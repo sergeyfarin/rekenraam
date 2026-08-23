@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-20 (merge of two long-diverged branches).
+Last updated: 2026-08-23 (R3 planned; see the current-initiative section below).
 
 ## Where things stand
 
@@ -115,6 +115,39 @@ See `backlog.md` G-09.
       valuation method, after R3. Saved definitions, snapshots,
       tax/jurisdiction dimensions, and a report builder are all deferred with
       stated reasons.
+
+## Current initiative — R3 portable and protected core data — **planned 2026-08-23**
+
+Plan: `docs/plans/data-portability-plan.md`. Eight slices, in order; the first
+three are the mandatory export requirement, the next three the protection half.
+
+- [ ] 1. Dedicated read-only connection + one-snapshot export read model +
+      `ledger.csv` (unfiltered) + `/exports/preview` + OpenAPI + an ADR
+      carrying the format-stability guarantee, the entry-complete filter
+      semantics, and the trial-balance definition.
+- [ ] 2. `bundle.zip` — dimension files, `trial-balance.csv`, `manifest.json`
+      with checksums, beancount mapping table. **First thing to cut** if the
+      slice runs long; `ledger.csv` alone meets the PRD.
+- [ ] 3. QIF writer (cash-like accounts only) + round-trip through the app's
+      own importer (auto-detect and matching explicit layout) + a mixed-selection
+      confirm flow.
+- [ ] 4. Scheduled verified backups via SQLite's **online backup API** (ADR
+      0004's in-app path): policy, `database_backup` work kind with an
+      occurrence identity, symlink-safe retention, run history, endpoints.
+- [ ] 5. `rekenraam verify-backup` / `rekenraam restore` (process lock,
+      WAL-set preservation, atomic install) + the `REKENRAAM_SECRET_KEY`
+      operator workflow + docs rewrite + an automated restore drill.
+- [ ] 6. Trial-balance self-check — seven checks, read-only, attachments slot
+      reserved for R14a.
+- [ ] 7. `Settings → Data` screen, six locales, e2e smoke.
+- [ ] 8. Acceptance review + docs reconciliation.
+
+The plan was reviewed the same day it was written; eight contract/safety
+findings are folded into revision 2 (see its header). **Five owner questions
+are open** (QIF default date layout, backup retention
+default, `BACKUP_DIR` in Docker, automatic nightly self-check, which export is
+the primary button). Each has a recommendation in the plan and none blocks
+slice 1.
 
 ## Ready to start — unblocked by the 2026-08-19 decisions
 

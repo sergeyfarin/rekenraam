@@ -26,7 +26,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 |---|---|---|---|
 | R1 | Reconcile workflow screen (trust loop) | ✅ | `docs/implemented.md` (Reconciliation) |
 | R2 | Reports users can act on | ✅ | `docs/plans/reports-plan.md` |
-| R3 | Portable core data (CSV/QIF export) | ⏭ | this file |
+| R3 | Portable **and protected** core data (CSV/QIF export, backups, self-check) | ▶ | `docs/plans/data-portability-plan.md` |
 | R3a | Accessibility regression coverage | ⏭ | this file |
 | R4 | QIF import | ✅ | `docs/implemented.md` (Import Pipeline) |
 | R5 | Ordinary-bank CSV import + profiles | ⏭ | `docs/plans/import-plan.md` |
@@ -164,6 +164,13 @@ balanced"*:
 Design the export shape so a ledger/beancount-format export is trivially
 derivable later (review §4.2) — the plain-text-accounting audience is a
 positioning group worth courting at announcement, at zero feature cost.
+
+**The implementation reference is `docs/plans/data-portability-plan.md`**
+(written 2026-08-23). It carries the export grain and column contract, the QIF
+limitations, the backup policy and worker shape, the restore commands, the
+seven self-check checks, the eight delivery slices with cut lines, and the
+five open owner questions. The four numbered commitments above are its
+non-negotiables; the plan may not quietly narrow them.
 
 **Sequenced after R3, approved 2026-08-19: a reporting-currency selector**
 (one reporting currency, a named valuation method). Per-commodity exact totals
