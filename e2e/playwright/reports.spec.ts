@@ -284,6 +284,13 @@ test('a report exports CSV a spreadsheet can read, and prints without its chrome
   expect(firstRow).toContain('1234.56');
   expect(firstRow).not.toContain('1,234.56');
 
+  // The file says what it measured. A column of figures with no scope, basis, or
+  // exclusion policy is one nobody can check later — and the header row is still
+  // first, so the context costs a naive reader nothing.
+  expect(content).toContain('Posted transactions only');
+  expect(content).toContain('Measuring the 1 accounts you selected.');
+  expect(content).toContain('Excluded: all');
+
   // Printing drops what cannot be acted on from paper and keeps the report.
   await page.emulateMedia({ media: 'print' });
   await expect(page.getByRole('button', { name: 'Download CSV' })).toBeHidden();
@@ -428,6 +435,48 @@ test('one multi-currency journey travels through every report without combining 
   await expect(breakdown).not.toContainText('65.00');
 });
 
+test('a report keeps each measure at its own scale, in the table and the export', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const today = todayISO();
+
+  const checking = await createCashAccount(page, csrfToken, `Scale checking ${suffix}`, currencyID);
+  const categories = await apiJSON<{
+    categories: Array<{ id: number; code?: string; allows_postings: boolean }>;
+  }>(page, 'GET', '/api/v1/categories');
+  const category = (code: string) => {
+    const found = categories.categories.find((item) => item.code === code && item.allows_postings);
+    if (!found) throw new Error(`seeded category ${code} not found`);
+    return found.id;
+  };
+
+  // 50.00 of salary recorded at scale 2, and 100 of groceries recorded at scale
+  // 0 — both legal for this commodity. Inflow and outflow therefore accumulate
+  // at different scales, and a screen that reads one scale for the whole row
+  // renders the 100 as 1.00.
+  await postScaledTransaction(page, today, checking.id, category('income_salary_wages'), currencyID, '5000', 2, true);
+  await postScaledTransaction(page, today, checking.id, category('expense_food_groceries'), currencyID, '100', 0, false);
+
+  await page.goto(
+    `/app/reports?view=cashflow&start_date=${today}&end_date=${today}&bucket=day&account_id=${checking.id}`
+  );
+
+  const row = page.getByRole('table').locator('tbody tr').first();
+  await expect(row).toContainText('50.00');
+  await expect(row).toContainText('100.00');
+  // The outflow is one hundred, not one.
+  await expect(row).not.toContainText('1.00\n');
+  // 50 in, 100 out.
+  await expect(row).toContainText('-50.00');
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download CSV' }).click();
+  const content = await readFile((await (await download).path()) as string, 'utf8');
+  const dataRow = content.split('\r\n')[1];
+  expect(dataRow).toContain('100.00');
+  expect(dataRow).toContain('50.00');
+});
+
 async function postTransaction(
   page: Page,
   date: string,
@@ -447,6 +496,36 @@ async function postTransaction(
         postings: [
           { account_id: accountID, commodity_id: commodityID, quantity_value: String(-cents), quantity_scale: 2 },
           { account_id: categoryID, commodity_id: commodityID, quantity_value: String(cents), quantity_scale: 2 }
+        ]
+      }
+    ]
+  }, [201]);
+}
+
+/** Posts one balanced entry at an explicit quantity scale. */
+async function postScaledTransaction(
+  page: Page,
+  date: string,
+  accountID: number,
+  categoryID: number,
+  commodityID: number,
+  coefficient: string,
+  scale: number,
+  incoming: boolean
+) {
+  const csrfToken = await csrfTokenFor(page);
+  const accountValue = incoming ? coefficient : `-${coefficient}`;
+  const categoryValue = incoming ? `-${coefficient}` : coefficient;
+  await apiJSON(page, 'POST', '/api/v1/transactions', csrfToken, {
+    status: 'posted',
+    transaction_date: date,
+    description: 'reports scale fixture',
+    journal_entries: [
+      {
+        entry_date: date,
+        postings: [
+          { account_id: accountID, commodity_id: commodityID, quantity_value: accountValue, quantity_scale: scale },
+          { account_id: categoryID, commodity_id: commodityID, quantity_value: categoryValue, quantity_scale: scale }
         ]
       }
     ]
