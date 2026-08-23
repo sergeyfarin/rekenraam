@@ -85,15 +85,19 @@ type SpendingGroup struct {
 }
 
 type SpendingResult struct {
-	StartDate           string
-	EndDate             string
-	GroupBy             string
-	Mode                string
-	CategoryIDs         []int64
-	PayeeIDs            []int64
-	Filters             ReportFiltersEcho
-	Groups              []SpendingGroup
-	CommodityTotals     []BalanceQuantity
+	StartDate       string
+	EndDate         string
+	GroupBy         string
+	Mode            string
+	CategoryIDs     []int64
+	PayeeIDs        []int64
+	Filters         ReportFiltersEcho
+	Groups          []SpendingGroup
+	CommodityTotals []BalanceQuantity
+	// RankingCommodityID names the commodity the group order was computed in, so
+	// a reader can be told what ordered the rows instead of inferring it. Absent
+	// when no group carries a total and there is no value order to explain.
+	RankingCommodityID  *int64
 	ExcludedSystemRoles []string
 	// GroupingPolicy names how rows were formed, so a printed report is not
 	// ambiguous about whether parent categories include their children.
@@ -152,7 +156,7 @@ func (s *TransactionService) Spending(ctx context.Context, input SpendingInput) 
 		return SpendingResult{}, fmt.Errorf("read spending postings: %w", err)
 	}
 
-	groups, commodityTotals, err := s.aggregateSpending(ctx, postings, groupBy, categoryType, endDate)
+	groups, commodityTotals, rankingCommodityID, err := s.aggregateSpending(ctx, postings, groupBy, categoryType, endDate)
 	if err != nil {
 		return SpendingResult{}, err
 	}
@@ -167,6 +171,7 @@ func (s *TransactionService) Spending(ctx context.Context, input SpendingInput) 
 		Filters:             filters,
 		Groups:              groups,
 		CommodityTotals:     commodityTotals,
+		RankingCommodityID:  rankingCommodityID,
 		ExcludedSystemRoles: []string{"commodity_trading", "transfer_clearing", "opening_balances", "fx_gain_loss"},
 		GroupingPolicy:      "direct_postings",
 	}, nil
@@ -181,7 +186,7 @@ func (s *TransactionService) aggregateSpending(
 	groupBy string,
 	categoryType string,
 	asOf string,
-) ([]SpendingGroup, []BalanceQuantity, error) {
+) ([]SpendingGroup, []BalanceQuantity, *int64, error) {
 	type groupKey struct {
 		id       int64
 		hasID    bool
@@ -217,7 +222,7 @@ func (s *TransactionService) aggregateSpending(
 
 	commodityTotals, err := reportMagnitudes(reportTotals, negate)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	totalsByCommodity := make(map[int64]BalanceQuantity, len(commodityTotals))
 	for _, total := range commodityTotals {
@@ -226,20 +231,20 @@ func (s *TransactionService) aggregateSpending(
 
 	categoryNames, payeeNames, err := s.spendingGroupLabels(ctx, postings, groupBy, asOf)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	groups := make([]SpendingGroup, 0, len(order))
 	for _, key := range order {
 		magnitudes, err := reportMagnitudes(amounts[key], negate)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		totals := make([]SpendingGroupTotal, 0, len(magnitudes))
 		for _, magnitude := range magnitudes {
 			share, err := shareBasisPoints(magnitude, totalsByCommodity[magnitude.CommodityID])
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			totals = append(totals, SpendingGroupTotal{
 				CommodityID:      magnitude.CommodityID,
@@ -264,8 +269,8 @@ func (s *TransactionService) aggregateSpending(
 		groups = append(groups, group)
 	}
 
-	sortSpendingGroups(groups)
-	return groups, commodityTotals, nil
+	rankingCommodityID := sortSpendingGroups(groups)
+	return groups, commodityTotals, rankingCommodityID, nil
 }
 
 type spendingCategoryLabel struct {
@@ -334,13 +339,15 @@ func (s *TransactionService) spendingGroupLabels(
 // did until 2026-08-23 — made every group under one unit rank as zero, so 0.90
 // and 0.10 tied and fell through to the identity tiebreak, which is precisely
 // the case a high-scale instrument or crypto quantity lands in.
-func sortSpendingGroups(groups []SpendingGroup) {
+// It returns the commodity the order was computed in, so the response can name
+// it rather than leaving the reader to guess what sorted the rows.
+func sortSpendingGroups(groups []SpendingGroup) *int64 {
 	rankingCommodityID, ok := rankingCommodity(groups)
 	if !ok {
 		slices.SortStableFunc(groups, func(a, b SpendingGroup) int {
 			return cmp.Compare(spendingGroupIdentity(a), spendingGroupIdentity(b))
 		})
-		return
+		return nil
 	}
 
 	// Ranks are computed once per group rather than inside the comparator, which
@@ -372,6 +379,7 @@ func sortSpendingGroups(groups []SpendingGroup) {
 		}
 		return cmp.Compare(identityA, identityB)
 	})
+	return &rankingCommodityID
 }
 
 // rankingCommodity picks the one commodity the ordering is computed in: the one

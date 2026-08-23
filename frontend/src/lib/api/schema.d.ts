@@ -12147,6 +12147,11 @@ export interface components {
             query: components["schemas"]["SpendingReportQuery"];
             groups: components["schemas"]["SpendingReportGroup"][];
             commodity_totals: components["schemas"]["BalanceQuantity"][];
+            /**
+             * Format: int64
+             * @description The commodity the group order was computed in: the one present in the most groups, ties broken by the lowest id. Groups are ordered by their total in this commodity, so every comparison is within a single unit; a group with no total in it sorts after those that have one, by a stable identity. `groups` is one flat list in one order — the ranking is not per commodity — so a client showing a multi-commodity report should name this commodity rather than describe the order as separate per commodity. Absent when no group carries a total and there is no value order.
+             */
+            ranking_commodity_id?: number;
             excluded_system_roles: components["schemas"]["SystemAccountRole"][];
             /**
              * @description direct_postings means rows are the categories the postings landed on; parent categories do not include their children's amounts.

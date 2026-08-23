@@ -921,3 +921,28 @@ func TestSpendingRankingNeverComparesUnlikeCommodities(t *testing.T) {
 	// others. A "largest magnitude wins" rule would have ranked it first.
 	assert.Equal(t, dining.ID, *report.Groups[2].CategoryID)
 }
+
+// TestSpendingReportNamesTheCommodityThatOrderedTheRows pins the field the UI
+// needs to describe the order truthfully. `groups` is one flat list in one
+// order, so a client that has to explain a multi-commodity report must be able
+// to name what produced it rather than claiming a ranking per commodity.
+func TestSpendingReportNamesTheCommodityThatOrderedTheRows(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	// The fixture's June range holds USD in two groups and EUR in one, so USD
+	// ranks the report on group count alone.
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category")
+	require.NotNil(t, report.RankingCommodityID)
+	assert.Equal(t, fixture.usdID, *report.RankingCommodityID)
+
+	// A range with no postings has no value order to explain, and says so by
+	// omitting the field rather than naming a commodity it did not rank by.
+	empty := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2027-01-01&end_date=2027-01-31&group_by=category")
+	require.Empty(t, empty.Groups)
+	assert.Nil(t, empty.RankingCommodityID)
+}

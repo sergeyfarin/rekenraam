@@ -168,6 +168,18 @@ SpendingReportResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    ranking_commodity_id:
+      description: >
+        The commodity the group order was computed in: the one present in the
+        most groups, ties broken by the lowest id. Groups are ordered by their
+        total in this commodity, so every comparison is within a single unit; a
+        group with no total in it sorts after those that have one, by a stable
+        identity. `groups` is one flat list in one order — the ranking is not
+        per commodity — so a client showing a multi-commodity report should name
+        this commodity rather than describe the order as separate per commodity.
+        Absent when no group carries a total and there is no value order.
+      type: integer
+      format: int64
     excluded_system_roles:
       type: array
       items:

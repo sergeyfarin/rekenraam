@@ -47,6 +47,21 @@
   // stable code speaks for itself and the retry button stands down.
   const errorState = $derived(reportErrorState(query.error, m.reports_spending_error_copy()));
 
+  /**
+   * The multi-commodity explanation, naming what ordered the rows.
+   *
+   * The response reports no ranking commodity only when no group carries a
+   * total, which cannot coincide with a multi-commodity report; the unranked
+   * wording exists so the notice degrades to something true rather than to a
+   * sentence with a hole in it.
+   */
+  const multiCommodityNotice = $derived.by(() => {
+    const rankingCommodityID = query.data?.ranking_commodity_id;
+    return rankingCommodityID === undefined
+      ? m.reports_spending_multi_commodity_notice_unranked()
+      : m.reports_spending_multi_commodity_notice({ commodity: commodityLabel(rankingCommodityID) });
+  });
+
   /** The endpoint's exclusion policy — the one fact with no place on screen. */
   const exclusionContext = $derived(
     query.data && query.data.excluded_system_roles.length > 0
@@ -243,9 +258,14 @@
       />
     </div>
   {:else}
+    <!--
+      The table is one flat list in one order, so the notice names the commodity
+      that produced it. Saying the ranking is "separate per commodity" would
+      describe a table this is not.
+    -->
     {#if !singleCommodity}
       <p class="mt-4 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
-        {m.reports_spending_multi_commodity_notice()}
+        {multiCommodityNotice}
       </p>
     {/if}
 

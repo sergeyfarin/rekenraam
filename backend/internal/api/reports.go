@@ -56,11 +56,16 @@ type spendingDrillDownResponse struct {
 }
 
 type spendingResponse struct {
-	Query               spendingQueryResponse     `json:"query"`
-	Groups              []spendingGroupResponse   `json:"groups"`
-	CommodityTotals     []balanceQuantityResponse `json:"commodity_totals"`
-	ExcludedSystemRoles []string                  `json:"excluded_system_roles"`
-	GroupingPolicy      string                    `json:"grouping_policy"`
+	Query           spendingQueryResponse     `json:"query"`
+	Groups          []spendingGroupResponse   `json:"groups"`
+	CommodityTotals []balanceQuantityResponse `json:"commodity_totals"`
+	// RankingCommodityID names the commodity the group order was computed in.
+	// The rows are group-major and there is one order, so a reader has to be
+	// told which commodity produced it rather than being left to assume the
+	// ranking is per commodity. Absent when no group carries a total.
+	RankingCommodityID  *int64   `json:"ranking_commodity_id,omitempty"`
+	ExcludedSystemRoles []string `json:"excluded_system_roles"`
+	GroupingPolicy      string   `json:"grouping_policy"`
 }
 
 func spendingReport(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
@@ -145,6 +150,7 @@ func toSpendingResponse(result app.SpendingResult) spendingResponse {
 		},
 		Groups:              groups,
 		CommodityTotals:     toBalanceQuantityResponses(result.CommodityTotals),
+		RankingCommodityID:  result.RankingCommodityID,
 		ExcludedSystemRoles: result.ExcludedSystemRoles,
 		GroupingPolicy:      result.GroupingPolicy,
 	}

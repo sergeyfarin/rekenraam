@@ -393,7 +393,12 @@ test('one multi-currency journey travels through every report without combining 
   await expect(spendingTable).not.toContainText('90.00');
   // Unlike commodities are named as separate, and the chart is suppressed
   // because bars across them would be a comparison the ledger cannot justify.
-  await expect(page.getByText(/ranked separately by commodity/)).toBeVisible();
+  // The table is one flat list in one order, so the notice must name the
+  // commodity that produced that order rather than claiming a per-commodity
+  // ranking the table does not have. USD ranks here: both groups tie on group
+  // count and it has the lower commodity id.
+  await expect(page.getByText(/Rows are ordered by USD/)).toBeVisible();
+  await expect(page.getByText(/never combined/)).toBeVisible();
   await expect(page.getByRole('img')).toHaveCount(0);
 
   // --- Cashflow: the same postings, still per commodity, still separate.
@@ -426,7 +431,7 @@ test('one multi-currency journey travels through every report without combining 
   const filtered = page.getByRole('table');
   await expect(filtered).toContainText('25.00');
   await expect(filtered).not.toContainText('65.00');
-  await expect(page.getByText(/ranked separately by commodity/)).toBeHidden();
+  await expect(page.getByText(/Rows are ordered by/)).toBeHidden();
   await expect(page.getByRole('img')).toHaveCount(1);
 
   // --- Drilling from one commodity's cashflow row carries that commodity, so

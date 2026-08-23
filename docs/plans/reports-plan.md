@@ -196,7 +196,9 @@ UI:
   single unit; a group with no total in it cannot be placed by value and sorts
   after the ones that can, by identity. A single-commodity report is the
   ordinary case of the same rule. Cross-commodity ranking waits on the approved
-  reporting-currency valuation method. `category_id`
+  reporting-currency valuation method. The response names the ranking commodity
+  as `ranking_commodity_id`, because the rows are one flat list in one order and
+  a reader who is not told what ordered them will assume something else. `category_id`
   must name an income or expense account — a category *is* an account, so an
   existence check alone would accept a bank account and answer with an
   unexplained empty report.
