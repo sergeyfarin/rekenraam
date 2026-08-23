@@ -31,6 +31,31 @@ export async function readyForLedger(page: Page): Promise<{ csrfToken: string; c
   return { csrfToken: await csrfTokenFor(page), currencyID: currency.id };
 }
 
+/**
+ * Returns the id of a currency in the current book, adding it if the book does
+ * not have it yet.
+ *
+ * The e2e database is shared within a run, so a second spec asking for the same
+ * currency must reuse the one already there rather than fail on the conflict.
+ */
+export async function ensureCurrency(
+  page: Page,
+  csrfToken: string,
+  code: string,
+  name: string
+): Promise<number> {
+  const existing = await apiJSON<{ currencies: Array<{ id: number; code: string }> }>(
+    page,
+    'GET',
+    '/api/v1/currencies'
+  );
+  const found = existing.currencies.find((item) => item.code === code);
+  if (found) return found.id;
+
+  const created = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/currencies', csrfToken, { code, name });
+  return created.id;
+}
+
 /** Creates a posting-enabled checking account. */
 export async function createCashAccount(
   page: Page,

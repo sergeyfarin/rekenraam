@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { expect, type Page, test } from '@playwright/test';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { todayISO } from './support/dates';
-import { createCashAccount, createLiabilityAccount, readyForLedger } from './support/ledger';
+import { createCashAccount, createLiabilityAccount, ensureCurrency, readyForLedger } from './support/ledger';
 
 test('spending report ranks categories, nets refunds, and ignores transfers', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
@@ -325,6 +325,96 @@ test('a cashflow row drills down to the categories behind it', async ({ page }) 
   await expect(page.getByRole('table')).toContainText('80.00');
   await expect(page.getByRole('table')).toContainText('30.00');
   await expect(page.getByRole('table')).not.toContainText('250.00');
+});
+
+test('one multi-currency journey travels through every report without combining commodities', async ({
+  page
+}) => {
+  const { csrfToken, currencyID: usdID } = await readyForLedger(page);
+  const eurID = await ensureCurrency(page, csrfToken, 'EUR', 'Euro');
+  const suffix = Date.now();
+  const today = todayISO();
+
+  const usdChecking = await createCashAccount(page, csrfToken, `Multi USD ${suffix}`, usdID);
+  const eurChecking = await createCashAccount(page, csrfToken, `Multi EUR ${suffix}`, eurID);
+
+  const categories = await apiJSON<{
+    categories: Array<{ id: number; code?: string; allows_postings: boolean }>;
+  }>(page, 'GET', '/api/v1/categories');
+  const category = (code: string) => {
+    const found = categories.categories.find((item) => item.code === code && item.allows_postings);
+    if (!found) throw new Error(`seeded category ${code} not found`);
+    return found.id;
+  };
+  const groceries = category('expense_food_groceries');
+
+  // The two figures are deliberately different, and neither is the sum: if any
+  // report ever combined them, 40.00 or 90.00 would appear where 25.00 and
+  // 65.00 belong.
+  await postTransaction(page, today, usdChecking.id, groceries, usdID, 6500);
+  await postTransaction(page, today, eurChecking.id, groceries, eurID, 2500);
+
+  // Every report is scoped to this test's own accounts: the e2e database is
+  // shared within a run and every spec posts to today.
+  const scoped = `&account_id=${usdChecking.id}&account_id=${eurChecking.id}`;
+  const range = `start_date=${today}&end_date=${today}&bucket=day`;
+
+  // --- Spending: one category, two commodities, ranked separately.
+  await page.goto(`/app/reports?view=spending&group_by=category&${range}${scoped}`);
+  const spendingTable = page.getByRole('table');
+  await expect(spendingTable).toBeVisible();
+  await expect(spendingTable).toContainText('65.00');
+  await expect(spendingTable).toContainText('25.00');
+  await expect(spendingTable).not.toContainText('90.00');
+  // Unlike commodities are named as separate, and the chart is suppressed
+  // because bars across them would be a comparison the ledger cannot justify.
+  await expect(page.getByText(/ranked separately by commodity/)).toBeVisible();
+  await expect(page.getByRole('img')).toHaveCount(0);
+
+  // --- Cashflow: the same postings, still per commodity, still separate.
+  await page.goto(`/app/reports?view=cashflow&${range}${scoped}`);
+  const cashflowTable = page.getByRole('table');
+  await expect(cashflowTable).toBeVisible();
+  await expect(cashflowTable).toContainText('-65.00');
+  await expect(cashflowTable).toContainText('-25.00');
+  await expect(page.getByText(/shown separately by commodity/)).toBeVisible();
+  await expect(page.getByRole('img')).toHaveCount(0);
+
+  // CSV carries both commodities as their own rows, exact and uncombined.
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download CSV' }).click();
+  const content = await readFile((await (await download).path()) as string, 'utf8');
+  const rows = content.split('\r\n').filter((line) => line.includes('-65.00') || line.includes('-25.00'));
+  expect(rows).toHaveLength(2);
+  expect(content).not.toContain('-90.00');
+
+  // --- Net worth: two rows for one bucket, one per commodity.
+  await page.goto(`/app/reports?view=net-worth&${range}${scoped}`);
+  const netWorthRows = page.getByRole('table').locator('tbody tr');
+  await expect(netWorthRows).toHaveCount(2);
+  await expect(page.getByRole('table')).toContainText('-65.00');
+  await expect(page.getByRole('table')).toContainText('-25.00');
+
+  // --- A commodity filter narrows to one commodity, survives in the URL, and
+  // the report becomes single-commodity again — chart and all.
+  await page.goto(`/app/reports?view=spending&group_by=category&${range}${scoped}&commodity_id=${eurID}`);
+  const filtered = page.getByRole('table');
+  await expect(filtered).toContainText('25.00');
+  await expect(filtered).not.toContainText('65.00');
+  await expect(page.getByText(/ranked separately by commodity/)).toBeHidden();
+  await expect(page.getByRole('img')).toHaveCount(1);
+
+  // --- Drilling from one commodity's cashflow row carries that commodity, so
+  // the breakdown never widens into the other one.
+  await page.goto(`/app/reports?view=cashflow&${range}${scoped}`);
+  const eurRow = page.getByRole('table').locator('tbody tr').filter({ hasText: 'EUR' }).first();
+  await eurRow.getByRole('link', { name: '25.00' }).click();
+
+  await expect(page).toHaveURL(new RegExp(`commodity_id=${eurID}`));
+  await expect(page).toHaveURL(/view=spending/);
+  const breakdown = page.getByRole('table');
+  await expect(breakdown).toContainText('25.00');
+  await expect(breakdown).not.toContainText('65.00');
 });
 
 async function postTransaction(
