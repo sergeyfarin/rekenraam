@@ -179,7 +179,6 @@ When a feature introduces a durable new rule, update one of those documents in t
   - **Reconciled posting facts change.** Changing a reconciled posting's account, commodity, amount, scale, or entry date.
   - **A posting enters or leaves a reconciled period.** A posting is inside the period when its `entry_date` is before the checkpoint date, or when its date is equal and its `account_day_sequence` is at or before `statement_account_sequence`. Creating, editing, voiding, unvoiding, soft-deleting, restoring, or reordering across that boundary changes the period balance and is guarded even when the posting is not itself marked `reconciled`.
   Reordering within the same side of a checkpoint boundary does not change the checkpoint balance and is allowed without reconciliation override. `transaction_day_sequence` is presentation-only and never affects reconciliation. Edits that touch only category, description, payee, note, tags, or other non-financial fields never change a balance and are always allowed, keeping reconciliation intact regardless of date. Operations on transactions that are already out of the ledger do not change any balance and are not guarded: restoring a voided-and-soft-deleted transaction only restores visibility of an out-of-ledger record, so it is never reconciliation-guarded.
-  Edits that touch only category, description, payee, note, tags, or other non-financial fields never change a balance and are always allowed, keeping reconciliation intact regardless of date. Operations on transactions that are already out of the ledger do not change any balance and are not guarded: restoring a voided-and-soft-deleted transaction only restores visibility of an out-of-ledger record, so it is never reconciliation-guarded.
 - Use the hybrid audit model for durable domain changes: domain version/lifecycle tables explain what changed, while `audit_events` rows explain who, when, how, and why the operation was initiated.
 - One `audit_events` row should represent one user/system operation, not one changed column. Multi-row workflows such as setup, imports, reconciliation, and transaction correction should create one event inside the same database transaction and reference it from every created version/lifecycle row.
 - Keep essential attribution columns such as `created_at`, `recorded_at`, `created_by_user_id`, `changed_by_user_id`, `created_request_id`, and `change_reason` on domain rows as denormalized snapshots for straightforward history and export queries. The referenced audit event is the canonical home for request, session, origin, operation, and grouped-workflow provenance.
@@ -193,6 +192,45 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Startup must validate effective SQLite PRAGMA state before serving requests.
 - Early runtime uses one application `*sql.DB` pool with `SetMaxOpenConns(1)`; revisit only when real workload pressure justifies more concurrency.
 - Database access uses repository-style methods over raw `database/sql`. Introduce **`sqlc`** only when the query surface is large enough to justify code generation, and document the generation command before generated files land.
+
+## Project Lifecycle And Migration Immutability
+
+Rekenraam is **pre-release**. There is no supported upgrade path from any
+existing database, and there are no legacy databases to protect. This section is
+the governing rule; `.claude/skills/backend-slice/SKILL.md` and
+`docs/developer-workflow.md` restate it operationally and must be kept in step
+with it.
+
+- **Development databases are disposable.** No local database may hold data that
+  is not reproducible from a script, a fixture, or an import file. If you need
+  data you would be sorry to lose, it belongs in a seed script committed to the
+  repo, not only in `backend/var/*.sqlite`.
+- **Until the freeze, migrations may be rewritten.** Existing migration files
+  may be edited, consolidated, split, renumbered, or deleted when that produces
+  a cleaner schema. Correctness of the resulting schema outranks
+  upgrade-compatibility with any database that already exists.
+- **A rewrite must be declared.** Any change that makes an already-committed
+  migration produce a different schema requires:
+  1. `BREAKING DEV DATABASE` as the first line of the commit message body, so
+     the change is greppable in `git log` and visible in review;
+  2. a note in the commit body saying what developers must do (normally: delete
+     the local database and let startup re-migrate);
+  3. a green CI run, which validates a fresh installation because every CI job
+     migrates from empty.
+- **The freeze milestone is the first tagged release, `v0.1.0`.** From the
+  commit that tag points at, every migration file in `backend/migrations` is
+  immutable: schema changes only ever land as new sequential files, and a
+  documented upgrade path from the previous release becomes mandatory. Nothing
+  is tagged today, so the rewrite freedom above is currently in force.
+- **Migration numbers are renumbered before merge, not after.** Two branches
+  that both add `00NN_` collide. The branch merged second renumbers its own
+  migration to the next free number as part of resolving the merge; never merge
+  two files sharing a number, and never renumber a migration that is already on
+  `main` (that is a rewrite, and needs the declaration above).
+- **After the freeze**, this section is replaced by a real upgrade policy: every
+  release must migrate any database from any previously released version, and
+  the migration suite grows a historical-upgrade mode alongside the
+  fresh-install mode CI already runs.
 
 ## API Conventions
 

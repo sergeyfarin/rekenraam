@@ -118,6 +118,13 @@ pnpm build
 E2E_BASE_URL=http://localhost:16888 ./scripts/test-e2e.sh
 ```
 
+Run just the fast journeys — everything except the serial release-preflight
+suite. This is what CI runs on every push:
+
+```sh
+./scripts/test-e2e-smoke.sh
+```
+
 Run the release preflight when preparing a release:
 
 ```sh
@@ -128,6 +135,8 @@ pnpm test:release-preflight
 - The Playwright suite runs with one worker because the default harness shares one app instance and SQLite database.
 - Set `E2E_PORT` when the self-managed e2e port needs to move.
 - Set `E2E_BASE_URL` when you want Playwright to target an already-running app instead of booting its own fresh instance.
+- The harness sets a throwaway `REKENRAAM_SECRET_KEY` for the instance it boots, because the MFA journey cannot enrol without one — enrolment returns `CONFIG_REQUIRED` rather than storing the shared secret in the clear. Export your own `REKENRAAM_SECRET_KEY` to override it.
+- `mfa.spec.ts` shares the run's database with every other spec, so it turns MFA back off in `afterAll`. A spec that changes account-wide authentication state must clean up the same way.
 - Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an existing Chromium binary when the sandbox or image cannot download the revision this Playwright release pins (`pnpm exec playwright install` fails, and the run dies with "Executable doesn't exist"). Container images that preinstall a browser usually expose one at `/opt/pw-browsers/chromium`. Prefer this over patching the browser cache by hand; leave it unset locally so Playwright uses its own pinned build.
 
 ## Area Notes
@@ -167,6 +176,43 @@ pnpm test:release-preflight
 4. Update docs or ADRs if the change introduces a durable new rule.
 5. Keep commits focused.
 
+## Migrations And Resetting Your Database
+
+The governing rule is **Project Lifecycle And Migration Immutability** in
+`docs/conventions.md`; this section is only how to carry it out. Short version:
+Rekenraam is pre-release, so migrations may still be rewritten and your local
+database is disposable.
+
+Adding schema:
+
+```sh
+# new sequential file, goose format (-- +goose Up / -- +goose Down)
+$EDITOR backend/migrations/00NN_short_name.sql
+./scripts/test-backend.sh
+```
+
+Resetting your database after someone rewrote a migration (or after your own
+rewrite) — migrations run at startup, so deleting the file is the whole reset:
+
+```sh
+rm -f backend/var/rekenraam.sqlite backend/var/rekenraam.sqlite-shm backend/var/rekenraam.sqlite-wal
+```
+
+Then start the app and redo owner setup. The e2e database resets itself on every
+run and needs nothing.
+
+- Keep nothing in a local database you would be sorry to lose. Reproducible
+  fixtures belong in the repo; `backend/var/*.sqlite` is scratch.
+- Rewriting an already-committed migration requires `BREAKING DEV DATABASE` as
+  the first line of the commit body, plus the reset instruction for other
+  developers. Grep for past ones with `git log --grep='BREAKING DEV DATABASE'`.
+- Two branches that both added `00NN_` collide. The one merged second renumbers
+  **its own** file to the next free number while resolving the merge. Renumbering
+  a migration already on `main` counts as a rewrite.
+- CI validates the fresh-install path on every run, because every job migrates
+  from an empty database. There is no historical-upgrade test yet; it arrives
+  with the `v0.1.0` freeze.
+
 ## Commit Conventions
 
 This repo uses Conventional Commits.
@@ -180,6 +226,10 @@ Preferred examples:
 - `test(backend): cover reconciliation lock behavior`
 
 Use the smallest honest scope. Avoid mixing unrelated concerns in one commit.
+
+A commit that rewrites an already-committed migration must additionally start
+its body with `BREAKING DEV DATABASE` — see *Migrations And Resetting Your
+Database* above.
 
 ## Branches And PRs
 
@@ -252,7 +302,11 @@ Workflow conventions:
 - Dependabot version updates are configured in `.github/dependabot.yml` for
   GitHub Actions, the backend Go module, root/frontend pnpm packages, and the
   Docker runtime image.
-- E2E stays in a separate workflow and runs only when a real user journey exists.
+- Browser journeys run in the `E2E Smoke` job of `ci.yml` on every push and pull
+  request: `./scripts/test-e2e-smoke.sh`, which builds the single binary, boots
+  a throwaway instance, and runs every spec except `release-preflight.spec.ts`.
+  The Playwright report uploads as an artifact on failure. The preflight suite
+  stays out of CI and is run deliberately before a release.
 - Use `pnpm install --frozen-lockfile` in CI.
 - Keep CI commands aligned with the local wrapper scripts in `scripts/`.
 - Use Node 22.

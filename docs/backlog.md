@@ -516,6 +516,115 @@ Separately fixed the same day: `ErrReconciliationOverrideRequired` was
 write-off. It told the user nothing and looked like a fault instead of the
 deliberate refusal it is. Now a `CONFLICT`, matching the transactions API.
 
+### T-57 MFA could activate without ever issuing recovery codes `[x]`
+
+**Files:** `backend/internal/app/auth_mfa.go` (`ActivateTOTP`);
+`backend/internal/db/auth_mfa.go` (`ActivateMFATOTPWithRecoveryCodes`).
+
+`ActivateTOTP` flipped the enrollment to `active` in one transaction and then
+created the recovery codes in a second. Any failure in between — a failed
+insert, a crash, a cancelled context — left the account with an **active second
+factor and zero recovery codes**, the request returning an error so the owner
+never saw any codes, and the retry refused with `ErrMFAAlreadyActive`. The only
+way out was `recover-owner`. Severity-1: the recovery codes are the sole way
+back in after losing the authenticator.
+
+Fixed 2026-08-23 (instance 3 of checklist item 4, "a row and its marker written
+in different transactions"). Codes are now minted in memory *before* anything is
+written (`newRecoveryCodeSet`), and one repository transaction does both the
+`pending → active` promotion and the hash inserts. `ReplaceMFARecoveryCodes`
+shares the same `replaceMFARecoveryCodesTx` helper, so regeneration is
+unchanged.
+
+**Proven by:** `TestActivateMFATOTPWithRecoveryCodesLeavesTheEnrollmentPendingWhenCodesFail`
+injects a failure with a duplicate hash (the `UNIQUE` index on `code_hash` is
+the lever) and asserts the enrollment is still `pending` with no codes stored;
+`...CanBeRetriedAfterAFailure` proves the retry that used to be impossible now
+works. Browser-level cover in `e2e/playwright/mfa.spec.ts`.
+
+### T-58 Price void could commit a partial dependency cascade `[x]`
+
+**Files:** `backend/internal/db/pricing.go` (`VoidPriceObservation`,
+`maxVoidCascadeDepth`).
+
+The cascade walked derived observations with `for depth := 0; depth <
+maxVoidCascadeDepth && len(frontier) > 0; depth++` and then **committed
+whatever it had found**. A graph deeper than 16 levels therefore left deeper
+derived prices *active* after the observation they were computed from was
+voided — the exact poisoned-number-under-a-different-id state the cascade
+exists to prevent. The bound is documented as a loop guard against malformed
+derivation metadata, so tripping it means the data is not what the system
+believes; committing part of it is worse than not voiding at all.
+
+Fixed 2026-08-23: the walk now runs until the frontier empties and returns
+`ErrPriceVoidCascadeTooDeep` if it discovers nodes past the bound, rolling the
+whole void back including its `audit_events` row. Surfaces as a 409 `CONFLICT`
+naming that nothing was voided (`writePricingServiceError`), documented in
+`api/openapi/paths/pricing-price-void.yaml`. The rewrite also fixed an
+off-by-one: the old loop could only reach 16 levels of *expansion*, so a chain
+of exactly 16 was never provably complete — a naive "abort if frontier is
+non-empty" would have wrongly refused it.
+
+**Proven by:** `TestVoidPriceObservationCascadesAChainExactlyAtTheDepthLimit`
+(16 levels void whole), `...RefusesAChainBeyondTheDepthLimit` (17 levels: error,
+nothing voided, audit event rolled back),
+`...CascadesThroughACycleWithoutHittingTheDepthLimit` (a cycle terminates on the
+visited set, not the bound), `...CascadesAcrossBranches`. Follow-up: T-54.
+
+### T-54 Price derivation lives in opaque JSON, not an indexed table `[ ]`
+
+**Files:** `backend/internal/db/pricing.go`
+(`activeDerivedObservationIDsTx`, `VoidPriceObservation`);
+`backend/internal/app/pricing_refresh.go` (`fxDerivationJSON`).
+
+Which observations a derived price came from is recorded only inside
+`price_observations.derivation_json`. Following the graph therefore means a
+`json_each(json_extract(...))` scan of the whole table **per node**, with no
+index available, and the cascade issues one such scan per level. The void
+cascade was made to abort rather than commit partially when it cannot reach the
+end of the graph (fixed 2026-08-23, `ErrPriceVoidCascadeTooDeep`), so the
+correctness hole is closed — this item is the cost and the ceiling that remain.
+
+Replace with an explicit `price_observation_dependencies (observation_id,
+source_observation_id)` table written in the same transaction that inserts a
+derived observation, indexed both ways. That makes the cascade a recursive CTE,
+makes "what depends on this?" answerable directly, and lets an integrity check
+find orphans. **Do this before derived pricing grows past triangulated FX** —
+the current graph is two or three levels deep, so nothing is urgent today.
+
+### T-55 No historical-upgrade migration test `[blocked]`
+
+**Depends on:** the `v0.1.0` migration freeze (see *Project Lifecycle And
+Migration Immutability* in `docs/conventions.md`). Meaningless before it —
+migrations are still rewritable, so there is no "previous version" to upgrade
+from.
+
+CI validates the fresh-install path on every run, because every job migrates
+from an empty database. That is the only mode that currently makes sense. Once
+migrations freeze, add a second mode: check out each released tag's schema,
+migrate it forward to `HEAD`, and assert the result matches a fresh install.
+The fresh-install assertion (schema snapshot comparison) is the reusable half
+and could be built earlier if it earns its keep.
+
+### T-56 No post-merge audit checklist `[ ]`
+
+**Files:** would live in `scripts/` plus a section in
+`docs/developer-workflow.md`.
+
+The 2026-08 merge of two long-diverged branches shipped several defects that
+share one shape — nobody structurally reviewed the *resolved* conflicts, only
+the code. Found afterwards: a duplicated reconciliation paragraph in
+`docs/conventions.md`, duplicated `case` arms in `writePricingServiceError`,
+a duplicate `codeql2.yml` workflow, and colliding backlog IDs T-42–T-47 (see
+the note at the top of this file).
+
+A script or checklist should mechanically flag, after any non-trivial merge:
+migration-number collisions; `pnpm --dir frontend run openapi:generate` leaving
+the tree dirty; adjacent duplicate paragraphs in `docs/*.md`; duplicate
+workflow files analysing the same thing; backlog/todo IDs used twice; and tests
+deleted or renamed by the merge. Cheap to write, and each item on that list has
+already cost something once.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

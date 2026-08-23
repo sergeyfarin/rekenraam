@@ -186,7 +186,13 @@ Run the self-contained e2e path from the repo root:
 ./scripts/test-e2e.sh
 ```
 
-This builds the integrated app, starts a fresh local instance on `127.0.0.1:16889`, and uses a dedicated SQLite file at `backend/var/e2e.sqlite` for the test run. Set `E2E_PORT` to use a different self-managed test port.
+This builds the integrated app, starts a fresh local instance on `127.0.0.1:16889`, and uses a dedicated SQLite file at `backend/var/e2e.sqlite` for the test run. Set `E2E_PORT` to use a different self-managed test port. The harness also sets a throwaway `REKENRAAM_SECRET_KEY` for that instance, since the two-factor journey cannot enrol without one.
+
+Run only the fast journeys — everything except the serial release preflight. This is what CI runs on every push:
+
+```sh
+./scripts/test-e2e-smoke.sh
+```
 
 For integrated app testing, run the single binary or Docker app on `16888`, then:
 
