@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { csvField, csvFilename, exactDecimal, toCSV } from './report-csv';
+import { csvField, csvFilename, exactDecimal, toCSV, withReportContext } from './report-csv';
 
 describe('exactDecimal', () => {
   it('places the decimal point from the scale', () => {
@@ -87,5 +87,39 @@ describe('csvFilename', () => {
     expect(csvFilename('spending', '2026-06-01', '2026-06-30')).toBe(
       'rekenraam-spending-2026-06-01-2026-06-30.csv'
     );
+  });
+});
+
+describe('withReportContext', () => {
+  const table = [
+    ['Period', 'Amount'],
+    ['2026-06-01', '100.00']
+  ];
+
+  it('keeps the header row first, so a naive reader still parses the table', () => {
+    const rows = withReportContext(table, ['Period: June 2026', 'Excluded: commodity_trading']);
+    expect(rows[0]).toEqual(['Period', 'Amount']);
+    expect(rows[1]).toEqual(['2026-06-01', '100.00']);
+  });
+
+  it('separates the context from the table with a blank row', () => {
+    const rows = withReportContext(table, ['Period: June 2026']);
+    expect(rows[2]).toEqual([]);
+    expect(rows[3]).toEqual(['Period: June 2026']);
+  });
+
+  it('drops empty lines rather than emitting blank context rows', () => {
+    const rows = withReportContext(table, ['Period: June 2026', '', '   ']);
+    expect(rows).toHaveLength(4);
+  });
+
+  it('returns the table untouched when there is no context to add', () => {
+    expect(withReportContext(table, [])).toEqual(table);
+  });
+
+  it('survives the CSV encoder with its quoting intact', () => {
+    const csv = toCSV(withReportContext(table, ['Accounts: Smith, Jones & Co']));
+    expect(csv.split('\r\n')[0]).toBe('Period,Amount');
+    expect(csv).toContain('"Accounts: Smith, Jones & Co"');
   });
 });

@@ -14,7 +14,7 @@
     type SpendingOptions
   } from '$lib/api/reports';
   import SpendingBarChart from './spending-bar-chart.svelte';
-  import { csvFilename, downloadCSV, exactDecimal, toCSV } from './report-csv';
+  import { csvFilename, downloadCSV, exactDecimal, toCSV, withReportContext } from './report-csv';
   import { reportErrorState } from './report-error';
   import {
     formatShare,
@@ -28,11 +28,14 @@
   let {
     options,
     commodityLabel,
+    reportContext,
     onGroupByChange,
     onModeChange
   }: {
     options: SpendingOptions;
     commodityLabel: (commodityID: number) => string;
+    /** What the shell measured, restated for an export that outlives the screen. */
+    reportContext: string[];
     /** Changes only group_by in the URL, preserving every compatible filter. */
     onGroupByChange: (groupBy: SpendingGroupBy) => void;
     onModeChange: (mode: SpendingMode) => void;
@@ -92,9 +95,24 @@
       // locale separator would not parse, so it goes out as basis points.
       row.shareBasisPoints === undefined ? '' : String(row.shareBasisPoints)
     ]);
+    // The grouping policy is part of the answer — a parent category not
+    // including its children changes what every row means — so it travels with
+    // the file rather than staying a note under the table on screen.
+    const context = [
+      ...reportContext,
+      ...(groupBy === 'category' ? [m.reports_spending_grouping_policy()] : []),
+      ...(query.data && query.data.excluded_system_roles.length > 0
+        ? [
+            m.reports_context_line({
+              label: m.reports_context_excluded(),
+              values: query.data.excluded_system_roles.join(', ')
+            })
+          ]
+        : [])
+    ];
     downloadCSV(
       csvFilename(mode === 'income' ? 'income' : 'spending', options.startDate, options.endDate),
-      toCSV([header, ...body])
+      toCSV(withReportContext([header, ...body], context))
     );
   }
 

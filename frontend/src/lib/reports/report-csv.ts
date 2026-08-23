@@ -37,6 +37,23 @@ export function exactDecimal(quantityValue: string, quantityScale: number): stri
   return formatLedgerAmount(quantityValue, scale);
 }
 
+/**
+ * Appends the report's own context beneath the data table.
+ *
+ * A file of figures that does not say what it measured is a file nobody can
+ * check later — which is the same reason cashflow states its scope on screen
+ * rather than assuming it. The context goes *after* the table, separated by a
+ * blank row, so the first line of the file is still the header row every naive
+ * CSV reader expects; a title block would move it and break them.
+ */
+export function withReportContext(rows: string[][], context: string[]): string[][] {
+  const lines = context.filter((line) => line.trim() !== '');
+  if (lines.length === 0) {
+    return rows;
+  }
+  return [...rows, [], ...lines.map((line) => [line])];
+}
+
 /** Quotes one field per RFC 4180, only where quoting is actually needed. */
 export function csvField(value: string): string {
   return /[",\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
