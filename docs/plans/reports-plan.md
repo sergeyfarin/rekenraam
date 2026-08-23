@@ -150,6 +150,8 @@ their own.
 
 - Include assets and liabilities only. `commodity_trading` is excluded by
   default; `transfer_clearing` remains included. The response names that policy.
+  The account filter follows the same rule and rejects anything else with
+  `VALIDATION_FAILED`, rather than accepting an id it would then skip.
 - Take each bucket’s balance as of the bucket end, using account versions and
   postings valid through that date. Do not derive a time series by summing
   current account balances backward in the frontend.
@@ -164,7 +166,10 @@ UI:
 - `/app/reports` opens on net worth with a sensible, URL-visible recent date
   preset. It offers date range, bucket, account, and commodity filters.
 - Show a chart only as a summary of a bucket table. The table provides bucket,
-  commodity, asset total, liability total, and net-worth total.
+  commodity, and net-worth total. **As shipped it carries no asset and liability
+  columns** — the acceptance review retained that split as a known partial
+  capability, because composition belongs with the balance-sheet view rather
+  than half-built into this series.
 - Explain empty state (“post transactions to see history”) and multi-commodity
   state (“totals are shown separately; no valuation method is selected”).
 
@@ -182,7 +187,12 @@ UI:
   classification.
 - Each group row contains exact per-commodity totals, its share only within the
   same commodity, and a drill-down query. A ranking must not compare unlike
-  commodities as one number.
+  commodities as one number: a group's rank is the largest single-commodity
+  magnitude it holds, compared exactly as whole-and-fractional units, and the
+  order is never a claim that two commodities are convertible. `category_id`
+  must name an income or expense account — a category *is* an account, so an
+  existence check alone would accept a bank account and answer with an
+  unexplained empty report.
 
 UI:
 
@@ -225,8 +235,13 @@ UI:
   every bucket. Make the transfer inclusion policy visible.
 - The default table/chart uses the default liquid-cash scope. A selected account
   tree is clearly named in the result summary.
-- Category/payee filters constrain the relevant counterpart dimensions; the UI
-  must explain when a transfer-only movement is excluded by such a filter.
+- **No category or payee filter.** This bullet originally required one; it was
+  rejected during slice 4 and the rejection is recorded in the acceptance table.
+  Such a filter removes counterpart postings from the basis, which breaks the
+  `net_movement` reconciliation this report exists to provide — so there is no
+  "explain when a transfer-only movement is excluded" case to design, because
+  nothing is excluded. The filtered question is answered by drilling from a
+  cashflow row into the spending report.
 
 ## Frontend shape
 
