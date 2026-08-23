@@ -30,6 +30,8 @@
     type ReportFilterDimension,
     type ReportFilterState
   } from './report-filters';
+  import { defaultReportRange, parseReportRange, repairReportRange } from './report-range';
+  import { reportErrorState } from './report-error';
   import SpendingView from './spending-view.svelte';
 
   type ReportView = 'net-worth' | 'spending' | 'cashflow';
@@ -50,22 +52,11 @@
   }
 
   function defaultFilters(): NetWorthSeriesOptions {
-    const endDate = todayISO();
-    return { startDate: `${endDate.slice(0, 4)}-01-01`, endDate, bucket: 'month' };
+    return defaultReportRange(todayISO());
   }
 
   function parseFilters(): NetWorthSeriesOptions | null {
-    const search = $page.url.searchParams;
-    const startDate = search.get('start_date') ?? '';
-    const endDate = search.get('end_date') ?? '';
-    const bucket = search.get('bucket');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      return null;
-    }
-    if (bucket !== 'day' && bucket !== 'week' && bucket !== 'month' && bucket !== 'quarter' && bucket !== 'year') {
-      return null;
-    }
-    return { startDate, endDate, bucket };
+    return parseReportRange($page.url.searchParams);
   }
 
   function parseView(): ReportView {
@@ -112,10 +103,17 @@
     }
   });
 
+  // A link with a missing or malformed range is repaired in place, never
+  // rebuilt: `/app/reports?view=spending&group_by=payee&account_id=12` asks a
+  // specific question, and answering it with the default net-worth report would
+  // silently discard every selection the sender made.
   $effect(() => {
-    if (browser && activeFilters === null) {
-      const defaults = defaultFilters();
-      void goto(`/app/reports?start_date=${defaults.startDate}&end_date=${defaults.endDate}&bucket=${defaults.bucket}`, {
+    if (!browser || activeFilters !== null) {
+      return;
+    }
+    const repaired = repairReportRange($page.url.searchParams, todayISO());
+    if (repaired) {
+      void goto(`/app/reports?${repaired.toString()}`, {
         replaceState: true,
         keepFocus: true,
         noScroll: true
@@ -157,6 +155,9 @@
   }));
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
+  // An overflow or a rejected query is not something retrying can fix, so the
+  // stable code speaks for itself and the retry button stands down.
+  const netWorthError = $derived(reportErrorState(netWorthQuery.error, m.reports_error_copy()));
   const rows = $derived(netWorthQuery.data ? netWorthRows(netWorthQuery.data) : []);
   const multiCommodity = $derived(hasMultipleCommodities(rows));
   const currencyCodeByID = $derived.by(() => {
@@ -311,6 +312,7 @@
       <ReportFilterControls
         filters={reportFilters}
         dimensions={filterDimensions}
+        accountScope={view === 'cashflow' ? 'cash-scope' : 'basis'}
         onChange={applyReportFilters}
       />
     </div>
@@ -346,14 +348,16 @@
   {:else if netWorthQuery.isPending}
     <StatePanel title={m.reports_loading_title()} copy={m.reports_loading_copy()} />
   {:else if netWorthQuery.isError}
-    <StatePanel title={m.reports_error_title()} copy={m.reports_error_copy()}>
-      <button
-        type="button"
-        class="rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
-        onclick={() => netWorthQuery.refetch()}
-      >
-        {m.reports_retry()}
-      </button>
+    <StatePanel title={m.reports_error_title()} copy={netWorthError.copy}>
+      {#if netWorthError.retryable}
+        <button
+          type="button"
+          class="rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+          onclick={() => netWorthQuery.refetch()}
+        >
+          {m.reports_retry()}
+        </button>
+      {/if}
     </StatePanel>
   {:else if rows.length === 0}
     <StatePanel title={m.reports_empty_title()} copy={m.reports_empty_copy()} />
