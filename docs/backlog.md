@@ -625,6 +625,38 @@ workflow files analysing the same thing; backlog/todo IDs used twice; and tests
 deleted or renamed by the merge. Cheap to write, and each item on that list has
 already cost something once.
 
+### T-59 gosec runs unfiltered and non-blocking `[ ]`
+
+**Files:** `.github/workflows/gosec.yml`.
+
+Added 2026-08-23 as interim first-party Go coverage while CodeQL's `go`
+analysis is paused (its extractor cannot parse a Go 1.27 module — see
+`docs/developer-workflow.md`). It uploads SARIF to the Security tab and never
+fails the build, because a first run reports 41 findings and the high-severity
+ones are false positives:
+
+- **12x G202 "SQL string concatenation"** — every one is the safe idiom of
+  joining `?` placeholders and passing the values as bound args
+  (`accounts.go:247`, `investments.go:2014`, and ten more).
+- **4x G101 "hardcoded credentials"** — flags constant *names*:
+  `csrfTokenHeader`, `secureSessionCookieName`, `setupTokenHeader`, and the
+  deliberate `dummyPasswordHash` that equalises the timing of the
+  unknown-user and wrong-password paths.
+- **1x G505 "weak crypto: crypto/sha1"** — required by RFC 6238 for TOTP.
+- **9x G104 "errors unhandled"** — mostly `conn.Close()` in a defer.
+
+Not yet triaged: **7x G115** (integer overflow on `uint64 -> int64`
+conversions, in `auth_mfa.go`, `auth.go`, `import_locale.go`), **5x G602**
+(slice index out of range), **1x G120** (unbounded form parse,
+`imports.go:158`), **1x G301** (directory permissions, `sqlite.go:212`), and
+**1x G201**. These are the ones worth reading before this item can close.
+
+Two ways to close it: triage the list, suppress the false positives with
+justified `#nosec` comments or a rule exclusion, fix anything real, and promote
+gosec to a blocking gate — or delete the workflow once CodeQL's Go analysis is
+restored, if CodeQL covers the same ground. The second is likelier; this
+workflow is explicitly labelled interim.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

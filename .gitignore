@@ -63,3 +63,6 @@ bin/
 # Release outputs
 /dist/*
 !/dist/README.md
+
+# Security scan output (gosec writes here when run locally)
+/gosec.sarif

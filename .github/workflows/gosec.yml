@@ -1,0 +1,62 @@
+name: gosec
+
+# Interim first-party Go scanning while CodeQL's `go` analysis is paused: its
+# extractor cannot parse a Go 1.27 module yet (see codeql.yml). govulncheck
+# covers known CVEs in dependencies; this covers bugs in our own code, which is
+# the half that went uncovered.
+#
+# Deliberately non-blocking. A first run reports ~41 findings, and the
+# high-severity ones are false positives — every G202 "SQL string
+# concatenation" is the safe idiom of joining `?` placeholders with the values
+# passed as bound args, and G101 flags constant *names* like `X-CSRF-Token`.
+# Blocking on that would train people to ignore a red check. Results go to the
+# Security tab instead, where new findings are visible without gating a push.
+#
+# Remove this workflow once CodeQL's Go analysis is restored.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/gosec.yml"
+      - "backend/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/gosec.yml"
+      - "backend/**"
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gosec:
+    name: gosec
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+
+      # Build gosec from source rather than using securego/gosec's own action:
+      # that action ships its own Go, which would defeat the toolchain pin above
+      # the same way CodeQL's bundled extractor did.
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+
+      # -no-fail keeps the step green; the SARIF upload is the actual output.
+      - name: Run gosec
+        run: gosec -no-fail -fmt sarif -out ../gosec.sarif ./...
+        working-directory: backend
+
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gosec.sarif
+          category: gosec

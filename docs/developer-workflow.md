@@ -325,6 +325,14 @@ Workflow conventions:
   September 2026. To restore: check `gh api
   repos/github/codeql-cli-binaries/releases --jq '.[0].tag_name'` for >= 2.26.4,
   then uncomment the two `go` matrix lines and confirm the job goes green.
+- `gosec` runs in `.github/workflows/gosec.yml` on backend-affecting pushes and
+  pull requests, weekly, and via `workflow_dispatch`. It is **non-blocking** by
+  design (`-no-fail`): results are uploaded to the Security tab, never gated on.
+  It exists only to cover first-party Go bugs while CodeQL's `go` analysis is
+  paused — govulncheck finds known CVEs in dependencies, not SQL injection or
+  SSRF in our own code. A first run reports 41 findings whose high-severity
+  entries are false positives; see backlog T-59 before acting on any of them.
+  Delete this workflow when CodeQL's Go analysis is restored.
 - Dependabot version updates are configured in `.github/dependabot.yml` for
   GitHub Actions, the backend Go module, root/frontend pnpm packages, and the
   Docker runtime image.
