@@ -7,6 +7,12 @@
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
   import { currenciesQueryOptions } from '$lib/api/currencies';
+  import { accountsQueryOptions } from '$lib/api/accounts';
+  import { categoriesQueryOptions } from '$lib/api/categories';
+  import { payeesQueryOptions } from '$lib/api/payees';
+  import { accountDisplayName } from '$lib/accounts/account-labels';
+  import { categoryDisplayName } from '$lib/categories/category-labels';
+  import { investmentInstrumentsQueryOptions } from '$lib/api/investments';
   import {
     netWorthSeriesQueryOptions,
     type CashflowOptions,
@@ -21,7 +27,7 @@
   import { hasMultipleCommodities, netWorthRows } from './net-worth';
   import BucketColumnChart from './bucket-column-chart.svelte';
   import CashflowView from './cashflow-view.svelte';
-  import { csvFilename, downloadCSV, exactDecimal, toCSV } from './report-csv';
+  import { csvFilename, downloadCSV, exactDecimal, toCSV, withReportContext } from './report-csv';
   import { seriesColumns } from './report-series';
   import ReportFilterControls from './report-filter-controls.svelte';
   import {
@@ -31,6 +37,7 @@
     type ReportFilterState
   } from './report-filters';
   import { defaultReportRange, parseReportRange, repairReportRange } from './report-range';
+  import { commodityLabelMap } from './commodity-labels';
   import { reportErrorState } from './report-error';
   import SpendingView from './spending-view.svelte';
 
@@ -154,22 +161,90 @@
     enabled: activeFilters !== null && view === 'net-worth'
   }));
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
+  const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
+  // The same query options the filter control uses, so these share its cache
+  // rather than issuing a second round of requests. The control owns picking a
+  // filter; this screen owns saying, on paper and in an export, what was picked.
+  const contextAccountsQuery = createQuery(() => accountsQueryOptions(true, false));
+  const contextCategoriesQuery = createQuery(() => categoriesQueryOptions({ includeArchived: true }));
+  const contextPayeesQuery = createQuery(() => payeesQueryOptions({ includeArchived: true }));
 
   // An overflow or a rejected query is not something retrying can fix, so the
   // stable code speaks for itself and the retry button stands down.
   const netWorthError = $derived(reportErrorState(netWorthQuery.error, m.reports_error_copy()));
   const rows = $derived(netWorthQuery.data ? netWorthRows(netWorthQuery.data) : []);
   const multiCommodity = $derived(hasMultipleCommodities(rows));
-  const currencyCodeByID = $derived.by(() => {
-    const codes = new Map<number, string>();
-    for (const currency of currenciesQuery.data?.currencies ?? []) {
-      codes.set(currency.id, currency.code);
-    }
-    return codes;
-  });
+  // Currencies *and* instrument commodities: a report can be filtered to a
+  // security, and a commodity that can be selected must be nameable in every
+  // place the report is read.
+  const commodityNames = $derived(
+    commodityLabelMap(currenciesQuery.data?.currencies, instrumentsQuery.data?.instruments)
+  );
 
   function formatDate(date: string): string {
     return dateFormatter.format(parseISO(date));
+  }
+
+  /**
+   * What this report measured, as localized sentences.
+   *
+   * A printed page and an exported file both outlive the screen that produced
+   * them, and the controls that hold the selection are interactive — they mean
+   * nothing on paper and are hidden there. Without this, a printout or a CSV of
+   * a report narrowed to two accounts and one commodity is indistinguishable
+   * from the same report over everything.
+   */
+  function contextLine(label: string, values: string[]): string | null {
+    return values.length === 0 ? null : m.reports_context_line({ label, values: values.join(', ') });
+  }
+
+  const reportContext = $derived.by(() => {
+    const range = activeFilters ?? initialFilters;
+    const accountNames = new Map<number, string>();
+    for (const account of contextAccountsQuery.data?.accounts ?? []) {
+      accountNames.set(account.id, accountDisplayName(account));
+    }
+    const categoryNames = new Map<number, string>();
+    for (const category of contextCategoriesQuery.data?.categories ?? []) {
+      categoryNames.set(category.id, categoryDisplayName(category));
+    }
+    const payeeNames = new Map<number, string>();
+    for (const payee of contextPayeesQuery.data?.payees ?? []) {
+      payeeNames.set(payee.id, payee.name);
+    }
+    // An id with no name yet is shown as its id rather than dropped: a context
+    // block that quietly omits part of the selection is worse than none.
+    const named = (ids: number[], names: Map<number, string>) =>
+      ids.map((id) => names.get(id) ?? String(id));
+
+    const lines: Array<string | null> = [
+      m.reports_print_filters({
+        range: formatRange(range.startDate, range.endDate),
+        basis: m.reports_posted_only()
+      }),
+      contextLine(m.reports_filter_accounts(), named(reportFilters.accountIDs, accountNames)),
+      reportFilters.accountIDs.length > 0 && reportFilters.includeDescendants
+        ? m.reports_context_descendants()
+        : null,
+      contextLine(
+        m.reports_filter_commodities(),
+        reportFilters.commodityIDs.map((id) => commodityLabel(id))
+      ),
+      view === 'spending'
+        ? contextLine(m.reports_filter_categories(), named(reportFilters.categoryIDs, categoryNames))
+        : null,
+      view === 'spending'
+        ? contextLine(m.reports_filter_payees(), named(reportFilters.payeeIDs, payeeNames))
+        : null
+    ];
+    return lines.filter((line): line is string => line !== null);
+  });
+
+  /** The endpoint's own exclusion policy, as one context line. */
+  function exclusionLine(roles: string[] | undefined): string[] {
+    return roles && roles.length > 0
+      ? [m.reports_context_line({ label: m.reports_context_excluded(), values: roles.join(', ') })]
+      : [];
   }
 
   // Axis labels get their own compact format: a full date is wider than a
@@ -209,7 +284,11 @@
       exactDecimal(row.normal_quantity_value, row.quantity_scale)
     ]);
     const range = activeFilters ?? initialFilters;
-    downloadCSV(csvFilename('net-worth', range.startDate, range.endDate), toCSV([header, ...body]));
+    const context = [...reportContext, ...exclusionLine(netWorthQuery.data?.excluded_system_roles)];
+    downloadCSV(
+      csvFilename('net-worth', range.startDate, range.endDate),
+      toCSV(withReportContext([header, ...body], context))
+    );
   }
 
   function formatRange(start: string, end: string): string {
@@ -217,7 +296,7 @@
   }
 
   function commodityLabel(commodityID: number): string {
-    return currencyCodeByID.get(commodityID) ?? m.reports_commodity_unknown({ commodityId: commodityID });
+    return commodityNames.get(commodityID) ?? m.reports_commodity_unknown({ commodityId: commodityID });
   }
 
   function formattedTotal(value: string, scale: number, commodityID: number): string {
@@ -256,12 +335,11 @@
     paper, but the range they hold does — so the print sheet restates it as
     text rather than dropping that context along with the form.
   -->
-  <p class="hidden text-sm text-muted print:block">
-    {m.reports_print_filters({
-      range: formatRange((activeFilters ?? initialFilters).startDate, (activeFilters ?? initialFilters).endDate),
-      basis: m.reports_posted_only()
-    })}
-  </p>
+  <div class="hidden text-sm text-muted print:block">
+    {#each reportContext as line (line)}
+      <p>{line}</p>
+    {/each}
+  </div>
 
   <div data-print-hide>
   <Panel>
@@ -312,7 +390,6 @@
       <ReportFilterControls
         filters={reportFilters}
         dimensions={filterDimensions}
-        accountScope={view === 'cashflow' ? 'cash-scope' : 'basis'}
         onChange={applyReportFilters}
       />
     </div>
@@ -337,11 +414,12 @@
   </div>
 
   {#if view === 'cashflow'}
-    <CashflowView options={cashflowOptions} {commodityLabel} />
+    <CashflowView options={cashflowOptions} {commodityLabel} {reportContext} />
   {:else if view === 'spending'}
     <SpendingView
       options={spendingOptions}
       {commodityLabel}
+      {reportContext}
       onGroupByChange={(next) => setParam('group_by', next)}
       onModeChange={(next) => setParam('mode', next)}
     />
