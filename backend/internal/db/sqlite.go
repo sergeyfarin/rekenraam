@@ -209,7 +209,12 @@ func BackupSQLiteDatabase(ctx context.Context, database *sql.DB, backupPath stri
 		return fmt.Errorf("backup path is required")
 	}
 
-	if err := os.MkdirAll(filepath.Dir(backupPath), 0o755); err != nil {
+	// 0700, not 0755: the backup is a full copy of the ledger, and
+	// EnforceSQLiteFilePermissions below pins the file itself to 0600. A
+	// world-readable directory would leave the containing path more permissive
+	// than everything in it. The container image assumes the same — see
+	// deploy/docker/Dockerfile, which creates /app/data as 0700.
+	if err := os.MkdirAll(filepath.Dir(backupPath), 0o700); err != nil {
 		return fmt.Errorf("create backup directory: %w", err)
 	}
 	if _, err := os.Stat(backupPath); err == nil {

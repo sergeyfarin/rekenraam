@@ -151,10 +151,15 @@ rotation command exists yet.
 
 The app enforces mode `0600` on the SQLite database and its `-wal` and `-shm`
 sidecars after startup/migration; SQLite backups created by the app receive the
-same mode. Keep the containing data directory accessible only to the service
-account. Backups include financial data and encrypted credential blobs, so
-protect them as strictly as the live database. Never copy a live WAL database
-file as a normal backup; use the documented SQLite-aware backup process.
+same mode, and a backup directory the app creates is made `0700`. Keep the
+containing data directory accessible only to the service account — the app
+cannot do this for you when the directory already exists, because it only sets
+the mode on directories it creates itself. Pointing a backup path into an
+existing world-readable directory still yields a `0600` file, but in a
+directory that lists its name to every local user. Backups include financial
+data and encrypted credential blobs, so protect them as strictly as the live
+database. Never copy a live WAL database file as a normal backup; use the
+documented SQLite-aware backup process.
 
 ## Docker Compose
 

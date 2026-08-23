@@ -51,6 +51,39 @@ func TestEnforceSQLiteFilePermissionsRestrictsDatabaseAndSidecars(t *testing.T) 
 	}
 }
 
+// A recovery backup is a full copy of the ledger, so the directory holding it
+// must not be more permissive than the database files themselves, which
+// EnforceSQLiteFilePermissions pins to 0600. The container image makes the same
+// assumption: deploy/docker/Dockerfile creates /app/data as 0700.
+//
+// This covers directories the backup itself creates. A directory that already
+// exists keeps whatever mode it has — MkdirAll does not tighten one — so an
+// operator pointing --backup-path into an existing world-readable directory
+// still gets a 0600 backup file inside a 0755 directory. The file mode is what
+// protects the ledger contents there.
+func TestBackupSQLiteDatabaseCreatesPrivateDirectory(t *testing.T) {
+	databasePath := filepath.Join(t.TempDir(), "source.sqlite")
+	database, err := Open(context.Background(), "file:"+databasePath)
+	require.NoError(t, err)
+	defer database.Close()
+
+	_, err = database.ExecContext(context.Background(), "CREATE TABLE backup_perm_test (id INTEGER PRIMARY KEY)")
+	require.NoError(t, err)
+
+	// A nested path so the directory is created by the backup, not by t.TempDir.
+	backupDir := filepath.Join(t.TempDir(), "backups", "nested")
+	backupPath := filepath.Join(backupDir, "recovery.sqlite")
+	require.NoError(t, BackupSQLiteDatabase(context.Background(), database, backupPath))
+
+	info, err := os.Stat(backupDir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm(), backupDir)
+
+	backupInfo, err := os.Stat(backupPath)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), backupInfo.Mode().Perm(), backupPath)
+}
+
 func TestVerifySQLiteBackupRejectsForeignKeyViolation(t *testing.T) {
 	backupPath := filepath.Join(t.TempDir(), "invalid-backup.sqlite")
 	backupDatabase, err := sql.Open(driverName, "file:"+backupPath)

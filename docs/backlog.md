@@ -625,37 +625,58 @@ workflow files analysing the same thing; backlog/todo IDs used twice; and tests
 deleted or renamed by the merge. Cheap to write, and each item on that list has
 already cost something once.
 
-### T-59 gosec runs unfiltered and non-blocking `[ ]`
+### T-59 gosec runs unfiltered and non-blocking `[~]`
 
 **Files:** `.github/workflows/gosec.yml`.
 
 Added 2026-08-23 as interim first-party Go coverage while CodeQL's `go`
 analysis is paused (its extractor cannot parse a Go 1.27 module — see
 `docs/developer-workflow.md`). It uploads SARIF to the Security tab and never
-fails the build, because a first run reports 41 findings and the high-severity
-ones are false positives:
+fails the build.
 
-- **12x G202 "SQL string concatenation"** — every one is the safe idiom of
-  joining `?` placeholders and passing the values as bound args
-  (`accounts.go:247`, `investments.go:2014`, and ten more).
+**All 41 findings triaged 2026-08-23. One was real; it is fixed.**
+
+Real, fixed: **G301** `sqlite.go:212` created the recovery backup directory
+`0755` while `EnforceSQLiteFilePermissions` pins the database files themselves
+to `0600`, and `deploy/docker/Dockerfile` creates `/app/data` as `0700`. A
+recovery backup is a full copy of the ledger, so the directory is now `0700`,
+covered by `TestBackupSQLiteDatabaseCreatesPrivateDirectory`. Note the limit:
+`MkdirAll` does not tighten a directory that already exists, so a backup written
+into an existing world-readable directory is still a `0600` file inside a `0755`
+directory — the file mode is what protects the contents there.
+
+False positives, with the reason each is safe:
+
+- **12x G202 "SQL string concatenation"** — every one joins `?` placeholders and
+  passes the values as bound args (`accounts.go:247`, `investments.go:2014`, and
+  ten more). No user data reaches the SQL text.
+- **7x G115 "integer overflow conversion"** — the four in `auth.go:599-602` are
+  guarded by `validateArgonParameters`, which bounds each value to exactly the
+  target type's maximum immediately before the conversion. The two in
+  `auth_mfa.go` convert a TOTP step counter that `totp.Step` derives as
+  `Unix() / 30`, which cannot approach the `int64` ceiling. The last is a
+  `rune -> byte` in `import_locale.go` over ASCII digits.
+- **5x G602 "slice index out of range"** — `transactions_service.go:222-250` are
+  `for i := range` loops indexing the slice they range over. gosec does not
+  follow the nesting.
 - **4x G101 "hardcoded credentials"** — flags constant *names*:
   `csrfTokenHeader`, `secureSessionCookieName`, `setupTokenHeader`, and the
-  deliberate `dummyPasswordHash` that equalises the timing of the
-  unknown-user and wrong-password paths.
-- **1x G505 "weak crypto: crypto/sha1"** — required by RFC 6238 for TOTP.
+  deliberate `dummyPasswordHash` that equalises the timing of the unknown-user
+  and wrong-password paths.
 - **9x G104 "errors unhandled"** — mostly `conn.Close()` in a defer.
+- **1x G505 "weak crypto: crypto/sha1"** — required by RFC 6238 for TOTP.
+- **1x G120 "unbounded form parsing"** — `imports.go:158` already caps at
+  `50 << 20` and re-limits with `io.LimitReader`.
+- **1x G201 "SQL string formatting"** — `sqlite.go:221` builds `VACUUM INTO`,
+  which SQLite does not accept a bound parameter for; the path is escaped by
+  `sqliteStringLiteral`.
 
-Not yet triaged: **7x G115** (integer overflow on `uint64 -> int64`
-conversions, in `auth_mfa.go`, `auth.go`, `import_locale.go`), **5x G602**
-(slice index out of range), **1x G120** (unbounded form parse,
-`imports.go:158`), **1x G301** (directory permissions, `sqlite.go:212`), and
-**1x G201**. These are the ones worth reading before this item can close.
-
-Two ways to close it: triage the list, suppress the false positives with
-justified `#nosec` comments or a rule exclusion, fix anything real, and promote
-gosec to a blocking gate — or delete the workflow once CodeQL's Go analysis is
-restored, if CodeQL covers the same ground. The second is likelier; this
-workflow is explicitly labelled interim.
+What remains open is only the workflow's shape, not the findings: the 40 false
+positives are still uploaded on every run, so the Security tab is no longer a
+clean slate. Close by either suppressing them with justified `#nosec` comments
+or a rule exclusion and promoting gosec to a blocking gate, or — likelier —
+deleting the workflow once CodeQL's Go analysis is restored, since CodeQL
+covers the same ground without the noise.
 
 ## Public-deployment security gates
 
