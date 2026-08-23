@@ -1,10 +1,11 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -104,8 +105,8 @@ type CurrencyService struct {
 func NewCurrencyService(repository *db.CommodityRepository, setupService *SetupService) *CurrencyService {
 	catalog := make(map[string]CurrencyCatalogEntry, len(currencyCatalog))
 	catalogList := append([]CurrencyCatalogEntry(nil), currencyCatalog...)
-	sort.Slice(catalogList, func(i, j int) bool {
-		return catalogList[i].Code < catalogList[j].Code
+	slices.SortFunc(catalogList, func(a, b CurrencyCatalogEntry) int {
+		return cmp.Compare(a.Code, b.Code)
 	})
 	for _, entry := range catalogList {
 		catalog[entry.Code] = entry

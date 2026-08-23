@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -9,7 +10,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -833,14 +834,30 @@ func (s *ImportService) ListImportBatches(ctx context.Context, input ListImportB
 // row_index-relative order; only investment rows are reordered relative to
 // each other and to non-investment rows.
 func sortRowsForInvestmentCommitOrder(rows []db.ImportStagedRowRecord) {
-	sort.SliceStable(rows, func(i, j int) bool {
-		return investmentRowSortKey(rows[i]) < investmentRowSortKey(rows[j])
+	// Decorate-sort-undecorate: investmentRowSortKey unmarshals JSON, so
+	// computing it once per row rather than on every comparison keeps a large
+	// brokerage import from re-parsing the same rows O(n log n) times. The key
+	// travels with its row rather than sitting in a map, so rows that share an
+	// ID (or carry none) still sort by their own key.
+	type keyedRow struct {
+		key string
+		row db.ImportStagedRowRecord
+	}
+	decorated := make([]keyedRow, len(rows))
+	for i, row := range rows {
+		decorated[i] = keyedRow{key: investmentRowSortKey(row), row: row}
+	}
+	slices.SortStableFunc(decorated, func(a, b keyedRow) int {
+		return cmp.Compare(a.key, b.key)
 	})
+	for i, d := range decorated {
+		rows[i] = d.row
+	}
 }
 
 // investmentRowSortKey returns a full order-fill timestamp where available,
 // falling back to the normalized date for dividends and older staged data.
-// Empty keys preserve original row order via sort.SliceStable.
+// Empty keys preserve original row order via the stable sort.
 func investmentRowSortKey(row db.ImportStagedRowRecord) string {
 	var raw map[string]string
 	if err := json.Unmarshal([]byte(row.RawJSON), &raw); err != nil {

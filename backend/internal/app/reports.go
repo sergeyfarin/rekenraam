@@ -1,12 +1,12 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"math/big"
 	"slices"
-	"sort"
 	"strings"
 
 	"rekenraam/backend/internal/db"
@@ -333,12 +333,12 @@ func sortSpendingGroups(groups []SpendingGroup) {
 		return best
 	}
 
-	sort.SliceStable(groups, func(i, j int) bool {
-		left, right := rankOf(groups[i]), rankOf(groups[j])
-		if cmp := right.Cmp(left); cmp != 0 {
-			return cmp < 0
+	slices.SortStableFunc(groups, func(a, b SpendingGroup) int {
+		// rankOf descending, then identity ascending as a stable tiebreak.
+		if c := rankOf(b).Cmp(rankOf(a)); c != 0 {
+			return c
 		}
-		return spendingGroupIdentity(groups[i]) < spendingGroupIdentity(groups[j])
+		return cmp.Compare(spendingGroupIdentity(a), spendingGroupIdentity(b))
 	})
 }
 
@@ -641,7 +641,9 @@ func reportMagnitudes(amounts map[int64]*exact.ScaledInt, negate bool) ([]Balanc
 			NormalQuantityValue: value,
 		})
 	}
-	sort.Slice(quantities, func(i, j int) bool { return quantities[i].CommodityID < quantities[j].CommodityID })
+	slices.SortFunc(quantities, func(a, b BalanceQuantity) int {
+		return cmp.Compare(a.CommodityID, b.CommodityID)
+	})
 	return quantities, nil
 }
 

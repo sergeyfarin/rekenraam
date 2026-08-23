@@ -1,12 +1,13 @@
 package db
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"math/big"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -2454,12 +2455,12 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	}
 
 	// Replicate ORDER BY le.event_date DESC, MIN(le.id) DESC.
-	sort.Slice(order, func(i, j int) bool {
-		gi, gj := groups[order[i]], groups[order[j]]
-		if gi.key.eventDate != gj.key.eventDate {
-			return gi.key.eventDate > gj.key.eventDate
+	slices.SortFunc(order, func(a, b groupKey) int {
+		ga, gb := groups[a], groups[b]
+		if c := cmp.Compare(gb.key.eventDate, ga.key.eventDate); c != 0 {
+			return c
 		}
-		return gi.minEventID > gj.minEventID
+		return cmp.Compare(gb.minEventID, ga.minEventID)
 	})
 
 	records := make([]RealizedGainRecord, 0, len(order))
