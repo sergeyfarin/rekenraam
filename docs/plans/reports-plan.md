@@ -187,9 +187,16 @@ UI:
   classification.
 - Each group row contains exact per-commodity totals, its share only within the
   same commodity, and a drill-down query. A ranking must not compare unlike
-  commodities as one number: a group's rank is the largest single-commodity
-  magnitude it holds, compared exactly as whole-and-fractional units, and the
-  order is never a claim that two commodities are convertible. `category_id`
+  commodities as one number, and taking each group's largest magnitude does not
+  satisfy that — those maxima are still compared, and the result would depend on
+  unit conventions (90,000 JPY over 1 BTC, 0.9 BTC under 1 EUR). **As shipped,
+  one commodity ranks the report: the one present in the most groups, ties
+  broken by the lowest commodity id.** Groups are ordered by their total in that
+  commodity, exactly and including fractions, so every comparison is within a
+  single unit; a group with no total in it cannot be placed by value and sorts
+  after the ones that can, by identity. A single-commodity report is the
+  ordinary case of the same rule. Cross-commodity ranking waits on the approved
+  reporting-currency valuation method. `category_id`
   must name an income or expense account — a category *is* an account, so an
   existence check alone would accept a bank account and answer with an
   unexplained empty report.
