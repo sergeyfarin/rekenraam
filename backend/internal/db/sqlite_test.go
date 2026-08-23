@@ -829,3 +829,55 @@ func readSQLiteObjectSQL(t *testing.T, database *sql.DB, objectType string, obje
 
 	return strings.Join(strings.Fields(objectSQL), " ")
 }
+
+func TestOpenReadOnlyRefusesWrites(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	databaseURL := "file:" + filepath.Join(t.TempDir(), "readonly.sqlite")
+	writer, err := Open(ctx, databaseURL)
+	require.NoError(t, err)
+	defer writer.Close()
+	require.NoError(t, Migrate(ctx, writer))
+
+	reader, err := OpenReadOnly(ctx, databaseURL)
+	require.NoError(t, err)
+	defer reader.Close()
+
+	var books int
+	require.NoError(t, reader.QueryRowContext(ctx, "SELECT COUNT(*) FROM books").Scan(&books))
+
+	_, err = reader.ExecContext(ctx, "INSERT INTO tags (book_id, name, kind, status, created_at, created_by_user_id, updated_at, updated_by_user_id) VALUES (1, 'x', 'custom', 'active', '2026-01-01T00:00:00Z', 1, '2026-01-01T00:00:00Z', 1)")
+	require.Error(t, err, "the read pool must refuse writes rather than quietly competing with the writer")
+}
+
+// A snapshot read must not see rows committed after it began, which is what
+// makes a multi-file export internally consistent.
+func TestReadOnlySnapshotDoesNotSeeLaterWrites(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	databaseURL := "file:" + filepath.Join(t.TempDir(), "snapshot.sqlite")
+	writer, err := Open(ctx, databaseURL)
+	require.NoError(t, err)
+	defer writer.Close()
+	require.NoError(t, Migrate(ctx, writer))
+
+	reader, err := OpenReadOnly(ctx, databaseURL)
+	require.NoError(t, err)
+	defer reader.Close()
+
+	snapshot, err := reader.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer func() { _ = snapshot.Rollback() }()
+
+	var before int
+	require.NoError(t, snapshot.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit_events").Scan(&before))
+
+	_, err = writer.ExecContext(ctx, "INSERT INTO audit_events (occurred_at, origin_type, operation) VALUES ('2026-01-01T00:00:00Z', 'internal', 'test.write')")
+	require.NoError(t, err)
+
+	var after int
+	require.NoError(t, snapshot.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit_events").Scan(&after))
+	require.Equal(t, before, after, "the snapshot must not grow while it is open")
+}

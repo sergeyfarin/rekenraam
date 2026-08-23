@@ -20,6 +20,7 @@ ErrorBody:
         - SETUP_ALREADY_COMPLETE
         - CONFIG_REQUIRED
         - PROVIDER_ERROR
+        - EXPORT_SCOPE_UNSUPPORTED
         - INTERNAL_ERROR
     message:
       type: string

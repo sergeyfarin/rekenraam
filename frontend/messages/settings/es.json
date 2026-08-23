@@ -130,6 +130,7 @@
   "api_error_conflict": "Esta acción entra en conflicto con el estado actual. Actualice y vuelva a intentarlo.",
   "api_error_config_required": "El servidor no está configurado para esta acción.",
   "api_error_csrf_invalid": "No se ha podido verificar su sesión. Actualice y vuelva a intentarlo.",
+  "api_error_export_scope_unsupported": "Esta exportación siempre contiene el libro mayor completo. Para exportar una parte, utilice la exportación en archivo comprimido, que registra lo que contiene.",
   "api_error_forbidden": "No tiene permiso para hacer eso.",
   "api_error_generic": "Algo ha salido mal. Vuelva a intentarlo.",
   "api_error_internal_error": "Algo ha salido mal en el servidor. Vuelva a intentarlo.",

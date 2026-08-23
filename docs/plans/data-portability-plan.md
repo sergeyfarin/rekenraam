@@ -1,7 +1,12 @@
 # Data Portability & Protection Plan (R3)
 
-Status: **planned, not started**. Written 2026-08-23, immediately after R2's
-acceptance review closed. This plan is the implementation reference for the
+Status: **slice 1 shipped 2026-08-23; slices 2-8 planned**. Written 2026-08-23,
+immediately after R2's acceptance review closed. Slice 1 delivered the
+dedicated read-only connection, the one-snapshot export read model,
+`GET /api/v1/exports/ledger.csv`, `GET /api/v1/exports/preview`, and
+`docs/adrs/0011-ledger-export-contract.md`, which is now the authority for the
+column schema, the filter semantics, and the trial-balance definitions this
+plan describes. This plan is the implementation reference for the
 roadmap slice "R3 — portable **and protected** core data"; it replaces the
 roadmap's inline prose, which stays as the one-paragraph summary and now points
 here.
@@ -184,14 +189,18 @@ misclassify periods. `from`/`to` filtering is on `entry_date` by default, with
 
 ```
 transaction_id, transaction_version_id, transaction_kind, status,
-transaction_date, correction_of_transaction_id, payee, description,
+transaction_date, correction_of_transaction_id, payee_id, payee, description,
 external_ref_hint, needs_review, transaction_tags, transaction_complete,
 journal_entry_id, entry_seq, entry_kind, entry_date, entry_memo,
-posting_line_key, line_seq, account_id, account_path, account_kind,
-account_type, quantity, commodity, commodity_kind, posting_memo,
+posting_line_key, line_seq, account_id, account_path, account_class,
+account_kind, quantity, commodity_id, commodity, commodity_kind, posting_memo,
 reconciliation_status, cleared_on, posting_tags
 ```
 
+- Three identifier columns were added when slice 1 shipped, so every dimension
+  the export names can be joined rather than matched on text: `payee_id`,
+  `commodity_id`, and `account_class` (the schema's own word — revision 1 called
+  it `account_type`, which named nothing in this ledger).
 - `transaction_complete` is the lowercase token `true` or `false`, repeated on
   **every posting row** of the transaction (rev 4). It is a transaction-level
   fact carried at posting grain, like `payee` and `transaction_date` beside it,

@@ -43,6 +43,16 @@ var requiredPragmas = []string{
 	"wal_autocheckpoint(1000)",
 }
 
+// readOnlyPragmas are the subset a read-only connection can set. Journal mode,
+// synchronous, and autocheckpoint are database-level settings owned by the
+// writer; query_only is added so a bug on this pool fails loudly instead of
+// writing.
+var readOnlyPragmas = []string{
+	"busy_timeout(5000)",
+	"foreign_keys(1)",
+	"query_only(1)",
+}
+
 type SQLiteState struct {
 	ForeignKeys       int
 	BusyTimeout       int
@@ -81,6 +91,57 @@ func Open(ctx context.Context, databaseURL string) (*sql.DB, error) {
 	if err := EnforceSQLiteFilePermissions(databaseURL); err != nil {
 		_ = database.Close()
 		return nil, err
+	}
+
+	return database, nil
+}
+
+// OpenReadOnly opens a second pool over the same database file for long reads —
+// exports and the ledger self-check — that must not hold the writer.
+//
+// The main pool is SetMaxOpenConns(1) (see Open), so a read transaction held
+// there for the length of an export would stall every other request. WAL
+// readers run concurrently with the single writer by design, so a separate
+// read-only pool adds no write contention: it is the standard SQLite shape for
+// this, not a workaround.
+//
+// The database must already exist and be migrated — mode=ro will not create it,
+// which is deliberate: this pool is never the one that brings a book into being.
+func OpenReadOnly(ctx context.Context, databaseURL string) (*sql.DB, error) {
+	databasePath, err := ResolveSQLiteFilePath(databaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	parts := make([]string, 0, len(readOnlyPragmas)+1)
+	parts = append(parts, "mode=ro")
+	for _, pragma := range readOnlyPragmas {
+		parts = append(parts, "_pragma="+pragma)
+	}
+
+	database, err := sql.Open(driverName, "file:"+databasePath+"?"+strings.Join(parts, "&"))
+	if err != nil {
+		return nil, fmt.Errorf("open read-only sqlite database: %w", err)
+	}
+
+	// Small but not single: concurrent reads are safe, and a stuck export
+	// must not block the self-check or a second reader.
+	database.SetMaxOpenConns(4)
+	database.SetMaxIdleConns(2)
+
+	if err := database.PingContext(ctx); err != nil {
+		_ = database.Close()
+		return nil, fmt.Errorf("ping read-only sqlite database: %w", err)
+	}
+
+	var queryOnly int
+	if err := database.QueryRowContext(ctx, "PRAGMA query_only").Scan(&queryOnly); err != nil {
+		_ = database.Close()
+		return nil, fmt.Errorf("read PRAGMA query_only: %w", err)
+	}
+	if queryOnly != 1 {
+		_ = database.Close()
+		return nil, fmt.Errorf("sqlite query_only pragma is %d, want 1", queryOnly)
 	}
 
 	return database, nil

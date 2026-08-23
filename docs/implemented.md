@@ -147,6 +147,20 @@ non-English locales all landed together).
 | Report ID filters + drill-down | ✅ | Shipped 2026-08-18 (superseded the R2 plan's original "not delivered" gap): repeatable `account_id`/`category_id`/`payee_id`/`commodity_id` filters, plus drill-down from both spending and cashflow rows into `/app/transactions`. |
 | Reporting-currency valuation method | ⬜ | Deliberately deferred, approved 2026-08-19 to build after R3 (named, auditable valuation method — not a silent conversion). Reports show unlike commodities separately and say so until it lands. |
 
+## Exports (R3) — 🟦 Slice 1: flat ledger CSV + preview shipped
+
+| Capability | Status | Notes |
+|---|---|---|
+| Ledger CSV export | ✅ | `GET /api/v1/exports/ledger.csv` streams one row per posting of the current version of every posted, non-deleted transaction, ordered by entry date, transaction, entry, then line — a total order, so two exports of one snapshot are byte-identical. Amounts render from the stored coefficient and scale through `exact.Decimal` (point separator, no group separators, debit-positive, stored scale kept). UTF-8 with BOM, LF endings, RFC 4180 quoting, header row first and no context block — unlike R2's report CSVs, which are snapshots of a screen. |
+| System accounts in exports | ✅ | Included, deliberately, where every report excludes them: an export without the `commodity_trading` counterpart leg would emit transactions that do not balance. Pinned by `TestLedgerExportIncludesCommodityTradingPostings`. |
+| Export record policy | ✅ | Drafts, voided versions, superseded versions, and soft-deleted transactions never leave through the export; the SQLite backup remains the audit-complete artifact. The policy is served with the preview as a sentence a manifest can carry verbatim. |
+| Export preview | ✅ | `GET /api/v1/exports/preview` — posting/entry/transaction/account/commodity counts, earliest and latest entry date, the stable column list, the record policy, the named exclusions, and the empty-but-declared attachments block (R14a fills it). It exists because a streamed download commits its status code with the first byte. |
+| Scope refusal on the flat file | ✅ | `from`, `to`, `date_basis`, `account_id`, `include_descendants`, and `commodity_id` are refused by name with `EXPORT_SCOPE_UNSUPPORTED`, not ignored: a scoped CSV with no manifest is an artifact nobody can reproduce. Scoped exports arrive with `bundle.zip` (slice 2). |
+| Read-only connection + snapshot | ✅ | `db.OpenReadOnly` opens a second `mode=ro`/`query_only` pool; each export runs in one deferred read transaction. The main pool is `SetMaxOpenConns(1)`, so a long export on it would stall every request; WAL readers are concurrent with the single writer. |
+| Export format contract | ✅ | `docs/adrs/0011-ledger-export-contract.md` — grain and order, entry-complete filter semantics, the `in_scope` definition, the seven-column trial-balance identities, amount rendering, and append-only schema stability. |
+| Account paths | ✅ | Every row carries `account_id` (join key) and `account_path` (colon-separated hierarchy, current names). A system account is named by its role rather than left blank; the path builder refuses to loop on a cyclic parent chain. |
+| CSV bundle, QIF export, backups, restore, self-check | ⬜ | Slices 2–8 of `docs/plans/data-portability-plan.md`. |
+
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 
 | Capability | Status | Notes |
@@ -200,7 +214,8 @@ non-English locales all landed together).
 
 ## Not started (see roadmap)
 
-Exports (CSV/QIF), CSV/OFX/QFX import adapters, import profiles, budgets,
+QIF export and the CSV bundle (exports slice 1 shipped — see "Exports" above),
+CSV/OFX/QFX import adapters, import profiles, budgets,
 scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
 shipped in R2 — see the Reports section above.)

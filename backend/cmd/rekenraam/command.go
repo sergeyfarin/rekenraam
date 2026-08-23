@@ -91,6 +91,17 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	importConnectionService := app.NewImportConnectionService(db.NewImportConnectionRepository(database), accountService, cfg.SecretKey, app.NewTrading212Prober(nil))
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, importConnectionService, db.NewBackgroundWorkRepository(database), investmentService)
+	// Exports read through their own read-only pool: the main pool is one
+	// connection, and a long export holding it would stall every request. WAL
+	// readers are concurrent with the single writer, so this costs no write
+	// throughput (ADR 0011).
+	readOnlyDatabase, err := db.OpenReadOnly(ctx, cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("open read-only database", slog.Any("err", err))
+		return 1
+	}
+	defer readOnlyDatabase.Close()
+	exportService := app.NewExportService(db.NewExportRepository(readOnlyDatabase))
 	pricingService.StartScheduler(ctx, logger)
 	authService.StartSessionCleanup(ctx, logger)
 	pricingService.StartBackgroundWorker(ctx, logger)
@@ -112,6 +123,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 		Investment:       investmentService,
 		Import:           importService,
 		ImportConnection: importConnectionService,
+		Export:           exportService,
 	}, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,

@@ -9,6 +9,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   NOT_FOUND: () => m.api_error_not_found(),
   CONFLICT: () => m.api_error_conflict(),
   CSRF_INVALID: () => m.api_error_csrf_invalid(),
+  EXPORT_SCOPE_UNSUPPORTED: () => m.api_error_export_scope_unsupported(),
   RATE_LIMITED: () => m.api_error_rate_limited(),
   RESOURCE_BUSY: () => m.api_error_resource_busy(),
   LEDGER_OVERFLOW: () => m.api_error_ledger_overflow(),

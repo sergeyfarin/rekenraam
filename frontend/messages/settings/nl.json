@@ -130,6 +130,7 @@
   "api_error_conflict": "Deze actie botst met de huidige toestand. Vernieuw en probeer het opnieuw.",
   "api_error_config_required": "De server is niet ingesteld voor deze actie.",
   "api_error_csrf_invalid": "Uw sessie kon niet worden geverifieerd. Vernieuw en probeer het opnieuw.",
+  "api_error_export_scope_unsupported": "Deze export bevat altijd het volledige grootboek. Gebruik de archiefexport om een deel te exporteren; die legt vast wat erin zit.",
   "api_error_forbidden": "U hebt geen toegang om dat te doen.",
   "api_error_generic": "Er is iets misgegaan. Probeer het opnieuw.",
   "api_error_internal_error": "Er is iets misgegaan op de server. Probeer het opnieuw.",

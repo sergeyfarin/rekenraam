@@ -1,0 +1,19 @@
+meta {
+  name: Export Ledger CSV
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/v1/exports/ledger.csv
+  body: none
+  auth: none
+}
+
+docs {
+  The whole posted ledger, one row per posting, streamed as CSV. Takes no scope
+  parameters by design: a flat file cannot carry the manifest that makes a
+  scoped export reproducible, so adding from/to/account_id/commodity_id returns
+  EXPORT_SCOPE_UNSUPPORTED rather than a quietly whole-ledger file. See
+  docs/adrs/0011-ledger-export-contract.md.
+}

@@ -130,6 +130,7 @@
   "api_error_conflict": "This action conflicts with the current state. Refresh and try again.",
   "api_error_config_required": "The server is not configured for this action.",
   "api_error_csrf_invalid": "Your session could not be verified. Refresh and try again.",
+  "api_error_export_scope_unsupported": "This export always contains the whole ledger. To export part of it, use the archive export, which records what it contains.",
   "api_error_forbidden": "You do not have access to do that.",
   "api_error_generic": "Something went wrong. Try again.",
   "api_error_internal_error": "Something went wrong on the server. Try again.",

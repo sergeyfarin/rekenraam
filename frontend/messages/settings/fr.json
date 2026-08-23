@@ -130,6 +130,7 @@
   "api_error_conflict": "Cette action entre en conflit avec l'état actuel. Actualisez et réessayez.",
   "api_error_config_required": "Le serveur n'est pas configuré pour cette action.",
   "api_error_csrf_invalid": "Votre session n'a pas pu être vérifiée. Actualisez et réessayez.",
+  "api_error_export_scope_unsupported": "Cette exportation contient toujours l'intégralité du grand livre. Pour n'en exporter qu'une partie, utilisez l'exportation en archive, qui consigne son contenu.",
   "api_error_forbidden": "Vous n'avez pas l'autorisation de faire cela.",
   "api_error_generic": "Une erreur est survenue. Réessayez.",
   "api_error_internal_error": "Une erreur est survenue sur le serveur. Réessayez.",

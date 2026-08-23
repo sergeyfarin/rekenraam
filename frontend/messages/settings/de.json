@@ -130,6 +130,7 @@
   "api_error_conflict": "Diese Aktion steht im Konflikt mit dem aktuellen Stand. Aktualisieren Sie und versuchen Sie es erneut.",
   "api_error_config_required": "Der Server ist für diese Aktion nicht konfiguriert.",
   "api_error_csrf_invalid": "Ihre Sitzung konnte nicht überprüft werden. Aktualisieren Sie und versuchen Sie es erneut.",
+  "api_error_export_scope_unsupported": "Dieser Export enthält immer das gesamte Hauptbuch. Um einen Teil zu exportieren, verwenden Sie den Archivexport, der festhält, was er enthält.",
   "api_error_forbidden": "Dafür fehlt Ihnen die Berechtigung.",
   "api_error_generic": "Etwas ist schiefgelaufen. Versuchen Sie es erneut.",
   "api_error_internal_error": "Auf dem Server ist etwas schiefgelaufen. Versuchen Sie es erneut.",

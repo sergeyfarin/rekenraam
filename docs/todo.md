@@ -5,7 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-23 (R3 planned; see the current-initiative section below).
+Last updated: 2026-08-23 (R3 planned and slice 1 shipped; see the
+current-initiative section below).
 
 ## Where things stand
 
@@ -121,10 +122,14 @@ See `backlog.md` G-09.
 Plan: `docs/plans/data-portability-plan.md`. Eight slices, in order; the first
 three are the mandatory export requirement, the next three the protection half.
 
-- [ ] 1. Dedicated read-only connection + one-snapshot export read model +
-      `ledger.csv` (unfiltered) + `/exports/preview` + OpenAPI + an ADR
-      carrying the format-stability guarantee, the entry-complete filter
-      semantics, and the trial-balance definition.
+- [x] 1. **Done 2026-08-23.** Dedicated read-only connection (`db.OpenReadOnly`)
+      + one-snapshot export read model + `GET /exports/ledger.csv` (unfiltered,
+      streamed) + `GET /exports/preview` + OpenAPI + `EXPORT_SCOPE_UNSUPPORTED`
+      in six locales + `docs/adrs/0011-ledger-export-contract.md`, which now
+      carries the column schema, the entry-complete filter semantics, the
+      `in_scope` definition, and the trial-balance identities. Nine named tests,
+      including balance per journal entry, system accounts present, stored scale
+      without float, and voided/soft-deleted exclusion.
 - [ ] 2. `bundle.zip` — dimension files, `trial-balance.csv`, `manifest.json`
       with checksums, beancount mapping table. **First thing to cut** if the
       slice runs long; `ledger.csv` alone meets the PRD.

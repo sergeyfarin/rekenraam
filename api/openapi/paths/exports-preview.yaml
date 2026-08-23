@@ -1,0 +1,22 @@
+get:
+  summary: Describe the export before downloading it
+  description: >
+    Answers "what would I get" without producing it: row counts, the date span,
+    the stable column list, the record policy, and what the export leaves
+    behind. It exists because a streamed download commits its status code with
+    the first byte — this is the last point at which a problem can still be
+    reported in an error envelope, and the place a screen learns what to show
+    before offering the file.
+  responses:
+    "200":
+      description: What the export would contain
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/LedgerExportPreviewResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

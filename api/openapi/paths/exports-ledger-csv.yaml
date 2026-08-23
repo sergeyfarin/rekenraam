@@ -1,0 +1,44 @@
+get:
+  summary: Download the whole posted ledger as CSV
+  description: >
+    Streams one row per posting of the current version of every posted,
+    non-deleted transaction, in entry-date order. Amounts are exact decimal
+    strings rendered from the stored coefficient and scale, debit-positive,
+    with a point separator and no group separators. System accounts are
+    included: an export that dropped them would emit transactions that do not
+    balance.
+
+
+    The file takes no filters. A downloaded flat file cannot carry the manifest
+    that makes a scoped export reproducible, so scope parameters are refused
+    with EXPORT_SCOPE_UNSUPPORTED rather than silently ignored; scoped exports
+    are produced as an archive that carries its own manifest.
+
+
+    The response is UTF-8 with a byte order mark so a spreadsheet reads it
+    correctly, LF line endings, RFC 4180 quoting, and a header row first.
+  responses:
+    "200":
+      description: The ledger, streamed as CSV
+      headers:
+        Content-Disposition:
+          description: Attachment with a dated filename.
+          schema:
+            type: string
+      content:
+        text/csv:
+          schema:
+            type: string
+            format: binary
+    "400":
+      description: A scope parameter was supplied to an export that is always whole-ledger
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

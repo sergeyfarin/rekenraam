@@ -1,0 +1,18 @@
+meta {
+  name: Export Preview
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/v1/exports/preview
+  body: none
+  auth: none
+}
+
+docs {
+  What a ledger export would contain: row counts, the date span, the stable
+  column list, the record policy, and what the export leaves behind. Answered
+  before any bytes stream, which is why it is the place a bad request can still
+  fail with an error envelope.
+}

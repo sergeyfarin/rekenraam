@@ -1,0 +1,104 @@
+LedgerExportAttachments:
+  type: object
+  description: >
+    Attachment coverage, declared empty rather than omitted. Attachments will
+    live outside SQLite (R14a), so the export states from day one that it does
+    not carry them; the field exists so coverage is never claimed and later
+    walked back.
+  required:
+    - included
+    - directory
+    - reason
+  properties:
+    included:
+      type: boolean
+    directory:
+      type: string
+      nullable: true
+    reason:
+      type: string
+LedgerExportTotals:
+  type: object
+  description: What the export would contain, counted from the same selection the download uses.
+  required:
+    - posting_count
+    - journal_entry_count
+    - transaction_count
+    - account_count
+    - commodity_count
+  properties:
+    posting_count:
+      type: integer
+      format: int64
+      description: Rows the CSV will carry, excluding the header.
+    journal_entry_count:
+      type: integer
+      format: int64
+    transaction_count:
+      type: integer
+      format: int64
+    account_count:
+      type: integer
+      format: int64
+      description: Distinct accounts named by an exported posting, system accounts included.
+    commodity_count:
+      type: integer
+      format: int64
+    earliest_entry_date:
+      type: string
+      format: date
+    latest_entry_date:
+      type: string
+      format: date
+LedgerExportPreviewResponse:
+  type: object
+  required:
+    - generated_at
+    - selection_unit
+    - record_policy
+    - all_transactions_complete
+    - includes_system_accounts
+    - columns
+    - excluded
+    - ledger
+    - attachments
+  properties:
+    generated_at:
+      type: string
+      format: date-time
+    selection_unit:
+      type: string
+      description: >
+        What a filter selects. Always journal_entry: selecting individual
+        postings would drop counterpart legs and break the per-entry balance
+        the export guarantees.
+      enum: [journal_entry]
+    record_policy:
+      type: string
+      description: Which ledger records leave through the export, in one sentence a manifest can carry verbatim.
+    all_transactions_complete:
+      type: boolean
+      description: >
+        Archive-wide, not per transaction. True when every entry of every
+        exported transaction is present — always true for the unfiltered flat
+        CSV. The per-row transaction_complete column carries the same fact per
+        transaction.
+    includes_system_accounts:
+      type: boolean
+      description: >
+        Always true. Reports exclude system accounts; an export that dropped
+        them would emit transactions that do not balance.
+    columns:
+      type: array
+      description: The stable ledger.csv schema, in order. Columns are appended, never reordered or renamed.
+      items:
+        type: string
+    excluded:
+      type: array
+      description: Data a portable export deliberately leaves behind, named so nobody has to infer it.
+      items:
+        type: string
+    ledger:
+      $ref: "../../openapi.yaml#/components/schemas/LedgerExportTotals"
+    attachments:
+      $ref: "../../openapi.yaml#/components/schemas/LedgerExportAttachments"

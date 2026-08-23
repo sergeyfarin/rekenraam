@@ -305,13 +305,23 @@ func newSetupTestHandler(t *testing.T) (http.Handler, *sql.DB) {
 func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.Handler, *sql.DB) {
 	t.Helper()
 
-	database, err := db.Open(context.Background(), "file:"+filepath.Join(t.TempDir(), "rekenraam.sqlite"))
+	databaseURL := "file:" + filepath.Join(t.TempDir(), "rekenraam.sqlite")
+	database, err := db.Open(context.Background(), databaseURL)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, database.Close())
 	})
 
 	require.NoError(t, db.Migrate(context.Background(), database))
+
+	// Exports read through the same second, read-only pool production wires
+	// (ADR 0011), so a test exercises the real isolation rather than a
+	// convenient shortcut through the writer.
+	readOnlyDatabase, err := db.OpenReadOnly(context.Background(), databaseURL)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, readOnlyDatabase.Close())
+	})
 
 	setupRepository := db.NewSetupRepository(database)
 	setupService := app.NewSetupService(setupRepository)
@@ -343,6 +353,7 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	pricingService := app.NewPricingService(db.NewPricingRepository(database))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, nil, nil, nil)
+	exportService := app.NewExportService(db.NewExportRepository(readOnlyDatabase))
 
 	return NewHandler(logger, http.NotFoundHandler(), Services{
 		Setup:       setupService,
@@ -359,6 +370,7 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 		Pricing:     pricingService,
 		Investment:  investmentService,
 		Import:      importService,
+		Export:      exportService,
 	}, options), database
 }
 

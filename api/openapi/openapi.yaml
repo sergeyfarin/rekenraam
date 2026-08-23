@@ -93,6 +93,10 @@ paths:
     $ref: "./paths/reports-cashflow.yaml"
   /api/v1/reports/spending:
     $ref: "./paths/reports-spending.yaml"
+  /api/v1/exports/preview:
+    $ref: "./paths/exports-preview.yaml"
+  /api/v1/exports/ledger.csv:
+    $ref: "./paths/exports-ledger-csv.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
   /api/v1/setup/categories:
@@ -504,6 +508,12 @@ components:
       $ref: "./components/schemas/reports.yaml#/NetWorthSeriesResponse"
     ReportFilters:
       $ref: "./components/schemas/reports.yaml#/ReportFilters"
+    LedgerExportAttachments:
+      $ref: "./components/schemas/exports.yaml#/LedgerExportAttachments"
+    LedgerExportTotals:
+      $ref: "./components/schemas/exports.yaml#/LedgerExportTotals"
+    LedgerExportPreviewResponse:
+      $ref: "./components/schemas/exports.yaml#/LedgerExportPreviewResponse"
     SpendingReportQuery:
       $ref: "./components/schemas/reports.yaml#/SpendingReportQuery"
     SpendingReportGroupTotal:

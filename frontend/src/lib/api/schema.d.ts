@@ -3895,6 +3895,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Describe the export before downloading it
+         * @description Answers "what would I get" without producing it: row counts, the date span, the stable column list, the record policy, and what the export leaves behind. It exists because a streamed download commits its status code with the first byte — this is the last point at which a problem can still be reported in an error envelope, and the place a screen learns what to show before offering the file.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description What the export would contain */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LedgerExportPreviewResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/ledger.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the whole posted ledger as CSV
+         * @description Streams one row per posting of the current version of every posted, non-deleted transaction, in entry-date order. Amounts are exact decimal strings rendered from the stored coefficient and scale, debit-positive, with a point separator and no group separators. System accounts are included: an export that dropped them would emit transactions that do not balance.
+         *
+         *     The file takes no filters. A downloaded flat file cannot carry the manifest that makes a scoped export reproducible, so scope parameters are refused with EXPORT_SCOPE_UNSUPPORTED rather than silently ignored; scoped exports are produced as an archive that carries its own manifest.
+         *
+         *     The response is UTF-8 with a byte order mark so a spreadsheet reads it correctly, LF line endings, RFC 4180 quoting, and a header row first.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The ledger, streamed as CSV */
+                200: {
+                    headers: {
+                        /** @description Attachment with a dated filename. */
+                        "Content-Disposition"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/csv": string;
+                    };
+                };
+                /** @description A scope parameter was supplied to an export that is always whole-ledger */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/system-accounts": {
         parameters: {
             query?: never;
@@ -12093,6 +12204,56 @@ export interface components {
             commodity_ids: number[];
             resolved_account_ids: number[];
         };
+        /** @description Attachment coverage, declared empty rather than omitted. Attachments will live outside SQLite (R14a), so the export states from day one that it does not carry them; the field exists so coverage is never claimed and later walked back. */
+        LedgerExportAttachments: {
+            included: boolean;
+            directory: string | null;
+            reason: string;
+        };
+        /** @description What the export would contain, counted from the same selection the download uses. */
+        LedgerExportTotals: {
+            /**
+             * Format: int64
+             * @description Rows the CSV will carry, excluding the header.
+             */
+            posting_count: number;
+            /** Format: int64 */
+            journal_entry_count: number;
+            /** Format: int64 */
+            transaction_count: number;
+            /**
+             * Format: int64
+             * @description Distinct accounts named by an exported posting, system accounts included.
+             */
+            account_count: number;
+            /** Format: int64 */
+            commodity_count: number;
+            /** Format: date */
+            earliest_entry_date?: string;
+            /** Format: date */
+            latest_entry_date?: string;
+        };
+        LedgerExportPreviewResponse: {
+            /** Format: date-time */
+            generated_at: string;
+            /**
+             * @description What a filter selects. Always journal_entry: selecting individual postings would drop counterpart legs and break the per-entry balance the export guarantees.
+             * @enum {string}
+             */
+            selection_unit: "journal_entry";
+            /** @description Which ledger records leave through the export, in one sentence a manifest can carry verbatim. */
+            record_policy: string;
+            /** @description Archive-wide, not per transaction. True when every entry of every exported transaction is present — always true for the unfiltered flat CSV. The per-row transaction_complete column carries the same fact per transaction. */
+            all_transactions_complete: boolean;
+            /** @description Always true. Reports exclude system accounts; an export that dropped them would emit transactions that do not balance. */
+            includes_system_accounts: boolean;
+            /** @description The stable ledger.csv schema, in order. Columns are appended, never reordered or renamed. */
+            columns: string[];
+            /** @description Data a portable export deliberately leaves behind, named so nobody has to infer it. */
+            excluded: string[];
+            ledger: components["schemas"]["LedgerExportTotals"];
+            attachments: components["schemas"]["LedgerExportAttachments"];
+        };
         SpendingReportQuery: {
             /** Format: date */
             start_date: string;
@@ -13712,7 +13873,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {
