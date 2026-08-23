@@ -29,7 +29,10 @@ get:
       description: >
         Repeatable. Restricts the series to these asset and liability accounts,
         so the same endpoint powers full net worth, one account's history, or a
-        selected group without changing the calculation.
+        selected group without changing the calculation. An account of any other
+        class is VALIDATION_FAILED: the series sums assets and liabilities, so
+        accepting one and skipping its balance would answer an empty report to a
+        question the caller thought it had asked.
       schema:
         type: array
         items:

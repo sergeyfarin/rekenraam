@@ -37,7 +37,10 @@ get:
         default: spending
     - in: query
       name: category_id
-      description: Repeatable. Restricts the report to these category accounts.
+      description: >
+        Repeatable. Restricts the report to these category accounts. A category
+        is an income or expense account, so an id naming any other account is
+        VALIDATION_FAILED rather than an empty report.
       schema:
         type: array
         items:
@@ -64,6 +67,8 @@ get:
         entry rather than per transaction means a multi-entry transaction whose
         category posting and filtered account sit in different entries does not
         count, which is also what keeps this in step with the cashflow report.
+        Asset and liability accounts only, like every report's account filter;
+        anything else is VALIDATION_FAILED.
       schema:
         type: array
         items:

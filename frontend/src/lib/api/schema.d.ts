@@ -3678,7 +3678,7 @@ export interface paths {
                     start_date: string;
                     end_date: string;
                     bucket: "day" | "week" | "month" | "quarter" | "year";
-                    /** @description Repeatable. Restricts the series to these asset and liability accounts, so the same endpoint powers full net worth, one account's history, or a selected group without changing the calculation. */
+                    /** @description Repeatable. Restricts the series to these asset and liability accounts, so the same endpoint powers full net worth, one account's history, or a selected group without changing the calculation. An account of any other class is VALIDATION_FAILED: the series sums assets and liabilities, so accepting one and skipping its balance would answer an empty report to a question the caller thought it had asked. */
                     account_id?: number[];
                     /** @description Expands each account_id to itself plus every descendant, using the account versions in effect on the reporting date. */
                     include_descendants?: boolean;
@@ -3832,11 +3832,11 @@ export interface paths {
                     group_by: "category" | "payee";
                     /** @description Defaults to spending. Income is a distinct, explicitly selected mode and is labelled as income, never folded into a spending number. */
                     mode?: "spending" | "income";
-                    /** @description Repeatable. Restricts the report to these category accounts. */
+                    /** @description Repeatable. Restricts the report to these category accounts. A category is an income or expense account, so an id naming any other account is VALIDATION_FAILED rather than an empty report. */
                     category_id?: number[];
                     /** @description Repeatable. Restricts the report to these payees. */
                     payee_id?: number[];
-                    /** @description Repeatable counterpart filter. Keeps category postings whose *journal entry* also touches one of these accounts — "what did I spend from here" — without inferring a bank-statement classification. Matching per entry rather than per transaction means a multi-entry transaction whose category posting and filtered account sit in different entries does not count, which is also what keeps this in step with the cashflow report. */
+                    /** @description Repeatable counterpart filter. Keeps category postings whose *journal entry* also touches one of these accounts — "what did I spend from here" — without inferring a bank-statement classification. Matching per entry rather than per transaction means a multi-entry transaction whose category posting and filtered account sit in different entries does not count, which is also what keeps this in step with the cashflow report. Asset and liability accounts only, like every report's account filter; anything else is VALIDATION_FAILED. */
                     account_id?: number[];
                     /** @description Expands each account_id to itself plus every descendant, using the account versions in effect on the reporting date. */
                     include_descendants?: boolean;

@@ -130,7 +130,7 @@ func (s *TransactionService) Spending(ctx context.Context, input SpendingInput) 
 	if err != nil {
 		return SpendingResult{}, err
 	}
-	if err := s.ensureCategoriesExist(ctx, categoryIDs); err != nil {
+	if err := s.ensureCategoriesExist(ctx, categoryIDs, endDate); err != nil {
 		return SpendingResult{}, err
 	}
 	if err := s.ensurePayeesExist(ctx, payeeIDs); err != nil {
@@ -313,19 +313,26 @@ func (s *TransactionService) spendingGroupLabels(
 }
 
 // sortSpendingGroups ranks by the largest single-commodity magnitude, then by a
-// stable identity tiebreak. Magnitudes across unlike commodities are never
-// added together to build the ranking key.
+// stable identity tiebreak.
+//
+// **The multi-commodity ranking policy, stated rather than implied:** unlike
+// commodities are never added together, and the order is not a claim that they
+// are comparable. A group's rank is the largest single-commodity magnitude it
+// contains, compared as a number of whole-and-fractional units — so 0.75 BTC
+// ranks below 100.00 EUR because 0.75 is less than 100, not because any
+// exchange rate was applied. Without a reporting currency that is the only
+// honest total order available; the table still shows each commodity its own
+// row, and shares are computed only within one commodity.
+//
+// The comparison is exact. Truncating to whole units first — which is what this
+// did until 2026-08-23 — made every group under one unit rank as zero, so 0.90
+// and 0.10 tied and fell through to the identity tiebreak, which is precisely
+// the case a high-scale instrument or crypto quantity lands in.
 func sortSpendingGroups(groups []SpendingGroup) {
-	rankOf := func(group SpendingGroup) *big.Int {
-		best := big.NewInt(0)
+	rankOf := func(group SpendingGroup) *exact.ScaledInt {
+		best := exact.NewScaledInt()
 		for i, total := range group.Totals {
-			// Compare whole units so a high-scale crypto amount does not outrank
-			// a larger fiat amount purely on digit count.
-			scaled := exact.ScaledIntFromCoefficient(total.QuantityValue, total.QuantityScale)
-			value := scaled.BigInt()
-			if scaled.Scale() > 0 {
-				value.Quo(value, exact.Pow10(scaled.Scale()))
-			}
+			value := exact.ScaledIntFromCoefficient(total.QuantityValue, total.QuantityScale)
 			if i == 0 || value.Cmp(best) > 0 {
 				best = value
 			}
@@ -333,12 +340,20 @@ func sortSpendingGroups(groups []SpendingGroup) {
 		return best
 	}
 
+	// Ranks are computed once per group rather than inside the comparator, which
+	// would rebuild both sides on every comparison.
+	ranks := make(map[int64]*exact.ScaledInt, len(groups))
+	for _, group := range groups {
+		ranks[spendingGroupIdentity(group)] = rankOf(group)
+	}
+
 	slices.SortStableFunc(groups, func(a, b SpendingGroup) int {
-		// rankOf descending, then identity ascending as a stable tiebreak.
-		if c := rankOf(b).Cmp(rankOf(a)); c != 0 {
+		identityA, identityB := spendingGroupIdentity(a), spendingGroupIdentity(b)
+		// rank descending, then identity ascending as a stable tiebreak.
+		if c := ranks[identityB].Cmp(ranks[identityA]); c != 0 {
 			return c
 		}
-		return cmp.Compare(spendingGroupIdentity(a), spendingGroupIdentity(b))
+		return cmp.Compare(identityA, identityB)
 	})
 }
 
@@ -441,6 +456,15 @@ func (s *TransactionService) resolveReportFilters(ctx context.Context, filters R
 			return ReportFiltersEcho{}, nil, fmt.Errorf("check report account filter: %w", err)
 		}
 	}
+	if len(normalized.AccountIDs) > 0 {
+		accounts, err := s.repository.LedgerAccountsAsOf(ctx, BookID, asOf)
+		if err != nil {
+			return ReportFiltersEcho{}, nil, fmt.Errorf("read accounts for report filter: %w", err)
+		}
+		if err := validateReportAccountClasses(accounts, normalized.AccountIDs); err != nil {
+			return ReportFiltersEcho{}, nil, err
+		}
+	}
 	if len(normalized.CommodityIDs) > 0 {
 		known, err := s.commodityRepository.CommoditiesByIDs(ctx, BookID, normalized.CommodityIDs)
 		if err != nil {
@@ -464,6 +488,66 @@ func (s *TransactionService) resolveReportFilters(ctx context.Context, filters R
 		CommodityIDs:       normalized.CommodityIDs,
 		ResolvedAccountIDs: resolved,
 	}, resolved, nil
+}
+
+// reportAccountClasses is what the shared account filter may name, on every
+// report.
+//
+// The filter always means "the account the money sat in or moved through" —
+// net worth sums these accounts, spending matches them as the counterpart of a
+// category posting, and cashflow makes them the cash scope. Only asset and
+// liability accounts answer that. An income or expense account is the category
+// dimension, and a user equity account holds no balance a report reads, so
+// naming either produced an empty result the screen could not explain.
+var reportAccountClasses = map[string]bool{
+	"asset":     true,
+	"liability": true,
+}
+
+// validateReportAccountClasses rejects a filter that can only return nothing.
+// It checks the named accounts rather than the descendant expansion: a subtree
+// is class-homogeneous by construction (a child must share its parent's class),
+// and naming the parent is the user's actual choice.
+func validateReportAccountClasses(accounts []db.LedgerAccountRecord, accountIDs []int64) error {
+	byID := make(map[int64]db.LedgerAccountRecord, len(accounts))
+	for _, account := range accounts {
+		byID[account.ID] = account
+	}
+	for _, accountID := range accountIDs {
+		account, ok := byID[accountID]
+		if !ok {
+			// In the book but with no version as of the reporting date: it has no
+			// postings the range can reach, so it cannot make the filter wrong.
+			continue
+		}
+		if !reportAccountClasses[account.AccountClass] {
+			return ValidationError{Message: "account filter is invalid: reports filter on asset or liability accounts"}
+		}
+	}
+	return nil
+}
+
+// validateCategoryFilter rejects a category_id that is not a category.
+//
+// Categories are income and expense accounts, so every account id is a
+// syntactically valid category id and the existence check alone let a checking
+// account through — producing an empty spending report with nothing to explain
+// why.
+func validateCategoryFilter(accounts []db.LedgerAccountRecord, categoryIDs []int64) error {
+	byID := make(map[int64]db.LedgerAccountRecord, len(accounts))
+	for _, account := range accounts {
+		byID[account.ID] = account
+	}
+	for _, categoryID := range categoryIDs {
+		account, ok := byID[categoryID]
+		if !ok {
+			continue
+		}
+		if account.AccountClass != "income" && account.AccountClass != "expense" {
+			return ValidationError{Message: "category filter is invalid: a category is an income or expense account"}
+		}
+	}
+	return nil
 }
 
 // echoedReportFilters turns a resolved echo back into the normalized selection
@@ -574,7 +658,10 @@ func accountSubtreeIDs(accounts []db.LedgerAccountRecord, accountIDs []int64) []
 	return resolved
 }
 
-func (s *TransactionService) ensureCategoriesExist(ctx context.Context, categoryIDs []int64) error {
+func (s *TransactionService) ensureCategoriesExist(ctx context.Context, categoryIDs []int64, asOf string) error {
+	if len(categoryIDs) == 0 {
+		return nil
+	}
 	for _, categoryID := range categoryIDs {
 		if err := s.repository.EnsureAccountInBook(ctx, BookID, categoryID); err != nil {
 			if errors.Is(err, db.ErrNotFound) {
@@ -583,7 +670,11 @@ func (s *TransactionService) ensureCategoriesExist(ctx context.Context, category
 			return fmt.Errorf("check report category filter: %w", err)
 		}
 	}
-	return nil
+	accounts, err := s.repository.LedgerAccountsAsOf(ctx, BookID, asOf)
+	if err != nil {
+		return fmt.Errorf("read accounts for report category filter: %w", err)
+	}
+	return validateCategoryFilter(accounts, categoryIDs)
 }
 
 func (s *TransactionService) ensurePayeesExist(ctx context.Context, payeeIDs []int64) error {

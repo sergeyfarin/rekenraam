@@ -712,3 +712,169 @@ func TestSpendingAndNetWorthOverflowAreA422(t *testing.T) {
 		assert.Equal(t, "LEDGER_OVERFLOW", body.Error.Code, name)
 	}
 }
+
+// TestSpendingRanksSubUnitAmountsByValue pins ranking below one whole unit.
+// The comparison used to truncate each total to whole units first, so every
+// group under 1.00 ranked as zero and fell through to the identity tiebreak —
+// the case any instrument or crypto quantity lands in, and one an account
+// created earlier would silently win.
+func TestSpendingRanksSubUnitAmountsByValue(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	// Groceries is the older account, so the identity tiebreak favours it. Give
+	// it the smaller amount: only a value comparison puts travel first.
+	// October: the fixture seeds June and July, and this ranking must be read
+	// against only the two amounts under test.
+	createTransactionForSession(t, handler, fixture.sessionCookie, fixture.csrfToken, balancedBody("2026-10-05",
+		posting(fixture.checking.ID, -10, 2, fixture.usdID),
+		posting(fixture.groceries.ID, 10, 2, fixture.usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, fixture.sessionCookie, fixture.csrfToken, balancedBody("2026-10-06",
+		posting(fixture.checking.ID, -90, 2, fixture.usdID),
+		posting(fixture.travel.ID, 90, 2, fixture.usdID),
+	), http.StatusCreated)
+
+	require.Less(t, fixture.groceries.ID, fixture.travel.ID)
+
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-10-01&end_date=2026-10-31&group_by=category")
+
+	require.Len(t, report.Groups, 2)
+	assert.Equal(t, fixture.travel.ID, *report.Groups[0].CategoryID, "0.90 must outrank 0.10")
+	assertGroupTotal(t, report.Groups[0], fixture.usdID, "90", 2)
+	assert.Equal(t, fixture.groceries.ID, *report.Groups[1].CategoryID)
+	assertGroupTotal(t, report.Groups[1], fixture.usdID, "10", 2)
+}
+
+// TestSpendingRanksAcrossScalesByValueNotDigitCount is the other half of the
+// same rule: an exact comparison must still not let a deep scale win on digit
+// count alone. 1.90 outranks 1.10 even though both are "1" in whole units, and
+// a scale-8 quantity worth less than a scale-2 one still ranks below it.
+func TestSpendingRanksAcrossScalesByValueNotDigitCount(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	createTransactionForSession(t, handler, fixture.sessionCookie, fixture.csrfToken, balancedBody("2026-09-05",
+		posting(fixture.checking.ID, -110, 2, fixture.usdID),
+		posting(fixture.groceries.ID, 110, 2, fixture.usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, fixture.sessionCookie, fixture.csrfToken, balancedBody("2026-09-06",
+		posting(fixture.checking.ID, -190, 2, fixture.usdID),
+		posting(fixture.travel.ID, 190, 2, fixture.usdID),
+	), http.StatusCreated)
+
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-09-01&end_date=2026-09-30&group_by=category")
+
+	require.Len(t, report.Groups, 2)
+	assert.Equal(t, fixture.travel.ID, *report.Groups[0].CategoryID, "1.90 must outrank 1.10")
+	assert.Equal(t, fixture.groceries.ID, *report.Groups[1].CategoryID)
+}
+
+// TestReportAccountFilterRejectsAccountsThatHoldNoReadableBalance pins the
+// shared account-filter contract. The filter always means "the account the
+// money sat in or moved through", which only asset and liability accounts
+// answer. An equity or category account used to be accepted and then silently
+// skipped, so the report came back empty with nothing to explain it.
+func TestReportAccountFilterRejectsAccountsThatHoldNoReadableBalance(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	// commodity_trading is the reachable equity account: users cannot create one
+	// ("equity accounts are managed by system workflows") and the picker never
+	// offers a system account, so this arrives only by hand-editing a URL — which
+	// is exactly what a shareable-URL report invites.
+	systemAccounts := listAccountsForSession(t, handler, fixture.sessionCookie, "?include_system=true")
+	equity := accountBySystemRole(t, systemAccounts.Accounts, "commodity_trading")
+
+	for name, target := range map[string]string{
+		"net worth": "/api/v1/reports/net-worth?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id=",
+		"spending":  "/api/v1/reports/spending?start_date=2026-06-01&end_date=2026-06-30&group_by=category&account_id=",
+		"cashflow":  "/api/v1/reports/cashflow?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id=",
+	} {
+		req := httptest.NewRequest(http.MethodGet, target+strconvFormatInt(equity.ID), nil)
+		req.AddCookie(fixture.sessionCookie)
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		require.Equal(t, http.StatusBadRequest, res.Code, "%s: %s", name, res.Body.String())
+		var body errorResponse
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+		assert.Equal(t, "VALIDATION_FAILED", body.Error.Code, name)
+	}
+
+	// A category account is the other reachable case: the picker excludes them,
+	// but a hand-edited or stale link can still name one.
+	for name, target := range map[string]string{
+		"net worth": "/api/v1/reports/net-worth?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id=",
+		"spending":  "/api/v1/reports/spending?start_date=2026-06-01&end_date=2026-06-30&group_by=category&account_id=",
+	} {
+		req := httptest.NewRequest(http.MethodGet, target+strconvFormatInt(fixture.groceries.ID), nil)
+		req.AddCookie(fixture.sessionCookie)
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusBadRequest, res.Code, "%s: %s", name, res.Body.String())
+	}
+
+	// The liability account is still a legal filter on every report: it holds a
+	// balance, so the question has an answer.
+	for name, target := range map[string]string{
+		"net worth": "/api/v1/reports/net-worth?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id=",
+		"spending":  "/api/v1/reports/spending?start_date=2026-06-01&end_date=2026-06-30&group_by=category&account_id=",
+	} {
+		req := httptest.NewRequest(http.MethodGet, target+strconvFormatInt(fixture.card.ID), nil)
+		req.AddCookie(fixture.sessionCookie)
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		assert.Equal(t, http.StatusOK, res.Code, "%s: %s", name, res.Body.String())
+	}
+}
+
+// TestSpendingCategoryFilterRejectsAccountsThatAreNotCategories closes the
+// other half. Categories are income and expense accounts, so every account id
+// is a syntactically valid category id and an existence check alone let a
+// checking account through — answering with an empty report rather than saying
+// the question was malformed.
+func TestSpendingCategoryFilterRejectsAccountsThatAreNotCategories(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	for name, categoryID := range map[string]int64{
+		"a checking account": fixture.checking.ID,
+		"a credit card":      fixture.card.ID,
+	} {
+		req := httptest.NewRequest(http.MethodGet,
+			"/api/v1/reports/spending?start_date=2026-06-01&end_date=2026-06-30&group_by=category&category_id="+
+				strconvFormatInt(categoryID), nil)
+		req.AddCookie(fixture.sessionCookie)
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		require.Equal(t, http.StatusBadRequest, res.Code, "%s: %s", name, res.Body.String())
+		var body errorResponse
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+		assert.Equal(t, "VALIDATION_FAILED", body.Error.Code, name)
+	}
+
+	// A real category still narrows the report rather than being rejected.
+	report := readSpendingForSession(t, handler, fixture.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category&category_id="+
+			strconvFormatInt(fixture.groceries.ID))
+	require.Len(t, report.Groups, 1)
+	assert.Equal(t, fixture.groceries.ID, *report.Groups[0].CategoryID)
+}

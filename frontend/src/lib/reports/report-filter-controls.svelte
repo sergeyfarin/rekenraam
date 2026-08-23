@@ -6,10 +6,11 @@
   import { currenciesQueryOptions } from '$lib/api/currencies';
   import { investmentInstrumentsQueryOptions } from '$lib/api/investments';
   import { payeesQueryOptions } from '$lib/api/payees';
-  import { accountDisplayName, isCategoryAccount } from '$lib/accounts/account-labels';
+  import { accountDisplayName } from '$lib/accounts/account-labels';
   import { categoryDisplayName } from '$lib/categories/category-labels';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import ReportFilterSelect from './report-filter-select.svelte';
+  import { commodityLabelMap } from './commodity-labels';
   import {
     activeFilterCount,
     clearDimensions,
@@ -23,19 +24,11 @@
   let {
     filters,
     dimensions,
-    accountScope = 'basis',
     onChange
   }: {
     filters: ReportFilterState;
     /** Only the dimensions the active report can express. Net worth has no category or payee. */
     dimensions: ReportFilterDimension[];
-    /**
-     * What the account selection means to the active report. On net worth and
-     * spending it narrows a basis (`basis`). On cashflow it *is* the cash scope
-     * (`cash-scope`), which the API restricts to accounts that hold a balance —
-     * so the control must not offer an equity account the request would reject.
-     */
-    accountScope?: 'basis' | 'cash-scope';
     onChange: (filters: ReportFilterState) => void;
   } = $props();
 
@@ -63,38 +56,29 @@
     return options.sort((a, b) => collator.compare(a.label, b.label));
   }
 
-  // Income and expense accounts are the category dimension, not a place value is
-  // held; offering them here would invite a filter that can only return nothing.
-  // A cash scope narrows further to the classes that hold a balance the report
-  // can reconcile to, which is the same rule the endpoint validates.
+  // The same rule the endpoints validate: the account dimension means "where the
+  // money sat or moved through", so only accounts that hold a balance belong.
+  // Income and expense accounts are the category dimension, and offering one
+  // here would invite a filter that can only return nothing.
   const accountOptions = $derived(
     sortOptions(
       (accountsQuery.data?.accounts ?? [])
-        .filter((account) => !isCategoryAccount(account))
-        .filter(
-          (account) =>
-            accountScope === 'basis' ||
-            account.account_class === 'asset' ||
-            account.account_class === 'liability'
-        )
+        .filter((account) => account.account_class === 'asset' || account.account_class === 'liability')
         .map((account) => ({ id: account.id, label: accountDisplayName(account) }))
     )
   );
 
   // Both currencies and the commodities behind held instruments can carry a
-  // balance, so a portfolio's securities have to be filterable too.
-  const commodityOptions = $derived.by(() => {
-    const byID = new Map<number, string>();
-    for (const currency of currenciesQuery.data?.currencies ?? []) {
-      byID.set(currency.id, currency.code);
-    }
-    for (const instrument of instrumentsQuery.data?.instruments ?? []) {
-      if (!byID.has(instrument.commodity_id)) {
-        byID.set(instrument.commodity_id, instrument.commodity_code || instrument.display_name);
-      }
-    }
-    return sortOptions([...byID].map(([id, label]) => ({ id, label })));
-  });
+  // balance, so a portfolio's securities have to be filterable too — and the
+  // report screens read the same map, so anything offered here is also readable
+  // in the table, chart caption, print sheet, and CSV.
+  const commodityOptions = $derived(
+    sortOptions(
+      [...commodityLabelMap(currenciesQuery.data?.currencies, instrumentsQuery.data?.instruments)].map(
+        ([id, label]) => ({ id, label })
+      )
+    )
+  );
 
   const categoryOptions = $derived(
     sortOptions(
