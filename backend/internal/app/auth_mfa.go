@@ -194,14 +194,25 @@ func (s *AuthService) ActivateTOTP(ctx context.Context, input ActivateMFAInput) 
 		return nil, ErrMFACodeInvalid
 	}
 
-	if err := s.repository.ActivateMFATOTP(ctx, input.UserID, s.now().UTC().Format(time.RFC3339), int64(step)); err != nil {
+	// The codes are minted before anything is written, and stored in the same
+	// transaction that flips the enrollment on. Activating first and issuing
+	// codes afterwards would, on any failure in between, leave MFA active with
+	// no recovery codes and no way to retry: the retry would be refused as
+	// already active.
+	codes, hashes, err := newRecoveryCodeSet()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repository.ActivateMFATOTPWithRecoveryCodes(
+		ctx, input.UserID, s.now().UTC().Format(time.RFC3339), int64(step), hashes,
+	); err != nil {
 		if errors.Is(err, db.ErrNotFound) {
 			return nil, ErrMFANotEnrolled
 		}
 		return nil, fmt.Errorf("activate mfa enrollment: %w", err)
 	}
 
-	return s.issueRecoveryCodes(ctx, input.UserID)
+	return codes, nil
 }
 
 // DisableMFA removes the second factor. Password-confirmed, because switching
@@ -417,21 +428,32 @@ func (s *AuthService) mfaActive(ctx context.Context, userID int64) (bool, error)
 }
 
 func (s *AuthService) issueRecoveryCodes(ctx context.Context, userID int64) ([]string, error) {
-	codes := make([]string, 0, mfaRecoveryCodeCount)
-	hashes := make([]string, 0, mfaRecoveryCodeCount)
-	for range mfaRecoveryCodeCount {
-		code, err := newRecoveryCode()
-		if err != nil {
-			return nil, err
-		}
-		codes = append(codes, code)
-		hashes = append(hashes, hashRecoveryCode(code))
+	codes, hashes, err := newRecoveryCodeSet()
+	if err != nil {
+		return nil, err
 	}
 	if err := s.repository.ReplaceMFARecoveryCodes(ctx, userID, hashes, s.now().UTC().Format(time.RFC3339)); err != nil {
 		return nil, fmt.Errorf("persist mfa recovery codes: %w", err)
 	}
 
 	return codes, nil
+}
+
+// newRecoveryCodeSet mints a full set and its hashes without touching the
+// database, so callers can decide what transaction persists them.
+func newRecoveryCodeSet() (codes []string, hashes []string, err error) {
+	codes = make([]string, 0, mfaRecoveryCodeCount)
+	hashes = make([]string, 0, mfaRecoveryCodeCount)
+	for range mfaRecoveryCodeCount {
+		code, err := newRecoveryCode()
+		if err != nil {
+			return nil, nil, err
+		}
+		codes = append(codes, code)
+		hashes = append(hashes, hashRecoveryCode(code))
+	}
+
+	return codes, hashes, nil
 }
 
 // verifyOwnerPassword re-authenticates the session holder for the security

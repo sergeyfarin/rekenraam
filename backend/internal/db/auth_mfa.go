@@ -83,8 +83,33 @@ func (r *AuthRepository) UpsertMFATOTP(ctx context.Context, params UpsertMFATOTP
 // ActivateMFATOTP promotes a pending enrollment once a code has proved the
 // user really stored the secret, recording the step that code came from so it
 // cannot be replayed.
-func (r *AuthRepository) ActivateMFATOTP(ctx context.Context, userID int64, activatedAt string, usedStep int64) error {
-	result, err := r.database.ExecContext(ctx, `
+// ActivateMFATOTPWithRecoveryCodes promotes a pending enrollment and installs
+// its recovery codes in one transaction. The two must not be separable: an
+// activation that succeeded while its codes failed to persist would leave the
+// owner locked to a single authenticator with no way back in, and a retry
+// would be refused as already active.
+func (r *AuthRepository) ActivateMFATOTPWithRecoveryCodes(ctx context.Context, userID int64, activatedAt string, usedStep int64, codeHashes []string) error {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin mfa activation transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := activateMFATOTPTx(ctx, tx, userID, activatedAt, usedStep); err != nil {
+		return err
+	}
+	if err := replaceMFARecoveryCodesTx(ctx, tx, userID, codeHashes, activatedAt); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit mfa activation transaction: %w", err)
+	}
+
+	return nil
+}
+
+func activateMFATOTPTx(ctx context.Context, tx *sql.Tx, userID int64, activatedAt string, usedStep int64) error {
+	result, err := tx.ExecContext(ctx, `
 		UPDATE user_mfa_totp
 		SET status = 'active', activated_at = ?, last_used_step = ?
 		WHERE user_id = ? AND status = 'pending'
@@ -160,6 +185,17 @@ func (r *AuthRepository) ReplaceMFARecoveryCodes(ctx context.Context, userID int
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := replaceMFARecoveryCodesTx(ctx, tx, userID, codeHashes, createdAt); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit mfa recovery code transaction: %w", err)
+	}
+
+	return nil
+}
+
+func replaceMFARecoveryCodesTx(ctx context.Context, tx *sql.Tx, userID int64, codeHashes []string, createdAt string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM user_mfa_recovery_codes WHERE user_id = ?`, userID); err != nil {
 		return fmt.Errorf("delete previous mfa recovery codes: %w", err)
 	}
@@ -170,9 +206,6 @@ func (r *AuthRepository) ReplaceMFARecoveryCodes(ctx context.Context, userID int
 		`, userID, codeHash, createdAt); err != nil {
 			return fmt.Errorf("insert mfa recovery code: %w", err)
 		}
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit mfa recovery code transaction: %w", err)
 	}
 
 	return nil
