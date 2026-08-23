@@ -57,7 +57,10 @@ export function withReportContext(rows: string[][], context: string[]): string[]
   if (lines.length === 0) {
     return rows;
   }
-  const width = rows.reduce((widest, row) => Math.max(widest, row.length), 0);
+  // At least one column: an empty table would otherwise produce a zero-field
+  // separator followed by one-field context rows, which is the ragged shape
+  // this padding exists to avoid.
+  const width = rows.reduce((widest, row) => Math.max(widest, row.length), 1);
   const pad = (row: string[]) => [...row, ...Array<string>(Math.max(0, width - row.length)).fill('')];
   return [...rows.map(pad), pad([]), ...lines.map((line) => pad([line]))];
 }

@@ -128,6 +128,13 @@ describe('withReportContext', () => {
     expect(withReportContext(table, [])).toEqual(table);
   });
 
+  it('stays rectangular even with no table to measure', () => {
+    const rows = withReportContext([], ['Period: June 2026']);
+    for (const row of rows) {
+      expect(row).toHaveLength(1);
+    }
+  });
+
   it('survives the CSV encoder with its quoting intact', () => {
     const csv = toCSV(withReportContext(table, ['Accounts: Smith, Jones & Co']));
     expect(csv.split('\r\n')[0]).toBe('Period,Amount');
