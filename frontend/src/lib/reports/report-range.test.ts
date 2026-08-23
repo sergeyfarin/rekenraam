@@ -18,6 +18,24 @@ describe('parseReportRange', () => {
     expect(parseReportRange(params('start_date=January&end_date=2026-06-30&bucket=month'))).toBeNull();
     expect(parseReportRange(params('start_date=2026-01-01&end_date=2026-06-30&bucket=fortnight'))).toBeNull();
   });
+
+  it('rejects a date-shaped string that is not a date', () => {
+    // The shape is not the contract: sending either of these produces a
+    // permanent validation error the screen cannot recover from.
+    expect(parseReportRange(params('start_date=2026-99-99&end_date=2026-06-30&bucket=month'))).toBeNull();
+    expect(parseReportRange(params('start_date=2026-02-31&end_date=2026-06-30&bucket=month'))).toBeNull();
+    expect(parseReportRange(params('start_date=2026-00-10&end_date=2026-06-30&bucket=month'))).toBeNull();
+    expect(parseReportRange(params('start_date=2026-01-00&end_date=2026-06-30&bucket=month'))).toBeNull();
+    expect(parseReportRange(params('start_date=2026-04-31&end_date=2026-06-30&bucket=month'))).toBeNull();
+  });
+
+  it('accepts the real boundaries, including a leap day', () => {
+    expect(parseReportRange(params('start_date=2024-02-29&end_date=2026-12-31&bucket=month'))).not.toBeNull();
+    expect(parseReportRange(params('start_date=2026-02-28&end_date=2026-01-31&bucket=month'))).not.toBeNull();
+    // 1900 is not a leap year; 2000 is.
+    expect(parseReportRange(params('start_date=1900-02-29&end_date=2026-06-30&bucket=month'))).toBeNull();
+    expect(parseReportRange(params('start_date=2000-02-29&end_date=2026-06-30&bucket=month'))).not.toBeNull();
+  });
 });
 
 describe('repairReportRange', () => {
@@ -34,6 +52,14 @@ describe('repairReportRange', () => {
     expect(repaired?.get('start_date')).toBe('2026-01-01');
     expect(repaired?.get('end_date')).toBe(today);
     expect(repaired?.get('bucket')).toBe('month');
+  });
+
+  it('repairs an impossible date rather than sending it to the API', () => {
+    const repaired = repairReportRange(params('view=spending&start_date=2026-02-31&end_date=2026-06-30&bucket=month'), today);
+    expect(repaired?.get('start_date')).toBe('2026-01-01');
+    // The end date was a real date, so it is left exactly as it arrived.
+    expect(repaired?.get('end_date')).toBe('2026-06-30');
+    expect(repaired?.get('view')).toBe('spending');
   });
 
   it('repairs only the malformed part and keeps the parts that were valid', () => {
