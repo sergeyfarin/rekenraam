@@ -214,6 +214,14 @@ Workflow conventions:
 - Go vulnerability scanning runs in `.github/workflows/govulncheck.yml` with
   `govulncheck ./...` from `backend/` on a weekly schedule, manually via
   `workflow_dispatch`, and on backend-affecting pull requests.
+- CodeQL code scanning runs in `.github/workflows/codeql.yml` for `actions`,
+  `go`, and `javascript-typescript`. It is an *advanced* setup — a committed
+  workflow rather than GitHub's default setup — specifically so the Go analysis
+  can run `actions/setup-go` with `go-version-file: backend/go.mod`. Default
+  setup builds Go with whatever the runner preinstalls under
+  `GOTOOLCHAIN=local`, so a `go.mod` above that version fails extraction and
+  takes every other language in the run down with it (this broke on the Go 1.27
+  bump). Changing this back to default setup reintroduces that failure mode.
 - Dependabot version updates are configured in `.github/dependabot.yml` for
   GitHub Actions, the backend Go module, root/frontend pnpm packages, and the
   Docker runtime image.
