@@ -3754,7 +3754,7 @@ export interface paths {
                     start_date: string;
                     end_date: string;
                     bucket: "day" | "week" | "month" | "quarter" | "year";
-                    /** @description Repeatable. Selects the cash scope. Omitted, the report uses the named liquid-cash default — active, non-system accounts of the kinds echoed in query.default_cash_account_kinds — and echoes what that resolved to. */
+                    /** @description Repeatable. Selects the cash scope. Omitted, the report uses the named liquid-cash default — active, non-system accounts of the kinds echoed in query.default_cash_account_kinds — and echoes what that resolved to. An explicit selection may name any asset or liability account, including ones outside the default kinds such as a credit card, because net_movement reconciles to the balance change of whatever stable set is selected. A system account or a non-balance account class (income, expense, equity) is VALIDATION_FAILED: the response reports excluded_system_roles ["all"], and an accepted system account would make it contradict itself. */
                     account_id?: number[];
                     /** @description Expands each account_id to itself plus every descendant. The scope is resolved once, as of end_date, and applied to the whole range so net_movement keeps reconciling to one stable set of accounts. */
                     include_descendants?: boolean;
@@ -12193,7 +12193,7 @@ export interface components {
         CashflowReportResponse: {
             query: components["schemas"]["CashflowReportQuery"];
             buckets: components["schemas"]["CashflowReportBucket"][];
-            /** @description System accounts never join the cash scope, so this is ["all"]. They stay visible as counterparts: transfer clearing is financing movement, not spending. */
+            /** @description System accounts never join the cash scope, so this is ["all"] — the default scope excludes them and an explicit selection naming one is rejected. They stay visible as counterparts: transfer clearing is financing movement, not spending. */
             excluded_system_roles: string[];
         };
         PriceObservationResponse: {

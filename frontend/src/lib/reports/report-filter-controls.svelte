@@ -23,11 +23,19 @@
   let {
     filters,
     dimensions,
+    accountScope = 'basis',
     onChange
   }: {
     filters: ReportFilterState;
     /** Only the dimensions the active report can express. Net worth has no category or payee. */
     dimensions: ReportFilterDimension[];
+    /**
+     * What the account selection means to the active report. On net worth and
+     * spending it narrows a basis (`basis`). On cashflow it *is* the cash scope
+     * (`cash-scope`), which the API restricts to accounts that hold a balance —
+     * so the control must not offer an equity account the request would reject.
+     */
+    accountScope?: 'basis' | 'cash-scope';
     onChange: (filters: ReportFilterState) => void;
   } = $props();
 
@@ -57,10 +65,18 @@
 
   // Income and expense accounts are the category dimension, not a place value is
   // held; offering them here would invite a filter that can only return nothing.
+  // A cash scope narrows further to the classes that hold a balance the report
+  // can reconcile to, which is the same rule the endpoint validates.
   const accountOptions = $derived(
     sortOptions(
       (accountsQuery.data?.accounts ?? [])
         .filter((account) => !isCategoryAccount(account))
+        .filter(
+          (account) =>
+            accountScope === 'basis' ||
+            account.account_class === 'asset' ||
+            account.account_class === 'liability'
+        )
         .map((account) => ({ id: account.id, label: accountDisplayName(account) }))
     )
   );

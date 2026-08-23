@@ -358,9 +358,10 @@ CashflowReportResponse:
         $ref: "../../openapi.yaml#/components/schemas/CashflowReportBucket"
     excluded_system_roles:
       description: >
-        System accounts never join the cash scope, so this is ["all"]. They stay
-        visible as counterparts: transfer clearing is financing movement, not
-        spending.
+        System accounts never join the cash scope, so this is ["all"] — the
+        default scope excludes them and an explicit selection naming one is
+        rejected. They stay visible as counterparts: transfer clearing is
+        financing movement, not spending.
       type: array
       items:
         type: string

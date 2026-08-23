@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -320,4 +321,114 @@ func readCashflowForSession(t *testing.T, handler http.Handler, sessionCookie *h
 	var response cashflowResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
 	return response
+}
+
+// requestCashflowForSession is readCashflowForSession without the success
+// assertion, for the cases whose subject is the rejection.
+func requestCashflowForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, suffix string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/reports/cashflow"+suffix, nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+
+	handler.ServeHTTP(res, req)
+	return res
+}
+
+func apiErrorCode(t *testing.T, res *httptest.ResponseRecorder) string {
+	t.Helper()
+
+	var body errorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	return body.Error.Code
+}
+
+// TestCashflowRejectsSystemAccountsInTheCashScope pins the one promise this
+// endpoint makes about its scope in every response it sends. Selecting a system
+// account explicitly used to be accepted, which produced a report that summed
+// transfer clearing while its own excluded_system_roles said ["all"].
+func TestCashflowRejectsSystemAccountsInTheCashScope(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newCashflowFixture(t, handler)
+
+	systemAccounts := listAccountsForSession(t, handler, f.sessionCookie, "?include_system=true")
+	transferClearing := accountBySystemRole(t, systemAccounts.Accounts, "transfer_clearing")
+	commodityTrading := accountBySystemRole(t, systemAccounts.Accounts, "commodity_trading")
+
+	// transfer_clearing is an asset account, so a class check alone would let it
+	// through: the system role is what disqualifies it.
+	for name, accountID := range map[string]int64{
+		"transfer clearing": transferClearing.ID,
+		"commodity trading": commodityTrading.ID,
+	} {
+		res := requestCashflowForSession(t, handler, f.sessionCookie,
+			"?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id="+strconvFormatInt(accountID))
+		require.Equal(t, http.StatusBadRequest, res.Code, name)
+		assert.Equal(t, "VALIDATION_FAILED", apiErrorCode(t, res), name)
+	}
+}
+
+// TestCashflowScopeTakesAssetAndLiabilityAccountsOnly records the other half of
+// the scope policy: a credit card is a legal cash scope because it has a balance
+// net_movement reconciles to, while a category account has none.
+func TestCashflowScopeTakesAssetAndLiabilityAccountsOnly(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newCashflowFixture(t, handler)
+
+	// 40.00 of groceries on the card: the card owes more, and the card-scoped
+	// report reads that as outflow, not as an unclassifiable posting.
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-05",
+		posting(f.card.ID, -4000, 2, f.usdID),
+		posting(f.groceries.ID, 4000, 2, f.usdID),
+	), http.StatusCreated)
+
+	card := readCashflowForSession(t, handler, f.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id="+strconvFormatInt(f.card.ID))
+	require.Len(t, card.Buckets, 1)
+	assert.Equal(t, "selected_accounts", card.Query.CashScope)
+	assertBalance(t, card.Buckets[0].Outflow, f.usdID, 4000, 2, 4000)
+	assertBalance(t, card.Buckets[0].NetMovement, f.usdID, -4000, 2, -4000)
+
+	// A category is an expense account: it holds no balance to move, so naming
+	// one as "cash" is a malformed question rather than an empty report.
+	res := requestCashflowForSession(t, handler, f.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id="+strconvFormatInt(f.groceries.ID))
+	require.Equal(t, http.StatusBadRequest, res.Code)
+	assert.Equal(t, "VALIDATION_FAILED", apiErrorCode(t, res))
+}
+
+// TestCashflowOverflowIsA422RatherThanA500 pins the error the validation matrix
+// names for exact arithmetic: an aggregate wider than the 38-digit coefficient
+// limit is a stable LEDGER_OVERFLOW the client can explain, not an internal
+// error it should offer to retry.
+func TestCashflowOverflowIsA422RatherThanA500(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newCashflowFixture(t, handler)
+
+	// Two postings that are each legal on their own — 38 digits is the limit,
+	// not an error — but whose sum needs 39.
+	huge := strings.Repeat("9", 38)
+	hugePosting := func(accountID int64, sign string) string {
+		return `{"account_id":` + strconvFormatInt(accountID) +
+			`,"quantity_value":"` + sign + huge + `","quantity_scale":2,"commodity_id":` +
+			strconvFormatInt(f.usdID) + `}`
+	}
+	for _, date := range []string{"2026-06-05", "2026-06-06"} {
+		createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody(date,
+			hugePosting(f.checking.ID, "-"),
+			hugePosting(f.groceries.ID, ""),
+		), http.StatusCreated)
+	}
+
+	res := requestCashflowForSession(t, handler, f.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month")
+	require.Equal(t, http.StatusUnprocessableEntity, res.Code, res.Body.String())
+	assert.Equal(t, "LEDGER_OVERFLOW", apiErrorCode(t, res))
 }

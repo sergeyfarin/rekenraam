@@ -127,6 +127,8 @@ func (s *TransactionService) Cashflow(ctx context.Context, input CashflowInput) 
 		cashScope = "default_liquid_cash"
 		cashAccountIDs = defaultCashAccountIDs(accounts)
 		filters.ResolvedAccountIDs = sortedIDs(cashAccountIDs)
+	} else if err := validateCashflowScope(accounts, resolvedAccountIDs); err != nil {
+		return CashflowResult{}, err
 	}
 
 	bounds, err := calendarBucketBounds(startDate, endDate, bucket)
@@ -331,6 +333,49 @@ func bucketIndexFor(bounds []calendarBucketBound, entryDate string) int {
 		}
 	}
 	return -1
+}
+
+// cashflowScopeClasses is what an explicitly selected cash scope may contain.
+// The scope is the balance net_movement reconciles to, so every member must be
+// an account that holds one: asset or liability. A credit card or a brokerage
+// holding is therefore a legal scope — "what moved through this account" is a
+// real question — while an income, expense, or equity account has no balance to
+// move and would read as cash flowing the wrong way.
+var cashflowScopeClasses = map[string]bool{
+	"asset":     true,
+	"liability": true,
+}
+
+// validateCashflowScope rejects a selection this endpoint's own response would
+// then contradict. The default scope excludes system accounts (reports-plan.md,
+// cashflow rule 1) and every response reports excluded_system_roles: ["all"], so
+// an explicit selection that admitted one would claim to exclude an account it
+// had just summed. The generic report filter validator cannot carry this rule:
+// on net worth and spending a system account is an ordinary basis member.
+//
+// The resolved selection is checked rather than the named one, because
+// include_descendants is what actually becomes the scope.
+func validateCashflowScope(accounts []db.LedgerAccountRecord, resolvedAccountIDs []int64) error {
+	byID := make(map[int64]db.LedgerAccountRecord, len(accounts))
+	for _, account := range accounts {
+		byID[account.ID] = account
+	}
+	for _, accountID := range resolvedAccountIDs {
+		account, ok := byID[accountID]
+		if !ok {
+			// resolveReportFilters already proved the account is in the book. No
+			// version as of end_date means it has no postings the range could
+			// reach, so it cannot make the scope wrong.
+			continue
+		}
+		if account.SystemRole.Valid {
+			return ValidationError{Message: "account filter is invalid: a system account cannot join the cashflow cash scope"}
+		}
+		if !cashflowScopeClasses[account.AccountClass] {
+			return ValidationError{Message: "account filter is invalid: the cashflow cash scope takes asset or liability accounts"}
+		}
+	}
+	return nil
 }
 
 // defaultCashAccountIDs is the named liquid-cash default: active, non-system

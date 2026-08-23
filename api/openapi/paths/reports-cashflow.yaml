@@ -34,6 +34,13 @@ get:
         Repeatable. Selects the cash scope. Omitted, the report uses the named
         liquid-cash default — active, non-system accounts of the kinds echoed in
         query.default_cash_account_kinds — and echoes what that resolved to.
+        An explicit selection may name any asset or liability account, including
+        ones outside the default kinds such as a credit card, because
+        net_movement reconciles to the balance change of whatever stable set is
+        selected. A system account or a non-balance account class (income,
+        expense, equity) is VALIDATION_FAILED: the response reports
+        excluded_system_roles ["all"], and an accepted system account would make
+        it contradict itself.
       schema:
         type: array
         items:
