@@ -37,6 +37,13 @@ the race detector. The formatting and vet gates live inside the wrapper script
 so CI enforces them too — before they were added, `gofmt` drift could sit in the
 tree with a green pipeline (backlog T-43).
 
+The script resolves gofmt as `"$(go env GOROOT)/bin/gofmt"` rather than trusting
+PATH. Run it that way by hand too: a version manager pinning an older Go leaves
+its gofmt first on PATH even while the `go` command switches to the newer
+toolchain `go.mod` requires, and gofmt's output is not stable across releases,
+so a bare `gofmt` both misses drift CI will reject and flags files that are
+correctly formatted for the toolchain actually compiling them.
+
 ```sh
 ./scripts/test-backend.sh
 ```

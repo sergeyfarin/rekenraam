@@ -37,7 +37,10 @@ backend/cmd/rekenraam/  binary entrypoint + service wiring (command.go)
   API codes in the handler layer (pattern: `api/transactions_errors.go`).
 - Structured logging via `log/slog` only; **never log financial content**
   (amounts, payees, account names) at any level.
-- Run `gofmt -w` and `go vet ./...` on touched files.
+- Run `"$(go env GOROOT)/bin/gofmt" -w` and `go vet ./...` on touched files.
+  Use the GOROOT path, not a bare `gofmt`: a version manager can leave an older
+  gofmt first on PATH while `go` switches to the newer toolchain go.mod asks
+  for, and the two disagree about formatting.
 
 ## Error envelope
 
@@ -93,7 +96,7 @@ strings to the client.
 
 ```sh
 ./scripts/test-backend.sh            # go test ./... — the default gate
-cd backend && go vet ./... && gofmt -l .
+cd backend && go vet ./... && "$(go env GOROOT)/bin/gofmt" -l .
 pnpm build                           # only if the integrated binary shape changed
 ```
 

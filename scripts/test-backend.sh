@@ -7,11 +7,26 @@ cd "$ROOT/backend"
 
 # Formatting gate. Without this in the wrapper script, CI never sees gofmt
 # drift (backlog T-49: four files sat unformatted with a green pipeline).
-unformatted="$(gofmt -l .)"
+#
+# Resolve gofmt from the toolchain `go` actually selected, never whichever one
+# happens to be first on PATH. Those differ whenever a version manager pins an
+# older Go while go.mod's `go` directive makes the go command switch to a newer
+# one, and gofmt's output is not stable across releases (1.27 reindents
+# multi-value composite literals in return statements). A stale gofmt reports
+# both false negatives — drift that CI then rejects — and false positives on
+# files that are correctly formatted for the toolchain being compiled with.
+GOFMT="$(go env GOROOT)/bin/gofmt"
+if [ ! -x "$GOFMT" ]; then
+  echo "no usable gofmt in the selected toolchain at $GOFMT" >&2
+  echo "go is $(command -v go) reporting $(go version)" >&2
+  exit 1
+fi
+
+unformatted="$("$GOFMT" -l .)"
 if [ -n "$unformatted" ]; then
   echo "gofmt needs to be run on:" >&2
   echo "$unformatted" >&2
-  echo "Fix with: gofmt -w <files>" >&2
+  echo "Fix with: $GOFMT -w <files>" >&2
   exit 1
 fi
 
