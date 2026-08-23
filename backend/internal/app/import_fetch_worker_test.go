@@ -339,10 +339,8 @@ func TestStartOnlineImport_ConcurrentStartsRaceSafely(t *testing.T) {
 	var successes int64
 	var conflicts int64
 	var unexpected int64
-	for i := 0; i < attempts; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range attempts {
+		wg.Go(func() {
 			_, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
 			switch {
 			case err == nil:
@@ -353,7 +351,7 @@ func TestStartOnlineImport_ConcurrentStartsRaceSafely(t *testing.T) {
 				atomic.AddInt64(&unexpected, 1)
 				t.Errorf("unexpected error from concurrent StartOnlineImport: %v", err)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 

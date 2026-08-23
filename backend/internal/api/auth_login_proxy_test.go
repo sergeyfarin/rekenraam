@@ -16,7 +16,7 @@ func TestLoginIgnoresForwardedClientIPHeadersByDefault(t *testing.T) {
 	handler, _ := newSetupTestHandler(t)
 	bootstrapOwner(t, handler)
 
-	for attempt := 0; attempt < 4; attempt++ {
+	for range 4 {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
 		setSameOrigin(req)
@@ -50,7 +50,7 @@ func TestLoginUsesForwardedClientIPHeadersWhenTrusted(t *testing.T) {
 	})
 	bootstrapOwner(t, handler)
 
-	for attempt := 0; attempt < 4; attempt++ {
+	for range 4 {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
 		setSameOrigin(req)
@@ -102,7 +102,7 @@ func TestLoginUsesRightmostUntrustedForwardedClientIPWhenTrusted(t *testing.T) {
 	})
 	bootstrapOwner(t, handler)
 
-	for attempt := 0; attempt < 5; attempt++ {
+	for attempt := range 5 {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
 		setSameOrigin(req)
@@ -142,7 +142,7 @@ func TestLoginIgnoresForwardedClientIPHeadersWhenPeerNotAllowlisted(t *testing.T
 	})
 	bootstrapOwner(t, handler)
 
-	for attempt := 0; attempt < 4; attempt++ {
+	for range 4 {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-user","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
 		setSameOrigin(req)

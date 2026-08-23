@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -278,10 +279,7 @@ func writeAuthServiceError(w http.ResponseWriter, r *http.Request, logger *slog.
 	case errors.As(err, &validationError):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
 	case errors.As(err, &rateLimitError):
-		retryAfterSecs := int(math.Ceil(rateLimitError.RetryAfter.Seconds()))
-		if retryAfterSecs < 1 {
-			retryAfterSecs = 1
-		}
+		retryAfterSecs := max(int(math.Ceil(rateLimitError.RetryAfter.Seconds())), 1)
 		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSecs))
 		writeAPIError(w, http.StatusTooManyRequests, "RATE_LIMITED", "too many login attempts, try again later")
 	case errors.Is(err, app.ErrSecretKeyMissing):
@@ -481,8 +479,8 @@ func loginClientIP(r *http.Request, options HandlerOptions) string {
 // than passing a client-supplied header through unchanged.
 func trustedForwardedClientIP(forwardedFor string, trustedProxyCIDRs []netip.Prefix) string {
 	parts := strings.Split(forwardedFor, ",")
-	for index := len(parts) - 1; index >= 0; index-- {
-		clientIP := canonicalizeIP(parts[index])
+	for _, part := range slices.Backward(parts) {
+		clientIP := canonicalizeIP(part)
 		if clientIP == "" {
 			return ""
 		}

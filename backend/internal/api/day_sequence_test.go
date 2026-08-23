@@ -191,7 +191,7 @@ func TestCursorPaginationRespectsDaySequence(t *testing.T) {
 	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Cursor Expense","category_type":"expense"}`)
 
 	var created []transactionResponse
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		tx := createTransactionForSession(t, handler, sessionCookie, csrfToken, balancedBody("2026-06-07",
 			posting(checking.ID, int64(-1000*(i+1)), 2, commodityID),
 			posting(expense.ID, int64(1000*(i+1)), 2, commodityID),

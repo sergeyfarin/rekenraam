@@ -8,7 +8,7 @@ COPY frontend ./frontend
 WORKDIR /src/frontend
 RUN pnpm run build
 
-FROM golang:1.26-trixie AS backend
+FROM golang:1.27-trixie AS backend
 WORKDIR /src
 COPY backend ./backend
 COPY --from=frontend /src/frontend/build ./backend/internal/web/dist

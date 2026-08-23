@@ -419,7 +419,7 @@ func (s *AuthService) mfaActive(ctx context.Context, userID int64) (bool, error)
 func (s *AuthService) issueRecoveryCodes(ctx context.Context, userID int64) ([]string, error) {
 	codes := make([]string, 0, mfaRecoveryCodeCount)
 	hashes := make([]string, 0, mfaRecoveryCodeCount)
-	for index := 0; index < mfaRecoveryCodeCount; index++ {
+	for range mfaRecoveryCodeCount {
 		code, err := newRecoveryCode()
 		if err != nil {
 			return nil, err
@@ -514,7 +514,7 @@ func (s *AuthService) pruneMFAChallenges(ctx context.Context, logger *slog.Logge
 func newRecoveryCode() (string, error) {
 	alphabetSize := big.NewInt(int64(len(mfaRecoveryAlphabet)))
 	characters := make([]byte, 0, mfaRecoveryCodeLength+1)
-	for index := 0; index < mfaRecoveryCodeLength; index++ {
+	for index := range mfaRecoveryCodeLength {
 		// Rejection-free selection via crypto/rand.Int keeps the distribution
 		// uniform; modulo over a raw byte would not.
 		pick, err := rand.Int(rand.Reader, alphabetSize)

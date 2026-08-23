@@ -3,7 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strings"
 
 	"rekenraam/backend/internal/db"
@@ -348,19 +349,9 @@ func defaultCashAccountIDs(accounts []db.LedgerAccountRecord) map[int64]bool {
 }
 
 func sortedIDs(ids map[int64]bool) []int64 {
-	sorted := make([]int64, 0, len(ids))
-	for id := range ids {
-		sorted = append(sorted, id)
-	}
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
-	return sorted
+	return slices.Sorted(maps.Keys(ids))
 }
 
 func sortedKinds(kinds map[string]bool) []string {
-	sorted := make([]string, 0, len(kinds))
-	for kind := range kinds {
-		sorted = append(sorted, kind)
-	}
-	sort.Strings(sorted)
-	return sorted
+	return slices.Sorted(maps.Keys(kinds))
 }

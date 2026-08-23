@@ -175,8 +175,7 @@ func writeDecodeError(w http.ResponseWriter, err error) {
 		writeAPIError(w, http.StatusRequestEntityTooLarge, "REQUEST_TOO_LARGE", "request body must not exceed 1 MB")
 		return
 	}
-	var validationError app.ValidationError
-	if errors.As(err, &validationError) {
+	if validationError, ok := errors.AsType[app.ValidationError](err); ok {
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
 		return
 	}
@@ -195,8 +194,7 @@ func decodeJSONBody(r *http.Request, destination any) error {
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(destination); err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			return errRequestTooLarge
 		}
 		return app.ValidationError{Message: "invalid request body"}
@@ -217,8 +215,7 @@ func decodeOptionalJSONBody(r *http.Request, destination any) error {
 	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			return errRequestTooLarge
 		}
 		return app.ValidationError{Message: "invalid request body"}

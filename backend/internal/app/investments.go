@@ -774,7 +774,7 @@ func (s *InvestmentService) CreateHoldingAccount(ctx context.Context, input Hold
 		InstitutionID:         input.InstitutionID,
 		DefaultCommodityID:    &instrument.CommodityID,
 		QuantityScaleOverride: scale,
-		AllowsPostings:        boolPtr(true),
+		AllowsPostings:        new(true),
 		OpenedOn:              input.OpenedOn,
 		EffectiveFrom:         input.EffectiveFrom,
 		ChangeReason:          input.ChangeReason,
@@ -1678,8 +1678,7 @@ func (s *InvestmentService) AcceptSuggestion(ctx context.Context, ownerUserID in
 		return s.repository.MarkSuggestionAcceptedInTx(ctx, tx, BookID, suggestionID, transactionID, now, ownerUserID, authSessionID, requestID)
 	})
 	if err != nil {
-		var validationErr ValidationError
-		if errors.As(err, &validationErr) {
+		if validationErr, ok := errors.AsType[ValidationError](err); ok {
 			return s.failSuggestion(ctx, suggestionID, validationErr.Error(), now, ownerUserID, authSessionID, requestID)
 		}
 		return InvestmentEventSuggestion{}, fmt.Errorf("post accepted suggestion transaction: %w", err)
@@ -2379,10 +2378,6 @@ func dividendDefaultOperation(defaultID int64) string {
 		return "investment.dividend_default.update"
 	}
 	return "investment.dividend_default.create"
-}
-
-func boolPtr(value bool) *bool {
-	return &value
 }
 
 func scaledDivision(numerator int64, numeratorScale int, denominator exact.Coefficient, denominatorScale int, resultScale int) (int64, error) {

@@ -65,7 +65,7 @@ func TestLoginRateLimitsRepeatedFailures(t *testing.T) {
 	handler, _ := newSetupTestHandler(t)
 	bootstrapOwner(t, handler)
 
-	for attempt := 0; attempt < 4; attempt++ {
+	for range 4 {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
 		setSameOrigin(req)
@@ -97,7 +97,7 @@ func TestLoginThrottlePersistsAcrossHandlerRebuild(t *testing.T) {
 	handler, database := newSetupTestHandler(t)
 	bootstrapOwner(t, handler)
 
-	for attempt := 0; attempt < 5; attempt++ {
+	for range 5 {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"owner","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
 		setSameOrigin(req)
@@ -127,7 +127,7 @@ func TestLoginRateLimitsRepeatedFailuresFromSameIPAcrossDifferentUsernames(t *te
 	handler, database := newSetupTestHandler(t)
 	bootstrapOwner(t, handler)
 
-	for attempt := 0; attempt < 4; attempt++ {
+	for attempt := range 4 {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"missing-`+string(rune('a'+attempt))+`","password":"wrong-password"}`))
 		req.Header.Set("Content-Type", "application/json")
 		setSameOrigin(req)

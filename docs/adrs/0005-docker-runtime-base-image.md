@@ -29,7 +29,7 @@ Rules:
 3. Keep the final image as one app process running the compiled Go binary.
 4. Run the app as a non-root numeric user.
 5. Keep SQLite data in a mounted persistent volume outside the image.
-6. Build stages use official language images pinned to the project toolchain and Debian generation; the Go build stage uses `golang:1.26-trixie` while the runtime base remains `debian:trixie-slim`.
+6. Build stages use official language images pinned to the project toolchain and Debian generation; the Go build stage uses `golang:1.27-trixie` while the runtime base remains `debian:trixie-slim`.
 
 ## Rationale
 

@@ -51,7 +51,7 @@ func (s *PricingService) StartBackgroundWorker(ctx context.Context, logger *slog
 }
 
 func (s *PricingService) runDueFXCoverage(ctx context.Context, logger *slog.Logger, workerID string) {
-	for processed := 0; processed < 4; processed++ {
+	for range 4 {
 		now := s.now().UTC()
 		item, err := s.repository.ClaimBackgroundWork(ctx, fxCoverageWorkKind, workerID, now.Format(time.RFC3339), now.Add(15*time.Minute).Format(time.RFC3339))
 		if errors.Is(err, db.ErrNotFound) || ctx.Err() != nil {

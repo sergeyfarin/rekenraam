@@ -2657,10 +2657,7 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 			// Align market and cost to the larger scale for subtraction.
 			costBig := big.NewInt(pos.RemainingCostBasisValue)
 			costScale := pos.RemainingCostBasisScale
-			gainScale := marketScale
-			if costScale > gainScale {
-				gainScale = costScale
-			}
+			gainScale := max(marketScale, costScale)
 			if marketScale < gainScale {
 				diff := gainScale - marketScale
 				factor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(diff)), nil)

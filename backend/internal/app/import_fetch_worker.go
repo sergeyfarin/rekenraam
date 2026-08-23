@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -257,7 +258,7 @@ func (s *ImportService) StartBackgroundWorker(ctx context.Context, logger *slog.
 }
 
 func (s *ImportService) runDueTrading212Fetches(ctx context.Context, logger *slog.Logger, workerID string) {
-	for processed := 0; processed < 4; processed++ {
+	for range 4 {
 		now := s.now().UTC()
 		item, err := s.backgroundWork.ClaimBackgroundWork(ctx, trading212FetchWorkKind, workerID, now.Format(time.RFC3339), now.Add(15*time.Minute).Format(time.RFC3339))
 		if errors.Is(err, db.ErrNotFound) || ctx.Err() != nil {
@@ -429,10 +430,7 @@ func (s *ImportService) runTrading212Fetch(ctx context.Context, payload trading2
 	// The running max across every chunk of this STAGE's logical fetch so
 	// far, not just this chunk's chunkCursor — mirrors Fetch's own
 	// cursor/MaxCursorSoFar split (see its doc comment).
-	runningMax := payload.MaxCursorSoFar
-	if chunkCursor > runningMax {
-		runningMax = chunkCursor
-	}
+	runningMax := max(payload.MaxCursorSoFar, chunkCursor)
 
 	if hasMore {
 		// More pages remain in this stage than a single Fetch-family call
@@ -532,12 +530,12 @@ func (s *ImportService) runTrading212Fetch(ctx context.Context, payload trading2
 func mergeTrading212BatchMeta(existing trading212BatchMeta, parseResult ParseResult, baseIndex int) trading212BatchMeta {
 	merged := existing
 	for _, h := range parseResult.Meta.AccountHints {
-		if !containsString(merged.AccountHints, h) {
+		if !slices.Contains(merged.AccountHints, h) {
 			merged.AccountHints = append(merged.AccountHints, h)
 		}
 	}
 	for _, h := range parseResult.Meta.CurrencyHints {
-		if !containsString(merged.CurrencyHints, h) {
+		if !slices.Contains(merged.CurrencyHints, h) {
 			merged.CurrencyHints = append(merged.CurrencyHints, h)
 		}
 	}

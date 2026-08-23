@@ -83,7 +83,7 @@ func Code(secret string, step uint64) (string, error) {
 	truncated := binary.BigEndian.Uint32(sum[offset:offset+4]) & 0x7fffffff
 
 	divisor := uint32(1)
-	for index := 0; index < Digits; index++ {
+	for range Digits {
 		divisor *= 10
 	}
 

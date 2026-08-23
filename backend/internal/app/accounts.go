@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -535,7 +536,7 @@ func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountL
 	if current.IsSystem {
 		return Account{}, ErrSystemAccountProtected
 	}
-	if !statusAllowed(current.Status, allowedCurrentStatuses) {
+	if !slices.Contains(allowedCurrentStatuses, current.Status) {
 		return Account{}, ErrAccountInvalidLifecycle
 	}
 
@@ -593,15 +594,6 @@ func (s *AccountService) changeAccountStatus(ctx context.Context, input AccountL
 	}
 
 	return toAccount(record), nil
-}
-
-func statusAllowed(status string, allowed []string) bool {
-	for _, allowedStatus := range allowed {
-		if status == allowedStatus {
-			return true
-		}
-	}
-	return false
 }
 
 type accountSpecInput struct {

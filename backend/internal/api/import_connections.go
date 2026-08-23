@@ -197,8 +197,7 @@ func writeImportConnectionServiceError(w http.ResponseWriter, r *http.Request, l
 	case errors.Is(err, app.ErrSecretKeyMissing):
 		writeAPIError(w, http.StatusServiceUnavailable, "CONFIG_REQUIRED", "REKENRAAM_SECRET_KEY is not configured on the server")
 	default:
-		var ve app.ValidationError
-		if errors.As(err, &ve) {
+		if ve, ok := errors.AsType[app.ValidationError](err); ok {
 			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", ve.Message)
 			return
 		}

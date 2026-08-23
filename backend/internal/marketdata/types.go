@@ -144,7 +144,7 @@ func decimalToScaled(value string) (int64, int, error) {
 func pow10(exp int) *big.Int {
 	result := big.NewInt(1)
 	ten := big.NewInt(10)
-	for i := 0; i < exp; i++ {
+	for range exp {
 		result.Mul(result, ten)
 	}
 	return result

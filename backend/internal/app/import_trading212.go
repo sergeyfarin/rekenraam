@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"rekenraam/backend/internal/onlinesource/trading212"
@@ -147,7 +148,7 @@ func (a *Trading212Adapter) Parse(ctx context.Context, input RawInput, profile *
 				result.Meta.DateTo = row.Date
 			}
 		}
-		if row.CommodityHint != "" && !containsString(result.Meta.CurrencyHints, row.CommodityHint) {
+		if row.CommodityHint != "" && !slices.Contains(result.Meta.CurrencyHints, row.CommodityHint) {
 			result.Meta.CurrencyHints = append(result.Meta.CurrencyHints, row.CommodityHint)
 		}
 	}
@@ -313,15 +314,6 @@ func buildTrading212Fingerprint(connectionID int64, providerID string, occurrenc
 		return fmt.Sprintf("trading212|%d|noref|%d", connectionID, occurrence)
 	}
 	return fmt.Sprintf("trading212|%d|%s", connectionID, providerID)
-}
-
-func containsString(values []string, target string) bool {
-	for _, v := range values {
-		if v == target {
-			return true
-		}
-	}
-	return false
 }
 
 // Trading212Prober implements ConnectionProber against the live Trading 212

@@ -246,7 +246,7 @@ func TestListRefreshRunsReportsHasMoreWithoutReturningHiddenRows(t *testing.T) {
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewPricingRepository(database)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		startedAt := time.Date(2026, 6, 12, 12, i, 0, 0, time.UTC).Format(time.RFC3339)
 		_, err := repository.RecordRefreshRun(ctx, BookID, 1, "manual", "succeeded", startedAt, startedAt, 0, 0, 0, "")
 		require.NoError(t, err)

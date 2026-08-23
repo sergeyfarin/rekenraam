@@ -166,7 +166,7 @@ func TestCompleteLoginMFAThrottlesWrongCodes(t *testing.T) {
 	enrollAndActivate(t, service, now)
 
 	var lastErr error
-	for attempt := 0; attempt < loginThrottleMaxFailures; attempt++ {
+	for range loginThrottleMaxFailures {
 		challenge, err := service.Login(ctx, LoginInput{Username: "owner", Password: "correct-horse-battery", ClientIP: "198.51.100.4"})
 		require.NoError(t, err)
 		_, lastErr = service.CompleteLoginMFA(ctx, CompleteMFALoginInput{

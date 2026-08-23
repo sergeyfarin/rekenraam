@@ -203,7 +203,7 @@ func TestLogin_RecordsBlockedAttemptsSeparatelyFromFailures(t *testing.T) {
 	now := time.Date(2026, 8, 6, 9, 0, 0, 0, time.UTC)
 	_, service := newAuthEventTestService(t, now)
 
-	for attempt := 0; attempt < loginThrottleMaxFailures; attempt++ {
+	for range loginThrottleMaxFailures {
 		_, err := service.Login(ctx, LoginInput{Username: "owner", Password: "wrong", ClientIP: "203.0.113.7"})
 		require.Error(t, err)
 	}
@@ -307,7 +307,7 @@ func TestPruneAuthenticationEvents_KeepsOnlyTheRetentionWindow(t *testing.T) {
 func exhaustThrottle(t *testing.T, service *AuthService, clientIP string) {
 	t.Helper()
 	ctx := context.Background()
-	for attempt := 0; attempt < loginThrottleMaxFailures; attempt++ {
+	for range loginThrottleMaxFailures {
 		_, err := service.Login(ctx, LoginInput{Username: "owner", Password: "wrong", ClientIP: clientIP})
 		require.Error(t, err)
 	}
@@ -359,7 +359,7 @@ func TestLogin_ApprovedDeviceStillHasItsOwnFailureBudget(t *testing.T) {
 
 	// A stolen device cookie must not buy unlimited password guesses: the
 	// bypass isolates the blast radius, it does not remove the limit.
-	for attempt := 0; attempt < loginThrottleMaxFailures; attempt++ {
+	for range loginThrottleMaxFailures {
 		_, err = service.Login(ctx, LoginInput{
 			Username: "owner", Password: "wrong", ClientIP: "198.51.100.4", TrustedDeviceToken: deviceToken,
 		})

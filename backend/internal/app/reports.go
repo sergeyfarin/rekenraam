@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"strings"
 
@@ -569,7 +570,7 @@ func accountSubtreeIDs(accounts []db.LedgerAccountRecord, accountIDs []int64) []
 		resolved = append(resolved, current)
 		pending = append(pending, childrenByParent[current]...)
 	}
-	sort.Slice(resolved, func(i, j int) bool { return resolved[i] < resolved[j] })
+	slices.Sort(resolved)
 	return resolved
 }
 
@@ -660,6 +661,6 @@ func dedupeIDs(ids []int64) []int64 {
 	if len(deduped) == 0 {
 		return nil
 	}
-	sort.Slice(deduped, func(i, j int) bool { return deduped[i] < deduped[j] })
+	slices.Sort(deduped)
 	return deduped
 }

@@ -104,7 +104,7 @@ func TestTrading212Adapter_CashMovementTypesMatchRealAPIEnum(t *testing.T) {
 	for _, w := range result.Warnings {
 		warningRows[w.RowIndex] = true
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		assert.False(t, warningRows[i], "row %d (real cash-movement type) must not be flagged", i)
 	}
 	for i := 4; i < 6; i++ {

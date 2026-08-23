@@ -271,7 +271,7 @@ func TestUpdateImportConnection_OmittedAutoRefreshPreservesExisting(t *testing.T
 		ID:                 conn.ID,
 		DisplayName:        conn.DisplayName,
 		ConfigJSON:         "{}",
-		AutoRefreshEnabled: boolPtr(true),
+		AutoRefreshEnabled: new(true),
 	})
 	require.NoError(t, err)
 	require.True(t, enabled.AutoRefreshEnabled)
@@ -307,7 +307,7 @@ func TestUpdateImportConnection_OmittedAutoRefreshPreservesExisting(t *testing.T
 		ID:                 conn.ID,
 		DisplayName:        "Renamed",
 		ConfigJSON:         "{}",
-		AutoRefreshEnabled: boolPtr(false),
+		AutoRefreshEnabled: new(false),
 	})
 	require.NoError(t, err)
 	assert.False(t, disabled.AutoRefreshEnabled)

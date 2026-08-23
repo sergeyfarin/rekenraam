@@ -191,8 +191,7 @@ func ResolveSQLiteFilePath(databaseURL string) (string, error) {
 		}
 	}
 
-	if strings.HasPrefix(databaseURL, "file:") {
-		trimmed := strings.TrimPrefix(databaseURL, "file:")
+	if trimmed, ok := strings.CutPrefix(databaseURL, "file:"); ok {
 		if idx := strings.Index(trimmed, "?"); idx >= 0 {
 			trimmed = trimmed[:idx]
 		}
