@@ -19,6 +19,9 @@ var (
 	ErrPriceObservationAlreadyVoided = errors.New("price observation is already voided")
 	ErrPricingPolicyNotFound         = errors.New("pricing policy not found")
 	ErrPricingAssignmentNotFound     = errors.New("pricing source assignment not found")
+	// ErrPriceVoidCascadeTooDeep means the void found derived observations
+	// past the traversal bound and refused to commit a partial cascade.
+	ErrPriceVoidCascadeTooDeep = errors.New("price void cascade exceeds the maximum derivation depth")
 )
 
 type MarketDataSource struct {
@@ -333,6 +336,8 @@ func (s *PricingService) VoidPrice(ctx context.Context, input VoidPriceInput) ([
 			return nil, ErrPriceObservationNotFound
 		case errors.Is(err, db.ErrPriceObservationAlreadyVoided):
 			return nil, ErrPriceObservationAlreadyVoided
+		case errors.Is(err, db.ErrPriceVoidCascadeTooDeep):
+			return nil, ErrPriceVoidCascadeTooDeep
 		default:
 			return nil, fmt.Errorf("void price observation: %w", err)
 		}

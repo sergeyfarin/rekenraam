@@ -541,10 +541,9 @@ func writePricingServiceError(w http.ResponseWriter, r *http.Request, logger *sl
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "pricing source assignment not found")
 	case errors.Is(err, app.ErrPricingBackgroundWorkNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "failed pricing background work not found")
-	case errors.Is(err, app.ErrPriceObservationNotFound):
-		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "price observation not found")
-	case errors.Is(err, app.ErrPriceObservationAlreadyVoided):
-		writeAPIError(w, http.StatusConflict, "CONFLICT", "price observation is already voided")
+	case errors.Is(err, app.ErrPriceVoidCascadeTooDeep):
+		writeAPIError(w, http.StatusConflict, "CONFLICT",
+			"price observation has derived observations beyond the maximum cascade depth; nothing was voided")
 	case errors.Is(err, app.ErrPricingBackgroundWorkActive):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "equivalent pricing background work is already queued")
 	default:

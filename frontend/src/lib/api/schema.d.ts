@@ -8128,7 +8128,7 @@ export interface paths {
         put?: never;
         /**
          * Void a price observation
-         * @description Retires a price observation so it stops being used for valuations, without deleting or overwriting it. A price is corrected by superseding or voiding, never edited in place. The void cascades to every still-active observation triangulated from this one, because a derived rate carries the same poisoned number under a different id. Voiding is not idempotent: a second void would overwrite the first reason and returns 409.
+         * @description Retires a price observation so it stops being used for valuations, without deleting or overwriting it. A price is corrected by superseding or voiding, never edited in place. The void cascades to every still-active observation triangulated from this one, because a derived rate carries the same poisoned number under a different id. If the cascade cannot reach the end of the derivation graph within the traversal bound, the whole void is refused with 409 and nothing is voided: a partial cascade would leave derived valuations active after their source was retired. Voiding is not idempotent: a second void would overwrite the first reason and returns 409.
          */
         post: {
             parameters: {
@@ -8198,7 +8198,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Price observation is already voided */
+                /** @description Price observation is already voided, or its derived observations go deeper than the maximum cascade depth and nothing was voided */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];

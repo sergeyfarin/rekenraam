@@ -13,6 +13,13 @@ import (
 // a second void would record a second reason over an existing one.
 var ErrPriceObservationAlreadyVoided = errors.New("price observation is already voided")
 
+// ErrPriceVoidCascadeTooDeep is returned when a void cannot reach the end of
+// the derivation graph within maxVoidCascadeDepth levels. The whole void is
+// rolled back: committing the part that was reachable would leave derived
+// valuations active after the observation they came from was retired, which is
+// a worse state than the void never having happened.
+var ErrPriceVoidCascadeTooDeep = errors.New("price void cascade exceeds the maximum derivation depth")
+
 type PricingRepository struct {
 	database *sql.DB
 	*BackgroundWorkRepository
@@ -550,6 +557,8 @@ type VoidPriceObservationParams struct {
 // triangulated rate derives from at most triangulation_max_hops legs and
 // nothing re-derives from a derived observation more than a few times, so this
 // is a loop guard against malformed derivation metadata, not a policy limit.
+// Hitting it means the graph is not what the system believes it to be, so the
+// void aborts rather than committing a partial cascade.
 const maxVoidCascadeDepth = 16
 
 // VoidPriceObservation retires one observation and every still-active
@@ -594,7 +603,12 @@ func (r *PricingRepository) VoidPriceObservation(ctx context.Context, params Voi
 	voidedIDs := []int64{params.ObservationID}
 	frontier := []int64{params.ObservationID}
 	seen := map[int64]bool{params.ObservationID: true}
-	for depth := 0; depth < maxVoidCascadeDepth && len(frontier) > 0; depth++ {
+	// depth is the derivation level of the observations `next` collects: the
+	// target is level 0 and observations derived directly from it are level 1.
+	// The walk runs until the frontier empties, so a cycle terminates on `seen`
+	// rather than on the depth bound; only genuinely deeper-than-bound graphs
+	// abort. A chain of exactly maxVoidCascadeDepth levels is voided in full.
+	for depth := 1; len(frontier) > 0; depth++ {
 		var next []int64
 		for _, observationID := range frontier {
 			derived, err := activeDerivedObservationIDsTx(ctx, tx, params.BookID, observationID)
@@ -606,10 +620,14 @@ func (r *PricingRepository) VoidPriceObservation(ctx context.Context, params Voi
 					continue
 				}
 				seen[derivedID] = true
-				voidedIDs = append(voidedIDs, derivedID)
 				next = append(next, derivedID)
 			}
 		}
+		if len(next) > 0 && depth > maxVoidCascadeDepth {
+			return nil, fmt.Errorf("%w: observation %d in book %d has derived observations beyond %d levels",
+				ErrPriceVoidCascadeTooDeep, params.ObservationID, params.BookID, maxVoidCascadeDepth)
+		}
+		voidedIDs = append(voidedIDs, next...)
 		frontier = next
 	}
 
