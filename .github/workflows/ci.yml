@@ -56,6 +56,37 @@ jobs:
       - name: Run frontend check
         run: ./scripts/test-frontend.sh
 
+  e2e-smoke:
+    name: E2E Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6.0.10
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        run: pnpm --dir e2e exec playwright install --with-deps chromium
+      # The suite builds the single binary and boots its own instance against a
+      # throwaway SQLite file; see e2e/playwright.config.ts. release-preflight
+      # stays out of this job and runs before a release.
+      - name: Run browser smoke journeys
+        run: ./scripts/test-e2e-smoke.sh
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+
   app-build:
     name: Integrated Build
     runs-on: ubuntu-latest
