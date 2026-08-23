@@ -170,12 +170,23 @@ test('a spending row drills down to exactly its transactions', async ({ page }) 
   // The list is narrowed to that row, and says why — the filter bar cannot show
   // a category, so without the notice it would look like a broken list.
   await expect(page.getByText('Showing the transactions behind one report row.')).toBeVisible();
-  await expect(page.getByRole('table').getByText('42.00')).toBeVisible();
-  await expect(page.getByRole('table').getByText('31.00')).toHaveCount(0);
+
+  // Scoped to this test's own account, because the amount cell renders the
+  // commodity symbol hard against the figure and the e2e database is shared: a
+  // bare `getByText('31.00')` over the whole table also matched the preflight
+  // spec's instrument, whose generated code ends in a digit and whose sell
+  // quantity is `1.000` — "…31.000" whenever `Date.now()` happened to end in 3.
+  // That is a one-in-ten failure of the full suite, and it is the selector's
+  // fault, not the app's.
+  const ownRows = page.getByRole('table').locator('tbody tr').filter({ hasText: checking.name });
+  await expect(ownRows.filter({ hasText: '42.00' })).toHaveCount(1);
+  await expect(ownRows.filter({ hasText: '31.00' })).toHaveCount(0);
 
   // The way out restores the unfiltered list.
   await page.getByRole('button', { name: 'Show all transactions' }).click();
-  await expect(page.getByRole('table').getByText('31.00')).toBeVisible();
+  await expect(
+    page.getByRole('table').locator('tbody tr').filter({ hasText: checking.name }).filter({ hasText: '31.00' })
+  ).toHaveCount(1);
 });
 
 test('cashflow separates spending from transfers and names its cash scope', async ({ page }) => {
