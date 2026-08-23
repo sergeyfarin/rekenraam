@@ -713,6 +713,31 @@ Worth a third, small grouping — a tag or a directory — whose cases map one-t
 onto a plan's validation matrix, so closing an initiative can point at a suite
 rather than at an argument. The R2 multi-currency case is the first member.
 
+### T-62 A commodity symbol is rendered hard against its amount `[ ]`
+
+**Files:** `frontend/src/lib/transactions/transaction-list.svelte:165`,
+`frontend/src/lib/transactions/transaction-detail-panel.svelte:446`,
+`frontend/src/routes/app/settings/trash/+page.svelte:147` — all three write
+`{commodityDisplay(p)}{formatSignedAmount(p, …)}` with no separator.
+
+`commodityDisplay` returns `commodity_symbol ?? commodity_code`. For a currency
+whose symbol is punctuation that is right: `$42.00`. For anything whose symbol
+is a word or a code — an instrument ticker, or a currency with no symbol — it
+runs the two together: `AAPL2.000`, `USD42.00`. The reports views already do it
+the other way (`${commodityLabel(id)} ${formatQuantity(…)}`), so the two halves
+of the app disagree.
+
+Found via a one-in-ten e2e flake rather than by looking: the release-preflight
+instrument's generated code ends in whatever digit `Date.now()` ended in, and
+its sell quantity is `1.000`, so the cell read `…31.000` about 10% of runs and
+collided with a substring assertion elsewhere in the suite (fixed on the test
+side 2026-08-23; this is the display half).
+
+Fix is a shared helper with the rule stated once — separate when the symbol's
+last character is alphanumeric, do not when it is punctuation — applied at all
+three call sites, with the rule unit-tested rather than each call site checked
+by eye. It is a display concern only: no amount, scale, or commodity changes.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04
