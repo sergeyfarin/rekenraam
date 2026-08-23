@@ -343,9 +343,13 @@ CashflowReportBucket:
       items:
         $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
 
-# Every measure of one commodity in one bucket is written at the same scale:
-# the deepest any of them needs. Coefficients and scales must be paired per
-# measure regardless, since they differ by a power of ten per digit.
+# Each measure carries its own quantity_scale, and two measures of the same
+# commodity in the same bucket may differ: a posting is recorded at any scale
+# its commodity permits, and the measures accumulate independently. Always pair
+# a coefficient with the scale it arrived with — they differ by a power of ten
+# per digit. The measures are deliberately not restated at a common scale,
+# because deepening costs a digit against the 38-digit coefficient ceiling and
+# would let one measure's precision overflow another that was representable.
 CashflowReportResponse:
   type: object
   required:

@@ -242,14 +242,13 @@ func (t *cashflowTotals) toBucket(startDate string, endDate string) (CashflowBuc
 	operatingNet := subtractAmounts(t.inflow, t.outflow)
 	transferNet := subtractAmounts(t.transferIn, t.transferOut)
 
-	// Every measure of one commodity leaves this bucket at one scale. Each of
-	// the seven accumulates independently, and a posting may be recorded at any
-	// scale the commodity permits, so 50.00 of income and 100 of expense would
-	// otherwise be reported as scale 2 and scale 0 in the same commodity — and a
-	// client that reads one scale for the row renders the other measure a
-	// hundred times too small.
-	alignCommodityScales(t.inflow, t.outflow, t.transferIn, t.transferOut, t.netMovement, operatingNet, transferNet)
-
+	// Each measure keeps the scale it accumulated at, and each is paired with
+	// that scale in the response. Restating them all at the deepest scale any of
+	// them reached would read more tidily, but it costs a digit per decimal
+	// place against a 38-digit ceiling — so a measure that is representable as
+	// recorded could be pushed past the limit by the precision of an unrelated
+	// one, turning a valid report into LEDGER_OVERFLOW. Pairing is the client's
+	// job and cannot be taken away from it by rewriting the numbers.
 	inflow, err := reportMagnitudes(t.inflow, false)
 	if err != nil {
 		return CashflowBucket{}, err
@@ -290,29 +289,6 @@ func (t *cashflowTotals) toBucket(startDate string, endDate string) (CashflowBuc
 		TransferNet:  transfer,
 		NetMovement:  netMovement,
 	}, nil
-}
-
-// alignCommodityScales restates every measure of a commodity at the deepest
-// scale any of them carries.
-//
-// Deepening is lossless — it multiplies by a power of ten — so this changes how
-// a figure is written, never what it is worth, and the identity
-// net_movement = operating_net + transfer_net keeps holding coefficient for
-// coefficient once every side is written at the same scale.
-func alignCommodityScales(measures ...map[int64]*exact.ScaledInt) {
-	deepest := map[int64]int{}
-	for _, measure := range measures {
-		for commodityID, amount := range measure {
-			if amount.Scale() > deepest[commodityID] {
-				deepest[commodityID] = amount.Scale()
-			}
-		}
-	}
-	for _, measure := range measures {
-		for commodityID, amount := range measure {
-			amount.Align(deepest[commodityID])
-		}
-	}
 }
 
 // subtractAmounts returns left - right for every commodity present in either,

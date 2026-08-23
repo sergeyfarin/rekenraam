@@ -325,6 +325,19 @@ func readCashflowForSession(t *testing.T, handler http.Handler, sessionCookie *h
 
 // requestCashflowForSession is readCashflowForSession without the success
 // assertion, for the cases whose subject is the rejection.
+// quantityFor picks one commodity's entry out of a measure.
+func quantityFor(t *testing.T, quantities []balanceQuantityResponse, commodityID int64) balanceQuantityResponse {
+	t.Helper()
+
+	for _, quantity := range quantities {
+		if quantity.CommodityID == commodityID {
+			return quantity
+		}
+	}
+	require.Failf(t, "commodity not present in measure", "commodity %d", commodityID)
+	return balanceQuantityResponse{}
+}
+
 func requestCashflowForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, suffix string) *httptest.ResponseRecorder {
 	t.Helper()
 
@@ -433,13 +446,15 @@ func TestCashflowOverflowIsA422RatherThanA500(t *testing.T) {
 	assert.Equal(t, "LEDGER_OVERFLOW", apiErrorCode(t, res))
 }
 
-// TestCashflowMeasuresOfOneCommodityShareOneScale pins the invariant every
-// client reads the response through. Postings may be recorded at any scale the
-// commodity permits, and each measure accumulates independently, so inflow
-// could arrive at scale 2 while outflow arrived at scale 0 in the same
-// commodity and bucket. A client pairing one coefficient with another measure's
-// scale then renders a figure off by a factor of ten per digit.
-func TestCashflowMeasuresOfOneCommodityShareOneScale(t *testing.T) {
+// TestCashflowKeepsEachMeasureAtTheScaleItAccumulated pins what the response
+// promises about scales: each measure is paired with its own, and none is
+// restated to match a sibling. A posting may be recorded at any scale its
+// commodity permits, and the seven measures accumulate independently, so 50.00
+// of income and 100 of expense really do come back as scale 2 and scale 0 in
+// the same commodity and bucket. Pairing them correctly is the client's job —
+// see the frontend's per-measure scales — and rewriting the numbers to make
+// that job easier is what TestCashflowDoesNotManufactureOverflow... rules out.
+func TestCashflowKeepsEachMeasureAtTheScaleItAccumulated(t *testing.T) {
 	t.Parallel()
 
 	handler, _ := newSetupTestHandler(t)
@@ -460,32 +475,76 @@ func TestCashflowMeasuresOfOneCommodityShareOneScale(t *testing.T) {
 	require.Len(t, report.Buckets, 1)
 	bucket := report.Buckets[0]
 
-	scales := map[string]int{}
-	for name, quantities := range map[string][]balanceQuantityResponse{
-		"inflow":        bucket.Inflow,
-		"outflow":       bucket.Outflow,
-		"operating_net": bucket.OperatingNet,
-		"transfer_in":   bucket.TransferIn,
-		"transfer_out":  bucket.TransferOut,
-		"transfer_net":  bucket.TransferNet,
-		"net_movement":  bucket.NetMovement,
-	} {
-		for _, quantity := range quantities {
-			if quantity.CommodityID == f.usdID {
-				scales[name] = quantity.QuantityScale
-			}
-		}
-	}
+	inflow := quantityFor(t, bucket.Inflow, f.usdID)
+	assert.Equal(t, "5000", inflow.QuantityValue.String())
+	assert.Equal(t, 2, inflow.QuantityScale)
 
-	require.Contains(t, scales, "inflow")
-	require.Contains(t, scales, "outflow")
-	for name, scale := range scales {
-		assert.Equal(t, scales["inflow"], scale, "%s must share the commodity's scale", name)
-	}
+	outflow := quantityFor(t, bucket.Outflow, f.usdID)
+	assert.Equal(t, "100", outflow.QuantityValue.String())
+	assert.Equal(t, 0, outflow.QuantityScale)
 
-	// Deepening is lossless, so the aligned figures are the same money: 50.00 in
-	// and 100.00 out, netting to -50.00.
-	assertBalance(t, bucket.Inflow, f.usdID, 5000, 2, 5000)
-	assertBalance(t, bucket.Outflow, f.usdID, 10000, 2, 10000)
+	// The derived measures combine the two, so they carry the deeper scale the
+	// combination needs: 50.00 - 100.00 = -50.00.
+	assertBalance(t, bucket.OperatingNet, f.usdID, -5000, 2, -5000)
 	assertBalance(t, bucket.NetMovement, f.usdID, -5000, 2, -5000)
+}
+
+// TestCashflowDoesNotManufactureOverflowFromAnUnrelatedMeasure is the boundary
+// on writing a commodity's measures at one scale. Restating a coefficient at a
+// deeper scale costs a digit per decimal place, and the coefficient ceiling is
+// 38 digits — so a measure that is perfectly representable at the scale it was
+// recorded at must not be pushed past the limit because some *other* measure of
+// the same commodity happened to carry more precision.
+func TestCashflowDoesNotManufactureOverflowFromAnUnrelatedMeasure(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newCashflowFixture(t, handler)
+
+	// A 38-digit inflow at scale 0 — the largest coefficient the ledger accepts —
+	// and an equal outflow, so operating_net is zero and net_movement stays
+	// tiny. Every individual measure is representable exactly as recorded.
+	huge := strings.Repeat("9", 38)
+	scaleZero := func(accountID int64, sign string) string {
+		return `{"account_id":` + strconvFormatInt(accountID) +
+			`,"quantity_value":"` + sign + huge + `","quantity_scale":0,"commodity_id":` +
+			strconvFormatInt(f.usdID) + `}`
+	}
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-05",
+		scaleZero(f.checking.ID, ""),
+		scaleZero(f.salary.ID, "-"),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-06",
+		scaleZero(f.checking.ID, "-"),
+		scaleZero(f.groceries.ID, ""),
+	), http.StatusCreated)
+
+	// A 2.50 transfer out to an account outside the scope. It is tiny, but it
+	// makes scale 2 the deepest precision this commodity carries in the bucket.
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-07",
+		posting(f.checking.ID, -250, 2, f.usdID),
+		posting(f.savings.ID, 250, 2, f.usdID),
+	), http.StatusCreated)
+
+	report := readCashflowForSession(t, handler, f.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id="+strconvFormatInt(f.checking.ID))
+	require.Len(t, report.Buckets, 1)
+
+	// Every measure comes back at the scale it was produced at, losslessly.
+	inflow := quantityFor(t, report.Buckets[0].Inflow, f.usdID)
+	assert.Equal(t, huge, inflow.QuantityValue.String())
+	assert.Equal(t, 0, inflow.QuantityScale)
+
+	outflow := quantityFor(t, report.Buckets[0].Outflow, f.usdID)
+	assert.Equal(t, huge, outflow.QuantityValue.String())
+	assert.Equal(t, 0, outflow.QuantityScale)
+
+	transferOut := quantityFor(t, report.Buckets[0].TransferOut, f.usdID)
+	assert.Equal(t, "250", transferOut.QuantityValue.String())
+	assert.Equal(t, 2, transferOut.QuantityScale)
+
+	// The results that combine them stay small, so they are representable at the
+	// deeper scale the combination needs.
+	assertBalance(t, report.Buckets[0].OperatingNet, f.usdID, 0, 0, 0)
+	assertBalance(t, report.Buckets[0].NetMovement, f.usdID, -250, 2, -250)
 }
