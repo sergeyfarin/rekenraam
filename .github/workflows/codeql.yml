@@ -6,6 +6,9 @@ name: CodeQL
 # broke extraction ("go.mod requires go >= 1.27.0, running go 1.26.6"). Pinning
 # the toolchain here with go-version-file keeps this workflow following
 # backend/go.mod the way ci.yml and govulncheck.yml already do.
+#
+# The Go entry is nonetheless paused right now — see the matrix note below.
+# The setup-go step is kept so restoring it is a two-line uncomment.
 
 on:
   push:
@@ -34,8 +37,15 @@ jobs:
         include:
           - language: actions
             build-mode: none
-          - language: go
-            build-mode: autobuild
+          # DISABLED 2026-08-23 — CodeQL's Go extractor is itself built with
+          # Go 1.26 and cannot parse a 1.27 module: every backend package fails
+          # with "package requires newer Go version go1.27 (application built
+          # with go1.26)", yielding a partial database and a red job. Go has no
+          # build-mode: none to fall back on, and 2.26.3 is the newest bundle.
+          # govulncheck.yml still covers known CVEs in dependencies meanwhile.
+          # RESTORE these two lines once a CodeQL release extracts Go 1.27.
+          # - language: go
+          #   build-mode: autobuild
           - language: javascript-typescript
             build-mode: none
     steps:

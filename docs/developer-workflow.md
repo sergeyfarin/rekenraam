@@ -214,14 +214,24 @@ Workflow conventions:
 - Go vulnerability scanning runs in `.github/workflows/govulncheck.yml` with
   `govulncheck ./...` from `backend/` on a weekly schedule, manually via
   `workflow_dispatch`, and on backend-affecting pull requests.
-- CodeQL code scanning runs in `.github/workflows/codeql.yml` for `actions`,
-  `go`, and `javascript-typescript`. It is an *advanced* setup — a committed
-  workflow rather than GitHub's default setup — specifically so the Go analysis
-  can run `actions/setup-go` with `go-version-file: backend/go.mod`. Default
-  setup builds Go with whatever the runner preinstalls under
-  `GOTOOLCHAIN=local`, so a `go.mod` above that version fails extraction and
-  takes every other language in the run down with it (this broke on the Go 1.27
-  bump). Changing this back to default setup reintroduces that failure mode.
+- CodeQL code scanning runs in `.github/workflows/codeql.yml`. It is an
+  *advanced* setup — a committed workflow rather than GitHub's default setup —
+  because default setup gives no control over the Go toolchain: it builds with
+  whatever the runner preinstalls under `GOTOOLCHAIN=local`, so a `go.mod`
+  above that version fails extraction and takes every other language in the run
+  down with it. This workflow instead runs `actions/setup-go` with
+  `go-version-file: backend/go.mod`. Reverting to default setup reintroduces
+  that failure mode. Note that advanced and default setup are mutually
+  exclusive: while default setup is enabled in repository settings, this
+  workflow's results are rejected on upload.
+- **CodeQL's `go` matrix entry is paused** (2026-08-23). The Go extractor
+  bundled with CodeQL is itself built with Go 1.26 and cannot parse a 1.27
+  module — every backend package fails with "package requires newer Go version
+  go1.27 (application built with go1.26)", yielding a partial database and a
+  red job. Go supports no `build-mode: none` fallback, and 2.26.3 was already
+  the newest bundle. Restore the two commented matrix lines once a CodeQL
+  release extracts Go 1.27; `govulncheck.yml` covers known dependency CVEs in
+  the meantime.
 - Dependabot version updates are configured in `.github/dependabot.yml` for
   GitHub Actions, the backend Go module, root/frontend pnpm packages, and the
   Docker runtime image.
