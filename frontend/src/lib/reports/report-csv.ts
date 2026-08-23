@@ -42,16 +42,24 @@ export function exactDecimal(quantityValue: string, quantityScale: number): stri
  *
  * A file of figures that does not say what it measured is a file nobody can
  * check later — which is the same reason cashflow states its scope on screen
- * rather than assuming it. The context goes *after* the table, separated by a
- * blank row, so the first line of the file is still the header row every naive
- * CSV reader expects; a title block would move it and break them.
+ * rather than assuming it. The context goes *after* the table, so the first
+ * line of the file is still the header row; a title block would move it.
+ *
+ * Every row, including the separator and each context line, is padded to the
+ * table's column count. A strict RFC 4180 reader may reject a file whose rows
+ * disagree on field count, so ragged rows would make the context the thing that
+ * broke the export. Padded, the file stays rectangular: the context reads as
+ * trailing records whose later fields are empty, which every reader accepts
+ * even though only a spreadsheet renders it the way a person would want.
  */
 export function withReportContext(rows: string[][], context: string[]): string[][] {
   const lines = context.filter((line) => line.trim() !== '');
   if (lines.length === 0) {
     return rows;
   }
-  return [...rows, [], ...lines.map((line) => [line])];
+  const width = rows.reduce((widest, row) => Math.max(widest, row.length), 0);
+  const pad = (row: string[]) => [...row, ...Array<string>(Math.max(0, width - row.length)).fill('')];
+  return [...rows.map(pad), pad([]), ...lines.map((line) => pad([line]))];
 }
 
 /** Quotes one field per RFC 4180, only where quoting is actually needed. */

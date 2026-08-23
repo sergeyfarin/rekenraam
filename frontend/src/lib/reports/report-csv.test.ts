@@ -104,8 +104,19 @@ describe('withReportContext', () => {
 
   it('separates the context from the table with a blank row', () => {
     const rows = withReportContext(table, ['Period: June 2026']);
-    expect(rows[2]).toEqual([]);
-    expect(rows[3]).toEqual(['Period: June 2026']);
+    expect(rows[2]).toEqual(['', '']);
+    expect(rows[3]).toEqual(['Period: June 2026', '']);
+  });
+
+  it('keeps the file rectangular, so a strict reader does not reject it', () => {
+    const wide = [
+      ['A', 'B', 'C'],
+      ['1', '2', '3']
+    ];
+    const rows = withReportContext(wide, ['Period: June 2026', 'Excluded: none']);
+    for (const row of rows) {
+      expect(row).toHaveLength(3);
+    }
   });
 
   it('drops empty lines rather than emitting blank context rows', () => {
@@ -120,6 +131,6 @@ describe('withReportContext', () => {
   it('survives the CSV encoder with its quoting intact', () => {
     const csv = toCSV(withReportContext(table, ['Accounts: Smith, Jones & Co']));
     expect(csv.split('\r\n')[0]).toBe('Period,Amount');
-    expect(csv).toContain('"Accounts: Smith, Jones & Co"');
+    expect(csv).toContain('"Accounts: Smith, Jones & Co",');
   });
 });

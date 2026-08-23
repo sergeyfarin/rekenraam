@@ -291,11 +291,18 @@ test('a report exports CSV a spreadsheet can read, and prints without its chrome
   expect(content).toContain('Measuring the 1 accounts you selected.');
   expect(content).toContain('Excluded: all');
 
-  // Printing drops what cannot be acted on from paper and keeps the report.
+  // Printing drops what cannot be acted on from paper and keeps the report —
+  // including the context the export carries, so a printout and a CSV of the
+  // same report describe it the same way.
   await page.emulateMedia({ media: 'print' });
   await expect(page.getByRole('button', { name: 'Download CSV' })).toBeHidden();
   await expect(page.getByRole('navigation', { name: 'Report' })).toBeHidden();
   await expect(page.getByRole('table')).toBeVisible();
+  // The shell's context line, not the view's own basis note — both say "posted
+  // transactions only", and the point here is that the period and basis survive
+  // the filter form being dropped.
+  await expect(page.getByText(/Period: .* · Posted transactions only/)).toBeVisible();
+  await expect(page.getByText('Excluded: all')).toBeVisible();
   await page.emulateMedia({ media: 'screen' });
 });
 
@@ -462,19 +469,22 @@ test('a report keeps each measure at its own scale, in the table and the export'
   );
 
   const row = page.getByRole('table').locator('tbody tr').first();
+  // Each figure is rendered at the scale it was recorded at: the inflow shows
+  // its cents, the outflow has none to show. What matters is that the outflow
+  // is one hundred and not one — which is what borrowing the inflow's scale
+  // would have made it.
   await expect(row).toContainText('50.00');
-  await expect(row).toContainText('100.00');
-  // The outflow is one hundred, not one.
-  await expect(row).not.toContainText('1.00\n');
-  // 50 in, 100 out.
+  await expect(row).toContainText('100');
+  await expect(row).not.toContainText('1.00');
+  // 50.00 in, 100 out.
   await expect(row).toContainText('-50.00');
 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download CSV' }).click();
   const content = await readFile((await (await download).path()) as string, 'utf8');
   const dataRow = content.split('\r\n')[1];
-  expect(dataRow).toContain('100.00');
-  expect(dataRow).toContain('50.00');
+  expect(dataRow.split(',')).toContain('100');
+  expect(dataRow.split(',')).toContain('50.00');
 });
 
 async function postTransaction(

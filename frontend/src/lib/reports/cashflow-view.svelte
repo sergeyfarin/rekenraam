@@ -44,6 +44,33 @@
   const resolvedAccountIDs = $derived(query.data?.query.filters.resolved_account_ids ?? []);
   const resolvedAccountCount = $derived(resolvedAccountIDs.length);
 
+  /** The endpoint's exclusion policy — the one fact with no place on screen. */
+  const exclusionContext = $derived(
+    query.data && query.data.excluded_system_roles.length > 0
+      ? [
+          m.reports_context_line({
+            label: m.reports_context_excluded(),
+            values: query.data.excluded_system_roles.join(', ')
+          })
+        ]
+      : []
+  );
+
+  /**
+   * This report's own policy, beyond the shell's common context.
+   *
+   * The scope and the transfer rule are the two things that make cashflow's
+   * figures mean anything. Both are stated on screen and print as they are; the
+   * export has no screen to inherit them from, so it restates them here.
+   */
+  const policyContext = $derived([
+    scope === 'selected_accounts'
+      ? m.reports_cashflow_scope_selected({ count: resolvedAccountCount })
+      : m.reports_cashflow_scope_default({ count: resolvedAccountCount }),
+    m.reports_cashflow_transfer_policy(),
+    ...exclusionContext
+  ]);
+
   // Cashflow answers "what changed my cash"; the breakdown of a direction is the
   // spending report's question, over the same accounts and range. Linking is how
   // both stay true — filtering cashflow itself would break its reconciliation.
@@ -142,27 +169,9 @@
       exactDecimal(row.transferNet, row.scales.transferNet),
       exactDecimal(row.netMovement, row.scales.netMovement)
     ]);
-    // Cashflow's scope and transfer policy are the two things that make its
-    // figures mean anything, and both are stated on screen. A file that dropped
-    // them would be a column of numbers nobody could check.
-    const context = [
-      ...reportContext,
-      scope === 'selected_accounts'
-        ? m.reports_cashflow_scope_selected({ count: resolvedAccountCount })
-        : m.reports_cashflow_scope_default({ count: resolvedAccountCount }),
-      m.reports_cashflow_transfer_policy(),
-      ...(query.data && query.data.excluded_system_roles.length > 0
-        ? [
-            m.reports_context_line({
-              label: m.reports_context_excluded(),
-              values: query.data.excluded_system_roles.join(', ')
-            })
-          ]
-        : [])
-    ];
     downloadCSV(
       csvFilename('cashflow', options.startDate, options.endDate),
-      toCSV(withReportContext([header, ...body], context))
+      toCSV(withReportContext([header, ...body], [...reportContext, ...policyContext]))
     );
   }
 
@@ -200,6 +209,17 @@
   <!-- Rule 3: movement to an account outside the scope is financing movement,
        never spending. Saying so is part of the report, not a footnote. -->
   <p class="mt-2 text-xs text-muted">{m.reports_cashflow_transfer_policy()}</p>
+  <!--
+    The scope sentence and the transfer policy are ordinary screen content and
+    print as they are. The exclusion policy has nowhere on screen it belongs, so
+    it is added on paper — which is what makes the printed page carry the same
+    facts as the export, without saying anything twice.
+  -->
+  <div class="hidden text-xs text-muted print:block">
+    {#each exclusionContext as line (line)}
+      <p>{line}</p>
+    {/each}
+  </div>
 
   {#if query.isPending}
     <div class="mt-5">

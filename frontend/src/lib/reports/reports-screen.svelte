@@ -247,6 +247,15 @@
       : [];
   }
 
+  // Net worth has no view component of its own, so its exclusion policy is
+  // printed here. The other two reports print their policy lines themselves,
+  // from the same list their exports carry.
+  const printContext = $derived(
+    view === 'net-worth'
+      ? [...reportContext, ...exclusionLine(netWorthQuery.data?.excluded_system_roles)]
+      : reportContext
+  );
+
   // Axis labels get their own compact format: a full date is wider than a
   // column, and overlapping labels are worse than terse ones.
   const shortDateFormatter = $derived(new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }));
@@ -336,7 +345,7 @@
     text rather than dropping that context along with the form.
   -->
   <div class="hidden text-sm text-muted print:block">
-    {#each reportContext as line (line)}
+    {#each printContext as line (line)}
       <p>{line}</p>
     {/each}
   </div>

@@ -46,6 +46,19 @@
   // Retrying cannot undo an overflow or repair a rejected query, so the
   // stable code speaks for itself and the retry button stands down.
   const errorState = $derived(reportErrorState(query.error, m.reports_spending_error_copy()));
+
+  /** The endpoint's exclusion policy — the one fact with no place on screen. */
+  const exclusionContext = $derived(
+    query.data && query.data.excluded_system_roles.length > 0
+      ? [
+          m.reports_context_line({
+            label: m.reports_context_excluded(),
+            values: query.data.excluded_system_roles.join(', ')
+          })
+        ]
+      : []
+  );
+
   // Built-in categories arrive as stable codes with no name; display text is
   // resolved here at render time through the canonical label helper, which also
   // honours a user rename. One request per page, never per row.
@@ -61,6 +74,19 @@
   const rows = $derived(query.data ? spendingRows(query.data) : []);
   const singleCommodity = $derived(query.data ? isSingleCommodity(query.data) : false);
   const groupBy = $derived(options.groupBy);
+
+  /**
+   * This report's own policy, beyond the shell's common context.
+   *
+   * The grouping policy is part of the answer — a parent category not including
+   * its children changes what every row means — and the exclusion list is what
+   * the endpoint left out. One list, so the printed page and the exported file
+   * cannot come to disagree about what the report was.
+   */
+  const policyContext = $derived([
+    ...(groupBy === 'category' ? [m.reports_spending_grouping_policy()] : []),
+    ...exclusionContext
+  ]);
   const mode = $derived(options.mode ?? 'spending');
 
   function rowLabel(row: SpendingRow): string {
@@ -95,24 +121,9 @@
       // locale separator would not parse, so it goes out as basis points.
       row.shareBasisPoints === undefined ? '' : String(row.shareBasisPoints)
     ]);
-    // The grouping policy is part of the answer — a parent category not
-    // including its children changes what every row means — so it travels with
-    // the file rather than staying a note under the table on screen.
-    const context = [
-      ...reportContext,
-      ...(groupBy === 'category' ? [m.reports_spending_grouping_policy()] : []),
-      ...(query.data && query.data.excluded_system_roles.length > 0
-        ? [
-            m.reports_context_line({
-              label: m.reports_context_excluded(),
-              values: query.data.excluded_system_roles.join(', ')
-            })
-          ]
-        : [])
-    ];
     downloadCSV(
       csvFilename(mode === 'income' ? 'income' : 'spending', options.startDate, options.endDate),
-      toCSV(withReportContext([header, ...body], context))
+      toCSV(withReportContext([header, ...body], [...reportContext, ...policyContext]))
     );
   }
 
@@ -305,5 +316,16 @@
     {#if groupBy === 'category'}
       <p class="mt-4 text-xs text-muted">{m.reports_spending_grouping_policy()}</p>
     {/if}
+    <!--
+      The grouping policy is ordinary screen content and prints as it is. The
+      exclusion policy has nowhere on screen it belongs, so it is added on paper
+      — which is what makes the printed page carry the same facts as the export,
+      without saying anything twice.
+    -->
+    <div class="hidden text-xs text-muted print:block">
+      {#each exclusionContext as line (line)}
+        <p>{line}</p>
+      {/each}
+    </div>
   {/if}
 </Panel>
