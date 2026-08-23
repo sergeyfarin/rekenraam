@@ -4,7 +4,6 @@ packages:
 
 minimumReleaseAgeExclude:
   - js-yaml@4.3.1
-  - '@inlang/plugin-m-function-matcher@2.2.11'
   - '@inlang/sdk@3.0.1'
   - '@lix-js/sdk-darwin-arm64@0.12.2'
   - '@lix-js/sdk-linux-arm64@0.12.2'
