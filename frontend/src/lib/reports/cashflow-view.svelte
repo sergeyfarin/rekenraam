@@ -13,19 +13,23 @@
     hasMultipleCommodities,
     isEmptyCashflow,
     transferDetail,
-    type CashflowRow
+    type CashflowRow,
+    type Measure
   } from './cashflow';
   import BucketColumnChart from './bucket-column-chart.svelte';
   import { seriesColumns } from './report-series';
-  import { csvFilename, downloadCSV, exactDecimal, toCSV } from './report-csv';
+  import { csvFilename, downloadCSV, exactDecimal, toCSV, withReportContext } from './report-csv';
   import { reportErrorState } from './report-error';
 
   let {
     options,
-    commodityLabel
+    commodityLabel,
+    reportContext
   }: {
     options: CashflowOptions;
     commodityLabel: (commodityID: number) => string;
+    /** What the shell measured, restated for an export that outlives the screen. */
+    reportContext: string[];
   } = $props();
 
   const locale = $derived(getLocale());
@@ -70,8 +74,15 @@
     return m.reports_date_range({ start: formatDate(start), end: formatDate(end) });
   }
 
-  function amount(value: string, row: CashflowRow): string {
-    return formatQuantity(value, row.quantityScale, locale);
+  /**
+   * Renders one measure at the scale that measure was produced at.
+   *
+   * Taking the measure by name rather than by value is what makes borrowing a
+   * sibling's scale impossible: a coefficient and a scale from two different
+   * measures differ by a power of ten per digit.
+   */
+  function amount(row: CashflowRow, measure: Measure): string {
+    return formatQuantity(row[measure], row.scales[measure], locale);
   }
 
   /**
@@ -79,8 +90,9 @@
    * alone is not a cue every reader has. `formatQuantity` already renders a
    * leading minus, so only the positive case needs marking.
    */
-  function signedAmount(value: string, row: CashflowRow): string {
-    const formatted = amount(value, row);
+  function signedAmount(row: CashflowRow, measure: Measure): string {
+    const formatted = amount(row, measure);
+    const value = row[measure];
     return value.startsWith('-') || value === '0' ? formatted : `+${formatted}`;
   }
 
@@ -100,7 +112,7 @@
             key: row.key,
             label: shortDate(row.startDate),
             quantityValue: row.netMovement,
-            quantityScale: row.quantityScale
+            quantityScale: row.scales.netMovement
           }))
         )
   );
@@ -122,17 +134,35 @@
       row.startDate,
       row.endDate,
       commodityLabel(row.commodityID),
-      exactDecimal(row.inflow, row.quantityScale),
-      exactDecimal(row.outflow, row.quantityScale),
-      exactDecimal(row.operatingNet, row.quantityScale),
-      exactDecimal(row.transferIn, row.quantityScale),
-      exactDecimal(row.transferOut, row.quantityScale),
-      exactDecimal(row.transferNet, row.quantityScale),
-      exactDecimal(row.netMovement, row.quantityScale)
+      exactDecimal(row.inflow, row.scales.inflow),
+      exactDecimal(row.outflow, row.scales.outflow),
+      exactDecimal(row.operatingNet, row.scales.operatingNet),
+      exactDecimal(row.transferIn, row.scales.transferIn),
+      exactDecimal(row.transferOut, row.scales.transferOut),
+      exactDecimal(row.transferNet, row.scales.transferNet),
+      exactDecimal(row.netMovement, row.scales.netMovement)
     ]);
+    // Cashflow's scope and transfer policy are the two things that make its
+    // figures mean anything, and both are stated on screen. A file that dropped
+    // them would be a column of numbers nobody could check.
+    const context = [
+      ...reportContext,
+      scope === 'selected_accounts'
+        ? m.reports_cashflow_scope_selected({ count: resolvedAccountCount })
+        : m.reports_cashflow_scope_default({ count: resolvedAccountCount }),
+      m.reports_cashflow_transfer_policy(),
+      ...(query.data && query.data.excluded_system_roles.length > 0
+        ? [
+            m.reports_context_line({
+              label: m.reports_context_excluded(),
+              values: query.data.excluded_system_roles.join(', ')
+            })
+          ]
+        : [])
+    ];
     downloadCSV(
       csvFilename('cashflow', options.startDate, options.endDate),
-      toCSV([header, ...body])
+      toCSV(withReportContext([header, ...body], context))
     );
   }
 
@@ -232,48 +262,48 @@
               <td class="px-3 py-3 text-right tabular-nums text-foreground">
                 {#if drillDown(row, 'in')}
                   <a href={drillDown(row, 'in')} class="text-accent underline underline-offset-2 transition hover:opacity-80">
-                    {amount(row.inflow, row)}
+                    {amount(row, 'inflow')}
                   </a>
                 {:else}
-                  {amount(row.inflow, row)}
+                  {amount(row, 'inflow')}
                 {/if}
               </td>
               <td class="px-3 py-3 text-right tabular-nums text-foreground">
                 {#if drillDown(row, 'out')}
                   <a href={drillDown(row, 'out')} class="text-accent underline underline-offset-2 transition hover:opacity-80">
-                    {amount(row.outflow, row)}
+                    {amount(row, 'outflow')}
                   </a>
                 {:else}
-                  {amount(row.outflow, row)}
+                  {amount(row, 'outflow')}
                 {/if}
               </td>
               <td class={`px-3 py-3 text-right tabular-nums ${derivedCellClass} ${toneFor(row.operatingNet)}`}>
-                {signedAmount(row.operatingNet, row)}
+                {signedAmount(row, 'operatingNet')}
               </td>
               <td class={`px-3 py-3 text-right tabular-nums ${derivedCellClass} ${toneFor(row.transferNet)}`}>
-                {signedAmount(row.transferNet, row)}
+                {signedAmount(row, 'transferNet')}
                 <!-- The incoming/outgoing pair behind the net, so a financing
                      figure can be read without a second query. Only the sides
                      that actually moved are named. -->
                 {#if transferDetail(row) === 'both'}
                   <span class="block text-xs font-normal text-muted">
                     {m.reports_cashflow_transfer_detail_both({
-                      incoming: amount(row.transferIn, row),
-                      outgoing: amount(row.transferOut, row)
+                      incoming: amount(row, 'transferIn'),
+                      outgoing: amount(row, 'transferOut')
                     })}
                   </span>
                 {:else if transferDetail(row) === 'in'}
                   <span class="block text-xs font-normal text-muted">
-                    {m.reports_cashflow_transfer_detail_in({ incoming: amount(row.transferIn, row) })}
+                    {m.reports_cashflow_transfer_detail_in({ incoming: amount(row, 'transferIn') })}
                   </span>
                 {:else if transferDetail(row) === 'out'}
                   <span class="block text-xs font-normal text-muted">
-                    {m.reports_cashflow_transfer_detail_out({ outgoing: amount(row.transferOut, row) })}
+                    {m.reports_cashflow_transfer_detail_out({ outgoing: amount(row, 'transferOut') })}
                   </span>
                 {/if}
               </td>
               <td class={`px-3 py-3 text-right font-semibold tabular-nums ${toneFor(row.netMovement)}`}>
-                {signedAmount(row.netMovement, row)}
+                {signedAmount(row, 'netMovement')}
               </td>
             </tr>
           {/each}

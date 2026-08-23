@@ -112,6 +112,37 @@ describe('cashflowRows', () => {
       report([{ ...emptyBucket, net_movement: [quantity(1, '1234567', 4)] }])
     );
     expect(rows[0].quantityScale).toBe(4);
+    expect(rows[0].scales.netMovement).toBe(4);
+  });
+
+  it('keeps each measure with the scale it was produced at', () => {
+    // The server writes one scale per commodity, but a client that pairs one
+    // measure's coefficient with another's scale renders 100 as 1.00. Reading
+    // each measure's own scale makes that impossible rather than unlikely.
+    const rows = cashflowRows(
+      report([
+        {
+          ...emptyBucket,
+          inflow: [quantity(1, '5000', 2)],
+          outflow: [quantity(1, '100', 0)],
+          net_movement: [quantity(1, '-5000', 2)]
+        }
+      ])
+    );
+
+    expect(rows[0].scales.inflow).toBe(2);
+    expect(rows[0].scales.outflow).toBe(0);
+    expect(rows[0].scales.netMovement).toBe(2);
+    // The row-level scale is the deepest present, never a sibling's.
+    expect(rows[0].quantityScale).toBe(2);
+  });
+
+  it('gives an absent measure the row scale, since zero is zero at any scale', () => {
+    const rows = cashflowRows(
+      report([{ ...emptyBucket, net_movement: [quantity(1, '-5000', 2)] }])
+    );
+    expect(rows[0].inflow).toBe('0');
+    expect(rows[0].scales.inflow).toBe(2);
   });
 
   it('emits a row for a bucket whose movements cancelled to zero', () => {

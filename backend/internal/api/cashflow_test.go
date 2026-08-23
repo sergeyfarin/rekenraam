@@ -432,3 +432,60 @@ func TestCashflowOverflowIsA422RatherThanA500(t *testing.T) {
 	require.Equal(t, http.StatusUnprocessableEntity, res.Code, res.Body.String())
 	assert.Equal(t, "LEDGER_OVERFLOW", apiErrorCode(t, res))
 }
+
+// TestCashflowMeasuresOfOneCommodityShareOneScale pins the invariant every
+// client reads the response through. Postings may be recorded at any scale the
+// commodity permits, and each measure accumulates independently, so inflow
+// could arrive at scale 2 while outflow arrived at scale 0 in the same
+// commodity and bucket. A client pairing one coefficient with another measure's
+// scale then renders a figure off by a factor of ten per digit.
+func TestCashflowMeasuresOfOneCommodityShareOneScale(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newCashflowFixture(t, handler)
+
+	// 50.00 salary in at scale 2, 100 groceries out at scale 0.
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-05",
+		posting(f.checking.ID, 5000, 2, f.usdID),
+		posting(f.salary.ID, -5000, 2, f.usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-06",
+		posting(f.checking.ID, -100, 0, f.usdID),
+		posting(f.groceries.ID, 100, 0, f.usdID),
+	), http.StatusCreated)
+
+	report := readCashflowForSession(t, handler, f.sessionCookie,
+		"?start_date=2026-06-01&end_date=2026-06-30&bucket=month&account_id="+strconvFormatInt(f.checking.ID))
+	require.Len(t, report.Buckets, 1)
+	bucket := report.Buckets[0]
+
+	scales := map[string]int{}
+	for name, quantities := range map[string][]balanceQuantityResponse{
+		"inflow":        bucket.Inflow,
+		"outflow":       bucket.Outflow,
+		"operating_net": bucket.OperatingNet,
+		"transfer_in":   bucket.TransferIn,
+		"transfer_out":  bucket.TransferOut,
+		"transfer_net":  bucket.TransferNet,
+		"net_movement":  bucket.NetMovement,
+	} {
+		for _, quantity := range quantities {
+			if quantity.CommodityID == f.usdID {
+				scales[name] = quantity.QuantityScale
+			}
+		}
+	}
+
+	require.Contains(t, scales, "inflow")
+	require.Contains(t, scales, "outflow")
+	for name, scale := range scales {
+		assert.Equal(t, scales["inflow"], scale, "%s must share the commodity's scale", name)
+	}
+
+	// Deepening is lossless, so the aligned figures are the same money: 50.00 in
+	// and 100.00 out, netting to -50.00.
+	assertBalance(t, bucket.Inflow, f.usdID, 5000, 2, 5000)
+	assertBalance(t, bucket.Outflow, f.usdID, 10000, 2, 10000)
+	assertBalance(t, bucket.NetMovement, f.usdID, -5000, 2, -5000)
+}

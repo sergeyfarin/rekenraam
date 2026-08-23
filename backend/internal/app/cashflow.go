@@ -242,6 +242,14 @@ func (t *cashflowTotals) toBucket(startDate string, endDate string) (CashflowBuc
 	operatingNet := subtractAmounts(t.inflow, t.outflow)
 	transferNet := subtractAmounts(t.transferIn, t.transferOut)
 
+	// Every measure of one commodity leaves this bucket at one scale. Each of
+	// the seven accumulates independently, and a posting may be recorded at any
+	// scale the commodity permits, so 50.00 of income and 100 of expense would
+	// otherwise be reported as scale 2 and scale 0 in the same commodity — and a
+	// client that reads one scale for the row renders the other measure a
+	// hundred times too small.
+	alignCommodityScales(t.inflow, t.outflow, t.transferIn, t.transferOut, t.netMovement, operatingNet, transferNet)
+
 	inflow, err := reportMagnitudes(t.inflow, false)
 	if err != nil {
 		return CashflowBucket{}, err
@@ -282,6 +290,29 @@ func (t *cashflowTotals) toBucket(startDate string, endDate string) (CashflowBuc
 		TransferNet:  transfer,
 		NetMovement:  netMovement,
 	}, nil
+}
+
+// alignCommodityScales restates every measure of a commodity at the deepest
+// scale any of them carries.
+//
+// Deepening is lossless — it multiplies by a power of ten — so this changes how
+// a figure is written, never what it is worth, and the identity
+// net_movement = operating_net + transfer_net keeps holding coefficient for
+// coefficient once every side is written at the same scale.
+func alignCommodityScales(measures ...map[int64]*exact.ScaledInt) {
+	deepest := map[int64]int{}
+	for _, measure := range measures {
+		for commodityID, amount := range measure {
+			if amount.Scale() > deepest[commodityID] {
+				deepest[commodityID] = amount.Scale()
+			}
+		}
+	}
+	for _, measure := range measures {
+		for commodityID, amount := range measure {
+			amount.Align(deepest[commodityID])
+		}
+	}
 }
 
 // subtractAmounts returns left - right for every commodity present in either,
@@ -335,23 +366,18 @@ func bucketIndexFor(bounds []calendarBucketBound, entryDate string) int {
 	return -1
 }
 
-// cashflowScopeClasses is what an explicitly selected cash scope may contain.
-// The scope is the balance net_movement reconciles to, so every member must be
-// an account that holds one: asset or liability. A credit card or a brokerage
-// holding is therefore a legal scope — "what moved through this account" is a
-// real question — while an income, expense, or equity account has no balance to
-// move and would read as cash flowing the wrong way.
-var cashflowScopeClasses = map[string]bool{
-	"asset":     true,
-	"liability": true,
-}
-
-// validateCashflowScope rejects a selection this endpoint's own response would
-// then contradict. The default scope excludes system accounts (reports-plan.md,
-// cashflow rule 1) and every response reports excluded_system_roles: ["all"], so
-// an explicit selection that admitted one would claim to exclude an account it
-// had just summed. The generic report filter validator cannot carry this rule:
-// on net worth and spending a system account is an ordinary basis member.
+// validateCashflowScope adds the one rule this endpoint has beyond the shared
+// account-filter contract.
+//
+// The asset/liability requirement is already enforced for every report by
+// validateReportAccountClasses — the cash scope is the balance net_movement
+// reconciles to, so a credit card is a legal scope and an income or equity
+// account is not. What is specific here is the system-account exclusion: the
+// default scope skips them (reports-plan.md, cashflow rule 1) and every
+// response reports excluded_system_roles: ["all"], so an explicit selection
+// that admitted one would claim to exclude an account it had just summed. That
+// rule cannot move into the shared validator, because on net worth
+// transfer_clearing is an ordinary basis member.
 //
 // The resolved selection is checked rather than the named one, because
 // include_descendants is what actually becomes the scope.
@@ -370,9 +396,6 @@ func validateCashflowScope(accounts []db.LedgerAccountRecord, resolvedAccountIDs
 		}
 		if account.SystemRole.Valid {
 			return ValidationError{Message: "account filter is invalid: a system account cannot join the cashflow cash scope"}
-		}
-		if !cashflowScopeClasses[account.AccountClass] {
-			return ValidationError{Message: "account filter is invalid: the cashflow cash scope takes asset or liability accounts"}
 		}
 	}
 	return nil

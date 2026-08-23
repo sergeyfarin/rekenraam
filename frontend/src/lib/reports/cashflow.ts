@@ -15,7 +15,21 @@ export type CashflowRow = {
   startDate: string;
   endDate: string;
   commodityID: number;
+  /**
+   * The deepest scale any of this row's measures carries, for anything that
+   * needs one number for the row. Never use it to render a measure: read that
+   * measure's own entry in `scales`.
+   */
   quantityScale: number;
+  /**
+   * Each measure's own scale.
+   *
+   * The server writes every measure of one commodity at one scale, but a
+   * coefficient must be paired with the scale it was produced at rather than
+   * with a scale borrowed from a sibling measure: the two differ by a power of
+   * ten per digit, so borrowing renders 100 as 1.00.
+   */
+  scales: Record<Measure, number>;
   inflow: string;
   outflow: string;
   operatingNet: string;
@@ -25,10 +39,14 @@ export type CashflowRow = {
   netMovement: string;
 };
 
-type Measure = keyof Pick<
-  CashflowRow,
-  'inflow' | 'outflow' | 'operatingNet' | 'transferIn' | 'transferOut' | 'transferNet' | 'netMovement'
->;
+export type Measure =
+  | 'inflow'
+  | 'outflow'
+  | 'operatingNet'
+  | 'transferIn'
+  | 'transferOut'
+  | 'transferNet'
+  | 'netMovement';
 
 const MEASURES: Array<[Measure, keyof CashflowReportResponse['buckets'][number]]> = [
   ['inflow', 'inflow'],
@@ -70,9 +88,16 @@ export function cashflowRows(report: CashflowReportResponse): CashflowRow[] {
           startDate: bucket.start_date,
           endDate: bucket.end_date,
           commodityID,
-          // Every measure of one commodity is produced at the same scale by the
-          // server, so the first one present names the scale for the row.
           quantityScale: 0,
+          scales: {
+            inflow: 0,
+            outflow: 0,
+            operatingNet: 0,
+            transferIn: 0,
+            transferOut: 0,
+            transferNet: 0,
+            netMovement: 0
+          },
           inflow: '0',
           outflow: '0',
           operatingNet: '0',
@@ -82,14 +107,20 @@ export function cashflowRows(report: CashflowReportResponse): CashflowRow[] {
           netMovement: '0'
         };
 
-        let scale: number | undefined;
         for (const [measure] of MEASURES) {
           const quantity = measures.get(measure)?.get(commodityID);
           if (!quantity) continue;
           row[measure] = quantity.quantity_value;
-          scale ??= quantity.quantity_scale;
+          row.scales[measure] = quantity.quantity_scale;
+          row.quantityScale = Math.max(row.quantityScale, quantity.quantity_scale);
         }
-        row.quantityScale = scale ?? 0;
+        // An absent measure reads as zero, and zero is the same number at every
+        // scale, so it takes the row's scale rather than a misleading 0.
+        for (const [measure] of MEASURES) {
+          if (!measures.get(measure)?.get(commodityID)) {
+            row.scales[measure] = row.quantityScale;
+          }
+        }
         return row;
       });
   });
