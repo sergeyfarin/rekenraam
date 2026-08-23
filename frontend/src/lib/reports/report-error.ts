@@ -14,12 +14,22 @@ import type { APIErrorCode } from '$lib/api/client';
 import { APIClientError } from '$lib/api/client';
 import { getAPIErrorMessage } from '$lib/api-error-messages';
 
-/** Codes an identical repeat of the same report query cannot resolve. */
+/**
+ * Codes an identical repeat of the same report query cannot resolve.
+ *
+ * `UNAUTHENTICATED` and `CSRF_INVALID` belong here for the same reason as the
+ * rest: the request that failed carries the credential that failed, so sending
+ * it again sends the same expired session. Recovery is the app shell's job —
+ * it re-reads the session and returns the reader to sign-in — not a button that
+ * repeats a request already known to be refused.
+ */
 const PERMANENT_CODES = new Set<APIErrorCode>([
   'VALIDATION_FAILED',
+  'UNAUTHENTICATED',
   'FORBIDDEN',
   'NOT_FOUND',
   'CONFLICT',
+  'CSRF_INVALID',
   'LEDGER_OVERFLOW',
   'CONFIG_REQUIRED',
   'SETUP_REQUIRED',

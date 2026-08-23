@@ -12,6 +12,11 @@ describe('isRetryableAPIError', () => {
     expect(isRetryableAPIError('NOT_FOUND')).toBe(false);
   });
 
+  it('does not offer retry for an expired session, which the same request cannot renew', () => {
+    expect(isRetryableAPIError('UNAUTHENTICATED')).toBe(false);
+    expect(isRetryableAPIError('CSRF_INVALID')).toBe(false);
+  });
+
   it('offers retry for a transient server-side failure', () => {
     expect(isRetryableAPIError('RESOURCE_BUSY')).toBe(true);
     expect(isRetryableAPIError('INTERNAL_ERROR')).toBe(true);
