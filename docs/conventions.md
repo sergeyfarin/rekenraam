@@ -447,6 +447,13 @@ with it.
   not competing trackers.
 - When roadmap priorities change, cross-check `docs/competitor-comparison.md` and
   record intentional parity gaps or gains in the roadmap's parity section.
+- **An acceptance decision is recorded in the plan it governs, in the same
+  commit that flips the status elsewhere.** `roadmap.md`, `todo.md`, and
+  `implemented.md` say *that* an initiative was accepted; the feature plan is
+  where each retained follow-up gets its yes/no and its reason, because the plan
+  is what the next initiative is checked against. R2 shipped with the status
+  flipped in three trackers and no decision recorded in `reports-plan.md`, which
+  left the three saying "closed" and the plan saying "open" for four days.
 - Decision records belong in `docs/adrs/`.
 - Repo-wide agent guidance belongs in `AGENTS.md`.
 - Developer workflow notes belong in `README.md` and `docs/developer-workflow.md` unless a tooling area needs substantial local guidance.

@@ -1,15 +1,15 @@
 # Reports Plan
 
-Status: **R2 is code-complete; the plan is now the reference for what shipped
-and what was deliberately left out**. Net worth, spending, and cashflow are all
-shipped end to end — read models, the shared filter contract, screens, filter
-controls, drill-down, CSV export, print layout, and chart summaries. The only
-open R2 item is the acceptance review at the end of this document, which is an
-owner decision.
+Status: **R2 is complete and accepted; the plan is now the reference for what
+shipped and what was deliberately left out**. Net worth, spending, and cashflow
+are all shipped end to end — read models, the shared filter contract, screens,
+filter controls, drill-down, CSV export, print layout, and chart summaries. The
+acceptance review at the end of this document is closed, with a yes/no and a
+reason for every retained item.
 
 Two gaps are deliberate and recorded below, not oversights: the net-worth series
 carries no asset/liability split, and cashflow takes no category or payee
-filter. Last verified against the codebase: 2026-08-19.
+filter. Last verified against the codebase: 2026-08-23.
 
 This plan delivers the first daily-driver reports: net worth over time,
 spending by category or payee, and cashflow. It is governed by
@@ -58,8 +58,8 @@ R2 includes shared filters, URL-addressable report views, tables, modest chart
 summaries, CSV/print-friendly output, drill-down where an existing route can
 honour the filter, and all loading/empty/error states.
 
-The following remain designed follow-ups and must be reconsidered explicitly at
-the R2 acceptance review:
+The following were carried as designed follow-ups and each received a decision
+at the R2 acceptance review (see the table at the end of this document):
 
 - named saved report definitions and live report runs;
 - immutable/reproducible report snapshots;
@@ -119,13 +119,28 @@ Add these OpenAPI-first endpoints under `/api/v1/reports`:
 | --- | --- | --- |
 | `GET /reports/net-worth` | Asset/liability value at each bucket end | dates, bucket, account IDs, descendants, commodity IDs |
 | `GET /reports/spending` | Expense or income totals ranked by one dimension | dates, `group_by=category|payee`, category IDs, payee IDs, account IDs, descendants, commodity IDs |
-| `GET /reports/cashflow` | Cash movement classified as inflow, outflow, transfer, and net movement | dates, bucket, cash account IDs, descendants, category IDs, payee IDs, commodity IDs, transfer policy |
+| `GET /reports/cashflow` | Cash movement classified as inflow, outflow, transfer, and net movement | dates, bucket, cash account IDs, descendants, commodity IDs |
 
-Every response must contain `query`, `buckets`, `commodity_totals`, and
-`excluded_system_roles` (or an equally explicit endpoint-specific policy). Do
-not reuse presentation DTOs from the existing ledger endpoints merely because
-they have similar quantity fields. Reuse the lossless quantity schema, but give
-reports stable names and response types of their own.
+**As shipped, cashflow takes no category or payee filter and no transfer-policy
+option.** Both were in the first draft of this table and were rejected during
+slice 4: a category or payee filter removes counterpart postings from the basis
+and breaks the `net_movement` reconciliation guarantee, and the transfer policy
+is not an option but the rule the report is built on — movement to an account
+outside the scope is financing movement, always. The cash scope itself takes any
+asset or liability account; a system account or a non-balance class (income,
+expense, equity) is `VALIDATION_FAILED`, because the response reports
+`excluded_system_roles: ["all"]` in every case.
+
+Every response must contain `query`, `excluded_system_roles` (or an equally
+explicit endpoint-specific policy), and its own exact per-commodity figures. Net
+worth and spending carry those as a top-level `commodity_totals`; **cashflow does
+not** — its measures are per bucket (`inflow`, `outflow`, `operating_net`,
+`transfer_in`, `transfer_out`, `transfer_net`, `net_movement`), each an exact
+per-commodity list, because a range total would hide the bucket boundaries the
+reconciliation is stated across. Do not reuse presentation DTOs from the existing
+ledger endpoints merely because they have similar quantity fields. Reuse the
+lossless quantity schema, but give reports stable names and response types of
+their own.
 
 ## Report definitions
 
@@ -408,9 +423,10 @@ Shipped across all three views.
      arrived-from-report notice explains the narrowing and offers the way out.
      A silently filtered list reads as a broken one.
 
-   Remaining in this slice: the R2 acceptance review — which of the larger items
+   The R2 acceptance review that closed this slice — which of the larger items
    above (saved definitions, cross-currency valuation, investment dimensions,
-   snapshots) are justified before R3 starts. That is an owner decision.
+   snapshots) are justified before R3 starts — is recorded in full at the end of
+   this document.
 4. **Cashflow**
    - Implement the locked liquid-cash selection and counterpart-classification
      model, then the API and UI.
@@ -517,10 +533,12 @@ Shipped across all three views.
    `role="img"` with a caption, so nothing in a chart is unavailable to a
    screen reader.
 
-   **Not yet covered:** the validation matrix below calls for an E2E case
-   carrying a *multi-currency* transaction through every report. The existing
-   E2E cases are single-currency; the multi-commodity paths are covered by
-   backend and unit tests only. Worth closing before R2 is formally accepted.
+   **Closed 2026-08-23:** the validation matrix below calls for an E2E case
+   carrying a *multi-currency* transaction through every report. It exists —
+   `e2e/playwright/reports.spec.ts`, "one multi-currency journey travels through
+   every report without combining commodities" — alongside the single-currency
+   cases, so the browser proves the per-commodity separation the backend tests
+   assert.
 
 ## Validation matrix
 
@@ -546,3 +564,30 @@ exact per-currency cashflow, and the Ghostfolio/Portfolio Performance returns
 gap deliberately retained for R13. The one honest caveat recorded there is that
 the commercial tools show a single blended base-currency figure and Rekenraam
 still refuses to until the approved reporting-currency selector lands.
+
+## R2 acceptance review — closed 2026-08-19
+
+Recorded here rather than only in `roadmap.md`, because this plan is what the
+next initiative is checked against. Each item retained at the top of this
+document gets a disposition and a reason; nothing is left as "reconsider later".
+
+| Retained item | Decision | Reason |
+| --- | --- | --- |
+| Reporting-currency selector and named FX/price valuation method | **Yes, after R3** | The one item worth building. Every report is exact per commodity today, which is correct but leaves a multi-currency holder without a single figure. It needs a *named* valuation method and a rate provenance trail, so it is its own slice rather than a flag on these three reports. |
+| Named saved report definitions and live report runs | **No, deferred** | The URL already is the saved definition: every control writes it and a link reproduces the exact report. A saved-definition store adds a second source of truth and a migration story for a convenience the address bar covers. Revisit when a report acquires state a URL cannot carry. |
+| Immutable/reproducible report snapshots | **No, deferred** | Reproducibility here would mean freezing the ledger as it was read, which is a point-in-time query over the version tables — a capability worth having on its own terms, not a report feature. The audit model already records what changed and when. |
+| Country, jurisdiction, tax, investment, and benchmark dimensions | **No, deferred** | These are report *questions*, and the ledger does not yet carry the facts most of them need. Tax and jurisdiction have no schema; investment returns are R13's subject and are tracked there. Adding dimensions before the facts exist would ship empty columns. |
+| User-configurable report builder | **No, rejected for this stage** | A builder is the answer to "many reports we cannot predict". With three reports and a single-user product, it would be a large generic surface protecting against a problem the product does not have. The shared filter contract is the part worth keeping, and it shipped. |
+| Net-worth asset/liability split in the series response | **No, retained as a known partial capability** | Recorded above as a deliberate gap, not an oversight. The series answers "what is it worth over time"; the split is a composition question that belongs with the balance-sheet view, and shipping half of it in the series response would fix the shape before that view is designed. |
+| Cashflow category/payee filter | **No, rejected on correctness grounds** | Such a filter removes counterpart postings from the basis, which breaks the `net_movement` reconciliation guarantee this report exists to provide. The filtered question is answered by drilling from a cashflow row into the spending report, which is exactly what that link does. |
+
+**Validation matrix closure.** The one gap named during slice 4 — an E2E case
+carrying a multi-currency transaction through every report — is closed:
+`e2e/playwright/reports.spec.ts` has "one multi-currency journey travels through
+every report without combining commodities", which asserts per-commodity
+separation in all three reports, the multi-commodity explanation, chart
+suppression across unlike commodities, an export that keeps both commodities as
+their own rows, and a commodity-preserving drill-down. Overflow has named
+API cases on all three reports (`TestCashflowOverflowIsA422RatherThanA500`,
+`TestSpendingAndNetWorthOverflowAreA422`), and the screens no longer offer retry
+as the response to a code retrying cannot fix (`lib/reports/report-error.ts`).

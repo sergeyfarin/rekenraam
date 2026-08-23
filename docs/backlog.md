@@ -678,6 +678,41 @@ or a rule exclusion and promoting gosec to a blocking gate, or — likelier —
 deleting the workflow once CodeQL's Go analysis is restored, since CodeQL
 covers the same ground without the noise.
 
+### T-60 Report test fixtures are rebuilt per suite `[ ]`
+
+**Files:** `backend/internal/api/reports_test.go` (`newSpendingFixture`),
+`backend/internal/api/cashflow_test.go` (`newCashflowFixture`),
+`e2e/playwright/reports.spec.ts`.
+
+Three test suites build the same reporting shape three times — accounts under a
+parent, an expense and income category, a refund, a transfer, a voided posting,
+a second commodity — each in its own dialect. They already drifted: the backend
+fixtures carry a EUR expense the browser suite had to grow separately when the
+multi-currency E2E case landed (2026-08-23).
+
+The shape worth sharing is the *scenario*, not the code: a declared set of
+transactions with the exact per-commodity figures every report must produce from
+them, consumed by the Go suites through a seeding helper and by Playwright
+through the same JSON. Then a classification change that breaks one report's
+answer breaks it in both places at once, instead of in whichever suite happened
+to encode that case. Not urgent — the coverage exists today — but it is the
+cheapest way to stop the two layers asserting different numbers about the same
+ledger.
+
+### T-61 The browser suite has no acceptance-mapped subset `[ ]`
+
+**Files:** `e2e/playwright/`, `scripts/test-e2e-smoke.sh`,
+`scripts/test-release-preflight.sh`.
+
+There are two browser suites today (merge smoke, release preflight) and they are
+split by *cost*, not by what they prove. When a plan's validation matrix asks
+"does one transaction travel through every report correctly", the answer is
+spread across several specs and has to be re-derived by reading them.
+
+Worth a third, small grouping — a tag or a directory — whose cases map one-to-one
+onto a plan's validation matrix, so closing an initiative can point at a suite
+rather than at an argument. The R2 multi-currency case is the first member.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04
