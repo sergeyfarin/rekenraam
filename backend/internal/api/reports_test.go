@@ -670,3 +670,45 @@ func TestSpendingAccountFilterMatchesPerJournalEntry(t *testing.T) {
 		"?start_date=2026-06-01&end_date=2026-06-30&group_by=category")
 	assert.Len(t, unfiltered.Groups, 2)
 }
+
+// TestSpendingAndNetWorthOverflowAreA422 covers the other two reports for the
+// overflow row of the validation matrix. Both aggregate into the same exact
+// accumulator, so both must surface the same stable code rather than a 500 — a
+// client cannot retry its way out of exceeding the 38-digit limit.
+func TestSpendingAndNetWorthOverflowAreA422(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	fixture := newSpendingFixture(t, handler)
+
+	// Each posting is legal on its own — 38 digits is the limit, not an error —
+	// but the report has to sum two of them.
+	huge := strings.Repeat("9", 38)
+	hugePosting := func(accountID int64, sign string) string {
+		return `{"account_id":` + strconvFormatInt(accountID) +
+			`,"quantity_value":"` + sign + huge + `","quantity_scale":2,"commodity_id":` +
+			strconvFormatInt(fixture.usdID) + `}`
+	}
+	for _, date := range []string{"2026-06-05", "2026-06-06"} {
+		createTransactionForSession(t, handler, fixture.sessionCookie, fixture.csrfToken, balancedBody(date,
+			hugePosting(fixture.checking.ID, "-"),
+			hugePosting(fixture.groceries.ID, ""),
+		), http.StatusCreated)
+	}
+
+	for name, target := range map[string]string{
+		"spending":  "/api/v1/reports/spending?start_date=2026-06-01&end_date=2026-06-30&group_by=category",
+		"net worth": "/api/v1/reports/net-worth?start_date=2026-06-01&end_date=2026-06-30&bucket=month",
+	} {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		req.AddCookie(fixture.sessionCookie)
+		res := httptest.NewRecorder()
+
+		handler.ServeHTTP(res, req)
+
+		require.Equal(t, http.StatusUnprocessableEntity, res.Code, "%s: %s", name, res.Body.String())
+		var body errorResponse
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+		assert.Equal(t, "LEDGER_OVERFLOW", body.Error.Code, name)
+	}
+}

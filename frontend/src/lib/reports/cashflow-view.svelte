@@ -18,6 +18,7 @@
   import BucketColumnChart from './bucket-column-chart.svelte';
   import { seriesColumns } from './report-series';
   import { csvFilename, downloadCSV, exactDecimal, toCSV } from './report-csv';
+  import { reportErrorState } from './report-error';
 
   let {
     options,
@@ -29,6 +30,9 @@
 
   const locale = $derived(getLocale());
   const query = createQuery(() => cashflowQueryOptions(options));
+  // Retrying cannot undo an overflow or repair a rejected query, so the
+  // stable code speaks for itself and the retry button stands down.
+  const errorState = $derived(reportErrorState(query.error, m.reports_cashflow_error_copy()));
 
   const rows = $derived(query.data ? cashflowRows(query.data) : []);
   const multiCommodity = $derived(hasMultipleCommodities(rows));
@@ -173,14 +177,16 @@
     </div>
   {:else if query.isError}
     <div class="mt-5">
-      <StatePanel title={m.reports_cashflow_error_title()} copy={m.reports_cashflow_error_copy()}>
-        <button
-          type="button"
-          class="rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
-          onclick={() => query.refetch()}
-        >
-          {m.reports_retry()}
-        </button>
+      <StatePanel title={m.reports_cashflow_error_title()} copy={errorState.copy}>
+        {#if errorState.retryable}
+          <button
+            type="button"
+            class="rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+            onclick={() => query.refetch()}
+          >
+            {m.reports_retry()}
+          </button>
+        {/if}
       </StatePanel>
     </div>
   {:else if isEmptyCashflow(rows)}

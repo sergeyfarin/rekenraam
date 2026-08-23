@@ -15,6 +15,7 @@
   } from '$lib/api/reports';
   import SpendingBarChart from './spending-bar-chart.svelte';
   import { csvFilename, downloadCSV, exactDecimal, toCSV } from './report-csv';
+  import { reportErrorState } from './report-error';
   import {
     formatShare,
     isSingleCommodity,
@@ -39,6 +40,9 @@
 
   const locale = $derived(getLocale());
   const query = createQuery(() => spendingQueryOptions(options));
+  // Retrying cannot undo an overflow or repair a rejected query, so the
+  // stable code speaks for itself and the retry button stands down.
+  const errorState = $derived(reportErrorState(query.error, m.reports_spending_error_copy()));
   // Built-in categories arrive as stable codes with no name; display text is
   // resolved here at render time through the canonical label helper, which also
   // honours a user rename. One request per page, never per row.
@@ -190,14 +194,16 @@
     </div>
   {:else if query.isError}
     <div class="mt-5">
-      <StatePanel title={m.reports_spending_error_title()} copy={m.reports_spending_error_copy()}>
-        <button
-          type="button"
-          class="rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
-          onclick={() => query.refetch()}
-        >
-          {m.reports_retry()}
-        </button>
+      <StatePanel title={m.reports_spending_error_title()} copy={errorState.copy}>
+        {#if errorState.retryable}
+          <button
+            type="button"
+            class="rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+            onclick={() => query.refetch()}
+          >
+            {m.reports_retry()}
+          </button>
+        {/if}
       </StatePanel>
     </div>
   {:else if rows.length === 0}
