@@ -1,0 +1,58 @@
+name: CodeQL
+
+# Replaces GitHub's default code-scanning setup. Default setup gives no
+# control over the toolchain: it builds Go with whatever version the runner
+# preinstalls under GOTOOLCHAIN=local, so the Go 1.27 bump in backend/go.mod
+# broke extraction ("go.mod requires go >= 1.27.0, running go 1.26.6"). Pinning
+# the toolchain here with go-version-file keeps this workflow following
+# backend/go.mod the way ci.yml and govulncheck.yml already do.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: go
+            build-mode: autobuild
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@v7
+
+      # Go only. Must precede init: the extractor runs during analyze and
+      # needs the go.mod toolchain already on PATH.
+      - uses: actions/setup-go@v7
+        if: matrix.language == 'go'
+        with:
+          go-version-file: backend/go.mod
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"

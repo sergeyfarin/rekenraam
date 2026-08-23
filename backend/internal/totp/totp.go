@@ -105,9 +105,7 @@ func Validate(secret string, code string, now time.Time, skew int) (uint64, bool
 	if len(code) != Digits {
 		return 0, false
 	}
-	if skew < 0 {
-		skew = 0
-	}
+	skew = max(skew, 0)
 
 	current := Step(now)
 	var matchedStep uint64

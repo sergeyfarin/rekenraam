@@ -198,9 +198,7 @@ func fetchPaginated[T any](
 				continue
 			}
 			items = append(items, item)
-			if ts > maxSeen {
-				maxSeen = ts
-			}
+			maxSeen = max(maxSeen, ts)
 		}
 		if stop {
 			nextPath = ""
