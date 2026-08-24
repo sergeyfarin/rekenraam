@@ -781,9 +781,13 @@ cost is that every development database must be recreated, so the commit body
 needs the `BREAKING DEV DATABASE` marker and a reset instruction, per the same
 convention.
 
-**Sequencing:** do it after R3's own schema work lands (slice 4 adds the backup
-policy and `backup_runs` tables — collapsing before that means collapsing
-twice), and before the `v0.1.0` tag. Note the interaction with T-55: collapsing
+**Sequencing:** do it after R3's own schema work lands — that is, after its
+**last** migration, and before the `v0.1.0` tag. Slice 4 shipped migration 0006
+(`backup_policies`, `backup_runs`) on 2026-08-24, but slice 6's self-check
+persists its own run record and will add another, so the trigger is slice 6.
+An earlier note here named slice 4; that was the wrong reading of its own
+reason, which is that collapsing between two schema slices means collapsing
+twice. Note the interaction with T-55: collapsing
 removes the only multi-step upgrade path a historical-upgrade migration test
 could exercise, which makes T-55 a post-`v0.1.0` concern rather than a
 pre-release one.
