@@ -112,6 +112,11 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 		mux.HandleFunc("POST /api/v1/maintenance/backups", requestBackup(logger, services.Auth, services.Backup, options))
 		mux.HandleFunc("POST /api/v1/maintenance/backups/{run_id}/retry", retryBackupRun(logger, services.Auth, services.Backup, options))
 	}
+
+	if services.SelfCheck != nil {
+		mux.HandleFunc("GET /api/v1/maintenance/self-check", selfCheckStatus(logger, services.Auth, services.SelfCheck))
+		mux.HandleFunc("POST /api/v1/maintenance/self-check", runSelfCheck(logger, services.Auth, services.SelfCheck, options))
+	}
 	mux.HandleFunc("GET /api/v1/transactions", listTransactions(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/transactions/deleted", listDeletedTransactions(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("POST /api/v1/transactions", createTransaction(logger, services.Auth, services.Transaction, options))

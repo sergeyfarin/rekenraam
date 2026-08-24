@@ -1,0 +1,101 @@
+SelfCheckResult:
+  type: object
+  description: >
+    One check's verdict, in the terms a person needs: what was checked, what was
+    found, where to look, and what to do about it. A failure a reader cannot act
+    on is only half reported.
+  required:
+    - check_id
+    - status
+    - finding_count
+    - sample
+    - summary
+    - explanation
+    - next_step
+  properties:
+    check_id:
+      type: string
+      enum:
+        - entry_balance
+        - transaction_balance
+        - book_balance
+        - version_integrity
+        - lot_reconciliation
+        - checkpoint_integrity
+        - account_version_coverage
+        - sqlite_integrity
+        - attachments
+    status:
+      type: string
+      description: >
+        not_applicable is reserved for a check that cannot run yet — attachments
+        until R14a. It never passes by default: passing a check nobody ran is how
+        a coverage claim gets made by accident.
+      enum: [passed, failed, not_applicable]
+    finding_count:
+      type: integer
+      format: int64
+    sample:
+      type: array
+      description: A capped sample of offending identifiers, for a human to go and look at. Diagnostic display only.
+      items:
+        type: integer
+        format: int64
+    summary:
+      type: string
+    explanation:
+      type: string
+      description: What this check verifies and why it matters.
+    next_step:
+      type: string
+      description: What to do when it fails. The check never repairs anything itself.
+SelfCheckRun:
+  type: object
+  required:
+    - id
+    - trigger
+    - status
+    - failed_check_count
+    - started_at
+    - results
+  properties:
+    id:
+      type: integer
+      format: int64
+    trigger:
+      type: string
+      enum: [manual, scheduled]
+      description: scheduled runs are chained onto a successful nightly backup.
+    status:
+      type: string
+      enum: [passed, failed]
+    failed_check_count:
+      type: integer
+      format: int64
+    started_at:
+      type: string
+      format: date-time
+    finished_at:
+      type: string
+      format: date-time
+    results:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/SelfCheckResult"
+SelfCheckStatusResponse:
+  type: object
+  required:
+    - has_run
+    - read_only
+  properties:
+    has_run:
+      type: boolean
+      description: >
+        False for a book that has never been checked. That is a real answer —
+        "not checked yet" — and not an error, so a screen can say it instead of
+        showing an empty table that looks like a pass.
+    read_only:
+      type: boolean
+      description: Always true. The check reports and explains; it never repairs.
+    latest_run:
+      $ref: "../../openapi.yaml#/components/schemas/SelfCheckRun"

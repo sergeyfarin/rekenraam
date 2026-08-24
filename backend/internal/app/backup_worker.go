@@ -172,6 +172,16 @@ func (s *BackupService) RunBackup(ctx context.Context, runID int64) error {
 	if err := s.pruneBackups(ctx); err != nil {
 		return nil
 	}
+
+	// "Backed up nightly and provably balanced" is one sentence, so the check
+	// runs where the backup does rather than waiting for someone to press a
+	// button. Its failure is not the backup's: a book that does not balance
+	// still deserves the copy that was just made of it.
+	if s.selfCheck != nil {
+		if _, err := s.selfCheck.RunSelfCheck(ctx, "scheduled"); err != nil {
+			return nil
+		}
+	}
 	return nil
 }
 

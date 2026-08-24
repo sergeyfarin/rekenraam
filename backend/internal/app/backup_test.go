@@ -15,12 +15,13 @@ import (
 )
 
 type backupHarness struct {
-	service    *BackupService
-	repository *db.BackupRepository
-	writer     *sql.DB
-	readOnly   *sql.DB
-	directory  string
-	now        time.Time
+	service     *BackupService
+	repository  *db.BackupRepository
+	writer      *sql.DB
+	readOnly    *sql.DB
+	directory   string
+	databaseURL string
+	now         time.Time
 }
 
 func (h *backupHarness) advance(d time.Duration) { h.now = h.now.Add(d) }
@@ -48,12 +49,13 @@ func newBackupHarness(t *testing.T) *backupHarness {
 	service := NewBackupService(repository, db.NewBackgroundWorkRepository(writer), readOnly, databaseURL, directory)
 
 	harness := &backupHarness{
-		service:    service,
-		repository: repository,
-		writer:     writer,
-		readOnly:   readOnly,
-		directory:  directory,
-		now:        time.Date(2026, 8, 24, 4, 0, 0, 0, time.UTC),
+		service:     service,
+		repository:  repository,
+		writer:      writer,
+		readOnly:    readOnly,
+		directory:   directory,
+		databaseURL: databaseURL,
+		now:         time.Date(2026, 8, 24, 4, 0, 0, 0, time.UTC),
 	}
 	service.SetNowForTest(func() time.Time { return harness.now })
 
@@ -88,6 +90,35 @@ func (h *backupHarness) runManualBackup(t *testing.T) db.BackupRunRecord {
 	completed, err := h.repository.BackupRunByID(context.Background(), run.ID)
 	require.NoError(t, err)
 	return completed
+}
+
+// "Backed up nightly and provably balanced" is one sentence, so the check runs
+// where the backup does rather than waiting for someone to press a button.
+func TestSuccessfulBackupChainsTheSelfCheck(t *testing.T) {
+	t.Parallel()
+
+	harness := newBackupHarness(t)
+	ctx := context.Background()
+
+	readOnly, err := db.OpenReadOnly(ctx, harness.databaseURL)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, readOnly.Close()) })
+
+	selfCheck := NewSelfCheckService(db.NewSelfCheckRepository(harness.writer, readOnly))
+	selfCheck.SetNowForTest(func() time.Time { return harness.now })
+	harness.service.SetSelfCheck(selfCheck)
+
+	_, hasRun, err := selfCheck.LatestSelfCheck(ctx)
+	require.NoError(t, err)
+	require.False(t, hasRun)
+
+	harness.runManualBackup(t)
+
+	run, hasRun, err := selfCheck.LatestSelfCheck(ctx)
+	require.NoError(t, err)
+	require.True(t, hasRun, "a successful backup must leave a check behind it")
+	assert.Equal(t, "scheduled", run.Trigger)
+	assert.Equal(t, SelfCheckPassed, run.Status)
 }
 
 // The copy uses SQLite's online backup API, which ADR 0004 names as the

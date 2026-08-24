@@ -4412,6 +4412,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/maintenance/self-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the last ledger self-check
+         * @description The most recent finished run, so a screen can show the last answer without making anyone wait for a new one. A book that has never been checked reports has_run false rather than an empty result set.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The latest self-check, if there is one */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SelfCheckStatusResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Run the ledger self-check now
+         * @description Runs every check against one snapshot and returns the result. The checks are **read-only and diagnostic**: per-commodity balance of every journal entry, transaction, and the whole book; structural integrity of versions, entries and postings; investment lots against the holdings they claim; active reconciliation checkpoints against the postings under them; account-version coverage; and SQLite's own integrity_check and foreign_key_check.
+         *
+         *     Nothing is repaired. A book that has gone wrong needs a person to look at it, not a program to tidy the evidence away — so each failing check reports what it found, a sample of where, and what to do next.
+         *
+         *     Returns 200 rather than 202: unlike a backup, the run finishes before the response. It is a POST because running one records that it ran, and recording is a write; the checks themselves touch no ledger row.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The completed run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SelfCheckRun"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/system-accounts": {
         parameters: {
             query?: never;
@@ -12633,6 +12726,50 @@ export interface components {
             selection_unit: "journal_entry";
             /** @description Plain-language consequences of this filter, such as that it also carries postings it did not name. */
             notes?: string[];
+        };
+        /** @description One check's verdict, in the terms a person needs: what was checked, what was found, where to look, and what to do about it. A failure a reader cannot act on is only half reported. */
+        SelfCheckResult: {
+            /** @enum {string} */
+            check_id: "entry_balance" | "transaction_balance" | "book_balance" | "version_integrity" | "lot_reconciliation" | "checkpoint_integrity" | "account_version_coverage" | "sqlite_integrity" | "attachments";
+            /**
+             * @description not_applicable is reserved for a check that cannot run yet — attachments until R14a. It never passes by default: passing a check nobody ran is how a coverage claim gets made by accident.
+             * @enum {string}
+             */
+            status: "passed" | "failed" | "not_applicable";
+            /** Format: int64 */
+            finding_count: number;
+            /** @description A capped sample of offending identifiers, for a human to go and look at. Diagnostic display only. */
+            sample: number[];
+            summary: string;
+            /** @description What this check verifies and why it matters. */
+            explanation: string;
+            /** @description What to do when it fails. The check never repairs anything itself. */
+            next_step: string;
+        };
+        SelfCheckRun: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * @description scheduled runs are chained onto a successful nightly backup.
+             * @enum {string}
+             */
+            trigger: "manual" | "scheduled";
+            /** @enum {string} */
+            status: "passed" | "failed";
+            /** Format: int64 */
+            failed_check_count: number;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at?: string;
+            results: components["schemas"]["SelfCheckResult"][];
+        };
+        SelfCheckStatusResponse: {
+            /** @description False for a book that has never been checked. That is a real answer — "not checked yet" — and not an error, so a screen can say it instead of showing an empty table that looks like a pass. */
+            has_run: boolean;
+            /** @description Always true. The check reports and explains; it never repairs. */
+            read_only: boolean;
+            latest_run?: components["schemas"]["SelfCheckRun"];
         };
         /** @description The nightly schedule and retention the owner controls. Where backups are written is not here: that is an operator decision (BACKUP_DIR), because the deployment docs recommend a device the app cannot arrange for itself. */
         BackupPolicy: {

@@ -136,6 +136,8 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	pricingService.StartBackgroundWorker(ctx, logger)
 	importService.StartBackgroundWorker(ctx, logger)
 	importService.StartScheduler(ctx, logger)
+	selfCheckService := app.NewSelfCheckService(db.NewSelfCheckRepository(database, readOnlyDatabase))
+	backupService.SetSelfCheck(selfCheckService)
 	backupService.StartBackgroundWorker(ctx, logger)
 	backupService.StartScheduler(ctx, logger)
 	handler := api.NewHandler(logger, web.Handler(), api.Services{
@@ -156,6 +158,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 		ImportConnection: importConnectionService,
 		Export:           exportService,
 		Backup:           backupService,
+		SelfCheck:        selfCheckService,
 	}, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,

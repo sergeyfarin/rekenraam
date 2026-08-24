@@ -147,7 +147,7 @@ non-English locales all landed together).
 | Report ID filters + drill-down | ✅ | Shipped 2026-08-18 (superseded the R2 plan's original "not delivered" gap): repeatable `account_id`/`category_id`/`payee_id`/`commodity_id` filters, plus drill-down from both spending and cashflow rows into `/app/transactions`. |
 | Reporting-currency valuation method | ⬜ | Deliberately deferred, approved 2026-08-19 to build after R3 (named, auditable valuation method — not a silent conversion). Reports show unlike commodities separately and say so until it lands. |
 
-## Exports & Backups (R3) — 🟦 Slices 1-5: flat ledger CSV, preview, the scoped archive, QIF, scheduled backups, and the restore path shipped
+## Exports & Backups (R3) — 🟦 Slices 1-6: exports, scheduled backups, restore, and the ledger self-check shipped; the Data screen is next
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -176,7 +176,11 @@ non-English locales all landed together).
 | Proof the server is stopped | ✅ | `serve` holds an advisory `flock` on `<database>.lock` for its whole life, with its PID inside. Restore takes the lock briefly to check, and names the holding process when it cannot. An idle SQLite connection proves nothing and an absent `-wal` proves nothing — a cleanly stopped database has none — so only a lock a live process holds answers the question, and the OS releases it however that process ends. |
 | Backup verification CLI | ✅ | `rekenraam verify-backup --from <path>`: integrity (`integrity_check` + `foreign_key_check`), schema version against this build, row counts a human can sanity-check, and how many sealed rows exist. With `REKENRAAM_SECRET_KEY` set it decrypts a sample and says whether the seal still opens; without it, it says plainly what a restore would cost. |
 | Restore drills | ✅ | Six named tests, run in CI with everything else: a full drill comparing the restored trial balance (folded in Go, not `SUM`) to the source's, a source whose content lives only in an uncheckpointed WAL, the lock refusal, source==destination via symlink, a newer schema, and sealed data that opens with the retained key and fails loudly with a different one. |
-| Ledger self-check | ⬜ | Slices 6–8 of `docs/plans/data-portability-plan.md`. |
+| Ledger self-check | ✅ | `POST /api/v1/maintenance/self-check` runs nine checks against one snapshot on the read-only pool; `GET` returns the last run without re-running it. Read-only and diagnostic by design: it reports, names a sample of where, and says what to do — and never repairs, because a book that has gone wrong needs a person, not a program tidying the evidence away. Every total is folded in Go through `exact.ScaledInt`; coefficients are strings, so `SUM()` over them would be a float in disguise. |
+| What the self-check verifies | ✅ | Per-commodity balance of every journal entry, every posted transaction, and the whole book; structural integrity (transactions with no version, postings whose entry belongs to another version, postings whose line belongs to another transaction); open lots against the holdings they claim, plus negative and over-consumed remaining quantity; active reconciliation checkpoints against their snapshotted postings and against postings that have since been superseded (the T-53 case); `account_version_coverage`, the counter slice 1's export fallback needed; SQLite's `integrity_check` and `foreign_key_check`; and a reserved `attachments` slot reporting `not_applicable` until R14a. |
+| Self-check history | ✅ | Migration 0007 adds `self_check_runs` and `self_check_results` — one row per check per run rather than a JSON blob, because "which check failed, how often, since when" is worth a query (the mistake T-54 records about price derivations). A run's record is the only thing the check writes, and a test compares every ledger table before and after to prove it. |
+| Nightly chaining | ✅ | A successful backup runs the check, so "backed up nightly and provably balanced" is one nightly fact rather than two features that happen to exist. A failing check does not fail the backup: a book that does not balance still deserves the copy just made of it. |
+| Data screen, acceptance review | ⬜ | Slices 7–8 of `docs/plans/data-portability-plan.md`. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 
@@ -231,8 +235,8 @@ non-English locales all landed together).
 
 ## Not started (see roadmap)
 
-The ledger self-check (R3 slices 6-8 — exports, scheduled backups, and restore
-shipped, see "Exports & Backups" above), CSV/OFX/QFX import adapters, import profiles,
+The Settings → Data screen (R3 slices 7-8 — exports, scheduled backups, restore,
+and the ledger self-check shipped, see "Exports & Backups" above), CSV/OFX/QFX import adapters, import profiles,
 budgets, scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
 shipped in R2 — see the Reports section above.)

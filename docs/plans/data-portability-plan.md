@@ -1,6 +1,6 @@
 # Data Portability & Protection Plan (R3)
 
-Status: **slices 1-5 shipped (1-3 on 2026-08-23, 4-5 on 2026-08-24); slices 6-8
+Status: **slices 1-6 shipped (1-3 on 2026-08-23, 4-6 on 2026-08-24); slices 7-8
 planned**. Written 2026-08-23,
 immediately after R2's acceptance review closed. Slice 1 delivered the
 dedicated read-only connection, the one-snapshot export read model,
@@ -22,7 +22,10 @@ retention, and the status read model carrying the `REKENRAAM_SECRET_KEY`
 notice. Slice 5 delivered the restore path: `verify-backup` and `restore`
 commands, an advisory process lock the server holds for its whole life, WAL-set
 preservation with a checkpoint first, atomic install, and six drills — including
-uncheckpointed WAL content and sealed data that decrypts with the retained key. This plan is the implementation reference for the
+uncheckpointed WAL content and sealed data that decrypts with the retained key.
+Slice 6 delivered the read-only self-check: nine checks over one snapshot,
+chained onto every successful backup, with the finding that most corruptions it
+looks for are already refused by schema triggers — recorded below. This plan is the implementation reference for the
 roadmap slice "R3 — portable **and protected** core data"; it replaces the
 roadmap's inline prose, which stays as the one-paragraph summary and now points
 here.
@@ -759,6 +762,19 @@ plain-language explanation with what to do next — never an automatic repair.
 Never `SUM()` a coefficient column in SQL — they are strings
 (`ledger-invariants`). Every total here is folded in Go.
 
+**What building it turned up (slice 6).** Most of these corruptions cannot be
+produced through SQL at all: the schema carries triggers that refuse them —
+`posting_versions` and `account_versions` are append-only,
+`posting_versions_same_book_and_lineage` rejects a posting whose entry belongs
+to another version, and `posting_versions_account_version_valid` rejects a
+posting with no account version in effect on its date. The tests therefore drop
+the guarding trigger before inserting each bad row, which is honest about what
+they prove: the self-check is the **second** line of defence, behind a schema
+that already refuses this, and it exists for rows that arrived from somewhere
+other than this app — a backfill, a manual repair, a database restored from
+external tooling. That makes it cheaper insurance than the plan assumed, not
+more valuable.
+
 **Why a fallback needs a counter.** Slice 1 chose a fallback over both
 alternatives on purpose: an inner join would silently drop a posting and produce
 a file whose entries do not balance, and failing the whole export on one bad row
@@ -830,7 +846,7 @@ after slice 6, never mid-slice.
 | 3 | QIF writer + archive (per-account files, `manifest.json`, `README.txt`), unsupported-account confirm flow | M | Round-trips exactly under the declared layout and under auto-detect with a decisive date; **the declared layout appears in the filename of every response, and additionally in `manifest.json` and `README.txt` for every archive** (rev 5); an ambiguous-only export is archived and both metadata files carry the declared layout; any omission returns a zip whose manifest names the excluded accounts and why |
 | 4 | **Online-backup-API copy path**, policy table + migration, `database_backup` work kind with occurrence identity, scheduler, retention with symlink-safe pruning, `backup_runs`, endpoints, `foreign_key_check` added to verification | L | A scheduled backup appears and verifies; pruning refuses a symlink and anything outside `BACKUP_DIR`; a crash at each of four points leaves no duplicate and no untracked file; a full disk fails retryably and recovers when space returns |
 | 5 | `verify-backup` and `restore` CLI (process lock, WAL-set preservation, atomic install), the `REKENRAAM_SECRET_KEY` operator workflow, docs rewrite, automated restore drill | M | The drill restores into a fresh path and matches trial balance and row counts, including a source with uncheckpointed WAL; sealed data decrypts with the retained key and fails loudly without it; restore refuses while `serve` holds the lock |
-| 6 | Self-check: eight checks (including `account_version_coverage`) + reserved attachments slot, run record, endpoints, post-backup chaining | M | Each check has a test that deliberately corrupts a fixture (raw SQL, bypassing services) and is caught; a healthy book passes clean; a posting written behind the service layer with no account version effective at its entry date is reported rather than silently absorbed by slice 1's fallback |
+| 6 | Self-check: nine checks (including `account_version_coverage` and the reserved attachments slot), run record, endpoints, post-backup chaining | M | Each check has a test that deliberately corrupts a fixture (raw SQL, bypassing services) and is caught; a healthy book passes clean; a posting written behind the service layer with no account version effective at its entry date is reported rather than silently absorbed by slice 1's fallback |
 | 7 | `Settings → Data` screen, six locales, glossary terms, e2e smoke | M | Export downloads, backup status renders, self-check runs, all states present, keyboard-navigable |
 | 8 | Acceptance review + docs reconciliation (`implemented.md`, `roadmap.md`, `README.md`, this plan's status header) | S | Every deferred item has a yes/no with a reason, in this file, the way R2 closed |
 

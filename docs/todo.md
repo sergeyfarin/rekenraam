@@ -167,11 +167,15 @@ three are the mandatory export requirement, the next three the protection half.
       the configured `REKENRAAM_SECRET_KEY` — the question a restore otherwise
       raises too late. Eleven named tests, including a drill that compares the
       restored trial balance to the source's.
-- [ ] 6. Trial-balance self-check — eight checks, read-only, attachments slot
-      reserved for R14a. One of the eight, `account_version_coverage`, is the
-      follow-up to slice 1: the export falls back when a posting has no account
-      version effective on its entry date, and the check is what makes that
-      fallback announce itself instead of quietly covering for corrupt data.
+- [x] 6. **Done 2026-08-24.** Trial-balance self-check: nine checks over one
+      snapshot on the read-only pool, read-only and diagnostic, chained onto
+      every successful backup. Migration 0007 adds `self_check_runs` and
+      `self_check_results` — a table rather than a JSON blob, since "which check
+      failed, how often, since when" deserves a query (the mistake T-54
+      records). `account_version_coverage` is slice 1's promised counter.
+      Finding: the schema's own triggers already refuse most of these
+      corruptions, so the tests drop the guarding trigger to produce each one
+      and the check is documented as the second line of defence.
 - [ ] 7. `Settings → Data` screen, six locales, e2e smoke.
 - [ ] 8. Acceptance review + docs reconciliation.
 

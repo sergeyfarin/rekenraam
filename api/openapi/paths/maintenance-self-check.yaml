@@ -1,0 +1,57 @@
+get:
+  summary: Read the last ledger self-check
+  description: >
+    The most recent finished run, so a screen can show the last answer without
+    making anyone wait for a new one. A book that has never been checked reports
+    has_run false rather than an empty result set.
+  responses:
+    "200":
+      description: The latest self-check, if there is one
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/SelfCheckStatusResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+post:
+  summary: Run the ledger self-check now
+  description: >
+    Runs every check against one snapshot and returns the result. The checks are
+    **read-only and diagnostic**: per-commodity balance of every journal entry,
+    transaction, and the whole book; structural integrity of versions, entries
+    and postings; investment lots against the holdings they claim; active
+    reconciliation checkpoints against the postings under them; account-version
+    coverage; and SQLite's own integrity_check and foreign_key_check.
+
+
+    Nothing is repaired. A book that has gone wrong needs a person to look at
+    it, not a program to tidy the evidence away — so each failing check reports
+    what it found, a sample of where, and what to do next.
+
+
+    Returns 200 rather than 202: unlike a backup, the run finishes before the
+    response. It is a POST because running one records that it ran, and
+    recording is a write; the checks themselves touch no ledger row.
+  responses:
+    "200":
+      description: The completed run
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/SelfCheckRun"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -56,7 +56,11 @@ type BackupService struct {
 	readOnly    *sql.DB
 	databaseURL string
 	backupDir   string
-	now         func() time.Time
+	// selfCheck runs after a successful backup, so "backed up nightly and
+	// provably balanced" is one nightly fact rather than two features that
+	// happen to exist.
+	selfCheck *SelfCheckService
+	now       func() time.Time
 }
 
 // BackupPolicy is the schedule and retention the owner controls.
@@ -94,6 +98,9 @@ func NewBackupService(repository *db.BackupRepository, backgroundWork *db.Backgr
 }
 
 func (s *BackupService) SetNowForTest(now func() time.Time) { s.now = now }
+
+// SetSelfCheck chains the ledger self-check onto every successful backup.
+func (s *BackupService) SetSelfCheck(selfCheck *SelfCheckService) { s.selfCheck = selfCheck }
 
 // BackupDirectory is where backups land: BACKUP_DIR, or a directory beside the
 // database when unset. The deployment docs recommend a different device, which

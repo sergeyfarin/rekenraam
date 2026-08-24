@@ -1,0 +1,19 @@
+meta {
+  name: Ledger Self-Check
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/v1/maintenance/self-check
+  body: none
+  auth: none
+}
+
+docs {
+  Runs every check against one snapshot: per-commodity balance of each entry,
+  transaction, and the book; structural integrity; lots against holdings;
+  active checkpoints against their postings; account-version coverage; and
+  SQLite's own integrity checks. Read-only and diagnostic — it reports and
+  explains, and never repairs. GET returns the last run without re-running it.
+}

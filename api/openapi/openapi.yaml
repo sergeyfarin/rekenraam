@@ -107,6 +107,8 @@ paths:
     $ref: "./paths/maintenance-backups-policy.yaml"
   /api/v1/maintenance/backups/{run_id}/retry:
     $ref: "./paths/maintenance-backup-retry.yaml"
+  /api/v1/maintenance/self-check:
+    $ref: "./paths/maintenance-self-check.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
   /api/v1/setup/categories:
@@ -522,6 +524,12 @@ components:
       $ref: "./components/schemas/exports.yaml#/LedgerExportAttachments"
     LedgerExportFilter:
       $ref: "./components/schemas/exports.yaml#/LedgerExportFilter"
+    SelfCheckResult:
+      $ref: "./components/schemas/self-check.yaml#/SelfCheckResult"
+    SelfCheckRun:
+      $ref: "./components/schemas/self-check.yaml#/SelfCheckRun"
+    SelfCheckStatusResponse:
+      $ref: "./components/schemas/self-check.yaml#/SelfCheckStatusResponse"
     BackupPolicy:
       $ref: "./components/schemas/backups.yaml#/BackupPolicy"
     BackupPolicyRequest:

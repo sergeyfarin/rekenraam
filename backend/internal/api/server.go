@@ -32,6 +32,7 @@ type Services struct {
 	ImportConnection *app.ImportConnectionService
 	Export           *app.ExportService
 	Backup           *app.BackupService
+	SelfCheck        *app.SelfCheckService
 }
 
 func NewHandler(logger *slog.Logger, webHandler http.Handler, services Services, options HandlerOptions) http.Handler {
