@@ -1,0 +1,97 @@
+get:
+  summary: Download a ledger export archive
+  description: >
+    Streams a zip holding the ledger, the reference tables it joins to, a trial
+    balance that reconciles it, and a manifest describing all of them with a
+    SHA-256 per file. The manifest is written last, so a truncated download
+    fails to open rather than looking complete.
+
+
+    This is the only scoped export. Filters select whole **journal entries**,
+    never individual postings, so the archive balances per entry under every
+    filter; every posting of a selected entry is included, in accounts,
+    commodities, and dates the filter never named. `date_basis=transaction`
+    selects transactions by their date and then takes every entry of them,
+    including entries dated outside the range. The manifest reports what the
+    filter resolved to, how many transactions the archive holds only part of,
+    and how many postings it carries only as counterparts.
+
+
+    Contents: `README.txt`, `ledger.csv`, `accounts.csv`, `categories.csv`,
+    `payees.csv`, `commodities.csv`, `tags.csv`, `lots.csv`, `prices.csv`,
+    `trial-balance.csv`, `manifest.json`. See
+    `docs/adrs/0011-ledger-export-contract.md`.
+  parameters:
+    - in: query
+      name: from
+      description: Inclusive start of the range. Omit for unbounded.
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: to
+      description: Inclusive end of the range. Omit for unbounded.
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: date_basis
+      description: >
+        Which date the range selects on. `entry` takes journal entries by their
+        own accounting date; `transaction` takes transactions by theirs and then
+        every entry of them, including entries outside the range.
+      schema:
+        type: string
+        enum: [entry, transaction]
+        default: entry
+    - in: query
+      name: account_id
+      description: >
+        Repeatable. An entry is selected when at least one of its postings is in
+        a resolved account. Any account class is accepted here, unlike the
+        reports filter: exporting everything that touched a category is a
+        reasonable request.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+    - in: query
+      name: include_descendants
+      description: Expand each named account to its subtree, using current parent links.
+      schema:
+        type: boolean
+        default: false
+    - in: query
+      name: commodity_id
+      description: Repeatable. An entry is selected when at least one of its postings is in that commodity.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+  responses:
+    "200":
+      description: The export archive, streamed
+      headers:
+        Content-Disposition:
+          description: Attachment with a dated filename.
+          schema:
+            type: string
+      content:
+        application/zip:
+          schema:
+            type: string
+            format: binary
+    "400":
+      description: The filter was rejected — always before the first byte, since a stream cannot change its status
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

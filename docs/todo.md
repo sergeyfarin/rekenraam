@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-23 (R3 planned and slice 1 shipped; see the
+Last updated: 2026-08-23 (R3 planned; slices 1-2 shipped; see the
 current-initiative section below).
 
 ## Where things stand
@@ -130,9 +130,15 @@ three are the mandatory export requirement, the next three the protection half.
       `in_scope` definition, and the trial-balance identities. Nine named tests,
       including balance per journal entry, system accounts present, stored scale
       without float, and voided/soft-deleted exclusion.
-- [ ] 2. `bundle.zip` — dimension files, `trial-balance.csv`, `manifest.json`
-      with checksums, beancount mapping table. **First thing to cut** if the
-      slice runs long; `ledger.csv` alone meets the PRD.
+- [x] 2. **Done 2026-08-23.** `GET /exports/bundle.zip`: entry-complete
+      filtering (`from`/`to`/`date_basis`/`account_id`/`include_descendants`/
+      `commodity_id`), the seven-column `trial-balance.csv` with its three
+      identities, eight reference files, `manifest.json` with a SHA-256 per
+      file written last, `README.txt`, and `fixtures/decimal-rendering.json`
+      pinning `exact.Decimal` to `formatLedgerAmount` across both languages.
+      Ten named tests, including the two shapes earlier revisions got wrong:
+      a scoped export whose counterpart account has activity of its own, and a
+      transaction straddling the range boundary under both date bases.
 - [ ] 3. QIF writer (cash-like accounts only) + round-trip through the app's
       own importer (auto-detect and matching explicit layout) + a mixed-selection
       confirm flow.

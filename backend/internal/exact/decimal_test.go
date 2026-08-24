@@ -1,9 +1,12 @@
 package exact
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecimalKeepsTheStoredScale(t *testing.T) {
@@ -34,4 +37,32 @@ func TestDecimalTreatsANegativeScaleAsWhole(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, "-42", Decimal(MustParse("-42"), -3))
+}
+
+// decimalVectorFile is the one specification behind two implementations:
+// exact.Decimal here and formatLedgerAmount in the frontend's $lib/money. The
+// two cannot share code across languages, so they share this file instead — a
+// change to either that drifts from the other fails here by name.
+const decimalVectorFile = "../../../fixtures/decimal-rendering.json"
+
+func TestDecimalMatchesTheSharedRenderingVectors(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(decimalVectorFile)
+	require.NoError(t, err, "the shared decimal vectors must be readable from the Go suite")
+
+	var fixture struct {
+		Vectors []struct {
+			Name        string `json:"name"`
+			Coefficient string `json:"coefficient"`
+			Scale       int    `json:"scale"`
+			Expected    string `json:"expected"`
+		} `json:"vectors"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &fixture))
+	require.NotEmpty(t, fixture.Vectors)
+
+	for _, vector := range fixture.Vectors {
+		assert.Equalf(t, vector.Expected, Decimal(MustParse(vector.Coefficient), vector.Scale), vector.Name)
+	}
 }

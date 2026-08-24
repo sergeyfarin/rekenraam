@@ -147,7 +147,7 @@ non-English locales all landed together).
 | Report ID filters + drill-down | ✅ | Shipped 2026-08-18 (superseded the R2 plan's original "not delivered" gap): repeatable `account_id`/`category_id`/`payee_id`/`commodity_id` filters, plus drill-down from both spending and cashflow rows into `/app/transactions`. |
 | Reporting-currency valuation method | ⬜ | Deliberately deferred, approved 2026-08-19 to build after R3 (named, auditable valuation method — not a silent conversion). Reports show unlike commodities separately and say so until it lands. |
 
-## Exports (R3) — 🟦 Slice 1: flat ledger CSV + preview shipped
+## Exports (R3) — 🟦 Slices 1-2: flat ledger CSV, preview, and the scoped archive shipped
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -159,7 +159,11 @@ non-English locales all landed together).
 | Read-only connection + snapshot | ✅ | `db.OpenReadOnly` opens a second `mode=ro`/`query_only` pool; each export runs in one deferred read transaction. The main pool is `SetMaxOpenConns(1)`, so a long export on it would stall every request; WAL readers are concurrent with the single writer. |
 | Export format contract | ✅ | `docs/adrs/0011-ledger-export-contract.md` — grain and order, entry-complete filter semantics, the `in_scope` definition, the seven-column trial-balance identities, amount rendering, and append-only schema stability. |
 | Account paths | ✅ | Every row carries `account_id` (join key) and `account_path` (colon-separated hierarchy, current names). A system account is named by its role rather than left blank; the path builder refuses to loop on a cyclic parent chain. |
-| CSV bundle, QIF export, backups, restore, self-check | ⬜ | Slices 2–8 of `docs/plans/data-portability-plan.md`. |
+| Export archive | ✅ | `GET /api/v1/exports/bundle.zip` — `README.txt`, `ledger.csv`, `accounts.csv`, `categories.csv`, `payees.csv`, `commodities.csv`, `tags.csv`, `lots.csv`, `prices.csv`, `trial-balance.csv`, and `manifest.json` written **last**, so a truncated download fails to open rather than looking complete. The manifest carries a SHA-256 and byte count per file, the resolved query, the incomplete-transaction count, and the counterpart-posting count. |
+| Scoped export filters | ✅ | `from`, `to`, `date_basis=entry\|transaction`, repeatable `account_id` with `include_descendants`, repeatable `commodity_id` — on the archive only. Filters select whole **journal entries**: every posting of a selected entry is exported, so the archive balances per entry under every filter, and `transaction_complete` reports per row which transaction groups are whole. Any account class is accepted, unlike the reports filter, because exporting everything that touched a category is a reasonable request. A rejected filter is a 400 before the first byte (`ValidateFilter`), since a stream cannot change its status afterwards. |
+| Trial balance | ✅ | `trial-balance.csv` states `in_scope`, `opening_balance`, `exported_in_range_movement`, `exported_out_of_range_movement`, `excluded_in_range_movement`, `derived_closing_balance`, and `actual_closing_balance`, with three exact identities tested over the two shapes that break simpler models: a scoped export whose counterpart account has unrelated activity, and a transaction whose entries straddle the range under both date bases. The derived figure is never called the account's closing balance. Each figure keeps the scale it accumulated at — the same decision R2 reached for cashflow measures, for the same 38-digit-ceiling reason. |
+| Cross-language decimal rendering | ✅ | `fixtures/decimal-rendering.json` is one specification with two readers: `exact.Decimal` (Go) and `formatLedgerAmount` (TypeScript) both test against it, so the twin implementations cannot drift. |
+| QIF export, backups, restore, self-check | ⬜ | Slices 3–8 of `docs/plans/data-portability-plan.md`. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 
@@ -214,7 +218,7 @@ non-English locales all landed together).
 
 ## Not started (see roadmap)
 
-QIF export and the CSV bundle (exports slice 1 shipped — see "Exports" above),
+QIF export (exports slices 1-2 shipped — see "Exports" above),
 CSV/OFX/QFX import adapters, import profiles, budgets,
 scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself

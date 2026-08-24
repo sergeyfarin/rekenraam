@@ -97,6 +97,8 @@ paths:
     $ref: "./paths/exports-preview.yaml"
   /api/v1/exports/ledger.csv:
     $ref: "./paths/exports-ledger-csv.yaml"
+  /api/v1/exports/bundle.zip:
+    $ref: "./paths/exports-bundle-zip.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
   /api/v1/setup/categories:
@@ -510,6 +512,8 @@ components:
       $ref: "./components/schemas/reports.yaml#/ReportFilters"
     LedgerExportAttachments:
       $ref: "./components/schemas/exports.yaml#/LedgerExportAttachments"
+    LedgerExportFilter:
+      $ref: "./components/schemas/exports.yaml#/LedgerExportFilter"
     LedgerExportTotals:
       $ref: "./components/schemas/exports.yaml#/LedgerExportTotals"
     LedgerExportPreviewResponse:

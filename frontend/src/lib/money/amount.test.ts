@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import {
 	commodityImbalance,
@@ -377,4 +378,29 @@ describe('sumByCommodity', () => {
       { commodityID: 1, value: '23000', scale: 2 }
     ]);
   });
+});
+
+/**
+ * One specification, two implementations.
+ *
+ * `formatLedgerAmount` here and `exact.Decimal` in the Go backend render the
+ * same coefficient-and-scale rule, and neither language can import the other.
+ * Both suites read `fixtures/decimal-rendering.json`, so a change on either
+ * side that drifts from the other fails a named test rather than shipping. Add
+ * a case to that file before changing either implementation.
+ */
+describe('shared decimal rendering vectors', () => {
+	const fixture = JSON.parse(
+		readFileSync(new URL('../../../../fixtures/decimal-rendering.json', import.meta.url), 'utf8')
+	) as { vectors: { name: string; coefficient: string; scale: number; expected: string }[] };
+
+	it('has vectors to check', () => {
+		expect(fixture.vectors.length).toBeGreaterThan(0);
+	});
+
+	for (const vector of fixture.vectors) {
+		it(vector.name, () => {
+			expect(formatLedgerAmount(vector.coefficient, vector.scale)).toBe(vector.expected);
+		});
+	}
 });

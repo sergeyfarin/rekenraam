@@ -50,13 +50,63 @@ LedgerExportTotals:
     latest_entry_date:
       type: string
       format: date
+LedgerExportFilter:
+  type: object
+  description: >
+    What the filter resolved to. Echoed so an archive can be reproduced from its
+    own manifest rather than from whatever the caller remembers typing.
+  required:
+    - date_basis
+    - account_ids
+    - include_descendants
+    - resolved_account_ids
+    - commodity_ids
+    - selection_unit
+  properties:
+    from:
+      type: string
+      format: date
+    to:
+      type: string
+      format: date
+    date_basis:
+      type: string
+      enum: [entry, transaction]
+    account_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    include_descendants:
+      type: boolean
+    resolved_account_ids:
+      type: array
+      description: The account selection after descendant expansion — what the export actually matched on.
+      items:
+        type: integer
+        format: int64
+    commodity_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    selection_unit:
+      type: string
+      enum: [journal_entry]
+    notes:
+      type: array
+      description: Plain-language consequences of this filter, such as that it also carries postings it did not name.
+      items:
+        type: string
 LedgerExportPreviewResponse:
   type: object
   required:
     - generated_at
     - selection_unit
     - record_policy
+    - query
     - all_transactions_complete
+    - incomplete_transaction_count
     - includes_system_accounts
     - columns
     - excluded
@@ -76,6 +126,12 @@ LedgerExportPreviewResponse:
     record_policy:
       type: string
       description: Which ledger records leave through the export, in one sentence a manifest can carry verbatim.
+    query:
+      $ref: "../../openapi.yaml#/components/schemas/LedgerExportFilter"
+    incomplete_transaction_count:
+      type: integer
+      format: int64
+      description: How many exported transactions are missing at least one of their own entries. Zero unless a filter cut across one.
     all_transactions_complete:
       type: boolean
       description: >

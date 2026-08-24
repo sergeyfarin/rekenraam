@@ -102,6 +102,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	if services.Export != nil {
 		mux.HandleFunc("GET /api/v1/exports/preview", exportPreview(logger, services.Auth, services.Export))
 		mux.HandleFunc("GET /api/v1/exports/ledger.csv", exportLedgerCSV(logger, services.Auth, services.Export))
+		mux.HandleFunc("GET /api/v1/exports/bundle.zip", exportBundle(logger, services.Auth, services.Export))
 	}
 	mux.HandleFunc("GET /api/v1/transactions", listTransactions(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/transactions/deleted", listDeletedTransactions(logger, services.Auth, services.Transaction))

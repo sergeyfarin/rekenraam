@@ -1,12 +1,16 @@
 # Data Portability & Protection Plan (R3)
 
-Status: **slice 1 shipped 2026-08-23; slices 2-8 planned**. Written 2026-08-23,
+Status: **slices 1-2 shipped 2026-08-23; slices 3-8 planned**. Written 2026-08-23,
 immediately after R2's acceptance review closed. Slice 1 delivered the
 dedicated read-only connection, the one-snapshot export read model,
 `GET /api/v1/exports/ledger.csv`, `GET /api/v1/exports/preview`, and
 `docs/adrs/0011-ledger-export-contract.md`, which is now the authority for the
 column schema, the filter semantics, and the trial-balance definitions this
-plan describes. This plan is the implementation reference for the
+plan describes. Slice 2 delivered `GET /api/v1/exports/bundle.zip` — the
+scoped export — with entry-complete filtering, the seven-column trial balance
+and its three identities, the eight reference files, a checksummed manifest
+written last, `README.txt`, and the shared decimal vectors that pin
+`exact.Decimal` to `formatLedgerAmount` across two languages. This plan is the implementation reference for the
 roadmap slice "R3 — portable **and protected** core data"; it replaces the
 roadmap's inline prose, which stays as the one-paragraph summary and now points
 here.

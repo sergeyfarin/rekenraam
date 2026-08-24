@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -101,25 +102,194 @@ var ExportExcludedData = []string{
 	"superseded, draft, and voided transaction versions",
 }
 
+// ExportFilter is a scoped export's request, as the caller wrote it.
+//
+// It is validated and expanded into a db.LedgerExportSelection before any read;
+// the expansion is echoed back so a manifest can state what the filter actually
+// resolved to rather than only what was asked for.
+type ExportFilter struct {
+	From               string
+	To                 string
+	DateBasis          string
+	AccountIDs         []int64
+	IncludeDescendants bool
+	CommodityIDs       []int64
+}
+
+// Filtered reports whether the caller restricted anything.
+func (f ExportFilter) Filtered() bool {
+	return f.From != "" || f.To != "" || len(f.AccountIDs) > 0 || len(f.CommodityIDs) > 0
+}
+
+// ResolvedExportFilter is what the filter became: the normalized request plus
+// the account expansion, so an archive can be reproduced from its own manifest.
+type ResolvedExportFilter struct {
+	From               string   `json:"from,omitempty"`
+	To                 string   `json:"to,omitempty"`
+	DateBasis          string   `json:"date_basis"`
+	AccountIDs         []int64  `json:"account_ids"`
+	IncludeDescendants bool     `json:"include_descendants"`
+	ResolvedAccountIDs []int64  `json:"resolved_account_ids"`
+	CommodityIDs       []int64  `json:"commodity_ids"`
+	SelectionUnit      string   `json:"selection_unit"`
+	Notes              []string `json:"notes,omitempty"`
+}
+
+// resolveExportFilter validates the request and expands the account selection
+// against the same snapshot the export reads, so resolution and content cannot
+// disagree.
+//
+// Unlike the reports filter it accepts any account class: "everything that
+// touched Groceries" is a reasonable export and an unreasonable net-worth
+// chart. Descendants expand from current parent links, matching the account
+// paths the export writes.
+func (s *ExportService) resolveExportFilter(ctx context.Context, snapshot *sql.Tx, filter ExportFilter, accounts []db.ExportAccountRecord) (db.LedgerExportSelection, ResolvedExportFilter, error) {
+	from, err := cleanExportDate(filter.From, "from")
+	if err != nil {
+		return db.LedgerExportSelection{}, ResolvedExportFilter{}, err
+	}
+	to, err := cleanExportDate(filter.To, "to")
+	if err != nil {
+		return db.LedgerExportSelection{}, ResolvedExportFilter{}, err
+	}
+	if from != "" && to != "" && from > to {
+		return db.LedgerExportSelection{}, ResolvedExportFilter{}, ValidationError{Message: "export range starts after it ends"}
+	}
+
+	basis := strings.TrimSpace(filter.DateBasis)
+	if basis == "" {
+		basis = db.DateBasisEntry
+	}
+	if basis != db.DateBasisEntry && basis != db.DateBasisTransaction {
+		return db.LedgerExportSelection{}, ResolvedExportFilter{}, ValidationError{Message: "date_basis must be entry or transaction"}
+	}
+
+	accountIDs := dedupeIDs(filter.AccountIDs)
+	for _, accountID := range accountIDs {
+		exists, err := s.repository.AccountExistsInBook(ctx, snapshot, BookID, accountID)
+		if err != nil {
+			return db.LedgerExportSelection{}, ResolvedExportFilter{}, err
+		}
+		if !exists {
+			return db.LedgerExportSelection{}, ResolvedExportFilter{}, ValidationError{Message: "account filter is invalid"}
+		}
+	}
+
+	commodityIDs := dedupeIDs(filter.CommodityIDs)
+	for _, commodityID := range commodityIDs {
+		exists, err := s.repository.CommodityExistsInBook(ctx, snapshot, BookID, commodityID)
+		if err != nil {
+			return db.LedgerExportSelection{}, ResolvedExportFilter{}, err
+		}
+		if !exists {
+			return db.LedgerExportSelection{}, ResolvedExportFilter{}, ValidationError{Message: "commodity filter is invalid"}
+		}
+	}
+
+	resolvedAccountIDs := accountIDs
+	if filter.IncludeDescendants && len(accountIDs) > 0 {
+		resolvedAccountIDs = expandAccountDescendants(accounts, accountIDs)
+	}
+
+	selection := db.LedgerExportSelection{
+		From:         from,
+		To:           to,
+		DateBasis:    basis,
+		AccountIDs:   resolvedAccountIDs,
+		CommodityIDs: commodityIDs,
+	}
+
+	resolved := ResolvedExportFilter{
+		From:               from,
+		To:                 to,
+		DateBasis:          basis,
+		AccountIDs:         emptyIfNilIDs(accountIDs),
+		IncludeDescendants: filter.IncludeDescendants,
+		ResolvedAccountIDs: emptyIfNilIDs(resolvedAccountIDs),
+		CommodityIDs:       emptyIfNilIDs(commodityIDs),
+		SelectionUnit:      ExportSelectionUnit,
+	}
+	if selection.Filtered() {
+		resolved.Notes = append(resolved.Notes,
+			"a filter selects whole journal entries, so this export also carries postings in accounts, commodities, and dates it did not name")
+	}
+	if basis == db.DateBasisTransaction {
+		resolved.Notes = append(resolved.Notes,
+			"transaction basis: a transaction in range brings every one of its entries, including entries dated outside the range")
+	}
+
+	return selection, resolved, nil
+}
+
+func cleanExportDate(value string, field string) (string, error) {
+	cleaned := strings.TrimSpace(value)
+	if cleaned == "" {
+		return "", nil
+	}
+	if _, err := time.Parse(time.DateOnly, cleaned); err != nil {
+		return "", ValidationError{Message: field + " must use YYYY-MM-DD"}
+	}
+	return cleaned, nil
+}
+
+// expandAccountDescendants walks the current parent links so an account filter
+// means the subtree the user sees, and cannot loop on a cyclic chain.
+func expandAccountDescendants(accounts []db.ExportAccountRecord, accountIDs []int64) []int64 {
+	children := map[int64][]int64{}
+	for _, account := range accounts {
+		if account.ParentAccountID.Valid {
+			children[account.ParentAccountID.Int64] = append(children[account.ParentAccountID.Int64], account.AccountID)
+		}
+	}
+
+	selected := map[int64]bool{}
+	queue := append([]int64(nil), accountIDs...)
+	for len(queue) > 0 {
+		accountID := queue[0]
+		queue = queue[1:]
+		if selected[accountID] {
+			continue
+		}
+		selected[accountID] = true
+		queue = append(queue, children[accountID]...)
+	}
+
+	expanded := make([]int64, 0, len(selected))
+	for accountID := range selected {
+		expanded = append(expanded, accountID)
+	}
+	sort.Slice(expanded, func(i, j int) bool { return expanded[i] < expanded[j] })
+	return expanded
+}
+
+func emptyIfNilIDs(ids []int64) []int64 {
+	if ids == nil {
+		return []int64{}
+	}
+	return ids
+}
+
 // LedgerExportPreview answers "what would I get" before a byte is written. A
 // streamed response cannot change its status code after the first byte, so
 // this is also where a caller learns that its request is sound.
 type LedgerExportPreview struct {
-	GeneratedAt             string
-	SelectionUnit           string
-	RecordPolicy            string
-	AllTransactionsComplete bool
-	IncludesSystemAccounts  bool
-	Columns                 []string
-	Excluded                []string
-	PostingCount            int64
-	JournalEntryCount       int64
-	TransactionCount        int64
-	AccountCount            int64
-	CommodityCount          int64
-	EarliestEntryDate       string
-	LatestEntryDate         string
-	Attachments             ExportAttachments
+	GeneratedAt                string
+	SelectionUnit              string
+	RecordPolicy               string
+	Filter                     ResolvedExportFilter
+	AllTransactionsComplete    bool
+	IncompleteTransactionCount int64
+	IncludesSystemAccounts     bool
+	Columns                    []string
+	Excluded                   []string
+	PostingCount               int64
+	JournalEntryCount          int64
+	TransactionCount           int64
+	AccountCount               int64
+	CommodityCount             int64
+	EarliestEntryDate          string
+	LatestEntryDate            string
+	Attachments                ExportAttachments
 }
 
 // ExportAttachments is the hook R14a fills. It is declared empty rather than
@@ -135,14 +305,43 @@ func emptyAttachments() ExportAttachments {
 	return ExportAttachments{Included: false, Directory: nil, Reason: "not implemented"}
 }
 
-func (s *ExportService) Preview(ctx context.Context) (LedgerExportPreview, error) {
+// ValidateFilter resolves a filter and throws the result away.
+//
+// It exists so a streaming handler can reject a bad request while an error
+// envelope is still possible, without relying on the unstated promise that
+// WriteBundle happens to validate before its first byte.
+func (s *ExportService) ValidateFilter(ctx context.Context, filter ExportFilter) error {
+	snapshot, err := s.repository.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = snapshot.Rollback() }()
+
+	accounts, err := s.repository.ExportAccounts(ctx, snapshot, BookID)
+	if err != nil {
+		return err
+	}
+	_, _, err = s.resolveExportFilter(ctx, snapshot, filter, accounts)
+	return err
+}
+
+func (s *ExportService) Preview(ctx context.Context, filter ExportFilter) (LedgerExportPreview, error) {
 	snapshot, err := s.repository.Snapshot(ctx)
 	if err != nil {
 		return LedgerExportPreview{}, err
 	}
 	defer func() { _ = snapshot.Rollback() }()
 
-	totals, err := s.repository.LedgerExportTotals(ctx, snapshot, BookID)
+	accounts, err := s.repository.ExportAccounts(ctx, snapshot, BookID)
+	if err != nil {
+		return LedgerExportPreview{}, err
+	}
+	selection, resolved, err := s.resolveExportFilter(ctx, snapshot, filter, accounts)
+	if err != nil {
+		return LedgerExportPreview{}, err
+	}
+
+	totals, err := s.repository.LedgerExportTotals(ctx, snapshot, BookID, selection)
 	if err != nil {
 		return LedgerExportPreview{}, err
 	}
@@ -151,21 +350,23 @@ func (s *ExportService) Preview(ctx context.Context) (LedgerExportPreview, error
 		GeneratedAt:   s.now().UTC().Format(time.RFC3339),
 		SelectionUnit: ExportSelectionUnit,
 		RecordPolicy:  ExportedRecordPolicy,
-		// The flat CSV takes no filters, so every transaction is whole by
-		// construction. Scoped exports arrive with bundle.zip, which carries
-		// its own manifest.
-		AllTransactionsComplete: true,
-		IncludesSystemAccounts:  true,
-		Columns:                 LedgerExportColumns,
-		Excluded:                ExportExcludedData,
-		PostingCount:            totals.PostingCount,
-		JournalEntryCount:       totals.JournalEntryCount,
-		TransactionCount:        totals.TransactionCount,
-		AccountCount:            totals.AccountCount,
-		CommodityCount:          totals.CommodityCount,
-		EarliestEntryDate:       totals.EarliestEntryDate.String,
-		LatestEntryDate:         totals.LatestEntryDate.String,
-		Attachments:             emptyAttachments(),
+		Filter:        resolved,
+		// Archive-wide, not per transaction: the per-row transaction_complete
+		// column carries the same fact per transaction. An unfiltered export is
+		// complete by construction.
+		AllTransactionsComplete:    totals.IncompleteTransactionCount == 0,
+		IncompleteTransactionCount: totals.IncompleteTransactionCount,
+		IncludesSystemAccounts:     true,
+		Columns:                    LedgerExportColumns,
+		Excluded:                   ExportExcludedData,
+		PostingCount:               totals.PostingCount,
+		JournalEntryCount:          totals.JournalEntryCount,
+		TransactionCount:           totals.TransactionCount,
+		AccountCount:               totals.AccountCount,
+		CommodityCount:             totals.CommodityCount,
+		EarliestEntryDate:          totals.EarliestEntryDate.String,
+		LatestEntryDate:            totals.LatestEntryDate.String,
+		Attachments:                emptyAttachments(),
 	}, nil
 }
 
@@ -201,7 +402,7 @@ func (s *ExportService) WriteLedgerCSV(ctx context.Context, out io.Writer) (int6
 	}
 
 	var written int64
-	streamErr := s.repository.StreamLedgerPostings(ctx, snapshot, BookID, func(record db.LedgerExportPostingRecord) error {
+	streamErr := s.repository.StreamLedgerPostings(ctx, snapshot, BookID, db.LedgerExportSelection{}, func(record db.LedgerExportPostingRecord) error {
 		if err := writer.Write(ledgerExportRow(record, paths)); err != nil {
 			return fmt.Errorf("write export row: %w", err)
 		}
@@ -234,9 +435,7 @@ func ledgerExportRow(record db.LedgerExportPostingRecord, paths map[int64]string
 		record.ExternalRefHint.String,
 		boolToken(record.NeedsReview),
 		record.TransactionTags.String,
-		// Unfiltered: every entry of every transaction is present. Slice 2
-		// computes this per transaction once filters exist.
-		boolToken(true),
+		boolToken(record.TransactionComplete),
 		strconv.FormatInt(record.JournalEntryID, 10),
 		strconv.FormatInt(record.EntrySeq, 10),
 		record.EntryKind,

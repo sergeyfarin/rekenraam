@@ -1,0 +1,28 @@
+meta {
+  name: Export Bundle
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/exports/bundle.zip
+  body: none
+  auth: none
+}
+
+params:query {
+  ~from: 2026-01-01
+  ~to: 2026-12-31
+  ~date_basis: entry
+  ~account_id: 1
+  ~include_descendants: true
+  ~commodity_id: 1
+}
+
+docs {
+  The scoped export: ledger, reference tables, a trial balance that reconciles
+  it, and a manifest with a SHA-256 per file, written last so a truncated
+  download fails to open. Filters select whole journal entries, so the archive
+  balances per entry however it is scoped — and carries postings the filter did
+  not name. See docs/adrs/0011-ledger-export-contract.md.
+}

@@ -7,6 +7,42 @@ get:
     the first byte — this is the last point at which a problem can still be
     reported in an error envelope, and the place a screen learns what to show
     before offering the file.
+  parameters:
+    - in: query
+      name: from
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: to
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: date_basis
+      schema:
+        type: string
+        enum: [entry, transaction]
+        default: entry
+    - in: query
+      name: account_id
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+    - in: query
+      name: include_descendants
+      schema:
+        type: boolean
+        default: false
+    - in: query
+      name: commodity_id
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
   responses:
     "200":
       description: What the export would contain
@@ -14,6 +50,12 @@ get:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/LedgerExportPreviewResponse"
+    "400":
+      description: The filter was rejected
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "401":
       description: Authentication is required
       content:

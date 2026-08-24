@@ -1,9 +1,12 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"rekenraam/backend/internal/app"
@@ -25,16 +28,67 @@ type exportLedgerTotalsResponse struct {
 	LatestEntryDate   string `json:"latest_entry_date,omitempty"`
 }
 
+type exportFilterResponse struct {
+	From               string   `json:"from,omitempty"`
+	To                 string   `json:"to,omitempty"`
+	DateBasis          string   `json:"date_basis"`
+	AccountIDs         []int64  `json:"account_ids"`
+	IncludeDescendants bool     `json:"include_descendants"`
+	ResolvedAccountIDs []int64  `json:"resolved_account_ids"`
+	CommodityIDs       []int64  `json:"commodity_ids"`
+	SelectionUnit      string   `json:"selection_unit"`
+	Notes              []string `json:"notes,omitempty"`
+}
+
 type exportPreviewResponse struct {
-	GeneratedAt             string                     `json:"generated_at"`
-	SelectionUnit           string                     `json:"selection_unit"`
-	RecordPolicy            string                     `json:"record_policy"`
-	AllTransactionsComplete bool                       `json:"all_transactions_complete"`
-	IncludesSystemAccounts  bool                       `json:"includes_system_accounts"`
-	Columns                 []string                   `json:"columns"`
-	Excluded                []string                   `json:"excluded"`
-	Ledger                  exportLedgerTotalsResponse `json:"ledger"`
-	Attachments             exportAttachmentsResponse  `json:"attachments"`
+	GeneratedAt                string                     `json:"generated_at"`
+	SelectionUnit              string                     `json:"selection_unit"`
+	RecordPolicy               string                     `json:"record_policy"`
+	Query                      exportFilterResponse       `json:"query"`
+	AllTransactionsComplete    bool                       `json:"all_transactions_complete"`
+	IncompleteTransactionCount int64                      `json:"incomplete_transaction_count"`
+	IncludesSystemAccounts     bool                       `json:"includes_system_accounts"`
+	Columns                    []string                   `json:"columns"`
+	Excluded                   []string                   `json:"excluded"`
+	Ledger                     exportLedgerTotalsResponse `json:"ledger"`
+	Attachments                exportAttachmentsResponse  `json:"attachments"`
+}
+
+// parseExportFilter reads the shared scope parameters. Repeated-ID filters
+// follow R2's contract, so "these accounts" means the same thing in a report
+// and in an export.
+func parseExportFilter(query url.Values) (app.ExportFilter, error) {
+	accountIDs, err := parseRepeatedIDs(query, "account_id")
+	if err != nil {
+		return app.ExportFilter{}, err
+	}
+	commodityIDs, err := parseRepeatedIDs(query, "commodity_id")
+	if err != nil {
+		return app.ExportFilter{}, err
+	}
+
+	return app.ExportFilter{
+		From:               strings.TrimSpace(query.Get("from")),
+		To:                 strings.TrimSpace(query.Get("to")),
+		DateBasis:          strings.TrimSpace(query.Get("date_basis")),
+		AccountIDs:         accountIDs,
+		IncludeDescendants: query.Get("include_descendants") == "true",
+		CommodityIDs:       commodityIDs,
+	}, nil
+}
+
+func toExportFilterResponse(filter app.ResolvedExportFilter) exportFilterResponse {
+	return exportFilterResponse{
+		From:               filter.From,
+		To:                 filter.To,
+		DateBasis:          filter.DateBasis,
+		AccountIDs:         emptyIfNil(filter.AccountIDs),
+		IncludeDescendants: filter.IncludeDescendants,
+		ResolvedAccountIDs: emptyIfNil(filter.ResolvedAccountIDs),
+		CommodityIDs:       emptyIfNil(filter.CommodityIDs),
+		SelectionUnit:      filter.SelectionUnit,
+		Notes:              filter.Notes,
+	}
 }
 
 // exportScopeParameters are the filters bundle.zip will accept and the flat CSV
@@ -55,20 +109,31 @@ func exportPreview(logger *slog.Logger, authService *app.AuthService, exportServ
 			return
 		}
 
-		preview, err := exportService.Preview(r.Context())
+		filter, err := parseExportFilter(r.URL.Query())
 		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
+		preview, err := exportService.Preview(r.Context(), filter)
+		if err != nil {
+			if writeExportValidationError(w, err) {
+				return
+			}
 			writeServiceInternalError(w, r, logger, "read export preview", err)
 			return
 		}
 
 		writeJSON(w, http.StatusOK, exportPreviewResponse{
-			GeneratedAt:             preview.GeneratedAt,
-			SelectionUnit:           preview.SelectionUnit,
-			RecordPolicy:            preview.RecordPolicy,
-			AllTransactionsComplete: preview.AllTransactionsComplete,
-			IncludesSystemAccounts:  preview.IncludesSystemAccounts,
-			Columns:                 preview.Columns,
-			Excluded:                preview.Excluded,
+			GeneratedAt:                preview.GeneratedAt,
+			SelectionUnit:              preview.SelectionUnit,
+			RecordPolicy:               preview.RecordPolicy,
+			Query:                      toExportFilterResponse(preview.Filter),
+			AllTransactionsComplete:    preview.AllTransactionsComplete,
+			IncompleteTransactionCount: preview.IncompleteTransactionCount,
+			IncludesSystemAccounts:     preview.IncludesSystemAccounts,
+			Columns:                    preview.Columns,
+			Excluded:                   preview.Excluded,
 			Ledger: exportLedgerTotalsResponse{
 				PostingCount:      preview.PostingCount,
 				JournalEntryCount: preview.JournalEntryCount,
@@ -118,6 +183,59 @@ func exportLedgerCSV(logger *slog.Logger, authService *app.AuthService, exportSe
 				logger = slog.Default()
 			}
 			logger.ErrorContext(r.Context(), "write ledger export", slog.Any("err", err))
+			return
+		}
+	}
+}
+
+// writeExportValidationError maps a rejected filter to the envelope. Reported
+// here rather than as a 500, because "account filter is invalid" is something
+// the caller can fix.
+func writeExportValidationError(w http.ResponseWriter, err error) bool {
+	var validationErr app.ValidationError
+	if errors.As(err, &validationErr) {
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationErr.Message)
+		return true
+	}
+	return false
+}
+
+func exportBundle(logger *slog.Logger, authService *app.AuthService, exportService *app.ExportService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+
+		filter, err := parseExportFilter(r.URL.Query())
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
+		// The filter is validated before the first byte, because a streamed
+		// archive cannot change its status code afterwards. /exports/preview
+		// answers the same question in full without producing the file.
+		if err := exportService.ValidateFilter(r.Context(), filter); err != nil {
+			if writeExportValidationError(w, err) {
+				return
+			}
+			writeServiceInternalError(w, r, logger, "validate export bundle request", err)
+			return
+		}
+
+		filename := "rekenraam-export-" + time.Now().UTC().Format("20060102") + ".zip"
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+		w.Header().Set("Cache-Control", "no-store")
+
+		if err := exportService.WriteBundle(r.Context(), w, filter); err != nil {
+			if logger == nil {
+				logger = slog.Default()
+			}
+			// Past the first byte the only honest signal left is a truncated
+			// archive, which a zip reader rejects rather than accepting as a
+			// short export.
+			logger.ErrorContext(r.Context(), "write export bundle", slog.Any("err", err))
 			return
 		}
 	}

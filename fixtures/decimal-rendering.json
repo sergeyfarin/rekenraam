@@ -1,0 +1,17 @@
+{
+  "_comment": "One specification, two readers. Go's exact.Decimal (backend/internal/exact/decimal.go) and TypeScript's formatLedgerAmount (frontend/src/lib/money/amount.ts) render a coefficient and scale as decimal text, and neither language can import the other. Both test suites read this file, so a change to either implementation that drifts from the other fails a named test instead of shipping. Add a case here before changing either side.",
+  "vectors": [
+    { "name": "whole units at scale zero", "coefficient": "1200", "scale": 0, "expected": "1200" },
+    { "name": "two decimal places", "coefficient": "1200", "scale": 2, "expected": "12.00" },
+    { "name": "negative keeps its sign", "coefficient": "-12345", "scale": 2, "expected": "-123.45" },
+    { "name": "value narrower than the scale", "coefficient": "5", "scale": 3, "expected": "0.005" },
+    { "name": "exactly as wide as the scale", "coefficient": "-25", "scale": 2, "expected": "-0.25" },
+    { "name": "zero renders its scale", "coefficient": "0", "scale": 2, "expected": "0.00" },
+    { "name": "zero at scale zero", "coefficient": "0", "scale": 0, "expected": "0" },
+    { "name": "crypto scale stays exact", "coefficient": "1", "scale": 24, "expected": "0.000000000000000000000001" },
+    { "name": "beyond int64 range", "coefficient": "123456789012345678901234567890", "scale": 4, "expected": "12345678901234567890123456.7890" },
+    { "name": "negative beyond int64 range", "coefficient": "-99999999999999999999999", "scale": 12, "expected": "-99999999999.999999999999" },
+    { "name": "single digit at scale one", "coefficient": "7", "scale": 1, "expected": "0.7" },
+    { "name": "negative single digit at scale one", "coefficient": "-7", "scale": 1, "expected": "-0.7" }
+  ]
+}

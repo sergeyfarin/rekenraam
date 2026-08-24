@@ -3908,7 +3908,14 @@ export interface paths {
          */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    from?: string;
+                    to?: string;
+                    date_basis?: "entry" | "transaction";
+                    account_id?: number[];
+                    include_descendants?: boolean;
+                    commodity_id?: number[];
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -3922,6 +3929,15 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["LedgerExportPreviewResponse"];
+                    };
+                };
+                /** @description The filter was rejected */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
                 /** @description Authentication is required */
@@ -3979,6 +3995,82 @@ export interface paths {
                     };
                 };
                 /** @description A scope parameter was supplied to an export that is always whole-ledger */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/bundle.zip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a ledger export archive
+         * @description Streams a zip holding the ledger, the reference tables it joins to, a trial balance that reconciles it, and a manifest describing all of them with a SHA-256 per file. The manifest is written last, so a truncated download fails to open rather than looking complete.
+         *
+         *     This is the only scoped export. Filters select whole **journal entries**, never individual postings, so the archive balances per entry under every filter; every posting of a selected entry is included, in accounts, commodities, and dates the filter never named. `date_basis=transaction` selects transactions by their date and then takes every entry of them, including entries dated outside the range. The manifest reports what the filter resolved to, how many transactions the archive holds only part of, and how many postings it carries only as counterparts.
+         *
+         *     Contents: `README.txt`, `ledger.csv`, `accounts.csv`, `categories.csv`, `payees.csv`, `commodities.csv`, `tags.csv`, `lots.csv`, `prices.csv`, `trial-balance.csv`, `manifest.json`. See `docs/adrs/0011-ledger-export-contract.md`.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Inclusive start of the range. Omit for unbounded. */
+                    from?: string;
+                    /** @description Inclusive end of the range. Omit for unbounded. */
+                    to?: string;
+                    /** @description Which date the range selects on. `entry` takes journal entries by their own accounting date; `transaction` takes transactions by theirs and then every entry of them, including entries outside the range. */
+                    date_basis?: "entry" | "transaction";
+                    /** @description Repeatable. An entry is selected when at least one of its postings is in a resolved account. Any account class is accepted here, unlike the reports filter: exporting everything that touched a category is a reasonable request. */
+                    account_id?: number[];
+                    /** @description Expand each named account to its subtree, using current parent links. */
+                    include_descendants?: boolean;
+                    /** @description Repeatable. An entry is selected when at least one of its postings is in that commodity. */
+                    commodity_id?: number[];
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The export archive, streamed */
+                200: {
+                    headers: {
+                        /** @description Attachment with a dated filename. */
+                        "Content-Disposition"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/zip": string;
+                    };
+                };
+                /** @description The filter was rejected — always before the first byte, since a stream cannot change its status */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -12210,6 +12302,24 @@ export interface components {
             directory: string | null;
             reason: string;
         };
+        /** @description What the filter resolved to. Echoed so an archive can be reproduced from its own manifest rather than from whatever the caller remembers typing. */
+        LedgerExportFilter: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            /** @enum {string} */
+            date_basis: "entry" | "transaction";
+            account_ids: number[];
+            include_descendants: boolean;
+            /** @description The account selection after descendant expansion — what the export actually matched on. */
+            resolved_account_ids: number[];
+            commodity_ids: number[];
+            /** @enum {string} */
+            selection_unit: "journal_entry";
+            /** @description Plain-language consequences of this filter, such as that it also carries postings it did not name. */
+            notes?: string[];
+        };
         /** @description What the export would contain, counted from the same selection the download uses. */
         LedgerExportTotals: {
             /**
@@ -12243,6 +12353,12 @@ export interface components {
             selection_unit: "journal_entry";
             /** @description Which ledger records leave through the export, in one sentence a manifest can carry verbatim. */
             record_policy: string;
+            query: components["schemas"]["LedgerExportFilter"];
+            /**
+             * Format: int64
+             * @description How many exported transactions are missing at least one of their own entries. Zero unless a filter cut across one.
+             */
+            incomplete_transaction_count: number;
             /** @description Archive-wide, not per transaction. True when every entry of every exported transaction is present — always true for the unfiltered flat CSV. The per-row transaction_complete column carries the same fact per transaction. */
             all_transactions_complete: boolean;
             /** @description Always true. Reports exclude system accounts; an export that dropped them would emit transactions that do not balance. */
