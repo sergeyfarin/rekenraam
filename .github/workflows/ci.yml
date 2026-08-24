@@ -35,7 +35,7 @@ jobs:
           set -o pipefail
           COVERAGE=1 ./scripts/test-backend.sh | tee coverage-summary.txt
       - name: Upload coverage profile
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: backend-coverage-profile
           path: backend/coverage.out
@@ -79,7 +79,7 @@ jobs:
         run: ./scripts/test-e2e-smoke.sh
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
