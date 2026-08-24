@@ -2,7 +2,9 @@ package exact
 
 import (
 	"encoding/json"
+	"math/big"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,4 +67,31 @@ func TestDecimalMatchesTheSharedRenderingVectors(t *testing.T) {
 	for _, vector := range fixture.Vectors {
 		assert.Equalf(t, vector.Expected, Decimal(MustParse(vector.Coefficient), vector.Scale), vector.Name)
 	}
+}
+
+// DecimalFromBig renders values the Coefficient gate would refuse. A balance
+// can legitimately need more than 38 digits — the ledger holds a 38-digit
+// posting and a 2.50 posting quite legally, and their sum needs 39 — and an
+// export writes text, not a stored coefficient.
+func TestDecimalFromBigRendersBeyondTheCoefficientCeiling(t *testing.T) {
+	t.Parallel()
+
+	wide, ok := new(big.Int).SetString(strings.Repeat("9", 38), 10)
+	require.True(t, ok)
+	// (10^38 - 1) at scale 0, restated at scale 2, plus 250: the sum carries
+	// into a 41-character coefficient.
+	sum := new(big.Int).Mul(wide, big.NewInt(100))
+	sum.Add(sum, big.NewInt(250))
+
+	rendered := DecimalFromBig(sum, 2)
+	assert.Equal(t, "100000000000000000000000000000000000001.50", rendered)
+
+	_, err := Parse(sum.String())
+	require.Error(t, err, "the same value is refused as a stored coefficient, which is the distinction being tested")
+}
+
+func TestDecimalFromBigTreatsNilAsZero(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "0.00", DecimalFromBig(nil, 2))
 }

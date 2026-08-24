@@ -108,6 +108,15 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		return err
 	}
 
+	// The trial balance is the one step that reads the whole book and folds it,
+	// so it is also the one most likely to fail. Do it before the archive
+	// exists: a failure here then reaches the caller as an error rather than as
+	// a response that has already begun and can only be truncated.
+	trialBalance, err := s.computeTrialBalance(ctx, snapshot, selection)
+	if err != nil {
+		return err
+	}
+
 	paths := accountExportPaths(accounts)
 	archive := zip.NewWriter(out)
 	manifest := bundleManifest{
@@ -175,7 +184,7 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		{"lots.csv", func(w io.Writer) (int64, error) { return s.writeLotsCSV(ctx, w, snapshot, paths) }},
 		{"prices.csv", func(w io.Writer) (int64, error) { return s.writePricesCSV(ctx, w, snapshot) }},
 		{"trial-balance.csv", func(w io.Writer) (int64, error) {
-			return s.writeTrialBalanceCSV(ctx, w, snapshot, selection, paths)
+			return writeTrialBalanceCSV(w, trialBalance, selection, paths)
 		}},
 	}
 	for _, file := range dimensionFiles {
@@ -536,10 +545,7 @@ func newTrialBalanceRow() *trialBalanceRow {
 // exports entries dated outside the range, which a single closing figure would
 // double-count or omit. Hence: the selection basis decides which rows are in the
 // file; balances are always entry-date arithmetic (ADR 0011).
-func (s *ExportService) writeTrialBalanceCSV(ctx context.Context, out io.Writer, snapshot *sql.Tx, selection db.LedgerExportSelection, paths map[int64]string) (int64, error) {
-	accountScope := idSet(selection.AccountIDs)
-	commodityScope := idSet(selection.CommodityIDs)
-
+func (s *ExportService) computeTrialBalance(ctx context.Context, snapshot *sql.Tx, selection db.LedgerExportSelection) (map[trialBalanceKey]*trialBalanceRow, error) {
 	rowsByKey := map[trialBalanceKey]*trialBalanceRow{}
 	err := s.repository.StreamTrialBalancePostings(ctx, snapshot, BookID, selection, func(record db.TrialBalancePostingRecord) error {
 		key := trialBalanceKey{accountID: record.AccountID, commodityID: record.CommodityID}
@@ -570,8 +576,18 @@ func (s *ExportService) writeTrialBalanceCSV(ctx context.Context, out io.Writer,
 		return nil
 	})
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
+
+	return rowsByKey, nil
+}
+
+// writeTrialBalanceCSV renders what computeTrialBalance folded. It touches no
+// database, so once the archive has started the only remaining failure is the
+// writer itself.
+func writeTrialBalanceCSV(out io.Writer, rowsByKey map[trialBalanceKey]*trialBalanceRow, selection db.LedgerExportSelection, paths map[int64]string) (int64, error) {
+	accountScope := idSet(selection.AccountIDs)
+	commodityScope := idSet(selection.CommodityIDs)
 
 	writer, err := newBundleCSV(out, []string{
 		"account_id", "account_path", "commodity_id", "in_scope",
@@ -604,23 +620,34 @@ func (s *ExportService) writeTrialBalanceCSV(ctx context.Context, out io.Writer,
 		derived.AddScaled(row.opening)
 		derived.AddScaled(row.exportedIn)
 
-		// Each figure is rendered at the scale it accumulated at, and two
-		// figures of one row may therefore differ — a column that never
-		// received a posting reads "0" where its neighbour reads "0.00". This
-		// mirrors the decision R2 reached for cashflow measures and reverted a
-		// common-scale restatement over: deepening a value costs digits against
-		// the 38-digit ceiling and can overflow a figure that was
-		// representable as recorded. The values are exact either way, and
-		// README.txt tells the reader so.
-		figures := make([]string, 0, 6)
-		for _, value := range []*exact.ScaledInt{
+		// Scale policy, in two halves, both taken from what R2 settled:
+		//
+		//  - A figure that accumulated something keeps its own scale. Restating
+		//    figures at a common scale was tried in cashflow and reverted
+		//    (04a1d354): deepening costs a digit per decimal place against the
+		//    38-digit ceiling, so the precision of one figure could push an
+		//    unrelated one past the limit.
+		//  - A figure that accumulated nothing takes the row's deepest scale.
+		//    Zero is the same number at every scale, so deepening it multiplies
+		//    zero by a power of ten and can never widen anything — while
+		//    leaving it at scale 0 prints "0" beside "0.00" and reads as a
+		//    different kind of number. This is the rule cashflow's own view
+		//    applies to an absent measure (frontend cashflow.ts).
+		values := []*exact.ScaledInt{
 			row.opening, row.exportedIn, row.exportedOut, row.excludedIn, derived, row.actualClosing,
-		} {
-			rendered, err := renderScaled(value)
-			if err != nil {
-				return rows, err
+		}
+		rowScale := 0
+		for _, value := range values {
+			if value.Scale() > rowScale {
+				rowScale = value.Scale()
 			}
-			figures = append(figures, rendered)
+		}
+		figures := make([]string, 0, len(values))
+		for _, value := range values {
+			if value.Sign() == 0 {
+				value.Align(rowScale)
+			}
+			figures = append(figures, renderScaled(value))
 		}
 
 		record := append([]string{
@@ -638,14 +665,18 @@ func (s *ExportService) writeTrialBalanceCSV(ctx context.Context, out io.Writer,
 	return finishBundleCSV(writer, rows)
 }
 
-// renderScaled turns an accumulated figure into the export's decimal text,
-// refusing rather than truncating when it exceeds the exact coefficient limit.
-func renderScaled(value *exact.ScaledInt) (string, error) {
-	coefficient, err := value.Coefficient()
-	if err != nil {
-		return "", fmt.Errorf("render trial balance figure: %w", err)
-	}
-	return exact.Decimal(coefficient, value.Scale()), nil
+// renderScaled turns an accumulated figure into the export's decimal text.
+//
+// It renders the accumulated integer directly rather than passing through
+// exact.Coefficient, whose 38-digit ceiling belongs to values the app stores
+// and returns as coefficient strings. A balance can legitimately need more: a
+// 38-digit posting at scale 0 and a 2.50 posting in the same account force the
+// sum to 40 digits, and both postings are perfectly legal. Going through the
+// gate turned that book into an archive the user could not download at all —
+// an HTTP 200 with zero bytes, because the failure happened after the response
+// had begun. The figure is exact and readable; the export writes it.
+func renderScaled(value *exact.ScaledInt) string {
+	return exact.DecimalFromBig(value.BigInt(), value.Scale())
 }
 
 // writeBundleReadme explains the archive to whoever opens it in a year, in
@@ -694,10 +725,14 @@ do not balance.`,
 Two identities hold exactly:
   opening_balance + exported_in_range_movement = derived_closing_balance
   derived_closing_balance + excluded_in_range_movement = actual_closing_balance
-Each figure is written at the scale it was accumulated at, so one row may read
-"0" in one column and "0.00" in the next. Both are exact zero; the values are
-never restated at a common scale, because deepening a figure costs digits
-against the exact 38-digit limit.
+Each figure is written at the scale it accumulated at, so two rows may carry
+different numbers of decimal places. Figures are never restated at a common
+scale: deepening a value costs a digit per decimal place, and one figure's
+precision must not widen another's. A figure that accumulated nothing is the
+exception — zero is the same number at every scale, so it is written at its
+row's scale rather than as a bare "0".
+A total may be wider than any single posting it came from. That is exact
+arithmetic, not an error.
 The derived figure is NOT the account's closing balance. For an account present
 only as a counterpart to something you filtered for, it is a partial figure by
 construction. opening_balance, excluded_in_range_movement, and

@@ -108,6 +108,24 @@ Amounts are rendered from the stored coefficient and scale by `exact.Decimal`:
 point separator, no group separators, sign as a leading `-`, stored scale kept.
 No float touches an export at any layer.
 
+**Scale, in two halves.** A figure that accumulated something keeps the scale it
+accumulated at; figures are never restated at a common scale, because deepening
+costs a digit per decimal place against the 38-digit coefficient ceiling and one
+figure's precision must not widen another's. This is the rule the cashflow
+report reached by reverting the opposite (`04a1d354`). A figure that accumulated
+**nothing** is the exception: zero is the same number at every scale, so
+deepening it multiplies zero by a power of ten and can widen nothing, and it is
+written at its row's deepest scale rather than as a bare `0` beside a
+neighbour's `0.00`.
+
+**A derived total may exceed the stored-coefficient ceiling, and is still
+written.** A 38-digit posting and a 2.50 posting in one account sum to 39
+digits; both postings are legal and the sum is exact. That ceiling governs
+values the app stores and returns as coefficient strings, not decimal text in a
+file, so aggregates render through `exact.DecimalFromBig`. Refusing would fail
+an entire archive over a figure it can write exactly — and an export is what a
+user reaches for when something is already wrong.
+
 Column headers and enumerated values are stable English identifiers, not
 localized strings — a machine-readable contract must not change shape with the
 reader's locale. Only the surrounding UI is translated.

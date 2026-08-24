@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -323,10 +324,10 @@ func TestStraddlingTransactionIsWholeUnderTransactionBasisAndPartialUnderEntryBa
 	trialBalance := transactionBasis.table(t, "trial-balance.csv")
 	groceries := trialBalanceFor(t, trialBalance, f.groceries.ID, f.usdID)
 	assert.Equal(t, "100.00", trialBalance.column(groceries, "exported_out_of_range_movement"))
-	// "0" rather than "0.00": a figure that never received a posting has no
-	// scale to carry, and figures are never restated at a common scale (see the
-	// cashflow scale decision R2 reverted). Exact zero either way.
-	assert.Equal(t, "0", trialBalance.column(groceries, "exported_in_range_movement"))
+	// A figure that accumulated nothing takes the row's scale rather than
+	// printing a bare "0" beside its neighbour's "0.00" — see
+	// TestTrialBalanceZeroFiguresTakeTheRowScale for why that is safe.
+	assert.Equal(t, "0.00", trialBalance.column(groceries, "exported_in_range_movement"))
 
 	for _, row := range trialBalance.rows {
 		derived := decimalColumn(t, trialBalance, row, "derived_closing_balance")
@@ -493,4 +494,117 @@ func TestBundleCarriesEveryFieldABeancountTransformNeeds(t *testing.T) {
 		}
 		assert.NotNil(t, narration)
 	}
+}
+
+// Scale policy, half one: a figure that accumulated nothing takes the row's
+// deepest scale.
+//
+// Zero is the same number at every scale, so deepening it multiplies zero by a
+// power of ten and cannot widen anything — which is exactly why this half is
+// safe while restating *non-zero* figures at a common scale is not. The rule is
+// the one cashflow's own view already applies to an absent measure.
+func TestTrialBalanceZeroFiguresTakeTheRowScale(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newBundleFixture(t, handler)
+
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-01",
+		posting(f.checking.ID, 200000, 2, f.usdID),
+		posting(f.salary.ID, -200000, 2, f.usdID),
+	), http.StatusCreated)
+
+	bundle := downloadBundle(t, handler, f.sessionCookie, "")
+	trialBalance := bundle.table(t, "trial-balance.csv")
+	checking := trialBalanceFor(t, trialBalance, f.checking.ID, f.usdID)
+
+	// Unfiltered: nothing is excluded and nothing is out of range, so those two
+	// columns accumulated nothing at all.
+	assert.Equal(t, "2000.00", trialBalance.column(checking, "exported_in_range_movement"))
+	assert.Equal(t, "0.00", trialBalance.column(checking, "excluded_in_range_movement"))
+	assert.Equal(t, "0.00", trialBalance.column(checking, "exported_out_of_range_movement"))
+	assert.Equal(t, "0.00", trialBalance.column(checking, "opening_balance"))
+}
+
+// Scale policy, half two: a figure that accumulated something keeps its own
+// scale, so the precision of one figure never widens another.
+func TestTrialBalanceKeepsEachFigureAtTheScaleItAccumulated(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newBundleFixture(t, handler)
+
+	// Savings takes postings at two different scales; checking only at one.
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-01",
+		posting(f.savings.ID, 100000, 2, f.usdID),
+		posting(f.salary.ID, -100000, 2, f.usdID),
+	), http.StatusCreated)
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-02",
+		posting(f.checking.ID, 5, 0, f.usdID),
+		posting(f.salary.ID, -5, 0, f.usdID),
+	), http.StatusCreated)
+
+	bundle := downloadBundle(t, handler, f.sessionCookie, "")
+	trialBalance := bundle.table(t, "trial-balance.csv")
+
+	checking := trialBalanceFor(t, trialBalance, f.checking.ID, f.usdID)
+	assert.Equal(t, "5", trialBalance.column(checking, "exported_in_range_movement"),
+		"a scale-0 account keeps scale 0: it is not deepened to match an unrelated account")
+
+	savings := trialBalanceFor(t, trialBalance, f.savings.ID, f.usdID)
+	assert.Equal(t, "1000.00", trialBalance.column(savings, "exported_in_range_movement"))
+}
+
+// The boundary case from the cashflow scale revert (04a1d354), aimed at the
+// trial balance: a 38-digit posting and a 2.50 posting in the same account force
+// their sum to 40 digits.
+//
+// Both postings are legal, and the sum is exact — it simply does not fit the
+// 38-digit ceiling that governs *stored* coefficients. Rendering it through
+// that gate used to fail the whole archive after the response had begun, so the
+// caller received an HTTP 200 carrying zero bytes. An export exists to get data
+// out; it does not refuse a figure it can write exactly.
+func TestTrialBalanceRendersASumWiderThanAStoredCoefficient(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newBundleFixture(t, handler)
+
+	wide := strings.Repeat("9", 38)
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, `{
+		"transaction_date":"2026-06-01",
+		"journal_entries":[{"entry_date":"2026-06-01","postings":[
+			{"account_id":`+strconvFormatInt(f.checking.ID)+`,"quantity_value":"`+wide+`","quantity_scale":0,"commodity_id":`+strconvFormatInt(f.usdID)+`},
+			{"account_id":`+strconvFormatInt(f.salary.ID)+`,"quantity_value":"-`+wide+`","quantity_scale":0,"commodity_id":`+strconvFormatInt(f.usdID)+`}
+		]}]
+	}`, http.StatusCreated)
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-02",
+		posting(f.checking.ID, 250, 2, f.usdID),
+		posting(f.salary.ID, -250, 2, f.usdID),
+	), http.StatusCreated)
+
+	bundle := downloadBundle(t, handler, f.sessionCookie, "")
+	trialBalance := bundle.table(t, "trial-balance.csv")
+	checking := trialBalanceFor(t, trialBalance, f.checking.ID, f.usdID)
+
+	// (10^38 - 1) + 2.50, stated as arithmetic rather than as a hand-copied
+	// literal: the sum carries into a 39th digit, which is precisely the width
+	// a stored coefficient may not have.
+	wideValue, ok := new(big.Rat).SetString(wide)
+	require.True(t, ok)
+	want := new(big.Rat).Add(wideValue, big.NewRat(250, 100))
+
+	for _, column := range []string{"actual_closing_balance", "derived_closing_balance"} {
+		rendered := trialBalance.column(checking, column)
+		assert.Equal(t, want.RatString(), decimalColumn(t, trialBalance, checking, column).RatString(),
+			"%s must be the exact sum", column)
+		assert.Greater(t, len(strings.TrimSuffix(strings.ReplaceAll(rendered, ".", ""), "")), 38,
+			"%s is wider than a stored coefficient may be, which is the point of this case", column)
+	}
+
+	// And the identities still hold on a figure that wide.
+	opening := decimalColumn(t, trialBalance, checking, "opening_balance")
+	exportedIn := decimalColumn(t, trialBalance, checking, "exported_in_range_movement")
+	derived := decimalColumn(t, trialBalance, checking, "derived_closing_balance")
+	assert.Equal(t, new(big.Rat).Add(opening, exportedIn).RatString(), derived.RatString())
 }

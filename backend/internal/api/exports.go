@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -223,20 +224,45 @@ func exportBundle(logger *slog.Logger, authService *app.AuthService, exportServi
 			return
 		}
 
+		// Headers are attached on the first byte, not before it. A failure
+		// between here and there — the trial-balance fold reads the whole book —
+		// would otherwise leave the caller holding a 200 with an empty body that
+		// claims to be a zip. This way such a failure is still an error
+		// envelope, and only a failure *during* the archive truncates it, which
+		// a zip reader rejects rather than accepting as a short export.
 		filename := "rekenraam-export-" + time.Now().UTC().Format("20060102") + ".zip"
-		w.Header().Set("Content-Type", "application/zip")
-		w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
-		w.Header().Set("Cache-Control", "no-store")
+		body := &deferredHeaderWriter{response: w, onFirstWrite: func() {
+			w.Header().Set("Content-Type", "application/zip")
+			w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+			w.Header().Set("Cache-Control", "no-store")
+		}}
 
-		if err := exportService.WriteBundle(r.Context(), w, filter); err != nil {
+		if err := exportService.WriteBundle(r.Context(), body, filter); err != nil {
 			if logger == nil {
 				logger = slog.Default()
 			}
-			// Past the first byte the only honest signal left is a truncated
-			// archive, which a zip reader rejects rather than accepting as a
-			// short export.
 			logger.ErrorContext(r.Context(), "write export bundle", slog.Any("err", err))
+			if !body.started {
+				writeServiceInternalError(w, r, logger, "write export bundle", err)
+			}
 			return
 		}
 	}
+}
+
+// deferredHeaderWriter delays a download's headers until something is actually
+// being downloaded, so a failure before the first byte can still be reported as
+// an error rather than as an empty file.
+type deferredHeaderWriter struct {
+	response     io.Writer
+	onFirstWrite func()
+	started      bool
+}
+
+func (w *deferredHeaderWriter) Write(p []byte) (int, error) {
+	if !w.started {
+		w.started = true
+		w.onFirstWrite()
+	}
+	return w.response.Write(p)
 }
