@@ -1,0 +1,38 @@
+post:
+  summary: Retry a failed backup
+  description: >
+    Puts a failed run back on the queue. Retries are bounded — a worker that
+    retried forever was a real defect (T-39) — and a bounded cap is only safe
+    with a way back, which is this.
+  parameters:
+    - in: path
+      name: run_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+  responses:
+    "202":
+      description: The backup was queued again
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/BackupRun"
+    "400":
+      description: The run cannot be retried (already completed, or already queued)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: No such backup run
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

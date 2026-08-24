@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-23 (R3 planned; slices 1-3 shipped; see the
+Last updated: 2026-08-24 (R3 planned; slices 1-4 shipped; see the
 current-initiative section below).
 
 ## Where things stand
@@ -148,9 +148,15 @@ three are the mandatory export requirement, the next three the protection half.
       `QIF_ACCOUNT_UNSUPPORTED` until `allow_partial=true`. Thirteen named
       tests, including round-trips through the app's own importer under both
       the declared layout and auto-detection.
-- [ ] 4. Scheduled verified backups via SQLite's **online backup API** (ADR
-      0004's in-app path): policy, `database_backup` work kind with an
-      occurrence identity, symlink-safe retention, run history, endpoints.
+- [x] 4. **Done 2026-08-24.** Scheduled verified backups via SQLite's online
+      backup API (ADR 0004's in-app path), sourced from the read-only pool so a
+      copy never holds the writer. Migration 0006 adds `backup_policies` and
+      `backup_runs`; the run row and its work item are created in one
+      transaction, and the run's occurrence key is what makes a *completed*
+      night idempotent where the queue's own uniqueness stops. Retention prunes
+      only paths that are recorded, correctly named, and resolve through
+      symlinks to a regular file inside `BACKUP_DIR`. Fifteen named tests,
+      including the four crash points and a planted symlink.
 - [ ] 5. `rekenraam verify-backup` / `rekenraam restore` (process lock,
       WAL-set preservation, atomic install) + the `REKENRAAM_SECRET_KEY`
       operator workflow + docs rewrite + an automated restore drill.

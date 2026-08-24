@@ -21,6 +21,12 @@ type Config struct {
 	TrustProxyHeaders      bool
 	TrustedProxyCIDRs      []netip.Prefix
 	OpenExchangeRatesAppID string
+	// BackupDir is where scheduled backups are written. Empty means the
+	// default beside the database (<database dir>/backups). It is deliberately
+	// an operator setting rather than a stored preference: where a backup lands
+	// is a deployment fact, and the deployment docs recommend a different
+	// device from the database, which the app cannot arrange for itself.
+	BackupDir string
 	// SecretKey is a 32-byte AES-256 key (base64-encoded) used to seal online
 	// provider credentials at rest. Required when any import connection exists;
 	// the server starts without it but returns CONFIG_REQUIRED if unset when
@@ -70,6 +76,7 @@ func Load() (Config, error) {
 		AppEnv:                 appEnv,
 		HTTPAddr:               env("HTTP_ADDR", ":16888"),
 		DatabaseURL:            env("DATABASE_URL", "file:var/dev.sqlite"),
+		BackupDir:              strings.TrimSpace(os.Getenv("BACKUP_DIR")),
 		SetupToken:             setupToken,
 		GeneratedSetupToken:    generatedSetupToken,
 		SessionLifetime:        sessionLifetime,

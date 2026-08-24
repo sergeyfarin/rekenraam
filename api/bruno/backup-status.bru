@@ -1,0 +1,17 @@
+meta {
+  name: Backup Status
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/v1/maintenance/backups
+  body: none
+  auth: none
+}
+
+docs {
+  Policy, backup directory, next scheduled run, recent attempts (failures
+  included), and the REKENRAAM_SECRET_KEY notice — the part of the protection
+  story no database backup can carry.
+}

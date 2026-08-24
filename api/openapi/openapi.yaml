@@ -101,6 +101,12 @@ paths:
     $ref: "./paths/exports-bundle-zip.yaml"
   /api/v1/exports/qif:
     $ref: "./paths/exports-qif.yaml"
+  /api/v1/maintenance/backups:
+    $ref: "./paths/maintenance-backups.yaml"
+  /api/v1/maintenance/backups/policy:
+    $ref: "./paths/maintenance-backups-policy.yaml"
+  /api/v1/maintenance/backups/{run_id}/retry:
+    $ref: "./paths/maintenance-backup-retry.yaml"
   /api/v1/setup/system-accounts:
     $ref: "./paths/setup-system-accounts.yaml"
   /api/v1/setup/categories:
@@ -516,6 +522,16 @@ components:
       $ref: "./components/schemas/exports.yaml#/LedgerExportAttachments"
     LedgerExportFilter:
       $ref: "./components/schemas/exports.yaml#/LedgerExportFilter"
+    BackupPolicy:
+      $ref: "./components/schemas/backups.yaml#/BackupPolicy"
+    BackupPolicyRequest:
+      $ref: "./components/schemas/backups.yaml#/BackupPolicyRequest"
+    BackupRun:
+      $ref: "./components/schemas/backups.yaml#/BackupRun"
+    BackupSecretKeyNotice:
+      $ref: "./components/schemas/backups.yaml#/BackupSecretKeyNotice"
+    BackupStatusResponse:
+      $ref: "./components/schemas/backups.yaml#/BackupStatusResponse"
     QIFAccountStatus:
       $ref: "./components/schemas/exports.yaml#/QIFAccountStatus"
     QIFExportPreview:

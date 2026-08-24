@@ -256,6 +256,36 @@ data/rekenraam.sqlite
 
 For Docker Compose, SQLite data lives in the `rekenraam-data` Docker volume.
 
+### Scheduled backups
+
+The app backs itself up nightly, using SQLite's online backup API while it keeps
+running. Nothing needs to be scheduled outside it.
+
+- **Where:** `BACKUP_DIR`, or `<database directory>/backups` when unset. Point it
+  at a **different device** from the database — a backup on the same disk
+  survives corruption and mistakes, not disk loss.
+- **When:** the owner's local time, 03:15 by default, with retention of the last
+  14. Both are changed in the app, under the backup settings.
+- **What you get:** one self-contained `rekenraam-<date>.sqlite` file per run,
+  mode `0600`, verified with `integrity_check` and `foreign_key_check` before it
+  is given its final name. A `.part` file is always a failed attempt.
+- **Whether it worked:** the app shows the last successful backup, the next
+  scheduled one, and any failures with their reason. A backup that has been
+  failing all week is visible without reading logs.
+
+**`REKENRAAM_SECRET_KEY` is not in any backup, and must not be.** It seals
+two-factor enrolment and connection credentials, and a key stored beside the
+data it protects protects nothing. Keep it in a password manager or secret store
+**outside the backup directory**. Restoring a database without it leaves an
+intact ledger, unreadable two-factor enrolment, and unusable connection
+credentials — the ledger survives, those two must be set up again.
+
+Pruning only ever deletes a file that the app recorded, that matches its own
+naming, and that resolves to a regular file inside `BACKUP_DIR`. Anything else
+in that directory is left alone.
+
+### Operator backups
+
 Prefer app-aware or stopped-app backups. Do not copy a live WAL-mode SQLite database file as the normal backup path.
 
 Create a compact operator backup from the project root while the app is stopped or lightly used:

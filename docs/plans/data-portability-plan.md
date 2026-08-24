@@ -1,6 +1,7 @@
 # Data Portability & Protection Plan (R3)
 
-Status: **slices 1-3 shipped 2026-08-23; slices 4-8 planned**. Written 2026-08-23,
+Status: **slices 1-4 shipped (1-3 on 2026-08-23, 4 on 2026-08-24); slices 5-8
+planned**. Written 2026-08-23,
 immediately after R2's acceptance review closed. Slice 1 delivered the
 dedicated read-only connection, the one-snapshot export read model,
 `GET /api/v1/exports/ledger.csv`, `GET /api/v1/exports/preview`, and
@@ -14,7 +15,11 @@ written last, `README.txt`, and the shared decimal vectors that pin
 delivered `GET /api/v1/exports/qif`: one file per cash-like account, transfers
 and categories in QIF's own syntax, splits that sum to their record, a foreign
 counterpart stated rather than converted, the bare-versus-archive rule, and the
-confirm flow for accounts QIF cannot express. This plan is the implementation reference for the
+confirm flow for accounts QIF cannot express. Slice 4 delivered scheduled
+backups on SQLite's online backup API: a stored policy, occurrence identity that
+survives a completed run, crash reconciliation at all four points, symlink-safe
+retention, and the status read model carrying the `REKENRAAM_SECRET_KEY`
+notice. This plan is the implementation reference for the
 roadmap slice "R3 — portable **and protected** core data"; it replaces the
 roadmap's inline prose, which stays as the one-paragraph summary and now points
 here.
@@ -80,8 +85,10 @@ What exists:
   INTO` with a `0700` parent directory, `0600` on the file, and a refusal when
   the target already exists.
 - `db.VerifySQLiteBackup` (same file) — opens the copy read-only and runs
-  `PRAGMA integrity_check`. It does **not** yet run `foreign_key_check`, which
-  the documented operator procedure in `README.md` does run.
+  `PRAGMA integrity_check` **and** `PRAGMA foreign_key_check`, matching the
+  documented operator procedure in `README.md`. (Revisions 2-4 said the second
+  was missing. It is not, and slice 4 corrected the claim rather than adding a
+  duplicate.)
 - Both are reachable from exactly one place: `RecoveryService.PrepareBackup`
   (`backend/internal/app/recovery.go:37`), i.e. the `rekenraam recover-owner`
   CLI path. Nothing schedules a backup; nothing shows one in the UI.
@@ -628,9 +635,11 @@ Handler steps:
    Terminal is reserved for what cannot succeed on repetition.
 3. Copy through the online backup API into
    `rekenraam-<occurrence>.sqlite.part`.
-4. Verify: `integrity_check` **and** `foreign_key_check` (extend
-   `VerifySQLiteBackup`; the README procedure already runs both, the code does
-   not — closing that gap is part of this slice).
+4. Verify: `integrity_check` **and** `foreign_key_check` — which
+   `VerifySQLiteBackup` has done since the deployment-hardening work of
+   2026-07-12 (`8398e99a`). Revisions 2-4 of this plan claimed the code ran only
+   the first and that slice 4 would close the gap; that was wrong, checked
+   during slice 4, and the check needed no extending.
 5. Rename to the final name only after verification passes, so a `.part` file
    is always a failed attempt and never mistaken for a backup. `fsync` the
    file and its parent directory before the rename is trusted.

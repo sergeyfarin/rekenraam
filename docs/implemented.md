@@ -147,7 +147,7 @@ non-English locales all landed together).
 | Report ID filters + drill-down | ✅ | Shipped 2026-08-18 (superseded the R2 plan's original "not delivered" gap): repeatable `account_id`/`category_id`/`payee_id`/`commodity_id` filters, plus drill-down from both spending and cashflow rows into `/app/transactions`. |
 | Reporting-currency valuation method | ⬜ | Deliberately deferred, approved 2026-08-19 to build after R3 (named, auditable valuation method — not a silent conversion). Reports show unlike commodities separately and say so until it lands. |
 
-## Exports (R3) — 🟦 Slices 1-3: flat ledger CSV, preview, the scoped archive, and QIF shipped
+## Exports & Backups (R3) — 🟦 Slices 1-4: flat ledger CSV, preview, the scoped archive, QIF, and scheduled backups shipped
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -166,7 +166,13 @@ non-English locales all landed together).
 | QIF export | ✅ | `GET /api/v1/exports/qif` — one file per cash-like account, typed from the account's `base_kind` (Bank, Cash, CCard, Oth A, Oth L). Transfers write `[Account Path]` and categories their path, so a move between accounts is not exported as spending. Several same-currency counterparts become S/E/$ splits that sum to the record's own amount. An exchange's other side is stated in the memo rather than converted, because inventing a rate would be worse than being explicit — and the leg named is the real other account, not the `commodity_trading` bookkeeping leg. |
 | QIF limits, stated rather than hidden | ✅ | Investment containers, security holdings, and crypto wallets are refused with `422 QIF_ACCOUNT_UNSUPPORTED` naming each account and why; `allow_partial=true` accepts the omission, and the resulting archive records it in `manifest.json` and `README.txt` — so it travels with the file rather than living in a dismissed dialog. Partial approval leaving one writable account still returns an archive for the same reason. `/exports/preview` reports the same verdict, so the list a screen confirms is the list the download honours. |
 | QIF layout, stated out of band | ✅ | QIF declares neither its date layout nor its decimal mark. Amounts always use a point and never a group separator; the date layout is the caller's (`mdy` default) and appears in **every** filename, plus the manifest and README of an archive. A single account comes back bare only when its file carries a decisive date (a day past the 12th); an ambiguous-only file is always archived, because it has nowhere to say how it was written. Round-trip tests feed exports back through the app's own QIF importer under both the declared layout and auto-detection, and pin the one corner that stays undetectable: three-decimal money read under a comma profile. |
-| Backups, restore, self-check | ⬜ | Slices 4–8 of `docs/plans/data-portability-plan.md`. |
+| Scheduled backups | ✅ | Nightly at the owner's local time (default 03:15, stored with their IANA zone so DST does not shift it), on the durable work queue. The copy uses SQLite's **online backup API** — ADR 0004's preferred in-app mechanism — driven entirely inside the `sql.Conn.Raw` callback and sourced from the read-only pool, so a copy of a large book never holds the single write connection. The result is consolidated into one self-contained file: the copy inherits WAL mode, and a backup that is three files is a backup someone restores two-thirds of. |
+| Backup identity and crash safety | ✅ | Migration 0006 adds `backup_policies` and `backup_runs`. A run row and its work item are created in **one** transaction, and the run carries an occurrence key (`scheduled:<local date>`, or a per-request identity for manual runs) — which is what makes a *completed* occurrence idempotent, since the queue's own uniqueness covers only pending and running items. The target path is derived from the occurrence, not the clock, so a retry rewrites the same path. Re-running reconciles what a crash left: a verified final file is adopted, a partial file (and its sidecars) is deleted. Tested at all four crash points. |
+| Backup retention | ✅ | Keeps the newest N (default 14) with an optional age cap. Three conditions must all hold before anything is unlinked: the path is recorded in `backup_runs`, it matches the app's own name pattern, and — at delete time — `EvalSymlinks` resolves it to a regular file still inside `BACKUP_DIR`. A symlink planted in the backup directory is refused and left for a human to look at. |
+| Backup failure handling | ✅ | Bounded retries (5) with capped exponential backoff. A full disk is **retryable**, not terminal: nothing about the request is wrong and freeing space makes the identical work succeed. The free-space preflight checks the filesystem holding `BACKUP_DIR` — not the database's, which on a good deployment is a different device — and is advisory, since space can vanish mid-copy. Failures are recorded on the run with their reason and re-queueable from the API. |
+| Backup status API | ✅ | `GET /api/v1/maintenance/backups` (policy, directory, next run, recent runs including failures, and the secret-key notice), `PUT .../policy` (omitted fields keep their value), `POST .../backups` → **202 accepted work**, never a claim that a copy happened, and `POST .../{run_id}/retry`. |
+| Secret-key honesty | ✅ | The status response states that `REKENRAAM_SECRET_KEY` is in no backup, what it protects (MFA enrolment, connection credentials), and what a restore without it leaves: an intact ledger and two unusable subsystems. Served with the status rather than left to the docs, because the consequence only surfaces during a restore. |
+| Restore, self-check | ⬜ | Slices 5–8 of `docs/plans/data-portability-plan.md`. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 
@@ -221,8 +227,8 @@ non-English locales all landed together).
 
 ## Not started (see roadmap)
 
-Backups, restore, and the ledger self-check (R3 slices 4-8 — the export half
-shipped, see "Exports" above), CSV/OFX/QFX import adapters, import profiles,
+Restore and the ledger self-check (R3 slices 5-8 — exports and scheduled
+backups shipped, see "Exports & Backups" above), CSV/OFX/QFX import adapters, import profiles,
 budgets, scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
 shipped in R2 — see the Reports section above.)

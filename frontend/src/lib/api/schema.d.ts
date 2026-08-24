@@ -4185,6 +4185,233 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/maintenance/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read backup status
+         * @description The policy, where backups are written, when the next one is due, and what recent attempts did — including the failures, so a backup that has been quietly failing for a week is visible without reading logs. Also carries the secret-key notice: REKENRAAM_SECRET_KEY is not in any backup, and a restore without it leaves an intact ledger with unreadable MFA enrolment and unusable connection credentials.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Backup status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BackupStatusResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Request a backup now
+         * @description Enqueues a backup and returns 202. Per ADR 0010 the response reports *accepted work*: the copy has not happened yet, and saying otherwise would be a claim the queue cannot keep. Poll the status endpoint for the outcome.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The backup was queued */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BackupRun"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maintenance/backups/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update the backup policy
+         * @description Every field is optional and an omitted field keeps its current value, so a partial update cannot silently zero a setting it did not mention.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["BackupPolicyRequest"];
+                };
+            };
+            responses: {
+                /** @description The saved policy */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BackupPolicy"];
+                    };
+                };
+                /** @description A value was out of range */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maintenance/backups/{run_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry a failed backup
+         * @description Puts a failed run back on the queue. Retries are bounded — a worker that retried forever was a real defect (T-39) — and a bounded cap is only safe with a way back, which is this.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    run_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The backup was queued again */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BackupRun"];
+                    };
+                };
+                /** @description The run cannot be retried (already completed, or already queued) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No such backup run */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/system-accounts": {
         parameters: {
             query?: never;
@@ -12406,6 +12633,74 @@ export interface components {
             selection_unit: "journal_entry";
             /** @description Plain-language consequences of this filter, such as that it also carries postings it did not name. */
             notes?: string[];
+        };
+        /** @description The nightly schedule and retention the owner controls. Where backups are written is not here: that is an operator decision (BACKUP_DIR), because the deployment docs recommend a device the app cannot arrange for itself. */
+        BackupPolicy: {
+            enabled: boolean;
+            hour_local: number;
+            minute_local: number;
+            /** @description The book owner's IANA zone. Local time plus a zone is what keeps a nightly promise across DST. */
+            time_zone: string;
+            retention_count: number;
+            retention_max_age_days: number | null;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        /** @description Every field is optional; an omitted field keeps its current value. */
+        BackupPolicyRequest: {
+            enabled?: boolean;
+            hour_local?: number;
+            minute_local?: number;
+            retention_count?: number;
+            retention_max_age_days?: number | null;
+        };
+        /** @description One backup occurrence — what was attempted, what it produced, and what went wrong. */
+        BackupRun: {
+            /** Format: int64 */
+            id: number;
+            /** @enum {string} */
+            trigger: "scheduled" | "manual";
+            /** @enum {string} */
+            status: "pending" | "running" | "completed" | "failed";
+            /** @description Deterministic from the occurrence, so a retry rewrites the same path instead of scattering near-duplicates. */
+            target_path: string;
+            /** Format: date */
+            scheduled_for_local_date?: string;
+            /** Format: int64 */
+            byte_size?: number;
+            /**
+             * Format: int64
+             * @description Pages copied, reported by SQLite's online backup API.
+             */
+            page_count?: number;
+            /** @description Whether integrity_check and foreign_key_check both passed. An unverified copy is never published under the final name. */
+            verified: boolean;
+            attempts: number;
+            error_summary?: string;
+            /** Format: date-time */
+            started_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+            /** Format: date-time */
+            pruned_at?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description The part of the protection story no database backup can carry. Served with the status because the consequence only becomes visible during a restore, which is the worst moment to discover it. */
+        BackupSecretKeyNotice: {
+            included_in_backup: boolean;
+            environment_variable: string;
+            protects: string;
+            consequence: string;
+        };
+        BackupStatusResponse: {
+            policy: components["schemas"]["BackupPolicy"];
+            directory: string;
+            /** Format: date-time */
+            next_run_at?: string;
+            last_success?: components["schemas"]["BackupRun"];
+            runs: components["schemas"]["BackupRun"][];
+            secret_key: components["schemas"]["BackupSecretKeyNotice"];
         };
         /** @description One account's QIF verdict — written, or named and skipped, never silently dropped. */
         QIFAccountStatus: {

@@ -1,0 +1,36 @@
+put:
+  summary: Update the backup policy
+  description: >
+    Every field is optional and an omitted field keeps its current value, so a
+    partial update cannot silently zero a setting it did not mention.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/BackupPolicyRequest"
+  responses:
+    "200":
+      description: The saved policy
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/BackupPolicy"
+    "400":
+      description: A value was out of range
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

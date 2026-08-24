@@ -1,0 +1,154 @@
+BackupPolicy:
+  type: object
+  description: >
+    The nightly schedule and retention the owner controls. Where backups are
+    written is not here: that is an operator decision (BACKUP_DIR), because the
+    deployment docs recommend a device the app cannot arrange for itself.
+  required:
+    - enabled
+    - hour_local
+    - minute_local
+    - time_zone
+    - retention_count
+    - retention_max_age_days
+  properties:
+    enabled:
+      type: boolean
+    hour_local:
+      type: integer
+      minimum: 0
+      maximum: 23
+    minute_local:
+      type: integer
+      minimum: 0
+      maximum: 59
+    time_zone:
+      type: string
+      description: The book owner's IANA zone. Local time plus a zone is what keeps a nightly promise across DST.
+    retention_count:
+      type: integer
+      minimum: 1
+    retention_max_age_days:
+      type: integer
+      nullable: true
+      minimum: 1
+    updated_at:
+      type: string
+      format: date-time
+BackupRun:
+  type: object
+  description: One backup occurrence — what was attempted, what it produced, and what went wrong.
+  required:
+    - id
+    - trigger
+    - status
+    - target_path
+    - verified
+    - attempts
+    - created_at
+  properties:
+    id:
+      type: integer
+      format: int64
+    trigger:
+      type: string
+      enum: [scheduled, manual]
+    status:
+      type: string
+      enum: [pending, running, completed, failed]
+    target_path:
+      type: string
+      description: Deterministic from the occurrence, so a retry rewrites the same path instead of scattering near-duplicates.
+    scheduled_for_local_date:
+      type: string
+      format: date
+    byte_size:
+      type: integer
+      format: int64
+    page_count:
+      type: integer
+      format: int64
+      description: Pages copied, reported by SQLite's online backup API.
+    verified:
+      type: boolean
+      description: Whether integrity_check and foreign_key_check both passed. An unverified copy is never published under the final name.
+    attempts:
+      type: integer
+    error_summary:
+      type: string
+    started_at:
+      type: string
+      format: date-time
+    finished_at:
+      type: string
+      format: date-time
+    pruned_at:
+      type: string
+      format: date-time
+    created_at:
+      type: string
+      format: date-time
+BackupSecretKeyNotice:
+  type: object
+  description: >
+    The part of the protection story no database backup can carry. Served with
+    the status because the consequence only becomes visible during a restore,
+    which is the worst moment to discover it.
+  required:
+    - included_in_backup
+    - environment_variable
+    - protects
+    - consequence
+  properties:
+    included_in_backup:
+      type: boolean
+    environment_variable:
+      type: string
+    protects:
+      type: string
+    consequence:
+      type: string
+BackupStatusResponse:
+  type: object
+  required:
+    - policy
+    - directory
+    - runs
+    - secret_key
+  properties:
+    policy:
+      $ref: "../../openapi.yaml#/components/schemas/BackupPolicy"
+    directory:
+      type: string
+    next_run_at:
+      type: string
+      format: date-time
+    last_success:
+      $ref: "../../openapi.yaml#/components/schemas/BackupRun"
+    runs:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/BackupRun"
+    secret_key:
+      $ref: "../../openapi.yaml#/components/schemas/BackupSecretKeyNotice"
+BackupPolicyRequest:
+  type: object
+  description: Every field is optional; an omitted field keeps its current value.
+  properties:
+    enabled:
+      type: boolean
+    hour_local:
+      type: integer
+      minimum: 0
+      maximum: 23
+    minute_local:
+      type: integer
+      minimum: 0
+      maximum: 59
+    retention_count:
+      type: integer
+      minimum: 1
+    retention_max_age_days:
+      type: integer
+      nullable: true
+      minimum: 1

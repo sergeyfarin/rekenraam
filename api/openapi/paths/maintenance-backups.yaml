@@ -1,0 +1,47 @@
+get:
+  summary: Read backup status
+  description: >
+    The policy, where backups are written, when the next one is due, and what
+    recent attempts did — including the failures, so a backup that has been
+    quietly failing for a week is visible without reading logs. Also carries the
+    secret-key notice: REKENRAAM_SECRET_KEY is not in any backup, and a restore
+    without it leaves an intact ledger with unreadable MFA enrolment and
+    unusable connection credentials.
+  responses:
+    "200":
+      description: Backup status
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/BackupStatusResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+post:
+  summary: Request a backup now
+  description: >
+    Enqueues a backup and returns 202. Per ADR 0010 the response reports
+    *accepted work*: the copy has not happened yet, and saying otherwise would
+    be a claim the queue cannot keep. Poll the status endpoint for the outcome.
+  responses:
+    "202":
+      description: The backup was queued
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/BackupRun"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

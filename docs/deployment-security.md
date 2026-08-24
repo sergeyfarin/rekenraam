@@ -176,3 +176,27 @@ The Compose example is deliberately loopback-only, runs as a non-root user,
 uses a read-only root filesystem, drops Linux capabilities, and leaves only the
 SQLite volume and a temporary directory writable. Add a TLS reverse proxy
 instead of changing its port mapping to all interfaces.
+
+## Backups
+
+Scheduled backups are on by default and write to `BACKUP_DIR` (or
+`<database directory>/backups`). Two deployment decisions the app cannot make
+for itself:
+
+1. **Put `BACKUP_DIR` on a different device from the database.** The default is
+   convenient, not durable: it survives file corruption and human error, and not
+   the disk. A mounted volume, a second disk, or an offsite sync target are all
+   better than the default.
+2. **Keep `REKENRAAM_SECRET_KEY` somewhere other than the backup directory.** It
+   is deliberately absent from every backup — it seals two-factor enrolment and
+   connection credentials, and storing a key beside its ciphertext defeats the
+   sealing. A password manager or a secret store is the right home. Without it, a
+   restored database is an intact ledger whose two-factor enrolment and stored
+   connection credentials must be recreated.
+
+The backup directory is created `0700` and each file `0600`. Retention deletes
+only files the app recorded, named by its own pattern, that resolve inside the
+configured directory; anything else placed there is left untouched.
+
+Until the word "protected" can honestly cover both points above, the product
+does not use it: `docs/plans/data-portability-plan.md` records why.

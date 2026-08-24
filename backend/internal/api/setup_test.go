@@ -354,6 +354,13 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, nil, nil, nil)
 	exportService := app.NewExportService(db.NewExportRepository(readOnlyDatabase))
+	backupService := app.NewBackupService(
+		db.NewBackupRepository(database),
+		db.NewBackgroundWorkRepository(database),
+		readOnlyDatabase,
+		databaseURL,
+		filepath.Join(t.TempDir(), "backups"),
+	)
 
 	return NewHandler(logger, http.NotFoundHandler(), Services{
 		Setup:       setupService,
@@ -371,6 +378,7 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 		Investment:  investmentService,
 		Import:      importService,
 		Export:      exportService,
+		Backup:      backupService,
 	}, options), database
 }
 

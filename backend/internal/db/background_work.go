@@ -45,6 +45,21 @@ func (r *BackgroundWorkRepository) EnqueueBackgroundWork(ctx context.Context, bo
 	}
 	defer tx.Rollback()
 
+	item, err := EnqueueBackgroundWorkTx(ctx, tx, bookID, kind, payloadJSON, availableAt)
+	if err != nil {
+		return BackgroundWorkItemRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return BackgroundWorkItemRecord{}, fmt.Errorf("commit background work enqueue: %w", err)
+	}
+	return item, nil
+}
+
+// EnqueueBackgroundWorkTx enqueues inside a caller's transaction, so a domain
+// row and the work item that acts on it are created together or not at all —
+// the transactional-outbox rule from ADR 0010, and the fix for the
+// guard-then-create race that stranded imports (T-14).
+func EnqueueBackgroundWorkTx(ctx context.Context, tx *sql.Tx, bookID int64, kind string, payloadJSON string, availableAt string) (BackgroundWorkItemRecord, error) {
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO background_work_items (
 			book_id, kind, payload_json, available_at, created_at, updated_at
@@ -80,11 +95,31 @@ func (r *BackgroundWorkRepository) EnqueueBackgroundWork(ctx context.Context, bo
 			return BackgroundWorkItemRecord{}, fmt.Errorf("read existing background work id: %w", err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return BackgroundWorkItemRecord{}, fmt.Errorf("commit background work enqueue: %w", err)
-	}
-	return r.BackgroundWorkByID(ctx, id)
+
+	return backgroundWorkByIDTx(ctx, tx, id)
 }
+
+func backgroundWorkByIDTx(ctx context.Context, tx *sql.Tx, id int64) (BackgroundWorkItemRecord, error) {
+	var item BackgroundWorkItemRecord
+	err := tx.QueryRowContext(ctx, backgroundWorkByIDQuery, id).Scan(
+		&item.ID, &item.BookID, &item.Kind, &item.PayloadVersion, &item.PayloadJSON,
+		&item.Status, &item.Attempts, &item.AvailableAt, &item.LeaseOwner,
+		&item.LeaseExpiresAt, &item.LastError, &item.CreatedAt, &item.UpdatedAt,
+		&item.CompletedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return BackgroundWorkItemRecord{}, ErrNotFound
+	}
+	if err != nil {
+		return BackgroundWorkItemRecord{}, fmt.Errorf("read background work: %w", err)
+	}
+	return item, nil
+}
+
+const backgroundWorkByIDQuery = `
+	SELECT id, book_id, kind, payload_version, payload_json, status, attempts,
+		available_at, lease_owner, lease_expires_at, last_error, created_at,
+		updated_at, completed_at
+	FROM background_work_items WHERE id = ?`
 
 func (r *BackgroundWorkRepository) ClaimBackgroundWork(ctx context.Context, kind string, leaseOwner string, now string, leaseExpiresAt string) (BackgroundWorkItemRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
@@ -263,12 +298,8 @@ func (r *BackgroundWorkRepository) ListBackgroundWorkByStatus(ctx context.Contex
 
 func (r *BackgroundWorkRepository) BackgroundWorkByID(ctx context.Context, id int64) (BackgroundWorkItemRecord, error) {
 	var item BackgroundWorkItemRecord
-	err := r.database.QueryRowContext(ctx, `
-		SELECT id, book_id, kind, payload_version, payload_json, status, attempts,
-			available_at, lease_owner, lease_expires_at, last_error, created_at,
-			updated_at, completed_at
-		FROM background_work_items WHERE id = ?
-	`, id).Scan(&item.ID, &item.BookID, &item.Kind, &item.PayloadVersion, &item.PayloadJSON,
+	err := r.database.QueryRowContext(ctx, backgroundWorkByIDQuery, id).Scan(
+		&item.ID, &item.BookID, &item.Kind, &item.PayloadVersion, &item.PayloadJSON,
 		&item.Status, &item.Attempts, &item.AvailableAt, &item.LeaseOwner,
 		&item.LeaseExpiresAt, &item.LastError, &item.CreatedAt, &item.UpdatedAt,
 		&item.CompletedAt)

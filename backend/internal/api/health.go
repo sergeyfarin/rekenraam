@@ -105,6 +105,13 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 		mux.HandleFunc("GET /api/v1/exports/bundle.zip", exportBundle(logger, services.Auth, services.Export))
 		mux.HandleFunc("GET /api/v1/exports/qif", exportQIF(logger, services.Auth, services.Export))
 	}
+
+	if services.Backup != nil {
+		mux.HandleFunc("GET /api/v1/maintenance/backups", backupStatus(logger, services.Auth, services.Backup))
+		mux.HandleFunc("PUT /api/v1/maintenance/backups/policy", saveBackupPolicy(logger, services.Auth, services.Backup, options))
+		mux.HandleFunc("POST /api/v1/maintenance/backups", requestBackup(logger, services.Auth, services.Backup, options))
+		mux.HandleFunc("POST /api/v1/maintenance/backups/{run_id}/retry", retryBackupRun(logger, services.Auth, services.Backup, options))
+	}
 	mux.HandleFunc("GET /api/v1/transactions", listTransactions(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/transactions/deleted", listDeletedTransactions(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("POST /api/v1/transactions", createTransaction(logger, services.Auth, services.Transaction, options))
