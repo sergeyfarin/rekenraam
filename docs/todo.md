@@ -157,9 +157,16 @@ three are the mandatory export requirement, the next three the protection half.
       only paths that are recorded, correctly named, and resolve through
       symlinks to a regular file inside `BACKUP_DIR`. Fifteen named tests,
       including the four crash points and a planted symlink.
-- [ ] 5. `rekenraam verify-backup` / `rekenraam restore` (process lock,
-      WAL-set preservation, atomic install) + the `REKENRAAM_SECRET_KEY`
-      operator workflow + docs rewrite + an automated restore drill.
+- [x] 5. **Done 2026-08-24.** `rekenraam verify-backup` and `rekenraam restore`.
+      The server holds an advisory `flock` for its whole life, so restore
+      *proves* it is stopped rather than inferring it; the previous database is
+      preserved as a whole file set after a checkpoint, and the new one is
+      installed atomically with an fsync before success is reported. Refuses
+      source==destination (through symlinks) and a backup whose schema is newer
+      than the build. `verify-backup` reports whether sealed rows decrypt under
+      the configured `REKENRAAM_SECRET_KEY` — the question a restore otherwise
+      raises too late. Eleven named tests, including a drill that compares the
+      restored trial balance to the source's.
 - [ ] 6. Trial-balance self-check — eight checks, read-only, attachments slot
       reserved for R14a. One of the eight, `account_version_coverage`, is the
       follow-up to slice 1: the export falls back when a posting has no account

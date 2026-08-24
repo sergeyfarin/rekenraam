@@ -1,6 +1,6 @@
 # Data Portability & Protection Plan (R3)
 
-Status: **slices 1-4 shipped (1-3 on 2026-08-23, 4 on 2026-08-24); slices 5-8
+Status: **slices 1-5 shipped (1-3 on 2026-08-23, 4-5 on 2026-08-24); slices 6-8
 planned**. Written 2026-08-23,
 immediately after R2's acceptance review closed. Slice 1 delivered the
 dedicated read-only connection, the one-snapshot export read model,
@@ -19,7 +19,10 @@ confirm flow for accounts QIF cannot express. Slice 4 delivered scheduled
 backups on SQLite's online backup API: a stored policy, occurrence identity that
 survives a completed run, crash reconciliation at all four points, symlink-safe
 retention, and the status read model carrying the `REKENRAAM_SECRET_KEY`
-notice. This plan is the implementation reference for the
+notice. Slice 5 delivered the restore path: `verify-backup` and `restore`
+commands, an advisory process lock the server holds for its whole life, WAL-set
+preservation with a checkpoint first, atomic install, and six drills — including
+uncheckpointed WAL content and sealed data that decrypts with the retained key. This plan is the implementation reference for the
 roadmap slice "R3 — portable **and protected** core data"; it replaces the
 roadmap's inline prose, which stays as the one-paragraph summary and now points
 here.

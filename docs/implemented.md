@@ -147,7 +147,7 @@ non-English locales all landed together).
 | Report ID filters + drill-down | ✅ | Shipped 2026-08-18 (superseded the R2 plan's original "not delivered" gap): repeatable `account_id`/`category_id`/`payee_id`/`commodity_id` filters, plus drill-down from both spending and cashflow rows into `/app/transactions`. |
 | Reporting-currency valuation method | ⬜ | Deliberately deferred, approved 2026-08-19 to build after R3 (named, auditable valuation method — not a silent conversion). Reports show unlike commodities separately and say so until it lands. |
 
-## Exports & Backups (R3) — 🟦 Slices 1-4: flat ledger CSV, preview, the scoped archive, QIF, and scheduled backups shipped
+## Exports & Backups (R3) — 🟦 Slices 1-5: flat ledger CSV, preview, the scoped archive, QIF, scheduled backups, and the restore path shipped
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -172,7 +172,11 @@ non-English locales all landed together).
 | Backup failure handling | ✅ | Bounded retries (5) with capped exponential backoff. A full disk is **retryable**, not terminal: nothing about the request is wrong and freeing space makes the identical work succeed. The free-space preflight checks the filesystem holding `BACKUP_DIR` — not the database's, which on a good deployment is a different device — and is advisory, since space can vanish mid-copy. Failures are recorded on the run with their reason and re-queueable from the API. |
 | Backup status API | ✅ | `GET /api/v1/maintenance/backups` (policy, directory, next run, recent runs including failures, and the secret-key notice), `PUT .../policy` (omitted fields keep their value), `POST .../backups` → **202 accepted work**, never a claim that a copy happened, and `POST .../{run_id}/retry`. |
 | Secret-key honesty | ✅ | The status response states that `REKENRAAM_SECRET_KEY` is in no backup, what it protects (MFA enrolment, connection credentials), and what a restore without it leaves: an intact ledger and two unusable subsystems. Served with the status rather than left to the docs, because the consequence only surfaces during a restore. |
-| Restore, self-check | ⬜ | Slices 5–8 of `docs/plans/data-portability-plan.md`. |
+| Restore | ✅ | `rekenraam restore --from <path>`. A WAL-mode database is a *set* of files, so the whole set is preserved into `<database>.before-restore-<timestamp>/` after a `wal_checkpoint(TRUNCATE)` — moving only the main file would discard committed-but-uncheckpointed transactions and leave the safety copy torn. The new file is copied to a temp path in the destination directory, fsynced, chmod `0600`, renamed, and the parent directory fsynced before success is reported; stale sidecars are cleared only after that. Refuses source==destination (resolved through symlinks) and a backup whose schema version exceeds this build's migrations. The preserved copy is never deleted by the tool. |
+| Proof the server is stopped | ✅ | `serve` holds an advisory `flock` on `<database>.lock` for its whole life, with its PID inside. Restore takes the lock briefly to check, and names the holding process when it cannot. An idle SQLite connection proves nothing and an absent `-wal` proves nothing — a cleanly stopped database has none — so only a lock a live process holds answers the question, and the OS releases it however that process ends. |
+| Backup verification CLI | ✅ | `rekenraam verify-backup --from <path>`: integrity (`integrity_check` + `foreign_key_check`), schema version against this build, row counts a human can sanity-check, and how many sealed rows exist. With `REKENRAAM_SECRET_KEY` set it decrypts a sample and says whether the seal still opens; without it, it says plainly what a restore would cost. |
+| Restore drills | ✅ | Six named tests, run in CI with everything else: a full drill comparing the restored trial balance (folded in Go, not `SUM`) to the source's, a source whose content lives only in an uncheckpointed WAL, the lock refusal, source==destination via symlink, a newer schema, and sealed data that opens with the retained key and fails loudly with a different one. |
+| Ledger self-check | ⬜ | Slices 6–8 of `docs/plans/data-portability-plan.md`. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 
@@ -227,8 +231,8 @@ non-English locales all landed together).
 
 ## Not started (see roadmap)
 
-Restore and the ledger self-check (R3 slices 5-8 — exports and scheduled
-backups shipped, see "Exports & Backups" above), CSV/OFX/QFX import adapters, import profiles,
+The ledger self-check (R3 slices 6-8 — exports, scheduled backups, and restore
+shipped, see "Exports & Backups" above), CSV/OFX/QFX import adapters, import profiles,
 budgets, scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
 shipped in R2 — see the Reports section above.)

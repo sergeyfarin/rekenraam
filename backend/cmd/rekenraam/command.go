@@ -17,6 +17,7 @@ import (
 	"rekenraam/backend/internal/app"
 	"rekenraam/backend/internal/config"
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/lockfile"
 	"rekenraam/backend/internal/marketdata"
 	"rekenraam/backend/internal/web"
 )
@@ -38,6 +39,10 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 		return runServe(ctx, cfg, logger)
 	case "recover-owner":
 		return runRecoverOwner(ctx, cfg, args[1:], stdin, stdout, stderr)
+	case "verify-backup":
+		return runVerifyBackup(ctx, cfg, args[1:], stdout, stderr)
+	case "restore":
+		return runRestore(ctx, cfg, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown command %q\n", args[0])
 		return 2
@@ -48,6 +53,21 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	if cfg.GeneratedSetupToken {
 		logger.Warn("generated one-time setup token; set SETUP_TOKEN before the next restart if setup is not completed", slog.String("setup_token", cfg.SetupToken))
 	}
+
+	// Held for the life of this process: it is what lets `restore` prove the
+	// server is stopped instead of guessing from an idle connection or a
+	// missing -wal file.
+	databasePath, err := db.ResolveSQLiteFilePath(cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("resolve database path", slog.Any("err", err))
+		return 1
+	}
+	processLock, err := lockfile.Acquire(databasePath)
+	if err != nil {
+		logger.Error("acquire database lock", slog.Any("err", err))
+		return 1
+	}
+	defer processLock.Close()
 
 	database, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {

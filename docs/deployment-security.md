@@ -200,3 +200,23 @@ configured directory; anything else placed there is left untouched.
 
 Until the word "protected" can honestly cover both points above, the product
 does not use it: `docs/plans/data-portability-plan.md` records why.
+
+## Restore
+
+`rekenraam verify-backup --from <path>` checks a backup without touching
+anything: integrity, schema version against the running build, row counts, and
+whether sealed rows decrypt under the configured `REKENRAAM_SECRET_KEY`. Run it
+on a schedule of your own choosing — a backup nobody has ever opened is a
+hypothesis.
+
+`rekenraam restore --from <path>` installs one. It refuses while the server is
+running, proved by an advisory lock the server process holds for its whole life
+rather than inferred from an idle connection or a missing `-wal` file. It
+preserves the previous database as a complete file set under
+`<database>.before-restore-<timestamp>/`, checkpointing first so that copy is
+self-contained, and installs the new file atomically with an fsync before
+reporting success. The preserved copy is never deleted by the tool.
+
+Restoring onto a host without the original `REKENRAAM_SECRET_KEY` succeeds and
+leaves an intact ledger — and unreadable two-factor enrolment and unusable
+connection credentials. `verify-backup` says so before you commit to it.

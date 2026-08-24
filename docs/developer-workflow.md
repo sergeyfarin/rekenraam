@@ -142,7 +142,12 @@ pnpm test:release-preflight
 ## Area Notes
 
 - Backend code lives in `backend/`; run `go test ./...` there directly only when you intentionally want to bypass the wrapper script.
-- The backend binary also exposes a local maintenance command, `recover-owner`, for backup-first password recovery and session revocation.
+- The backend binary also exposes local maintenance commands: `recover-owner`
+  (backup-first password recovery and session revocation), `verify-backup`
+  (integrity, schema version, row counts, and whether sealed rows decrypt under
+  the configured `REKENRAAM_SECRET_KEY`), and `restore` (refuses while the
+  server holds its lock, preserves the previous database as a whole file set,
+  installs atomically).
 - Frontend code lives in `frontend/`; SvelteKit builds static output that is copied into `backend/internal/web/dist/` for the single binary.
 - Frontend foundation libraries are pinned in `frontend/package.json`: Tailwind CSS, Bits UI, shadcn-svelte, Paraglide JS, `@tanstack/svelte-query`, `@tanstack/svelte-table`, `openapi-typescript`, `openapi-fetch`, `date-fns`, and Dinero.js. Add TanStack Virtual only when a concrete screen needs it.
 - The frontend stays on **TypeScript 6**. TypeScript 7 (the native port) drops the JS compiler API that `openapi-typescript` builds `src/lib/api/schema.d.ts` with — `openapi-typescript` still declares `peerDependencies.typescript: ^5.x`, and under TS 7 `pnpm run openapi:generate` dies with `Cannot read properties of undefined (reading 'createKeywordTypeNode')`. See backlog T-42.

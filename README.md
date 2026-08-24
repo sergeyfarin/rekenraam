@@ -284,6 +284,44 @@ Pruning only ever deletes a file that the app recorded, that matches its own
 naming, and that resolves to a regular file inside `BACKUP_DIR`. Anything else
 in that directory is left alone.
 
+### Checking a backup
+
+Before trusting a backup — and ideally on a quiet Sunday rather than during an
+incident:
+
+```sh
+./rekenraam verify-backup --from data/backups/rekenraam-2026-08-24.sqlite
+```
+
+It reports the integrity checks, the schema version against what this build
+knows, row counts you can sanity-check, and whether the sealed rows (two-factor
+enrolment, connection credentials) still decrypt under the
+`REKENRAAM_SECRET_KEY` currently in the environment. That last line is the one
+worth reading: it is the question a restore only raises once it is too late.
+
+### Restoring
+
+Stop the app first — the restore refuses to run while the server holds its lock,
+and names the process that does.
+
+```sh
+./rekenraam restore --from data/backups/rekenraam-2026-08-24.sqlite
+```
+
+What it does, in order: proves the server is stopped, refuses if the backup and
+the database are the same file or if the backup's schema is newer than this
+build, checkpoints the current database so its write-ahead log is folded in,
+moves the whole set (`.sqlite`, `-wal`, `-shm`) into
+`<database>.before-restore-<timestamp>/`, then installs the backup atomically
+and syncs it to disk before reporting success.
+
+The previous database is kept, not deleted. Start the app, check that the
+restored data looks right, and delete that directory yourself.
+
+Set the **original** `REKENRAAM_SECRET_KEY` before starting the restored app. The
+ledger does not need it; two-factor enrolment and stored connection credentials
+do, and without it they must be set up again.
+
 ### Operator backups
 
 Prefer app-aware or stopped-app backups. Do not copy a live WAL-mode SQLite database file as the normal backup path.
@@ -303,12 +341,20 @@ The integrity check should print `ok`; the foreign-key check should return no ro
 `umask 077` protects files created during the procedure and the explicit `chmod`
 keeps the backup at mode `0600` even if the operator's umask differs.
 
-Restore by stopping the app, moving the existing database aside, copying the verified backup into place, then starting the app again:
+If you are restoring by hand rather than with `rekenraam restore`, stop the app
+and move the **whole set** aside — a WAL-mode database is three files, and
+moving only the first discards transactions that were committed but not yet
+checkpointed:
 
 ```sh
-mv data/rekenraam.sqlite data/rekenraam.sqlite.before-restore
+mkdir -p data/before-restore
+mv data/rekenraam.sqlite data/rekenraam.sqlite-wal data/rekenraam.sqlite-shm data/before-restore/ 2>/dev/null
 cp data/rekenraam-backup.sqlite data/rekenraam.sqlite
+chmod 600 data/rekenraam.sqlite
 ```
+
+`rekenraam restore` does all of that, plus the checkpoint, the atomic install,
+and the running-server check. Prefer it.
 
 For Docker Compose, stop the app before restore and copy the verified backup into the mounted `rekenraam-data` volume. Keep the old database until the restored app has started and the setup/status endpoint responds successfully.
 
