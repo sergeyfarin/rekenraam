@@ -98,6 +98,51 @@ LedgerExportFilter:
       description: Plain-language consequences of this filter, such as that it also carries postings it did not name.
       items:
         type: string
+QIFAccountStatus:
+  type: object
+  description: One account's QIF verdict — written, or named and skipped, never silently dropped.
+  required:
+    - account_id
+    - account_path
+    - supported
+  properties:
+    account_id:
+      type: integer
+      format: int64
+    account_path:
+      type: string
+    qif_type:
+      type: string
+      description: The QIF account type this account is written as.
+      enum: [Bank, Cash, CCard, "Oth A", "Oth L"]
+    supported:
+      type: boolean
+    reason:
+      type: string
+      description: Why an unsupported account cannot be written.
+      enum: [not_a_balance_account, investment_account, non_currency_commodity, no_single_commodity]
+QIFExportPreview:
+  type: object
+  description: >
+    What a QIF export of this selection would write and what it would omit. The
+    screen confirms this list before offering the download, and the download
+    honours the same list.
+  required:
+    - date_layout
+    - supported_accounts
+    - unsupported_accounts
+  properties:
+    date_layout:
+      type: string
+      enum: [mdy, dmy]
+    supported_accounts:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/QIFAccountStatus"
+    unsupported_accounts:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/QIFAccountStatus"
 LedgerExportPreviewResponse:
   type: object
   required:
@@ -111,6 +156,7 @@ LedgerExportPreviewResponse:
     - columns
     - excluded
     - ledger
+    - qif
     - attachments
   properties:
     generated_at:
@@ -156,5 +202,7 @@ LedgerExportPreviewResponse:
         type: string
     ledger:
       $ref: "../../openapi.yaml#/components/schemas/LedgerExportTotals"
+    qif:
+      $ref: "../../openapi.yaml#/components/schemas/QIFExportPreview"
     attachments:
       $ref: "../../openapi.yaml#/components/schemas/LedgerExportAttachments"

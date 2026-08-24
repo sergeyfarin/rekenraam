@@ -147,7 +147,7 @@ non-English locales all landed together).
 | Report ID filters + drill-down | ✅ | Shipped 2026-08-18 (superseded the R2 plan's original "not delivered" gap): repeatable `account_id`/`category_id`/`payee_id`/`commodity_id` filters, plus drill-down from both spending and cashflow rows into `/app/transactions`. |
 | Reporting-currency valuation method | ⬜ | Deliberately deferred, approved 2026-08-19 to build after R3 (named, auditable valuation method — not a silent conversion). Reports show unlike commodities separately and say so until it lands. |
 
-## Exports (R3) — 🟦 Slices 1-2: flat ledger CSV, preview, and the scoped archive shipped
+## Exports (R3) — 🟦 Slices 1-3: flat ledger CSV, preview, the scoped archive, and QIF shipped
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -163,7 +163,10 @@ non-English locales all landed together).
 | Scoped export filters | ✅ | `from`, `to`, `date_basis=entry\|transaction`, repeatable `account_id` with `include_descendants`, repeatable `commodity_id` — on the archive only. Filters select whole **journal entries**: every posting of a selected entry is exported, so the archive balances per entry under every filter, and `transaction_complete` reports per row which transaction groups are whole. Any account class is accepted, unlike the reports filter, because exporting everything that touched a category is a reasonable request. A rejected filter is a 400 before the first byte (`ValidateFilter`), since a stream cannot change its status afterwards. |
 | Trial balance | ✅ | `trial-balance.csv` states `in_scope`, `opening_balance`, `exported_in_range_movement`, `exported_out_of_range_movement`, `excluded_in_range_movement`, `derived_closing_balance`, and `actual_closing_balance`, with three exact identities tested over the two shapes that break simpler models: a scoped export whose counterpart account has unrelated activity, and a transaction whose entries straddle the range under both date bases. The derived figure is never called the account's closing balance. Each figure keeps the scale it accumulated at — the same decision R2 reached for cashflow measures, for the same 38-digit-ceiling reason — except a figure that accumulated nothing, which takes its row's scale, because zero is the same number at every scale and deepening it can widen nothing. A derived total wider than a stored coefficient (a 38-digit posting plus a 2.50 one) is written exactly through `exact.DecimalFromBig` rather than failing the archive; the ceiling governs stored values, not decimal text. |
 | Cross-language decimal rendering | ✅ | `fixtures/decimal-rendering.json` is one specification with two readers: `exact.Decimal` (Go) and `formatLedgerAmount` (TypeScript) both test against it, so the twin implementations cannot drift. |
-| QIF export, backups, restore, self-check | ⬜ | Slices 3–8 of `docs/plans/data-portability-plan.md`. |
+| QIF export | ✅ | `GET /api/v1/exports/qif` — one file per cash-like account, typed from the account's `base_kind` (Bank, Cash, CCard, Oth A, Oth L). Transfers write `[Account Path]` and categories their path, so a move between accounts is not exported as spending. Several same-currency counterparts become S/E/$ splits that sum to the record's own amount. An exchange's other side is stated in the memo rather than converted, because inventing a rate would be worse than being explicit — and the leg named is the real other account, not the `commodity_trading` bookkeeping leg. |
+| QIF limits, stated rather than hidden | ✅ | Investment containers, security holdings, and crypto wallets are refused with `422 QIF_ACCOUNT_UNSUPPORTED` naming each account and why; `allow_partial=true` accepts the omission, and the resulting archive records it in `manifest.json` and `README.txt` — so it travels with the file rather than living in a dismissed dialog. Partial approval leaving one writable account still returns an archive for the same reason. `/exports/preview` reports the same verdict, so the list a screen confirms is the list the download honours. |
+| QIF layout, stated out of band | ✅ | QIF declares neither its date layout nor its decimal mark. Amounts always use a point and never a group separator; the date layout is the caller's (`mdy` default) and appears in **every** filename, plus the manifest and README of an archive. A single account comes back bare only when its file carries a decisive date (a day past the 12th); an ambiguous-only file is always archived, because it has nowhere to say how it was written. Round-trip tests feed exports back through the app's own QIF importer under both the declared layout and auto-detection, and pin the one corner that stays undetectable: three-decimal money read under a comma profile. |
+| Backups, restore, self-check | ⬜ | Slices 4–8 of `docs/plans/data-portability-plan.md`. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 
@@ -218,9 +221,9 @@ non-English locales all landed together).
 
 ## Not started (see roadmap)
 
-QIF export (exports slices 1-2 shipped — see "Exports" above),
-CSV/OFX/QFX import adapters, import profiles, budgets,
-scheduled transactions, projected balances, loan/liability helpers,
+Backups, restore, and the ledger self-check (R3 slices 4-8 — the export half
+shipped, see "Exports" above), CSV/OFX/QFX import adapters, import profiles,
+budgets, scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
 shipped in R2 — see the Reports section above.)
 

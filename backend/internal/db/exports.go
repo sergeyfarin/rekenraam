@@ -72,11 +72,13 @@ type ExportAccountRecord struct {
 	AccountClass    string
 	AccountKind     string
 	SystemRole      sql.NullString
+	BaseKind        string
 	Status          string
 	OpenedOn        string
 	ClosedOn        sql.NullString
 	InstitutionName sql.NullString
 	CommodityCode   sql.NullString
+	CommodityKind   sql.NullString
 	AllowsPostings  bool
 	// CategoryType, CategoryBuiltin, CategoryStarter, and CategoryBuiltinKey
 	// come from the account's metadata: a category *is* an income or expense
@@ -455,11 +457,13 @@ func (r *ExportRepository) ExportAccounts(ctx context.Context, transaction *sql.
 			av.account_class,
 			av.account_kind,
 			a.system_role,
+			COALESCE(kind.base_kind, ''),
 			av.status,
 			av.opened_on,
 			av.closed_on,
 			institution_v.name,
 			commodity.code,
+			commodity.kind,
 			av.allows_postings,
 			json_extract(av.metadata_json, '$.category.type'),
 			json_extract(av.metadata_json, '$.category.is_builtin'),
@@ -467,6 +471,7 @@ func (r *ExportRepository) ExportAccounts(ctx context.Context, transaction *sql.
 			json_extract(av.metadata_json, '$.category.builtin_key')
 		FROM accounts a
 		JOIN current_account_versions av ON av.account_id = a.id
+		LEFT JOIN account_kinds kind ON kind.code = av.account_kind AND kind.account_class = av.account_class
 		LEFT JOIN institutions institution ON institution.id = av.institution_id
 		LEFT JOIN institution_versions institution_v ON institution_v.id = (
 			SELECT current_iv.id
@@ -495,11 +500,13 @@ func (r *ExportRepository) ExportAccounts(ctx context.Context, transaction *sql.
 			&account.AccountClass,
 			&account.AccountKind,
 			&account.SystemRole,
+			&account.BaseKind,
 			&account.Status,
 			&account.OpenedOn,
 			&account.ClosedOn,
 			&account.InstitutionName,
 			&account.CommodityCode,
+			&account.CommodityKind,
 			&account.AllowsPostings,
 			&account.CategoryType,
 			&account.CategoryBuiltin,

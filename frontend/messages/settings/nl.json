@@ -138,6 +138,7 @@
   "api_error_network": "De server is niet bereikbaar. Controleer de verbinding en probeer het opnieuw.",
   "api_error_not_found": "Het gevraagde item is niet gevonden.",
   "api_error_provider_error": "De externe aanbieder heeft het verzoek geweigerd. Controleer de verbinding en probeer het opnieuw.",
+  "api_error_qif_account_unsupported": "QIF kan sommige geselecteerde rekeningen niet weergeven. Exporteer die als archief of bevestig om zonder ze door te gaan.",
   "api_error_rate_limited": "Er zijn te veel pogingen gedaan. Wacht even en probeer het opnieuw.",
   "api_error_resource_busy": "Die bron is op dit moment bezet. Probeer het zo dadelijk opnieuw.",
   "api_error_setup_already_complete": "De installatie is al voltooid. Meld u aan met het eigenaarsaccount.",

@@ -138,6 +138,7 @@
   "api_error_network": "Der Server ist nicht erreichbar. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
   "api_error_not_found": "Der angeforderte Eintrag wurde nicht gefunden.",
   "api_error_provider_error": "Der externe Anbieter hat die Anfrage abgelehnt. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
+  "api_error_qif_account_unsupported": "QIF kann einige der gewählten Konten nicht abbilden. Exportieren Sie diese als Archiv, oder bestätigen Sie, um ohne sie fortzufahren.",
   "api_error_rate_limited": "Es wurden zu viele Versuche unternommen. Warten Sie einen Moment und versuchen Sie es erneut.",
   "api_error_resource_busy": "Diese Ressource ist gerade belegt. Versuchen Sie es gleich noch einmal.",
   "api_error_setup_already_complete": "Die Einrichtung ist bereits abgeschlossen. Melden Sie sich stattdessen mit dem Eigentümerkonto an.",

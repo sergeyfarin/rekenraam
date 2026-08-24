@@ -138,6 +138,7 @@
   "api_error_network": "No se ha podido contactar con el servidor. Compruebe la conexión y vuelva a intentarlo.",
   "api_error_not_found": "No se ha encontrado el elemento solicitado.",
   "api_error_provider_error": "El proveedor externo ha rechazado la solicitud. Compruebe la conexión y vuelva a intentarlo.",
+  "api_error_qif_account_unsupported": "QIF no puede representar algunas de las cuentas seleccionadas. Expórtelas en formato de archivo comprimido o confirme para continuar sin ellas.",
   "api_error_rate_limited": "Se han hecho demasiados intentos. Espere un momento y vuelva a intentarlo.",
   "api_error_resource_busy": "Ese recurso está ocupado en este momento. Vuelva a intentarlo en unos instantes.",
   "api_error_setup_already_complete": "La configuración ya está completa. Inicie sesión con la cuenta del propietario.",

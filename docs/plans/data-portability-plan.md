@@ -1,6 +1,6 @@
 # Data Portability & Protection Plan (R3)
 
-Status: **slices 1-2 shipped 2026-08-23; slices 3-8 planned**. Written 2026-08-23,
+Status: **slices 1-3 shipped 2026-08-23; slices 4-8 planned**. Written 2026-08-23,
 immediately after R2's acceptance review closed. Slice 1 delivered the
 dedicated read-only connection, the one-snapshot export read model,
 `GET /api/v1/exports/ledger.csv`, `GET /api/v1/exports/preview`, and
@@ -10,7 +10,11 @@ plan describes. Slice 2 delivered `GET /api/v1/exports/bundle.zip` — the
 scoped export — with entry-complete filtering, the seven-column trial balance
 and its three identities, the eight reference files, a checksummed manifest
 written last, `README.txt`, and the shared decimal vectors that pin
-`exact.Decimal` to `formatLedgerAmount` across two languages. This plan is the implementation reference for the
+`exact.Decimal` to `formatLedgerAmount` across two languages. Slice 3
+delivered `GET /api/v1/exports/qif`: one file per cash-like account, transfers
+and categories in QIF's own syntax, splits that sum to their record, a foreign
+counterpart stated rather than converted, the bare-versus-archive rule, and the
+confirm flow for accounts QIF cannot express. This plan is the implementation reference for the
 roadmap slice "R3 — portable **and protected** core data"; it replaces the
 roadmap's inline prose, which stays as the one-paragraph summary and now points
 here.
@@ -503,14 +507,16 @@ What is actually decidable, and therefore what gets tested:
   grouping misread.
 
 On a mismatched *decimal* profile, the honest statement is narrower than
-"rejected" (rev 3). Reading Rekenraam's `1234.56` under a comma profile,
-`stripGrouping` sees a four-digit leading group and errors — so ordinary
-two-decimal money does fail loudly. But `1.234` in a three-decimal currency
-(KWD, TND — this ledger supports them) is well-formed grouping under that
-profile and silently becomes `1234`. So: usually detected, undetectable in a
-real corner. The test pins both behaviours rather than claiming the corner
-away, and the mitigation is the same out-of-band statement of separator and
-layout that the date problem needs.
+"rejected" (rev 3, refined in slice 3 against what the importer actually does).
+Reading Rekenraam's `1234.56` under a comma profile, `stripGrouping` sees a
+four-digit leading group and refuses to parse it — but the importer does not
+discard the row: it keeps the raw text and attaches an "unrecognized amount"
+warning, so the failure is visible and the number is never wrong by 100×. In a
+three-decimal currency (KWD, TND — this ledger supports them) `1.234` *is*
+well-formed grouping under that profile and becomes `1234`, with no warning at
+all. So: flagged in the common case, silent in a real corner. The test pins both
+behaviours rather than claiming the corner away, and the mitigation is the same
+out-of-band statement of separator and layout that the date problem needs.
 
 Whether Rekenraam should also *write* comma-decimal QIF for European tools is
 deliberately deferred; the point is that a file has one true reading and the

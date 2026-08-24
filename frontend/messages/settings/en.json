@@ -138,6 +138,7 @@
   "api_error_network": "The server could not be reached. Check the connection and try again.",
   "api_error_not_found": "The requested item could not be found.",
   "api_error_provider_error": "The external provider rejected the request. Check the connection and try again.",
+  "api_error_qif_account_unsupported": "QIF cannot represent some of the selected accounts. Export them in the archive format, or confirm to continue without them.",
   "api_error_rate_limited": "Too many attempts were made. Wait a moment and try again.",
   "api_error_resource_busy": "That resource is busy right now. Try again in a moment.",
   "api_error_setup_already_complete": "Setup is already complete. Sign in with the owner account instead.",

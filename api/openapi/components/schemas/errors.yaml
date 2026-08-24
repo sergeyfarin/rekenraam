@@ -21,6 +21,7 @@ ErrorBody:
         - CONFIG_REQUIRED
         - PROVIDER_ERROR
         - EXPORT_SCOPE_UNSUPPORTED
+        - QIF_ACCOUNT_UNSUPPORTED
         - INTERNAL_ERROR
     message:
       type: string

@@ -138,6 +138,7 @@
   "api_error_network": "Le serveur est injoignable. Vérifiez la connexion et réessayez.",
   "api_error_not_found": "L'élément demandé est introuvable.",
   "api_error_provider_error": "Le fournisseur externe a rejeté la demande. Vérifiez la connexion et réessayez.",
+  "api_error_qif_account_unsupported": "QIF ne peut pas représenter certains des comptes sélectionnés. Exportez-les au format archive, ou confirmez pour continuer sans eux.",
   "api_error_rate_limited": "Trop de tentatives ont été effectuées. Patientez un instant et réessayez.",
   "api_error_resource_busy": "Cette ressource est occupée pour le moment. Réessayez dans un instant.",
   "api_error_setup_already_complete": "La configuration est déjà terminée. Connectez-vous plutôt avec le compte propriétaire.",

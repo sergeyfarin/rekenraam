@@ -41,6 +41,20 @@ type exportFilterResponse struct {
 	Notes              []string `json:"notes,omitempty"`
 }
 
+type exportQIFAccountResponse struct {
+	AccountID   int64  `json:"account_id"`
+	AccountPath string `json:"account_path"`
+	QIFType     string `json:"qif_type,omitempty"`
+	Supported   bool   `json:"supported"`
+	Reason      string `json:"reason,omitempty"`
+}
+
+type exportQIFResponse struct {
+	DateLayout  string                     `json:"date_layout"`
+	Supported   []exportQIFAccountResponse `json:"supported_accounts"`
+	Unsupported []exportQIFAccountResponse `json:"unsupported_accounts"`
+}
+
 type exportPreviewResponse struct {
 	GeneratedAt                string                     `json:"generated_at"`
 	SelectionUnit              string                     `json:"selection_unit"`
@@ -52,6 +66,7 @@ type exportPreviewResponse struct {
 	Columns                    []string                   `json:"columns"`
 	Excluded                   []string                   `json:"excluded"`
 	Ledger                     exportLedgerTotalsResponse `json:"ledger"`
+	QIF                        exportQIFResponse          `json:"qif"`
 	Attachments                exportAttachmentsResponse  `json:"attachments"`
 }
 
@@ -110,7 +125,8 @@ func exportPreview(logger *slog.Logger, authService *app.AuthService, exportServ
 			return
 		}
 
-		filter, err := parseExportFilter(r.URL.Query())
+		query := r.URL.Query()
+		filter, err := parseExportFilter(query)
 		if err != nil {
 			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
 			return
@@ -122,6 +138,15 @@ func exportPreview(logger *slog.Logger, authService *app.AuthService, exportServ
 				return
 			}
 			writeServiceInternalError(w, r, logger, "read export preview", err)
+			return
+		}
+
+		qifSelection, err := exportService.ResolveQIFSelection(r.Context(), filter, query.Get("qif_date_layout"))
+		if err != nil {
+			if writeExportValidationError(w, err) {
+				return
+			}
+			writeServiceInternalError(w, r, logger, "read qif export selection", err)
 			return
 		}
 
@@ -143,6 +168,11 @@ func exportPreview(logger *slog.Logger, authService *app.AuthService, exportServ
 				CommodityCount:    preview.CommodityCount,
 				EarliestEntryDate: preview.EarliestEntryDate,
 				LatestEntryDate:   preview.LatestEntryDate,
+			},
+			QIF: exportQIFResponse{
+				DateLayout:  string(qifSelection.Layout),
+				Supported:   toQIFAccountResponses(qifSelection.Supported),
+				Unsupported: toQIFAccountResponses(qifSelection.Unsupported),
 			},
 			Attachments: exportAttachmentsResponse{
 				Included:  preview.Attachments.Included,
@@ -265,4 +295,98 @@ func (w *deferredHeaderWriter) Write(p []byte) (int, error) {
 		w.onFirstWrite()
 	}
 	return w.response.Write(p)
+}
+
+func toQIFAccountResponses(accounts []app.QIFAccountStatus) []exportQIFAccountResponse {
+	responses := make([]exportQIFAccountResponse, 0, len(accounts))
+	for _, account := range accounts {
+		responses = append(responses, exportQIFAccountResponse{
+			AccountID:   account.AccountID,
+			AccountPath: account.AccountPath,
+			QIFType:     account.QIFType,
+			Supported:   account.Supported,
+			Reason:      account.Reason,
+		})
+	}
+	return responses
+}
+
+func exportQIF(logger *slog.Logger, authService *app.AuthService, exportService *app.ExportService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+
+		query := r.URL.Query()
+		filter, err := parseExportFilter(query)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		layout := query.Get("qif_date_layout")
+		allowPartial := query.Get("allow_partial") == "true"
+
+		// Which accounts can be written is decided before anything is, so a
+		// selection carrying accounts QIF cannot express is refused by name
+		// rather than downloaded silently short.
+		selection, err := exportService.ResolveQIFSelection(r.Context(), filter, layout)
+		if err != nil {
+			if writeExportValidationError(w, err) {
+				return
+			}
+			writeServiceInternalError(w, r, logger, "resolve qif export selection", err)
+			return
+		}
+		if len(selection.Unsupported) > 0 && !allowPartial {
+			writeAPIError(w, http.StatusUnprocessableEntity, "QIF_ACCOUNT_UNSUPPORTED",
+				"QIF cannot represent "+qifUnsupportedSummary(selection.Unsupported)+
+					"; export those through the CSV bundle, or repeat this request with allow_partial=true to accept the omission")
+			return
+		}
+		if len(selection.Supported) == 0 {
+			writeAPIError(w, http.StatusUnprocessableEntity, "QIF_ACCOUNT_UNSUPPORTED",
+				"no account in this selection can be written as QIF; the CSV bundle carries them all")
+			return
+		}
+
+		// WriteQIF decides between a bare file and an archive from what it
+		// renders — an ambiguous-only file has nowhere to state its layout — so
+		// it announces the shape through this callback before writing anything,
+		// and the headers are attached then. A failure before that point is
+		// still an error envelope, because nothing has been written yet.
+		var started bool
+		err = exportService.WriteQIF(r.Context(), w, filter, layout, allowPartial, func(result app.QIFExportResult) {
+			started = true
+			w.Header().Set("Content-Type", result.ContentType)
+			w.Header().Set("Content-Disposition", `attachment; filename="`+result.Filename+`"`)
+			w.Header().Set("Cache-Control", "no-store")
+		})
+		if err != nil {
+			if logger == nil {
+				logger = slog.Default()
+			}
+			logger.ErrorContext(r.Context(), "write qif export", slog.Any("err", err))
+			if !started {
+				if errors.Is(err, app.ErrQIFSelectionUnsupported) || errors.Is(err, app.ErrQIFNothingToExport) {
+					writeAPIError(w, http.StatusUnprocessableEntity, "QIF_ACCOUNT_UNSUPPORTED", err.Error())
+					return
+				}
+				if writeExportValidationError(w, err) {
+					return
+				}
+				writeServiceInternalError(w, r, logger, "write qif export", err)
+			}
+			return
+		}
+	}
+}
+
+// qifUnsupportedSummary names the accounts rather than counting them: a reader
+// deciding whether to accept an omission needs to know what is being omitted.
+func qifUnsupportedSummary(accounts []app.QIFAccountStatus) string {
+	names := make([]string, 0, len(accounts))
+	for _, account := range accounts {
+		names = append(names, account.AccountPath+" ("+account.Reason+")")
+	}
+	return strings.Join(names, ", ")
 }

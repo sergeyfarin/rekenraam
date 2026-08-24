@@ -17,6 +17,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   SETUP_ALREADY_COMPLETE: () => m.api_error_setup_already_complete(),
   CONFIG_REQUIRED: () => m.api_error_config_required(),
   PROVIDER_ERROR: () => m.api_error_provider_error(),
+  QIF_ACCOUNT_UNSUPPORTED: () => m.api_error_qif_account_unsupported(),
   INTERNAL_ERROR: () => m.api_error_internal_error()
 };
 

@@ -1,0 +1,27 @@
+meta {
+  name: Export QIF
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/v1/exports/qif
+  body: none
+  auth: none
+}
+
+params:query {
+  ~account_id: 1
+  ~qif_date_layout: mdy
+  ~allow_partial: true
+  ~from: 2026-01-01
+  ~to: 2026-12-31
+}
+
+docs {
+  One QIF file per cash-like account, or an archive when more than one account
+  is written, when something was omitted, or when the file's dates are all
+  ambiguous and it has nowhere to state its layout. Investment accounts are
+  refused with QIF_ACCOUNT_UNSUPPORTED unless allow_partial=true; the CSV bundle
+  carries them losslessly. See docs/adrs/0011-ledger-export-contract.md.
+}

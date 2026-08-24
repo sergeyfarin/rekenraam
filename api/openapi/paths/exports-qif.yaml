@@ -1,0 +1,121 @@
+get:
+  summary: Download the ledger as QIF
+  description: >
+    Writes one QIF file per account, each in that account's own currency. QIF is
+    a lossy legacy format and this endpoint is deliberate about every place it
+    cannot carry what the ledger holds.
+
+
+    **What is written.** Cash-like balance accounts only, typed from the
+    account's kind: Bank, Cash, CCard, Oth A, Oth L. A transfer appears as
+    `[Account Path]`, a category by its path, and several counterparts in the
+    same currency as S/E/$ split lines that sum to the record's own amount. An
+    entry whose other side is in a different currency states that side in the
+    memo rather than converting it — inventing a rate would be worse than being
+    explicit.
+
+
+    **What is not.** Investment containers, security holdings, and crypto
+    wallets: `!Type:Invst` means different things to different readers and would
+    misstate cost basis. Naming one of them returns 422
+    `QIF_ACCOUNT_UNSUPPORTED` listing the accounts and why; repeating the
+    request with `allow_partial=true` accepts the omission, and the resulting
+    archive records it. The CSV bundle carries those accounts losslessly.
+
+
+    **Dates and decimals.** QIF declares neither, so both are stated out of
+    band. Amounts always use a point and never a group separator. The date
+    layout is the caller's choice and appears in every filename; an archive
+    states it in `manifest.json` and `README.txt` as well. A single account with
+    nothing omitted comes back as a bare `.qif` only when the file contains at
+    least one decisive date (a day past the 12th) to anchor its layout —
+    otherwise it is archived, because an ambiguous-only file has nowhere to say
+    how it was written.
+  parameters:
+    - in: query
+      name: from
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: to
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: date_basis
+      schema:
+        type: string
+        enum: [entry, transaction]
+        default: entry
+    - in: query
+      name: account_id
+      description: Repeatable. Which accounts get a file; omit for every account QIF can write.
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+    - in: query
+      name: include_descendants
+      schema:
+        type: boolean
+        default: false
+    - in: query
+      name: commodity_id
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+    - in: query
+      name: qif_date_layout
+      description: How dates are written. Stated in the filename, and in the manifest and README of an archive.
+      schema:
+        type: string
+        enum: [mdy, dmy]
+        default: mdy
+    - in: query
+      name: allow_partial
+      description: >
+        Accept that accounts QIF cannot express will be omitted. The omission is
+        recorded in the archive's manifest and README, so it travels with the
+        file rather than living in a dialog the reader dismissed.
+      schema:
+        type: boolean
+        default: false
+  responses:
+    "200":
+      description: One QIF file, or an archive of them with a manifest and README
+      headers:
+        Content-Disposition:
+          description: Attachment whose filename states the date layout.
+          schema:
+            type: string
+      content:
+        application/qif:
+          schema:
+            type: string
+            format: binary
+        application/zip:
+          schema:
+            type: string
+            format: binary
+    "400":
+      description: The filter or the date layout was rejected
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: The selection names accounts QIF cannot express and the omission was not acknowledged
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

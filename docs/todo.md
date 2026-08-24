@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-23 (R3 planned; slices 1-2 shipped; see the
+Last updated: 2026-08-23 (R3 planned; slices 1-3 shipped; see the
 current-initiative section below).
 
 ## Where things stand
@@ -139,9 +139,15 @@ three are the mandatory export requirement, the next three the protection half.
       Ten named tests, including the two shapes earlier revisions got wrong:
       a scoped export whose counterpart account has activity of its own, and a
       transaction straddling the range boundary under both date bases.
-- [ ] 3. QIF writer (cash-like accounts only) + round-trip through the app's
-      own importer (auto-detect and matching explicit layout) + a mixed-selection
-      confirm flow.
+- [x] 3. **Done 2026-08-23.** `GET /exports/qif`: one file per cash-like
+      account (typed from `base_kind`), transfers as `[Account]`, categories by
+      path, splits that sum to their record, a foreign counterpart stated in the
+      memo rather than converted, `qif_date_layout` in every filename, and the
+      bare-versus-archive rule (bare only for one account, nothing omitted, and
+      a decisive date). Investment accounts refuse with
+      `QIF_ACCOUNT_UNSUPPORTED` until `allow_partial=true`. Thirteen named
+      tests, including round-trips through the app's own importer under both
+      the declared layout and auto-detection.
 - [ ] 4. Scheduled verified backups via SQLite's **online backup API** (ADR
       0004's in-app path): policy, `database_backup` work kind with an
       occurrence identity, symlink-safe retention, run history, endpoints.

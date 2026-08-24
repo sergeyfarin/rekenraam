@@ -4098,6 +4098,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exports/qif": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the ledger as QIF
+         * @description Writes one QIF file per account, each in that account's own currency. QIF is a lossy legacy format and this endpoint is deliberate about every place it cannot carry what the ledger holds.
+         *
+         *     **What is written.** Cash-like balance accounts only, typed from the account's kind: Bank, Cash, CCard, Oth A, Oth L. A transfer appears as `[Account Path]`, a category by its path, and several counterparts in the same currency as S/E/$ split lines that sum to the record's own amount. An entry whose other side is in a different currency states that side in the memo rather than converting it — inventing a rate would be worse than being explicit.
+         *
+         *     **What is not.** Investment containers, security holdings, and crypto wallets: `!Type:Invst` means different things to different readers and would misstate cost basis. Naming one of them returns 422 `QIF_ACCOUNT_UNSUPPORTED` listing the accounts and why; repeating the request with `allow_partial=true` accepts the omission, and the resulting archive records it. The CSV bundle carries those accounts losslessly.
+         *
+         *     **Dates and decimals.** QIF declares neither, so both are stated out of band. Amounts always use a point and never a group separator. The date layout is the caller's choice and appears in every filename; an archive states it in `manifest.json` and `README.txt` as well. A single account with nothing omitted comes back as a bare `.qif` only when the file contains at least one decisive date (a day past the 12th) to anchor its layout — otherwise it is archived, because an ambiguous-only file has nowhere to say how it was written.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    date_basis?: "entry" | "transaction";
+                    /** @description Repeatable. Which accounts get a file; omit for every account QIF can write. */
+                    account_id?: number[];
+                    include_descendants?: boolean;
+                    commodity_id?: number[];
+                    /** @description How dates are written. Stated in the filename, and in the manifest and README of an archive. */
+                    qif_date_layout?: "mdy" | "dmy";
+                    /** @description Accept that accounts QIF cannot express will be omitted. The omission is recorded in the archive's manifest and README, so it travels with the file rather than living in a dialog the reader dismissed. */
+                    allow_partial?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One QIF file, or an archive of them with a manifest and README */
+                200: {
+                    headers: {
+                        /** @description Attachment whose filename states the date layout. */
+                        "Content-Disposition"?: string;
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/qif": string;
+                        "application/zip": string;
+                    };
+                };
+                /** @description The filter or the date layout was rejected */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description The selection names accounts QIF cannot express and the omission was not acknowledged */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup/system-accounts": {
         parameters: {
             query?: never;
@@ -12320,6 +12407,30 @@ export interface components {
             /** @description Plain-language consequences of this filter, such as that it also carries postings it did not name. */
             notes?: string[];
         };
+        /** @description One account's QIF verdict — written, or named and skipped, never silently dropped. */
+        QIFAccountStatus: {
+            /** Format: int64 */
+            account_id: number;
+            account_path: string;
+            /**
+             * @description The QIF account type this account is written as.
+             * @enum {string}
+             */
+            qif_type?: "Bank" | "Cash" | "CCard" | "Oth A" | "Oth L";
+            supported: boolean;
+            /**
+             * @description Why an unsupported account cannot be written.
+             * @enum {string}
+             */
+            reason?: "not_a_balance_account" | "investment_account" | "non_currency_commodity" | "no_single_commodity";
+        };
+        /** @description What a QIF export of this selection would write and what it would omit. The screen confirms this list before offering the download, and the download honours the same list. */
+        QIFExportPreview: {
+            /** @enum {string} */
+            date_layout: "mdy" | "dmy";
+            supported_accounts: components["schemas"]["QIFAccountStatus"][];
+            unsupported_accounts: components["schemas"]["QIFAccountStatus"][];
+        };
         /** @description What the export would contain, counted from the same selection the download uses. */
         LedgerExportTotals: {
             /**
@@ -12368,6 +12479,7 @@ export interface components {
             /** @description Data a portable export deliberately leaves behind, named so nobody has to infer it. */
             excluded: string[];
             ledger: components["schemas"]["LedgerExportTotals"];
+            qif: components["schemas"]["QIFExportPreview"];
             attachments: components["schemas"]["LedgerExportAttachments"];
         };
         SpendingReportQuery: {
@@ -13989,7 +14101,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {
