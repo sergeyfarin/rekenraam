@@ -216,6 +216,7 @@ func TestAmbiguousOnlyQIFIsAlwaysArchived(t *testing.T) {
 		DecimalMark string `json:"decimal_mark"`
 		Files       []struct {
 			Name string `json:"name"`
+			Rows int64  `json:"rows"`
 		} `json:"files"`
 	}
 	require.NoError(t, json.Unmarshal(files["manifest.json"], &manifest))
@@ -223,6 +224,13 @@ func TestAmbiguousOnlyQIFIsAlwaysArchived(t *testing.T) {
 	assert.Equal(t, ".", manifest.DecimalMark)
 	require.Len(t, manifest.Files, 1)
 	assert.Contains(t, manifest.Files[0].Name, "-dmy.qif", "the member filename states it too")
+
+	// This file was rendered before the archive existed, to find out whether it
+	// could travel bare. Its count has to survive that detour: a manifest that
+	// says a non-empty file holds no records describes something that is not in
+	// the archive.
+	assert.Equal(t, int64(3), manifest.Files[0].Rows)
+	assert.Len(t, qifRecords(t, files[manifest.Files[0].Name]), 3)
 }
 
 // Grouping is what makes a written amount ambiguous, so nothing is grouped.

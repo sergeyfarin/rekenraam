@@ -259,13 +259,23 @@ func (s *ExportService) WriteQIF(
 		}
 
 		onDecided(archiveResult)
-		return s.writeQIFArchive(ctx, out, snapshot, selection, classified, resolved, accounts, map[int64][]byte{
-			account.AccountID: buffer.Bytes(),
+		return s.writeQIFArchive(ctx, out, snapshot, selection, classified, resolved, accounts, map[int64]qifRenderedFile{
+			account.AccountID: {content: buffer.Bytes(), stats: file},
 		})
 	}
 
 	onDecided(archiveResult)
 	return s.writeQIFArchive(ctx, out, snapshot, selection, classified, resolved, accounts, nil)
+}
+
+// qifRenderedFile is a file that was written before the archive existed,
+// because the choice between a bare file and an archive depends on what its
+// dates turned out to be. Its stats travel with its bytes: the manifest
+// describes what is in the archive, and re-deriving that from a buffer would be
+// a second source of truth for the same fact.
+type qifRenderedFile struct {
+	content []byte
+	stats   qifFileStats
 }
 
 // qifFileStats is what one written account file turned out to contain.
@@ -285,7 +295,7 @@ func (s *ExportService) writeQIFArchive(
 	classified QIFSelection,
 	resolved ResolvedExportFilter,
 	accounts []db.ExportAccountRecord,
-	prerendered map[int64][]byte,
+	prerendered map[int64]qifRenderedFile,
 ) error {
 	archive := zip.NewWriter(out)
 
@@ -328,9 +338,10 @@ func (s *ExportService) writeQIFArchive(
 
 		var stats qifFileStats
 		if rendered, ok := prerendered[account.AccountID]; ok {
-			if _, err := counted.Write(rendered); err != nil {
+			if _, err := counted.Write(rendered.content); err != nil {
 				return fmt.Errorf("write %s: %w", name, err)
 			}
+			stats = rendered.stats
 		} else {
 			stats, err = s.writeQIFAccount(ctx, counted, snapshot, selection, account, classified.Layout, accounts)
 			if err != nil {
