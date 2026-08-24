@@ -738,6 +738,56 @@ last character is alphanumeric, do not when it is punctuation — applied at all
 three call sites, with the rule unit-tested rather than each call site checked
 by eye. It is a display concern only: no amount, scale, or commodity changes.
 
+### T-63 A posting rejected for a version gap says the account is invalid `[ ]`
+
+**Files:** `backend/internal/app/transactions_validate.go:335-356`.
+
+`PostingAccountRule` is an as-of lookup. When an account's earliest version is
+effective *after* the posting's entry date, it misses — and the fallback branch
+below it only produces a specific message when `entry_date < opened_on`. An
+account whose `opened_on` is earlier than its first version's `effective_from`
+satisfies neither, so the write is refused with "posting account is invalid".
+
+Reproduced 2026-08-23: create an account with `opened_on` 2020-01-01 and
+`effective_from` 2026-01-01, then post on 2020-06-01 →
+`400 VALIDATION_FAILED "posting account is invalid"`. The account exists, is
+active, and the date is after it opened; the real reason is that no *version* of
+it is effective at that date. The message sends the reader to check the wrong
+thing.
+
+Fix is to name the actual reason (no account version is effective on that date,
+and the earliest one starts on <date>), reached from the same miss the code
+already detects.
+
+**Do not "fix" it by letting the write through.** This rejection is what keeps
+the ledger export's account-version fallback defensive rather than load-bearing
+(ADR 0011, `db/exports.go`): if a posting can exist before its account's first
+version, the export starts relying on a fallback instead of a guarantee, and
+`docs/plans/data-portability-plan.md` slice 6 gains a real failure to report
+rather than a counter that should always read zero.
+
+### T-64 Five migration files describe one schema nobody has yet `[ ]`
+
+**Files:** `backend/migrations/0001_initial_schema.sql` … `0005_mfa_totp.sql`.
+
+Four small deltas sit on top of a 2,400-line initial schema, so reading "what is
+the schema" means reading five files and applying the deltas by eye. There are
+no legacy databases and no tagged release, and *Project Lifecycle And Migration
+Immutability* (`docs/conventions.md`) permits rewriting migrations until
+`v0.1.0` — after that they are immutable and this stops being possible.
+
+Collapsing them into one file is therefore cheap now and impossible later. The
+cost is that every development database must be recreated, so the commit body
+needs the `BREAKING DEV DATABASE` marker and a reset instruction, per the same
+convention.
+
+**Sequencing:** do it after R3's own schema work lands (slice 4 adds the backup
+policy and `backup_runs` tables — collapsing before that means collapsing
+twice), and before the `v0.1.0` tag. Note the interaction with T-55: collapsing
+removes the only multi-step upgrade path a historical-upgrade migration test
+could exercise, which makes T-55 a post-`v0.1.0` concern rather than a
+pre-release one.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

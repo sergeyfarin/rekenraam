@@ -92,9 +92,17 @@ type LedgerExportTotalsRecord struct {
 //
 // The account version is resolved as of the entry date, falling back to the
 // account's earliest version when a posting predates every version of its own
-// account (a backdated import can produce exactly that). The join is LEFT for
-// the same reason: an export that silently dropped a posting would emit an
-// unbalanced entry, which is the one thing this file may never do.
+// account. The join is LEFT for the same reason: an export that silently
+// dropped a posting would emit an unbalanced entry, which is the one thing this
+// file may never do.
+//
+// The write path rejects that case today (app/transactions_validate.go's as-of
+// PostingAccountRule; the misleading message it produces is backlog T-63), so
+// this fallback is defensive rather than load-bearing — it covers data arriving
+// from outside the service layer: a backfill, a manual repair, a restored and
+// patched database. A fallback that never announces itself would turn such data
+// into a plausible-looking number, so the self-check counts it as
+// account_version_coverage: docs/plans/data-portability-plan.md, slice 6.
 const exportPostingSelection = `
 	FROM current_transaction_versions tv
 	JOIN transactions t ON t.id = tv.transaction_id

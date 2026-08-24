@@ -125,7 +125,7 @@ restore command. All of it is new.
    guarantee it holds for which group (rev 3). The per-entry identity is the
    same one R2's cashflow classification rests on.
 3. Money stays exact. Amounts are canonical decimal **strings** produced in Go
-   (`exact.ScaledInt`), point decimal separator, no group separators, sign
+   (`exact.Decimal` over `exact.ScaledInt`), point decimal separator, no group separators, sign
    carried as a leading `-`. No float touches an export at any layer, and the
    frontend never computes or reformats an exported figure.
 4. **Exports include system accounts.** Reports exclude `commodity_trading` and
@@ -201,6 +201,17 @@ reconciliation_status, cleared_on, posting_tags
   the export names can be joined rather than matched on text: `payee_id`,
   `commodity_id`, and `account_class` (the schema's own word — revision 1 called
   it `account_type`, which named nothing in this ledger).
+- Amounts are rendered by `exact.Decimal` (`backend/internal/exact/decimal.go`),
+  added in slice 1 because the backend had never rendered a decimal before — the
+  API sends coefficient and scale as separate fields and the frontend formats
+  them. It now has a **cross-language twin**: `formatLedgerAmount` in
+  `frontend/src/lib/money/amount.ts` applies the same rule in TypeScript, and
+  neither language can import the other. Slice 2 is where the second Go caller
+  arrives, so slice 2 also adds **one shared fixture of test vectors**
+  (`{coefficient, scale, expected}`) read by both the Go tests and Vitest. Two
+  implementations of one rule is how this repo's recurring decimal bug class
+  starts (T-36/T-45/T-47, G-02); a shared fixture turns them into one
+  specification with two readers.
 - `transaction_complete` is the lowercase token `true` or `false`, repeated on
   **every posting row** of the transaction (rev 4). It is a transaction-level
   fact carried at posting grain, like `payee` and `transaction_date` beside it,
@@ -721,9 +732,18 @@ plain-language explanation with what to do next — never an automatic repair.
 | `checkpoint_integrity` | each reconciliation checkpoint's recorded balance still equals the recomputed balance of its postings (catches T-53-class overrides) |
 | `sqlite_integrity` | `PRAGMA integrity_check` + `PRAGMA foreign_key_check` |
 | `attachments` | **reserved slot, reports `not_applicable`** until R14a fills it |
+| `account_version_coverage` | every posting has an account version effective on its entry date. Slice 1 shipped a fallback for the miss (`db/exports.go`: the as-of join is LEFT, falling back to the account's earliest version) so that a gap can never drop a posting and unbalance an export. The write path rejects the case today (`transactions_validate.go`, T-63), so this check exists to say so out loud: a non-zero count means data arrived from outside the service layer, and the fallback has been quietly covering for it |
 
 Never `SUM()` a coefficient column in SQL — they are strings
 (`ledger-invariants`). Every total here is folded in Go.
+
+**Why a fallback needs a counter.** Slice 1 chose a fallback over both
+alternatives on purpose: an inner join would silently drop a posting and produce
+a file whose entries do not balance, and failing the whole export on one bad row
+would break the feature exactly when a user most needs their data out. But a
+fallback that never announces itself turns corruption into a plausible-looking
+number. `account_version_coverage` is the announcement, and the export's preview
+carries the same count so it is visible without running a check.
 
 `GET /maintenance/self-check` returns the last result; `POST` runs it now and
 returns the fresh one. It also runs automatically after each successful
@@ -784,11 +804,11 @@ after slice 6, never mid-slice.
 | # | Slice | Size | Done when |
 |---|---|---|---|
 | 1 | Dedicated read-only connection; export read model in one snapshot; `ledger.csv` (unfiltered); `/exports/preview`; OpenAPI; **ADR carrying the format-stability guarantee, the entry-complete filter semantics, and the trial-balance definition** | M | A fixture book exports; every journal entry sums to zero per commodity; system accounts present; policy echoed in the preview; a concurrent write during an export cannot change its output |
-| 2 | `bundle.zip` — dimension files, `trial-balance.csv`, `manifest.json` with SHA-256, `README.txt`; beancount mapping table + its test | M | Bundle opens, checksums verify, trial balance reconciles to `ledger.csv` summed in a test |
+| 2 | `bundle.zip` — dimension files, `trial-balance.csv`, `manifest.json` with SHA-256, `README.txt`; beancount mapping table + its test; **shared decimal test vectors** (below) | M | Bundle opens, checksums verify, trial balance reconciles to `ledger.csv` summed in a test, and one fixture pins `exact.Decimal` and `formatLedgerAmount` to the same answers |
 | 3 | QIF writer + archive (per-account files, `manifest.json`, `README.txt`), unsupported-account confirm flow | M | Round-trips exactly under the declared layout and under auto-detect with a decisive date; **the declared layout appears in the filename of every response, and additionally in `manifest.json` and `README.txt` for every archive** (rev 5); an ambiguous-only export is archived and both metadata files carry the declared layout; any omission returns a zip whose manifest names the excluded accounts and why |
 | 4 | **Online-backup-API copy path**, policy table + migration, `database_backup` work kind with occurrence identity, scheduler, retention with symlink-safe pruning, `backup_runs`, endpoints, `foreign_key_check` added to verification | L | A scheduled backup appears and verifies; pruning refuses a symlink and anything outside `BACKUP_DIR`; a crash at each of four points leaves no duplicate and no untracked file; a full disk fails retryably and recovers when space returns |
 | 5 | `verify-backup` and `restore` CLI (process lock, WAL-set preservation, atomic install), the `REKENRAAM_SECRET_KEY` operator workflow, docs rewrite, automated restore drill | M | The drill restores into a fresh path and matches trial balance and row counts, including a source with uncheckpointed WAL; sealed data decrypts with the retained key and fails loudly without it; restore refuses while `serve` holds the lock |
-| 6 | Self-check: seven checks + reserved attachments slot, run record, endpoints, post-backup chaining | M | Each check has a test that deliberately corrupts a fixture (raw SQL, bypassing services) and is caught; a healthy book passes clean |
+| 6 | Self-check: eight checks (including `account_version_coverage`) + reserved attachments slot, run record, endpoints, post-backup chaining | M | Each check has a test that deliberately corrupts a fixture (raw SQL, bypassing services) and is caught; a healthy book passes clean; a posting written behind the service layer with no account version effective at its entry date is reported rather than silently absorbed by slice 1's fallback |
 | 7 | `Settings → Data` screen, six locales, glossary terms, e2e smoke | M | Export downloads, backup status renders, self-check runs, all states present, keyboard-navigable |
 | 8 | Acceptance review + docs reconciliation (`implemented.md`, `roadmap.md`, `README.md`, this plan's status header) | S | Every deferred item has a yes/no with a reason, in this file, the way R2 closed |
 
@@ -800,6 +820,22 @@ it is the first thing to drop if the slice runs long. Note the coupling the
 review surfaced: dropping slice 2 also drops the only artifact that can carry a
 *scoped* export, since the flat CSV is unfiltered by design. That is an
 acceptable cut, not a hidden one.
+
+## Backlog items this plan touches
+
+Registered defects and debt that land inside R3's path, each with the slice it
+belongs to. The registry is `docs/backlog.md`; this table only says *where*.
+
+| Item | Where it lands | Why it belongs there |
+|---|---|---|
+| **T-63** a posting refused for an account-version gap reports the wrong reason | Slice 6, or earlier as a standalone fix | It is the guard that keeps slice 1's export fallback defensive. Fixing the message is cosmetic; keeping the rejection is not. Slice 6's `account_version_coverage` check is only meaningful while the write path still refuses the case |
+| **T-64** collapse the five migration files into one | **After slice 4**, before `v0.1.0` | Slice 4 adds the backup-policy and `backup_runs` tables. Collapsing before it means collapsing twice; collapsing after the tag is not permitted at all |
+| **T-55** no historical-upgrade migration test `[blocked]` | Post-`v0.1.0` | T-64 removes the only multi-step upgrade path such a test could exercise. Pre-release that is fine — there are no legacy databases — but the two items must not be worked in the wrong order |
+| **T-61** the browser suite has no acceptance-mapped subset | Slice 7 | Slice 7 adds the first browser cases for export, backup, and self-check. They are exactly the kind of case T-61 wants grouped against a plan's validation matrix, so the tag is cheapest to introduce while writing them |
+| **T-62** a commodity symbol renders hard against its amount | Slice 7 | The Data screen shows sizes, counts, and commodity-labelled figures; it should not add a fourth call site to the three that already run symbol and amount together |
+
+Nothing else in the backlog blocks a slice. T-34 and T-48 are unrelated and
+stay where they are.
 
 ## Validation matrix
 
@@ -816,7 +852,7 @@ acceptable cut, not a hidden one.
 | QIF limits | `TestQIFExportRefusesMixedSelectionWithoutAcknowledgement`, `TestSingleSupportedAccountAfterPartialApprovalStillReturnsAnArchive` |
 | Backup | `TestBackupUsesOnlineBackupAPI`, `TestBackupRunsEntirelyInsideRawConnCallback`, `TestBackupSourcesFromReadOnlyPoolAndDoesNotBlockWrites`, `TestBackupDeadlineUnderContinuousWritesFailsRetryably`, `TestBackupWorkerVerifiesBeforePublishingFinalName`, `TestBackupWorkerPrunesOnlyItsOwnFiles`, `TestPruneRefusesSymlinkAndPathOutsideBackupDir`, `TestDiskShortageIsRetryableAndRecovers`, `TestENOSPCMidCopyLeavesNoPartialArtifact`, and one crash-point test each after **creation**, **verification**, **rename**, and **run-record persistence** |
 | Restore | `TestRestoreDrillMatchesSourceTrialBalance`, `TestRestorePreservesUncheckpointedWALContent`, `TestRestoreRefusesWhileServeHoldsTheLock`, `TestRestoreRefusesSourceEqualsDestination`, `TestRestoreRefusesNewerSchema`, `TestSealedDataDecryptsAfterRestoreWithRetainedKey` |
-| Self-check | one deliberate-corruption test per check, plus `TestSelfCheckPassesOnHealthyBook` and `TestSelfCheckWritesNothingToLedgerTables` |
+| Self-check | one deliberate-corruption test per check, plus `TestSelfCheckPassesOnHealthyBook`, `TestSelfCheckWritesNothingToLedgerTables`, and `TestSelfCheckReportsPostingsWithNoEffectiveAccountVersion` (the counter behind slice 1's export fallback) |
 | Frontend | Vitest for the export-options and backup-status view models; Playwright smoke for download, backup-now, run-check |
 
 Full-suite discipline per `validate-and-ship`: `scripts/test-backend.sh`,

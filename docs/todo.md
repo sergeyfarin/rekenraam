@@ -142,8 +142,11 @@ three are the mandatory export requirement, the next three the protection half.
 - [ ] 5. `rekenraam verify-backup` / `rekenraam restore` (process lock,
       WAL-set preservation, atomic install) + the `REKENRAAM_SECRET_KEY`
       operator workflow + docs rewrite + an automated restore drill.
-- [ ] 6. Trial-balance self-check — seven checks, read-only, attachments slot
-      reserved for R14a.
+- [ ] 6. Trial-balance self-check — eight checks, read-only, attachments slot
+      reserved for R14a. One of the eight, `account_version_coverage`, is the
+      follow-up to slice 1: the export falls back when a posting has no account
+      version effective on its entry date, and the check is what makes that
+      fallback announce itself instead of quietly covering for corrupt data.
 - [ ] 7. `Settings → Data` screen, six locales, e2e smoke.
 - [ ] 8. Acceptance review + docs reconciliation.
 
@@ -299,6 +302,12 @@ remote's T-42, TypeScript 7) and T-34.
       locale when parsing and when refilling a form field) stays open, and is
       no longer purely hypothetical now that es/fr/nl/de (all decimal-comma
       locales) shipped 2026-08-19. See `backlog.md` G-08.
+- [ ] T-63 a posting refused for an account-version gap reports the wrong
+      reason ("posting account is invalid"). Cosmetic, but the rejection itself
+      is load-bearing for R3's export — see `backlog.md`.
+- [ ] T-64 collapse the five migration files into one before `v0.1.0`, after
+      R3 slice 4 adds its own schema. Permitted only until the tag; needs the
+      `BREAKING DEV DATABASE` marker. See `backlog.md`.
 - [ ] T-34 investment provider-event producer — `[blocked]` on R15's third
       slice and an unmade provider choice. See `backlog.md`.
 - [ ] T-48 TypeScript 7 upgrade — `[blocked]` on `openapi-typescript` shipping
