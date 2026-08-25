@@ -352,7 +352,7 @@ test('a cashflow row drills down to the categories behind it', async ({ page }) 
   await expect(page.getByRole('table')).not.toContainText('250.00');
 });
 
-test('one multi-currency journey travels through every report without combining commodities', async ({
+test('[acceptance] one multi-currency journey travels through every report without combining commodities', async ({
   page
 }) => {
   const { csrfToken, currencyID: usdID } = await readyForLedger(page);

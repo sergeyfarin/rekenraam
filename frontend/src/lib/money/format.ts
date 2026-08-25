@@ -83,3 +83,28 @@ export function formatQuantity(value: string, scale: number, locale: string): st
   const result = `${intPartGrouped}${decimalSep}${fracStr}`;
   return isNegative ? `-${result}` : result;
 }
+
+/**
+ * Joins a commodity's label to an amount with a separator only where one is
+ * needed (T-62).
+ *
+ * A currency symbol that is punctuation reads correctly against its amount:
+ * `$42.00`, `€42.00`. A label that ends in a letter or digit does not — an
+ * instrument ticker or a currency with no symbol runs the two together and
+ * produces `AAPL2.000` or `USD42.00`, which is a different number to a quick
+ * reader. The rule is stated once here rather than judged at each call site,
+ * which is how the three existing call sites came to disagree with the reports
+ * views about the same question.
+ */
+export function joinCommodityAmount(label: string, amount: string): string {
+	const trimmed = label.trim();
+	if (trimmed === '') return amount;
+	return endsAlphanumeric(trimmed) ? `${trimmed} ${amount}` : `${trimmed}${amount}`;
+}
+
+function endsAlphanumeric(label: string): boolean {
+	const last = label.at(-1);
+	if (last === undefined) return false;
+	// Unicode-aware: a Cyrillic or Greek currency abbreviation is a word too.
+	return /\p{L}|\p{N}/u.test(last);
+}

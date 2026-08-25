@@ -699,7 +699,7 @@ to encode that case. Not urgent — the coverage exists today — but it is the
 cheapest way to stop the two layers asserting different numbers about the same
 ledger.
 
-### T-61 The browser suite has no acceptance-mapped subset `[ ]`
+### T-61 The browser suite has no acceptance-mapped subset `[x]`
 
 **Files:** `e2e/playwright/`, `scripts/test-e2e-smoke.sh`,
 `scripts/test-release-preflight.sh`.
@@ -713,7 +713,14 @@ Worth a third, small grouping — a tag or a directory — whose cases map one-t
 onto a plan's validation matrix, so closing an initiative can point at a suite
 rather than at an argument. The R2 multi-currency case is the first member.
 
-### T-62 A commodity symbol is rendered hard against its amount `[ ]`
+**Done 2026-08-24.** The grouping is a `[acceptance]` prefix in the test title
+and `scripts/test-e2e-acceptance.sh` to run just those. Three members so far:
+the R2 multi-currency journey, and R3 slice 7's two Data-screen cases. A tag
+rather than a directory, so a case can live beside its feature's other tests
+and still be selectable — moving files would have split each feature's suite in
+two.
+
+### T-62 A commodity symbol is rendered hard against its amount `[x]`
 
 **Files:** `frontend/src/lib/transactions/transaction-list.svelte:165`,
 `frontend/src/lib/transactions/transaction-detail-panel.svelte:446`,
@@ -737,6 +744,11 @@ Fix is a shared helper with the rule stated once — separate when the symbol's
 last character is alphanumeric, do not when it is punctuation — applied at all
 three call sites, with the rule unit-tested rather than each call site checked
 by eye. It is a display concern only: no amount, scale, or commodity changes.
+
+**Done 2026-08-24.** `joinCommodityAmount` in `$lib/money/format.ts`, applied at
+all three call sites, with the rule tested including non-Latin labels (`руб 10,00`
+separates, `₽10,00` does not). The Data screen shipped the same day and uses it
+rather than adding a fourth call site with a fourth opinion.
 
 ### T-63 A posting rejected for a version gap says the account is invalid `[ ]`
 
@@ -766,12 +778,12 @@ version, the export starts relying on a fallback instead of a guarantee, and
 `docs/plans/data-portability-plan.md` slice 6 gains a real failure to report
 rather than a counter that should always read zero.
 
-### T-64 Five migration files describe one schema nobody has yet `[ ]`
+### T-64 Five migration files describe one schema nobody has yet `[x]`
 
-**Files:** `backend/migrations/0001_initial_schema.sql` … `0005_mfa_totp.sql`.
+**Files:** `backend/migrations/0001_initial_schema.sql` (was `0001` … `0007`).
 
-Four small deltas sit on top of a 2,400-line initial schema, so reading "what is
-the schema" means reading five files and applying the deltas by eye. There are
+Six small deltas sat on top of a 2,400-line initial schema, so reading "what is
+the schema" meant reading seven files and applying the deltas by eye. There are
 no legacy databases and no tagged release, and *Project Lifecycle And Migration
 Immutability* (`docs/conventions.md`) permits rewriting migrations until
 `v0.1.0` — after that they are immutable and this stops being possible.
@@ -787,7 +799,21 @@ convention.
 persists its own run record and will add another, so the trigger is slice 6.
 An earlier note here named slice 4; that was the wrong reading of its own
 reason, which is that collapsing between two schema slices means collapsing
-twice. Note the interaction with T-55: collapsing
+twice.
+
+**Done 2026-08-24**, after slice 6 added the last of R3's schema (0007). Seven
+files became one: 0002's `ALTER TABLE` became an inline column with its
+reasoning intact, and 0003-0007's tables were folded in with their comments
+rather than dumped from a live database — a `.schema` dump would have produced
+the same tables and thrown away every explanation in them.
+
+Verified by building the schema from the old chain and from the collapsed file
+and diffing all 207 objects, normalized for comments and punctuation spacing:
+identical. `TestMigrationsProduceTheExpectedSchema` keeps a lighter version of
+that check permanently, since nothing else now cross-references the schema.
+
+T-55 becomes post-`v0.1.0` by construction: there is no longer a multi-step
+upgrade path for a historical-upgrade test to exercise. Note the interaction with T-55: collapsing
 removes the only multi-step upgrade path a historical-upgrade migration test
 could exercise, which makes T-55 a post-`v0.1.0` concern rather than a
 pre-release one.

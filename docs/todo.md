@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-24 (R3 planned; slices 1-4 shipped; see the
-current-initiative section below).
+Last updated: 2026-08-24 (R3 planned; slices 1-7 shipped, T-61/T-62/T-64
+closed; see the current-initiative section below).
 
 ## Where things stand
 
@@ -176,7 +176,13 @@ three are the mandatory export requirement, the next three the protection half.
       Finding: the schema's own triggers already refuse most of these
       corruptions, so the tests drop the guarding trigger to produce each one
       and the check is documented as the second line of defence.
-- [ ] 7. `Settings → Data` screen, six locales, e2e smoke.
+- [x] 7. **Done 2026-08-24.** `/app/settings/data`: export (format, range, QIF
+      layout, preview line, exclusion list, confirm flow), backups (status, key
+      notice, policy form, back-up-now, history with retry), and the health
+      check (run, per-check results with explanations). 53 messages in six
+      locales, all four screen states, two `[acceptance]`-tagged browser cases.
+      Shipped with T-61 (acceptance-mapped browser subset) and T-62 (commodity
+      symbol spacing).
 - [ ] 8. Acceptance review + docs reconciliation.
 
 The plan was reviewed the same day it was written; eight contract/safety
@@ -334,10 +340,10 @@ remote's T-42, TypeScript 7) and T-34.
 - [ ] T-63 a posting refused for an account-version gap reports the wrong
       reason ("posting account is invalid"). Cosmetic, but the rejection itself
       is load-bearing for R3's export — see `backlog.md`.
-- [ ] T-64 collapse the migration files into one before `v0.1.0`, after R3's
-      **last** migration — slice 6, not slice 4: the self-check adds its own run
-      record. Permitted only until the tag; needs the `BREAKING DEV DATABASE`
-      marker. See `backlog.md`.
+- [x] T-64 **done 2026-08-24** — seven migration files folded into one after
+      slice 6 added the last of R3's schema. All 207 schema objects verified
+      identical to the old chain; `TestMigrationsProduceTheExpectedSchema` keeps
+      checking the shape. Development databases must be recreated.
 - [ ] T-34 investment provider-event producer — `[blocked]` on R15's third
       slice and an unmade provider choice. See `backlog.md`.
 - [ ] T-48 TypeScript 7 upgrade — `[blocked]` on `openapi-typescript` shipping

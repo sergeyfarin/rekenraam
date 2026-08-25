@@ -142,6 +142,11 @@ pnpm test:release-preflight
 ## Area Notes
 
 - Backend code lives in `backend/`; run `go test ./...` there directly only when you intentionally want to bypass the wrapper script.
+- `scripts/test-e2e-acceptance.sh` runs only the browser cases tagged
+  `[acceptance]` — the ones that map onto a plan's validation matrix, so closing
+  an initiative can point at a suite rather than at an argument (T-61). The
+  broader suites are split by cost instead: smoke on every push, release
+  preflight before a release.
 - The backend binary also exposes local maintenance commands: `recover-owner`
   (backup-first password recovery and session revocation), `verify-backup`
   (integrity, schema version, row counts, and whether sealed rows decrypt under

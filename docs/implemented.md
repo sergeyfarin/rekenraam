@@ -147,7 +147,7 @@ non-English locales all landed together).
 | Report ID filters + drill-down | ✅ | Shipped 2026-08-18 (superseded the R2 plan's original "not delivered" gap): repeatable `account_id`/`category_id`/`payee_id`/`commodity_id` filters, plus drill-down from both spending and cashflow rows into `/app/transactions`. |
 | Reporting-currency valuation method | ⬜ | Deliberately deferred, approved 2026-08-19 to build after R3 (named, auditable valuation method — not a silent conversion). Reports show unlike commodities separately and say so until it lands. |
 
-## Exports & Backups (R3) — 🟦 Slices 1-6: exports, scheduled backups, restore, and the ledger self-check shipped; the Data screen is next
+## Exports & Backups (R3) — 🟦 Slices 1-7 shipped: exports, scheduled backups, restore, the ledger self-check, and the Data screen; the acceptance review remains
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -180,7 +180,10 @@ non-English locales all landed together).
 | What the self-check verifies | ✅ | Per-commodity balance of every journal entry, every posted transaction, and the whole book; structural integrity (transactions with no version, postings whose entry belongs to another version, postings whose line belongs to another transaction); open lots against the holdings they claim, plus negative and over-consumed remaining quantity; active reconciliation checkpoints against their snapshotted postings and against postings that have since been superseded (the T-53 case); `account_version_coverage`, the counter slice 1's export fallback needed; SQLite's `integrity_check` and `foreign_key_check`; and a reserved `attachments` slot reporting `not_applicable` until R14a. |
 | Self-check history | ✅ | Migration 0007 adds `self_check_runs` and `self_check_results` — one row per check per run rather than a JSON blob, because "which check failed, how often, since when" is worth a query (the mistake T-54 records about price derivations). A run's record is the only thing the check writes, and a test compares every ledger table before and after to prove it. |
 | Nightly chaining | ✅ | A successful backup runs the check, so "backed up nightly and provably balanced" is one nightly fact rather than two features that happen to exist. A failing check does not fail the backup: a book that does not balance still deserves the copy just made of it. |
-| Data screen, acceptance review | ⬜ | Slices 7–8 of `docs/plans/data-portability-plan.md`. |
+| Settings → Data screen | ✅ | `/app/settings/data` in six locales. **Export**: format (archive / flat CSV / QIF) with what each one is for, a date range where the format accepts one, the QIF date layout, a preview line stating what the file will hold before it is offered, and the named list of what an export leaves behind. A QIF selection naming an account QIF cannot write shows those accounts and needs an explicit confirmation before the download unlocks. **Backups**: last and next run, folder, the `REKENRAAM_SECRET_KEY` notice, the policy form, back-up-now (queued, never claimed as done), and history with per-run failures and retry. **Health check**: run it, and read each check's verdict with what it means — plus what to do, for the ones that failed. |
+| Acceptance-mapped browser subset (T-61) | ✅ | `scripts/test-e2e-acceptance.sh` runs the cases tagged `[acceptance]`, which map onto a plan's validation matrix rather than being split by cost like the smoke and preflight suites. Three members: R2's multi-currency journey and R3's two Data-screen cases. |
+| Commodity symbol spacing (T-62) | ✅ | `joinCommodityAmount` states the rule once — separate when the label ends in a letter or digit, do not when it is punctuation — and the three call sites that ran `AAPL2.000` together now use it. Tested including non-Latin labels. |
+| Acceptance review | ⬜ | Slice 8 of `docs/plans/data-portability-plan.md`. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 
@@ -235,8 +238,8 @@ non-English locales all landed together).
 
 ## Not started (see roadmap)
 
-The Settings → Data screen (R3 slices 7-8 — exports, scheduled backups, restore,
-and the ledger self-check shipped, see "Exports & Backups" above), CSV/OFX/QFX import adapters, import profiles,
+R3's acceptance review (slice 8 — everything it reviews has shipped, see
+"Exports & Backups" above), CSV/OFX/QFX import adapters, import profiles,
 budgets, scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
 shipped in R2 — see the Reports section above.)

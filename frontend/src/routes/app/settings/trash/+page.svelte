@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { joinCommodityAmount } from '$lib/money/format';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
@@ -144,7 +145,10 @@
     {@const p = primaryPosting(row)}
     {#if p}
       <span class={`font-medium tabular-nums ${p.quantity_value.startsWith('-') ? 'text-danger' : 'text-foreground'}`}>
-        {commodityDisplay(p)}{formatSignedAmount(p, p.account_class as import('$lib/transactions/transaction-labels').AccountClass, locale)}
+        {joinCommodityAmount(
+          commodityDisplay(p),
+          formatSignedAmount(p, p.account_class as import('$lib/transactions/transaction-labels').AccountClass, locale)
+        )}
       </span>
     {:else}
       <span class="text-muted">—</span>
