@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-24 (R3 planned; slices 1-7 shipped, T-61/T-62/T-64
-closed; see the current-initiative section below).
+Last updated: 2026-08-24 (R3 complete and accepted; T-61/T-62/T-64 closed;
+R3a is next).
 
 ## Where things stand
 
@@ -52,8 +52,12 @@ Recorded here as pointers; the source of truth is `roadmap.md` and
   report, reached by drill-down from a cashflow row. Shipped 2026-08-19,
   including the entry-level tightening of spending's account filter.
 - **Public-deployment gates (S-04, S-06, S-07): parked.** Self-hosted locally
-  for now; unpark when an internet-exposed deployment is planned, R3 at the
-  earliest.
+  for now. The "R3 at the earliest" half of that condition passed on
+  2026-08-24; what remains is the other half, which is an owner decision:
+  unpark when an internet-exposed deployment is actually planned. The gates
+  themselves are closed — throttle, auth events, and MFA all shipped — so
+  unparking means enrolling the owner account and re-reading
+  `docs/deployment-security.md`, not building anything.
 - **Gains reporting (I-03 / I-04): research task, not a decision.** See
   `roadmap.md` — realized vs unrealized, per-country tax treatment, and
   presentation stability all need study first. Does not block R16 slice 1.
@@ -117,7 +121,7 @@ See `backlog.md` G-09.
       tax/jurisdiction dimensions, and a report builder are all deferred with
       stated reasons.
 
-## Current initiative — R3 portable and protected core data — **planned 2026-08-23**
+## Previous initiative — R3 portable and protected core data — **complete, accepted 2026-08-24**
 
 Plan: `docs/plans/data-portability-plan.md`. Eight slices, in order; the first
 three are the mandatory export requirement, the next three the protection half.
@@ -183,14 +187,35 @@ three are the mandatory export requirement, the next three the protection half.
       locales, all four screen states, two `[acceptance]`-tagged browser cases.
       Shipped with T-61 (acceptance-mapped browser subset) and T-62 (commodity
       symbol spacing).
-- [ ] 8. Acceptance review + docs reconciliation.
+- [x] 8. **Done 2026-08-24.** Acceptance review closed in
+      `docs/plans/data-portability-plan.md`: every commitment checked, every
+      deferred item answered with a reason, and the four planning claims that
+      testing disproved corrected in place. It found one real gap — the
+      attachments hook was in the manifest, the self-check, and the restore
+      output, but the backup documentation never named the attachments
+      directory — now fixed in `README.md` and `docs/deployment-security.md`.
 
 The plan was reviewed the same day it was written; eight contract/safety
-findings are folded into revision 2 (see its header). **Five owner questions
-are open** (QIF default date layout, backup retention
-default, `BACKUP_DIR` in Docker, automatic nightly self-check, which export is
-the primary button). Each has a recommendation in the plan and none blocks
-slice 1.
+findings are folded into revisions 2-5 (see its header). The **five owner
+questions** (QIF default date layout, backup retention default, `BACKUP_DIR` in
+Docker, automatic nightly self-check, which export is the primary button) were
+all settled by shipping the recommendation; the acceptance review records each
+as a default rather than a frozen decision.
+
+## Current initiative — R3a: core-workflow accessibility regression coverage
+
+Next per `roadmap.md`. Focused automated accessibility smoke checks for
+setup/auth, transaction entry, reconciliation, reports, and import: semantic
+controls, labels, keyboard navigation, focus handling, and contrast. Mobile
+journeys stay in the broader Playwright suite.
+
+Two things R3 leaves for it rather than claiming:
+
+- `/app/settings/data` shipped with semantic tables, labelled controls, and
+  `sr-only` headers, but nothing measured it. R3's acceptance review says so
+  explicitly instead of implying coverage.
+- `scripts/test-e2e-acceptance.sh` (T-61) is where a11y cases that map to a
+  plan's acceptance criteria belong, rather than a fourth suite.
 
 ## Ready to start — unblocked by the 2026-08-19 decisions
 

@@ -147,7 +147,7 @@ non-English locales all landed together).
 | Report ID filters + drill-down | ✅ | Shipped 2026-08-18 (superseded the R2 plan's original "not delivered" gap): repeatable `account_id`/`category_id`/`payee_id`/`commodity_id` filters, plus drill-down from both spending and cashflow rows into `/app/transactions`. |
 | Reporting-currency valuation method | ⬜ | Deliberately deferred, approved 2026-08-19 to build after R3 (named, auditable valuation method — not a silent conversion). Reports show unlike commodities separately and say so until it lands. |
 
-## Exports & Backups (R3) — 🟦 Slices 1-7 shipped: exports, scheduled backups, restore, the ledger self-check, and the Data screen; the acceptance review remains
+## Exports & Backups (R3) — ✅ Complete: exports, scheduled backups, restore, the ledger self-check, and the Data screen; acceptance review closed 2026-08-24
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -183,7 +183,7 @@ non-English locales all landed together).
 | Settings → Data screen | ✅ | `/app/settings/data` in six locales. **Export**: format (archive / flat CSV / QIF) with what each one is for, a date range where the format accepts one, the QIF date layout, a preview line stating what the file will hold before it is offered, and the named list of what an export leaves behind. A QIF selection naming an account QIF cannot write shows those accounts and needs an explicit confirmation before the download unlocks. **Backups**: last and next run, folder, the `REKENRAAM_SECRET_KEY` notice, the policy form, back-up-now (queued, never claimed as done), and history with per-run failures and retry. **Health check**: run it, and read each check's verdict with what it means — plus what to do, for the ones that failed. |
 | Acceptance-mapped browser subset (T-61) | ✅ | `scripts/test-e2e-acceptance.sh` runs the cases tagged `[acceptance]`, which map onto a plan's validation matrix rather than being split by cost like the smoke and preflight suites. Three members: R2's multi-currency journey and R3's two Data-screen cases. |
 | Commodity symbol spacing (T-62) | ✅ | `joinCommodityAmount` states the rule once — separate when the label ends in a letter or digit, do not when it is punctuation — and the three call sites that ran `AAPL2.000` together now use it. Tested including non-Latin labels. |
-| Acceptance review | ⬜ | Slice 8 of `docs/plans/data-portability-plan.md`. |
+| Acceptance review | ✅ | Closed 2026-08-24 in `docs/plans/data-portability-plan.md`: every commitment verified, every deferred item answered with a reason, and the four planning claims that testing disproved corrected in place. It found the attachments hook missing from the backup documentation — present in the manifest, the self-check, and the restore output, absent from `README.md` — now fixed. |
 
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 
@@ -238,8 +238,7 @@ non-English locales all landed together).
 
 ## Not started (see roadmap)
 
-R3's acceptance review (slice 8 — everything it reviews has shipped, see
-"Exports & Backups" above), CSV/OFX/QFX import adapters, import profiles,
+Accessibility regression coverage (R3a, next), CSV/OFX/QFX import adapters, import profiles,
 budgets, scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
 shipped in R2 — see the Reports section above.)

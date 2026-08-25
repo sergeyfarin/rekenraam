@@ -269,6 +269,11 @@ running. Nothing needs to be scheduled outside it.
 - **What you get:** one self-contained `rekenraam-<date>.sqlite` file per run,
   mode `0600`, verified with `integrity_check` and `foreign_key_check` before it
   is given its final name. A `.part` file is always a failed attempt.
+- **What a full backup covers:** the database **and**, once attachments exist,
+  the attachments directory. Attachment storage is not implemented yet, so
+  today there is nothing beside the database to copy — the procedure names both
+  from the start so that "backed up nightly" never has to be walked back when
+  files land outside SQLite, where a database copy cannot reach them.
 - **Whether it worked:** the app shows the last successful backup, the next
   scheduled one, and any failures with their reason. A backup that has been
   failing all week is visible without reading logs.

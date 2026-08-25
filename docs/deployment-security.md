@@ -198,6 +198,13 @@ The backup directory is created `0700` and each file `0600`. Retention deletes
 only files the app recorded, named by its own pattern, that resolve inside the
 configured directory; anything else placed there is left untouched.
 
+A complete backup is **the database and the attachments directory**. Attachments
+are not implemented yet, so today the second half is empty and the scheduled
+backup covers everything there is. It is named here, in the export manifest, in
+the restore output, and in the ledger self-check from the start, so that adding
+attachment storage extends an existing promise instead of quietly breaking one
+that was already made.
+
 Until the word "protected" can honestly cover both points above, the product
 does not use it: `docs/plans/data-portability-plan.md` records why.
 

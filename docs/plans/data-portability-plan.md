@@ -1,7 +1,9 @@
 # Data Portability & Protection Plan (R3)
 
-Status: **slices 1-7 shipped (1-3 on 2026-08-23, 4-7 on 2026-08-24); slice 8
-— the acceptance review — is what remains**. Written 2026-08-23,
+Status: **R3 is complete and accepted**. All eight slices shipped 2026-08-23
+and 2026-08-24; the acceptance review at the end of this document is closed,
+with a yes/no and a reason for every deferred item. The plan is now the
+reference for what shipped and what was deliberately left out. Written 2026-08-23,
 immediately after R2's acceptance review closed. Slice 1 delivered the
 dedicated read-only connection, the one-snapshot export read model,
 `GET /api/v1/exports/ledger.csv`, `GET /api/v1/exports/preview`, and
@@ -926,7 +928,88 @@ Full-suite discipline per `validate-and-ship`: `scripts/test-backend.sh`,
 13. QIF layout mismatch is stated out of band, never claimed as detectable
     (rev 3).
 
-## Open for the owner (recommendation first, none blocking the start)
+## R3 acceptance review — closed 2026-08-24
+
+Every deferred item below has a yes or no and a reason, the way R2 closed. The
+plan's own history is in the revision notes at the top; this section is about
+what shipped.
+
+### The four commitments
+
+| Commitment | Met | Where |
+|---|---|---|
+| **1. Scheduled backups** on the work queue, with retention and visible status | ✅ | Nightly at the owner's local time, on the durable queue, **using SQLite's online backup API** rather than the `VACUUM INTO` the roadmap assumed — ADR 0004 reserves that for operator-triggered copies, and the driver supports the in-app path. Retention prunes only recorded, correctly named files that resolve inside `BACKUP_DIR`. Status, history, and failures are on `/app/settings/data` |
+| **2. A documented restore path**, in this slice | ✅ | `rekenraam restore` and `rekenraam verify-backup`, with an advisory process lock, WAL-set preservation, atomic install, and six drills in CI. The claim "an untested backup is not a backup" is now false for this project |
+| **3. Trial-balance self-check**, read-only, surfaced in the UI | ✅ | Nine checks over one snapshot, chained onto every successful backup, reporting and explaining but never repairing. Covers more than the commitment asked: it named per-commodity sums, lots ↔ holdings, and `integrity_check`, and the shipped check adds transaction- and book-level balance, structural integrity, checkpoint integrity, `foreign_key_check`, and account-version coverage |
+| **4. An attachments hook, designed but empty** | ✅ | Four slots: the export manifest declares `attachments: {included: false}`, the self-check reserves a check reporting `not_applicable`, `rekenraam restore` prints the step, and the backup documentation names "the database **and** the attachments directory". The last of those was missing until this review — the code had the hook, the docs did not |
+| **Beancount derivability at zero feature cost** | ✅ | No writer, as intended. `ledger.csv` carries the four fields a transform needs on every posting, the per-entry balance guarantee, and a documented narration fallback, all asserted by `TestBundleCarriesEveryFieldABeancountTransformNeeds` |
+
+### Deferred, with the reason
+
+| Item | Shipped? | Why |
+|---|---|---|
+| Reporting-currency selector | **No** | Approved 2026-08-19 and explicitly sequenced *after* R3. Every export stays per-commodity and exact; conversion would have been the first place a rounded figure entered a file that claims to be exact |
+| Accessibility regression coverage | **No** | R3a owns it. Slice 7's screen uses semantic tables, labelled controls, and `sr-only` headers, but automated a11y checks are a separate initiative and pretending otherwise would let R3 claim coverage it never measured |
+| CSV **import** | **No** | R5. Export and import share no code path here by design: the export writes a shape, the import reads bank files. R5's CSV adapter must reuse `canonicalDecimal` and `parseFlexibleDate`, which is recorded there, not here |
+| Attachment storage, files in the backup | **No** | R14a, after R5. The hook above is what keeps this honest in the meantime |
+| Full structured JSON export (settings, connections, profiles) | **No** | Still an open product question in `product-requirements.md`, and R3 deliberately did not answer it. What R3 does instead is name every excluded category in the manifest, so "what is not in this file" is answered even though "should there be a second file" is not |
+| Native beancount/ledger writer | **No** | Derivability was the requirement and it is met. A writer is a format to maintain, and the audience it courts can write a 40-line transform against a contract that is now in an ADR |
+| Off-machine backup targets (S3, rsync) | **No** | The app writes one verified file to a directory; putting that directory on another device is an operator decision the deployment docs now make explicit. Building sync targets would mean owning credentials, retries, and partial-upload semantics for every provider |
+| Notification on backup failure | **No** | There is no notification channel in the product yet. Failures are visible on the Data screen with their reason and a retry, which is the honest maximum until one exists |
+| Comma-decimal QIF output | **No** | Deferred in slice 3. Rekenraam writes a point decimal mark and states it out of band; adding a second output convention doubles the ways a file can be misread while the reader still cannot detect either |
+| `!Type:Invst` QIF export | **No** | Excluded on purpose: investment semantics vary per reader and would misstate cost basis. The CSV bundle is the lossless investment path, and the refusal names the accounts rather than dropping them |
+
+### The five owner questions, settled by shipping
+
+All five were implemented as recommended. Each is a default, not a fixed
+decision — the first three are one line of code or configuration to change:
+
+1. **QIF default date layout** — `mdy`, with a selector, and the layout stated
+   in every filename plus an archive's manifest and README.
+2. **Backup retention default** — 14, no age cap, changeable on the screen.
+3. **`BACKUP_DIR` in Docker** — defaults beside the database, with the docs
+   recommending a separate device and saying plainly what the default does not
+   survive.
+4. **Automatic nightly self-check** — yes, chained onto a successful backup. A
+   failing check never fails the backup.
+5. **Primary export button** — the archive. The flat CSV is the secondary
+   link and is unfiltered by design.
+
+The two qualifications were kept: the product does not use the word
+"protected", and this plan's status header tracked the code rather than the
+document.
+
+### What the work changed about the plan
+
+Four claims written during planning turned out to be wrong when tested, and are
+corrected in place above rather than left as history to trip over:
+
+- `VerifySQLiteBackup` already ran `foreign_key_check`; the plan said it did
+  not, and slice 4 briefly added a duplicate before the existing test caught it.
+- A mismatched comma-decimal QIF profile does not empty an amount — it keeps
+  the raw text and warns; and three-decimal money under that profile is
+  silently wrong, which is worse than the plan claimed and is now pinned by a
+  test.
+- The trial balance's identities did not hold under `date_basis=transaction`
+  until exported movement was split into in-range and out-of-range.
+- Most corruptions the self-check looks for are already refused by schema
+  triggers, so the check is a second line of defence rather than the first.
+
+The pattern behind all four is the same: plausible behaviour written down
+during planning, without opening the file. The tests caught every one.
+
+### Follow-ups this initiative created
+
+| Item | Home |
+|---|---|
+| T-63 — a posting refused for an account-version gap reports the wrong reason | `backlog.md`, open; cosmetic, but the refusal itself is load-bearing for the export fallback |
+| Notification channel for backup and self-check failures | Unscheduled; the Data screen is the only surface today |
+| `bundle.zip` for very large books | Unscheduled. Exports stream and read in one snapshot, but nothing has been measured beyond a personal-scale book |
+
+## The owner questions as they were asked (all answered above)
+
+Kept as written so the acceptance review's answers can be read against the
+question they answer. Every one shipped as recommended; none is frozen.
 
 1. **QIF default date layout** — recommend `mdy` with a visible selector:
    maximum compatibility with legacy Quicken/Money readers, and the layout is

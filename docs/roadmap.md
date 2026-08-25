@@ -6,7 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-08-20 (merge of two long-diverged branches). R2's
+Last reviewed: 2026-08-24 (R3 complete and accepted; R3a becomes current).
+Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
 void) is fully shipped: T-37 cascades to every rate triangulated from a voided
@@ -26,8 +27,8 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 |---|---|---|---|
 | R1 | Reconcile workflow screen (trust loop) | ✅ | `docs/implemented.md` (Reconciliation) |
 | R2 | Reports users can act on | ✅ | `docs/plans/reports-plan.md` |
-| R3 | Portable **and protected** core data (CSV/QIF export, backups, self-check) | ▶ | `docs/plans/data-portability-plan.md` |
-| R3a | Accessibility regression coverage | ⏭ | this file |
+| R3 | Portable **and protected** core data (CSV/QIF export, backups, restore, self-check) | ✅ | `docs/plans/data-portability-plan.md` |
+| R3a | Accessibility regression coverage | ▶ | this file |
 | R4 | QIF import | ✅ | `docs/implemented.md` (Import Pipeline) |
 | R5 | Ordinary-bank CSV import + profiles | ⏭ | `docs/plans/import-plan.md` |
 | R6 | Import depth (XLSX/OFX, matching, rollback) | ⏸ | `docs/plans/import-plan.md` |
@@ -134,7 +135,31 @@ valuation, investment dimensions, and snapshots — remains recorded in
 reason; the reporting-currency valuation method is the only one approved to
 build, sequenced after R3.
 
-### Next — R3: portable **and protected** core data
+### Done — R3: portable **and protected** core data
+
+**Delivered 2026-08-23/24, acceptance review closed 2026-08-24.** The trust
+sentence holds end to end: a user can export the ledger as a flat CSV, a
+checksummed archive, or QIF; the app backs itself up nightly with SQLite's
+online backup API, verifies each copy before naming it, and prunes only what it
+recorded; `rekenraam restore` installs a backup without destroying what it
+replaces, behind a lock that proves the server is stopped; and a nine-check
+read-only self-check runs after every successful backup. All of it is reachable
+from `/app/settings/data` in six languages.
+
+Two decisions worth carrying forward: the export contract is an ADR
+(`docs/adrs/0011-ledger-export-contract.md`), not just a plan, because a
+consumer builds against it; and the product still does not use the word
+"protected", because that would need deployment guidance covering a separate
+storage device and the retention of `REKENRAAM_SECRET_KEY`.
+
+The four commitments below were the non-negotiables; every one is met, and
+`docs/plans/data-portability-plan.md` records each deferred item with a yes/no
+and a reason.
+
+<details>
+<summary>The scope as it was set on 2026-08-05</summary>
+
+### R3 as planned: portable **and protected** core data
 
 Ship core-ledger CSV and QIF export. These are mandatory product requirements,
 not optional polish. The first release should favour a documented, stable export
@@ -172,12 +197,14 @@ seven self-check checks, the eight delivery slices with cut lines, and the
 five open owner questions. The four numbered commitments above are its
 non-negotiables; the plan may not quietly narrow them.
 
+</details>
+
 **Sequenced after R3, approved 2026-08-19: a reporting-currency selector**
 (one reporting currency, a named valuation method). Per-commodity exact totals
 stay in every response — conversion is additive, never replacing what R2
 shipped.
 
-### R3a — core-workflow accessibility regression coverage
+### Next — R3a: core-workflow accessibility regression coverage
 
 Add focused automated accessibility smoke checks for setup/auth, transaction
 entry, reconciliation, reports, and import. Cover semantic controls, labels,
