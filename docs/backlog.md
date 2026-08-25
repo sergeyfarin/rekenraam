@@ -699,7 +699,7 @@ to encode that case. Not urgent — the coverage exists today — but it is the
 cheapest way to stop the two layers asserting different numbers about the same
 ledger.
 
-### T-61 The browser suite has no acceptance-mapped subset `[ ]`
+### T-61 The browser suite has no acceptance-mapped subset `[x]`
 
 **Files:** `e2e/playwright/`, `scripts/test-e2e-smoke.sh`,
 `scripts/test-release-preflight.sh`.
@@ -713,7 +713,14 @@ Worth a third, small grouping — a tag or a directory — whose cases map one-t
 onto a plan's validation matrix, so closing an initiative can point at a suite
 rather than at an argument. The R2 multi-currency case is the first member.
 
-### T-62 A commodity symbol is rendered hard against its amount `[ ]`
+**Done 2026-08-24.** The grouping is a `[acceptance]` prefix in the test title
+and `scripts/test-e2e-acceptance.sh` to run just those. Three members so far:
+the R2 multi-currency journey, and R3 slice 7's two Data-screen cases. A tag
+rather than a directory, so a case can live beside its feature's other tests
+and still be selectable — moving files would have split each feature's suite in
+two.
+
+### T-62 A commodity symbol is rendered hard against its amount `[x]`
 
 **Files:** `frontend/src/lib/transactions/transaction-list.svelte:165`,
 `frontend/src/lib/transactions/transaction-detail-panel.svelte:446`,
@@ -737,6 +744,11 @@ Fix is a shared helper with the rule stated once — separate when the symbol's
 last character is alphanumeric, do not when it is punctuation — applied at all
 three call sites, with the rule unit-tested rather than each call site checked
 by eye. It is a display concern only: no amount, scale, or commodity changes.
+
+**Done 2026-08-24.** `joinCommodityAmount` in `$lib/money/format.ts`, applied at
+all three call sites, with the rule tested including non-Latin labels (`руб 10,00`
+separates, `₽10,00` does not). The Data screen shipped the same day and uses it
+rather than adding a fourth call site with a fourth opinion.
 
 ### T-63 A posting rejected for a version gap says the account is invalid `[ ]`
 

@@ -17,7 +17,7 @@
     type TransactionLifecycleRequest
   } from '$lib/api/transactions';
   import { APIClientError } from '$lib/api/client';
-  import { formatQuantity } from '$lib/money/format';
+  import { formatQuantity, joinCommodityAmount } from '$lib/money/format';
   import {
     formatSignedAmount,
     resolveAccountLabel,
@@ -443,7 +443,10 @@
           <li class="flex items-center justify-between rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2 text-sm">
             <span class="min-w-0 truncate text-foreground">{resolveAccountLabel(p)}</span>
             <span class={`ml-3 shrink-0 font-medium tabular-nums ${p.quantity_value.startsWith('-') ? 'text-danger' : 'text-foreground'}`}>
-              {commodityDisplay(p)}{formatSignedAmount(p, p.account_class as AccountClass, locale)}
+              {joinCommodityAmount(
+                commodityDisplay(p),
+                formatSignedAmount(p, p.account_class as AccountClass, locale)
+              )}
             </span>
           </li>
         {/each}

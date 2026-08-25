@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatQuantity } from './format';
+import { formatQuantity, joinCommodityAmount } from './format';
 import { formatLedgerAmount, parseDecimalAmount } from './amount';
 
 describe('formatQuantity', () => {
@@ -94,4 +94,34 @@ describe('display formatting vs editable formatting', () => {
     const displayed = formatQuantity('123456789', 2, 'en-US');
     expect(parseDecimalAmount(displayed)).toEqual({ value: '123456789', scale: 2 });
   });
+});
+
+describe('joinCommodityAmount', () => {
+	it('runs a punctuation symbol straight into its amount', () => {
+		expect(joinCommodityAmount('$', '42.00')).toBe('$42.00');
+		expect(joinCommodityAmount('€', '42.00')).toBe('€42.00');
+		expect(joinCommodityAmount('£', '-7.50')).toBe('£-7.50');
+	});
+
+	it('separates a label that ends in a letter or digit', () => {
+		// The T-62 case: "AAPL2.000" and "USD42.00" read as different numbers.
+		expect(joinCommodityAmount('AAPL', '2.000')).toBe('AAPL 2.000');
+		expect(joinCommodityAmount('USD', '42.00')).toBe('USD 42.00');
+		expect(joinCommodityAmount('IWDA9', '1.5')).toBe('IWDA9 1.5');
+	});
+
+	it('treats non-Latin letters as letters', () => {
+		expect(joinCommodityAmount('руб', '10,00')).toBe('руб 10,00');
+		expect(joinCommodityAmount('₽', '10,00')).toBe('₽10,00');
+	});
+
+	it('returns the amount alone when there is no label', () => {
+		expect(joinCommodityAmount('', '42.00')).toBe('42.00');
+		expect(joinCommodityAmount('   ', '42.00')).toBe('42.00');
+	});
+
+	it('ignores surrounding whitespace in the label', () => {
+		expect(joinCommodityAmount(' USD ', '42.00')).toBe('USD 42.00');
+		expect(joinCommodityAmount(' $ ', '42.00')).toBe('$42.00');
+	});
 });

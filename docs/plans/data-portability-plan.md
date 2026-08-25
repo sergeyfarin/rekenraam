@@ -1,7 +1,7 @@
 # Data Portability & Protection Plan (R3)
 
-Status: **slices 1-6 shipped (1-3 on 2026-08-23, 4-6 on 2026-08-24); slices 7-8
-planned**. Written 2026-08-23,
+Status: **slices 1-7 shipped (1-3 on 2026-08-23, 4-7 on 2026-08-24); slice 8
+— the acceptance review — is what remains**. Written 2026-08-23,
 immediately after R2's acceptance review closed. Slice 1 delivered the
 dedicated read-only connection, the one-snapshot export read model,
 `GET /api/v1/exports/ledger.csv`, `GET /api/v1/exports/preview`, and
@@ -25,7 +25,9 @@ preservation with a checkpoint first, atomic install, and six drills — includi
 uncheckpointed WAL content and sealed data that decrypts with the retained key.
 Slice 6 delivered the read-only self-check: nine checks over one snapshot,
 chained onto every successful backup, with the finding that most corruptions it
-looks for are already refused by schema triggers — recorded below. This plan is the implementation reference for the
+looks for are already refused by schema triggers — recorded below. Slice 7
+delivered `/app/settings/data` in six locales, with T-61's acceptance-tagged
+browser subset and T-62's commodity-spacing helper alongside it. This plan is the implementation reference for the
 roadmap slice "R3 — portable **and protected** core data"; it replaces the
 roadmap's inline prose, which stays as the one-paragraph summary and now points
 here.
@@ -869,8 +871,8 @@ belongs to. The registry is `docs/backlog.md`; this table only says *where*.
 | **T-63** a posting refused for an account-version gap reports the wrong reason | Slice 6, or earlier as a standalone fix | It is the guard that keeps slice 1's export fallback defensive. Fixing the message is cosmetic; keeping the rejection is not. Slice 6's `account_version_coverage` check is only meaningful while the write path still refuses the case |
 | **T-64** collapse the migration files into one | ✅ **done 2026-08-24**, after slice 6 | The rule is "after R3's *last* migration", which the earlier note mis-stated as slice 4. Slice 4 added `backup_policies` and `backup_runs` (migration 0006), but slice 6's self-check persists its own run record and will add another. Collapsing between them means collapsing twice — the exact cost the sequencing exists to avoid; collapsing after the tag is not permitted at all |
 | **T-55** no historical-upgrade migration test `[blocked]` | Post-`v0.1.0` | T-64 removes the only multi-step upgrade path such a test could exercise. Pre-release that is fine — there are no legacy databases — but the two items must not be worked in the wrong order |
-| **T-61** the browser suite has no acceptance-mapped subset | Slice 7 | Slice 7 adds the first browser cases for export, backup, and self-check. They are exactly the kind of case T-61 wants grouped against a plan's validation matrix, so the tag is cheapest to introduce while writing them |
-| **T-62** a commodity symbol renders hard against its amount | Slice 7 | The Data screen shows sizes, counts, and commodity-labelled figures; it should not add a fourth call site to the three that already run symbol and amount together |
+| **T-61** the browser suite has no acceptance-mapped subset | ✅ **done 2026-08-24**, with slice 7 | Slice 7 adds the first browser cases for export, backup, and self-check. They are exactly the kind of case T-61 wants grouped against a plan's validation matrix, so the tag is cheapest to introduce while writing them |
+| **T-62** a commodity symbol renders hard against its amount | ✅ **done 2026-08-24**, with slice 7 | The Data screen shows sizes, counts, and commodity-labelled figures; it should not add a fourth call site to the three that already run symbol and amount together |
 
 Nothing else in the backlog blocks a slice. T-34 and T-48 are unrelated and
 stay where they are.

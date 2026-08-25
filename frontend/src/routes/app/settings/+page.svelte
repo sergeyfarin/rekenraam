@@ -161,6 +161,12 @@
       copy: m.settings_card_currencies_copy()
     },
     {
+      href: '/app/settings/data',
+      icon: Database,
+      title: m.settings_data_title(),
+      copy: m.settings_data_subtitle()
+    },
+    {
       href: '/app/settings/trash',
       icon: Trash2,
       title: m.settings_card_trash_title(),
