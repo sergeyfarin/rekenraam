@@ -766,12 +766,12 @@ version, the export starts relying on a fallback instead of a guarantee, and
 `docs/plans/data-portability-plan.md` slice 6 gains a real failure to report
 rather than a counter that should always read zero.
 
-### T-64 Five migration files describe one schema nobody has yet `[ ]`
+### T-64 Five migration files describe one schema nobody has yet `[x]`
 
-**Files:** `backend/migrations/0001_initial_schema.sql` … `0005_mfa_totp.sql`.
+**Files:** `backend/migrations/0001_initial_schema.sql` (was `0001` … `0007`).
 
-Four small deltas sit on top of a 2,400-line initial schema, so reading "what is
-the schema" means reading five files and applying the deltas by eye. There are
+Six small deltas sat on top of a 2,400-line initial schema, so reading "what is
+the schema" meant reading seven files and applying the deltas by eye. There are
 no legacy databases and no tagged release, and *Project Lifecycle And Migration
 Immutability* (`docs/conventions.md`) permits rewriting migrations until
 `v0.1.0` — after that they are immutable and this stops being possible.
@@ -787,7 +787,21 @@ convention.
 persists its own run record and will add another, so the trigger is slice 6.
 An earlier note here named slice 4; that was the wrong reading of its own
 reason, which is that collapsing between two schema slices means collapsing
-twice. Note the interaction with T-55: collapsing
+twice.
+
+**Done 2026-08-24**, after slice 6 added the last of R3's schema (0007). Seven
+files became one: 0002's `ALTER TABLE` became an inline column with its
+reasoning intact, and 0003-0007's tables were folded in with their comments
+rather than dumped from a live database — a `.schema` dump would have produced
+the same tables and thrown away every explanation in them.
+
+Verified by building the schema from the old chain and from the collapsed file
+and diffing all 207 objects, normalized for comments and punctuation spacing:
+identical. `TestMigrationsProduceTheExpectedSchema` keeps a lighter version of
+that check permanently, since nothing else now cross-references the schema.
+
+T-55 becomes post-`v0.1.0` by construction: there is no longer a multi-step
+upgrade path for a historical-upgrade test to exercise. Note the interaction with T-55: collapsing
 removes the only multi-step upgrade path a historical-upgrade migration test
 could exercise, which makes T-55 a post-`v0.1.0` concern rather than a
 pre-release one.

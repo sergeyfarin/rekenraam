@@ -334,10 +334,10 @@ remote's T-42, TypeScript 7) and T-34.
 - [ ] T-63 a posting refused for an account-version gap reports the wrong
       reason ("posting account is invalid"). Cosmetic, but the rejection itself
       is load-bearing for R3's export — see `backlog.md`.
-- [ ] T-64 collapse the migration files into one before `v0.1.0`, after R3's
-      **last** migration — slice 6, not slice 4: the self-check adds its own run
-      record. Permitted only until the tag; needs the `BREAKING DEV DATABASE`
-      marker. See `backlog.md`.
+- [x] T-64 **done 2026-08-24** — seven migration files folded into one after
+      slice 6 added the last of R3's schema. All 207 schema objects verified
+      identical to the old chain; `TestMigrationsProduceTheExpectedSchema` keeps
+      checking the shape. Development databases must be recreated.
 - [ ] T-34 investment provider-event producer — `[blocked]` on R15's third
       slice and an unmade provider choice. See `backlog.md`.
 - [ ] T-48 TypeScript 7 upgrade — `[blocked]` on `openapi-typescript` shipping

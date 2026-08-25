@@ -952,8 +952,16 @@ CREATE TABLE IF NOT EXISTS price_observations (
   void_reason TEXT NOT NULL DEFAULT '',
   recorded_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  -- Voiding a price observation is a user operation, so it needs its own
+  -- audit_events reference. created_audit_event_id records the insert; without
+  -- this column a void's who/when/why would be an orphaned audit row (T-37).
+  voided_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
 );
+
+CREATE INDEX IF NOT EXISTS price_observations_voided_idx
+  ON price_observations (book_id, voided_at)
+  WHERE voided_at IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS price_observations_lookup_idx
   ON price_observations (book_id, base_commodity_id, quote_commodity_id, quote_type, adjustment_basis, valuation_date DESC, recorded_at DESC, id DESC);
@@ -2235,7 +2243,256 @@ BEGIN
 END;
 -- +goose StatementEnd
 
+-- Durable record of successful and failed authentication attempts so an
+-- operator can spot a brute-force run and reconstruct an incident (S-07).
+--
+-- Privacy posture, deliberate:
+--   * No password material, no session token, not even the token hash — the
+--     session id is enough to correlate with auth_sessions.
+--   * The attempted username is stored because "which account is being
+--     guessed" is the whole point; it has already passed username-shape
+--     validation before an event is written.
+--   * client_ip is the proxy-aware client address resolved by the API layer,
+--     not the raw peer address, so events behind a reverse proxy name the
+--     real client.
+--   * Rows are pruned by the existing session-cleanup loop; this is an
+--     operational log with a retention window, not a permanent archive.
+CREATE TABLE IF NOT EXISTS authentication_events (
+  id INTEGER PRIMARY KEY,
+  occurred_at TEXT NOT NULL,
+  event_type TEXT NOT NULL CHECK (
+    event_type IN ('login_succeeded', 'login_failed', 'login_blocked', 'logout')
+  ),
+  outcome TEXT NOT NULL CHECK (outcome IN ('success', 'failure')),
+  username TEXT NOT NULL DEFAULT '',
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  auth_session_id INTEGER REFERENCES auth_sessions(id) ON DELETE SET NULL,
+  client_ip TEXT NOT NULL DEFAULT '',
+  failure_reason TEXT NOT NULL DEFAULT '',
+  request_id TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS authentication_events_occurred_idx
+  ON authentication_events (occurred_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS authentication_events_client_ip_idx
+  ON authentication_events (client_ip, occurred_at DESC)
+  WHERE client_ip <> '';
+
+-- Approved-device records that make the login throttle lockout-safe (S-04).
+--
+-- The problem: this app has exactly one owner, so its username is effectively
+-- public. Any internet attacker could fail five logins and keep the
+-- username-scoped throttle permanently engaged, locking the real owner out of
+-- their own finances — the throttle became the denial of service.
+--
+-- A device that has previously completed a successful login carries a random
+-- token; presenting it moves the attempt onto a throttle scope only that
+-- device can fill. The token is a throttle-scope selector, NOT a credential:
+-- it grants no access whatsoever, and a login still needs the password.
+-- Only the hash is stored, exactly like session tokens.
+CREATE TABLE IF NOT EXISTS login_trusted_devices (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT,
+  -- The client IP the device was approved from, so the owner can recognise
+  -- an entry when reviewing the list. Proxy-aware, same resolution as
+  -- authentication_events.
+  created_client_ip TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS login_trusted_devices_user_idx
+  ON login_trusted_devices (user_id, revoked_at, expires_at);
+
+-- Multi-factor authentication (S-06), the last gate on deploying real
+-- financial data to the public internet. The second factor is TOTP
+-- (RFC 6238) plus single-use recovery codes.
+--
+-- Why TOTP and not WebAuthn: this is a single-owner, self-hosted app that is
+-- routinely reached over a LAN address or a private hostname, where WebAuthn's
+-- origin binding is awkward and its recovery story for an owner who loses
+-- their only authenticator is worse. An authenticator app works everywhere the
+-- app does.
+
+-- One enrollment per user. 'pending' means the secret has been issued but no
+-- code has proved the user actually stored it; only 'active' gates a login, so
+-- an abandoned enrollment can never lock anyone out.
+CREATE TABLE IF NOT EXISTS user_mfa_totp (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  -- secretbox (AES-256-GCM) ciphertext of the base32 shared secret. The
+  -- secret is a credential-equivalent: anyone holding it can mint valid
+  -- codes forever, so it is never stored in the clear. Enrollment therefore
+  -- requires REKENRAAM_SECRET_KEY, exactly like online import connections.
+  secret_ciphertext TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'active')),
+  created_at TEXT NOT NULL,
+  activated_at TEXT,
+  -- The RFC 6238 counter of the last accepted code. A code stays valid for
+  -- its whole 30-second step, so without refusing steps at or below this one
+  -- a shoulder-surfed or intercepted code could be replayed inside the
+  -- window.
+  last_used_step INTEGER
+);
+
+-- Recovery codes are the answer to "my phone is gone". Single use, hashed at
+-- rest, and regenerated as a set: showing a used code again would be a lie
+-- about what still works.
+--
+-- SHA-256 without a slow KDF is deliberate and matches session tokens: these
+-- are 100+ bits of server-generated randomness, not user-chosen passwords, so
+-- there is nothing for a slow hash to protect against.
+CREATE TABLE IF NOT EXISTS user_mfa_recovery_codes (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  used_at TEXT,
+  -- The client IP that spent the code, so a recovery-code login is
+  -- recognisable when reviewing the authentication log.
+  used_client_ip TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS user_mfa_recovery_codes_user_idx
+  ON user_mfa_recovery_codes (user_id, used_at);
+
+-- A password that verified but has not yet met the second factor. This is the
+-- half-authenticated state, and it is deliberately a durable row rather than
+-- anything the browser could forge: it carries no session, grants nothing, and
+-- expires in minutes.
+CREATE TABLE IF NOT EXISTS login_mfa_challenges (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT,
+  client_ip TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS login_mfa_challenges_expiry_idx
+  ON login_mfa_challenges (expires_at);
+
+-- Scheduled backups (R3 slice 4, docs/plans/data-portability-plan.md).
+--
+-- The policy is stored rather than configured by environment so the owner can
+-- change it from the app; where the files go stays an operator decision
+-- (BACKUP_DIR), because it is a deployment fact, not a preference.
+CREATE TABLE IF NOT EXISTS backup_policies (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL UNIQUE REFERENCES books(id) ON DELETE RESTRICT,
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  hour_local INTEGER NOT NULL DEFAULT 3 CHECK (hour_local BETWEEN 0 AND 23),
+  minute_local INTEGER NOT NULL DEFAULT 15 CHECK (minute_local BETWEEN 0 AND 59),
+  retention_count INTEGER NOT NULL DEFAULT 14 CHECK (retention_count >= 1),
+  retention_max_age_days INTEGER CHECK (retention_max_age_days IS NULL OR retention_max_age_days >= 1),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+-- One row per backup occurrence, created in the same transaction as the work
+-- item that will execute it.
+--
+-- occurrence_key is what makes a retry idempotent where the work queue cannot:
+-- the queue's uniqueness covers pending and running items only, so once an item
+-- completes the same scheduled day could be enqueued again. A scheduled run's
+-- key is its local date; a manual run gets its own identity because asking for
+-- a backup twice is a reasonable thing to do.
+CREATE TABLE IF NOT EXISTS backup_runs (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  trigger TEXT NOT NULL CHECK (trigger IN ('scheduled', 'manual')),
+  occurrence_key TEXT NOT NULL CHECK (length(trim(occurrence_key)) > 0),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+  -- Deterministic from the occurrence, not from the clock at execution time, so
+  -- a retry writes to the same path instead of scattering near-duplicates.
+  target_path TEXT NOT NULL,
+  scheduled_for_local_date TEXT CHECK (scheduled_for_local_date IS NULL OR scheduled_for_local_date GLOB '????-??-??'),
+  byte_size INTEGER,
+  page_count INTEGER,
+  verified INTEGER NOT NULL DEFAULT 0 CHECK (verified IN (0, 1)),
+  attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  error_summary TEXT NOT NULL DEFAULT '',
+  work_item_id INTEGER REFERENCES background_work_items(id) ON DELETE SET NULL,
+  requested_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  started_at TEXT,
+  finished_at TEXT,
+  pruned_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (book_id, occurrence_key)
+);
+
+CREATE INDEX IF NOT EXISTS backup_runs_book_created_idx
+  ON backup_runs (book_id, created_at DESC, id DESC);
+
+-- Pruning walks completed, unpruned runs oldest-first.
+CREATE INDEX IF NOT EXISTS backup_runs_retention_idx
+  ON backup_runs (book_id, status, pruned_at, created_at, id);
+
+-- The ledger self-check (R3 slice 6, docs/plans/data-portability-plan.md).
+--
+-- Read-only and diagnostic: it reports and explains, and never repairs. These
+-- two tables are the only thing it writes, and they hold no ledger data — a
+-- check that could change a balance would be a different, far more dangerous
+-- feature.
+CREATE TABLE IF NOT EXISTS self_check_runs (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  trigger TEXT NOT NULL CHECK (trigger IN ('manual', 'scheduled')),
+  status TEXT NOT NULL CHECK (status IN ('running', 'passed', 'failed')),
+  failed_check_count INTEGER NOT NULL DEFAULT 0 CHECK (failed_check_count >= 0),
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS self_check_runs_book_started_idx
+  ON self_check_runs (book_id, started_at DESC, id DESC);
+
+-- One row per check per run. A table rather than a JSON blob on the run,
+-- because "which check failed, how often, since when" is a question worth
+-- answering with a query — the mistake T-54 records about price derivations.
+CREATE TABLE IF NOT EXISTS self_check_results (
+  id INTEGER PRIMARY KEY,
+  run_id INTEGER NOT NULL REFERENCES self_check_runs(id) ON DELETE CASCADE,
+  check_id TEXT NOT NULL CHECK (length(trim(check_id)) > 0),
+  status TEXT NOT NULL CHECK (status IN ('passed', 'failed', 'not_applicable')),
+  finding_count INTEGER NOT NULL DEFAULT 0 CHECK (finding_count >= 0),
+  -- A capped sample of offending identifiers, for a human to go and look at.
+  -- Diagnostic display only: never joined on, never counted from.
+  sample_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(sample_json)),
+  summary TEXT NOT NULL DEFAULT '',
+  UNIQUE (run_id, check_id)
+);
+
+CREATE INDEX IF NOT EXISTS self_check_results_check_idx
+  ON self_check_results (check_id, status);
+
 -- +goose Down
+DROP INDEX IF EXISTS self_check_results_check_idx;
+DROP TABLE IF EXISTS self_check_results;
+DROP INDEX IF EXISTS self_check_runs_book_started_idx;
+DROP TABLE IF EXISTS self_check_runs;
+DROP INDEX IF EXISTS backup_runs_retention_idx;
+DROP INDEX IF EXISTS backup_runs_book_created_idx;
+DROP TABLE IF EXISTS backup_runs;
+DROP TABLE IF EXISTS backup_policies;
+DROP INDEX IF EXISTS login_mfa_challenges_expiry_idx;
+DROP TABLE IF EXISTS login_mfa_challenges;
+DROP INDEX IF EXISTS user_mfa_recovery_codes_user_idx;
+DROP TABLE IF EXISTS user_mfa_recovery_codes;
+DROP TABLE IF EXISTS user_mfa_totp;
+DROP INDEX IF EXISTS login_trusted_devices_user_idx;
+DROP TABLE IF EXISTS login_trusted_devices;
+DROP INDEX IF EXISTS authentication_events_client_ip_idx;
+DROP INDEX IF EXISTS authentication_events_occurred_idx;
+DROP TABLE IF EXISTS authentication_events;
 DROP TRIGGER IF EXISTS commodity_versions_no_delete;
 DROP TRIGGER IF EXISTS investment_instrument_versions_no_delete;
 DROP INDEX IF EXISTS import_connection_holdings_connection_idx;

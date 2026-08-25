@@ -881,3 +881,68 @@ func TestReadOnlySnapshotDoesNotSeeLaterWrites(t *testing.T) {
 	require.NoError(t, snapshot.QueryRowContext(ctx, "SELECT COUNT(*) FROM audit_events").Scan(&after))
 	require.Equal(t, before, after, "the snapshot must not grow while it is open")
 }
+
+// The schema is one migration file now (T-64), which means nothing else
+// re-derives it and nothing checks it against a previous shape. What can still
+// be checked is that the file produces what the code expects: every table,
+// index, and trigger the app reads, created exactly once, with the constraints
+// that make the ledger's invariants enforceable rather than aspirational.
+func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	database, err := Open(ctx, "file:"+filepath.Join(t.TempDir(), "schema.sqlite"))
+	require.NoError(t, err)
+	defer database.Close()
+	require.NoError(t, Migrate(ctx, database))
+
+	objects := map[string]string{}
+	rows, err := database.QueryContext(ctx, `
+		SELECT type, name FROM sqlite_master
+		WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE 'goose_%'
+	`)
+	require.NoError(t, err)
+	defer rows.Close()
+	for rows.Next() {
+		var kind, name string
+		require.NoError(t, rows.Scan(&kind, &name))
+		_, duplicate := objects[name]
+		require.Falsef(t, duplicate, "%s %s was created twice", kind, name)
+		objects[name] = kind
+	}
+	require.NoError(t, rows.Err())
+
+	// A sample across every era of the schema: the original ledger, the
+	// security work, and each feature folded in when the migrations were
+	// collapsed. If a fold dropped something, one of these is missing.
+	for name, kind := range map[string]string{
+		"transactions":                           "table",
+		"posting_versions":                       "table",
+		"current_transaction_versions":           "view",
+		"investment_lots":                        "table",
+		"price_observations":                     "table",
+		"background_work_items":                  "table",
+		"authentication_events":                  "table",
+		"login_trusted_devices":                  "table",
+		"user_mfa_totp":                          "table",
+		"user_mfa_recovery_codes":                "table",
+		"login_mfa_challenges":                   "table",
+		"backup_policies":                        "table",
+		"backup_runs":                            "table",
+		"self_check_runs":                        "table",
+		"self_check_results":                     "table",
+		"price_observations_voided_idx":          "index",
+		"posting_versions_no_update":             "trigger",
+		"posting_versions_account_version_valid": "trigger",
+	} {
+		assert.Equalf(t, kind, objects[name], "%s %s is missing from the schema", kind, name)
+	}
+
+	// The column that arrived as an ALTER before the collapse must still be a
+	// column, not a casualty of folding it inline.
+	var voidedAuditColumn int
+	require.NoError(t, database.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM pragma_table_info('price_observations') WHERE name = 'voided_audit_event_id'
+	`).Scan(&voidedAuditColumn))
+	assert.Equal(t, 1, voidedAuditColumn)
+}
