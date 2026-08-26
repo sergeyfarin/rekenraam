@@ -940,5 +940,7 @@
   "settings_data_status_not_applicable": "Nicht zutreffend",
   "settings_data_status_pending": "In Warteschlange",
   "settings_data_status_running": "Läuft",
-  "settings_data_status_completed": "Geprüft"
+  "settings_data_status_completed": "Geprüft",
+  "settings_data_backups_will_retry": "Wird erneut versucht",
+  "settings_data_backups_gave_up": "Aufgegeben"
 }

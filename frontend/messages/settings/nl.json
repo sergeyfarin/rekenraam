@@ -940,5 +940,7 @@
   "settings_data_status_not_applicable": "Niet van toepassing",
   "settings_data_status_pending": "In wachtrij",
   "settings_data_status_running": "Bezig",
-  "settings_data_status_completed": "Geverifieerd"
+  "settings_data_status_completed": "Geverifieerd",
+  "settings_data_backups_will_retry": "Probeert opnieuw",
+  "settings_data_backups_gave_up": "Opgegeven"
 }

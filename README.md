@@ -275,8 +275,13 @@ running. Nothing needs to be scheduled outside it.
   from the start so that "backed up nightly" never has to be walked back when
   files land outside SQLite, where a database copy cannot reach them.
 - **Whether it worked:** the app shows the last successful backup, the next
-  scheduled one, and any failures with their reason. A backup that has been
-  failing all week is visible without reading logs.
+  scheduled one, and any failures with their reason — distinguishing a backup
+  that will try again from one that has spent its attempts. A backup that has
+  been failing all week is visible without reading logs.
+- **If a night fails repeatedly:** attempts are bounded, and once they are
+  spent that night has no backup and no further automatic attempt — retrying a
+  full disk every minute helps nobody. Fix the cause and press retry; the next
+  night is scheduled as usual.
 
 **`REKENRAAM_SECRET_KEY` is not in any backup, and must not be.** It seals
 two-factor enrolment and connection credentials, and a key stored beside the

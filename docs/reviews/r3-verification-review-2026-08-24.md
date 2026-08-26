@@ -1,7 +1,16 @@
 # R3 verification review — 2026-08-24
 
-**Status: open.** Findings V-1 to V-7 below; the actionable ones carry backlog
-IDs (T-65 to T-69). This document is a point-in-time review, not a tracker.
+**Status: findings resolved 2026-08-24.** V-1 to V-7 below all landed —
+T-65 to T-69 are closed in `backlog.md`, and V-7 is documented rather than
+changed. The six further passes at the end are **not** done; they are what a
+next review should cover. This document is a point-in-time review, not a
+tracker.
+
+Resolving them turned up one defect the review had not seen: retrying a backup
+that was still queued answered `404 "backup run not found"` about a run the
+caller was looking at, because requeue matches only failed work items. Fixed
+with T-68. That is the fourth wrong-reason error message this project has
+found — T-63 is the open one — which is itself worth noticing.
 
 R3 shipped in eight slices over two days, and a gap turned up at almost every
 one. Most were caught before they shipped — by a test, by a reviewer, or by

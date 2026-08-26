@@ -206,24 +206,26 @@ as a default rather than a frozen decision.
 
 `docs/reviews/r3-verification-review-2026-08-24.md`, opened because a gap turned
 up at almost every slice and the pattern was worth measuring rather than
-reassuring. A first, coverage-directed pass found seven items; five carry
-backlog IDs:
+reassuring. A first, coverage-directed pass found seven items; **all five
+backlog IDs are closed as of 2026-08-24**, and resolving them found one further
+defect (a 404 about a run that exists, fixed with T-68):
 
-- [ ] **T-65** a restore test asserts its premise, not its name — the WAL
+- [x] **T-65** a restore test asserts its premise, not its name — the WAL
       preservation behaviour is unverified (11.8% coverage on the checkpoint
       path). The most safety-critical gap of the five.
-- [ ] **T-66** the nightly schedule and the backup's queue path have no tests
+- [x] **T-66** the nightly schedule and the backup's queue path have no tests
       at all (0%).
-- [ ] **T-67** `lots.csv` and `prices.csv` have never been written with a row,
+- [x] **T-67** `lots.csv` and `prices.csv` have never been written with a row,
       so two money-bearing files are unverified.
-- [ ] **T-68** the two recovery paths — retry-after-cap and the sealed-data
+- [x] **T-68** the two recovery paths — retry-after-cap and the sealed-data
       report — are at 20%.
-- [ ] **T-69** a backup that will retry is displayed identically to one that
+- [x] **T-69** a backup that will retry is displayed identically to one that
       gave up.
 
-Six further review passes are listed in the review, ordered by expected value:
+**Six further review passes remain**, listed in the review in value order:
 claim audit, money-path coverage, failure-branch walk, contract-vs-code diff,
-concurrency, and the Data screen's states.
+concurrency, and the Data screen's states. They are not scheduled — R3a starts
+next — but they are the queue if another verification pass is wanted.
 
 ## Then — R3a: core-workflow accessibility regression coverage
 

@@ -968,5 +968,7 @@
   "settings_data_status_not_applicable": "Not applicable",
   "settings_data_status_pending": "Queued",
   "settings_data_status_running": "Running",
-  "settings_data_status_completed": "Verified"
+  "settings_data_status_completed": "Verified",
+  "settings_data_backups_will_retry": "Will try again",
+  "settings_data_backups_gave_up": "Gave up"
 }

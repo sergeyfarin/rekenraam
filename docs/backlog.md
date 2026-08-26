@@ -924,7 +924,7 @@ run the caller was looking at — the same wrong-reason class as T-63. Fixed:
 `RetryBackupRun` now refuses a pending or running run with "this backup is
 already queued".
 
-### T-69 A backup that will retry looks the same as one that gave up `[ ]`
+### T-69 A backup that will retry looks the same as one that gave up `[x]`
 
 **Files:** `backend/internal/app/backup_worker.go` (`RunBackup`),
 `frontend/src/lib/settings/data-settings.svelte`.
@@ -939,6 +939,16 @@ run exists for it, whatever its status, so a night that exhausts its retries
 produces no backup and no further automatic attempt. That is a defensible
 choice — retrying a full disk every minute helps nobody — but the "nightly"
 promise has an exception nobody has written down.
+
+**Done 2026-08-24.** The queue is the authority on whether a retry is waiting,
+so the read model asks it rather than inventing a second status on the run:
+`will_retry` is true when the run failed and its work item is still pending.
+The screen shows "Will try again" or "Gave up" instead of one word for both,
+and offers the retry button only where pressing it can do something — which is
+also where T-68's "already queued" refusal would otherwise have met the reader.
+
+V-7 is now written down twice: in `README.md`, where an operator reads what
+"nightly" does not cover, and beside the scheduler's own skip check.
 
 ## Public-deployment security gates
 

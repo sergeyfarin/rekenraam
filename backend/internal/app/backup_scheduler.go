@@ -60,6 +60,12 @@ func (s *BackupService) scheduleBackupIfDue(ctx context.Context, logger *slog.Lo
 		return
 	}
 
+	// One occurrence per local day, whatever became of it. A night whose run
+	// exhausted its attempts therefore gets no second run and no further
+	// automatic attempt — deliberate, since retrying a full disk every minute
+	// helps nobody, and the way back is the retry the Data screen offers. The
+	// exception to "nightly" is documented in README.md rather than left for
+	// someone to discover (review 2026-08-24, V-7).
 	localDate := localNow.Format(time.DateOnly)
 	exists, err := s.repository.ScheduledRunExistsForLocalDate(ctx, BookID, localDate)
 	if err != nil {

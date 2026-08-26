@@ -940,5 +940,7 @@
   "settings_data_status_not_applicable": "Sans objet",
   "settings_data_status_pending": "En attente",
   "settings_data_status_running": "En cours",
-  "settings_data_status_completed": "Vérifiée"
+  "settings_data_status_completed": "Vérifiée",
+  "settings_data_backups_will_retry": "Nouvelle tentative prévue",
+  "settings_data_backups_gave_up": "Abandonnée"
 }

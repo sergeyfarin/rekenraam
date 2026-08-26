@@ -447,14 +447,20 @@
                   <tr class="border-t border-border" data-testid="backup-run">
                     <td class="py-2 pr-3 text-foreground">{formatDateTime(run.finished_at || run.created_at)}</td>
                     <td class="py-2 pr-3">
-                      <StatusBadge tone={statusTone(run.status)}>{statusLabel(run.status)}</StatusBadge>
+                      <StatusBadge tone={run.will_retry ? 'neutral' : statusTone(run.status)}>
+                        {run.status === 'failed'
+                          ? run.will_retry
+                            ? m.settings_data_backups_will_retry()
+                            : m.settings_data_backups_gave_up()
+                          : statusLabel(run.status)}
+                      </StatusBadge>
                       {#if run.error_summary}
                         <span class="ml-2 text-xs text-danger">{run.error_summary}</span>
                       {/if}
                     </td>
                     <td class="py-2 pr-3 text-right tabular-nums text-muted">{formatBytes(run.byte_size)}</td>
                     <td class="py-2 text-right">
-                      {#if run.status === 'failed'}
+                      {#if run.status === 'failed' && !run.will_retry}
                         <button type="button" class={secondaryButtonClass} onclick={() => retryRun(run.id)}>
                           {m.settings_data_backups_retry()}
                         </button>

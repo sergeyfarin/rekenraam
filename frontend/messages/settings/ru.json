@@ -940,5 +940,7 @@
   "settings_data_status_not_applicable": "Неприменимо",
   "settings_data_status_pending": "В очереди",
   "settings_data_status_running": "Выполняется",
-  "settings_data_status_completed": "Проверена"
+  "settings_data_status_completed": "Проверена",
+  "settings_data_backups_will_retry": "Будет повторено",
+  "settings_data_backups_gave_up": "Отменено"
 }

@@ -12813,6 +12813,8 @@ export interface components {
             /** @description Whether integrity_check and foreign_key_check both passed. An unverified copy is never published under the final name. */
             verified: boolean;
             attempts: number;
+            /** @description True when this run failed and the queue still has an attempt waiting. The run's own status says "failed" after every failed attempt, so without this a backup about to succeed and one that has spent its attempts look identical. */
+            will_retry: boolean;
             error_summary?: string;
             /** Format: date-time */
             started_at?: string;

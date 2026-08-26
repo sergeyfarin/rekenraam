@@ -41,6 +41,12 @@ type BackupRunRecord struct {
 	PrunedAt              sql.NullString
 	CreatedAt             string
 	UpdatedAt             string
+	// WorkStatus is the queue's view of this run: 'pending' while a retry is
+	// waiting, 'failed' once the attempt cap is spent. The run row alone cannot
+	// tell those apart — it says "failed" after every failed attempt — and a
+	// screen that shows one word for both is telling a reader two things
+	// (T-69).
+	WorkStatus sql.NullString
 }
 
 type BackupRepository struct {
@@ -197,10 +203,13 @@ func (r *BackupRepository) CreateBackupRunWithWork(ctx context.Context, params C
 }
 
 const backupRunColumns = `
-	id, book_id, trigger, occurrence_key, status, target_path,
-	scheduled_for_local_date, byte_size, page_count, verified, attempts,
-	error_summary, work_item_id, started_at, finished_at, pruned_at,
-	created_at, updated_at`
+	backup_runs.id, backup_runs.book_id, backup_runs.trigger, backup_runs.occurrence_key,
+	backup_runs.status, backup_runs.target_path, backup_runs.scheduled_for_local_date,
+	backup_runs.byte_size, backup_runs.page_count, backup_runs.verified, backup_runs.attempts,
+	backup_runs.error_summary, backup_runs.work_item_id, backup_runs.started_at,
+	backup_runs.finished_at, backup_runs.pruned_at, backup_runs.created_at,
+	backup_runs.updated_at,
+	(SELECT status FROM background_work_items WHERE id = backup_runs.work_item_id)`
 
 func scanBackupRun(scan func(dest ...any) error) (BackupRunRecord, error) {
 	var run BackupRunRecord
@@ -208,7 +217,7 @@ func scanBackupRun(scan func(dest ...any) error) (BackupRunRecord, error) {
 		&run.ID, &run.BookID, &run.Trigger, &run.OccurrenceKey, &run.Status, &run.TargetPath,
 		&run.ScheduledForLocalDate, &run.ByteSize, &run.PageCount, &run.Verified, &run.Attempts,
 		&run.ErrorSummary, &run.WorkItemID, &run.StartedAt, &run.FinishedAt, &run.PrunedAt,
-		&run.CreatedAt, &run.UpdatedAt,
+		&run.CreatedAt, &run.UpdatedAt, &run.WorkStatus,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return BackupRunRecord{}, ErrNotFound

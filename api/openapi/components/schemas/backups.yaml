@@ -45,6 +45,7 @@ BackupRun:
     - target_path
     - verified
     - attempts
+    - will_retry
     - created_at
   properties:
     id:
@@ -74,6 +75,13 @@ BackupRun:
       description: Whether integrity_check and foreign_key_check both passed. An unverified copy is never published under the final name.
     attempts:
       type: integer
+    will_retry:
+      type: boolean
+      description: >
+        True when this run failed and the queue still has an attempt waiting.
+        The run's own status says "failed" after every failed attempt, so
+        without this a backup about to succeed and one that has spent its
+        attempts look identical.
     error_summary:
       type: string
     started_at:

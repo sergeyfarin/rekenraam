@@ -940,5 +940,7 @@
   "settings_data_status_not_applicable": "No aplicable",
   "settings_data_status_pending": "En cola",
   "settings_data_status_running": "En curso",
-  "settings_data_status_completed": "Verificada"
+  "settings_data_status_completed": "Verificada",
+  "settings_data_backups_will_retry": "Se reintentará",
+  "settings_data_backups_gave_up": "Se dio por vencida"
 }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -142,4 +143,36 @@ func mutateBackup(t *testing.T, handler http.Handler, sessionCookie *http.Cookie
 
 	require.Equalf(t, wantStatus, res.Code, "response body: %s", res.Body.String())
 	return res.Body.Bytes()
+}
+
+// T-69: the run row says "failed" after every failed attempt, so the response
+// has to say which kind of failure a reader is looking at.
+func TestBackupRunSaysWhetherItWillTryAgain(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	f := newBundleFixture(t, handler)
+	ctx := context.Background()
+
+	mutateBackup(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/maintenance/backups", ``, http.StatusAccepted)
+
+	// A failed attempt with the queue still holding a retry: the run reads
+	// "failed" but is about to run again.
+	_, err := database.ExecContext(ctx, `UPDATE backup_runs SET status = 'failed', error_summary = 'disk was full'`)
+	require.NoError(t, err)
+
+	status := readBackupStatus(t, handler, f.sessionCookie)
+	require.Len(t, status.Runs, 1)
+	assert.Equal(t, "failed", status.Runs[0].Status)
+	assert.True(t, status.Runs[0].WillRetry, "a queued retry must be visible as one")
+
+	// Attempts spent: the same status word, a different situation.
+	_, err = database.ExecContext(ctx, `UPDATE background_work_items SET status = 'failed', lease_owner = NULL, lease_expires_at = NULL`)
+	require.NoError(t, err)
+
+	status = readBackupStatus(t, handler, f.sessionCookie)
+	require.Len(t, status.Runs, 1)
+	assert.Equal(t, "failed", status.Runs[0].Status)
+	assert.False(t, status.Runs[0].WillRetry, "a backup that has given up must not look like one that has not")
 }

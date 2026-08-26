@@ -32,11 +32,16 @@ type backupRunResponse struct {
 	PageCount             *int64 `json:"page_count,omitempty"`
 	Verified              bool   `json:"verified"`
 	Attempts              int    `json:"attempts"`
-	ErrorSummary          string `json:"error_summary,omitempty"`
-	StartedAt             string `json:"started_at,omitempty"`
-	FinishedAt            string `json:"finished_at,omitempty"`
-	PrunedAt              string `json:"pruned_at,omitempty"`
-	CreatedAt             string `json:"created_at"`
+	// WillRetry distinguishes a backup that failed and is queued to try again
+	// from one that has spent its attempts. The run row says "failed" for both,
+	// and showing one word for two outcomes tells a reader nothing they can act
+	// on (T-69).
+	WillRetry    bool   `json:"will_retry"`
+	ErrorSummary string `json:"error_summary,omitempty"`
+	StartedAt    string `json:"started_at,omitempty"`
+	FinishedAt   string `json:"finished_at,omitempty"`
+	PrunedAt     string `json:"pruned_at,omitempty"`
+	CreatedAt    string `json:"created_at"`
 }
 
 // backupKeyNoticeResponse is the part of the protection story a database backup
@@ -88,6 +93,7 @@ func toBackupRunResponse(run db.BackupRunRecord) backupRunResponse {
 		ScheduledForLocalDate: run.ScheduledForLocalDate.String,
 		Verified:              run.Verified,
 		Attempts:              run.Attempts,
+		WillRetry:             run.Status == "failed" && run.WorkStatus.String == "pending",
 		ErrorSummary:          run.ErrorSummary,
 		StartedAt:             run.StartedAt.String,
 		FinishedAt:            run.FinishedAt.String,
