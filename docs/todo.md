@@ -155,7 +155,7 @@ three are the mandatory export requirement, the next three the protection half.
       the declared layout and auto-detection.
 - [x] 4. **Done 2026-08-24.** Scheduled verified backups via SQLite's online
       backup API (ADR 0004's in-app path), sourced from the read-only pool so a
-      copy never holds the writer. Migration 0006 adds `backup_policies` and
+      copy never holds the writer. `backup_policies` and
       `backup_runs`; the run row and its work item are created in one
       transaction, and the run's occurrence key is what makes a *completed*
       night idempotent where the queue's own uniqueness stops. Retention prunes
@@ -174,7 +174,7 @@ three are the mandatory export requirement, the next three the protection half.
       restored trial balance to the source's.
 - [x] 6. **Done 2026-08-24.** Trial-balance self-check: nine checks over one
       snapshot on the read-only pool, read-only and diagnostic, chained onto
-      every successful backup. Migration 0007 adds `self_check_runs` and
+      every successful backup. `self_check_runs` and
       `self_check_results` — a table rather than a JSON blob, since "which check
       failed, how often, since when" deserves a query (the mistake T-54
       records). `account_version_coverage` is slice 1's promised counter.
@@ -328,7 +328,7 @@ staying in every response.
       (`internal/exact/scaled.go`: `exact.ScaledInt` + `exact.Pow10` replace
       `scaledAmount`/`scaledInteger`/`pow10DB`).
 - [x] S-06 multi-factor authentication — done 2026-08-07 (TOTP + recovery
-      codes, `internal/totp/` + migration 0005 + Settings → Security). The
+      codes, `internal/totp/` + Settings → Security). The
       last public-deployment gate before it was **parked 2026-08-19**; what
       remains is enrolling the owner account before an internet deployment.
 - [x] G-07 CI coverage signal — done 2026-08-07 (`COVERAGE=1
