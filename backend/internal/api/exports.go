@@ -84,6 +84,9 @@ func parseExportFilter(query url.Values) (app.ExportFilter, error) {
 	}
 
 	return app.ExportFilter{
+		// A filter added here must also be added to exportScopeParameters, or
+		// the flat CSV will silently ignore it and hand back a whole-ledger
+		// file to a caller who believes it is scoped.
 		From:               strings.TrimSpace(query.Get("from")),
 		To:                 strings.TrimSpace(query.Get("to")),
 		DateBasis:          strings.TrimSpace(query.Get("date_basis")),

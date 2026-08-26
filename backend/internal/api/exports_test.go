@@ -290,7 +290,21 @@ func TestStandaloneLedgerCSVRejectsScopeParameters(t *testing.T) {
 	handler, _ := newSetupTestHandler(t)
 	f := newExportFixture(t, handler)
 
-	for _, parameter := range []string{"from=2026-01-01", "to=2026-12-31", "date_basis=transaction", "account_id=1", "include_descendants=true", "commodity_id=1"} {
+	// Driven from the production list rather than from a copy of it: a filter
+	// added there gets a refusal test by existing, instead of by someone
+	// remembering to add its name in two places.
+	values := map[string]string{
+		"from":                "2026-01-01",
+		"to":                  "2026-12-31",
+		"date_basis":          "transaction",
+		"account_id":          "1",
+		"include_descendants": "true",
+		"commodity_id":        "1",
+	}
+	for _, name := range exportScopeParameters {
+		value, ok := values[name]
+		require.Truef(t, ok, "no sample value for scope parameter %q — add one here", name)
+		parameter := name + "=" + value
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/exports/ledger.csv?"+parameter, nil)
 		req.AddCookie(f.sessionCookie)
 		res := httptest.NewRecorder()
