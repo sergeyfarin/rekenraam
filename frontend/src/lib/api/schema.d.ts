@@ -12866,7 +12866,7 @@ export interface components {
             byte_size?: number;
             /**
              * Format: int64
-             * @description Pages copied, reported by SQLite's online backup API.
+             * @description Pages held by the verified backup file. For a copy this equals what SQLite's online backup API reported, because that figure is the source's page count at the end of the copy and the destination carries the same one. A backup adopted after a crash — correctly in place, but with no run recorded — is measured from the file, so both paths report the same thing.
              */
             page_count?: number;
             /** @description Whether integrity_check and foreign_key_check both passed. An unverified copy is never published under the final name. */

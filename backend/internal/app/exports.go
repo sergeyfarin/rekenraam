@@ -116,10 +116,11 @@ type ExportFilter struct {
 	CommodityIDs       []int64
 }
 
-// Filtered reports whether the caller restricted anything.
-func (f ExportFilter) Filtered() bool {
-	return f.From != "" || f.To != "" || len(f.AccountIDs) > 0 || len(f.CommodityIDs) > 0
-}
+// "Is anything restricted?" is answered once, by
+// db.LedgerExportSelection.Filtered, on the resolved selection rather than on
+// the request. A second copy here had no callers and would have drifted the
+// moment one rule gained a dimension the other did not — which is how the
+// decimal-comma bug shipped three times (T-36/T-45/T-47).
 
 // ResolvedExportFilter is what the filter became: the normalized request plus
 // the account expansion, so an archive can be reproduced from its own manifest.

@@ -295,33 +295,52 @@ func BackupSQLiteDatabase(ctx context.Context, database *sql.DB, backupPath stri
 	return nil
 }
 
+// VerifySQLiteBackup reports whether a copy is a usable database. It is the
+// error-only form of VerifySQLiteBackupStats, for callers with nothing to
+// record.
 func VerifySQLiteBackup(ctx context.Context, backupPath string) error {
+	_, err := VerifySQLiteBackupStats(ctx, backupPath)
+	return err
+}
+
+// VerifySQLiteBackupStats verifies a copy and reports its size in pages and
+// bytes.
+//
+// The page count is read from the file rather than taken from whatever produced
+// it, so a backup this process *adopted* — one a crash left correctly in place
+// between the rename and the run being recorded — is described by the same
+// number a backup this process copied would carry. The online backup API's page
+// count is the source's page count at the end of the copy, which is the
+// destination's, so the two paths agree by construction rather than by
+// coincidence. Returning zero there instead recorded a completed, verified
+// backup that claimed to hold no pages at all.
+func VerifySQLiteBackupStats(ctx context.Context, backupPath string) (OnlineBackupResult, error) {
 	backupPath = filepath.Clean(strings.TrimSpace(backupPath))
 	if backupPath == "" {
-		return fmt.Errorf("backup path is required")
+		return OnlineBackupResult{}, fmt.Errorf("backup path is required")
 	}
 
 	backupDatabase, err := sql.Open(driverName, "file:"+backupPath+"?mode=ro")
 	if err != nil {
-		return fmt.Errorf("open sqlite backup: %w", err)
+		return OnlineBackupResult{}, fmt.Errorf("open sqlite backup: %w", err)
 	}
 	defer backupDatabase.Close()
 
 	if err := backupDatabase.PingContext(ctx); err != nil {
-		return fmt.Errorf("ping sqlite backup: %w", err)
+		return OnlineBackupResult{}, fmt.Errorf("ping sqlite backup: %w", err)
 	}
 
 	var integrityResult string
 	if err := backupDatabase.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrityResult); err != nil {
-		return fmt.Errorf("run sqlite integrity_check: %w", err)
+		return OnlineBackupResult{}, fmt.Errorf("run sqlite integrity_check: %w", err)
 	}
 	if !strings.EqualFold(integrityResult, "ok") {
-		return fmt.Errorf("sqlite integrity_check returned %q", integrityResult)
+		return OnlineBackupResult{}, fmt.Errorf("sqlite integrity_check returned %q", integrityResult)
 	}
 
 	foreignKeyRows, err := backupDatabase.QueryContext(ctx, "PRAGMA foreign_key_check")
 	if err != nil {
-		return fmt.Errorf("run sqlite foreign_key_check: %w", err)
+		return OnlineBackupResult{}, fmt.Errorf("run sqlite foreign_key_check: %w", err)
 	}
 	defer foreignKeyRows.Close()
 	if foreignKeyRows.Next() {
@@ -330,15 +349,25 @@ func VerifySQLiteBackup(ctx context.Context, backupPath string) error {
 		var parentTable string
 		var foreignKeyID int64
 		if err := foreignKeyRows.Scan(&table, &rowID, &parentTable, &foreignKeyID); err != nil {
-			return fmt.Errorf("read sqlite foreign_key_check result: %w", err)
+			return OnlineBackupResult{}, fmt.Errorf("read sqlite foreign_key_check result: %w", err)
 		}
-		return fmt.Errorf("sqlite foreign_key_check found violation in %s row %d referencing %s (foreign key %d)", table, rowID, parentTable, foreignKeyID)
+		return OnlineBackupResult{}, fmt.Errorf("sqlite foreign_key_check found violation in %s row %d referencing %s (foreign key %d)", table, rowID, parentTable, foreignKeyID)
 	}
 	if err := foreignKeyRows.Err(); err != nil {
-		return fmt.Errorf("iterate sqlite foreign_key_check: %w", err)
+		return OnlineBackupResult{}, fmt.Errorf("iterate sqlite foreign_key_check: %w", err)
 	}
 
-	return nil
+	var pageCount int64
+	if err := backupDatabase.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount); err != nil {
+		return OnlineBackupResult{}, fmt.Errorf("read sqlite page_count: %w", err)
+	}
+
+	info, err := os.Stat(backupPath)
+	if err != nil {
+		return OnlineBackupResult{}, fmt.Errorf("stat sqlite backup: %w", err)
+	}
+
+	return OnlineBackupResult{PageCount: int(pageCount), ByteSize: info.Size()}, nil
 }
 
 func sqliteStringLiteral(value string) string {

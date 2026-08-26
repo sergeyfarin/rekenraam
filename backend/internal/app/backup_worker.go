@@ -197,10 +197,12 @@ func (s *BackupService) produceBackup(ctx context.Context, run db.BackupRunRecor
 
 	// Crash after rename, before the run was recorded: the file is already
 	// there and correct. Verify before adopting it — an unverified file is not
-	// a backup, however plausible its name.
-	if info, err := os.Stat(run.TargetPath); err == nil {
-		if verifyErr := db.VerifySQLiteBackup(ctx, run.TargetPath); verifyErr == nil {
-			return db.OnlineBackupResult{ByteSize: info.Size()}, nil
+	// a backup, however plausible its name. The verification reports the file's
+	// own size in pages and bytes, so an adopted backup is recorded with the
+	// same figures a copied one carries rather than with a page count of zero.
+	if _, err := os.Stat(run.TargetPath); err == nil {
+		if adopted, verifyErr := db.VerifySQLiteBackupStats(ctx, run.TargetPath); verifyErr == nil {
+			return adopted, nil
 		}
 		if removeErr := os.Remove(run.TargetPath); removeErr != nil {
 			return db.OnlineBackupResult{}, fmt.Errorf("remove unverifiable backup: %w", removeErr)

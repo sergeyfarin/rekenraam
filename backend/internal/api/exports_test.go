@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -384,4 +385,58 @@ func TestExportSnapshotIsStableWhileTheLedgerIsWritten(t *testing.T) {
 	assert.Len(t, before.rows, 2)
 	assert.Len(t, after.rows, 4, "a later export sees the newer write")
 	assert.Equal(t, before.header, after.header)
+}
+
+// ADR 0011 clause 1 promises rows ordered by entry date, transaction, entry
+// sequence, then line sequence — a total order, which is what makes two exports
+// of one snapshot byte-identical and an archive checksum meaningful.
+//
+// This asserts the order, not the reproducibility. Comparing the bytes of two
+// consecutive downloads was tried first and could not fail: SQLite returns the
+// same scan order for the same query on unchanged data, so the comparison held
+// even with the ORDER BY replaced by a deliberately partial one. A test that
+// passes when the thing it names is broken is the defect V-1 found, not a
+// guard against it.
+func TestLedgerExportRowsFollowTheDocumentedTotalOrder(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newExportFixture(t, handler)
+
+	// Several transactions sharing one date, and one earlier date arriving
+	// last, so neither insertion order nor the date alone can produce the
+	// documented order by accident.
+	for i := 0; i < 4; i++ {
+		createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-02",
+			posting(f.checking.ID, int64(1000+i), 2, f.usdID),
+			posting(f.groceries.ID, int64(-1000-i), 2, f.usdID),
+		), http.StatusCreated)
+	}
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-01",
+		posting(f.checking.ID, 500, 2, f.usdID),
+		posting(f.groceries.ID, -500, 2, f.usdID),
+	), http.StatusCreated)
+
+	export := downloadLedgerCSV(t, handler, f.sessionCookie, "/api/v1/exports/ledger.csv")
+	require.Len(t, export.rows, 10)
+
+	sortKey := func(row []string) []string {
+		return []string{
+			export.column(row, "entry_date"),
+			// Numeric ids compared as fixed-width text, so 10 does not sort
+			// before 9 and turn a real regression into a passing test.
+			fmt.Sprintf("%020s", export.column(row, "transaction_id")),
+			fmt.Sprintf("%020s", export.column(row, "entry_seq")),
+			fmt.Sprintf("%020s", export.column(row, "line_seq")),
+		}
+	}
+	for i := 1; i < len(export.rows); i++ {
+		previous := sortKey(export.rows[i-1])
+		current := sortKey(export.rows[i])
+		assert.LessOrEqual(t, strings.Join(previous, "\x00"), strings.Join(current, "\x00"),
+			"row %d breaks the documented order", i)
+	}
+
+	// The first row is the earliest entry date even though it was written last.
+	assert.Equal(t, "2026-06-01", export.column(export.rows[0], "entry_date"))
 }

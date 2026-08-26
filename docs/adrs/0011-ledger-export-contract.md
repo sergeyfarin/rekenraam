@@ -33,8 +33,9 @@ carry the counterpart legs of investment trades.
 
 The export is **posting-level**: one row per posting of the current version of
 each posted, non-deleted transaction, ordered by entry date, transaction, entry
-sequence, then line sequence. That order is total, so two exports of one
-snapshot are byte-identical.
+sequence, then line sequence, with the posting version's own id as a final
+tiebreaker. That order is total, so two exports of one snapshot are
+byte-identical.
 
 Drafts, voided versions, superseded versions, and soft-deleted transactions are
 **not** exported. The portable export carries current posted state; the
@@ -149,12 +150,17 @@ requires a new ADR.
 ### 7. Exports read through a dedicated read-only connection, in one snapshot
 
 The main pool is `SetMaxOpenConns(1)` (ADR 0004): a read transaction held there
-for the length of an export would stall every other request. Exports and the
-ledger self-check therefore read through a second, read-only pool
-(`db.OpenReadOnly`, `mode=ro` with `query_only`), and each export runs inside one
-deferred read transaction so every file of an archive sees one state. WAL
-readers are concurrent with the single writer by design, so this costs no write
-throughput.
+for the length of an export would stall every other request. Exports, the ledger
+self-check, and the nightly backup's copy therefore read through a second,
+read-only pool (`db.OpenReadOnly`, `mode=ro` with `query_only`), and each export
+runs inside one deferred read transaction so every file of an archive sees one
+state. WAL readers are concurrent with the single writer by design, so this
+costs no write throughput.
+
+The pool must be opened after migrations have run, or it would hold a snapshot
+of a schema the app no longer speaks. `cmd/rekenraam` does so; nothing enforces
+it, because a read-only pool cannot itself tell a pre-migration database from a
+post-migration one.
 
 ## Consequences
 

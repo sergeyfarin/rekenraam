@@ -245,6 +245,17 @@ func TestBackupRetryAfterCrashLeavesNoDuplicateOrUntrackedFile(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, "completed", final.Status)
 			assert.NoError(t, db.VerifySQLiteBackup(context.Background(), final.TargetPath))
+			// A run recorded as completed and verified must describe the file
+			// it settled on. The adoption path used to report a page count of
+			// zero — a verified backup claiming to hold no pages — because it
+			// took the figure from a copy that never ran instead of from the
+			// file it adopted.
+			require.True(t, final.PageCount.Valid, "a settled run must record a page count")
+			assert.Positive(t, final.PageCount.Int64, "a verified backup holds pages")
+			require.True(t, final.ByteSize.Valid)
+			info, err := os.Stat(final.TargetPath)
+			require.NoError(t, err)
+			assert.Equal(t, info.Size(), final.ByteSize.Int64, "the recorded size is the file's")
 
 			entries, err := os.ReadDir(harness.directory)
 			require.NoError(t, err)

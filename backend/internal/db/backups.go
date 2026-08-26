@@ -5,12 +5,23 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ErrBackupOccurrenceExists means a run already exists for this occurrence —
 // the same scheduled day, asked for twice. It is a normal outcome, not a
 // failure: the second caller adopts the first one's run.
 var ErrBackupOccurrenceExists = errors.New("a backup run already exists for this occurrence")
+
+// isBackupOccurrenceConflict recognizes the unique index on (book_id,
+// occurrence_key) refusing a second run for one occurrence. Named by its
+// columns rather than by "any unique violation", so an unrelated constraint on
+// this table is never silently reported as a duplicate occurrence — the same
+// convention db/investments.go follows.
+func isBackupOccurrenceConflict(err error) bool {
+	return err != nil && strings.Contains(err.Error(),
+		"UNIQUE constraint failed: backup_runs.book_id, backup_runs.occurrence_key")
+}
 
 type BackupPolicyRecord struct {
 	BookID              int64
@@ -144,17 +155,6 @@ func (r *BackupRepository) CreateBackupRunWithWork(ctx context.Context, params C
 	}
 	defer rollbackTx(ctx, tx)
 
-	var existing int64
-	err = tx.QueryRowContext(ctx, `
-		SELECT id FROM backup_runs WHERE book_id = ? AND occurrence_key = ?
-	`, params.BookID, params.OccurrenceKey).Scan(&existing)
-	if err == nil {
-		return BackupRunRecord{}, BackgroundWorkItemRecord{}, ErrBackupOccurrenceExists
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return BackupRunRecord{}, BackgroundWorkItemRecord{}, fmt.Errorf("check backup occurrence: %w", err)
-	}
-
 	var scheduledFor any
 	if params.ScheduledForLocalDate != "" {
 		scheduledFor = params.ScheduledForLocalDate
@@ -172,6 +172,14 @@ func (r *BackupRepository) CreateBackupRunWithWork(ctx context.Context, params C
 	`, params.BookID, params.Trigger, params.OccurrenceKey, params.TargetPath,
 		scheduledFor, requestedBy, params.Now, params.Now)
 	if err != nil {
+		// The unique index decides, not a preceding SELECT. Checking first and
+		// then inserting looks equivalent and is not: two schedulers agreeing
+		// on the same night both read "no run yet", and the loser's INSERT was
+		// reported as an unexplained failure — so the caller's documented
+		// "losing this race is normal" branch never ran for the race it names.
+		if isBackupOccurrenceConflict(err) {
+			return BackupRunRecord{}, BackgroundWorkItemRecord{}, ErrBackupOccurrenceExists
+		}
 		return BackupRunRecord{}, BackgroundWorkItemRecord{}, fmt.Errorf("insert backup run: %w", err)
 	}
 	runID, err := result.LastInsertId()
