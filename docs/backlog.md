@@ -847,7 +847,7 @@ travels with it. `checkpointStoppedDatabase` went from 11.8% to 76.5% coverage,
 and the test was verified to fail (expected 1, actual 0) with the checkpoint
 call disabled.
 
-### T-66 The nightly backup schedule and its queue path have no tests `[ ]`
+### T-66 The nightly backup schedule and its queue path have no tests `[x]`
 
 **Files:** `backend/internal/app/backup_scheduler.go`,
 `backend/internal/app/backup_worker.go` (`StartBackgroundWorker`,
@@ -865,6 +865,14 @@ repeat of T-39. Everything else is unproven.
 
 A regression here fails in the direction that matters: no backup, and a screen
 that truthfully reports none to someone who is not looking.
+
+**Done 2026-08-24.** Six named tests: one occurrence per local day however
+often the ticker fires, a disabled policy, the owner's clock followed across a
+DST change in both directions, claim → complete, retry-to-the-cap followed by
+the manual way back, and an unusable payload failing on its first attempt
+rather than occupying five. `scheduleBackupIfDue` 0% → 60.6%, `runDueBackups`
+0% → 77.8%, `processBackupWork` 0% → 76.9%, and `RetryBackupRun` 20% → 53.3%,
+which closes most of T-68 as a side effect.
 
 ### T-67 Two money-bearing export files have never been written with a row `[ ]`
 

@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"database/sql"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -454,4 +456,228 @@ func TestBackupPolicyValidatesItsBounds(t *testing.T) {
 	assert.True(t, defaults.Enabled)
 	assert.Equal(t, 3, defaults.HourLocal)
 	assert.Equal(t, 14, defaults.RetentionCount)
+}
+
+// --- T-66: the schedule and the queue path around a backup ---
+//
+// RunBackup was tested directly, which left the code that decides *when* a
+// backup happens, and the queue transitions around it, entirely unexercised —
+// the part that makes "backed up nightly" true rather than aspirational.
+
+// The scheduler waits for the policy's local time, then arranges exactly one
+// backup for that day.
+func TestSchedulerArrangesOneBackupPerLocalDay(t *testing.T) {
+	t.Parallel()
+
+	harness := newBackupHarness(t)
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	_, err := harness.service.SavePolicy(ctx, SaveBackupPolicyInput{
+		UserID: 1, Enabled: true, HourLocal: 3, MinuteLocal: 15, RetentionCount: 14,
+	})
+	require.NoError(t, err)
+
+	// 02:00 UTC, before the 03:15 the policy asks for.
+	harness.now = time.Date(2026, 8, 24, 2, 0, 0, 0, time.UTC)
+	harness.service.scheduleBackupIfDue(ctx, logger)
+	runs, err := harness.repository.ListBackupRuns(ctx, BookID, 10)
+	require.NoError(t, err)
+	assert.Empty(t, runs, "nothing is due before the policy's time")
+
+	// 03:20 — due.
+	harness.now = time.Date(2026, 8, 24, 3, 20, 0, 0, time.UTC)
+	harness.service.scheduleBackupIfDue(ctx, logger)
+	runs, err = harness.repository.ListBackupRuns(ctx, BookID, 10)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	assert.Equal(t, "scheduled", runs[0].Trigger)
+	assert.Equal(t, "2026-08-24", runs[0].ScheduledForLocalDate.String)
+
+	// Every later tick that day is a no-op: the scheduler ticks once a minute,
+	// and a second run for one night would be a second backup nobody asked for.
+	for _, minute := range []int{21, 30, 59} {
+		harness.now = time.Date(2026, 8, 24, 3, minute, 0, 0, time.UTC)
+		harness.service.scheduleBackupIfDue(ctx, logger)
+	}
+	runs, err = harness.repository.ListBackupRuns(ctx, BookID, 10)
+	require.NoError(t, err)
+	assert.Len(t, runs, 1, "one occurrence per local day, however often the ticker fires")
+
+	// The next day is a new occurrence.
+	harness.now = time.Date(2026, 8, 25, 3, 20, 0, 0, time.UTC)
+	harness.service.scheduleBackupIfDue(ctx, logger)
+	runs, err = harness.repository.ListBackupRuns(ctx, BookID, 10)
+	require.NoError(t, err)
+	assert.Len(t, runs, 2)
+}
+
+// A disabled policy schedules nothing, however late it gets.
+func TestSchedulerRespectsADisabledPolicy(t *testing.T) {
+	t.Parallel()
+
+	harness := newBackupHarness(t)
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	_, err := harness.service.SavePolicy(ctx, SaveBackupPolicyInput{
+		UserID: 1, Enabled: false, HourLocal: 3, MinuteLocal: 15, RetentionCount: 14,
+	})
+	require.NoError(t, err)
+
+	harness.now = time.Date(2026, 8, 24, 23, 59, 0, 0, time.UTC)
+	harness.service.scheduleBackupIfDue(ctx, logger)
+
+	runs, err := harness.repository.ListBackupRuns(ctx, BookID, 10)
+	require.NoError(t, err)
+	assert.Empty(t, runs)
+}
+
+// "Nightly at 03:15" is a promise made to a person, so it follows their clock
+// through a DST change rather than drifting an hour twice a year.
+func TestSchedulerFollowsTheOwnersClockAcrossDST(t *testing.T) {
+	t.Parallel()
+
+	harness := newBackupHarness(t)
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	_, err := harness.writer.ExecContext(ctx, `
+		INSERT INTO user_preferences (user_id, time_zone, created_at, created_by_user_id, updated_at, updated_by_user_id)
+		VALUES (1, 'Europe/Amsterdam', '2026-01-01T00:00:00Z', 1, '2026-01-01T00:00:00Z', 1)
+	`)
+	require.NoError(t, err)
+	_, err = harness.service.SavePolicy(ctx, SaveBackupPolicyInput{
+		UserID: 1, Enabled: true, HourLocal: 3, MinuteLocal: 15, RetentionCount: 14,
+	})
+	require.NoError(t, err)
+
+	// Amsterdam is UTC+2 in summer: 02:00 UTC is 04:00 local, which is past
+	// 03:15 local — due, even though it is not yet 03:15 UTC.
+	harness.now = time.Date(2026, 8, 24, 2, 0, 0, 0, time.UTC)
+	harness.service.scheduleBackupIfDue(ctx, logger)
+
+	runs, err := harness.repository.ListBackupRuns(ctx, BookID, 10)
+	require.NoError(t, err)
+	require.Len(t, runs, 1, "the policy's time is local, not UTC")
+	assert.Equal(t, "2026-08-24", runs[0].ScheduledForLocalDate.String)
+
+	// In winter Amsterdam is UTC+1, so the same local time is a different UTC
+	// instant — and 02:00 UTC on that day is 03:00 local, which is *not* due.
+	harness.now = time.Date(2026, 12, 24, 2, 0, 0, 0, time.UTC)
+	harness.service.scheduleBackupIfDue(ctx, logger)
+	runs, err = harness.repository.ListBackupRuns(ctx, BookID, 10)
+	require.NoError(t, err)
+	assert.Len(t, runs, 1, "03:00 local is before 03:15 local, whatever the offset is")
+
+	harness.now = time.Date(2026, 12, 24, 2, 30, 0, 0, time.UTC)
+	harness.service.scheduleBackupIfDue(ctx, logger)
+	runs, err = harness.repository.ListBackupRuns(ctx, BookID, 10)
+	require.NoError(t, err)
+	assert.Len(t, runs, 2, "03:30 local is past it")
+}
+
+// The queue path: a claimed item runs the backup and is completed, so the same
+// occurrence is not handed out again.
+func TestWorkerCompletesAClaimedBackup(t *testing.T) {
+	t.Parallel()
+
+	harness := newBackupHarness(t)
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	work := db.NewBackgroundWorkRepository(harness.writer)
+
+	run, err := harness.service.RequestBackup(ctx, 1)
+	require.NoError(t, err)
+
+	harness.service.runDueBackups(ctx, logger, "worker-1")
+
+	completed, err := harness.repository.BackupRunByID(ctx, run.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", completed.Status)
+	assert.True(t, completed.Verified)
+	assert.FileExists(t, completed.TargetPath)
+
+	item, err := work.BackgroundWorkByID(ctx, completed.WorkItemID.Int64)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", item.Status, "a finished backup must not be claimable again")
+
+	// A second sweep finds nothing to do.
+	harness.service.runDueBackups(ctx, logger, "worker-1")
+	runs, err := harness.repository.ListBackupRuns(ctx, BookID, 10)
+	require.NoError(t, err)
+	assert.Len(t, runs, 1)
+}
+
+// A failing backup is retried with backoff until the cap, and then given up on
+// — the T-39 shape, which is only safe because RetryBackupRun exists as the way
+// back.
+func TestWorkerRetriesToTheCapAndThenStops(t *testing.T) {
+	t.Parallel()
+
+	harness := newBackupHarness(t)
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	work := db.NewBackgroundWorkRepository(harness.writer)
+
+	// An unwritable backup directory: every attempt fails the same way, which
+	// is what a full disk looks like to this worker.
+	require.NoError(t, os.MkdirAll(harness.directory, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(harness.directory, 0o700) })
+
+	run, err := harness.service.RequestBackup(ctx, 1)
+	require.NoError(t, err)
+
+	for attempt := 1; attempt <= maxBackupAttempts+1; attempt++ {
+		// Move past the backoff each round, so the item is due again.
+		harness.advance(2 * time.Hour)
+		harness.service.runDueBackups(ctx, logger, "worker-1")
+	}
+
+	item, err := work.BackgroundWorkByID(ctx, run.WorkItemID.Int64)
+	require.NoError(t, err)
+	assert.Equal(t, "failed", item.Status, "a bounded retry must stop, not loop forever")
+	assert.Equal(t, maxBackupAttempts, item.Attempts)
+
+	failed, err := harness.repository.BackupRunByID(ctx, run.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "failed", failed.Status)
+	assert.NotEmpty(t, failed.ErrorSummary, "and it must say why")
+
+	// The way back: space returns, the owner retries, and the same run
+	// succeeds without being recreated.
+	require.NoError(t, os.Chmod(harness.directory, 0o700))
+	_, err = harness.service.RetryBackupRun(ctx, run.ID)
+	require.NoError(t, err)
+
+	harness.advance(time.Minute)
+	harness.service.runDueBackups(ctx, logger, "worker-1")
+
+	recovered, err := harness.repository.BackupRunByID(ctx, run.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", recovered.Status)
+	assert.FileExists(t, recovered.TargetPath)
+}
+
+// A payload naming no run can never succeed, so it fails immediately rather
+// than occupying five attempts to reach the same conclusion.
+func TestWorkerFailsAnUnusablePayloadWithoutRetrying(t *testing.T) {
+	t.Parallel()
+
+	harness := newBackupHarness(t)
+	ctx := context.Background()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	work := db.NewBackgroundWorkRepository(harness.writer)
+
+	item, err := work.EnqueueBackgroundWork(ctx, BookID, BackupWorkKind, `{"run_id":0}`,
+		harness.now.Format(time.RFC3339))
+	require.NoError(t, err)
+
+	harness.service.runDueBackups(ctx, logger, "worker-1")
+
+	failed, err := work.BackgroundWorkByID(ctx, item.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "failed", failed.Status)
+	assert.Equal(t, 1, failed.Attempts, "an unusable payload is terminal on the first attempt")
+	assert.Contains(t, failed.LastError.String, "invalid backup work payload")
 }
