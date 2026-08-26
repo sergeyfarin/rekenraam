@@ -874,7 +874,7 @@ rather than occupying five. `scheduleBackupIfDue` 0% → 60.6%, `runDueBackups`
 0% → 77.8%, `processBackupWork` 0% → 76.9%, and `RetryBackupRun` 20% → 53.3%,
 which closes most of T-68 as a side effect.
 
-### T-67 Two money-bearing export files have never been written with a row `[ ]`
+### T-67 Two money-bearing export files have never been written with a row `[x]`
 
 **Files:** `backend/internal/app/exports_bundle.go` (`writeLotsCSV`,
 `writePricesCSV`).
@@ -887,6 +887,19 @@ into the wrong column would pass the entire suite.
 
 Fix: one fixture per money-bearing file, asserting the values as well as the
 headers.
+
+**Done 2026-08-24.** Both files now have a fixture with content and assertions
+on the values, not only the headers. The lots test buys ten units for 1000.00
+and asserts cost basis is written at the *cash* commodity's scale rather than
+the instrument's six-place quantity scale — the confusion the file exists to
+make impossible — then sells four and checks that original quantity stays while
+remaining quantity and remaining cost basis both fall. The prices test records
+an observation at scale 4 and asserts `123.4567`, because a price is not money
+at two decimals. 46.7% → 80.0% each.
+
+Turned up while writing it: `is_manual` is an explicit request field, not
+something inferred from `quote_type` — my first assertion was wrong, the code
+was right.
 
 ### T-68 The two recovery paths are barely covered `[ ]`
 

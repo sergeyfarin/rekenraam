@@ -16,6 +16,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/exact"
 )
 
 type exportedBundle struct {
@@ -607,4 +609,109 @@ func TestTrialBalanceRendersASumWiderThanAStoredCoefficient(t *testing.T) {
 	exportedIn := decimalColumn(t, trialBalance, checking, "exported_in_range_movement")
 	derived := decimalColumn(t, trialBalance, checking, "derived_closing_balance")
 	assert.Equal(t, new(big.Rat).Add(opening, exportedIn).RatString(), derived.RatString())
+}
+
+// --- T-67: the two money-bearing files that no fixture had ever populated ---
+//
+// lots.csv and prices.csv were written by every bundle and were always empty,
+// so their columns, their ordering, and their scale handling had never been
+// exercised. An export putting cost basis in the wrong column would have passed
+// the whole suite.
+
+func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "VWRL")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+
+	bundle := downloadBundle(t, handler, f.sessionCookie, "")
+	lots := bundle.table(t, "lots.csv")
+
+	require.Equal(t, []string{
+		"lot_id", "account_id", "account_path", "commodity_id", "opened_on", "status",
+		"quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis",
+		"cost_commodity_id", "source_transaction_id",
+	}, lots.header)
+	require.Len(t, lots.rows, 1)
+
+	row := lots.rows[0]
+	assert.Equal(t, strconvFormatInt(holding.ID), lots.column(row, "account_id"))
+	assert.Equal(t, "open", lots.column(row, "status"))
+	assert.Equal(t, "10", lots.column(row, "quantity"))
+	assert.Equal(t, "10", lots.column(row, "remaining_quantity"))
+	// The buy cost 1000.00 in cash, recorded at the cash commodity's scale —
+	// not the instrument's six-place quantity scale, which is the confusion
+	// this file exists to make impossible.
+	assert.Equal(t, "1000.00", lots.column(row, "cost_basis"))
+	assert.Equal(t, "1000.00", lots.column(row, "remaining_cost_basis"))
+	assert.NotEmpty(t, lots.column(row, "account_path"))
+	assert.NotEmpty(t, lots.column(row, "source_transaction_id"),
+		"a lot must point at the transaction that opened it")
+
+	// A partial sale leaves the original quantity intact and reduces only what
+	// remains — the distinction cost-basis reporting depends on.
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell",
+		investmentTradeRequest{
+			TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+			CashAccountID: f.cashAccount.ID, QuantityValue: exact.New(4), QuantityScale: 0,
+			CashAmountValue: 60000, CashAmountScale: 2, CashCommodityID: f.commodityID,
+		}, http.StatusCreated)
+
+	afterSale := downloadBundle(t, handler, f.sessionCookie, "").table(t, "lots.csv")
+	require.Len(t, afterSale.rows, 1)
+	assert.Equal(t, "10", afterSale.column(afterSale.rows[0], "quantity"))
+	assert.Equal(t, "6", afterSale.column(afterSale.rows[0], "remaining_quantity"))
+	assert.Equal(t, "1000.00", afterSale.column(afterSale.rows[0], "cost_basis"))
+	assert.Equal(t, "600.00", afterSale.column(afterSale.rows[0], "remaining_cost_basis"))
+}
+
+func TestBundlePricesFileCarriesObservationsAtTheirOwnScale(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "VWRL")
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/pricing/prices",
+		map[string]any{
+			"base_commodity_id":  instrument.CommodityID,
+			"quote_commodity_id": f.commodityID,
+			"valuation_date":     "2026-02-01",
+			"price_value":        1234567,
+			"price_scale":        4,
+			"quote_type":         "manual",
+			// is_manual is its own field rather than something inferred from
+			// quote_type, so the export has to carry what was recorded, not
+			// what the type implies.
+			"is_manual": true,
+		}, http.StatusCreated)
+
+	bundle := downloadBundle(t, handler, f.sessionCookie, "")
+	prices := bundle.table(t, "prices.csv")
+
+	require.Equal(t, []string{
+		"base_commodity_id", "quote_commodity_id", "valuation_date", "price",
+		"base_quantity", "quote_type", "adjustment_basis", "is_manual", "is_derived", "source",
+	}, prices.header)
+	require.NotEmpty(t, prices.rows)
+
+	var found bool
+	for _, row := range prices.rows {
+		if prices.column(row, "valuation_date") != "2026-02-01" {
+			continue
+		}
+		found = true
+		// Scale 4, written at scale 4: a price is not money at two decimals.
+		assert.Equal(t, "123.4567", prices.column(row, "price"))
+		assert.Equal(t, "1", prices.column(row, "base_quantity"))
+		assert.Equal(t, "manual", prices.column(row, "quote_type"))
+		assert.Equal(t, "true", prices.column(row, "is_manual"))
+		assert.Equal(t, "false", prices.column(row, "is_derived"))
+	}
+	assert.True(t, found, "the recorded observation must be in the export")
 }
