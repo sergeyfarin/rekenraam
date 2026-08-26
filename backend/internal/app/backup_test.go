@@ -681,3 +681,28 @@ func TestWorkerFailsAnUnusablePayloadWithoutRetrying(t *testing.T) {
 	assert.Equal(t, 1, failed.Attempts, "an unusable payload is terminal on the first attempt")
 	assert.Contains(t, failed.LastError.String, "invalid backup work payload")
 }
+
+// The retry guards: a cap is only safe with a way back, and a way back is only
+// safe if it refuses the cases that would duplicate work.
+func TestRetryBackupRunRefusesWhatCannotOrNeedNotBeRetried(t *testing.T) {
+	t.Parallel()
+
+	harness := newBackupHarness(t)
+	ctx := context.Background()
+
+	completed := harness.runManualBackup(t)
+	_, err := harness.service.RetryBackupRun(ctx, completed.ID)
+	require.Error(t, err, "a completed backup has nothing to retry")
+	assert.Contains(t, err.Error(), "already completed")
+
+	// A run that is still queued: retrying would be a second copy of work the
+	// queue is already going to do.
+	queued, err := harness.service.RequestBackup(ctx, 1)
+	require.NoError(t, err)
+	_, err = harness.service.RetryBackupRun(ctx, queued.ID)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already queued")
+
+	_, err = harness.service.RetryBackupRun(ctx, 987654)
+	require.ErrorIs(t, err, db.ErrNotFound)
+}

@@ -371,6 +371,13 @@ func (s *BackupService) RetryBackupRun(ctx context.Context, runID int64) (db.Bac
 	if run.Status == "completed" {
 		return db.BackupRunRecord{}, ValidationError{Message: "this backup already completed"}
 	}
+	// A run still waiting its turn has nothing to retry, and asking the queue
+	// would answer ErrNotFound — which the API would report as "backup run not
+	// found" about a run the caller is looking at. Requeue matches only failed
+	// items by design; the mismatch belongs here, not in a misleading 404.
+	if run.Status == "pending" || run.Status == "running" {
+		return db.BackupRunRecord{}, ValidationError{Message: "this backup is already queued"}
+	}
 	if !run.WorkItemID.Valid {
 		return db.BackupRunRecord{}, ValidationError{Message: "this backup has no work item to retry"}
 	}

@@ -901,7 +901,7 @@ Turned up while writing it: `is_manual` is an explicit request field, not
 something inferred from `quote_type` — my first assertion was wrong, the code
 was right.
 
-### T-68 The two recovery paths are barely covered `[ ]`
+### T-68 The two recovery paths are barely covered `[x]`
 
 **Files:** `backend/internal/app/backup_worker.go` (`RetryBackupRun`, 20%),
 `backend/cmd/rekenraam/restore.go` (`reportSealedData`, 20%).
@@ -911,6 +911,18 @@ a cap is only safe with one. `reportSealedData` covers only its "no sealed
 data" branch; the branch that matters — a key is configured and a sample either
 opens or does not — is exercised at service level but never through the command
 an operator actually runs.
+
+**Done 2026-08-24.** `reportSealedData` 20% → 86.7%, through `verify-backup`
+itself: the retained key opens the sample, a *different* key is reported as not
+opening it (silence there would be the worst possible answer), and no key at all
+states what a restore would cost. `RetryBackupRun` gained its guard cases.
+
+Writing those found a defect. `RequeueBackgroundWork` matches only
+`status = 'failed'`, so retrying a run that was still **queued** returned
+`ErrNotFound`, which the API reported as `404 "backup run not found"` about a
+run the caller was looking at — the same wrong-reason class as T-63. Fixed:
+`RetryBackupRun` now refuses a pending or running run with "this backup is
+already queued".
 
 ### T-69 A backup that will retry looks the same as one that gave up `[ ]`
 

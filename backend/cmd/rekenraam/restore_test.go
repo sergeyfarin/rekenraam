@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/lockfile"
+	"rekenraam/backend/internal/secretbox"
 )
 
 // backupOf makes a verified backup of a fresh migrated database and returns
@@ -141,4 +143,98 @@ func TestRestoreCommandRequiresAFromFlag(t *testing.T) {
 
 	assert.Equal(t, 2, exitCode)
 	assert.Contains(t, stderr.String(), "restore requires --from")
+}
+
+// --- T-68: the sealed-data report, through the command an operator runs ---
+//
+// The branch that matters is the one where a key is configured and a sample
+// either opens or does not — the question a restore otherwise raises far too
+// late. It was covered at service level and never through verify-backup itself.
+
+// sealedBackupOf returns a backup containing one sealed row, plus the key it
+// was sealed with.
+func sealedBackupOf(t *testing.T) (databaseURL string, backupPath string, key string) {
+	t.Helper()
+
+	ctx := context.Background()
+	root := t.TempDir()
+	databaseURL = "file:" + filepath.Join(root, "rekenraam.sqlite")
+
+	database, err := db.Open(ctx, databaseURL)
+	require.NoError(t, err)
+	require.NoError(t, db.Migrate(ctx, database))
+
+	key = "0123456789abcdef0123456789abcdef"
+	box, err := secretbox.New([]byte(key))
+	require.NoError(t, err)
+	sealed, err := box.Seal([]byte("JBSWY3DPEHPK3PXP"))
+	require.NoError(t, err)
+
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
+		VALUES (1, 'owner', 'x', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
+		INSERT INTO user_mfa_totp (user_id, secret_ciphertext, status, created_at)
+		VALUES (1, ?, 'active', '2026-01-01T00:00:00Z');
+	`, sealed)
+	require.NoError(t, err)
+
+	readOnly, err := db.OpenReadOnly(ctx, databaseURL)
+	require.NoError(t, err)
+	backupPath = filepath.Join(root, "backups", "rekenraam-2026-08-24.sqlite")
+	_, err = db.OnlineBackupSQLiteDatabase(ctx, readOnly, backupPath, db.OnlineBackupOptions{})
+	require.NoError(t, err)
+	require.NoError(t, readOnly.Close())
+	require.NoError(t, database.Close())
+
+	return databaseURL, backupPath, key
+}
+
+func TestVerifyBackupReportsSealedDataOpeningWithTheRetainedKey(t *testing.T) {
+	databaseURL, backupPath, key := sealedBackupOf(t)
+	t.Setenv("DATABASE_URL", databaseURL)
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("REKENRAAM_SECRET_KEY", base64.StdEncoding.EncodeToString([]byte(key)))
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := run(context.Background(), []string{"verify-backup", "--from", backupPath}, strings.NewReader(""), stdout, stderr)
+
+	require.Equalf(t, 0, exitCode, "stderr: %s", stderr.String())
+	output := stdout.String()
+	assert.Contains(t, output, "sealed rows user_mfa_totp:")
+	assert.Contains(t, output, "decrypts with the configured REKENRAAM_SECRET_KEY")
+}
+
+// The case that matters most: the operator kept a key, but not *the* key.
+// Silence here would be the worst possible answer.
+func TestVerifyBackupSaysSoWhenTheConfiguredKeyIsTheWrongOne(t *testing.T) {
+	databaseURL, backupPath, _ := sealedBackupOf(t)
+	t.Setenv("DATABASE_URL", databaseURL)
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("REKENRAAM_SECRET_KEY",
+		base64.StdEncoding.EncodeToString([]byte("fedcba9876543210fedcba9876543210")))
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	run(context.Background(), []string{"verify-backup", "--from", backupPath}, strings.NewReader(""), stdout, stderr)
+
+	assert.Contains(t, stdout.String(), "does NOT decrypt with the configured key",
+		"a key that cannot open the data must be reported, not passed over")
+}
+
+// No key configured: the report says what a restore would cost rather than
+// staying quiet about it.
+func TestVerifyBackupExplainsTheCostWhenNoKeyIsConfigured(t *testing.T) {
+	databaseURL, backupPath, _ := sealedBackupOf(t)
+	t.Setenv("DATABASE_URL", databaseURL)
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("REKENRAAM_SECRET_KEY", "")
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	run(context.Background(), []string{"verify-backup", "--from", backupPath}, strings.NewReader(""), stdout, stderr)
+
+	output := stdout.String()
+	assert.Contains(t, output, "is not set here")
+	assert.Contains(t, output, "would have to be set up again")
 }
