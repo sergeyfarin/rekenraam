@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-24 (R3 complete and accepted; T-61/T-62/T-64 closed;
-R3a is next).
+Last updated: 2026-08-24 (R3 complete and accepted; a verification review is
+open before R3a starts — see below).
 
 ## Where things stand
 
@@ -202,7 +202,30 @@ Docker, automatic nightly self-check, which export is the primary button) were
 all settled by shipping the recommendation; the acceptance review records each
 as a default rather than a frozen decision.
 
-## Current initiative — R3a: core-workflow accessibility regression coverage
+## Before R3a — verification review of what R3 shipped
+
+`docs/reviews/r3-verification-review-2026-08-24.md`, opened because a gap turned
+up at almost every slice and the pattern was worth measuring rather than
+reassuring. A first, coverage-directed pass found seven items; five carry
+backlog IDs:
+
+- [ ] **T-65** a restore test asserts its premise, not its name — the WAL
+      preservation behaviour is unverified (11.8% coverage on the checkpoint
+      path). The most safety-critical gap of the five.
+- [ ] **T-66** the nightly schedule and the backup's queue path have no tests
+      at all (0%).
+- [ ] **T-67** `lots.csv` and `prices.csv` have never been written with a row,
+      so two money-bearing files are unverified.
+- [ ] **T-68** the two recovery paths — retry-after-cap and the sealed-data
+      report — are at 20%.
+- [ ] **T-69** a backup that will retry is displayed identically to one that
+      gave up.
+
+Six further review passes are listed in the review, ordered by expected value:
+claim audit, money-path coverage, failure-branch walk, contract-vs-code diff,
+concurrency, and the Data screen's states.
+
+## Then — R3a: core-workflow accessibility regression coverage
 
 Next per `roadmap.md`. Focused automated accessibility smoke checks for
 setup/auth, transaction entry, reconciliation, reports, and import: semantic

@@ -818,6 +818,86 @@ removes the only multi-step upgrade path a historical-upgrade migration test
 could exercise, which makes T-55 a post-`v0.1.0` concern rather than a
 pre-release one.
 
+### T-65 A restore test asserts its premise, not its name `[ ]`
+
+**Files:** `backend/internal/app/restore_test.go`
+(`TestRestorePreservesUncheckpointedWALContent`),
+`backend/internal/db/restore.go` (`checkpointStoppedDatabase`).
+
+The test closes the database before restoring, and closing a SQLite database
+checkpoints and deletes its WAL — verified directly: 947 KB of `-wal` before
+`Close()`, no file after. The restore therefore never reaches the checkpoint
+path, and the "uncheckpointed WAL" the test is named for does not exist by the
+time it matters. It passes because the data was already in the main file.
+
+`checkpointStoppedDatabase` sits at 11.8% coverage as a result, in the most
+safety-critical path R3 shipped: the WAL-preservation behaviour restore was
+built to guarantee is unverified.
+
+Fix: leave the WAL in place — hold a second connection open, or copy the file
+set aside while a writer is live — then assert the preserved copy carries what
+only the WAL held. See `docs/reviews/r3-verification-review-2026-08-24.md` V-1.
+
+### T-66 The nightly backup schedule and its queue path have no tests `[ ]`
+
+**Files:** `backend/internal/app/backup_scheduler.go`,
+`backend/internal/app/backup_worker.go` (`StartBackgroundWorker`,
+`runDueBackups`, `processBackupWork`).
+
+All at 0% coverage. The scheduler decides when a backup is due — local-time
+arithmetic across DST, the already-ran-today check, the owner lookup, the
+lost-race path — and none of it is executed by a test. The worker's claim →
+complete, claim → retry with backoff, and claim → fail-at-the-cap transitions
+are likewise unexercised.
+
+One part was verified by reading during the review: `ClaimBackgroundWork` does
+`attempts = attempts + 1`, so the attempt cap can trigger and this is **not** a
+repeat of T-39. Everything else is unproven.
+
+A regression here fails in the direction that matters: no backup, and a screen
+that truthfully reports none to someone who is not looking.
+
+### T-67 Two money-bearing export files have never been written with a row `[ ]`
+
+**Files:** `backend/internal/app/exports_bundle.go` (`writeLotsCSV`,
+`writePricesCSV`).
+
+Both sit at 46.7% coverage: the loop bodies never execute, because no bundle
+fixture has an investment lot or a price observation. These files carry money —
+cost basis at its own scale, prices at theirs — so their column order, scale
+handling, and `exact.Decimal` calls are unverified. An export writing cost basis
+into the wrong column would pass the entire suite.
+
+Fix: one fixture per money-bearing file, asserting the values as well as the
+headers.
+
+### T-68 The two recovery paths are barely covered `[ ]`
+
+**Files:** `backend/internal/app/backup_worker.go` (`RetryBackupRun`, 20%),
+`backend/cmd/rekenraam/restore.go` (`reportSealedData`, 20%).
+
+`RetryBackupRun` is the documented way back from an exhausted attempt cap, and
+a cap is only safe with one. `reportSealedData` covers only its "no sealed
+data" branch; the branch that matters — a key is configured and a sample either
+opens or does not — is exercised at service level but never through the command
+an operator actually runs.
+
+### T-69 A backup that will retry looks the same as one that gave up `[ ]`
+
+**Files:** `backend/internal/app/backup_worker.go` (`RunBackup`),
+`frontend/src/lib/settings/data-settings.svelte`.
+
+`RunBackup` marks its run `failed` on every failed attempt while the work item
+may still be queued for retry, so the Data screen shows "failed" both for a
+backup about to succeed and for one that has exhausted its cap. No data is at
+risk; the screen is saying two different things with one word.
+
+Related and undocumented (V-7): the scheduler skips a day when *any* scheduled
+run exists for it, whatever its status, so a night that exhausts its retries
+produces no backup and no further automatic attempt. That is a defensible
+choice — retrying a full disk every minute helps nobody — but the "nightly"
+promise has an exception nobody has written down.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04
