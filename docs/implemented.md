@@ -185,6 +185,17 @@ non-English locales all landed together).
 | Commodity symbol spacing (T-62) | ✅ | `joinCommodityAmount` states the rule once — separate when the label ends in a letter or digit, do not when it is punctuation — and the three call sites that ran `AAPL2.000` together now use it. Tested including non-Latin labels. |
 | Acceptance review | ✅ | Closed 2026-08-24 in `docs/plans/data-portability-plan.md`: every commitment verified, every deferred item answered with a reason, and the four planning claims that testing disproved corrected in place. It found the attachments hook missing from the backup documentation — present in the manifest, the self-check, and the restore output, absent from `README.md` — now fixed. |
 
+## Accessibility (R3a) — ✅ Core-workflow regression coverage
+
+| Capability | Status | Notes |
+|---|---|---|
+| Automated a11y checks | ✅ | Eight browser cases over the journeys R3a names — entry/sign-in, overview and navigation, transaction entry, the transactions list, reconcile, all three report views, import, and settings including the Data screen. `@axe-core/playwright` against WCAG 2.1 A and AA. Tagged `[acceptance]`, so `scripts/test-e2e-acceptance.sh` runs them, and part of the smoke suite on every push. |
+| What axe cannot check | ✅ | `expectKeyboardReachable` tabs through a screen and asserts the controls it names are actually reached — a page can satisfy every axe rule and still be unusable without a mouse. `expectFocusIsNotOrphaned` catches focus left on an element that navigation has removed. |
+| Document titles | ✅ | No page in the app had a `<title>`: every tab was unnamed and every screen-reader navigation announced nothing. Derived once in the app shell from the heading it already computes, so the two cannot drift, plus the entry screen and a new `+error.svelte` — the page nobody meant to reach needs a name too. |
+| Light-theme contrast | ✅ | The accent family missed AA. Measured and re-derived by computing ratios directly: accent text on its own tint 3.73:1, positive on positive-soft 4.22:1, selected 4.03:1, and **white-on-accent 4.20:1 — every primary button in the app**. Values solved against the 4.5:1 threshold rather than nudged by eye; the `.status-accent-soft` tint dropped 12% → 8% because a chip whose legibility depended on whether it sat on a card or the page background is the wrong chip. The dark theme already cleared AA and is unchanged. |
+| Valid interactive markup | ✅ | A clickable transactions row carried `role="button"` with `aria-selected` — invalid on that role, and it nested the row's own buttons inside a button (one critical and one serious violation). Left as a row, the markup is valid and the behaviour is unchanged. |
+| Browser-suite ordering | ✅ | `auth.spec.ts` is the bootstrap journey and needs a database with no owner; it ran first only because "auth" sorted before every other filename, which a new spec starting with "a" quietly broke. A Playwright project dependency now states the requirement. |
+
 ## FX & Pricing (Phase 6 foundations) — 🟡 Backend only
 
 | Capability | Status | Notes |
@@ -238,7 +249,7 @@ non-English locales all landed together).
 
 ## Not started (see roadmap)
 
-Accessibility regression coverage (R3a, next), CSV/OFX/QFX import adapters, import profiles,
+CSV/OFX/QFX import adapters, import profiles,
 budgets, scheduled transactions, projected balances, loan/liability helpers,
 multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
 shipped in R2 — see the Reports section above.)

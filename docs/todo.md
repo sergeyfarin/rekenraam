@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-24 (R3 complete and accepted; a verification review is
-open before R3a starts — see below).
+Last updated: 2026-08-24 (R3 and R3a complete, verification findings T-65 to
+T-69 closed; the reporting-currency selector is next).
 
 ## Where things stand
 
@@ -227,20 +227,21 @@ claim audit, money-path coverage, failure-branch walk, contract-vs-code diff,
 concurrency, and the Data screen's states. They are not scheduled — R3a starts
 next — but they are the queue if another verification pass is wanted.
 
-## Then — R3a: core-workflow accessibility regression coverage
+## Previous initiative — R3a accessibility coverage — **complete 2026-08-24**
 
-Next per `roadmap.md`. Focused automated accessibility smoke checks for
-setup/auth, transaction entry, reconciliation, reports, and import: semantic
-controls, labels, keyboard navigation, focus handling, and contrast. Mobile
-journeys stay in the broader Playwright suite.
+Eight browser checks over setup/auth, transaction entry, the transactions list,
+reconciliation, reports, import, and settings — axe for the machine-checkable
+rules, plus keyboard-reachability and focus assertions that axe cannot make.
 
-Two things R3 leaves for it rather than claiming:
+They found four real defects on the first run, all fixed: no page in the app had
+a `<title>`; the light theme's accent family missed AA, including every primary
+button at 4.20:1; a clickable table row used `role="button"` with `aria-selected`
+and nested buttons inside it; and `auth.spec.ts`'s need to run first was held up
+only by alphabetical luck, now stated as a project dependency.
 
-- `/app/settings/data` shipped with semantic tables, labelled controls, and
-  `sr-only` headers, but nothing measured it. R3's acceptance review says so
-  explicitly instead of implying coverage.
-- `scripts/test-e2e-acceptance.sh` (T-61) is where a11y cases that map to a
-  plan's acceptance criteria belong, rather than a fourth suite.
+**Next initiative:** the reporting-currency selector — approved 2026-08-19, one
+reporting currency with a named valuation method, per-commodity exact totals
+staying in every response.
 
 ## Ready to start — unblocked by the 2026-08-19 decisions
 

@@ -6,7 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-08-24 (R3 complete and accepted; R3a becomes current).
+Last reviewed: 2026-08-24 (R3 and R3a complete; the reporting-currency
+selector is next).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -28,7 +29,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R1 | Reconcile workflow screen (trust loop) | ✅ | `docs/implemented.md` (Reconciliation) |
 | R2 | Reports users can act on | ✅ | `docs/plans/reports-plan.md` |
 | R3 | Portable **and protected** core data (CSV/QIF export, backups, restore, self-check) | ✅ | `docs/plans/data-portability-plan.md` |
-| R3a | Accessibility regression coverage | ▶ | this file |
+| R3a | Accessibility regression coverage | ✅ | this file |
 | R4 | QIF import | ✅ | `docs/implemented.md` (Import Pipeline) |
 | R5 | Ordinary-bank CSV import + profiles | ⏭ | `docs/plans/import-plan.md` |
 | R6 | Import depth (XLSX/OFX, matching, rollback) | ⏸ | `docs/plans/import-plan.md` |
@@ -204,12 +205,41 @@ non-negotiables; the plan may not quietly narrow them.
 stay in every response — conversion is additive, never replacing what R2
 shipped.
 
-### Next — R3a: core-workflow accessibility regression coverage
+### Done — R3a: core-workflow accessibility regression coverage
+
+**Delivered 2026-08-24.** Eight browser checks over the journeys named below,
+combining axe (contrast, labels, ARIA, heading order) with keyboard-reachability
+and focus assertions that axe cannot make — a screen can satisfy every axe rule
+and still be unusable without a mouse.
+
+They found real defects on their first run, all now fixed: **no page in the app
+had a `<title>`**, so every tab and every screen-reader announcement was
+unnamed; the light theme's accent family missed AA, including white-on-accent at
+4.20:1, which is every primary button in the app; and a clickable table row
+carried `role="button"` with `aria-selected`, which is invalid on that role and
+also nested the row's own buttons inside a button. The palette values were
+solved against the 4.5:1 threshold rather than nudged by eye, and the dark theme
+already cleared it.
+
+The suite also surfaced an ordering dependency that had been held up by luck:
+`auth.spec.ts` is the bootstrap journey and needs a database with no owner, and
+it only ran first because "auth" sorted before every other filename. A Playwright
+project dependency now states that requirement.
+
+**Next initiative:** the reporting-currency selector, approved 2026-08-19 and
+sequenced after R3.
+
+<details>
+<summary>R3a as planned</summary>
+
+### R3a as planned: core-workflow accessibility regression coverage
 
 Add focused automated accessibility smoke checks for setup/auth, transaction
 entry, reconciliation, reports, and import. Cover semantic controls, labels,
 keyboard navigation, focus handling, and contrast violations; keep mobile
 journeys in the broader Playwright suite.
+
+</details>
 
 ### Then — R5: ordinary-bank CSV import
 

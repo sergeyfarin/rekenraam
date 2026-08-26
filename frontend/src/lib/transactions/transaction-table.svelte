@@ -183,10 +183,17 @@
         <tbody>
           {#each table.getRowModel().rows as row, i (row.id)}
             {@const isClickable = !!onRowClick}
+            <!--
+              No role="button" here (R3a). A <tr> is already a row, and rows may
+              carry aria-selected while buttons may not — that was one violation.
+              The other was nesting: these rows contain their own buttons and
+              links, and a button may not contain interactive descendants. Left
+              as a row, the markup is valid and the behaviour is unchanged: the
+              row stays focusable and its keydown handler still opens it.
+            -->
             <tr
               data-table-row
               tabindex={isClickable ? 0 : undefined}
-              role={isClickable ? 'button' : undefined}
               aria-selected={focusedRowIndex === i}
               class={`border-b border-border/50 outline-none transition-colors ${isClickable ? 'cursor-pointer hover:bg-row-hover focus:bg-row-hover' : ''}`}
               onclick={() => onRowClick?.(row.original)}

@@ -166,6 +166,15 @@
   }
 </script>
 
+<!--
+  A page with no <title> is a tab a reader cannot tell apart and, for a screen
+  reader, a navigation that announces nothing (R3a, axe rule document-title).
+  Derived from the heading the shell already computes, so the two cannot drift.
+-->
+<svelte:head>
+  <title>{headerTitle} · {m.app_shell_nav_title()}</title>
+</svelte:head>
+
 {#if shellState === 'loading'}
   <main class="min-h-screen px-4 py-14 sm:px-6 lg:px-8">
     <div class="mx-auto max-w-3xl">

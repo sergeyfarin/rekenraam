@@ -14,6 +14,20 @@ export default defineConfig({
   testDir: './playwright',
   workers: 1,
   fullyParallel: false,
+  // auth.spec.ts is the bootstrap journey: it needs a database with no owner
+  // account, and every other spec creates one on its way in. That has always
+  // been true and was held up only by "auth" sorting before every other
+  // filename — which stopped being true the moment a spec starting with "a"
+  // arrived. A project dependency states the requirement instead of leaving it
+  // to alphabetical luck.
+  projects: [
+    { name: 'bootstrap', testMatch: /auth\.spec\.ts/ },
+    {
+      name: 'app',
+      testIgnore: /auth\.spec\.ts/,
+      dependencies: ['bootstrap']
+    }
+  ],
   use: {
     baseURL,
     // Sandboxes and CI images often ship a Chromium that is not the revision

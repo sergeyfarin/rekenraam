@@ -20,20 +20,28 @@
   --color-topbar-control-hover: oklch(0.36 0.067 154);
   --color-control: oklch(0.993 0.004 108);
   --color-control-hover: oklch(0.935 0.018 108);
-  --color-selected: oklch(0.57 0.14 154);
+  /*
+   * Light-theme accent family, set to clear WCAG AA (4.5:1) rather than to
+   * look about right: measured 2026-08-24 with axe and re-derived by
+   * computing the ratios directly. Before, accent text on its own 12% tint
+   * was 3.73:1, positive on positive-soft 4.22:1, selected 4.03:1, and
+   * white-on-accent — every primary button in the app — 4.20:1. The dark
+   * theme already cleared it and is unchanged (R3a).
+   */
+  --color-selected: oklch(0.54 0.14 154);
   --color-selected-foreground: oklch(0.986 0.01 154);
   --color-row-hover: oklch(0.965 0.014 108);
   --color-border: oklch(0.855 0.022 108);
   --color-muted: oklch(0.48 0.035 108);
-  --color-accent: oklch(0.56 0.14 154);
+  --color-accent: oklch(0.5 0.14 154);
   --color-accent-foreground: oklch(0.986 0.01 154);
-  --color-positive: oklch(0.52 0.12 155);
+  --color-positive: oklch(0.5 0.12 155);
   --color-positive-soft: oklch(0.925 0.035 155);
   --color-warning: oklch(0.62 0.12 78);
   --color-warning-soft: oklch(0.945 0.04 78);
   --color-danger: oklch(0.56 0.2 25);
   --color-danger-soft: oklch(0.93 0.03 25);
-  --color-chart-1: oklch(0.56 0.14 154);
+  --color-chart-1: oklch(0.5 0.14 154);
   --color-chart-2: oklch(0.62 0.12 175);
   --color-chart-3: oklch(0.5 0.1 132);
   --color-chart-4: oklch(0.72 0.12 92);
@@ -396,8 +404,15 @@
     @apply bg-control-hover;
   }
 
+  /*
+   * 8%, not 12% (R3a). These chips sit on the page background as often as on a
+   * card, and accent text on a 12% accent tint over the background measured
+   * 4.37:1 — under AA, while the same chip on a card passed at 4.61:1. A tint
+   * whose legibility depends on what is behind it is the wrong tint. At 8% it
+   * clears 4.5:1 on either, and the dark theme stays comfortably above 6:1.
+   */
   .status-accent-soft {
-    background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
+    background-color: color-mix(in oklab, var(--color-accent) 8%, transparent);
   }
 
   .app-control {
