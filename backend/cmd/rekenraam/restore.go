@@ -147,8 +147,20 @@ func runRestore(ctx context.Context, cfg config.Config, args []string, stdout io
 		default:
 			fmt.Fprintf(stderr, "restore failed: %v\n", err)
 		}
-		if result.PreservedDir != "" {
-			fmt.Fprintf(stderr, "the previous database is preserved in %s\n", result.PreservedDir)
+		// Which sentence is true here depends on how far the restore got, and
+		// the operator is deciding what to do next with no database in front of
+		// them. Saying "preserved" for a run that moved nothing, or telling
+		// someone to move files back over a restore that already succeeded,
+		// is worse than saying nothing.
+		switch {
+		case result.Installed:
+			fmt.Fprintf(stderr, "the restored database is already installed at %s; this failed afterwards.\n", result.DatabasePath)
+			fmt.Fprintf(stderr, "the previous database is in %s — keep it until the restored one looks right.\n", result.PreservedDir)
+		case len(result.PreservedFiles) > 0:
+			fmt.Fprintf(stderr, "nothing is at %s now: the previous database was moved to %s first.\n", result.DatabasePath, result.PreservedDir)
+			fmt.Fprintln(stderr, "to go back to it, move those files beside the database path under their original names.")
+		default:
+			fmt.Fprintln(stderr, "nothing was replaced; the database is untouched.")
 		}
 		return 1
 	}

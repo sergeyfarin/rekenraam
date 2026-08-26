@@ -157,10 +157,20 @@ func EmbeddedMigrationVersion() (int64, error) {
 // RestoreResult records what a restore did, so its output is a report rather
 // than a claim.
 type RestoreResult struct {
-	DatabasePath   string
-	PreservedDir   string
+	DatabasePath string
+	PreservedDir string
+	// PreservedFiles is what was actually moved aside, which is not the same
+	// question as whether PreservedDir exists: the directory is created before
+	// the first rename, so an empty list means the previous database is still
+	// where it was.
 	PreservedFiles []string
-	SchemaVersion  int64
+	// Installed is true once the restored file is under the real name. Between
+	// that rename and this function returning there is still work that can
+	// fail, and "the restore failed" means something different on either side
+	// of it: before, the previous database is only in PreservedDir; after, the
+	// restored one is already live.
+	Installed     bool
+	SchemaVersion int64
 }
 
 // RestoreSQLiteDatabase installs a verified backup over the live database.
@@ -241,6 +251,7 @@ func RestoreSQLiteDatabase(ctx context.Context, backupPath string, databaseURL s
 	if err := os.Rename(temporaryPath, databasePath); err != nil {
 		return result, fmt.Errorf("install restored database: %w", err)
 	}
+	result.Installed = true
 	if err := SyncDirectory(filepath.Dir(databasePath)); err != nil {
 		return result, err
 	}

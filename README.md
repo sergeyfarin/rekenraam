@@ -312,7 +312,7 @@ worth reading: it is the question a restore only raises once it is too late.
 ### Restoring
 
 Stop the app first — the restore refuses to run while the server holds its lock,
-and names the process that does.
+and reports the process id holding it.
 
 ```sh
 ./rekenraam restore --from data/backups/rekenraam-2026-08-24.sqlite
@@ -327,6 +327,14 @@ and syncs it to disk before reporting success.
 
 The previous database is kept, not deleted. Start the app, check that the
 restored data looks right, and delete that directory yourself.
+
+If a restore fails part-way it says which of three states you are in, because
+they need different responses: nothing was replaced and the database is
+untouched; the previous database was moved aside and **nothing is at the
+database path**, so move those files back beside it under their original names
+to return to it; or the restored database is already installed and the failure
+came afterwards, in which case keep the preserved directory until the restored
+one looks right.
 
 Set the **original** `REKENRAAM_SECRET_KEY` before starting the restored app. The
 ledger does not need it; two-factor enrolment and stored connection credentials

@@ -238,3 +238,64 @@ func TestVerifyBackupExplainsTheCostWhenNoKeyIsConfigured(t *testing.T) {
 	assert.Contains(t, output, "is not set here")
 	assert.Contains(t, output, "would have to be set up again")
 }
+
+// A restore that fails after moving the previous database aside leaves nothing
+// at the database path. What the operator is told at that moment decides
+// whether their data is recoverable or merely present somewhere they will not
+// look, so the message has to state which of the three states this is.
+func TestRestoreCommandSaysWhereTheDataIsWhenItFailsPartWay(t *testing.T) {
+	databaseURL, backupPath := backupOf(t)
+	databasePath, err := db.ResolveSQLiteFilePath(databaseURL)
+	require.NoError(t, err)
+	t.Setenv("DATABASE_URL", databaseURL)
+	t.Setenv("APP_ENV", "development")
+
+	// A directory where the install wants to write its temporary file: the copy
+	// fails, and it fails *after* the preserve step, which is the state worth
+	// describing.
+	require.NoError(t, os.MkdirAll(databasePath+".restoring", 0o700))
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := run(context.Background(), []string{"restore", "--from", backupPath}, strings.NewReader(""), stdout, stderr)
+
+	require.Equal(t, 1, exitCode)
+	output := stderr.String()
+	assert.Contains(t, output, "restore failed:")
+	assert.Contains(t, output, "nothing is at "+databasePath)
+	assert.Contains(t, output, "move those files beside the database path")
+	assert.NotContains(t, output, "nothing was replaced")
+
+	// And the claim is true: the files really are in the preserved directory.
+	entries, err := os.ReadDir(filepath.Dir(databasePath))
+	require.NoError(t, err)
+	var preservedDir string
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".before-restore-") {
+			preservedDir = filepath.Join(filepath.Dir(databasePath), entry.Name())
+		}
+	}
+	require.NotEmpty(t, preservedDir, "the previous database must be somewhere")
+	preserved, err := os.ReadDir(preservedDir)
+	require.NoError(t, err)
+	assert.NotEmpty(t, preserved)
+	assert.NoFileExists(t, databasePath)
+}
+
+// The other side of the same decision: a failure before anything moved must not
+// send the operator looking for a preserved copy that does not exist.
+func TestRestoreCommandSaysNothingWasReplacedWhenItRefusesEarly(t *testing.T) {
+	databaseURL, _ := backupOf(t)
+	t.Setenv("DATABASE_URL", databaseURL)
+	t.Setenv("APP_ENV", "development")
+
+	notABackup := filepath.Join(t.TempDir(), "not-a-database.sqlite")
+	require.NoError(t, os.WriteFile(notABackup, []byte("this is not a database"), 0o600))
+
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	exitCode := run(context.Background(), []string{"restore", "--from", notABackup}, strings.NewReader(""), stdout, stderr)
+
+	require.Equal(t, 1, exitCode)
+	assert.Contains(t, stderr.String(), "nothing was replaced; the database is untouched.")
+}
