@@ -1412,3 +1412,101 @@ func scanRefreshRuns(rows *sql.Rows) ([]PricingRefreshRunRecord, error) {
 	}
 	return records, nil
 }
+
+// ReportingRateRecord is one usable rate for converting a commodity into the
+// reporting currency: the price, what it is quoted per, and the date it was
+// observed on.
+type ReportingRateRecord struct {
+	BaseCommodityID   int64
+	PriceValue        int64
+	PriceScale        int
+	BaseQuantityValue int64
+	BaseQuantityScale int
+	ValuationDate     string
+	IsDerived         bool
+}
+
+// ReportingRates returns every non-voided observation that could convert one of
+// baseCommodityIDs into quoteCommodityID between fromDate and toDate.
+//
+// It returns the whole window rather than answering one date at a time: a
+// report asks about many commodities on many dates, and a query per question
+// would be a query per posting. The caller picks the applicable observation per
+// date in Go, where the "nearest earlier within the window" rule lives.
+//
+// Voided observations are excluded here rather than filtered later. A voided
+// observation is a statement the book has withdrawn, and a withdrawn rate must
+// not quietly drive a headline figure (T-37).
+func (r *PricingRepository) ReportingRates(ctx context.Context, bookID int64, quoteCommodityID int64, baseCommodityIDs []int64, fromDate string, toDate string) ([]ReportingRateRecord, error) {
+	if len(baseCommodityIDs) == 0 {
+		return nil, nil
+	}
+
+	clause, args := inClause("po.base_commodity_id", baseCommodityIDs)
+	queryArgs := append([]any{bookID, quoteCommodityID}, args...)
+	queryArgs = append(queryArgs, fromDate, toDate)
+
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT po.base_commodity_id, po.price_value, po.price_scale,
+			po.base_quantity_value, po.base_quantity_scale, po.valuation_date, po.is_derived
+		FROM price_observations po
+		WHERE po.book_id = ?
+			AND po.quote_commodity_id = ?
+			AND `+clause+`
+			AND po.voided_at IS NULL
+			AND po.valuation_date >= ?
+			AND po.valuation_date <= ?
+		ORDER BY po.base_commodity_id, po.valuation_date, po.recorded_at, po.id
+	`, queryArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("read reporting rates: %w", err)
+	}
+	defer rows.Close()
+
+	var rates []ReportingRateRecord
+	for rows.Next() {
+		var rate ReportingRateRecord
+		if err := rows.Scan(&rate.BaseCommodityID, &rate.PriceValue, &rate.PriceScale,
+			&rate.BaseQuantityValue, &rate.BaseQuantityScale, &rate.ValuationDate, &rate.IsDerived); err != nil {
+			return nil, fmt.Errorf("scan reporting rate: %w", err)
+		}
+		rates = append(rates, rate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate reporting rates: %w", err)
+	}
+
+	return rates, nil
+}
+
+// ReportingCurrencyRecord is what a report needs to know about the currency it
+// is being denominated in: what to call it, and how many decimal places its
+// figures carry.
+type ReportingCurrencyRecord struct {
+	ID            int64
+	Code          string
+	Kind          string
+	StandardScale int
+}
+
+// ReportingCurrency reads one commodity's identity and scale.
+//
+// The scale matters as much as the code: it is what a converted figure is
+// rounded to, and rounding a yen figure to two places or a dollar figure to
+// none would both be wrong in ways that look right.
+func (r *PricingRepository) ReportingCurrency(ctx context.Context, bookID int64, commodityID int64) (ReportingCurrencyRecord, error) {
+	var record ReportingCurrencyRecord
+	err := r.database.QueryRowContext(ctx, `
+		SELECT c.id, c.code, c.kind, cv.standard_scale
+		FROM commodities c
+		JOIN current_commodity_versions cv ON cv.commodity_id = c.id
+		WHERE c.book_id = ? AND c.id = ?
+	`, bookID, commodityID).Scan(&record.ID, &record.Code, &record.Kind, &record.StandardScale)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ReportingCurrencyRecord{}, ErrNotFound
+	}
+	if err != nil {
+		return ReportingCurrencyRecord{}, fmt.Errorf("read reporting currency: %w", err)
+	}
+	return record, nil
+}

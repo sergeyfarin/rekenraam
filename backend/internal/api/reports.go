@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"rekenraam/backend/internal/app"
 	"rekenraam/backend/internal/exact"
@@ -42,6 +43,10 @@ type spendingGroupResponse struct {
 	CategoryType string                       `json:"category_type"`
 	Totals       []spendingGroupTotalResponse `json:"totals"`
 	DrillDown    spendingDrillDownResponse    `json:"drill_down"`
+	// Converted is this group in the reporting currency, summed from each
+	// posting at its own entry date. Absent when the group holds a posting
+	// that could not be converted.
+	Converted *balanceQuantityResponse `json:"converted,omitempty"`
 }
 
 // spendingDrillDownResponse is the query that reproduces this row's postings.
@@ -55,6 +60,82 @@ type spendingDrillDownResponse struct {
 	AccountIDs []int64 `json:"account_ids"`
 }
 
+// valuationResponse is what the response says about its own conversions: the
+// method that produced them, how stale a rate was allowed to be, which rates
+// were used, and which commodities went unconverted. A converted figure
+// without this block would be a number with no provenance.
+type rateUseResponse struct {
+	CommodityID     int64  `json:"commodity_id"`
+	ObservationDate string `json:"observation_date"`
+	RequestedDate   string `json:"requested_date"`
+	Stale           bool   `json:"stale"`
+	Derived         bool   `json:"derived"`
+}
+
+type rateGapResponse struct {
+	CommodityID            int64  `json:"commodity_id"`
+	Reason                 string `json:"reason"`
+	NearestObservationDate string `json:"nearest_observation_date,omitempty"`
+}
+
+type valuationResponse struct {
+	CommodityID      int64             `json:"commodity_id"`
+	Code             string            `json:"code,omitempty"`
+	Scale            int               `json:"scale"`
+	Method           string            `json:"method"`
+	MaxStalenessDays int               `json:"max_staleness_days"`
+	Complete         bool              `json:"complete"`
+	RatesUsed        []rateUseResponse `json:"rates_used"`
+	Gaps             []rateGapResponse `json:"gaps"`
+}
+
+func toValuationResponse(coverage *app.ValuationCoverage) *valuationResponse {
+	if coverage == nil {
+		return nil
+	}
+	response := valuationResponse{
+		CommodityID:      coverage.CommodityID,
+		Code:             coverage.Code,
+		Scale:            coverage.Scale,
+		Method:           coverage.Method,
+		MaxStalenessDays: coverage.MaxStalenessDays,
+		Complete:         coverage.Complete,
+		RatesUsed:        make([]rateUseResponse, 0, len(coverage.Used)),
+		Gaps:             make([]rateGapResponse, 0, len(coverage.Gaps)),
+	}
+	for _, use := range coverage.Used {
+		response.RatesUsed = append(response.RatesUsed, rateUseResponse(use))
+	}
+	for _, gap := range coverage.Gaps {
+		response.Gaps = append(response.Gaps, rateGapResponse(gap))
+	}
+	return &response
+}
+
+// parseReportingCurrency reads the optional reporting-currency parameters.
+// Absent, reports behave exactly as before — the conversion is additive, and so
+// is the request.
+func parseReportingCurrency(query url.Values) (*app.ReportingCurrencyInput, error) {
+	raw := strings.TrimSpace(query.Get("reporting_currency_id"))
+	if raw == "" {
+		return nil, nil
+	}
+	commodityID, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || commodityID <= 0 {
+		return nil, reportFilterError{field: "reporting_currency_id"}
+	}
+
+	input := app.ReportingCurrencyInput{CommodityID: commodityID}
+	if staleness := strings.TrimSpace(query.Get("max_staleness_days")); staleness != "" {
+		days, err := strconv.Atoi(staleness)
+		if err != nil || days < 0 || days > 365 {
+			return nil, reportFilterError{field: "max_staleness_days"}
+		}
+		input.MaxStalenessDay = days
+	}
+	return &input, nil
+}
+
 type spendingResponse struct {
 	Query           spendingQueryResponse     `json:"query"`
 	Groups          []spendingGroupResponse   `json:"groups"`
@@ -66,6 +147,10 @@ type spendingResponse struct {
 	RankingCommodityID  *int64   `json:"ranking_commodity_id,omitempty"`
 	ExcludedSystemRoles []string `json:"excluded_system_roles"`
 	GroupingPolicy      string   `json:"grouping_policy"`
+	// ConvertedTotal and Valuation appear only when a reporting currency was
+	// asked for. The per-commodity totals above are unchanged either way.
+	ConvertedTotal *balanceQuantityResponse `json:"converted_total,omitempty"`
+	Valuation      *valuationResponse       `json:"valuation,omitempty"`
 }
 
 func spendingReport(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
@@ -91,6 +176,12 @@ func spendingReport(logger *slog.Logger, authService *app.AuthService, transacti
 			return
 		}
 
+		reporting, err := parseReportingCurrency(query)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
 		result, err := transactionService.Spending(r.Context(), app.SpendingInput{
 			StartDate:   query.Get("start_date"),
 			EndDate:     query.Get("end_date"),
@@ -99,6 +190,7 @@ func spendingReport(logger *slog.Logger, authService *app.AuthService, transacti
 			CategoryIDs: categoryIDs,
 			PayeeIDs:    payeeIDs,
 			Filters:     filters,
+			Reporting:   reporting,
 		})
 		if err != nil {
 			writeLedgerServiceError(w, r, logger, "read spending report", err)
@@ -135,6 +227,7 @@ func toSpendingResponse(result app.SpendingResult) spendingResponse {
 				PayeeID:    group.PayeeID,
 				AccountIDs: emptyIfNil(result.Filters.ResolvedAccountIDs),
 			},
+			Converted: toBalanceQuantityPointer(group.Converted),
 		})
 	}
 
@@ -153,7 +246,24 @@ func toSpendingResponse(result app.SpendingResult) spendingResponse {
 		RankingCommodityID:  result.RankingCommodityID,
 		ExcludedSystemRoles: result.ExcludedSystemRoles,
 		GroupingPolicy:      result.GroupingPolicy,
+		ConvertedTotal:      toBalanceQuantityPointer(result.ConvertedTotal),
+		Valuation:           toValuationResponse(result.Valuation),
 	}
+}
+
+// toBalanceQuantityPointer keeps an absent converted figure absent. A zero
+// would read as "nothing", which is a different claim from "not converted".
+func toBalanceQuantityPointer(quantity *app.BalanceQuantity) *balanceQuantityResponse {
+	if quantity == nil {
+		return nil
+	}
+	response := balanceQuantityResponse{
+		CommodityID:         quantity.CommodityID,
+		QuantityValue:       quantity.QuantityValue,
+		QuantityScale:       quantity.QuantityScale,
+		NormalQuantityValue: quantity.NormalQuantityValue,
+	}
+	return &response
 }
 
 func toReportFiltersResponse(filters app.ReportFiltersEcho) reportFiltersResponse {
@@ -233,6 +343,15 @@ type cashflowBucketResponse struct {
 	OperatingNet []balanceQuantityResponse `json:"operating_net"`
 	TransferNet  []balanceQuantityResponse `json:"transfer_net"`
 	NetMovement  []balanceQuantityResponse `json:"net_movement"`
+	// The same measures in the reporting currency, absent unless one was asked
+	// for. Converted net movement is derived from the converted parts, so
+	// net_movement = operating_net + transfer_net holds here exactly as it does
+	// in the exact figures.
+	ConvertedInflow       *balanceQuantityResponse `json:"converted_inflow,omitempty"`
+	ConvertedOutflow      *balanceQuantityResponse `json:"converted_outflow,omitempty"`
+	ConvertedOperatingNet *balanceQuantityResponse `json:"converted_operating_net,omitempty"`
+	ConvertedTransferNet  *balanceQuantityResponse `json:"converted_transfer_net,omitempty"`
+	ConvertedNetMovement  *balanceQuantityResponse `json:"converted_net_movement,omitempty"`
 }
 
 type cashflowQueryResponse struct {
@@ -248,6 +367,7 @@ type cashflowResponse struct {
 	Query               cashflowQueryResponse    `json:"query"`
 	Buckets             []cashflowBucketResponse `json:"buckets"`
 	ExcludedSystemRoles []string                 `json:"excluded_system_roles"`
+	Valuation           *valuationResponse       `json:"valuation,omitempty"`
 }
 
 func cashflowReport(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
@@ -263,11 +383,18 @@ func cashflowReport(logger *slog.Logger, authService *app.AuthService, transacti
 			return
 		}
 
+		reporting, err := parseReportingCurrency(query)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
 		result, err := transactionService.Cashflow(r.Context(), app.CashflowInput{
 			StartDate: query.Get("start_date"),
 			EndDate:   query.Get("end_date"),
 			Bucket:    query.Get("bucket"),
 			Filters:   filters,
+			Reporting: reporting,
 		})
 		if err != nil {
 			writeLedgerServiceError(w, r, logger, "read cashflow", err)
@@ -286,6 +413,12 @@ func cashflowReport(logger *slog.Logger, authService *app.AuthService, transacti
 				OperatingNet: toBalanceQuantityResponses(bucket.OperatingNet),
 				TransferNet:  toBalanceQuantityResponses(bucket.TransferNet),
 				NetMovement:  toBalanceQuantityResponses(bucket.NetMovement),
+
+				ConvertedInflow:       toBalanceQuantityPointer(bucket.ConvertedInflow),
+				ConvertedOutflow:      toBalanceQuantityPointer(bucket.ConvertedOutflow),
+				ConvertedOperatingNet: toBalanceQuantityPointer(bucket.ConvertedOperatingNet),
+				ConvertedTransferNet:  toBalanceQuantityPointer(bucket.ConvertedTransferNet),
+				ConvertedNetMovement:  toBalanceQuantityPointer(bucket.ConvertedNetMovement),
 			})
 		}
 
@@ -300,6 +433,7 @@ func cashflowReport(logger *slog.Logger, authService *app.AuthService, transacti
 			},
 			Buckets:             buckets,
 			ExcludedSystemRoles: result.ExcludedSystemRoles,
+			Valuation:           toValuationResponse(result.Valuation),
 		})
 	}
 }

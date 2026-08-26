@@ -17,8 +17,12 @@ type TransactionService struct {
 	payeeRepository     *db.PayeeRepository
 	accountRepository   *db.AccountRepository
 	commodityRepository *db.CommodityRepository
-	now                 func() time.Time
-	newLineKey          func() string
+	// pricingRepository is optional and used only by the reporting-currency
+	// selector: reports work without it, and refuse a reporting currency
+	// rather than inventing one.
+	pricingRepository *db.PricingRepository
+	now               func() time.Time
+	newLineKey        func() string
 }
 
 func NewTransactionService(
@@ -35,6 +39,15 @@ func NewTransactionService(
 		now:                 time.Now,
 		newLineKey:          uuid.NewString,
 	}
+}
+
+// SetPricingRepository enables the reporting-currency selector. It is a setter
+// rather than a constructor argument because reports are complete without it:
+// a book with no rates still reports exact per-commodity figures, and a
+// reporting currency asked for without this configured is refused rather than
+// approximated.
+func (s *TransactionService) SetPricingRepository(pricingRepository *db.PricingRepository) {
+	s.pricingRepository = pricingRepository
 }
 
 func (s *TransactionService) ListTransactions(ctx context.Context, input ListTransactionsInput) (ListTransactionsResult, error) {

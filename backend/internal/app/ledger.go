@@ -101,12 +101,20 @@ type NetWorthSeriesInput struct {
 	EndDate   string
 	Bucket    string
 	Filters   ReportFilters
+	// Reporting is optional. Net worth is a stock — a quantity measured *at* a
+	// date — so each bucket converts at its own end date rather than at one
+	// rate for the whole series.
+	Reporting *ReportingCurrencyInput
 }
 
 type NetWorthSeriesBucket struct {
 	StartDate string
 	EndDate   string
 	Totals    []BalanceQuantity
+	// Converted is this bucket's net worth in the reporting currency, at the
+	// bucket's end date. Absent when any commodity in the bucket could not be
+	// converted: a net worth missing one holding is not a smaller net worth.
+	Converted *BalanceQuantity
 }
 
 type NetWorthSeriesResult struct {
@@ -116,6 +124,7 @@ type NetWorthSeriesResult struct {
 	Filters             ReportFiltersEcho
 	Buckets             []NetWorthSeriesBucket
 	ExcludedSystemRoles []string
+	Valuation           *ValuationCoverage
 }
 
 func (s *TransactionService) AccountBalances(ctx context.Context, input AccountBalancesInput) (AccountBalancesResult, error) {
@@ -262,13 +271,45 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 	if err != nil {
 		return NetWorthSeriesResult{}, err
 	}
+	// One rate table for the whole series, covering every commodity that shows
+	// up in any bucket. Each bucket then converts at its own end date.
+	var rates *RateTable
+	if input.Reporting != nil {
+		seen := make([]int64, 0)
+		for _, totals := range bucketTotals {
+			for _, total := range totals {
+				seen = append(seen, total.CommodityID)
+			}
+		}
+		rates, err = s.NewRateTable(ctx, *input.Reporting, seen, startDate, endDate)
+		if err != nil {
+			return NetWorthSeriesResult{}, err
+		}
+	}
+
 	resultBuckets := make([]NetWorthSeriesBucket, 0, len(bounds))
 	for index, bound := range bounds {
-		resultBuckets = append(resultBuckets, NetWorthSeriesBucket{
+		bucketResult := NetWorthSeriesBucket{
 			StartDate: bound.startDate,
 			EndDate:   bound.endDate,
 			Totals:    bucketTotals[index],
-		})
+		}
+		if rates != nil {
+			converted := NewConvertedTotal(rates.Scale())
+			for _, total := range bucketTotals[index] {
+				value, ok := rates.Convert(total.QuantityValue, total.QuantityScale, total.CommodityID, bound.endDate)
+				converted.Add(value, ok)
+			}
+			if value, scale, ok := converted.Value(); ok {
+				bucketResult.Converted = &BalanceQuantity{
+					CommodityID:         rates.QuoteCommodityID(),
+					QuantityValue:       value,
+					QuantityScale:       scale,
+					NormalQuantityValue: value,
+				}
+			}
+		}
+		resultBuckets = append(resultBuckets, bucketResult)
 	}
 
 	return NetWorthSeriesResult{
@@ -278,6 +319,7 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 		Filters:             filters,
 		Buckets:             resultBuckets,
 		ExcludedSystemRoles: []string{"commodity_trading"},
+		Valuation:           s.valuationCoverage(ctx, rates),
 	}, nil
 }
 

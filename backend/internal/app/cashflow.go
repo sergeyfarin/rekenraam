@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"math/big"
 	"slices"
 	"strings"
 
@@ -23,6 +24,9 @@ var defaultCashAccountKinds = map[string]bool{
 }
 
 type CashflowInput struct {
+	// Reporting is optional; the exact per-commodity measures are unchanged
+	// whether or not it is set.
+	Reporting *ReportingCurrencyInput
 	StartDate string
 	EndDate   string
 	Bucket    string
@@ -56,6 +60,16 @@ type CashflowBucket struct {
 	// bucket, so it reconciles exactly to the selected cash balance change
 	// across the bucket's boundaries.
 	NetMovement []BalanceQuantity
+	// Converted holds the same five measures in the reporting currency, each
+	// summed from postings converted at their own entry date. Absent when a
+	// posting in the bucket could not be converted. ConvertedNetMovement is
+	// derived from the converted parts so the identity holds exactly — see
+	// cashflowTotals.
+	ConvertedInflow       *BalanceQuantity
+	ConvertedOutflow      *BalanceQuantity
+	ConvertedTransferNet  *BalanceQuantity
+	ConvertedOperatingNet *BalanceQuantity
+	ConvertedNetMovement  *BalanceQuantity
 }
 
 type CashflowResult struct {
@@ -67,25 +81,64 @@ type CashflowResult struct {
 	CashAccountKinds    []string
 	Buckets             []CashflowBucket
 	ExcludedSystemRoles []string
+	Valuation           *ValuationCoverage
 }
 
-// cashflowTotals accumulates one bucket's exact sums per commodity.
+// cashflowTotals accumulates one bucket's exact sums per commodity, and — when
+// a reporting currency is asked for — the same measures converted.
+//
+// The converted net movement is **derived** from the converted parts rather
+// than accumulated from the cash postings directly. Both are defensible; only
+// one keeps R2's identity. Each posting is rounded to the reporting currency as
+// it is converted, and rounding is not additive: converting a -100.00 cash
+// posting can differ by a minor unit from converting its 60.00 and 40.00
+// counterparts separately. Deriving makes net_movement = operating_net +
+// transfer_net true by construction in the converted view, exactly as it is in
+// the exact one, and the response names the method that produced it.
 type cashflowTotals struct {
 	inflow      map[int64]*exact.ScaledInt
 	outflow     map[int64]*exact.ScaledInt
 	transferIn  map[int64]*exact.ScaledInt
 	transferOut map[int64]*exact.ScaledInt
 	netMovement map[int64]*exact.ScaledInt
+
+	rates                *RateTable
+	convertedInflow      *ConvertedTotal
+	convertedOutflow     *ConvertedTotal
+	convertedTransferIn  *ConvertedTotal
+	convertedTransferOut *ConvertedTotal
 }
 
-func newCashflowTotals() *cashflowTotals {
-	return &cashflowTotals{
+func newCashflowTotals(rates *RateTable) *cashflowTotals {
+	totals := &cashflowTotals{
 		inflow:      map[int64]*exact.ScaledInt{},
 		outflow:     map[int64]*exact.ScaledInt{},
 		transferIn:  map[int64]*exact.ScaledInt{},
 		transferOut: map[int64]*exact.ScaledInt{},
 		netMovement: map[int64]*exact.ScaledInt{},
 	}
+	if rates != nil {
+		totals.rates = rates
+		totals.convertedInflow = NewConvertedTotal(rates.Scale())
+		totals.convertedOutflow = NewConvertedTotal(rates.Scale())
+		totals.convertedTransferIn = NewConvertedTotal(rates.Scale())
+		totals.convertedTransferOut = NewConvertedTotal(rates.Scale())
+	}
+	return totals
+}
+
+// addConverted values one counterpart posting at its own entry date — a flow,
+// converted when it happened.
+func (t *cashflowTotals) addConverted(target *ConvertedTotal, posting db.ReportCashflowPostingRecord, negate bool) {
+	if t.rates == nil {
+		return
+	}
+	value := posting.QuantityValue
+	if negate {
+		value = value.Negated()
+	}
+	converted, ok := t.rates.Convert(value, posting.QuantityScale, posting.CommodityID, posting.EntryDate)
+	target.Add(converted, ok)
 }
 
 // Cashflow answers what changed the selected liquid cash, without treating a
@@ -146,9 +199,21 @@ func (s *TransactionService) Cashflow(ctx context.Context, input CashflowInput) 
 		return CashflowResult{}, fmt.Errorf("read cashflow postings: %w", err)
 	}
 
+	var rates *RateTable
+	if input.Reporting != nil {
+		commodityIDs := make([]int64, 0, len(postings))
+		for _, posting := range postings {
+			commodityIDs = append(commodityIDs, posting.CommodityID)
+		}
+		rates, err = s.NewRateTable(ctx, *input.Reporting, commodityIDs, startDate, endDate)
+		if err != nil {
+			return CashflowResult{}, err
+		}
+	}
+
 	totalsByBucket := make([]*cashflowTotals, len(bounds))
 	for index := range totalsByBucket {
-		totalsByBucket[index] = newCashflowTotals()
+		totalsByBucket[index] = newCashflowTotals(rates)
 	}
 
 	for _, entry := range groupByJournalEntry(postings) {
@@ -179,6 +244,7 @@ func (s *TransactionService) Cashflow(ctx context.Context, input CashflowInput) 
 		// System accounts never join the cash scope, but they remain visible as
 		// counterparts: transfer clearing is financing movement, not spending.
 		ExcludedSystemRoles: []string{"all"},
+		Valuation:           s.valuationCoverage(ctx, rates),
 	}, nil
 }
 
@@ -209,8 +275,10 @@ func classifyCashflowEntry(postings []db.ReportCashflowPostingRecord, cashAccoun
 		case "income":
 			// Income postings are credits; negating gives a positive inflow.
 			addCashflowAmount(totals.inflow, posting, true)
+			totals.addConverted(totals.convertedInflow, posting, true)
 		case "expense":
 			addCashflowAmount(totals.outflow, posting, false)
+			totals.addConverted(totals.convertedOutflow, posting, false)
 		default:
 			// Asset, liability, and equity counterparts outside the selected
 			// scope are financing movement. The cash contribution is the
@@ -218,8 +286,10 @@ func classifyCashflowEntry(postings []db.ReportCashflowPostingRecord, cashAccoun
 			// in and a debit counterpart takes it out.
 			if posting.QuantityValue.BigInt().Sign() < 0 {
 				addCashflowAmount(totals.transferIn, posting, true)
+				totals.addConverted(totals.convertedTransferIn, posting, true)
 			} else {
 				addCashflowAmount(totals.transferOut, posting, false)
+				totals.addConverted(totals.convertedTransferOut, posting, false)
 			}
 		}
 	}
@@ -278,7 +348,7 @@ func (t *cashflowTotals) toBucket(startDate string, endDate string) (CashflowBuc
 		return CashflowBucket{}, err
 	}
 
-	return CashflowBucket{
+	bucket := CashflowBucket{
 		StartDate:    startDate,
 		EndDate:      endDate,
 		Inflow:       inflow,
@@ -288,7 +358,82 @@ func (t *cashflowTotals) toBucket(startDate string, endDate string) (CashflowBuc
 		OperatingNet: operating,
 		TransferNet:  transfer,
 		NetMovement:  netMovement,
-	}, nil
+	}
+	t.attachConverted(&bucket)
+	return bucket, nil
+}
+
+// attachConverted fills in the reporting-currency measures.
+//
+// Operating net, transfer net and net movement are computed from the converted
+// inflow/outflow/transfer figures rather than accumulated separately, so
+// net_movement = operating_net + transfer_net is an identity here exactly as it
+// is in the exact figures. Any measure that could not be fully converted stays
+// absent, and takes the derived measures that depend on it with it.
+func (t *cashflowTotals) attachConverted(bucket *CashflowBucket) {
+	if t.rates == nil {
+		return
+	}
+
+	quantity := func(total *ConvertedTotal) *BalanceQuantity {
+		value, scale, ok := total.Value()
+		if !ok {
+			return nil
+		}
+		return &BalanceQuantity{
+			CommodityID:         t.rates.QuoteCommodityID(),
+			QuantityValue:       value,
+			QuantityScale:       scale,
+			NormalQuantityValue: value,
+		}
+	}
+
+	inflow := quantity(t.convertedInflow)
+	outflow := quantity(t.convertedOutflow)
+	transferIn := quantity(t.convertedTransferIn)
+	transferOut := quantity(t.convertedTransferOut)
+
+	bucket.ConvertedInflow = inflow
+	bucket.ConvertedOutflow = outflow
+
+	operating := differenceOf(inflow, outflow, t.rates)
+	transferNet := differenceOf(transferIn, transferOut, t.rates)
+	bucket.ConvertedOperatingNet = operating
+	bucket.ConvertedTransferNet = transferNet
+	bucket.ConvertedNetMovement = sumOf(operating, transferNet, t.rates)
+}
+
+// differenceOf and sumOf combine two converted figures at the reporting
+// currency's own scale. Both are already rounded there, so this is plain
+// integer arithmetic with nothing left to align — and nothing left to round,
+// which is what keeps the identity exact.
+func differenceOf(left *BalanceQuantity, right *BalanceQuantity, rates *RateTable) *BalanceQuantity {
+	if left == nil || right == nil {
+		return nil
+	}
+	value := new(big.Int).Sub(left.QuantityValue.BigInt(), right.QuantityValue.BigInt())
+	return convertedQuantity(value, rates)
+}
+
+func sumOf(left *BalanceQuantity, right *BalanceQuantity, rates *RateTable) *BalanceQuantity {
+	if left == nil || right == nil {
+		return nil
+	}
+	value := new(big.Int).Add(left.QuantityValue.BigInt(), right.QuantityValue.BigInt())
+	return convertedQuantity(value, rates)
+}
+
+func convertedQuantity(value *big.Int, rates *RateTable) *BalanceQuantity {
+	coefficient, err := exact.FromBig(value)
+	if err != nil {
+		return nil
+	}
+	return &BalanceQuantity{
+		CommodityID:         rates.QuoteCommodityID(),
+		QuantityValue:       coefficient,
+		QuantityScale:       rates.Scale(),
+		NormalQuantityValue: coefficient,
+	}
 }
 
 // subtractAmounts returns left - right for every commodity present in either,

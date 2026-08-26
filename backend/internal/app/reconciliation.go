@@ -471,16 +471,16 @@ func reconciliationTotals(session db.ReconciliationSessionRecord, selected []db.
 		return BalanceQuantity{}, BalanceQuantity{}, err
 	}
 	return BalanceQuantity{
-		CommodityID:         session.CommodityID,
-		QuantityValue:       selectedValue,
-		QuantityScale:       selectedAmount.Scale(),
-		NormalQuantityValue: selectedValue,
-	}, BalanceQuantity{
-		CommodityID:         session.CommodityID,
-		QuantityValue:       differenceValue,
-		QuantityScale:       difference.Scale(),
-		NormalQuantityValue: differenceValue,
-	}, nil
+			CommodityID:         session.CommodityID,
+			QuantityValue:       selectedValue,
+			QuantityScale:       selectedAmount.Scale(),
+			NormalQuantityValue: selectedValue,
+		}, BalanceQuantity{
+			CommodityID:         session.CommodityID,
+			QuantityValue:       differenceValue,
+			QuantityScale:       difference.Scale(),
+			NormalQuantityValue: differenceValue,
+		}, nil
 }
 
 func cleanPositiveInt64IDs(values []int64, field string) ([]int64, error) {

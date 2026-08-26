@@ -69,6 +69,10 @@ type netWorthSeriesBucketResponse struct {
 	StartDate string                    `json:"start_date"`
 	EndDate   string                    `json:"end_date"`
 	Totals    []balanceQuantityResponse `json:"totals"`
+	// Converted is this bucket at its own end date, in the reporting currency.
+	// Absent when a commodity in the bucket had no rate: a net worth missing a
+	// holding is not a smaller net worth.
+	Converted *balanceQuantityResponse `json:"converted,omitempty"`
 }
 
 type netWorthSeriesQueryResponse struct {
@@ -85,6 +89,7 @@ type netWorthSeriesResponse struct {
 	Query               netWorthSeriesQueryResponse    `json:"query"`
 	Buckets             []netWorthSeriesBucketResponse `json:"buckets"`
 	ExcludedSystemRoles []string                       `json:"excluded_system_roles"`
+	Valuation           *valuationResponse             `json:"valuation,omitempty"`
 }
 
 func accountBalances(logger *slog.Logger, authService *app.AuthService, transactionService *app.TransactionService) http.HandlerFunc {
@@ -169,11 +174,18 @@ func netWorthSeries(logger *slog.Logger, authService *app.AuthService, transacti
 			return
 		}
 
+		reporting, err := parseReportingCurrency(r.URL.Query())
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+
 		result, err := transactionService.NetWorthSeries(r.Context(), app.NetWorthSeriesInput{
 			StartDate: r.URL.Query().Get("start_date"),
 			EndDate:   r.URL.Query().Get("end_date"),
 			Bucket:    r.URL.Query().Get("bucket"),
 			Filters:   filters,
+			Reporting: reporting,
 		})
 		if err != nil {
 			writeLedgerServiceError(w, r, logger, "read net worth series", err)
@@ -186,6 +198,7 @@ func netWorthSeries(logger *slog.Logger, authService *app.AuthService, transacti
 				StartDate: bucket.StartDate,
 				EndDate:   bucket.EndDate,
 				Totals:    toBalanceQuantityResponses(bucket.Totals),
+				Converted: toBalanceQuantityPointer(bucket.Converted),
 			})
 		}
 		writeJSON(w, http.StatusOK, netWorthSeriesResponse{
@@ -200,6 +213,7 @@ func netWorthSeries(logger *slog.Logger, authService *app.AuthService, transacti
 			},
 			Buckets:             buckets,
 			ExcludedSystemRoles: result.ExcludedSystemRoles,
+			Valuation:           toValuationResponse(result.Valuation),
 		})
 	}
 }

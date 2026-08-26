@@ -108,6 +108,8 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, commodityRepository)
 	pricingService := app.NewPricingService(db.NewPricingRepository(database), marketdata.DefaultRegistry(cfg.OpenExchangeRatesAppID))
+	// Reports can be denominated in a reporting currency, which needs rates.
+	transactionService.SetPricingRepository(db.NewPricingRepository(database))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	importConnectionService := app.NewImportConnectionService(db.NewImportConnectionRepository(database), accountService, cfg.SecretKey, app.NewTrading212Prober(nil))
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, importConnectionService, db.NewBackgroundWorkRepository(database), investmentService)

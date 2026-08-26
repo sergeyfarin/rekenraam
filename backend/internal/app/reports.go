@@ -55,6 +55,9 @@ type SpendingInput struct {
 	CategoryIDs []int64
 	PayeeIDs    []int64
 	Filters     ReportFilters
+	// Reporting is optional. Set, every group gains a converted total beside
+	// its exact per-commodity ones — never instead of them.
+	Reporting *ReportingCurrencyInput
 }
 
 // SpendingGroupTotal is one commodity's exact total for a group, plus that
@@ -82,6 +85,11 @@ type SpendingGroup struct {
 	Name         string
 	CategoryType string
 	Totals       []SpendingGroupTotal
+	// Converted is this group's total in the reporting currency, summed from
+	// each posting converted at its own entry date. Absent when no reporting
+	// currency was asked for, and absent — rather than partial — when any
+	// posting in the group could not be converted.
+	Converted *BalanceQuantity
 }
 
 type SpendingResult struct {
@@ -102,6 +110,11 @@ type SpendingResult struct {
 	// GroupingPolicy names how rows were formed, so a printed report is not
 	// ambiguous about whether parent categories include their children.
 	GroupingPolicy string
+	// ConvertedTotal is the whole report in the reporting currency, and
+	// Valuation says how it was produced and what it could not cover. Both are
+	// absent unless a reporting currency was asked for.
+	ConvertedTotal *BalanceQuantity
+	Valuation      *ValuationCoverage
 }
 
 // Spending answers "where did money go, and who received it" over the posted
@@ -156,7 +169,22 @@ func (s *TransactionService) Spending(ctx context.Context, input SpendingInput) 
 		return SpendingResult{}, fmt.Errorf("read spending postings: %w", err)
 	}
 
-	groups, commodityTotals, rankingCommodityID, err := s.aggregateSpending(ctx, postings, groupBy, categoryType, endDate)
+	// The rate table is built from the commodities this report actually
+	// touches, over the range it covers — one query rather than a lookup per
+	// posting.
+	var rates *RateTable
+	if input.Reporting != nil {
+		commodityIDs := make([]int64, 0, len(postings))
+		for _, posting := range postings {
+			commodityIDs = append(commodityIDs, posting.CommodityID)
+		}
+		rates, err = s.NewRateTable(ctx, *input.Reporting, commodityIDs, startDate, endDate)
+		if err != nil {
+			return SpendingResult{}, err
+		}
+	}
+
+	groups, commodityTotals, rankingCommodityID, convertedTotal, err := s.aggregateSpending(ctx, postings, groupBy, categoryType, endDate, rates)
 	if err != nil {
 		return SpendingResult{}, err
 	}
@@ -174,7 +202,27 @@ func (s *TransactionService) Spending(ctx context.Context, input SpendingInput) 
 		RankingCommodityID:  rankingCommodityID,
 		ExcludedSystemRoles: []string{"commodity_trading", "transfer_clearing", "opening_balances", "fx_gain_loss"},
 		GroupingPolicy:      "direct_postings",
+		ConvertedTotal:      convertedTotal,
+		Valuation:           s.valuationCoverage(ctx, rates),
 	}, nil
+}
+
+// valuationCoverage turns a rate table into the block a response carries: the
+// method, the staleness allowance, which rates were used, and which
+// commodities went unconverted. Nil when no reporting currency was asked for,
+// so the field is absent rather than empty.
+func (s *TransactionService) valuationCoverage(ctx context.Context, rates *RateTable) *ValuationCoverage {
+	if rates == nil {
+		return nil
+	}
+	code := ""
+	if s.pricingRepository != nil {
+		if currency, err := s.pricingRepository.ReportingCurrency(ctx, BookID, rates.QuoteCommodityID()); err == nil {
+			code = currency.Code
+		}
+	}
+	coverage := rates.Coverage(code)
+	return &coverage
 }
 
 // aggregateSpending sums postings per group and commodity in Go — coefficients
@@ -186,7 +234,8 @@ func (s *TransactionService) aggregateSpending(
 	groupBy string,
 	categoryType string,
 	asOf string,
-) ([]SpendingGroup, []BalanceQuantity, *int64, error) {
+	rates *RateTable,
+) ([]SpendingGroup, []BalanceQuantity, *int64, *BalanceQuantity, error) {
 	type groupKey struct {
 		id       int64
 		hasID    bool
@@ -196,6 +245,16 @@ func (s *TransactionService) aggregateSpending(
 	amounts := map[groupKey]map[int64]*exact.ScaledInt{}
 	reportTotals := map[int64]*exact.ScaledInt{}
 	order := make([]groupKey, 0)
+
+	// A flow is converted at the date it happened, so conversion belongs here,
+	// inside the loop over postings — not afterwards over the aggregate, which
+	// would apply one rate to a period and misattribute everything before a
+	// large mid-period move.
+	converted := map[groupKey]*ConvertedTotal{}
+	convertedReport := (*ConvertedTotal)(nil)
+	if rates != nil {
+		convertedReport = NewConvertedTotal(rates.Scale())
+	}
 
 	for _, posting := range postings {
 		key := groupKey{isCatKey: groupBy == "category"}
@@ -213,6 +272,15 @@ func (s *TransactionService) aggregateSpending(
 		}
 		addReportPosting(byCommodity, posting)
 		addReportPosting(reportTotals, posting)
+
+		if rates != nil {
+			if converted[key] == nil {
+				converted[key] = NewConvertedTotal(rates.Scale())
+			}
+			value, ok := rates.Convert(posting.QuantityValue, posting.QuantityScale, posting.CommodityID, posting.EntryDate)
+			converted[key].Add(value, ok)
+			convertedReport.Add(value, ok)
+		}
 	}
 
 	// Income postings are credits under the debit-positive convention; present
@@ -222,7 +290,7 @@ func (s *TransactionService) aggregateSpending(
 
 	commodityTotals, err := reportMagnitudes(reportTotals, negate)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	totalsByCommodity := make(map[int64]BalanceQuantity, len(commodityTotals))
 	for _, total := range commodityTotals {
@@ -231,20 +299,20 @@ func (s *TransactionService) aggregateSpending(
 
 	categoryNames, payeeNames, err := s.spendingGroupLabels(ctx, postings, groupBy, asOf)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	groups := make([]SpendingGroup, 0, len(order))
 	for _, key := range order {
 		magnitudes, err := reportMagnitudes(amounts[key], negate)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		totals := make([]SpendingGroupTotal, 0, len(magnitudes))
 		for _, magnitude := range magnitudes {
 			share, err := shareBasisPoints(magnitude, totalsByCommodity[magnitude.CommodityID])
 			if err != nil {
-				return nil, nil, nil, err
+				return nil, nil, nil, nil, err
 			}
 			totals = append(totals, SpendingGroupTotal{
 				CommodityID:      magnitude.CommodityID,
@@ -266,11 +334,39 @@ func (s *TransactionService) aggregateSpending(
 				group.Name = payeeNames[id]
 			}
 		}
+		// The converted figure is attached per group, and omitted rather than
+		// shown partial: a group total that quietly covers most of its
+		// postings reads as a smaller number, not as an incomplete one.
+		if rates != nil {
+			if total := converted[key]; total != nil {
+				if value, scale, ok := total.Value(); ok {
+					group.Converted = &BalanceQuantity{
+						CommodityID:         rates.QuoteCommodityID(),
+						QuantityValue:       value,
+						QuantityScale:       scale,
+						NormalQuantityValue: value,
+					}
+				}
+			}
+		}
 		groups = append(groups, group)
 	}
 
 	rankingCommodityID := sortSpendingGroups(groups)
-	return groups, commodityTotals, rankingCommodityID, nil
+
+	var convertedTotal *BalanceQuantity
+	if convertedReport != nil {
+		if value, scale, ok := convertedReport.Value(); ok {
+			convertedTotal = &BalanceQuantity{
+				CommodityID:         rates.QuoteCommodityID(),
+				QuantityValue:       value,
+				QuantityScale:       scale,
+				NormalQuantityValue: value,
+			}
+		}
+	}
+
+	return groups, commodityTotals, rankingCommodityID, convertedTotal, nil
 }
 
 type spendingCategoryLabel struct {

@@ -351,6 +351,8 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
 	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, commodityRepository)
 	pricingService := app.NewPricingService(db.NewPricingRepository(database))
+	// Reports can be denominated in a reporting currency, which needs rates.
+	transactionService.SetPricingRepository(db.NewPricingRepository(database))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, nil, nil, nil)
 	exportService := app.NewExportService(db.NewExportRepository(readOnlyDatabase))
