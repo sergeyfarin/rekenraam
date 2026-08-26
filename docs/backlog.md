@@ -818,7 +818,7 @@ removes the only multi-step upgrade path a historical-upgrade migration test
 could exercise, which makes T-55 a post-`v0.1.0` concern rather than a
 pre-release one.
 
-### T-65 A restore test asserts its premise, not its name `[ ]`
+### T-65 A restore test asserts its premise, not its name `[x]`
 
 **Files:** `backend/internal/app/restore_test.go`
 (`TestRestorePreservesUncheckpointedWALContent`),
@@ -837,6 +837,15 @@ built to guarantee is unverified.
 Fix: leave the WAL in place — hold a second connection open, or copy the file
 set aside while a writer is live — then assert the preserved copy carries what
 only the WAL held. See `docs/reviews/r3-verification-review-2026-08-24.md` V-1.
+
+**Done 2026-08-24.** The test now copies the file set out from under a live
+writer — wrong as a backup, right as a simulation of a machine losing power —
+and restores over *that*, so a WAL with content exists when it matters. It
+asserts against the preserved **main file alone**, copied away from its
+sidecars, because reading the preserved set would prove nothing: the WAL
+travels with it. `checkpointStoppedDatabase` went from 11.8% to 76.5% coverage,
+and the test was verified to fail (expected 1, actual 0) with the checkpoint
+call disabled.
 
 ### T-66 The nightly backup schedule and its queue path have no tests `[ ]`
 
