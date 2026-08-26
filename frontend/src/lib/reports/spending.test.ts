@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SpendingReportResponse } from '$lib/api/reports';
 import {
+  convertedBarRows,
   formatShare,
   isSingleCommodity,
   reportCommodityIDs,
@@ -363,6 +364,7 @@ describe('spendingDrillDownQuery', () => {
     quantityValue: '5000',
     quantityScale: 2,
     unattributed: false,
+    converted: false,
     drillDown: {
       start_date: '2026-06-01',
       end_date: '2026-06-30',
@@ -403,5 +405,66 @@ describe('spendingDrillDownQuery', () => {
     // A category grouping with no category on the row is not reproducible.
     const noCategory = row({ drillDown: { start_date: '2026-06-01', end_date: '2026-06-30', account_ids: [] } });
     expect(spendingDrillDownQuery(noCategory, 'category', 'spending')).toBeUndefined();
+  });
+});
+
+describe('the reporting-currency restatement', () => {
+  const converted = (value: string) => ({
+    commodity_id: 9,
+    quantity_value: value,
+    quantity_scale: 2,
+    normal_quantity_value: value
+  });
+
+  const group = (id: number, name: string, restatement?: string) => ({
+    category_id: id,
+    code: `expense_${name.toLowerCase()}`,
+    name,
+    category_type: 'expense' as const,
+    drill_down: drillDown,
+    totals: [
+      { commodity_id: 1, quantity_value: '30000', quantity_scale: 2, share_basis_points: 6000 },
+      { commodity_id: 2, quantity_value: '5000', quantity_scale: 2, share_basis_points: 4000 }
+    ],
+    ...(restatement ? { converted: converted(restatement) } : {})
+  });
+
+  it('follows each group with its own restatement', () => {
+    const source = report({ groups: [group(7, 'Travel', '35000'), group(8, 'Food', '12000')] });
+    const rows = spendingRows(source);
+    expect(rows.map((row) => [row.commodityID, row.converted])).toEqual([
+      [1, false],
+      [2, false],
+      [9, true],
+      [1, false],
+      [2, false],
+      [9, true]
+    ]);
+  });
+
+  it('carries no share and stays out of the ordering it summarizes', () => {
+    const source = report({ groups: [group(7, 'Travel', '35000')] });
+    const restatement = spendingRows(source).at(-1)!;
+    expect(restatement.shareBasisPoints).toBeUndefined();
+  });
+
+  it('leaves a group that did not convert with its exact rows only', () => {
+    const source = report({ groups: [group(7, 'Travel', '35000'), group(8, 'Food')] });
+    const rows = spendingRows(source);
+    expect(rows.filter((row) => row.converted)).toHaveLength(1);
+    expect(rows).toHaveLength(5);
+  });
+
+  it('charts nothing unless every group converted', () => {
+    const partial = report({ groups: [group(7, 'Travel', '35000'), group(8, 'Food')] });
+    expect(convertedBarRows(partial, spendingRows(partial))).toEqual([]);
+
+    const whole = report({ groups: [group(7, 'Travel', '35000'), group(8, 'Food', '12000')] });
+    expect(convertedBarRows(whole, spendingRows(whole))).toHaveLength(2);
+  });
+
+  it('emits no restatement when no reporting currency was asked for', () => {
+    const source = report({ groups: [group(7, 'Travel'), group(8, 'Food')] });
+    expect(spendingRows(source).some((row) => row.converted)).toBe(false);
   });
 });

@@ -67,6 +67,27 @@ get:
           format: int64
       style: form
       explode: true
+    - in: query
+      name: reporting_currency_id
+      description: >
+        Optional. Denominate the report in this currency *in addition to* the
+        exact per-commodity figures, which are unchanged. A stock converts at
+        the date it is measured on; a flow converts at the date it happened.
+        Figures that cannot be converted are omitted rather than shown short,
+        and named in the valuation block.
+      schema:
+        type: integer
+        format: int64
+    - in: query
+      name: max_staleness_days
+      description: >
+        Optional, default 7. How far back to look for the nearest earlier
+        observation before treating a commodity as unconvertible. A week covers
+        weekends and holidays without letting a month-old rate pass as today's.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 365
   responses:
     "200":
       description: Exact per-commodity cash movement for each calendar bucket

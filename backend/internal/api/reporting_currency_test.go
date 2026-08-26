@@ -304,6 +304,26 @@ func TestCashflowConvertedIdentityHoldsExactly(t *testing.T) {
 	assert.Equal(t, new(big.Int).Add(operating, transfer).String(), net.String(),
 		"converted net movement must equal operating plus transfer, exactly")
 
+	// The two legs behind each net are reported as well, so a reader can see
+	// what the net is made of without a second request — and so the same
+	// identity is checkable one level down.
+	require.NotNil(t, bucket.ConvertedInflow)
+	require.NotNil(t, bucket.ConvertedOutflow)
+	require.NotNil(t, bucket.ConvertedTransferIn)
+	require.NotNil(t, bucket.ConvertedTransferOut)
+
+	difference := func(left, right *balanceQuantityResponse) string {
+		leftValue, ok := new(big.Int).SetString(left.QuantityValue.String(), 10)
+		require.True(t, ok)
+		rightValue, ok := new(big.Int).SetString(right.QuantityValue.String(), 10)
+		require.True(t, ok)
+		return new(big.Int).Sub(leftValue, rightValue).String()
+	}
+	assert.Equal(t, difference(bucket.ConvertedInflow, bucket.ConvertedOutflow), operating.String(),
+		"converted operating net must equal converted inflow minus outflow, exactly")
+	assert.Equal(t, difference(bucket.ConvertedTransferIn, bucket.ConvertedTransferOut), transfer.String(),
+		"converted transfer net must equal converted transfer in minus out, exactly")
+
 	// And the exact per-commodity identity is untouched.
 	require.NotEmpty(t, bucket.NetMovement)
 	assert.Equal(t, f.usdID, bucket.NetMovement[0].CommodityID)

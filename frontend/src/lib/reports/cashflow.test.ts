@@ -3,6 +3,7 @@ import type { CashflowReportResponse } from '$lib/api/reports';
 import {
   cashflowDrillDownHref,
   cashflowRows,
+  convertedSeries,
   hasMultipleCommodities,
   isEmptyCashflow,
   transferDetail
@@ -222,5 +223,112 @@ describe('cashflowDrillDownHref', () => {
     );
     expect(cashflowDrillDownHref(quiet, 'in', [4], 'month')).toBeUndefined();
     expect(cashflowDrillDownHref(quiet, 'out', [4], 'month')).toBeUndefined();
+  });
+});
+
+describe('the reporting-currency restatement', () => {
+  const convertedBucket = (overrides: Record<string, unknown> = {}) => ({
+    ...emptyBucket,
+    inflow: [quantity(1, '200000')],
+    outflow: [quantity(1, '12000')],
+    operating_net: [quantity(1, '188000')],
+    net_movement: [quantity(1, '188000')],
+    converted_inflow: quantity(9, '180000'),
+    converted_outflow: quantity(9, '10800'),
+    converted_transfer_in: quantity(9, '0'),
+    converted_transfer_out: quantity(9, '0'),
+    converted_operating_net: quantity(9, '169200'),
+    converted_transfer_net: quantity(9, '0'),
+    converted_net_movement: quantity(9, '169200'),
+    ...overrides
+  });
+
+  it('follows the commodity rows with a full seven-measure row', () => {
+    const rows = cashflowRows(report([convertedBucket()]));
+    expect(rows).toHaveLength(2);
+    expect(rows[0].converted).toBe(false);
+    const restatement = rows[1];
+    expect(restatement.converted).toBe(true);
+    expect(restatement.commodityID).toBe(9);
+    expect(restatement.inflow).toBe('180000');
+    expect(restatement.netMovement).toBe('169200');
+    // Every measure is rounded once into the reporting currency's own scale, so
+    // no measure may inherit a scale from a commodity row.
+    expect(new Set(Object.values(restatement.scales))).toEqual(new Set([2]));
+  });
+
+  it('holds its own identities exactly', () => {
+    const restatement = cashflowRows(report([convertedBucket()])).at(-1)!;
+    expect(BigInt(restatement.operatingNet)).toBe(
+      BigInt(restatement.inflow) - BigInt(restatement.outflow)
+    );
+    expect(BigInt(restatement.netMovement)).toBe(
+      BigInt(restatement.operatingNet) + BigInt(restatement.transferNet)
+    );
+  });
+
+  it('is omitted whole when any one measure did not convert', () => {
+    // A real inflow beside a zero outflow that only means "unknown" would make
+    // the net movement between them neither figure.
+    const rows = cashflowRows(report([convertedBucket({ converted_outflow: undefined })]));
+    expect(rows.every((row) => !row.converted)).toBe(true);
+  });
+
+  it('is not a commodity anyone holds', () => {
+    const rows = cashflowRows(report([convertedBucket()]));
+    expect(hasMultipleCommodities(rows)).toBe(false);
+  });
+
+  it('charts nothing when a bucket did not convert', () => {
+    const rows = cashflowRows(
+      report([
+        convertedBucket(),
+        { ...convertedBucket({ converted_net_movement: undefined }), start_date: '2026-07-01', end_date: '2026-07-31' }
+      ])
+    );
+    expect(convertedSeries(rows)).toEqual([]);
+  });
+});
+
+describe('a restatement is not a set of postings', () => {
+  const bucket = {
+    ...emptyBucket,
+    inflow: [quantity(1, '200000')],
+    outflow: [quantity(1, '12000')],
+    operating_net: [quantity(1, '188000')],
+    net_movement: [quantity(1, '188000')],
+    converted_inflow: quantity(9, '180000'),
+    converted_outflow: quantity(9, '10800'),
+    converted_transfer_in: quantity(9, '0'),
+    converted_transfer_out: quantity(9, '0'),
+    converted_operating_net: quantity(9, '169200'),
+    converted_transfer_net: quantity(9, '0'),
+    converted_net_movement: quantity(9, '169200')
+  };
+
+  it('offers no drill-down, which would narrow to the reporting currency', () => {
+    const rows = cashflowRows(report([bucket]));
+    expect(cashflowDrillDownHref(rows[0], 'in', [4], 'month')).toBeDefined();
+    expect(cashflowDrillDownHref(rows[1], 'in', [4], 'month')).toBeUndefined();
+  });
+
+  it('does not turn a range with no activity into a table of zeros', () => {
+    // The backend converts an empty bucket to an exact zero, which is true but
+    // is not activity.
+    const rows = cashflowRows(
+      report([
+        {
+          ...emptyBucket,
+          converted_inflow: quantity(9, '0'),
+          converted_outflow: quantity(9, '0'),
+          converted_transfer_in: quantity(9, '0'),
+          converted_transfer_out: quantity(9, '0'),
+          converted_operating_net: quantity(9, '0'),
+          converted_transfer_net: quantity(9, '0'),
+          converted_net_movement: quantity(9, '0')
+        }
+      ])
+    );
+    expect(isEmptyCashflow(rows)).toBe(true);
   });
 });

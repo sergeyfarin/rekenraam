@@ -10,6 +10,7 @@
   import {
     cashflowDrillDownHref,
     cashflowRows,
+    convertedSeries,
     hasMultipleCommodities,
     isEmptyCashflow,
     transferDetail,
@@ -17,6 +18,7 @@
     type Measure
   } from './cashflow';
   import BucketColumnChart from './bucket-column-chart.svelte';
+  import ValuationNotice from './valuation-notice.svelte';
   import { seriesColumns } from './report-series';
   import { csvFilename, downloadCSV, exactDecimal, toCSV, withReportContext } from './report-csv';
   import { reportErrorState } from './report-error';
@@ -40,6 +42,7 @@
 
   const rows = $derived(query.data ? cashflowRows(query.data) : []);
   const multiCommodity = $derived(hasMultipleCommodities(rows));
+  const hasRestatements = $derived(rows.some((row) => row.converted));
   const scope = $derived(query.data?.query.cash_scope ?? 'default_liquid_cash');
   const resolvedAccountIDs = $derived(query.data?.query.filters.resolved_account_ids ?? []);
   const resolvedAccountCount = $derived(resolvedAccountIDs.length);
@@ -130,18 +133,23 @@
 
   // The chart summarizes one commodity's net movement. Columns across unlike
   // commodities would be a comparison the ledger cannot justify, so it appears
-  // only when a single commodity is in range.
+  // only when a single commodity is in range — or when a reporting currency
+  // restated every bucket, which is one commodity by construction and is the
+  // only series a multi-currency book can chart at all.
+  const chartRows = $derived.by(() => {
+    const restated = convertedSeries(rows);
+    if (restated.length > 0) return restated;
+    return multiCommodity ? [] : rows;
+  });
   const chartColumns = $derived(
-    multiCommodity
-      ? []
-      : seriesColumns(
-          rows.map((row) => ({
-            key: row.key,
-            label: shortDate(row.startDate),
-            quantityValue: row.netMovement,
-            quantityScale: row.scales.netMovement
-          }))
-        )
+    seriesColumns(
+      chartRows.map((row) => ({
+        key: row.key,
+        label: shortDate(row.startDate),
+        quantityValue: row.netMovement,
+        quantityScale: row.scales.netMovement
+      }))
+    )
   );
 
   function exportCSV() {
@@ -155,7 +163,10 @@
       m.reports_cashflow_csv_column_transfer_in(),
       m.reports_cashflow_csv_column_transfer_out(),
       m.reports_cashflow_column_transfers(),
-      m.reports_cashflow_column_net_movement()
+      m.reports_cashflow_column_net_movement(),
+      // Without this, a restatement in EUR and a real EUR row are the same row
+      // to a spreadsheet, and summing a column would double-count.
+      m.reports_reporting_currency()
     ];
     const body = rows.map((row) => [
       row.startDate,
@@ -167,7 +178,8 @@
       exactDecimal(row.transferIn, row.scales.transferIn),
       exactDecimal(row.transferOut, row.scales.transferOut),
       exactDecimal(row.transferNet, row.scales.transferNet),
-      exactDecimal(row.netMovement, row.scales.netMovement)
+      exactDecimal(row.netMovement, row.scales.netMovement),
+      row.converted ? commodityLabel(row.commodityID) : ''
     ]);
     downloadCSV(
       csvFilename('cashflow', options.startDate, options.endDate),
@@ -179,7 +191,9 @@
   // things that must survive at any width; the split that explains the net
   // comes next, and the derived subtotals go first.
   const derivedCellClass = 'hidden md:table-cell';
-  const commodityCellClass = $derived(multiCommodity ? '' : 'hidden min-[600px]:table-cell');
+  const commodityCellClass = $derived(
+    multiCommodity || hasRestatements ? '' : 'hidden min-[600px]:table-cell'
+  );
 </script>
 
 <Panel>
@@ -249,6 +263,7 @@
         {m.reports_multi_commodity_notice()}
       </p>
     {/if}
+    <ValuationNotice valuation={query.data?.valuation} {commodityLabel} />
 
     <div class="mt-5 overflow-x-auto">
       <table class="w-full border-collapse text-left text-sm">
@@ -274,10 +289,13 @@
         </thead>
         <tbody>
           {#each rows as row (row.key)}
-            <tr class="border-b border-border/70 last:border-b-0">
+            <tr class={`border-b border-border/70 last:border-b-0 ${row.converted ? 'bg-control/40' : ''}`}>
               <td class="px-3 py-3 text-foreground">{formatRange(row.startDate, row.endDate)}</td>
               <td class={`px-3 py-3 font-medium text-foreground ${commodityCellClass}`}>
                 {commodityLabel(row.commodityID)}
+                {#if row.converted}
+                  <span class="ml-1 text-xs font-normal text-muted">({m.reports_converted_badge()})</span>
+                {/if}
               </td>
               <td class="px-3 py-3 text-right tabular-nums text-foreground">
                 {#if drillDown(row, 'in')}
@@ -335,10 +353,15 @@
       <BucketColumnChart
         columns={chartColumns}
         formatAmount={(value, scale) => formatQuantity(value, scale, locale)}
-        caption={m.reports_cashflow_chart_caption({ commodity: commodityLabel(rows[0].commodityID) })}
+        caption={m.reports_cashflow_chart_caption({
+          commodity: commodityLabel(chartRows[0].commodityID)
+        })}
       />
     {/if}
 
+    {#if hasRestatements}
+      <p class="mt-4 text-xs text-muted">{m.reports_converted_row_note()}</p>
+    {/if}
     <p class="mt-4 text-xs text-muted">{m.reports_cashflow_identity_note()}</p>
     <p class="mt-1 text-xs text-muted">{m.reports_cashflow_drill_down_hint()}</p>
   {/if}

@@ -60,13 +60,15 @@ type CashflowBucket struct {
 	// bucket, so it reconciles exactly to the selected cash balance change
 	// across the bucket's boundaries.
 	NetMovement []BalanceQuantity
-	// Converted holds the same five measures in the reporting currency, each
+	// Converted holds the same seven measures in the reporting currency, each
 	// summed from postings converted at their own entry date. Absent when a
-	// posting in the bucket could not be converted. ConvertedNetMovement is
-	// derived from the converted parts so the identity holds exactly — see
+	// posting in the bucket could not be converted. The three net measures are
+	// derived from the converted parts so their identities hold exactly — see
 	// cashflowTotals.
 	ConvertedInflow       *BalanceQuantity
 	ConvertedOutflow      *BalanceQuantity
+	ConvertedTransferIn   *BalanceQuantity
+	ConvertedTransferOut  *BalanceQuantity
 	ConvertedTransferNet  *BalanceQuantity
 	ConvertedOperatingNet *BalanceQuantity
 	ConvertedNetMovement  *BalanceQuantity
@@ -395,6 +397,8 @@ func (t *cashflowTotals) attachConverted(bucket *CashflowBucket) {
 
 	bucket.ConvertedInflow = inflow
 	bucket.ConvertedOutflow = outflow
+	bucket.ConvertedTransferIn = transferIn
+	bucket.ConvertedTransferOut = transferOut
 
 	operating := differenceOf(inflow, outflow, t.rates)
 	transferNet := differenceOf(transferIn, transferOut, t.rates)

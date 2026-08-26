@@ -23,6 +23,11 @@ export type SpendingOptions = {
   accountIDs?: number[];
   includeDescendants?: boolean;
   commodityIDs?: number[];
+  /**
+   * Optional. Denominates the report in this currency *in addition to* the
+   * exact per-commodity figures, which are unchanged either way.
+   */
+  reportingCurrencyID?: number | null;
 };
 
 export type CashflowOptions = {
@@ -33,6 +38,11 @@ export type CashflowOptions = {
   accountIDs?: number[];
   includeDescendants?: boolean;
   commodityIDs?: number[];
+  /**
+   * Optional. Denominates the report in this currency *in addition to* the
+   * exact per-commodity figures, which are unchanged either way.
+   */
+  reportingCurrencyID?: number | null;
 };
 
 export type NetWorthSeriesOptions = {
@@ -42,6 +52,11 @@ export type NetWorthSeriesOptions = {
   accountIDs?: number[];
   includeDescendants?: boolean;
   commodityIDs?: number[];
+  /**
+   * Optional. Denominates the report in this currency *in addition to* the
+   * exact per-commodity figures, which are unchanged either way.
+   */
+  reportingCurrencyID?: number | null;
 };
 
 export const reportsQueryKey = ['api', 'reports'] as const;
@@ -80,7 +95,8 @@ export async function getCashflow(options: CashflowOptions): Promise<CashflowRep
           bucket: options.bucket,
           account_id: options.accountIDs,
           include_descendants: options.includeDescendants,
-          commodity_id: options.commodityIDs
+          commodity_id: options.commodityIDs,
+          reporting_currency_id: options.reportingCurrencyID ?? undefined
         }
       }
     });
@@ -112,7 +128,8 @@ export async function getSpending(options: SpendingOptions): Promise<SpendingRep
           payee_id: options.payeeIDs,
           account_id: options.accountIDs,
           include_descendants: options.includeDescendants,
-          commodity_id: options.commodityIDs
+          commodity_id: options.commodityIDs,
+          reporting_currency_id: options.reportingCurrencyID ?? undefined
         }
       }
     });
@@ -141,7 +158,8 @@ export async function getNetWorthSeries(options: NetWorthSeriesOptions): Promise
           bucket: options.bucket,
           account_id: options.accountIDs,
           include_descendants: options.includeDescendants,
-          commodity_id: options.commodityIDs
+          commodity_id: options.commodityIDs,
+          reporting_currency_id: options.reportingCurrencyID ?? undefined
         }
       }
     });

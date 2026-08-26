@@ -17,6 +17,7 @@
   import { csvFilename, downloadCSV, exactDecimal, toCSV, withReportContext } from './report-csv';
   import { reportErrorState } from './report-error';
   import {
+    convertedBarRows,
     formatShare,
     isSingleCommodity,
     spendingBars,
@@ -24,6 +25,7 @@
     spendingRows,
     type SpendingRow
   } from './spending';
+  import ValuationNotice from './valuation-notice.svelte';
 
   let {
     options,
@@ -88,6 +90,11 @@
 
   const rows = $derived(query.data ? spendingRows(query.data) : []);
   const singleCommodity = $derived(query.data ? isSingleCommodity(query.data) : false);
+  const hasRestatements = $derived(rows.some((row) => row.converted));
+  // The one figure a multi-currency report cannot otherwise produce: unlike
+  // commodities have no sum, so without a reporting currency there is no total
+  // to show at all.
+  const convertedTotal = $derived(query.data?.converted_total);
   const groupBy = $derived(options.groupBy);
 
   /**
@@ -126,7 +133,8 @@
       groupBy === 'payee' ? m.reports_column_payee() : m.reports_column_category(),
       m.reports_column_commodity(),
       mode === 'income' ? m.reports_column_income() : m.reports_column_spending(),
-      m.reports_column_share()
+      m.reports_column_share(),
+      m.reports_reporting_currency()
     ];
     const body = rows.map((row) => [
       rowLabel(row),
@@ -134,7 +142,10 @@
       exactDecimal(row.quantityValue, row.quantityScale),
       // The share is exact basis points from the server; a percentage with a
       // locale separator would not parse, so it goes out as basis points.
-      row.shareBasisPoints === undefined ? '' : String(row.shareBasisPoints)
+      row.shareBasisPoints === undefined ? '' : String(row.shareBasisPoints),
+      // Without this, a restatement in EUR and a real EUR total are the same
+      // row to a spreadsheet, and summing the column would double-count.
+      row.converted ? commodityLabel(row.commodityID) : ''
     ]);
     downloadCSV(
       csvFilename(mode === 'income' ? 'income' : 'spending', options.startDate, options.endDate),
@@ -150,9 +161,17 @@
     return `${commodityLabel(row.commodityID)} ${formatAmount(row.quantityValue, row.quantityScale)}`;
   }
 
-  // The chart only summarizes a single-commodity report: bars across unlike
-  // commodities would be a comparison the ledger cannot justify.
-  const bars = $derived(singleCommodity ? spendingBars(rows, rowLabel) : []);
+  // The chart only summarizes rows in one commodity: bars across unlike
+  // commodities would be a comparison the ledger cannot justify. A reporting
+  // currency that restated every group produces such a set by construction, and
+  // it is preferred — it covers the whole report rather than one commodity's
+  // share of it.
+  const barRows = $derived.by(() => {
+    const restated = query.data ? convertedBarRows(query.data, rows) : [];
+    if (restated.length > 0) return restated;
+    return singleCommodity ? rows.filter((row) => !row.converted) : [];
+  });
+  const bars = $derived(spendingBars(barRows, rowLabel));
 
   const dimensionHeader = $derived(
     groupBy === 'payee' ? m.reports_column_payee() : m.reports_column_category()
@@ -165,7 +184,7 @@
   // commodity code is already inside the amount cell, so that column is the
   // first to hide when a single commodity is in range; share hides next.
   const commodityCellClass = $derived(
-    singleCommodity ? 'hidden min-[600px]:table-cell' : ''
+    singleCommodity && !hasRestatements ? 'hidden min-[600px]:table-cell' : ''
   );
   const shareCellClass = 'hidden min-[460px]:table-cell';
 </script>
@@ -268,6 +287,7 @@
         {multiCommodityNotice}
       </p>
     {/if}
+    <ValuationNotice valuation={query.data?.valuation} {commodityLabel} />
 
     <div class="mt-5 overflow-x-auto">
       <table class="w-full border-collapse text-left text-sm">
@@ -288,12 +308,16 @@
         </thead>
         <tbody>
           {#each rows as row (row.key)}
-            <tr class="border-b border-border/70 last:border-b-0">
+            <tr class={`border-b border-border/70 last:border-b-0 ${row.converted ? 'bg-control/40' : ''}`}>
               <td class="px-3 py-3 text-foreground">
                 <!-- Linked only when the transactions route can ask the same
                      question; otherwise the label stays plain text rather than
                      leading to a list that disagrees with the number. -->
-                {#if drillDownHref(row)}
+                {#if row.converted}
+                  <!-- A restatement has no postings of its own to drill into:
+                       it sums the rows above it, which each keep their link. -->
+                  {rowLabel(row)}
+                {:else if drillDownHref(row)}
                   <a
                     href={drillDownHref(row)}
                     class="font-medium text-accent underline underline-offset-2 transition hover:opacity-80"
@@ -309,12 +333,19 @@
               </td>
               <td class={`px-3 py-3 font-medium text-foreground ${commodityCellClass}`}>
                 {commodityLabel(row.commodityID)}
+                {#if row.converted}
+                  <span class="ml-1 text-xs font-normal text-muted">({m.reports_converted_badge()})</span>
+                {/if}
               </td>
               <td class="px-3 py-3 text-right font-semibold tabular-nums text-foreground">
                 {formattedTotal(row)}
               </td>
               <td class={`px-3 py-3 text-right tabular-nums text-muted ${shareCellClass}`}>
-                {formatShare(row.shareBasisPoints, locale) || m.reports_spending_share_unavailable()}
+                <!-- A restatement carries no share: it is not one group's part
+                     of a commodity total, it is the group in another unit. -->
+                {row.converted
+                  ? ''
+                  : formatShare(row.shareBasisPoints, locale) || m.reports_spending_share_unavailable()}
               </td>
             </tr>
           {/each}
@@ -322,14 +353,25 @@
       </table>
     </div>
 
-    {#if singleCommodity && bars.length > 0}
+    {#if bars.length > 0}
       <SpendingBarChart
         {bars}
         {formatAmount}
         caption={m.reports_spending_chart_caption({
-          commodity: commodityLabel(rows[0].commodityID)
+          commodity: commodityLabel(barRows[0].commodityID)
         })}
       />
+    {/if}
+    {#if convertedTotal}
+      <p class="mt-4 text-sm font-semibold text-foreground">
+        {m.reports_converted_total({
+          commodity: commodityLabel(convertedTotal.commodity_id),
+          amount: formatAmount(convertedTotal.quantity_value, convertedTotal.quantity_scale)
+        })}
+      </p>
+    {/if}
+    {#if hasRestatements}
+      <p class="mt-4 text-xs text-muted">{m.reports_converted_row_note()}</p>
     {/if}
 
     <!-- The grouping policy note is about category depth; it says nothing about payees. -->

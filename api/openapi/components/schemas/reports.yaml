@@ -1,3 +1,67 @@
+RateUse:
+  type: object
+  description: A rate that was used, and whether it came from the date it was asked for.
+  required: [commodity_id, observation_date, requested_date, stale, derived]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    observation_date: { type: string, format: date }
+    requested_date: { type: string, format: date }
+    stale:
+      type: boolean
+      description: True when the observation is from an earlier date than the one asked for.
+    derived:
+      type: boolean
+      description: True when the observation was triangulated rather than observed directly.
+RateGap:
+  type: object
+  description: A commodity that could not be converted, and why.
+  required: [commodity_id, reason]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    reason:
+      type: string
+      enum: [no_observation_in_window, reporting_currency_is_not_a_currency]
+    nearest_observation_date:
+      type: string
+      format: date
+      description: >
+        The closest observation outside the staleness window, when one exists.
+        "No rate" and "no rate recently" are different problems with different
+        fixes, so the response distinguishes them.
+Valuation:
+  type: object
+  description: >
+    How a response's converted figures were produced and what they could not
+    cover. Present only when a reporting currency was asked for. A converted
+    figure without this block would be a number with no provenance.
+  required: [commodity_id, scale, method, max_staleness_days, complete, rates_used, gaps]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    code: { type: string }
+    scale:
+      type: integer
+      description: The reporting currency's own scale — what each conversion is rounded to, once.
+    method:
+      type: string
+      enum: [observed_on_or_before]
+      description: >
+        Named rather than assumed, so a second method can arrive without
+        changing what an existing figure means. A stock is converted at the
+        date it is measured on; a flow at the date it happened.
+    max_staleness_days:
+      type: integer
+      description: How far back the nearest-earlier search may look before giving up.
+    complete:
+      type: boolean
+      description: False when any figure was omitted for want of a rate.
+    rates_used:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/RateUse"
+    gaps:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/RateGap"
 ReportFilters:
   type: object
   description: >
@@ -148,6 +212,8 @@ SpendingReportGroup:
         $ref: "../../openapi.yaml#/components/schemas/SpendingReportGroupTotal"
     drill_down:
       $ref: "../../openapi.yaml#/components/schemas/SpendingReportDrillDown"
+    converted:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
 
 SpendingReportResponse:
   type: object
@@ -168,6 +234,10 @@ SpendingReportResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    converted_total:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    valuation:
+      $ref: "../../openapi.yaml#/components/schemas/Valuation"
     ranking_commodity_id:
       description: >
         The commodity the group order was computed in: the one present in the
@@ -208,6 +278,16 @@ NetWorthSeriesBucket:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    converted:
+      description: >
+        This bucket's net worth at its own end date, in the reporting currency.
+        A stock is converted on the date it is measured, so each bucket uses its
+        own rate rather than one rate for the range. Absent when no reporting
+        currency was asked for, and absent for a bucket whose commodities could
+        not all be converted — a short total would read as a real fall in net
+        worth.
+      allOf:
+        - $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
 
 NetWorthSeriesQuery:
   type: object
@@ -258,6 +338,8 @@ NetWorthSeriesResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"
+    valuation:
+      $ref: "../../openapi.yaml#/components/schemas/Valuation"
 
 CashflowReportQuery:
   type: object
@@ -354,6 +436,27 @@ CashflowReportBucket:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    converted_inflow:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    converted_outflow:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    converted_transfer_in:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    converted_transfer_out:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    converted_operating_net:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    converted_transfer_net:
+      $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    converted_net_movement:
+      description: >
+        Derived from the converted parts rather than accumulated from the cash
+        postings, so converted net_movement = operating_net + transfer_net is an
+        identity here exactly as it is in the exact figures. Per-posting
+        rounding is not additive, and accumulating it separately could differ by
+        a minor unit.
+      allOf:
+        - $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
 
 # Each measure carries its own quantity_scale, and two measures of the same
 # commodity in the same bucket may differ: a posting is recorded at any scale
@@ -362,6 +465,7 @@ CashflowReportBucket:
 # per digit. The measures are deliberately not restated at a common scale,
 # because deepening costs a digit against the 38-digit coefficient ceiling and
 # would let one measure's precision overflow another that was representable.
+
 CashflowReportResponse:
   type: object
   required:
@@ -384,3 +488,5 @@ CashflowReportResponse:
       type: array
       items:
         type: string
+    valuation:
+      $ref: "../../openapi.yaml#/components/schemas/Valuation"

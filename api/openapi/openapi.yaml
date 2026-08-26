@@ -520,6 +520,12 @@ components:
       $ref: "./components/schemas/reports.yaml#/NetWorthSeriesResponse"
     ReportFilters:
       $ref: "./components/schemas/reports.yaml#/ReportFilters"
+    RateUse:
+      $ref: "./components/schemas/reports.yaml#/RateUse"
+    RateGap:
+      $ref: "./components/schemas/reports.yaml#/RateGap"
+    Valuation:
+      $ref: "./components/schemas/reports.yaml#/Valuation"
     LedgerExportAttachments:
       $ref: "./components/schemas/exports.yaml#/LedgerExportAttachments"
     LedgerExportFilter:

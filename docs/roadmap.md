@@ -200,10 +200,18 @@ non-negotiables; the plan may not quietly narrow them.
 
 </details>
 
-**Sequenced after R3, approved 2026-08-19: a reporting-currency selector**
-(one reporting currency, a named valuation method). Per-commodity exact totals
-stay in every response — conversion is additive, never replacing what R2
-shipped.
+### Done — reporting-currency selector
+
+**Delivered 2026-08-26** (approved 2026-08-19, sequenced after R3). One
+reporting currency, a named valuation method (`observed_on_or_before`), on all
+three reports: a stock converts at the date it is measured, a flow at the date
+it happened. Per-commodity exact totals stay in every response — the conversion
+is additive, never replacing what R2 shipped, and the UI renders it as one more
+row after the rows it restates rather than as a substitution. A figure that
+cannot be fully converted is omitted and named in the response's `valuation`
+block rather than shown short. Cashflow's identities survive conversion exactly,
+because the converted nets are derived from the converted parts. See
+`implemented.md` for the full contract.
 
 ### Done — R3a: core-workflow accessibility regression coverage
 

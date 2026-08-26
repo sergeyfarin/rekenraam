@@ -24,14 +24,21 @@ export type SpendingRow = {
   shareBasisPoints?: number;
   /** True for the group holding postings with no payee record. */
   unattributed: boolean;
+  /**
+   * True for the reporting-currency restatement of a group. It sums the rows
+   * above it rather than being a total in a commodity anyone spent, so it
+   * carries no share and no drill-down of its own.
+   */
+  converted: boolean;
   /** The server's description of the postings behind this row. */
   drillDown: SpendingReportDrillDown;
 };
 
 export function spendingRows(report: SpendingReportResponse): SpendingRow[] {
-  return report.groups.flatMap((group, index) =>
-    group.totals.map((total) => ({
-      key: `${groupKey(group, index)}-${total.commodity_id}`,
+  return report.groups.flatMap((group, index) => {
+    const key = groupKey(group, index);
+    const totals = group.totals.map((total) => ({
+      key: `${key}-${total.commodity_id}`,
       categoryID: group.category_id,
       payeeID: group.payee_id,
       code: group.code ?? '',
@@ -41,9 +48,40 @@ export function spendingRows(report: SpendingReportResponse): SpendingRow[] {
       quantityScale: total.quantity_scale,
       shareBasisPoints: total.share_basis_points,
       unattributed: group.category_id === undefined && group.payee_id === undefined,
+      converted: false,
       drillDown: group.drill_down
-    }))
-  );
+    }));
+    // A group whose commodities could not all be converted keeps its exact rows
+    // and gains no restatement: a short total sitting beside the rows it fails
+    // to add up reads as a smaller number rather than as a missing one.
+    if (!group.converted || totals.length === 0) {
+      return totals;
+    }
+    // After the totals, not before: the restatement summarizes the rows above
+    // it, and reading it first would suggest they break it down.
+    return [
+      ...totals,
+      {
+        ...totals[0],
+        key: `${key}-converted`,
+        commodityID: group.converted.commodity_id,
+        quantityValue: group.converted.quantity_value,
+        quantityScale: group.converted.quantity_scale,
+        shareBasisPoints: undefined,
+        converted: true
+      }
+    ];
+  });
+}
+
+/**
+ * Bar geometry over the restatements, but only when every group has one: bars
+ * covering some groups and not others would rank a partial list as if it were
+ * the whole.
+ */
+export function convertedBarRows(report: SpendingReportResponse, rows: SpendingRow[]): SpendingRow[] {
+  const converted = rows.filter((row) => row.converted);
+  return converted.length > 0 && converted.length === report.groups.length ? converted : [];
 }
 
 function groupKey(group: SpendingReportGroup, index: number): string {

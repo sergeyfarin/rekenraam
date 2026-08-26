@@ -38,7 +38,8 @@ Recorded here as pointers; the source of truth is `roadmap.md` and
 
 - **Reporting-currency selector: build it** (one reporting currency, named
   valuation method), sequenced after R3. Per-commodity exact totals stay in
-  every response — conversion is additive, never replacing.
+  every response — conversion is additive, never replacing. **Shipped
+  2026-08-26**, backend and UI; see `implemented.md` under Reports.
 - **Free-text payees (backlog T-50): resolve on entry, but never silently.**
   Typing a new payee name prompts for confirmation, offering existing payees
   through a fuzzy search before creating a record.

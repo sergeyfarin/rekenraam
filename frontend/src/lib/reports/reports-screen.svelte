@@ -24,12 +24,19 @@
   import { formatQuantity } from '$lib/money/format';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
-  import { hasMultipleCommodities, netWorthRows } from './net-worth';
+  import { convertedSeries, hasMultipleCommodities, netWorthRows } from './net-worth';
   import BucketColumnChart from './bucket-column-chart.svelte';
   import CashflowView from './cashflow-view.svelte';
   import { csvFilename, downloadCSV, exactDecimal, toCSV, withReportContext } from './report-csv';
   import { seriesColumns } from './report-series';
   import ReportFilterControls from './report-filter-controls.svelte';
+  import ReportingCurrencySelect from './reporting-currency-select.svelte';
+  import ValuationNotice from './valuation-notice.svelte';
+  import {
+    conversionAddsInformation,
+    parseReportingCurrency,
+    withReportingCurrency
+  } from './reporting-currency';
   import {
     parseReportFilters,
     writeReportFilters,
@@ -85,6 +92,9 @@
   const activeFilters = $derived.by(parseFilters);
   const view = $derived.by(parseView);
   const reportFilters = $derived(parseReportFilters($page.url.searchParams));
+  // Not part of ReportFilterState: a filter narrows what a report is about, and
+  // this changes nothing about that. Every exact figure is present either way.
+  const reportingCurrencyID = $derived(parseReportingCurrency($page.url.searchParams));
   // Net worth has no category or payee dimension: those exist only where a
   // category posting does. Offering them here would be a control that changes
   // nothing.
@@ -139,21 +149,24 @@
     includeDescendants: reportFilters.includeDescendants,
     commodityIDs: reportFilters.commodityIDs,
     categoryIDs: reportFilters.categoryIDs,
-    payeeIDs: reportFilters.payeeIDs
+    payeeIDs: reportFilters.payeeIDs,
+    reportingCurrencyID
   });
 
   const netWorthOptions = $derived<NetWorthSeriesOptions>({
     ...(activeFilters ?? initialFilters),
     accountIDs: reportFilters.accountIDs,
     includeDescendants: reportFilters.includeDescendants,
-    commodityIDs: reportFilters.commodityIDs
+    commodityIDs: reportFilters.commodityIDs,
+    reportingCurrencyID
   });
 
   const cashflowOptions = $derived<CashflowOptions>({
     ...(activeFilters ?? initialFilters),
     accountIDs: reportFilters.accountIDs,
     includeDescendants: reportFilters.includeDescendants,
-    commodityIDs: reportFilters.commodityIDs
+    commodityIDs: reportFilters.commodityIDs,
+    reportingCurrencyID
   });
 
   const netWorthQuery = createQuery(() => ({
@@ -230,6 +243,9 @@
         m.reports_filter_commodities(),
         reportFilters.commodityIDs.map((id) => commodityLabel(id))
       ),
+      reportingCurrencyID === null
+        ? null
+        : contextLine(m.reports_reporting_currency(), [commodityLabel(reportingCurrencyID)]),
       view === 'spending'
         ? contextLine(m.reports_filter_categories(), named(reportFilters.categoryIDs, categoryNames))
         : null,
@@ -264,19 +280,24 @@
     return shortDateFormatter.format(parseISO(date));
   }
 
-  // One commodity only: columns across unlike commodities would compare what
-  // the ledger cannot.
+  // One commodity only — columns across unlike commodities would compare what
+  // the ledger cannot — unless a reporting currency restated every bucket, in
+  // which case that series is one commodity by construction. This is the whole
+  // payoff for a multi-currency book: until now it got no chart at all.
+  const chartRows = $derived.by(() => {
+    const restated = convertedSeries(rows);
+    if (restated.length > 0) return restated;
+    return multiCommodity ? [] : rows;
+  });
   const netWorthColumns = $derived(
-    multiCommodity
-      ? []
-      : seriesColumns(
-          rows.map((row) => ({
-            key: `${row.startDate}-${row.commodity_id}`,
-            label: shortDate(row.endDate),
-            quantityValue: row.normal_quantity_value,
-            quantityScale: row.quantity_scale
-          }))
-        )
+    seriesColumns(
+      chartRows.map((row) => ({
+        key: `${row.startDate}-${row.commodity_id}-${row.converted}`,
+        label: shortDate(row.endDate),
+        quantityValue: row.normal_quantity_value,
+        quantityScale: row.quantity_scale
+      }))
+    )
   );
 
   function exportNetWorthCSV() {
@@ -284,13 +305,17 @@
       m.reports_column_period_start(),
       m.reports_column_period_end(),
       m.reports_column_commodity(),
-      m.reports_column_net_worth()
+      m.reports_column_net_worth(),
+      // Without this, a restatement in EUR and a real EUR holding are the same
+      // row to a spreadsheet, and summing the column would double-count.
+      m.reports_reporting_currency()
     ];
     const body = rows.map((row) => [
       row.startDate,
       row.endDate,
       commodityLabel(row.commodity_id),
-      exactDecimal(row.normal_quantity_value, row.quantity_scale)
+      exactDecimal(row.normal_quantity_value, row.quantity_scale),
+      row.converted ? commodityLabel(row.commodity_id) : ''
     ]);
     const range = activeFilters ?? initialFilters;
     const context = [...reportContext, ...exclusionLine(netWorthQuery.data?.excluded_system_roles)];
@@ -334,6 +359,13 @@
   // stays in the URL, so switching back to spending restores it.
   function applyReportFilters(next: ReportFilterState) {
     const params = writeReportFilters($page.url.searchParams, next);
+    void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
+  }
+
+  // The selection is kept even where it currently adds nothing, so a range that
+  // later spans a second currency starts restating without being re-picked.
+  function applyReportingCurrency(commodityID: number | null) {
+    const params = withReportingCurrency($page.url.searchParams, commodityID);
     void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
   }
 </script>
@@ -394,6 +426,15 @@
         {m.reports_apply_filters()}
       </button>
     </form>
+
+    <div class="mt-5 flex flex-wrap items-end gap-3 border-t border-border pt-5">
+      <!-- Applied on change rather than on submit: a select is never half-set,
+           which is the same rule the filter controls follow. -->
+      <ReportingCurrencySelect
+        selected={reportingCurrencyID}
+        onChange={applyReportingCurrency}
+      />
+    </div>
 
     <div class="mt-5 border-t border-border pt-5">
       <ReportFilterControls
@@ -468,6 +509,7 @@
           {m.reports_multi_commodity_notice()}
         </p>
       {/if}
+      <ValuationNotice valuation={netWorthQuery.data?.valuation} {commodityLabel} />
 
       <div class="mt-5 overflow-x-auto">
         <table class="w-full min-w-[34rem] border-collapse text-left text-sm">
@@ -479,10 +521,15 @@
             </tr>
           </thead>
           <tbody>
-            {#each rows as row (`${row.startDate}-${row.endDate}-${row.commodity_id}`)}
-              <tr class="border-b border-border/70 last:border-b-0">
+            {#each rows as row (`${row.startDate}-${row.endDate}-${row.commodity_id}-${row.converted}`)}
+              <tr class={`border-b border-border/70 last:border-b-0 ${row.converted ? 'bg-control/40' : ''}`}>
                 <td class="px-3 py-3 text-foreground">{formatRange(row.startDate, row.endDate)}</td>
-                <td class="px-3 py-3 font-medium text-foreground">{commodityLabel(row.commodity_id)}</td>
+                <td class="px-3 py-3 font-medium text-foreground">
+                  {commodityLabel(row.commodity_id)}
+                  {#if row.converted}
+                    <span class="ml-1 text-xs font-normal text-muted">({m.reports_converted_badge()})</span>
+                  {/if}
+                </td>
                 <td class="px-3 py-3 text-right font-semibold tabular-nums text-foreground">
                   {formattedTotal(row.normal_quantity_value, row.quantity_scale, row.commodity_id)}
                 </td>
@@ -496,8 +543,13 @@
         <BucketColumnChart
           columns={netWorthColumns}
           formatAmount={(value, scale) => formatQuantity(value, scale, locale)}
-          caption={m.reports_net_worth_chart_caption({ commodity: commodityLabel(rows[0].commodity_id) })}
+          caption={m.reports_net_worth_chart_caption({
+            commodity: commodityLabel(chartRows[0].commodity_id)
+          })}
         />
+      {/if}
+      {#if rows.some((row) => row.converted)}
+        <p class="mt-4 text-xs text-muted">{m.reports_converted_row_note()}</p>
       {/if}
     </Panel>
   {/if}

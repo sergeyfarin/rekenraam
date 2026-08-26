@@ -3684,6 +3684,10 @@ export interface paths {
                     include_descendants?: boolean;
                     /** @description Repeatable. Restricts the series to balances in these commodities. */
                     commodity_id?: number[];
+                    /** @description Optional. Denominate the report in this currency *in addition to* the exact per-commodity figures, which are unchanged. A stock converts at the date it is measured on; a flow converts at the date it happened. Figures that cannot be converted are omitted rather than shown short, and named in the valuation block. */
+                    reporting_currency_id?: number;
+                    /** @description Optional, default 7. How far back to look for the nearest earlier observation before treating a commodity as unconvertible. A week covers weekends and holidays without letting a month-old rate pass as today's. */
+                    max_staleness_days?: number;
                 };
                 header?: never;
                 path?: never;
@@ -3760,6 +3764,10 @@ export interface paths {
                     include_descendants?: boolean;
                     /** @description Repeatable. Restricts the report to postings in these commodities. */
                     commodity_id?: number[];
+                    /** @description Optional. Denominate the report in this currency *in addition to* the exact per-commodity figures, which are unchanged. A stock converts at the date it is measured on; a flow converts at the date it happened. Figures that cannot be converted are omitted rather than shown short, and named in the valuation block. */
+                    reporting_currency_id?: number;
+                    /** @description Optional, default 7. How far back to look for the nearest earlier observation before treating a commodity as unconvertible. A week covers weekends and holidays without letting a month-old rate pass as today's. */
+                    max_staleness_days?: number;
                 };
                 header?: never;
                 path?: never;
@@ -3842,6 +3850,10 @@ export interface paths {
                     include_descendants?: boolean;
                     /** @description Repeatable. Restricts the report to postings in these commodities. */
                     commodity_id?: number[];
+                    /** @description Optional. Denominate the report in this currency *in addition to* the exact per-commodity figures, which are unchanged. A stock converts at the date it is measured on; a flow converts at the date it happened. Figures that cannot be converted are omitted rather than shown short, and named in the valuation block. */
+                    reporting_currency_id?: number;
+                    /** @description Optional, default 7. How far back to look for the nearest earlier observation before treating a commodity as unconvertible. A week covers weekends and holidays without letting a month-old rate pass as today's. */
+                    max_staleness_days?: number;
                 };
                 header?: never;
                 path?: never;
@@ -12675,6 +12687,8 @@ export interface components {
             /** Format: date */
             end_date: string;
             totals: components["schemas"]["BalanceQuantity"][];
+            /** @description This bucket's net worth at its own end date, in the reporting currency. A stock is converted on the date it is measured, so each bucket uses its own rate rather than one rate for the range. Absent when no reporting currency was asked for, and absent for a bucket whose commodities could not all be converted — a short total would read as a real fall in net worth. */
+            converted?: components["schemas"]["BalanceQuantity"];
         };
         NetWorthSeriesQuery: {
             /** Format: date */
@@ -12695,6 +12709,7 @@ export interface components {
             query: components["schemas"]["NetWorthSeriesQuery"];
             buckets: components["schemas"]["NetWorthSeriesBucket"][];
             excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+            valuation?: components["schemas"]["Valuation"];
         };
         /** @description The effective shared report filter set. account_ids echoes what was requested; resolved_account_ids is the descendant expansion the calculation actually used, so an exported report stays interpretable later. */
         ReportFilters: {
@@ -12702,6 +12717,50 @@ export interface components {
             include_descendants: boolean;
             commodity_ids: number[];
             resolved_account_ids: number[];
+        };
+        /** @description A rate that was used, and whether it came from the date it was asked for. */
+        RateUse: {
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: date */
+            observation_date: string;
+            /** Format: date */
+            requested_date: string;
+            /** @description True when the observation is from an earlier date than the one asked for. */
+            stale: boolean;
+            /** @description True when the observation was triangulated rather than observed directly. */
+            derived: boolean;
+        };
+        /** @description A commodity that could not be converted, and why. */
+        RateGap: {
+            /** Format: int64 */
+            commodity_id: number;
+            /** @enum {string} */
+            reason: "no_observation_in_window" | "reporting_currency_is_not_a_currency";
+            /**
+             * Format: date
+             * @description The closest observation outside the staleness window, when one exists. "No rate" and "no rate recently" are different problems with different fixes, so the response distinguishes them.
+             */
+            nearest_observation_date?: string;
+        };
+        /** @description How a response's converted figures were produced and what they could not cover. Present only when a reporting currency was asked for. A converted figure without this block would be a number with no provenance. */
+        Valuation: {
+            /** Format: int64 */
+            commodity_id: number;
+            code?: string;
+            /** @description The reporting currency's own scale — what each conversion is rounded to, once. */
+            scale: number;
+            /**
+             * @description Named rather than assumed, so a second method can arrive without changing what an existing figure means. A stock is converted at the date it is measured on; a flow at the date it happened.
+             * @enum {string}
+             */
+            method: "observed_on_or_before";
+            /** @description How far back the nearest-earlier search may look before giving up. */
+            max_staleness_days: number;
+            /** @description False when any figure was omitted for want of a rate. */
+            complete: boolean;
+            rates_used: components["schemas"]["RateUse"][];
+            gaps: components["schemas"]["RateGap"][];
         };
         /** @description Attachment coverage, declared empty rather than omitted. Attachments will live outside SQLite (R14a), so the export states from day one that it does not carry them; the field exists so coverage is never claimed and later walked back. */
         LedgerExportAttachments: {
@@ -12965,11 +13024,14 @@ export interface components {
             category_type: "income" | "expense";
             totals: components["schemas"]["SpendingReportGroupTotal"][];
             drill_down: components["schemas"]["SpendingReportDrillDown"];
+            converted?: components["schemas"]["BalanceQuantity"];
         };
         SpendingReportResponse: {
             query: components["schemas"]["SpendingReportQuery"];
             groups: components["schemas"]["SpendingReportGroup"][];
             commodity_totals: components["schemas"]["BalanceQuantity"][];
+            converted_total?: components["schemas"]["BalanceQuantity"];
+            valuation?: components["schemas"]["Valuation"];
             /**
              * Format: int64
              * @description The commodity the group order was computed in: the one present in the most groups, ties broken by the lowest id. Groups are ordered by their total in this commodity, so every comparison is within a single unit; a group with no total in it sorts after those that have one, by a stable identity. `groups` is one flat list in one order — the ranking is not per commodity — so a client showing a multi-commodity report should name this commodity rather than describe the order as separate per commodity. Absent when no group carries a total and there is no value order.
@@ -13017,12 +13079,21 @@ export interface components {
             transfer_net: components["schemas"]["BalanceQuantity"][];
             /** @description The signed sum of every selected-cash posting in the bucket. Equals operating_net plus transfer_net, and reconciles to the selected cash balance change across the bucket boundaries. */
             net_movement: components["schemas"]["BalanceQuantity"][];
+            converted_inflow?: components["schemas"]["BalanceQuantity"];
+            converted_outflow?: components["schemas"]["BalanceQuantity"];
+            converted_transfer_in?: components["schemas"]["BalanceQuantity"];
+            converted_transfer_out?: components["schemas"]["BalanceQuantity"];
+            converted_operating_net?: components["schemas"]["BalanceQuantity"];
+            converted_transfer_net?: components["schemas"]["BalanceQuantity"];
+            /** @description Derived from the converted parts rather than accumulated from the cash postings, so converted net_movement = operating_net + transfer_net is an identity here exactly as it is in the exact figures. Per-posting rounding is not additive, and accumulating it separately could differ by a minor unit. */
+            converted_net_movement?: components["schemas"]["BalanceQuantity"];
         };
         CashflowReportResponse: {
             query: components["schemas"]["CashflowReportQuery"];
             buckets: components["schemas"]["CashflowReportBucket"][];
             /** @description System accounts never join the cash scope, so this is ["all"] — the default scope excludes them and an explicit selection naming one is rejected. They stay visible as counterparts: transfer clearing is financing movement, not spending. */
             excluded_system_roles: string[];
+            valuation?: components["schemas"]["Valuation"];
         };
         PriceObservationResponse: {
             /** Format: int64 */

@@ -37,6 +37,12 @@ export type CashflowRow = {
   transferOut: string;
   transferNet: string;
   netMovement: string;
+  /**
+   * True for the reporting-currency restatement of a bucket. Its three net
+   * measures are derived from its own converted parts, so the identities hold
+   * within the row exactly as they do in a commodity row.
+   */
+  converted: boolean;
 };
 
 export type Measure =
@@ -80,7 +86,7 @@ export function cashflowRows(report: CashflowReportResponse): CashflowRow[] {
       }
     }
 
-    return [...commodityIDs]
+    const rows = [...commodityIDs]
       .sort((a, b) => a - b)
       .map((commodityID) => {
         const row: CashflowRow = {
@@ -104,7 +110,8 @@ export function cashflowRows(report: CashflowReportResponse): CashflowRow[] {
           transferIn: '0',
           transferOut: '0',
           transferNet: '0',
-          netMovement: '0'
+          netMovement: '0',
+          converted: false
         };
 
         for (const [measure] of MEASURES) {
@@ -123,11 +130,86 @@ export function cashflowRows(report: CashflowReportResponse): CashflowRow[] {
         }
         return row;
       });
+
+    // A bucket with no commodity rows has nothing to restate. The backend
+    // converts an empty bucket to an exact zero, which is true but is not
+    // activity — emitting it would replace the "nothing moved" empty state with
+    // a table of zeros.
+    const restatement = rows.length === 0 ? null : convertedRow(bucket);
+    // After the commodity rows: the restatement summarizes them, and reading it
+    // first would suggest they break it down.
+    return restatement ? [...rows, restatement] : rows;
   });
 }
 
+/**
+ * A bucket's reporting-currency restatement, or null when the bucket did not
+ * convert.
+ *
+ * Every measure has to be present for a row to be built. A partial row would
+ * put a real inflow beside a zero outflow that only means "unknown", and the
+ * net movement beside them would be neither.
+ */
+function convertedRow(bucket: CashflowReportResponse['buckets'][number]): CashflowRow | null {
+  const parts: Array<[Measure, BalanceQuantity | undefined]> = [
+    ['inflow', bucket.converted_inflow],
+    ['outflow', bucket.converted_outflow],
+    ['transferIn', bucket.converted_transfer_in],
+    ['transferOut', bucket.converted_transfer_out],
+    ['operatingNet', bucket.converted_operating_net],
+    ['transferNet', bucket.converted_transfer_net],
+    ['netMovement', bucket.converted_net_movement]
+  ];
+  if (parts.some(([, quantity]) => quantity === undefined)) return null;
+
+  // Every converted figure is rounded once into the reporting currency's own
+  // scale, so one scale covers the whole row.
+  const scale = bucket.converted_net_movement!.quantity_scale;
+  const value = (measure: Measure) =>
+    parts.find(([name]) => name === measure)![1]!.quantity_value;
+
+  return {
+    key: `${bucket.start_date}-${bucket.end_date}-converted`,
+    startDate: bucket.start_date,
+    endDate: bucket.end_date,
+    commodityID: bucket.converted_net_movement!.commodity_id,
+    quantityScale: scale,
+    scales: {
+      inflow: scale,
+      outflow: scale,
+      operatingNet: scale,
+      transferIn: scale,
+      transferOut: scale,
+      transferNet: scale,
+      netMovement: scale
+    },
+    inflow: value('inflow'),
+    outflow: value('outflow'),
+    operatingNet: value('operatingNet'),
+    transferIn: value('transferIn'),
+    transferOut: value('transferOut'),
+    transferNet: value('transferNet'),
+    netMovement: value('netMovement'),
+    converted: true
+  };
+}
+
+export function heldRows(rows: CashflowRow[]): CashflowRow[] {
+  return rows.filter((row) => !row.converted);
+}
+
 export function hasMultipleCommodities(rows: CashflowRow[]): boolean {
-  return new Set(rows.map((row) => row.commodityID)).size > 1;
+  return new Set(heldRows(rows).map((row) => row.commodityID)).size > 1;
+}
+
+/**
+ * The converted restatements, but only when every bucket has one: a series
+ * with a hole would chart a month of no movement that in fact did not convert.
+ */
+export function convertedSeries(rows: CashflowRow[]): CashflowRow[] {
+  const buckets = new Set(rows.map((row) => `${row.startDate}/${row.endDate}`));
+  const converted = rows.filter((row) => row.converted);
+  return converted.length > 0 && converted.length === buckets.size ? converted : [];
 }
 
 /**
@@ -177,6 +259,12 @@ export function cashflowDrillDownHref(
   resolvedAccountIDs: number[],
   bucket: string
 ): string | undefined {
+  // A restatement has no postings of its own. Its commodity is the reporting
+  // currency, so the link would narrow the breakdown to whatever happens to be
+  // held in that currency — a different set from the one the row sums. The
+  // commodity rows it summarizes each keep their own link.
+  if (row.converted) return undefined;
+
   const amount = direction === 'in' ? row.inflow : row.outflow;
   // Nothing moved in that direction, so there is nothing to break down.
   if (amount === '0') return undefined;

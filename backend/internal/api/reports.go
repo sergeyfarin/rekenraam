@@ -349,6 +349,8 @@ type cashflowBucketResponse struct {
 	// in the exact figures.
 	ConvertedInflow       *balanceQuantityResponse `json:"converted_inflow,omitempty"`
 	ConvertedOutflow      *balanceQuantityResponse `json:"converted_outflow,omitempty"`
+	ConvertedTransferIn   *balanceQuantityResponse `json:"converted_transfer_in,omitempty"`
+	ConvertedTransferOut  *balanceQuantityResponse `json:"converted_transfer_out,omitempty"`
 	ConvertedOperatingNet *balanceQuantityResponse `json:"converted_operating_net,omitempty"`
 	ConvertedTransferNet  *balanceQuantityResponse `json:"converted_transfer_net,omitempty"`
 	ConvertedNetMovement  *balanceQuantityResponse `json:"converted_net_movement,omitempty"`
@@ -416,6 +418,8 @@ func cashflowReport(logger *slog.Logger, authService *app.AuthService, transacti
 
 				ConvertedInflow:       toBalanceQuantityPointer(bucket.ConvertedInflow),
 				ConvertedOutflow:      toBalanceQuantityPointer(bucket.ConvertedOutflow),
+				ConvertedTransferIn:   toBalanceQuantityPointer(bucket.ConvertedTransferIn),
+				ConvertedTransferOut:  toBalanceQuantityPointer(bucket.ConvertedTransferOut),
 				ConvertedOperatingNet: toBalanceQuantityPointer(bucket.ConvertedOperatingNet),
 				ConvertedTransferNet:  toBalanceQuantityPointer(bucket.ConvertedTransferNet),
 				ConvertedNetMovement:  toBalanceQuantityPointer(bucket.ConvertedNetMovement),

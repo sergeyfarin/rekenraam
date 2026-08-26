@@ -577,3 +577,97 @@ async function openFilter(page: Page, label: string) {
   const disclosure = page.locator('details').filter({ has: page.getByText(label, { exact: true }) });
   await disclosure.locator('summary').click();
 }
+
+test('[acceptance] a reporting currency restates every report without touching the exact figures', async ({
+  page
+}) => {
+  const { csrfToken, currencyID: usdID } = await readyForLedger(page);
+  const eurID = await ensureCurrency(page, csrfToken, 'EUR', 'Euro');
+  const suffix = Date.now();
+  const today = todayISO();
+
+  const usdChecking = await createCashAccount(page, csrfToken, `Restated USD ${suffix}`, usdID);
+  const eurChecking = await createCashAccount(page, csrfToken, `Restated EUR ${suffix}`, eurID);
+
+  const categories = await apiJSON<{
+    categories: Array<{ id: number; code?: string; allows_postings: boolean }>;
+  }>(page, 'GET', '/api/v1/categories');
+  const groceries = categories.categories.find(
+    (item) => item.code === 'expense_food_groceries' && item.allows_postings
+  );
+  if (!groceries) throw new Error('seeded category expense_food_groceries not found');
+
+  // 1 USD = 0.25 EUR, so 40.00 USD restates to 10.00 EUR and joins 20.00 EUR to
+  // make 30.00 — a figure none of the exact totals carries, which is how a
+  // restatement proves it was computed rather than copied.
+  await apiJSON(page, 'POST', '/api/v1/pricing/prices', csrfToken, {
+    base_commodity_id: usdID,
+    quote_commodity_id: eurID,
+    valuation_date: today,
+    price_value: 250000,
+    price_scale: 6,
+    quote_type: 'manual',
+    is_manual: true
+  }, [201]);
+
+  await postTransaction(page, today, usdChecking.id, groceries.id, usdID, 4000);
+  await postTransaction(page, today, eurChecking.id, groceries.id, eurID, 2000);
+
+  // Scoped to this test's own accounts: the e2e database is shared within a run
+  // and every spec posts to today.
+  const scoped = `&account_id=${usdChecking.id}&account_id=${eurChecking.id}`;
+  const range = `start_date=${today}&end_date=${today}&bucket=day`;
+
+  // --- Without a reporting currency, nothing about the report changes.
+  await page.goto(`/app/reports?view=spending&group_by=category&${range}${scoped}`);
+  await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
+  await expect(page.getByRole('table')).not.toContainText('restated');
+  // Bars across unlike commodities would be a comparison the ledger cannot make.
+  await expect(page.getByRole('img')).toHaveCount(0);
+
+  // --- Choosing one adds a restated row; it does not replace anything.
+  await page.getByLabel('Reporting currency').selectOption(String(eurID));
+  await expect(page).toHaveURL(new RegExp(`reporting_currency_id=${eurID}`));
+
+  const spendingRows = page.getByRole('table').locator('tbody tr');
+  await expect(spendingRows).toHaveCount(3);
+  await expect(page.getByRole('table')).toContainText('40.00');
+  await expect(page.getByRole('table')).toContainText('20.00');
+  const restated = spendingRows.filter({ hasText: 'restated' });
+  await expect(restated).toHaveCount(1);
+  await expect(restated).toContainText('30.00');
+  await expect(page.getByText('Total across every group, restated in EUR: 30.00')).toBeVisible();
+  // A restatement covering every group is one commodity by construction, so the
+  // chart a multi-currency report could never have now appears.
+  await expect(page.getByRole('img')).toHaveCount(1);
+
+  // The export has to tell a restatement from a real EUR total, or a spreadsheet
+  // summing the column would double-count.
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download CSV' }).click();
+  const content = await readFile((await (await download).path()) as string, 'utf8');
+  const restatedLines = content.split('\r\n').filter((line) => line.includes('30.00'));
+  expect(restatedLines).toHaveLength(1);
+  expect(restatedLines[0].split(',').filter((cell) => cell === 'EUR')).toHaveLength(2);
+
+  // --- The selection is a property of the screen, not of one report: it
+  // survives a view switch, and each report restates on its own basis.
+  await page.getByRole('button', { name: 'Cashflow', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`reporting_currency_id=${eurID}`));
+  const cashflowRestated = page.getByRole('table').locator('tbody tr').filter({ hasText: 'restated' });
+  await expect(cashflowRestated).toHaveCount(1);
+  await expect(cashflowRestated).toContainText('-30.00');
+
+  await page.getByRole('button', { name: 'Net worth', exact: true }).click();
+  const netWorthRestated = page.getByRole('table').locator('tbody tr').filter({ hasText: 'restated' });
+  await expect(netWorthRestated).toHaveCount(1);
+  await expect(netWorthRestated).toContainText('-30.00');
+  // The exact per-commodity rows are still there, untouched.
+  await expect(page.getByRole('table')).toContainText('-40.00');
+  await expect(page.getByRole('table')).toContainText('-20.00');
+
+  // --- Clearing it returns the report to exactly what it was.
+  await page.getByLabel('Reporting currency').selectOption('');
+  await expect(page).not.toHaveURL(/reporting_currency_id/);
+  await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
+});
