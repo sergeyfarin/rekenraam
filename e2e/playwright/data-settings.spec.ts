@@ -95,3 +95,42 @@ test('[acceptance] a QIF export names the accounts it cannot write before downlo
   // available — the confirmation is for a selection that names one.
   await expect(page.getByTestId('export-download')).toBeEnabled();
 });
+
+// The backup form edits the configured policy. An edit that was never saved
+// must not come back looking like the configured one: someone who changes the
+// time, thinks better of it, and returns later would otherwise read their own
+// discarded number as the schedule the app is running on.
+test('an unsaved backup-policy edit does not survive as if it were saved', async ({ page }) => {
+  await readyForLedger(page);
+
+  await page.goto('/app/settings/data');
+  await expect(page.getByTestId('data-settings')).toBeVisible();
+
+  const retention = page.getByTestId('backup-retention');
+  const configured = await retention.inputValue();
+  const edited = String(Number(configured) + 7);
+
+  await retention.fill(edited);
+  await expect(retention).toHaveValue(edited);
+
+  // Leave without saving, then come back — by navigating inside the app, which
+  // is what a user does. A full reload would prove nothing here: it discards
+  // the client cache the unsaved edit could be hiding in.
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/settings$/);
+  await page.getByRole('link').filter({ hasText: 'Data' }).first().click();
+  await expect(page.getByTestId('data-settings')).toBeVisible();
+
+  await expect(page.getByTestId('backup-retention')).toHaveValue(configured);
+
+  // The other half of the same rule: a saved edit *must* come back. Holding the
+  // form's own copy is only correct if it still reaches the server.
+  await page.getByTestId('backup-retention').fill(edited);
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/settings$/);
+  await page.getByRole('link').filter({ hasText: 'Data' }).first().click();
+  await expect(page.getByTestId('backup-retention')).toHaveValue(edited);
+});

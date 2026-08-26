@@ -88,15 +88,16 @@ export function csvFilename(report: string, startDate: string, endDate: string):
 export function downloadCSV(filename: string, content: string): void {
   const blob = new Blob([`﻿${content}`], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
-  try {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.rel = 'noopener';
-    document.body.append(link);
-    link.click();
-    link.remove();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.rel = 'noopener';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  // Revoked on a later tick, not in a `finally` that runs on this one. The
+  // click only *starts* the download; revoking straight away can pull the blob
+  // out from under a browser that had not begun reading it, and the failure
+  // mode is a file that silently never arrives.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

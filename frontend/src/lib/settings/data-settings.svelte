@@ -28,6 +28,18 @@
 
   type ExportFormat = 'bundle' | 'csv' | 'qif';
 
+  /**
+   * The four fields this form owns. Spelled out rather than reusing
+   * BackupPolicyRequest, whose fields are all optional because a partial update
+   * is a valid request — the form always holds all four.
+   */
+  type BackupPolicyDraft = {
+    enabled: boolean;
+    hour_local: number;
+    minute_local: number;
+    retention_count: number;
+  };
+
   const queryClient = useQueryClient();
   const sessionQuery = createQuery(() => authSessionQueryOptions());
   const csrfToken = $derived(sessionQuery.data?.csrf_token ?? '');
@@ -65,7 +77,40 @@
   let selfCheckError = $state<unknown>(undefined);
   let selfCheckJustRun = $state<SelfCheckRun | undefined>(undefined);
 
-  const policy = $derived(backupQuery.data?.policy);
+  const serverPolicy = $derived(backupQuery.data?.policy);
+
+  /**
+   * The backup form's own state.
+   *
+   * Binding the inputs straight to `backupQuery.data.policy` wrote every
+   * keystroke into the TanStack cache, which is shared and outlives this
+   * component: an edit the user abandoned came back on the next visit reading
+   * as the configured schedule. The form therefore holds a copy, and the cache
+   * holds only what the server said.
+   */
+  let policy = $state<BackupPolicyDraft | undefined>(undefined);
+  // What the server last said, so a routine background refetch returning the
+  // same answer leaves an in-progress edit alone while a real change — someone
+  // saving from another tab — still wins.
+  let seededFrom = $state('');
+
+  $effect(() => {
+    if (!serverPolicy) return;
+    const fingerprint = JSON.stringify([
+      serverPolicy.enabled,
+      serverPolicy.hour_local,
+      serverPolicy.minute_local,
+      serverPolicy.retention_count
+    ]);
+    if (fingerprint === seededFrom) return;
+    seededFrom = fingerprint;
+    policy = {
+      enabled: serverPolicy.enabled,
+      hour_local: serverPolicy.hour_local,
+      minute_local: serverPolicy.minute_local,
+      retention_count: serverPolicy.retention_count
+    };
+  });
   const unsupportedQIF = $derived(previewQuery.data?.qif.unsupported_accounts ?? []);
   const needsQIFConfirmation = $derived(format === 'qif' && unsupportedQIF.length > 0);
 
@@ -144,7 +189,12 @@
       anchor.href = url;
       anchor.download = filename;
       anchor.click();
-      URL.revokeObjectURL(url);
+      // Revoked on a later tick, not on this one. The click only *starts* the
+      // download; revoking in the same task can pull the blob out from under a
+      // browser that had not begun reading it yet, and the failure mode is a
+      // download that silently never arrives — on a screen whose whole purpose
+      // is getting the data out.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (error) {
       exportError = error;
     } finally {
@@ -396,11 +446,11 @@
                     }
                   }}
                 />
-                <span class="mt-1.5 block text-xs text-muted">{policy.time_zone}</span>
+                <span class="mt-1.5 block text-xs text-muted">{serverPolicy?.time_zone}</span>
               </label>
               <label class="block">
                 <span class={labelClass}>{m.settings_data_backups_retention()}</span>
-                <input type="number" min="1" bind:value={policy.retention_count} class={inputClass} />
+                <input type="number" min="1" bind:value={policy.retention_count} class={inputClass} data-testid="backup-retention" />
                 <span class="mt-1.5 block text-xs text-muted">
                   {m.settings_data_backups_retention_unit()}
                 </span>
