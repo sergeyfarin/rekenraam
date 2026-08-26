@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -530,4 +531,48 @@ func TestQIFExportRejectsAnUnknownDateLayout(t *testing.T) {
 
 	download := downloadQIF(t, handler, f.sessionCookie, "?qif_date_layout=ymd", http.StatusBadRequest)
 	assert.Contains(t, string(download.body), "qif_date_layout must be mdy or dmy")
+}
+
+// A posting is recorded at any scale its commodity permits, so one entry can
+// hold a scale-0 leg beside a scale-2 one. Each split must render at the scale
+// its own counterpart was recorded at.
+//
+// Borrowing the record's scale for the splits instead would look like a tidy
+// simplification and would be wrong by a factor of a hundred per decimal place
+// — the exact bug this project has shipped three times (T-36/T-45/T-47). The
+// splits still have to sum to T, because the entry balances and the splits are
+// its negation.
+func TestQIFSplitsRenderAtEachCounterpartsOwnScale(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	f := newBundleFixture(t, handler)
+
+	// -120.00 = 100 (scale 0) + 20.00 (scale 2). All three are legal for USD
+	// and the entry balances scale-aware.
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-07-23",
+		posting(f.checking.ID, -12000, 2, f.usdID),
+		posting(f.groceries.ID, 100, 0, f.usdID),
+		posting(f.salary.ID, 2000, 2, f.usdID),
+	), http.StatusCreated)
+
+	download := downloadQIF(t, handler, f.sessionCookie,
+		"?account_id="+strconvFormatInt(f.checking.ID), http.StatusOK)
+
+	records := qifRecords(t, download.body)
+	require.Len(t, records, 1)
+	assert.Equal(t, []string{"-120.00"}, records[0]["T"])
+	assert.Equal(t, []string{"-100", "-20.00"}, records[0]["$"],
+		"each split keeps the scale its counterpart was recorded at")
+
+	// And the numbers still add up, whatever the text looks like.
+	total := new(big.Rat)
+	for _, split := range records[0]["$"] {
+		value, ok := new(big.Rat).SetString(split)
+		require.Truef(t, ok, "unparsable split %q", split)
+		total.Add(total, value)
+	}
+	recordAmount, ok := new(big.Rat).SetString(records[0]["T"][0])
+	require.True(t, ok)
+	assert.Equal(t, 0, total.Cmp(recordAmount), "the splits must sum to the record amount exactly")
 }
