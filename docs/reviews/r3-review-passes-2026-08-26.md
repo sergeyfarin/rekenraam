@@ -8,6 +8,27 @@ tests, across four commits. Nothing found here was a data-loss bug; two were
 "the app tells the user something untrue", which in a backup-and-restore
 feature is the same category of problem one step earlier.
 
+**Amended 2026-08-27: these passes were not exhaustive.** An external audit of
+the same code then found two defects they had missed, one of them a genuine
+data-loss path — a second restore inside the same second overwriting the safety
+copy the first had preserved (`MkdirAll` adopts an existing directory,
+`os.Rename` replaces its destination), and a pruning failure silently
+cancelling the nightly self-check *and* swallowing its own error. Both are fixed
+in `655b3ac5`; the open remainder is T-71, T-72 and T-73.
+
+The instructive part is where they were. Pass 3 was explicitly a
+failure-branch walk and it walked `produceBackup` and the restore path, but not
+`runBackup`'s tail — where two `return nil`s were doing something quite
+different from the comment above them. The restore collision sat inside a
+function the same passes read closely enough to rewrite its error reporting.
+
+So a fifth rule belongs beside the four below: **a pass has a lens, and the lens
+is also a blind spot.** Reading a function for "what does this error branch
+leave on disk" is not reading it for "is this filesystem call doing what its
+name suggests", and finishing the first does not mean the second was done.
+Ordinary line-by-line reading of the changed code still has to happen
+somewhere, and named passes can quietly displace it.
+
 ## What each pass found
 
 | Pass | Findings |
