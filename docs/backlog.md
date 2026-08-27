@@ -950,6 +950,33 @@ also where T-68's "already queued" refusal would otherwise have met the reader.
 V-7 is now written down twice: in `README.md`, where an operator reads what
 "nightly" does not cover, and beside the scheduler's own skip check.
 
+
+### T-70 The backend race suite runs at the edge of its own timeout `[ ]`
+
+**Files:** `scripts/test-backend.sh`, `backend/internal/api/*_test.go`.
+
+`internal/api` is ~310 integration tests, each migrating a fresh SQLite
+database. It is already 325-way parallel, so parallelism is not the lever left
+to pull; the cost is the databases, multiplied by the race detector, on a
+2-4 core runner.
+
+On 2026-08-27 it hit `panic: test timed out after 10m0s` — Go's default, which
+is a per-*package* budget nobody chose. Nothing had hung: the tests still listed
+as running were one-second auth cases, and the package simply had not finished.
+The three CI runs before it took 11m36s, 11m38s and 11m39s for the whole job,
+so the package had been sitting just under the limit for some time and one
+commit's worth of new tests tipped it.
+
+Raising the timeout to 25m unblocked CI and is the honest short-term answer —
+the suite really does cost that. What it does not do is stop the number
+growing. The cheapest real fix is to stop paying for a migrated database per
+test: migrate once into a template file and copy it per test, which is a
+file copy against ~2,700 lines of DDL. `newSetupTestHandler` is the single
+place that would change.
+
+Worth doing before the next large test-adding slice, not because the suite is
+wrong but because a 25-minute feedback loop stops people running it.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

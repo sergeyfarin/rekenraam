@@ -39,5 +39,14 @@ if [ "${COVERAGE:-0}" = "1" ]; then
   go test ./... -coverpkg=./... -coverprofile=coverage.out
   go tool cover -func=coverage.out | tail -1
 else
-  go test -race ./...
+  # -timeout above Go's 10m default, which is a per-*package* budget and not a
+  # considered one. internal/api is ~310 integration tests that each migrate a
+  # fresh SQLite database, already 325-way parallel, and the race detector
+  # multiplies that on a 2-4 core runner: the job measured 11m36s on 2026-08-26
+  # (8c2d7206) with the package alone just under the limit, so the next handful
+  # of tests tipped it into "panic: test timed out after 10m0s" while the tests
+  # still listed as running were 1-second auth cases. Nothing hung; the budget
+  # was simply smaller than the suite. Raising it keeps a real hang detectable
+  # while not failing the build for arithmetic.
+  go test -race -timeout 25m ./...
 fi
