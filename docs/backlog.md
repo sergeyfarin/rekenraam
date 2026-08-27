@@ -967,8 +967,10 @@ The three CI runs before it took 11m36s, 11m38s and 11m39s for the whole job,
 so the package had been sitting just under the limit for some time and one
 commit's worth of new tests tipped it.
 
-Raising the timeout to 25m unblocked CI and is the honest short-term answer —
-the suite really does cost that. What it does not do is stop the number
+Measured on 2026-08-27: the package passes in **386s (6m26s)** under `-race` on
+six cores, and exceeded 600s on the runner — CI is roughly 1.6x slower. So 25m
+is headroom rather than a cost estimate, and the number to watch is the 386s,
+not the timeout. What raising the timeout does not do is stop that number
 growing. The cheapest real fix is to stop paying for a migrated database per
 test: migrate once into a template file and copy it per test, which is a
 file copy against ~2,700 lines of DDL. `newSetupTestHandler` is the single
