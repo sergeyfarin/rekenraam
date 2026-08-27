@@ -717,3 +717,55 @@ func TestRetryBackupRunRefusesWhatCannotOrNeedNotBeRetried(t *testing.T) {
 	_, err = harness.service.RetryBackupRun(ctx, 987654)
 	require.ErrorIs(t, err, db.ErrNotFound)
 }
+
+// Pruning and the self-check are independent consequences of a verified copy.
+// Chaining them meant a backup directory that could not be tidied silently
+// skipped the ledger integrity check, while the API went on reporting a plain
+// success — "backed up nightly and provably balanced" quietly losing its second
+// half, with nothing anywhere saying so.
+func TestPruningFailureStillLeavesASelfCheckBehind(t *testing.T) {
+	harness := newBackupHarness(t)
+	ctx := context.Background()
+
+	readOnly, err := db.OpenReadOnly(ctx, harness.databaseURL)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, readOnly.Close()) })
+
+	selfCheck := NewSelfCheckService(db.NewSelfCheckRepository(harness.writer, readOnly))
+	selfCheck.SetNowForTest(func() time.Time { return harness.now })
+
+	// One completed backup, then a retention of 1, so the *next* run has
+	// something to prune.
+	first := harness.runManualBackup(t)
+	require.Equal(t, "completed", first.Status)
+	_, err = harness.service.SavePolicy(ctx, SaveBackupPolicyInput{
+		UserID: 1, Enabled: true, HourLocal: 3, MinuteLocal: 15, RetentionCount: 1,
+	})
+	require.NoError(t, err)
+
+	// The second run adopts a file already in place, so it needs no write of
+	// its own — which lets the backup directory be read-only for the whole
+	// call. Publishing succeeds; unlinking the older backup cannot.
+	harness.service.SetSelfCheck(selfCheck)
+	harness.now = harness.now.Add(24 * time.Hour)
+	second, err := harness.service.RequestBackup(ctx, 1)
+	require.NoError(t, err)
+	_, err = db.OnlineBackupSQLiteDatabase(ctx, harness.readOnly, second.TargetPath, db.OnlineBackupOptions{})
+	require.NoError(t, err)
+
+	require.NoError(t, os.Chmod(harness.directory, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(harness.directory, 0o700) })
+
+	require.NoError(t, harness.service.RunBackup(ctx, second.ID))
+
+	settled, err := harness.repository.BackupRunByID(ctx, second.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", settled.Status, "a copy that exists and verifies is still a backup")
+
+	// The point of the test: the prune failed, and the check ran anyway.
+	assert.FileExists(t, first.TargetPath, "the prune must really have been unable to unlink")
+	run, hasRun, err := selfCheck.LatestSelfCheck(ctx)
+	require.NoError(t, err)
+	require.True(t, hasRun, "an untidy backup directory is no reason to skip the integrity check")
+	assert.Equal(t, "scheduled", run.Trigger)
+}

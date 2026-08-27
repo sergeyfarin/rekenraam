@@ -420,3 +420,68 @@ func TestSealedDataDecryptsAfterRestoreWithRetainedKey(t *testing.T) {
 	_, err = otherBox.Open(samples["user_mfa_totp"])
 	require.Error(t, err, "a lost key must be loud, not silently empty")
 }
+
+// Two restores in immediate succession must leave two independent safety
+// copies. The preservation directory is named from a timestamp with one-second
+// resolution, and the pair MkdirAll + os.Rename is silently destructive: the
+// first accepts a directory that already exists, the second replaces whatever
+// sits at its destination. A second restore inside the same second therefore
+// moved the database *it* was replacing on top of the copy the first restore
+// had preserved, and the original — the one generation nobody can rebuild —
+// was gone.
+func TestConsecutiveRestoresEachKeepTheirOwnSafetyCopy(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	root := t.TempDir()
+	sourceURL := "file:" + filepath.Join(root, "source.sqlite")
+
+	source, err := db.Open(ctx, sourceURL)
+	require.NoError(t, err)
+	require.NoError(t, db.Migrate(ctx, source))
+	seedRestoreLedger(t, source)
+
+	readOnly, err := db.OpenReadOnly(ctx, sourceURL)
+	require.NoError(t, err)
+	backupPath := filepath.Join(root, "backups", "rekenraam-2026-08-24.sqlite")
+	_, err = db.OnlineBackupSQLiteDatabase(ctx, readOnly, backupPath, db.OnlineBackupOptions{})
+	require.NoError(t, err)
+	require.NoError(t, readOnly.Close())
+	require.NoError(t, source.Close())
+
+	// The live database is a *different* file from the backup, so "the original
+	// survived" is a claim about content, not just about a file existing.
+	liveDir := filepath.Join(root, "live")
+	require.NoError(t, os.MkdirAll(liveDir, 0o700))
+	livePath := filepath.Join(liveDir, "rekenraam.sqlite")
+	live, err := db.Open(ctx, "file:"+livePath)
+	require.NoError(t, err)
+	require.NoError(t, db.Migrate(ctx, live))
+	require.NoError(t, live.Close())
+	original := fingerprintLedger(t, livePath)
+	require.Zero(t, original.transactions, "the live database starts empty, unlike the backup")
+
+	first, err := db.RestoreSQLiteDatabase(ctx, backupPath, "file:"+livePath)
+	require.NoError(t, err)
+	require.NotEmpty(t, first.PreservedFiles)
+
+	// Immediately, with no sleep: the collision this guards against is the one
+	// that happens inside a single second.
+	second, err := db.RestoreSQLiteDatabase(ctx, backupPath, "file:"+livePath)
+	require.NoError(t, err)
+	require.NotEmpty(t, second.PreservedFiles)
+
+	require.NotEqual(t, first.PreservedDir, second.PreservedDir,
+		"each restore needs its own directory, or one overwrites the other's copy")
+
+	// The first generation still holds the empty original, not the restored
+	// ledger the second restore moved aside.
+	preservedOriginal := fingerprintLedger(t, filepath.Join(first.PreservedDir, "rekenraam.sqlite"))
+	assert.Zero(t, preservedOriginal.transactions,
+		"the first restore's safety copy must still be the database it replaced")
+
+	// And the second generation holds what the first restore installed.
+	preservedSecond := fingerprintLedger(t, filepath.Join(second.PreservedDir, "rekenraam.sqlite"))
+	assert.Positive(t, preservedSecond.transactions,
+		"the second restore's safety copy is the ledger the first one installed")
+}

@@ -953,12 +953,14 @@ V-7 is now written down twice: in `README.md`, where an operator reads what
 
 ### T-70 The backend race suite runs at the edge of its own timeout `[ ]`
 
-**Files:** `scripts/test-backend.sh`, `backend/internal/api/*_test.go`.
+**Files:** `scripts/test-backend.sh`, `backend/internal/api/*_test.go`,
+`backend/internal/app/*_test.go`.
 
 `internal/api` is ~310 integration tests, each migrating a fresh SQLite
-database. It is already 325-way parallel, so parallelism is not the lever left
-to pull; the cost is the databases, multiplied by the race detector, on a
-2-4 core runner.
+database, and `internal/app` is the same shape. Both are already heavily
+parallel — `internal/api` calls `t.Parallel()` 325 times — so parallelism is
+not the lever left to pull; the cost is the databases, multiplied by the race
+detector, on a 2-4 core runner.
 
 On 2026-08-27 it hit `panic: test timed out after 10m0s` — Go's default, which
 is a per-*package* budget nobody chose. Nothing had hung: the tests still listed
@@ -967,17 +969,95 @@ The three CI runs before it took 11m36s, 11m38s and 11m39s for the whole job,
 so the package had been sitting just under the limit for some time and one
 commit's worth of new tests tipped it.
 
-Measured on 2026-08-27: the package passes in **386s (6m26s)** under `-race` on
-six cores, and exceeded 600s on the runner — CI is roughly 1.6x slower. So 25m
-is headroom rather than a cost estimate, and the number to watch is the 386s,
-not the timeout. What raising the timeout does not do is stop that number
-growing. The cheapest real fix is to stop paying for a migrated database per
+Measured on 2026-08-27, six cores, `-race`. On its own `internal/api` takes
+**386s (6m26s)**. In the full `./...` run CI actually performs, where packages
+compete for cores, it takes **523s** — and `internal/app` takes **544s**, which
+makes it the *slower* of the two, so naming only `internal/api` understates the
+problem. Both were within a minute of the 600s default when it fired.
+
+So 25m is headroom rather than a cost estimate, and the numbers to watch are the
+523s and 544s, not the timeout. What raising the timeout does not do is stop
+them growing. The cheapest real fix is to stop paying for a migrated database per
 test: migrate once into a template file and copy it per test, which is a
 file copy against ~2,700 lines of DDL. `newSetupTestHandler` is the single
 place that would change.
 
 Worth doing before the next large test-adding slice, not because the suite is
 wrong but because a 25-minute feedback loop stops people running it.
+
+
+### T-71 An interrupted self-check stays `running` for ever `[ ]`
+
+**Files:** `backend/internal/app/self_check.go` (`RunSelfCheck`),
+`backend/migrations/0001_initial_schema.sql` (`self_check_runs.status`).
+
+`RunSelfCheck` writes a `running` row, then executes. Every error path after
+that — `executeChecks`, the sample marshal, `SaveSelfCheckResults` — returns
+without touching the row, so it stays `running` permanently. `LatestSelfCheckRun`
+skips it, so the Data screen goes on showing the *previous* run: a check that
+could not complete is invisible, and the screen states a verdict older than the
+attempt the user just made.
+
+The obvious patch is wrong. `status` is `running | passed | failed`, and
+`failed` in this vocabulary means a check found something — "your book does not
+balance". Writing it for an infrastructure error tells the user their ledger is
+broken when the truth is that the check could not run, which is the
+wrong-reason-message class this project has now hit five times (T-63, T-68 and
+the three the reviews record).
+
+So the fix needs its own state, `errored`, threaded through the status CHECK
+constraint, the API enum, `statusTone`/`statusLabel` on the Data screen, and six
+locale catalogs. Migrations are still rewritable before `v0.1.0`
+(migration-immutability policy), so the constraint can be edited in place with
+the BREAKING DEV DATABASE marker rather than added as a second migration.
+
+Include an error summary on the run while there: "could not run" is only
+actionable with the reason beside it.
+
+### T-72 Two-process concurrency is reasoned about, never exercised `[ ]`
+
+**Files:** `backend/internal/db/background_work.go` (`ClaimBackgroundWork`),
+`backend/internal/db/backups.go` (`CreateBackupRunWithWork`),
+`backend/internal/lockfile/`.
+
+Three defences exist for two processes sharing one database file: the claim's
+re-check of the status its SELECT chose on, the unique occurrence key, and the
+restore lock. None has a test that runs two *processes*, and one of them
+provably cannot get one in-process — the main pool is `SetMaxOpenConns(1)`
+(ADR 0004), so each claim transaction holds the single connection for its whole
+length and two SELECTs never interleave. `TestClaimHandsOneItemToOneWorker`
+says so in its own comment after the re-check was removed and it kept passing.
+
+What is needed is a test that spawns two `rekenraam` processes against one
+database file and asserts: one scheduled occurrence, no work item claimed
+twice, and a restore refused while the other holds the lock. `cmd/rekenraam`
+already has command-level tests to build on.
+
+Worth doing before anyone runs two instances deliberately — a second container
+against a shared volume is exactly the deployment this would break, and today
+nothing would catch it.
+
+### T-73 No export or self-check is measured against a large book `[ ]`
+
+**Files:** `backend/internal/app/exports_bundle.go` (`computeTrialBalance`),
+`backend/internal/app/exports.go` (account paths), `backend/internal/app/self_check.go`.
+
+`ledger.csv` streams, which is the part that matters. Around it, several
+structures are accumulated whole: the trial balance is a map of one accumulator
+set per account-and-commodity, account paths are built for every account, and
+the self-check folds every posted posting in memory. Each is bounded by the
+book's size rather than by anything chosen, and no test or benchmark states
+what "large" costs — so the first person to find the limit will be a user
+exporting their own ledger.
+
+Wanted: a generated book of a realistic upper bound (say 250k postings across a
+few thousand accounts), and a bounded assertion — peak allocation and wall time
+for a bundle export and a self-check — that fails when either regresses sharply
+rather than when either is merely slow. `testing.B` with `ReportAllocs` is
+enough; this does not need to run on every push.
+
+Related: T-70, which is about the *test suite's* runtime rather than the
+app's.
 
 ## Public-deployment security gates
 

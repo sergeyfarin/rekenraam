@@ -167,19 +167,27 @@ func (s *BackupService) RunBackup(ctx context.Context, runID int64) error {
 		return err
 	}
 
-	// Pruning failing must not fail the backup: the copy exists and is
-	// verified, which is the part that matters.
+	// Two independent best-effort steps follow a verified copy. Neither may
+	// fail the backup — the copy exists, which is the part that matters — and,
+	// just as importantly, neither may prevent the other.
+	//
+	// They used to be chained by `return nil`, so a backup directory that could
+	// not be tidied silently skipped the integrity check: "backed up nightly
+	// and provably balanced" quietly became "backed up nightly", with an API
+	// still reporting plain success. The failure was invisible twice over,
+	// because the error was swallowed rather than logged.
+	logger := slog.Default()
 	if err := s.pruneBackups(ctx); err != nil {
-		return nil
+		logger.WarnContext(ctx, "prune backups after a completed run",
+			slog.Int64("run_id", run.ID), slog.Any("err", err))
 	}
 
-	// "Backed up nightly and provably balanced" is one sentence, so the check
-	// runs where the backup does rather than waiting for someone to press a
-	// button. Its failure is not the backup's: a book that does not balance
-	// still deserves the copy that was just made of it.
+	// A book that does not balance still deserves the copy just made of it, so
+	// a failing check is not the backup's failure either.
 	if s.selfCheck != nil {
 		if _, err := s.selfCheck.RunSelfCheck(ctx, "scheduled"); err != nil {
-			return nil
+			logger.WarnContext(ctx, "scheduled self-check after a completed run",
+				slog.Int64("run_id", run.ID), slog.Any("err", err))
 		}
 	}
 	return nil

@@ -211,9 +211,9 @@ func RestoreSQLiteDatabase(ctx context.Context, backupPath string, databaseURL s
 			return result, err
 		}
 
-		preservedDir := databasePath + ".before-restore-" + time.Now().UTC().Format("20060102T150405Z")
-		if err := os.MkdirAll(preservedDir, 0o700); err != nil {
-			return result, fmt.Errorf("create pre-restore directory: %w", err)
+		preservedDir, err := createPreservedDir(databasePath)
+		if err != nil {
+			return result, err
 		}
 		result.PreservedDir = preservedDir
 
@@ -265,6 +265,37 @@ func RestoreSQLiteDatabase(ctx context.Context, backupPath string, databaseURL s
 	}
 
 	return result, nil
+}
+
+// createPreservedDir makes the directory this restore moves the previous
+// database into, and never adopts one that already exists.
+//
+// The name carries a timestamp with one-second resolution, so two restores
+// inside the same second compute the same path. MkdirAll accepts an existing
+// directory and os.Rename silently replaces its destination, so the second
+// restore would move the database *it* is replacing on top of the copy the
+// first one preserved — destroying the only remaining copy of the original,
+// inside the feature whose whole promise is that it does not. Each generation
+// gets its own directory instead.
+//
+// Failing here is safe: nothing has been moved yet, so the caller reports that
+// nothing was replaced and the database is untouched.
+func createPreservedDir(databasePath string) (string, error) {
+	base := databasePath + ".before-restore-" + time.Now().UTC().Format("20060102T150405Z")
+	for attempt := 1; attempt <= 100; attempt++ {
+		candidate := base
+		if attempt > 1 {
+			candidate = fmt.Sprintf("%s-%d", base, attempt)
+		}
+		err := os.Mkdir(candidate, 0o700)
+		if err == nil {
+			return candidate, nil
+		}
+		if !os.IsExist(err) {
+			return "", fmt.Errorf("create pre-restore directory: %w", err)
+		}
+	}
+	return "", fmt.Errorf("create pre-restore directory: %s and 99 numbered siblings already exist", base)
 }
 
 // checkpointStoppedDatabase folds a WAL back into the main file so the

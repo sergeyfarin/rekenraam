@@ -48,9 +48,10 @@ else
   # still listed as running were 1-second auth cases. Nothing hung; the budget
   # was simply smaller than the suite.
   #
-  # Measured 2026-08-27: the package passes in 386s (6m26s) under -race on six
-  # cores, and exceeded 600s on the runner — so CI is roughly 1.6x slower and
-  # 25m is headroom, not a cost estimate. If that 386s figure grows past about
-  # ten minutes locally, raising this number again is the wrong move; see T-70.
+  # Measured 2026-08-27 on six cores: in a full ./... run internal/api takes
+  # 523s and internal/app 544s, both within a minute of the 600s default that
+  # fired on CI. So 25m is headroom, not a cost estimate. If either figure grows
+  # past about ten minutes locally, raising this number again is the wrong move;
+  # see T-70.
   go test -race -timeout 25m ./...
 fi
