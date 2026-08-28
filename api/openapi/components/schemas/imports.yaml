@@ -335,6 +335,47 @@ ImportReconciliationIssue:
       items:
         type: integer
         format: int64
+ImportProfileResponse:
+  type: object
+  required: [id, name, adapter_kind, config, created_at, updated_at]
+  properties:
+    id:
+      type: integer
+      format: int64
+    name:
+      type: string
+    adapter_kind:
+      type: string
+      enum: [csv]
+    config:
+      type: string
+      description: JSON object string containing the adapter mapping.
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+ListImportProfilesResponse:
+  type: object
+  required: [profiles]
+  properties:
+    profiles:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ImportProfileResponse"
+CreateImportProfileRequest:
+  type: object
+  required: [name, adapter_kind, config]
+  properties:
+    name:
+      type: string
+    adapter_kind:
+      type: string
+      enum: [csv]
+    config:
+      type: string
+      description: JSON object string containing header mappings and locale/sign rules.
 PreviewCommitResponse:
   type: object
   required:

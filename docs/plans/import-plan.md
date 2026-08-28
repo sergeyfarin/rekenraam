@@ -8,9 +8,9 @@ Governed by `docs/product-requirements.md` (Phase 4) and `docs/roadmap.md`
 (R4–R7). Aligns with `docs/conventions.md`, `docs/early-architecture-decisions.md`,
 and the ADRs (notably ADR 0010 durable background work).
 
-Status: **Slice 1 (pipeline + QIF) shipped** (roadmap R4 — see `implemented.md`,
-Import Pipeline). Slices 2+ (CSV, profiles, XLSX/OFX/QFX, online) are planning, in
-roadmap order R5–R7. Last updated 2026-06-28.
+Status: **Slice 1 (pipeline + QIF) shipped; Slice 2 in progress** (roadmap R5 —
+see `implemented.md`, Import Pipeline). The first CSV/profile vertical cut
+shipped 2026-08-28. Last updated 2026-08-28.
 
 ---
 
@@ -391,9 +391,12 @@ R4–R7.
   into a reconciled period is skipped-with-warning unless overridden.
 
 ### Slice 2 — CSV + provider profiles (the variation engine)
-- CSV adapter + the **column-mapping profile** engine and UI (header detection,
+- ✅ First vertical cut (2026-08-28): CSV adapter + saved **column-mapping
+  profile** creation/list/reuse UI (header detection,
   date/decimal/sign config, amount-single vs debit/credit, save profile).
-- `import_profiles` CRUD; saved profiles auto-suggested by filename/headers.
+- Remaining: profile update/delete; saved profiles auto-suggested by
+  filename/headers; grouped unknown-payee resolution; roadmap R5's minimal
+  preview-time contains-match rules.
 - **Acceptance:** two different banks' CSV layouts import via two saved profiles
   with no code changes.
 

@@ -70,7 +70,7 @@ func NewImportService(
 		repository:         repository,
 		transactionService: transactionService,
 		accountRepository:  accountRepository,
-		registry:           newAdapterRegistry(&QIFAdapter{}, &Trading212Adapter{}),
+		registry:           newAdapterRegistry(&QIFAdapter{}, &CSVAdapter{}, &Trading212Adapter{}),
 		now:                time.Now,
 		connectionService:  connectionService,
 		backgroundWork:     backgroundWork,
@@ -96,11 +96,21 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 		return StartImportResult{}, ValidationError{Message: "no adapter can handle this file format"}
 	}
 
-	// Profiles are not persisted yet (R5 mapping-profile work owns that); the
-	// adapters already honor one when given it — a QIF profile's date_layout
-	// and decimal_separator override the per-file detection.
 	var profile *ImportProfile
-	// Future: load profile by input.ProfileID
+	if input.ProfileID != nil {
+		record, err := s.repository.ImportProfileByID(ctx, BookID, *input.ProfileID)
+		if err != nil {
+			if errors.Is(err, db.ErrImportProfileNotFound) {
+				return StartImportResult{}, ErrImportProfileNotFound
+			}
+			return StartImportResult{}, fmt.Errorf("load import profile: %w", err)
+		}
+		profileValue := toImportProfile(record)
+		profile = &profileValue
+		if profile.AdapterKind != adapter.Kind() {
+			return StartImportResult{}, ValidationError{Message: "import profile does not match the uploaded file format"}
+		}
+	}
 
 	parseResult, err := adapter.Parse(ctx, input.Input, profile)
 	if err != nil {
@@ -142,6 +152,47 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 		Warnings: parseResult.Warnings,
 		Meta:     parseResult.Meta,
 	}, nil
+}
+
+func (s *ImportService) ListImportProfiles(ctx context.Context) ([]ImportProfile, error) {
+	records, err := s.repository.ListImportProfiles(ctx, BookID)
+	if err != nil {
+		return nil, fmt.Errorf("list import profiles: %w", err)
+	}
+	profiles := make([]ImportProfile, 0, len(records))
+	for _, record := range records {
+		profiles = append(profiles, toImportProfile(record))
+	}
+	return profiles, nil
+}
+
+func (s *ImportService) CreateImportProfile(ctx context.Context, input CreateImportProfileInput) (ImportProfile, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	input.AdapterKind = strings.TrimSpace(input.AdapterKind)
+	if input.OwnerUserID <= 0 || input.Name == "" {
+		return ImportProfile{}, ValidationError{Message: "profile name is required"}
+	}
+	adapter, ok := s.registry.byKindName(input.AdapterKind)
+	if !ok || adapter.Kind() != "csv" {
+		return ImportProfile{}, ValidationError{Message: "only csv import profiles can be created"}
+	}
+	if err := validateCSVProfileConfig(input.ConfigJSON); err != nil {
+		return ImportProfile{}, err
+	}
+	now := s.now().UTC().Format(time.RFC3339)
+	record, err := s.repository.CreateImportProfile(ctx, db.CreateImportProfileParams{
+		BookID: BookID, Name: input.Name, AdapterKind: input.AdapterKind,
+		ConfigJSON: input.ConfigJSON, CreatedAt: now,
+		ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
+	})
+	if err != nil {
+		return ImportProfile{}, fmt.Errorf("create import profile: %w", err)
+	}
+	return toImportProfile(record), nil
+}
+
+func toImportProfile(record db.ImportProfileRecord) ImportProfile {
+	return ImportProfile{ID: record.ID, BookID: record.BookID, Name: record.Name, AdapterKind: record.AdapterKind, ConfigJSON: record.ConfigJSON, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
 }
 
 // stageParseResult takes a SourceAdapter's ParseResult and runs the

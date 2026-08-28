@@ -3,8 +3,9 @@ package app
 import "errors"
 
 var (
-	ErrImportBatchNotFound = errors.New("import batch not found")
-	ErrImportBatchNotOpen  = errors.New("import batch is not in previewing state")
+	ErrImportBatchNotFound   = errors.New("import batch not found")
+	ErrImportBatchNotOpen    = errors.New("import batch is not in previewing state")
+	ErrImportProfileNotFound = errors.New("import profile not found")
 )
 
 // ImportBatch is the service-layer representation of an import batch.
@@ -101,9 +102,21 @@ const (
 // Profile is a saved per-provider adapter configuration.
 type ImportProfile struct {
 	ID          int64
+	BookID      int64
 	Name        string
 	AdapterKind string
 	ConfigJSON  string
+	CreatedAt   string
+	UpdatedAt   string
+}
+
+type CreateImportProfileInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	Name          string
+	AdapterKind   string
+	ConfigJSON    string
 }
 
 // ImportRowResolution carries the user-chosen account/category/payee for a staged row.

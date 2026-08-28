@@ -15,6 +15,9 @@ export type ListImportBatchesResponse = components['schemas']['ListImportBatches
 export type CommitImportBatchRequest = components['schemas']['CommitImportBatchRequest'];
 export type CommitImportBatchResponse = components['schemas']['CommitImportBatchResponse'];
 export type PreviewCommitResponse = components['schemas']['PreviewCommitResponse'];
+export type ImportProfile = components['schemas']['ImportProfileResponse'];
+export type ListImportProfilesResponse = components['schemas']['ListImportProfilesResponse'];
+export type CreateImportProfileRequest = components['schemas']['CreateImportProfileRequest'];
 
 export interface RowResolutionPatch {
   row_id: number;
@@ -56,14 +59,27 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
 
 // --- Public API functions ---
 
-export async function startImport(file: File, csrfToken: string): Promise<StartImportResponse> {
+export async function startImport(file: File, csrfToken: string, profileId?: number): Promise<StartImportResponse> {
   const form = new FormData();
   form.append('file', file, file.name);
+  if (profileId) form.append('profile_id', String(profileId));
 
   return apiFetch<StartImportResponse>('/api/v1/imports', {
     method: 'POST',
     headers: { 'X-CSRF-Token': csrfToken },
     body: form
+  });
+}
+
+export async function listImportProfiles(): Promise<ListImportProfilesResponse> {
+  return apiFetch<ListImportProfilesResponse>('/api/v1/import-profiles');
+}
+
+export async function createImportProfile(request: CreateImportProfileRequest, csrfToken: string): Promise<ImportProfile> {
+  return apiFetch<ImportProfile>('/api/v1/import-profiles', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(request)
   });
 }
 
@@ -228,3 +244,4 @@ export function parseResolution(row: ImportStagedRow): ImportResolution {
 
 export const importBatchesQueryKey = ['api', 'imports'] as const;
 export const importBatchQueryKey = (batchId: number) => ['api', 'imports', batchId] as const;
+export const importProfilesQueryKey = ['api', 'import-profiles'] as const;

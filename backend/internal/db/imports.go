@@ -9,6 +9,7 @@ import (
 
 var (
 	ErrImportBatchNotFound             = errors.New("import batch not found")
+	ErrImportProfileNotFound           = errors.New("import profile not found")
 	ErrImportStagedRowAlreadyCommitted = errors.New("import staged row is already committed")
 )
 
@@ -66,6 +67,27 @@ type ImportCommitIdentityRecord struct {
 	SourceKind             string
 	AccountID              int64
 	CreatedAt              string
+}
+
+type ImportProfileRecord struct {
+	ID          int64
+	BookID      int64
+	Name        string
+	AdapterKind string
+	ConfigJSON  string
+	CreatedAt   string
+	UpdatedAt   string
+}
+
+type CreateImportProfileParams struct {
+	BookID        int64
+	Name          string
+	AdapterKind   string
+	ConfigJSON    string
+	CreatedAt     string
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
 }
 
 // --- Param types ---
@@ -152,6 +174,67 @@ type ListImportStagedRowsParams struct {
 }
 
 // --- Batch operations ---
+
+func (r *ImportRepository) ListImportProfiles(ctx context.Context, bookID int64) ([]ImportProfileRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `SELECT id, book_id, name, adapter_kind, config_json, created_at, updated_at FROM import_profiles WHERE book_id = ? ORDER BY name, id`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("list import profiles: %w", err)
+	}
+	defer rows.Close()
+	var records []ImportProfileRecord
+	for rows.Next() {
+		var record ImportProfileRecord
+		if err := rows.Scan(&record.ID, &record.BookID, &record.Name, &record.AdapterKind, &record.ConfigJSON, &record.CreatedAt, &record.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan import profile: %w", err)
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func (r *ImportRepository) ImportProfileByID(ctx context.Context, bookID, profileID int64) (ImportProfileRecord, error) {
+	var record ImportProfileRecord
+	err := r.database.QueryRowContext(ctx, `SELECT id, book_id, name, adapter_kind, config_json, created_at, updated_at FROM import_profiles WHERE book_id = ? AND id = ?`, bookID, profileID).Scan(&record.ID, &record.BookID, &record.Name, &record.AdapterKind, &record.ConfigJSON, &record.CreatedAt, &record.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ImportProfileRecord{}, ErrImportProfileNotFound
+	}
+	if err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("read import profile: %w", err)
+	}
+	return record, nil
+}
+
+func (r *ImportRepository) CreateImportProfile(ctx context.Context, params CreateImportProfileParams) (ImportProfileRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("begin create import profile: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return ImportProfileRecord{}, err
+	}
+	if _, err := insertAuditEvent(ctx, tx, AuditEventParams{BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID, OccurredAt: params.CreatedAt, RequestID: params.RequestID, OriginType: "browser_api", Operation: "import.profile.create", Reason: "import profile created"}); err != nil {
+		return ImportProfileRecord{}, err
+	}
+	result, err := tx.ExecContext(ctx, `INSERT INTO import_profiles (book_id, name, adapter_kind, config_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`, params.BookID, params.Name, params.AdapterKind, params.ConfigJSON, params.CreatedAt, params.CreatedAt)
+	if err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("insert import profile: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("read import profile id: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("commit create import profile: %w", err)
+	}
+	committed = true
+	return ImportProfileRecord{ID: id, BookID: params.BookID, Name: params.Name, AdapterKind: params.AdapterKind, ConfigJSON: params.ConfigJSON, CreatedAt: params.CreatedAt, UpdatedAt: params.CreatedAt}, nil
+}
 
 func (r *ImportRepository) CreateImportBatch(ctx context.Context, params CreateImportBatchParams) (ImportBatchRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)

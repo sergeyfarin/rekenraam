@@ -1,0 +1,54 @@
+get:
+  summary: List saved import profiles
+  responses:
+    "200":
+      description: Saved profiles
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ListImportProfilesResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+post:
+  summary: Save a CSV column-mapping profile
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CreateImportProfileRequest"
+  responses:
+    "201":
+      description: Profile saved
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ImportProfileResponse"
+    "400":
+      description: Invalid mapping
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

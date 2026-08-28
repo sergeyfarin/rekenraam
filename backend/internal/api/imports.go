@@ -118,6 +118,24 @@ type reconciliationIssueResponse struct {
 	CheckpointIDs []int64 `json:"checkpoint_ids"`
 }
 
+type importProfileResponse struct {
+	ID          int64  `json:"id"`
+	Name        string `json:"name"`
+	AdapterKind string `json:"adapter_kind"`
+	ConfigJSON  string `json:"config"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type listImportProfilesResponse struct {
+	Profiles []importProfileResponse `json:"profiles"`
+}
+type createImportProfileRequest struct {
+	Name        string `json:"name"`
+	AdapterKind string `json:"adapter_kind"`
+	ConfigJSON  string `json:"config"`
+}
+
 // --- Handlers ---
 
 func startImport(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
@@ -173,6 +191,16 @@ func startImport(logger *slog.Logger, authService *app.AuthService, importServic
 			return
 		}
 
+		var profileID *int64
+		if raw := strings.TrimSpace(r.FormValue("profile_id")); raw != "" {
+			parsed, parseErr := strconv.ParseInt(raw, 10, 64)
+			if parseErr != nil || parsed <= 0 {
+				writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "profile_id is invalid")
+				return
+			}
+			profileID = &parsed
+		}
+
 		result, err := importService.StartImport(r.Context(), app.StartImportInput{
 			OwnerUserID:   owner.ID,
 			AuthSessionID: authenticatedSessionID(r),
@@ -182,6 +210,7 @@ func startImport(logger *slog.Logger, authService *app.AuthService, importServic
 				ContentType: header.Header.Get("Content-Type"),
 				Bytes:       fileBytes,
 			},
+			ProfileID: profileID,
 		})
 		if err != nil {
 			writeImportServiceError(w, r, logger, "start import", err)
@@ -189,6 +218,44 @@ func startImport(logger *slog.Logger, authService *app.AuthService, importServic
 		}
 
 		writeJSON(w, http.StatusCreated, toStartImportResponse(result))
+	}))
+}
+
+func listImportProfiles(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		profiles, err := importService.ListImportProfiles(r.Context())
+		if err != nil {
+			writeImportServiceError(w, r, logger, "list import profiles", err)
+			return
+		}
+		response := make([]importProfileResponse, 0, len(profiles))
+		for _, profile := range profiles {
+			response = append(response, toImportProfileResponse(profile))
+		}
+		writeJSON(w, http.StatusOK, listImportProfilesResponse{Profiles: response})
+	}
+}
+
+func createImportProfile(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		var request createImportProfileRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		profile, err := importService.CreateImportProfile(r.Context(), app.CreateImportProfileInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), Name: request.Name, AdapterKind: request.AdapterKind, ConfigJSON: request.ConfigJSON})
+		if err != nil {
+			writeImportServiceError(w, r, logger, "create import profile", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, toImportProfileResponse(profile))
 	}))
 }
 
@@ -434,6 +501,8 @@ func writeImportServiceError(w http.ResponseWriter, r *http.Request, logger *slo
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import batch not found")
 	case errors.Is(err, app.ErrImportBatchNotOpen):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "import batch is not in an open state")
+	case errors.Is(err, app.ErrImportProfileNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import profile not found")
 	case errors.Is(err, app.ErrImportConnectionNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import connection not found")
 	case errors.Is(err, app.ErrImportFetchInProgress):
@@ -447,6 +516,10 @@ func writeImportServiceError(w http.ResponseWriter, r *http.Request, logger *slo
 		}
 		writeServiceInternalError(w, r, logger, op, err)
 	}
+}
+
+func toImportProfileResponse(profile app.ImportProfile) importProfileResponse {
+	return importProfileResponse{ID: profile.ID, Name: profile.Name, AdapterKind: profile.AdapterKind, ConfigJSON: profile.ConfigJSON, CreatedAt: profile.CreatedAt, UpdatedAt: profile.UpdatedAt}
 }
 
 // --- ID parsing ---

@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-24 (R3 and R3a complete, verification findings T-65 to
-T-69 closed; the reporting-currency selector is next).
+Last updated: 2026-08-28 (reporting currency and R3a complete; R5 CSV import is
+current and its first profile-backed vertical slice is shipped).
 
 ## Where things stand
 
@@ -240,9 +240,11 @@ button at 4.20:1; a clickable table row used `role="button"` with `aria-selected
 and nested buttons inside it; and `auth.spec.ts`'s need to run first was held up
 only by alphabetical luck, now stated as a project dependency.
 
-**Next initiative:** the reporting-currency selector — approved 2026-08-19, one
-reporting currency with a named valuation method, per-commodity exact totals
-staying in every response.
+**Current initiative:** R5 ordinary-bank CSV import. The first vertical cut is
+done: create and reuse a saved column mapping, preview through the existing
+pipeline, and commit through the real ledger service. Next R5 cuts are profile
+maintenance/auto-suggestion, grouped unknown-payee resolution, and minimal
+preview-time rules v1.
 
 ## Ready to start — unblocked by the 2026-08-19 decisions
 

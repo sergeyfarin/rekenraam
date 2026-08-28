@@ -165,6 +165,8 @@ paths:
     $ref: "./paths/transaction-reconciliation-impact.yaml"
   /api/v1/imports:
     $ref: "./paths/imports.yaml"
+  /api/v1/import-profiles:
+    $ref: "./paths/import-profiles.yaml"
   /api/v1/imports/{batch_id}:
     $ref: "./paths/import.yaml"
   /api/v1/imports/{batch_id}/preview-commit:
@@ -674,6 +676,12 @@ components:
       $ref: "./components/schemas/imports.yaml#/ImportReconciliationIssue"
     PreviewCommitResponse:
       $ref: "./components/schemas/imports.yaml#/PreviewCommitResponse"
+    ImportProfileResponse:
+      $ref: "./components/schemas/imports.yaml#/ImportProfileResponse"
+    ListImportProfilesResponse:
+      $ref: "./components/schemas/imports.yaml#/ListImportProfilesResponse"
+    CreateImportProfileRequest:
+      $ref: "./components/schemas/imports.yaml#/CreateImportProfileRequest"
     ImportConnectionResponse:
       $ref: "./components/schemas/import-connections.yaml#/ImportConnectionResponse"
     ListImportConnectionsResponse:

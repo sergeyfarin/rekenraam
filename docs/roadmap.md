@@ -6,8 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-08-24 (R3 and R3a complete; the reporting-currency
-selector is next).
+Last reviewed: 2026-08-28 (reporting currency and R3a complete; R5 is current,
+with its first CSV/profile vertical slice shipped).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -31,7 +31,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R3 | Portable **and protected** core data (CSV/QIF export, backups, restore, self-check) | ✅ | `docs/plans/data-portability-plan.md` |
 | R3a | Accessibility regression coverage | ✅ | this file |
 | R4 | QIF import | ✅ | `docs/implemented.md` (Import Pipeline) |
-| R5 | Ordinary-bank CSV import + profiles | ⏭ | `docs/plans/import-plan.md` |
+| R5 | Ordinary-bank CSV import + profiles | ▶ | `docs/plans/import-plan.md` |
 | R6 | Import depth (XLSX/OFX, matching, rollback) | ⏸ | `docs/plans/import-plan.md` |
 | R7 | Trading 212 online connections + lots | ✅ | `docs/plans/trading212-import-plan.md` |
 | R7a | Daily-entry convenience | ⏸ | this file |
@@ -249,11 +249,22 @@ journeys in the broader Playwright suite.
 
 </details>
 
-### Then — R5: ordinary-bank CSV import
+### Current — R5: ordinary-bank CSV import
 
 Ship CSV import plus saved mapping profiles. The user maps a bank statement once
 and can reuse that profile for the next statement. Reuse the staged review and
 commit pipeline; do not build another import path.
+
+**First vertical slice delivered 2026-08-28.** Ordinary CSV files now use a
+saved, book-scoped mapping profile for delimiter, named date/payee/memo/category/
+external-id columns, one signed amount or separate debit/credit columns, date
+layout, decimal separator, and sign inversion. The profile is created and reused
+from the upload screen; parsing feeds the existing preview/dedupe/commit path.
+The acceptance journey imports an EU semicolon/decimal-comma statement and
+reuses its saved mapping for the next file. Named backend cases also exercise a
+US debit/credit layout and reject missing or ambiguous mappings. Remaining R5:
+profile editing/deletion and header-based auto-suggestion, grouped unknown-payee
+resolution, and the deliberately small preview-time rules v1.
 
 **Done ahead of R5:** the EU import-correctness defects T-35 (QIF `MM/DD`
 parsed before `DD/MM`, profile override stubbed) and T-36 (decimal-comma

@@ -7279,6 +7279,11 @@ export interface paths {
                     "multipart/form-data": {
                         /** Format: binary */
                         file: string;
+                        /**
+                         * Format: int64
+                         * @description Required for CSV; selects a saved column-mapping profile.
+                         */
+                        profile_id?: number;
                     };
                     "application/json": components["schemas"]["StartOnlineImportRequest"];
                 };
@@ -7358,6 +7363,104 @@ export interface paths {
                 };
                 /** @description REKENRAAM_SECRET_KEY is not configured (online branch only) */
                 503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List saved import profiles */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Saved profiles */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ListImportProfilesResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Save a CSV column-mapping profile */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateImportProfileRequest"];
+                };
+            };
+            responses: {
+                /** @description Profile saved */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportProfileResponse"];
+                    };
+                };
+                /** @description Invalid mapping */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -13758,6 +13861,29 @@ export interface components {
             includable_count: number;
             duplicate_count: number;
             reconciliation_issues: components["schemas"]["ImportReconciliationIssue"][];
+        };
+        ImportProfileResponse: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @enum {string} */
+            adapter_kind: "csv";
+            /** @description JSON object string containing the adapter mapping. */
+            config: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ListImportProfilesResponse: {
+            profiles: components["schemas"]["ImportProfileResponse"][];
+        };
+        CreateImportProfileRequest: {
+            name: string;
+            /** @enum {string} */
+            adapter_kind: "csv";
+            /** @description JSON object string containing header mappings and locale/sign rules. */
+            config: string;
         };
         ImportConnectionResponse: {
             /** Format: int64 */

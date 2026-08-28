@@ -94,7 +94,7 @@ non-English locales all landed together).
 | **Slice 4a: scheduled auto-refresh (B-T212-SCHED)** | ✅ | Per-connection `auto_refresh_enabled` toggle drives `ImportService.StartScheduler`/`runDueTrading212AutoRefreshes` (`app/import_scheduler.go`) — a 24h-since-last-fetch cadence (not a fixed wall-clock time), reusing the existing manual-refresh path and its in-flight guard. Migration `0008`. |
 | **Slice 4b: investment lot import (B-T212-INVST)** | ✅ | Order fills route through `InvestmentService.Buy`/`Sell` (real lots via `import_connection_holdings`, a per-connection per-instrument holding-account mapping); dividends through `InvestmentService.Dividend`. Instrument resolution: ISIN → ticker/symbol → create (`ResolveOrCreateInstrumentForImport`), creation deferred to commit time only (`docs/plans/import-connection-accounts-plan.md`, migration `0009`: `cash_account_id` + `import_connection_holdings`). Fetcher gained `FetchOrders`/`FetchDividends` against the real, spec-verified `/equity/history/orders`/`/equity/history/dividends` endpoints, sharing one generic `fetchPaginated[T]` pagination engine with the original cash-history `Fetch`. Multi-endpoint cursor tracking: `fetch_cursor` renamed to `transactions_cursor` + new `orders_cursor`/`dividends_cursor` (migration `0010`), the worker walking three stages per logical fetch. Rows that can't resolve (no cash account, no instrument match, insufficient lots, no dividend default) fall back to the pre-4b plain-cash-row behavior unchanged. P1 follow-up 2026-07-11: order fills now retain and sort on full `filled_at` to preserve intraday buy→sell lot order (T-28), and the investment transaction, lot/disposal, import identity, and staged-row commit marker are atomic in one SQLite transaction (T-26). P2 follow-up 2026-07-12: failed or fallback investment routing compensates its never-used setup without deleting referenced history (migration `0011`, T-29); settlement accounts require active, non-system assets (T-30/T-33); and transactions/lots carry Trading 212 provider provenance (T-31). Also found and fixed while building this: a severity-1, source-agnostic bug where `EntryKind: "main"` made every single `CommitImportBatch` call fail real validation since the import feature's first commit (T-22), and a holding-account creation date defaulting to "today" instead of the trade's own date (later superseded by the genesis-date fix, T-42). |
 
-## Import Pipeline (Phase 4, Slice 1) — 🟦 Core pipeline + QIF shipped
+## Import Pipeline (Phase 4) — 🟦 QIF plus first R5 CSV/profile slice shipped
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -112,11 +112,12 @@ non-English locales all landed together).
 | Import nav link in app shell | ✅ | |
 | OpenAPI spec for import endpoints | ✅ | T-07 closed; all 7 import routes documented and frontend DTOs come from generated `schema.d.ts`. |
 | **Per-split category mapping** | ⬜ | All splits post to single category; per-split routing deferred to R6. |
-| **CSV adapter** | ⬜ | R5. |
+| **CSV adapter** | ✅ | R5 first slice, 2026-08-28: RFC 4180 parsing with comma, semicolon, or tab delimiters; named header mapping; DMY/MDY/YMD dates; exact decimal-comma/decimal-point amounts; one signed amount or debit/credit columns; optional sign inversion. It feeds the existing staged preview and real ledger commit service. |
 | **OFX/QFX adapter** | ⬜ | R6. |
 | **Import history / audit trail UI** | ⬜ | R6. |
 | **Batch rollback (void all committed rows)** | ⬜ | R6. |
-| **Import profiles (saved column/account mappings)** | ⬜ | R5. |
+| **Import profiles (saved column mappings)** | 🟦 | R5 first slice, 2026-08-28: audited book-scoped CSV profiles can be created, listed, selected on upload, and reused from the import screen. Editing/deletion and automatic header-based suggestions remain in R5. Account/category resolutions remain preview choices rather than profile defaults in this cut. |
+| **Minimal import rules v1** | ⬜ | Remaining R5: ordered contains-match rules applied visibly during preview only. |
 
 ## Reconciliation (Phase 3) — ✅ Core workflow shipped
 

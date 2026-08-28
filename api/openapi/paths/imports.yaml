@@ -49,6 +49,10 @@ post:
             file:
               type: string
               format: binary
+            profile_id:
+              type: integer
+              format: int64
+              description: Required for CSV; selects a saved column-mapping profile.
       application/json:
         schema:
           $ref: "../openapi.yaml#/components/schemas/StartOnlineImportRequest"

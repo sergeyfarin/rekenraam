@@ -105,6 +105,36 @@ func plainImportTransactionCount(t *testing.T, f *plainImportTestFixture) int {
 	return count
 }
 
+func TestCSVImportSavedProfileStagesAndCommitsThroughRealLedgerService(t *testing.T) {
+	f := newPlainImportTestFixture(t)
+	ctx := context.Background()
+	profile, err := f.importService.CreateImportProfile(ctx, CreateImportProfileInput{
+		OwnerUserID: f.ownerUserID,
+		Name:        "EU bank",
+		AdapterKind: "csv",
+		ConfigJSON:  `{"delimiter":"semicolon","date_column":"Datum","payee_column":"Omschrijving","amount_column":"Bedrag","date_layout":"DMY","decimal_separator":","}`,
+	})
+	require.NoError(t, err)
+
+	result, err := f.importService.StartImport(ctx, StartImportInput{
+		OwnerUserID: f.ownerUserID,
+		ProfileID:   &profile.ID,
+		Input:       RawInput{Filename: "bank.csv", Bytes: []byte("Datum;Omschrijving;Bedrag\n28/08/2026;Bakker;-12,34\n")},
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Rows, 1)
+	assert.Equal(t, "csv", result.Batch.SourceKind)
+	assert.Equal(t, profile.ID, *result.Batch.ProfileID)
+
+	resolutionJSON := `{"account_id":` + strconv.FormatInt(f.checkingAccountID, 10) + `,"commodity_id":` + strconv.FormatInt(f.eurCommodityID, 10) + `,"category_id":` + strconv.FormatInt(f.categoryAccountID, 10) + `}`
+	require.NoError(t, f.importService.PatchImportBatch(ctx, PatchImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: result.Batch.ID, RowResolutions: []RowResolutionPatch{{RowID: result.Rows[0].ID, DedupeStatus: "new", ResolutionJSON: resolutionJSON}}}))
+
+	committed, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: result.Batch.ID})
+	require.NoError(t, err)
+	assert.Equal(t, 1, committed.CommittedCount)
+	assert.Equal(t, 1, plainImportTransactionCount(t, f))
+}
+
 // TestCommitImportBatch_ConcurrentPlainRowCommitsKeepOneWinner mirrors
 // TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow for
 // the ordinary (non-investment) commit path: two callers racing to commit

@@ -25,11 +25,15 @@
     parseNormalized,
     parseResolution,
     parseBatchSourceMeta,
+    listImportProfiles,
+    createImportProfile,
+    importProfilesQueryKey,
     type StartImportResponse,
     type ImportStagedRow,
     type CommitImportBatchResponse,
     type ImportResolution
   } from '$lib/api/imports';
+  import { parseCSVHeader, type CSVDelimiter, type CSVProfileConfig } from '$lib/imports/csv-profile';
   import {
     listImportConnections,
     createImportConnection,
@@ -50,6 +54,23 @@
   let selectedFile = $state<File | null>(null);
   let uploading = $state(false);
   let uploadError = $state<unknown>(undefined);
+  let csvHeaders = $state<string[]>([]);
+  let csvHeaderError = $state(false);
+  let selectedProfileId = $state('');
+  let profileName = $state('');
+  let csvDelimiter = $state<CSVDelimiter>('comma');
+  let csvDateColumn = $state('');
+  let csvPayeeColumn = $state('');
+  let csvMemoColumn = $state('');
+  let csvCategoryColumn = $state('');
+  let csvExternalRefColumn = $state('');
+  let csvAmountMode = $state<'single' | 'debit_credit'>('single');
+  let csvAmountColumn = $state('');
+  let csvDebitColumn = $state('');
+  let csvCreditColumn = $state('');
+  let csvDateLayout = $state<'DMY' | 'MDY' | 'YMD'>('DMY');
+  let csvDecimalSeparator = $state<'.' | ','>(',');
+  let csvInvertAmount = $state(false);
 
   // Online import (fetching) step
   let startingOnlineConnectionId = $state<number | null>(null);
@@ -91,9 +112,68 @@
   const categories = $derived(categoriesQuery.data?.categories ?? []);
 
   // ── Upload ─────────────────────────────────────────────────────────
-  function handleFileChange(e: Event) {
+  const profilesQuery = createQuery(() => ({ queryKey: importProfilesQueryKey, queryFn: listImportProfiles, retry: false }));
+  const csvProfiles = $derived(profilesQuery.data?.profiles.filter((profile) => profile.adapter_kind === 'csv') ?? []);
+  const selectedIsCSV = $derived(selectedFile?.name.toLowerCase().endsWith('.csv') ?? false);
+  const newCSVProfileValid = $derived(
+    !selectedProfileId && profileName.trim() && csvDateColumn &&
+    (csvAmountMode === 'single' ? csvAmountColumn : csvDebitColumn && csvCreditColumn)
+  );
+
+  async function handleFileChange(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     selectedFile = input.files?.[0] ?? null;
+    uploadError = undefined;
+    csvHeaderError = false;
+    selectedProfileId = '';
+    if (!selectedFile?.name.toLowerCase().endsWith('.csv')) {
+      csvHeaders = [];
+      return;
+    }
+    try {
+      const parsed = parseCSVHeader(await selectedFile.text());
+      csvHeaders = parsed.headers;
+      csvDelimiter = parsed.delimiter;
+      csvDateColumn = parsed.headers[0] ?? '';
+      csvPayeeColumn = parsed.headers[1] ?? '';
+      csvAmountColumn = parsed.headers.at(-1) ?? '';
+    } catch {
+      csvHeaders = [];
+      csvHeaderError = true;
+    }
+  }
+
+  async function handleCSVDelimiterChange(e: Event) {
+    csvDelimiter = (e.currentTarget as HTMLSelectElement).value as CSVDelimiter;
+    if (!selectedFile) return;
+    try {
+      const parsed = parseCSVHeader(await selectedFile.text(), csvDelimiter);
+      csvHeaders = parsed.headers;
+      csvHeaderError = false;
+      csvDateColumn = parsed.headers.includes(csvDateColumn) ? csvDateColumn : (parsed.headers[0] ?? '');
+      csvPayeeColumn = parsed.headers.includes(csvPayeeColumn) ? csvPayeeColumn : (parsed.headers[1] ?? '');
+      csvAmountColumn = parsed.headers.includes(csvAmountColumn) ? csvAmountColumn : (parsed.headers.at(-1) ?? '');
+    } catch {
+      csvHeaders = [];
+      csvHeaderError = true;
+    }
+  }
+
+  function csvProfileConfig(): CSVProfileConfig {
+    return {
+      delimiter: csvDelimiter,
+      date_column: csvDateColumn,
+      payee_column: csvPayeeColumn || undefined,
+      memo_column: csvMemoColumn || undefined,
+      category_column: csvCategoryColumn || undefined,
+      external_ref_column: csvExternalRefColumn || undefined,
+      amount_column: csvAmountMode === 'single' ? csvAmountColumn : undefined,
+      debit_column: csvAmountMode === 'debit_credit' ? csvDebitColumn : undefined,
+      credit_column: csvAmountMode === 'debit_credit' ? csvCreditColumn : undefined,
+      date_layout: csvDateLayout,
+      decimal_separator: csvDecimalSeparator,
+      invert_amount: csvInvertAmount
+    };
   }
 
   async function handleUpload() {
@@ -102,7 +182,14 @@
     uploadError = undefined;
 
     try {
-      const result = await startImport(selectedFile, csrfToken);
+      let profileId = selectedProfileId ? Number(selectedProfileId) : undefined;
+      if (selectedIsCSV && !profileId) {
+        const profile = await createImportProfile({ name: profileName.trim(), adapter_kind: 'csv', config: JSON.stringify(csvProfileConfig()) }, csrfToken);
+        profileId = profile.id;
+        selectedProfileId = String(profile.id);
+        await queryClient.invalidateQueries({ queryKey: importProfilesQueryKey });
+      }
+      const result = await startImport(selectedFile, csrfToken, profileId);
       previewData = result;
       batchId = result.batch.id;
       // Initialize resolutions from existing data
@@ -459,12 +546,106 @@
           >
             <Upload size={16} aria-hidden="true" />
             {m.import_upload_choose_file()}
-            <input type="file" accept=".qif" class="sr-only" onchange={handleFileChange} />
+            <input type="file" accept=".qif,.csv,text/csv" class="sr-only" onchange={handleFileChange} />
           </label>
           <span class="ml-3 text-sm text-muted">
             {selectedFile ? selectedFile.name : m.import_upload_no_file()}
           </span>
         </div>
+
+        {#if selectedIsCSV}
+          <fieldset class="space-y-4 rounded-(--radius-control) border border-border p-4">
+            <legend class="px-1 text-sm font-semibold text-foreground">{m.import_csv_mapping_title()}</legend>
+            <p class="text-sm text-muted">{m.import_csv_mapping_copy()}</p>
+            {#if csvHeaderError}
+              <p class="text-sm text-warning">{m.import_csv_header_error()}</p>
+            {:else if profilesQuery.isLoading}
+              <p class="text-sm text-muted">{m.import_csv_profiles_loading()}</p>
+            {:else}
+              <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                {m.import_csv_saved_profile()}
+                <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={selectedProfileId}>
+                  <option value="">{m.import_csv_new_profile()}</option>
+                  {#each csvProfiles as profile (profile.id)}
+                    <option value={profile.id}>{profile.name}</option>
+                  {/each}
+                </select>
+              </label>
+
+              {#if !selectedProfileId}
+                <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                  {m.import_csv_profile_name()}
+                  <input class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={profileName} />
+                </label>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    {m.import_csv_delimiter()}
+                    <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" value={csvDelimiter} onchange={handleCSVDelimiterChange}>
+                      <option value="comma">{m.import_csv_delimiter_comma()}</option>
+                      <option value="semicolon">{m.import_csv_delimiter_semicolon()}</option>
+                      <option value="tab">{m.import_csv_delimiter_tab()}</option>
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    {m.import_csv_date_column()}
+                    <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvDateColumn}>
+                      {#each csvHeaders as header}<option value={header}>{header}</option>{/each}
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    {m.import_csv_payee_column()}
+                    <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvPayeeColumn}>
+                      <option value="">{m.import_csv_column_none()}</option>
+                      {#each csvHeaders as header}<option value={header}>{header}</option>{/each}
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    {m.import_csv_memo_column()}
+                    <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvMemoColumn}>
+                      <option value="">{m.import_csv_column_none()}</option>
+                      {#each csvHeaders as header}<option value={header}>{header}</option>{/each}
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    {m.import_csv_category_column()}
+                    <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvCategoryColumn}>
+                      <option value="">{m.import_csv_column_none()}</option>
+                      {#each csvHeaders as header}<option value={header}>{header}</option>{/each}
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    {m.import_csv_external_ref_column()}
+                    <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvExternalRefColumn}>
+                      <option value="">{m.import_csv_column_none()}</option>
+                      {#each csvHeaders as header}<option value={header}>{header}</option>{/each}
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                    {m.import_csv_amount_layout()}
+                    <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvAmountMode}>
+                      <option value="single">{m.import_csv_amount_single()}</option>
+                      <option value="debit_credit">{m.import_csv_amount_debit_credit()}</option>
+                    </select>
+                  </label>
+                  {#if csvAmountMode === 'single'}
+                    <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                      {m.import_csv_amount_column()}
+                      <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvAmountColumn}>
+                        {#each csvHeaders as header}<option value={header}>{header}</option>{/each}
+                      </select>
+                    </label>
+                  {:else}
+                    <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">{m.import_csv_debit_column()}<select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvDebitColumn}>{#each csvHeaders as header}<option value={header}>{header}</option>{/each}</select></label>
+                    <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">{m.import_csv_credit_column()}<select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvCreditColumn}>{#each csvHeaders as header}<option value={header}>{header}</option>{/each}</select></label>
+                  {/if}
+                  <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">{m.import_csv_date_layout()}<select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvDateLayout}><option value="DMY">DD/MM/YYYY</option><option value="MDY">MM/DD/YYYY</option><option value="YMD">YYYY-MM-DD</option></select></label>
+                  <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">{m.import_csv_decimal_separator()}<select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvDecimalSeparator}><option value=",">1.234,56</option><option value=".">1,234.56</option></select></label>
+                </div>
+                <label class="flex items-center gap-2 text-sm text-foreground"><input type="checkbox" bind:checked={csvInvertAmount} />{m.import_csv_invert_amount()}</label>
+              {/if}
+            {/if}
+          </fieldset>
+        {/if}
 
         <APIFormError error={uploadError} id="upload-error" />
 
@@ -472,7 +653,7 @@
           type="button"
           class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           onclick={handleUpload}
-          disabled={!selectedFile || uploading}
+          disabled={!selectedFile || uploading || (selectedIsCSV && (csvHeaderError || (!selectedProfileId && !newCSVProfileValid)))}
         >
           {uploading ? m.import_upload_submitting() : m.import_upload_submit()}
         </button>

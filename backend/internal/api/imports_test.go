@@ -292,6 +292,57 @@ func TestStartImport_MissingFileFieldRejected(t *testing.T) {
 	startMultipartImportForSession(t, handler, sessionCookie, csrfToken, false, "", nil, http.StatusBadRequest)
 }
 
+func TestCSVProfileCreateListAndUploadAcceptance(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _, _, _ := bootstrapImportAPITest(t, handler)
+
+	createBody := `{"name":"EU bank","adapter_kind":"csv","config":"{\"delimiter\":\"semicolon\",\"date_column\":\"Datum\",\"payee_column\":\"Omschrijving\",\"amount_column\":\"Bedrag\",\"date_layout\":\"DMY\",\"decimal_separator\":\",\"}"}`
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/import-profiles", strings.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(createReq)
+	createReq.AddCookie(sessionCookie)
+	createRes := httptest.NewRecorder()
+	handler.ServeHTTP(createRes, createReq)
+	require.Equal(t, http.StatusCreated, createRes.Code, createRes.Body.String())
+	var profile importProfileResponse
+	require.NoError(t, json.NewDecoder(createRes.Body).Decode(&profile))
+	assert.Equal(t, "EU bank", profile.Name)
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/import-profiles", nil)
+	listReq.AddCookie(sessionCookie)
+	listRes := httptest.NewRecorder()
+	handler.ServeHTTP(listRes, listReq)
+	require.Equal(t, http.StatusOK, listRes.Code, listRes.Body.String())
+	var listed listImportProfilesResponse
+	require.NoError(t, json.NewDecoder(listRes.Body).Decode(&listed))
+	require.Len(t, listed.Profiles, 1)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	require.NoError(t, writer.WriteField("profile_id", strconv.FormatInt(profile.ID, 10)))
+	part, err := writer.CreateFormFile("file", "statement.csv")
+	require.NoError(t, err)
+	_, err = part.Write([]byte("Datum;Omschrijving;Bedrag\n28/08/2026;Bakker;-12,34\n"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	uploadReq := httptest.NewRequest(http.MethodPost, "/api/v1/imports", &body)
+	uploadReq.Header.Set("Content-Type", writer.FormDataContentType())
+	uploadReq.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(uploadReq)
+	uploadReq.AddCookie(sessionCookie)
+	uploadRes := httptest.NewRecorder()
+	handler.ServeHTTP(uploadRes, uploadReq)
+	require.Equal(t, http.StatusCreated, uploadRes.Code, uploadRes.Body.String())
+	var started startImportResponse
+	require.NoError(t, json.NewDecoder(uploadRes.Body).Decode(&started))
+	assert.Equal(t, "csv", started.Batch.SourceKind)
+	assert.Equal(t, profile.ID, *started.Batch.ProfileID)
+	require.Len(t, started.Rows, 1)
+	assert.Contains(t, started.Rows[0].NormalizedJSON, `"amount":"-12.34"`)
+}
+
 // --- Not found ---
 
 func TestImportBatchEndpoints_UnknownBatchReturnsNotFound(t *testing.T) {
