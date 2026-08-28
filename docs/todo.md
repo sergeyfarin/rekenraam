@@ -6,7 +6,7 @@ Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-08-28 (reporting currency and R3a complete; R5 CSV import is
-current and its first profile-backed vertical slice is shipped).
+current, with profiles and grouped unknown-payee resolution shipped).
 
 ## Where things stand
 
@@ -241,9 +241,9 @@ and nested buttons inside it; and `auth.spec.ts`'s need to run first was held up
 only by alphabetical luck, now stated as a project dependency.
 
 **Current initiative:** R5 ordinary-bank CSV import. Profile creation/reuse,
-maintenance, and safe header/filename auto-suggestion now ship through the
-existing preview and ledger-commit pipeline. Next R5 cuts are grouped
-unknown-payee resolution and minimal preview-time rules v1.
+maintenance, safe header/filename auto-suggestion, and grouped unknown-payee
+resolution now ship through the existing preview and ledger-commit pipeline.
+The next R5 cut is minimal preview-time rules v1.
 
 ## Ready to start — unblocked by the 2026-08-19 decisions
 

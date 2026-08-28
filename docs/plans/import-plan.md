@@ -397,8 +397,10 @@ R4–R7.
 - ✅ Profile update/delete and safe filename/header auto-suggestion
   (2026-08-28). A uniquely best compatible profile is selected; tied matches
   remain a user choice. Deleting a profile preserves historical batches.
-- Remaining: grouped unknown-payee resolution; roadmap R5's minimal
-  preview-time contains-match rules.
+- ✅ Grouped unknown-payee resolution (2026-08-28): distinct unresolved names
+  are handled once per preview; the user links an existing fuzzy near match or
+  explicitly creates a payee, and the choice is applied to every matching row.
+- Remaining: roadmap R5's minimal preview-time contains-match rules.
 - **Acceptance:** two different banks' CSV layouts import via two saved profiles
   with no code changes.
 
@@ -464,10 +466,10 @@ import cannot ask per row, so it deliberately commits an unrecognized name as
 free text and leaves it unlinked — those transactions land in the spending
 report's "no payee recorded" group.
 
-The interim path is to open such a transaction and edit the payee, where the
-editor forces link-or-create. The improvement, when import UX is next worked on:
-group the staged rows by distinct unknown payee name and resolve each once —
-link to an existing payee (with the same fuzzy near-match search the editor
-uses) or create the record — applying the choice to every row carrying that
-name. `ImportResolution.payee_id` already exists in the API, so this is review
-UI over a contract that is already in place.
+The interim path was to open such a transaction and edit the payee, where the
+editor forces link-or-create. Shipped 2026-08-28: preview now groups staged rows
+by distinct unknown payee name and resolves each once — link to an existing
+payee (with the same fuzzy near-match search the editor uses) or explicitly
+create the record — applying the choice to every row carrying that name.
+`ImportResolution.payee_id` was already present, so this remained review UI
+over the existing contract.

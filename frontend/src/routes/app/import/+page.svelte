@@ -10,6 +10,8 @@
   import Loader from '@lucide/svelte/icons/loader-circle';
   import Panel from '$lib/components/panel.svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
+  import PayeeResolutionPanel from '$lib/imports/payee-resolution-panel.svelte';
+  import type { PayeeResponse } from '$lib/api/payees';
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { accountsQueryOptions } from '$lib/api/accounts';
   import { currenciesQueryOptions } from '$lib/api/currencies';
@@ -437,6 +439,12 @@
   function toggleExclude(row: ImportStagedRow) {
     const res = getResolution(row.id);
     updateResolution(row.id, { exclude: !res.exclude });
+  }
+
+  function resolveImportPayee(rowIDs: number[], payee: PayeeResponse) {
+    for (const rowID of rowIDs) {
+      updateResolution(rowID, { payee_id: payee.id, payee_name: payee.name });
+    }
   }
 
   function dedupeStatusLabel(status: ImportStagedRow['dedupe_status']): string {
@@ -1104,6 +1112,13 @@
         {m.import_preview_date_range({ from: previewData.meta.date_from ?? '?', to: previewData.meta.date_to ?? '?' })}
       </p>
     {/if}
+
+    <PayeeResolutionPanel
+      rows={previewData.rows}
+      resolutions={rowResolutions}
+      {csrfToken}
+      onresolve={resolveImportPayee}
+    />
 
     <!-- Global account/currency/category assignment -->
     <Panel>

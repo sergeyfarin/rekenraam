@@ -265,8 +265,10 @@ reuses its saved mapping for the next file. Named backend cases also exercise a
 US debit/credit layout and reject missing or ambiguous mappings. Profile
 editing/deletion and safe header/filename auto-suggestion followed on 2026-08-28:
 only a uniquely best compatible mapping is selected automatically, while ties
-remain explicit. Remaining R5: grouped unknown-payee resolution and the
-deliberately small preview-time rules v1.
+remain explicit. Grouped unknown-payee resolution followed the same day: one
+explicit link-or-create choice applies to every staged row carrying that name,
+with fuzzy near matches offered before a new record is created. Remaining R5:
+the deliberately small preview-time rules v1.
 
 **Done ahead of R5:** the EU import-correctness defects T-35 (QIF `MM/DD`
 parsed before `DD/MM`, profile override stubbed) and T-36 (decimal-comma
