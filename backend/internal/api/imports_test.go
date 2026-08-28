@@ -319,6 +319,19 @@ func TestCSVProfileCreateListAndUploadAcceptance(t *testing.T) {
 	require.NoError(t, json.NewDecoder(listRes.Body).Decode(&listed))
 	require.Len(t, listed.Profiles, 1)
 
+	updateBody := `{"name":"EU bank updated"}`
+	updateReq := httptest.NewRequest(http.MethodPatch, "/api/v1/import-profiles/"+strconv.FormatInt(profile.ID, 10), strings.NewReader(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateReq.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(updateReq)
+	updateReq.AddCookie(sessionCookie)
+	updateRes := httptest.NewRecorder()
+	handler.ServeHTTP(updateRes, updateReq)
+	require.Equal(t, http.StatusOK, updateRes.Code, updateRes.Body.String())
+	var updated importProfileResponse
+	require.NoError(t, json.NewDecoder(updateRes.Body).Decode(&updated))
+	assert.Equal(t, "EU bank updated", updated.Name)
+
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	require.NoError(t, writer.WriteField("profile_id", strconv.FormatInt(profile.ID, 10)))
@@ -341,6 +354,24 @@ func TestCSVProfileCreateListAndUploadAcceptance(t *testing.T) {
 	assert.Equal(t, profile.ID, *started.Batch.ProfileID)
 	require.Len(t, started.Rows, 1)
 	assert.Contains(t, started.Rows[0].NormalizedJSON, `"amount":"-12.34"`)
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/v1/import-profiles/"+strconv.FormatInt(profile.ID, 10), nil)
+	deleteReq.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(deleteReq)
+	deleteReq.AddCookie(sessionCookie)
+	deleteRes := httptest.NewRecorder()
+	handler.ServeHTTP(deleteRes, deleteReq)
+	require.Equal(t, http.StatusNoContent, deleteRes.Code, deleteRes.Body.String())
+
+	batchReq := httptest.NewRequest(http.MethodGet, "/api/v1/imports/"+strconv.FormatInt(started.Batch.ID, 10), nil)
+	batchReq.AddCookie(sessionCookie)
+	batchRes := httptest.NewRecorder()
+	handler.ServeHTTP(batchRes, batchReq)
+	require.Equal(t, http.StatusOK, batchRes.Code, batchRes.Body.String())
+	var historical getImportBatchResponse
+	require.NoError(t, json.NewDecoder(batchRes.Body).Decode(&historical))
+	assert.Nil(t, historical.Batch.ProfileID)
+	require.Len(t, historical.Rows, 1)
 }
 
 // --- Not found ---

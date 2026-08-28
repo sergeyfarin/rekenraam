@@ -27,13 +27,22 @@
     parseBatchSourceMeta,
     listImportProfiles,
     createImportProfile,
+    updateImportProfile,
+    deleteImportProfile,
     importProfilesQueryKey,
     type StartImportResponse,
     type ImportStagedRow,
     type CommitImportBatchResponse,
     type ImportResolution
   } from '$lib/api/imports';
-  import { parseCSVHeader, type CSVDelimiter, type CSVProfileConfig } from '$lib/imports/csv-profile';
+  import {
+    parseCSVHeader,
+    parseCSVProfileConfig,
+    rankCSVProfiles,
+    uniqueCSVProfileSuggestion,
+    type CSVDelimiter,
+    type CSVProfileConfig
+  } from '$lib/imports/csv-profile';
   import {
     listImportConnections,
     createImportConnection,
@@ -71,6 +80,12 @@
   let csvDateLayout = $state<'DMY' | 'MDY' | 'YMD'>('DMY');
   let csvDecimalSeparator = $state<'.' | ','>(',');
   let csvInvertAmount = $state(false);
+  let profileSelectionTouched = $state(false);
+  let editingProfileId = $state<number | null>(null);
+  let savingProfile = $state(false);
+  let deletingProfileId = $state<number | null>(null);
+  let confirmDeleteProfileId = $state<number | null>(null);
+  let profileMutationError = $state<unknown>(undefined);
 
   // Online import (fetching) step
   let startingOnlineConnectionId = $state<number | null>(null);
@@ -115,9 +130,26 @@
   const profilesQuery = createQuery(() => ({ queryKey: importProfilesQueryKey, queryFn: listImportProfiles, retry: false }));
   const csvProfiles = $derived(profilesQuery.data?.profiles.filter((profile) => profile.adapter_kind === 'csv') ?? []);
   const selectedIsCSV = $derived(selectedFile?.name.toLowerCase().endsWith('.csv') ?? false);
+  const rankedCSVProfiles = $derived(selectedFile ? rankCSVProfiles(csvProfiles, selectedFile.name, csvDelimiter, csvHeaders) : []);
+  const suggestedCSVProfile = $derived(uniqueCSVProfileSuggestion(rankedCSVProfiles));
+  const orderedCSVProfiles = $derived([
+    ...rankedCSVProfiles.map((entry) => entry.profile),
+    ...csvProfiles.filter((profile) => !rankedCSVProfiles.some((entry) => entry.profile.id === profile.id))
+  ]);
+  let autoSuggestionKey = $state('');
+  $effect(() => {
+    const key = `${selectedFile?.name ?? ''}|${csvDelimiter}|${csvHeaders.join('\u001f')}|${csvProfiles.map((profile) => `${profile.id}:${profile.updated_at}`).join(',')}`;
+    if (key !== autoSuggestionKey) {
+      autoSuggestionKey = key;
+      if (!profileSelectionTouched && suggestedCSVProfile) selectedProfileId = String(suggestedCSVProfile.id);
+    }
+  });
+  const csvMappingValid = $derived(
+    !!profileName.trim() && !!csvDateColumn &&
+    (csvAmountMode === 'single' ? !!csvAmountColumn : !!csvDebitColumn && !!csvCreditColumn)
+  );
   const newCSVProfileValid = $derived(
-    !selectedProfileId && profileName.trim() && csvDateColumn &&
-    (csvAmountMode === 'single' ? csvAmountColumn : csvDebitColumn && csvCreditColumn)
+    !selectedProfileId && csvMappingValid
   );
 
   async function handleFileChange(e: Event) {
@@ -126,6 +158,10 @@
     uploadError = undefined;
     csvHeaderError = false;
     selectedProfileId = '';
+    editingProfileId = null;
+    profileSelectionTouched = false;
+    confirmDeleteProfileId = null;
+    profileMutationError = undefined;
     if (!selectedFile?.name.toLowerCase().endsWith('.csv')) {
       csvHeaders = [];
       return;
@@ -172,8 +208,78 @@
       credit_column: csvAmountMode === 'debit_credit' ? csvCreditColumn : undefined,
       date_layout: csvDateLayout,
       decimal_separator: csvDecimalSeparator,
-      invert_amount: csvInvertAmount
+      invert_amount: csvInvertAmount,
+      source_filename: selectedFile?.name,
+      headers: csvHeaders
     };
+  }
+
+  function handleProfileSelection(e: Event) {
+    selectedProfileId = (e.currentTarget as HTMLSelectElement).value;
+    if (!selectedProfileId) profileName = '';
+    profileSelectionTouched = true;
+    editingProfileId = null;
+    confirmDeleteProfileId = null;
+    profileMutationError = undefined;
+  }
+
+  function beginProfileEdit() {
+    const profile = csvProfiles.find((candidate) => candidate.id === Number(selectedProfileId));
+    if (!profile) return;
+    const config = parseCSVProfileConfig(profile.config);
+    if (!config) return;
+    profileName = profile.name;
+    csvDelimiter = config.delimiter;
+    csvDateColumn = config.date_column;
+    csvPayeeColumn = config.payee_column ?? '';
+    csvMemoColumn = config.memo_column ?? '';
+    csvCategoryColumn = config.category_column ?? '';
+    csvExternalRefColumn = config.external_ref_column ?? '';
+    csvAmountMode = config.amount_column ? 'single' : 'debit_credit';
+    csvAmountColumn = config.amount_column ?? '';
+    csvDebitColumn = config.debit_column ?? '';
+    csvCreditColumn = config.credit_column ?? '';
+    csvDateLayout = config.date_layout;
+    csvDecimalSeparator = config.decimal_separator;
+    csvInvertAmount = config.invert_amount;
+    editingProfileId = profile.id;
+    profileSelectionTouched = true;
+    profileMutationError = undefined;
+  }
+
+  async function saveProfileEdit() {
+    if (!editingProfileId || !csvMappingValid) return;
+    savingProfile = true;
+    profileMutationError = undefined;
+    try {
+      await updateImportProfile(editingProfileId, { name: profileName.trim(), config: JSON.stringify(csvProfileConfig()) }, csrfToken);
+      await queryClient.invalidateQueries({ queryKey: importProfilesQueryKey });
+      editingProfileId = null;
+    } catch (err) {
+      profileMutationError = err;
+    } finally {
+      savingProfile = false;
+    }
+  }
+
+  async function handleDeleteProfile() {
+    const profileId = Number(selectedProfileId);
+    if (!profileId) return;
+    deletingProfileId = profileId;
+    profileMutationError = undefined;
+    try {
+      await deleteImportProfile(profileId, csrfToken);
+      selectedProfileId = '';
+      profileName = '';
+      editingProfileId = null;
+      confirmDeleteProfileId = null;
+      profileSelectionTouched = true;
+      await queryClient.invalidateQueries({ queryKey: importProfilesQueryKey });
+    } catch (err) {
+      profileMutationError = err;
+    } finally {
+      deletingProfileId = null;
+    }
   }
 
   async function handleUpload() {
@@ -561,18 +667,45 @@
               <p class="text-sm text-warning">{m.import_csv_header_error()}</p>
             {:else if profilesQuery.isLoading}
               <p class="text-sm text-muted">{m.import_csv_profiles_loading()}</p>
+            {:else if profilesQuery.isError}
+              <p class="text-sm text-warning">{m.import_csv_profiles_error()}</p>
             {:else}
-              <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
-                {m.import_csv_saved_profile()}
-                <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={selectedProfileId}>
-                  <option value="">{m.import_csv_new_profile()}</option>
-                  {#each csvProfiles as profile (profile.id)}
-                    <option value={profile.id}>{profile.name}</option>
-                  {/each}
-                </select>
-              </label>
+              {#key orderedCSVProfiles.map((profile) => `${profile.id}:${profile.updated_at}`).join(',')}
+                <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
+                  {m.import_csv_saved_profile()}
+                  <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={selectedProfileId} onchange={handleProfileSelection}>
+                    <option value="" selected={!selectedProfileId}>{m.import_csv_new_profile()}</option>
+                    {#each orderedCSVProfiles as profile (profile.id)}
+                      <option value={String(profile.id)} selected={selectedProfileId === String(profile.id)}>
+                        {suggestedCSVProfile?.id === profile.id ? m.import_csv_profile_suggested({ name: profile.name }) : profile.name}
+                      </option>
+                    {/each}
+                  </select>
+                </label>
+              {/key}
 
-              {#if !selectedProfileId}
+              {#if selectedProfileId && !editingProfileId}
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="button" class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-medium text-foreground hover:bg-control-hover" onclick={beginProfileEdit}>
+                    {m.import_csv_profile_edit()}
+                  </button>
+                  {#if confirmDeleteProfileId === Number(selectedProfileId)}
+                    <span class="text-sm text-muted">{m.import_csv_profile_delete_confirm()}</span>
+                    <button type="button" class="text-sm text-muted hover:text-foreground" onclick={() => { confirmDeleteProfileId = null; profileMutationError = undefined; }}>
+                      {m.import_csv_profile_delete_cancel()}
+                    </button>
+                    <button type="button" class="rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background disabled:opacity-60" onclick={handleDeleteProfile} disabled={deletingProfileId === Number(selectedProfileId)}>
+                      {m.import_csv_profile_delete_confirm_button()}
+                    </button>
+                  {:else}
+                    <button type="button" class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-medium text-muted hover:bg-control-hover hover:text-foreground" onclick={() => { confirmDeleteProfileId = Number(selectedProfileId); profileMutationError = undefined; }}>
+                      {m.import_csv_profile_delete()}
+                    </button>
+                  {/if}
+                </div>
+              {/if}
+
+              {#if !selectedProfileId || editingProfileId}
                 <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">
                   {m.import_csv_profile_name()}
                   <input class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={profileName} />
@@ -642,7 +775,18 @@
                   <label class="flex flex-col gap-1.5 text-xs font-medium text-muted">{m.import_csv_decimal_separator()}<select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" bind:value={csvDecimalSeparator}><option value=",">1.234,56</option><option value=".">1,234.56</option></select></label>
                 </div>
                 <label class="flex items-center gap-2 text-sm text-foreground"><input type="checkbox" bind:checked={csvInvertAmount} />{m.import_csv_invert_amount()}</label>
+                {#if editingProfileId}
+                  <div class="flex items-center gap-3">
+                    <button type="button" class="rounded-(--radius-control) bg-foreground px-3 py-2 text-sm font-semibold text-background disabled:opacity-60" onclick={saveProfileEdit} disabled={savingProfile || !csvMappingValid}>
+                      {savingProfile ? m.import_csv_profile_saving() : m.import_csv_profile_save()}
+                    </button>
+                    <button type="button" class="text-sm text-muted hover:text-foreground" onclick={() => { editingProfileId = null; profileMutationError = undefined; }}>
+                      {m.import_csv_profile_edit_cancel()}
+                    </button>
+                  </div>
+                {/if}
               {/if}
+              <APIFormError error={profileMutationError} id="profile-error" />
             {/if}
           </fieldset>
         {/if}
@@ -653,7 +797,7 @@
           type="button"
           class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           onclick={handleUpload}
-          disabled={!selectedFile || uploading || (selectedIsCSV && (csvHeaderError || (!selectedProfileId && !newCSVProfileValid)))}
+          disabled={!selectedFile || uploading || editingProfileId !== null || (selectedIsCSV && (csvHeaderError || (!selectedProfileId && !newCSVProfileValid)))}
         >
           {uploading ? m.import_upload_submitting() : m.import_upload_submit()}
         </button>

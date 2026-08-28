@@ -90,6 +90,26 @@ type CreateImportProfileParams struct {
 	RequestID     string
 }
 
+type UpdateImportProfileParams struct {
+	BookID        int64
+	ProfileID     int64
+	Name          *string
+	ConfigJSON    *string
+	UpdatedAt     string
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+}
+
+type DeleteImportProfileParams struct {
+	BookID        int64
+	ProfileID     int64
+	DeletedAt     string
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+}
+
 // --- Param types ---
 
 type CreateImportBatchParams struct {
@@ -234,6 +254,77 @@ func (r *ImportRepository) CreateImportProfile(ctx context.Context, params Creat
 	}
 	committed = true
 	return ImportProfileRecord{ID: id, BookID: params.BookID, Name: params.Name, AdapterKind: params.AdapterKind, ConfigJSON: params.ConfigJSON, CreatedAt: params.CreatedAt, UpdatedAt: params.CreatedAt}, nil
+}
+
+func (r *ImportRepository) UpdateImportProfile(ctx context.Context, params UpdateImportProfileParams) (ImportProfileRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("begin update import profile: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return ImportProfileRecord{}, err
+	}
+	var record ImportProfileRecord
+	err = tx.QueryRowContext(ctx, `SELECT id, book_id, name, adapter_kind, config_json, created_at, updated_at FROM import_profiles WHERE book_id = ? AND id = ?`, params.BookID, params.ProfileID).Scan(&record.ID, &record.BookID, &record.Name, &record.AdapterKind, &record.ConfigJSON, &record.CreatedAt, &record.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ImportProfileRecord{}, ErrImportProfileNotFound
+	}
+	if err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("read import profile for update: %w", err)
+	}
+	if _, err := insertAuditEvent(ctx, tx, AuditEventParams{BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID, OccurredAt: params.UpdatedAt, RequestID: params.RequestID, OriginType: "browser_api", Operation: "import.profile.update", Reason: "import profile updated", MetadataJSON: fmt.Sprintf(`{"profile_id":%d}`, params.ProfileID)}); err != nil {
+		return ImportProfileRecord{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE import_profiles SET name = COALESCE(?, name), config_json = COALESCE(?, config_json), updated_at = ? WHERE book_id = ? AND id = ?`, params.Name, params.ConfigJSON, params.UpdatedAt, params.BookID, params.ProfileID); err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("update import profile: %w", err)
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT id, book_id, name, adapter_kind, config_json, created_at, updated_at FROM import_profiles WHERE book_id = ? AND id = ?`, params.BookID, params.ProfileID).Scan(&record.ID, &record.BookID, &record.Name, &record.AdapterKind, &record.ConfigJSON, &record.CreatedAt, &record.UpdatedAt); err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("read updated import profile: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return ImportProfileRecord{}, fmt.Errorf("commit update import profile: %w", err)
+	}
+	committed = true
+	return record, nil
+}
+
+func (r *ImportRepository) DeleteImportProfile(ctx context.Context, params DeleteImportProfileParams) error {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete import profile: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return err
+	}
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM import_profiles WHERE book_id = ? AND id = ?`, params.BookID, params.ProfileID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+		return ErrImportProfileNotFound
+	} else if err != nil {
+		return fmt.Errorf("read import profile for delete: %w", err)
+	}
+	if _, err := insertAuditEvent(ctx, tx, AuditEventParams{BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID, OccurredAt: params.DeletedAt, RequestID: params.RequestID, OriginType: "browser_api", Operation: "import.profile.delete", Reason: "import profile deleted", MetadataJSON: fmt.Sprintf(`{"profile_id":%d}`, params.ProfileID)}); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM import_profiles WHERE book_id = ? AND id = ?`, params.BookID, params.ProfileID); err != nil {
+		return fmt.Errorf("delete import profile: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete import profile: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 func (r *ImportRepository) CreateImportBatch(ctx context.Context, params CreateImportBatchParams) (ImportBatchRecord, error) {

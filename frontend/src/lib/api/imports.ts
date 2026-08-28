@@ -18,6 +18,7 @@ export type PreviewCommitResponse = components['schemas']['PreviewCommitResponse
 export type ImportProfile = components['schemas']['ImportProfileResponse'];
 export type ListImportProfilesResponse = components['schemas']['ListImportProfilesResponse'];
 export type CreateImportProfileRequest = components['schemas']['CreateImportProfileRequest'];
+export type UpdateImportProfileRequest = components['schemas']['UpdateImportProfileRequest'];
 
 export interface RowResolutionPatch {
   row_id: number;
@@ -80,6 +81,25 @@ export async function createImportProfile(request: CreateImportProfileRequest, c
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: JSON.stringify(request)
+  });
+}
+
+export async function updateImportProfile(
+  profileId: number,
+  request: UpdateImportProfileRequest,
+  csrfToken: string
+): Promise<ImportProfile> {
+  return apiFetch<ImportProfile>(`/api/v1/import-profiles/${profileId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(request)
+  });
+}
+
+export async function deleteImportProfile(profileId: number, csrfToken: string): Promise<void> {
+  await apiFetch<void>(`/api/v1/import-profiles/${profileId}`, {
+    method: 'DELETE',
+    headers: { 'X-CSRF-Token': csrfToken }
   });
 }
 

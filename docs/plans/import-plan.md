@@ -394,8 +394,10 @@ R4–R7.
 - ✅ First vertical cut (2026-08-28): CSV adapter + saved **column-mapping
   profile** creation/list/reuse UI (header detection,
   date/decimal/sign config, amount-single vs debit/credit, save profile).
-- Remaining: profile update/delete; saved profiles auto-suggested by
-  filename/headers; grouped unknown-payee resolution; roadmap R5's minimal
+- ✅ Profile update/delete and safe filename/header auto-suggestion
+  (2026-08-28). A uniquely best compatible profile is selected; tied matches
+  remain a user choice. Deleting a profile preserves historical batches.
+- Remaining: grouped unknown-payee resolution; roadmap R5's minimal
   preview-time contains-match rules.
 - **Acceptance:** two different banks' CSV layouts import via two saved profiles
   with no code changes.

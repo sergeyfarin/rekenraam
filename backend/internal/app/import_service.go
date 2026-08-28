@@ -191,6 +191,67 @@ func (s *ImportService) CreateImportProfile(ctx context.Context, input CreateImp
 	return toImportProfile(record), nil
 }
 
+func (s *ImportService) UpdateImportProfile(ctx context.Context, input UpdateImportProfileInput) (ImportProfile, error) {
+	if input.OwnerUserID <= 0 || input.ProfileID <= 0 || (input.Name == nil && input.ConfigJSON == nil) {
+		return ImportProfile{}, ValidationError{Message: "profile update must include a name or config"}
+	}
+	existing, err := s.repository.ImportProfileByID(ctx, BookID, input.ProfileID)
+	if errors.Is(err, db.ErrImportProfileNotFound) {
+		return ImportProfile{}, ErrImportProfileNotFound
+	}
+	if err != nil {
+		return ImportProfile{}, fmt.Errorf("load import profile for update: %w", err)
+	}
+	var name *string
+	if input.Name != nil {
+		trimmedName := strings.TrimSpace(*input.Name)
+		if trimmedName == "" {
+			return ImportProfile{}, ValidationError{Message: "profile name is required"}
+		}
+		name = &trimmedName
+	}
+	var configJSON *string
+	if input.ConfigJSON != nil {
+		if existing.AdapterKind != "csv" {
+			return ImportProfile{}, ValidationError{Message: "only csv import profiles can be updated"}
+		}
+		if err := validateCSVProfileConfig(*input.ConfigJSON); err != nil {
+			return ImportProfile{}, err
+		}
+		configJSON = input.ConfigJSON
+	}
+	now := s.now().UTC().Format(time.RFC3339)
+	record, err := s.repository.UpdateImportProfile(ctx, db.UpdateImportProfileParams{
+		BookID: BookID, ProfileID: input.ProfileID, Name: name, ConfigJSON: configJSON, UpdatedAt: now,
+		ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
+	})
+	if errors.Is(err, db.ErrImportProfileNotFound) {
+		return ImportProfile{}, ErrImportProfileNotFound
+	}
+	if err != nil {
+		return ImportProfile{}, fmt.Errorf("update import profile: %w", err)
+	}
+	return toImportProfile(record), nil
+}
+
+func (s *ImportService) DeleteImportProfile(ctx context.Context, input DeleteImportProfileInput) error {
+	if input.OwnerUserID <= 0 || input.ProfileID <= 0 {
+		return ValidationError{Message: "profile_id is invalid"}
+	}
+	now := s.now().UTC().Format(time.RFC3339)
+	err := s.repository.DeleteImportProfile(ctx, db.DeleteImportProfileParams{
+		BookID: BookID, ProfileID: input.ProfileID, DeletedAt: now,
+		ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
+	})
+	if errors.Is(err, db.ErrImportProfileNotFound) {
+		return ErrImportProfileNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("delete import profile: %w", err)
+	}
+	return nil
+}
+
 func toImportProfile(record db.ImportProfileRecord) ImportProfile {
 	return ImportProfile{ID: record.ID, BookID: record.BookID, Name: record.Name, AdapterKind: record.AdapterKind, ConfigJSON: record.ConfigJSON, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
 }

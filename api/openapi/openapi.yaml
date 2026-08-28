@@ -167,6 +167,8 @@ paths:
     $ref: "./paths/imports.yaml"
   /api/v1/import-profiles:
     $ref: "./paths/import-profiles.yaml"
+  /api/v1/import-profiles/{profile_id}:
+    $ref: "./paths/import-profile.yaml"
   /api/v1/imports/{batch_id}:
     $ref: "./paths/import.yaml"
   /api/v1/imports/{batch_id}/preview-commit:
@@ -682,6 +684,8 @@ components:
       $ref: "./components/schemas/imports.yaml#/ListImportProfilesResponse"
     CreateImportProfileRequest:
       $ref: "./components/schemas/imports.yaml#/CreateImportProfileRequest"
+    UpdateImportProfileRequest:
+      $ref: "./components/schemas/imports.yaml#/UpdateImportProfileRequest"
     ImportConnectionResponse:
       $ref: "./components/schemas/import-connections.yaml#/ImportConnectionResponse"
     ListImportConnectionsResponse:

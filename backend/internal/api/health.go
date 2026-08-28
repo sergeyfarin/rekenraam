@@ -198,6 +198,8 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/imports/{batch_id}/discard", discardImportBatch(logger, services.Auth, services.Import, options))
 	mux.HandleFunc("GET /api/v1/import-profiles", listImportProfiles(logger, services.Auth, services.Import))
 	mux.HandleFunc("POST /api/v1/import-profiles", createImportProfile(logger, services.Auth, services.Import, options))
+	mux.HandleFunc("PATCH /api/v1/import-profiles/{profile_id}", updateImportProfile(logger, services.Auth, services.Import, options))
+	mux.HandleFunc("DELETE /api/v1/import-profiles/{profile_id}", deleteImportProfile(logger, services.Auth, services.Import, options))
 
 	if services.ImportConnection != nil {
 		mux.HandleFunc("GET /api/v1/import-connections", listImportConnections(logger, services.Auth, services.ImportConnection))

@@ -240,11 +240,10 @@ button at 4.20:1; a clickable table row used `role="button"` with `aria-selected
 and nested buttons inside it; and `auth.spec.ts`'s need to run first was held up
 only by alphabetical luck, now stated as a project dependency.
 
-**Current initiative:** R5 ordinary-bank CSV import. The first vertical cut is
-done: create and reuse a saved column mapping, preview through the existing
-pipeline, and commit through the real ledger service. Next R5 cuts are profile
-maintenance/auto-suggestion, grouped unknown-payee resolution, and minimal
-preview-time rules v1.
+**Current initiative:** R5 ordinary-bank CSV import. Profile creation/reuse,
+maintenance, and safe header/filename auto-suggestion now ship through the
+existing preview and ledger-commit pipeline. Next R5 cuts are grouped
+unknown-payee resolution and minimal preview-time rules v1.
 
 ## Ready to start — unblocked by the 2026-08-19 decisions
 

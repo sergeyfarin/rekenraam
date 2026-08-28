@@ -135,6 +135,10 @@ type createImportProfileRequest struct {
 	AdapterKind string `json:"adapter_kind"`
 	ConfigJSON  string `json:"config"`
 }
+type updateImportProfileRequest struct {
+	Name       *string `json:"name"`
+	ConfigJSON *string `json:"config"`
+}
 
 // --- Handlers ---
 
@@ -256,6 +260,48 @@ func createImportProfile(logger *slog.Logger, authService *app.AuthService, impo
 			return
 		}
 		writeJSON(w, http.StatusCreated, toImportProfileResponse(profile))
+	}))
+}
+
+func updateImportProfile(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		profileID, ok := readImportProfileID(w, r)
+		if !ok {
+			return
+		}
+		var request updateImportProfileRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		profile, err := importService.UpdateImportProfile(r.Context(), app.UpdateImportProfileInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), ProfileID: profileID, Name: request.Name, ConfigJSON: request.ConfigJSON})
+		if err != nil {
+			writeImportServiceError(w, r, logger, "update import profile", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toImportProfileResponse(profile))
+	}))
+}
+
+func deleteImportProfile(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		profileID, ok := readImportProfileID(w, r)
+		if !ok {
+			return
+		}
+		if err := importService.DeleteImportProfile(r.Context(), app.DeleteImportProfileInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), ProfileID: profileID}); err != nil {
+			writeImportServiceError(w, r, logger, "delete import profile", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	}))
 }
 
@@ -529,6 +575,16 @@ func readImportBatchID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "batch_id is invalid")
+		return 0, false
+	}
+	return id, true
+}
+
+func readImportProfileID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := r.PathValue("profile_id")
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "profile_id is invalid")
 		return 0, false
 	}
 	return id, true

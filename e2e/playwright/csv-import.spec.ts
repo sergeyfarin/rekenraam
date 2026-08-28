@@ -7,7 +7,7 @@ function todayDMY(): string {
   return `${day}/${month}/${year}`;
 }
 
-test('[acceptance] a bank CSV mapping is saved and reused for the next statement', async ({ page }) => {
+test('[acceptance] a bank CSV mapping is saved, suggested, edited, and reused', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
   const account = await createCashAccount(page, csrfToken, `CSV bank ${suffix}`, currencyID);
@@ -36,7 +36,12 @@ test('[acceptance] a bank CSV mapping is saved and reused for the next statement
     mimeType: 'text/csv',
     buffer: Buffer.from(`Datum;Omschrijving;Bedrag\n${todayDMY()};Slager;-8,90\n`)
   });
-  await page.getByLabel('Saved mapping').selectOption({ label: profileName });
+  const profileSelect = page.getByLabel('Saved mapping');
+  await expect.poll(() => profileSelect.evaluate((select: HTMLSelectElement) => select.selectedOptions[0]?.textContent?.trim())).toBe(`${profileName} — suggested`);
+  await page.getByRole('button', { name: 'Edit mapping' }).click();
+  await page.getByLabel('Mapping name').fill(`${profileName} updated`);
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect.poll(() => profileSelect.evaluate((select: HTMLSelectElement) => select.selectedOptions[0]?.textContent?.trim())).toBe(`${profileName} updated — suggested`);
   await page.getByRole('button', { name: 'Upload & preview' }).click();
   await expect(page.getByText('-8.90')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeVisible();

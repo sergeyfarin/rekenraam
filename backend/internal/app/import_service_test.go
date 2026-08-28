@@ -135,6 +135,58 @@ func TestCSVImportSavedProfileStagesAndCommitsThroughRealLedgerService(t *testin
 	assert.Equal(t, 1, plainImportTransactionCount(t, f))
 }
 
+func TestImportProfileUpdateAndDeletePreserveHistoricalBatch(t *testing.T) {
+	f := newPlainImportTestFixture(t)
+	ctx := context.Background()
+	profile, err := f.importService.CreateImportProfile(ctx, CreateImportProfileInput{
+		OwnerUserID: f.ownerUserID,
+		Name:        "Old name",
+		AdapterKind: "csv",
+		ConfigJSON:  `{"delimiter":"comma","date_column":"Date","amount_column":"Amount","date_layout":"YMD","decimal_separator":"."}`,
+	})
+	require.NoError(t, err)
+	result, err := f.importService.StartImport(ctx, StartImportInput{
+		OwnerUserID: f.ownerUserID,
+		ProfileID:   &profile.ID,
+		Input:       RawInput{Filename: "bank.csv", Bytes: []byte("Date,Amount\n2026-08-28,-12.34\n")},
+	})
+	require.NoError(t, err)
+
+	newName := "Current bank"
+	newConfig := `{"delimiter":"comma","date_column":"Booked","amount_column":"Value","date_layout":"YMD","decimal_separator":".","source_filename":"bank.csv","headers":["Booked","Value"]}`
+	updated, err := f.importService.UpdateImportProfile(ctx, UpdateImportProfileInput{
+		OwnerUserID: f.ownerUserID,
+		ProfileID:   profile.ID,
+		Name:        &newName,
+		ConfigJSON:  &newConfig,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, newName, updated.Name)
+	assert.Equal(t, newConfig, updated.ConfigJSON)
+
+	require.NoError(t, f.importService.DeleteImportProfile(ctx, DeleteImportProfileInput{OwnerUserID: f.ownerUserID, ProfileID: profile.ID}))
+	_, err = f.importService.UpdateImportProfile(ctx, UpdateImportProfileInput{OwnerUserID: f.ownerUserID, ProfileID: profile.ID, Name: &newName})
+	assert.ErrorIs(t, err, ErrImportProfileNotFound)
+
+	batch, err := f.importRepo.ImportBatchByID(ctx, BookID, result.Batch.ID)
+	require.NoError(t, err)
+	assert.False(t, batch.ProfileID.Valid)
+	require.Len(t, result.Rows, 1)
+	assert.Equal(t, "previewing", batch.Status)
+}
+
+func TestUpdateImportProfileOmittedConfigPreservesMapping(t *testing.T) {
+	f := newPlainImportTestFixture(t)
+	ctx := context.Background()
+	originalConfig := `{"delimiter":"semicolon","date_column":"Datum","amount_column":"Bedrag","date_layout":"DMY","decimal_separator":","}`
+	profile, err := f.importService.CreateImportProfile(ctx, CreateImportProfileInput{OwnerUserID: f.ownerUserID, Name: "Bank", AdapterKind: "csv", ConfigJSON: originalConfig})
+	require.NoError(t, err)
+	newName := "Renamed bank"
+	updated, err := f.importService.UpdateImportProfile(ctx, UpdateImportProfileInput{OwnerUserID: f.ownerUserID, ProfileID: profile.ID, Name: &newName})
+	require.NoError(t, err)
+	assert.Equal(t, originalConfig, updated.ConfigJSON)
+}
+
 // TestCommitImportBatch_ConcurrentPlainRowCommitsKeepOneWinner mirrors
 // TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow for
 // the ordinary (non-investment) commit path: two callers racing to commit

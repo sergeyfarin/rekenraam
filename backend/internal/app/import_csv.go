@@ -28,18 +28,20 @@ func (a *CSVAdapter) Detect(input RawInput) Confidence {
 }
 
 type csvProfileConfig struct {
-	Delimiter         string `json:"delimiter"`
-	DateColumn        string `json:"date_column"`
-	PayeeColumn       string `json:"payee_column"`
-	MemoColumn        string `json:"memo_column"`
-	CategoryColumn    string `json:"category_column"`
-	ExternalRefColumn string `json:"external_ref_column"`
-	AmountColumn      string `json:"amount_column"`
-	DebitColumn       string `json:"debit_column"`
-	CreditColumn      string `json:"credit_column"`
-	DateLayout        string `json:"date_layout"`
-	DecimalSeparator  string `json:"decimal_separator"`
-	InvertAmount      bool   `json:"invert_amount"`
+	Delimiter         string   `json:"delimiter"`
+	DateColumn        string   `json:"date_column"`
+	PayeeColumn       string   `json:"payee_column"`
+	MemoColumn        string   `json:"memo_column"`
+	CategoryColumn    string   `json:"category_column"`
+	ExternalRefColumn string   `json:"external_ref_column"`
+	AmountColumn      string   `json:"amount_column"`
+	DebitColumn       string   `json:"debit_column"`
+	CreditColumn      string   `json:"credit_column"`
+	DateLayout        string   `json:"date_layout"`
+	DecimalSeparator  string   `json:"decimal_separator"`
+	InvertAmount      bool     `json:"invert_amount"`
+	SourceFilename    string   `json:"source_filename"`
+	Headers           []string `json:"headers"`
 }
 
 func validateCSVProfileConfig(raw string) error {
@@ -56,6 +58,15 @@ func parseCSVProfileConfig(raw string) (csvProfileConfig, error) {
 	config.AmountColumn = strings.TrimSpace(config.AmountColumn)
 	config.DebitColumn = strings.TrimSpace(config.DebitColumn)
 	config.CreditColumn = strings.TrimSpace(config.CreditColumn)
+	config.SourceFilename = strings.TrimSpace(config.SourceFilename)
+	seenHeaders := make(map[string]bool, len(config.Headers))
+	for index, header := range config.Headers {
+		config.Headers[index] = strings.TrimSpace(header)
+		if config.Headers[index] == "" || seenHeaders[config.Headers[index]] {
+			return config, ValidationError{Message: "csv profile matching headers must be unique and non-empty"}
+		}
+		seenHeaders[config.Headers[index]] = true
+	}
 	if config.DateColumn == "" {
 		return config, ValidationError{Message: "csv profile date_column is required"}
 	}

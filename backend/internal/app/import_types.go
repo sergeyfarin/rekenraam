@@ -119,6 +119,22 @@ type CreateImportProfileInput struct {
 	ConfigJSON    string
 }
 
+type UpdateImportProfileInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	ProfileID     int64
+	Name          *string
+	ConfigJSON    *string
+}
+
+type DeleteImportProfileInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	ProfileID     int64
+}
+
 // ImportRowResolution carries the user-chosen account/category/payee for a staged row.
 type ImportRowResolution struct {
 	AccountID         int64  `json:"account_id,omitempty"`

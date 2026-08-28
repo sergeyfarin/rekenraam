@@ -376,6 +376,15 @@ CreateImportProfileRequest:
     config:
       type: string
       description: JSON object string containing header mappings and locale/sign rules.
+UpdateImportProfileRequest:
+  type: object
+  minProperties: 1
+  properties:
+    name:
+      type: string
+    config:
+      type: string
+      description: JSON object string containing header mappings, matching hints, and locale/sign rules.
 PreviewCommitResponse:
   type: object
   required:
