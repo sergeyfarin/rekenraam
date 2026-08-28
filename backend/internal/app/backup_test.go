@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/testdb"
 )
 
 type backupHarness struct {
@@ -33,12 +34,7 @@ func newBackupHarness(t *testing.T) *backupHarness {
 
 	ctx := context.Background()
 	root := t.TempDir()
-	databaseURL := "file:" + filepath.Join(root, "rekenraam.sqlite")
-
-	writer, err := db.Open(ctx, databaseURL)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, writer.Close()) })
-	require.NoError(t, db.Migrate(ctx, writer))
+	writer, databaseURL := testdb.Open(t)
 
 	seedBackupBook(t, writer)
 

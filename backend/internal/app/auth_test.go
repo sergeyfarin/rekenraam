@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"io"
 	"log/slog"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/testdb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -87,10 +87,7 @@ func TestCleanupExpiredAndRevokedSessionsDeletesOnlyInactiveRows(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	database, err := db.Open(ctx, "file:"+filepath.Join(t.TempDir(), "test.sqlite"))
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, database.Close()) })
-	require.NoError(t, db.Migrate(ctx, database))
+	database, _ := testdb.Open(t)
 
 	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
 	insertedAt := now.Add(-time.Hour).Format(time.RFC3339)
@@ -98,7 +95,7 @@ func TestCleanupExpiredAndRevokedSessionsDeletesOnlyInactiveRows(t *testing.T) {
 	activeExpiresAt := now.Add(time.Hour).Format(time.RFC3339)
 	revokedAt := now.Add(-30 * time.Minute).Format(time.RFC3339)
 
-	_, err = database.ExecContext(ctx, `
+	_, err := database.ExecContext(ctx, `
 		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
 		VALUES (1, 'owner', 'hash', 1, ?, ?)
 	`, insertedAt, insertedAt)
@@ -134,10 +131,7 @@ func TestCleanupExpiredAndRevokedSessionsDeletesOnlyInactiveRows(t *testing.T) {
 func newAuthEventTestService(t *testing.T, now time.Time) (*sql.DB, *AuthService) {
 	t.Helper()
 	ctx := context.Background()
-	database, err := db.Open(ctx, "file:"+filepath.Join(t.TempDir(), "test.sqlite"))
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, database.Close()) })
-	require.NoError(t, db.Migrate(ctx, database))
+	database, _ := testdb.Open(t)
 
 	passwordHash, err := hashPassword("correct-horse-battery")
 	require.NoError(t, err)

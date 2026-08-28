@@ -422,6 +422,12 @@ with it.
 ## Testing Conventions
 
 - Backend behavior gets Go tests.
+- Backend integration fixtures use `backend/internal/testdb.Open`: it migrates
+  one template per Go test process and copies that closed database into each
+  test's temporary directory. Tests still receive isolated files opened through
+  `db.Open`, including its production PRAGMA and permission checks. Tests whose
+  subject is migration, restore, or fresh-database startup behavior must keep
+  constructing and migrating their own database instead of using the template.
 - Use **`testify`** (`testify/assert` for non-fatal checks, `testify/require` for fatal checks) in all Go tests. Do not write verbose `if got != want` assertion blocks.
 - Frontend logic gets Svelte checks and focused component or unit tests when introduced.
 - Bruno covers important API workflows.

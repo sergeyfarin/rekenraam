@@ -951,7 +951,7 @@ V-7 is now written down twice: in `README.md`, where an operator reads what
 "nightly" does not cover, and beside the scheduler's own skip check.
 
 
-### T-70 The backend race suite runs at the edge of its own timeout `[ ]`
+### T-70 The backend race suite runs at the edge of its own timeout `[x]`
 
 **Files:** `scripts/test-backend.sh`, `backend/internal/api/*_test.go`,
 `backend/internal/app/*_test.go`.
@@ -984,6 +984,24 @@ place that would change.
 
 Worth doing before the next large test-adding slice, not because the suite is
 wrong but because a 25-minute feedback loop stops people running it.
+
+**Done 2026-08-28.** `backend/internal/testdb` now migrates one SQLite template
+per Go test process, snapshots it only after the writer closes, and copies it
+into each ordinary integration test's own temporary directory. The copied file
+still opens through `db.Open`, so production connection PRAGMAs, permission
+enforcement, and per-test isolation remain exercised. Migration, restore, and
+fresh-start tests deliberately retain direct `db.Migrate` calls.
+
+`TestOpenReturnsIndependentMigratedCopies` proves both that a copy contains the
+applied schema and that a schema mutation in one test database cannot appear in
+another. On the same local non-race command used immediately before and after
+the change (`go test -count=1 ./internal/api ./internal/app`), `internal/api`
+dropped from **38.644s to 9.843s** (74.5%). The app package also reaches its
+sandbox-blocked HTTP-listener test after **1.256s instead of 4.031s**; the full
+race wrapper then passed with `internal/api` at **125.699s** and `internal/app`
+at **96.686s**, down from the 523s and 544s measurements that put both packages
+at the default timeout. The temporary 25-minute override is therefore removed:
+the normal 10-minute per-package budget is useful regression pressure again.
 
 
 ### T-71 An interrupted self-check stays `running` for ever `[ ]`

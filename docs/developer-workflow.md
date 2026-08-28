@@ -295,6 +295,11 @@ once a released version exists, `main` is something users can be running.
 
 - Treat local validation scripts as the development contract.
 - CI commands must match the local wrapper scripts exactly.
+- Ordinary backend integration tests open an isolated copy of the process-wide
+  migrated template through `internal/testdb.Open`. Use `db.Open` plus
+  `db.Migrate` directly only when the test is specifically proving migration,
+  restore, or fresh-start behavior; repeating the complete schema setup in
+  ordinary fixtures makes the race-detector feedback loop needlessly expensive.
 
 ## GitHub Actions
 

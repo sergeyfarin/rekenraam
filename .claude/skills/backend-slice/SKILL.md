@@ -86,11 +86,16 @@ strings to the client.
 
 ## Test patterns
 
-- Every test gets a fresh migrated temp DB:
+- Every ordinary integration test gets an isolated copy of the migrated test
+  template:
   ```go
-  database, err := db.Open(ctx, "file:"+filepath.Join(t.TempDir(), "test.sqlite"))
-  require.NoError(t, err)
+  database, databaseURL := testdb.Open(t)
   ```
+  `internal/testdb` migrates once per Go test process, copies the closed
+  template into `t.TempDir()`, and opens the copy through `db.Open`, so tests
+  retain real PRAGMA validation and file isolation without replaying the full
+  DDL. Migration, restore, and fresh-start tests keep using `db.Open` plus
+  `db.Migrate` directly because migration behavior is their subject.
   Never touch `backend/var/dev.sqlite` from tests.
 - Use `testify`: `require` for fatal, `assert` for non-fatal. No manual
   `if got != want` blocks.

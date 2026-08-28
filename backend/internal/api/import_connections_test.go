@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,6 +18,7 @@ import (
 
 	"rekenraam/backend/internal/app"
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/testdb"
 )
 
 // --- Bootstrap ---
@@ -42,12 +42,7 @@ func importConnectionsTestSecretKey() []byte {
 func newImportConnectionsTestHandler(t *testing.T, prober app.ConnectionProber) (http.Handler, *sql.DB) {
 	t.Helper()
 
-	database, err := db.Open(context.Background(), "file:"+filepath.Join(t.TempDir(), "rekenraam.sqlite"))
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, database.Close())
-	})
-	require.NoError(t, db.Migrate(context.Background(), database))
+	database, _ := testdb.Open(t)
 
 	setupRepository := db.NewSetupRepository(database)
 	setupService := app.NewSetupService(setupRepository)

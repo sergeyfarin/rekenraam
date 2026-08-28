@@ -39,19 +39,9 @@ if [ "${COVERAGE:-0}" = "1" ]; then
   go test ./... -coverpkg=./... -coverprofile=coverage.out
   go tool cover -func=coverage.out | tail -1
 else
-  # -timeout above Go's 10m default, which is a per-*package* budget and not a
-  # considered one. internal/api is ~310 integration tests that each migrate a
-  # fresh SQLite database, already 325-way parallel, and the race detector
-  # multiplies that on a 2-4 core runner: the job measured 11m36s on 2026-08-26
-  # (8c2d7206) with the package alone just under the limit, so the next handful
-  # of tests tipped it into "panic: test timed out after 10m0s" while the tests
-  # still listed as running were 1-second auth cases. Nothing hung; the budget
-  # was simply smaller than the suite.
-  #
-  # Measured 2026-08-27 on six cores: in a full ./... run internal/api takes
-  # 523s and internal/app 544s, both within a minute of the 600s default that
-  # fired on CI. So 25m is headroom, not a cost estimate. If either figure grows
-  # past about ten minutes locally, raising this number again is the wrong move;
-  # see T-70.
-  go test -race -timeout 25m ./...
+  # Ordinary integration fixtures copy a process-wide migrated SQLite template
+  # (internal/testdb) instead of replaying the full schema per test. Keep Go's
+  # default per-package timeout visible: if a package approaches it again, the
+  # fixture economics need attention rather than more timeout headroom (T-70).
+  go test -race ./...
 fi

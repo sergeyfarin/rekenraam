@@ -4,13 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/testdb"
 )
 
 // --- Helpers ---
@@ -25,13 +25,10 @@ func testKey() []byte {
 
 func openConnectionTestDatabase(t *testing.T) *sql.DB {
 	t.Helper()
-	database, err := db.Open(context.Background(), "file:"+filepath.Join(t.TempDir(), "test.sqlite"))
-	require.NoError(t, err)
-	t.Cleanup(func() { database.Close() })
-	require.NoError(t, db.Migrate(context.Background(), database))
+	database, _ := testdb.Open(t)
 
 	// Seed the minimal row needed to satisfy import_connections.book_id FK.
-	_, err = database.ExecContext(context.Background(), `
+	_, err := database.ExecContext(context.Background(), `
 		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
 		VALUES (1, 'owner', 'hash', 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z');
 		INSERT INTO books (id, owner_user_id, code, name, updated_by_user_id, created_at, updated_at)

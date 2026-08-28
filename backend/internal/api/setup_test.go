@@ -19,6 +19,7 @@ import (
 
 	"rekenraam/backend/internal/app"
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/testdb"
 )
 
 func TestSetupStatusReturnsInitialSteps(t *testing.T) {
@@ -305,14 +306,7 @@ func newSetupTestHandler(t *testing.T) (http.Handler, *sql.DB) {
 func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.Handler, *sql.DB) {
 	t.Helper()
 
-	databaseURL := "file:" + filepath.Join(t.TempDir(), "rekenraam.sqlite")
-	database, err := db.Open(context.Background(), databaseURL)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, database.Close())
-	})
-
-	require.NoError(t, db.Migrate(context.Background(), database))
+	database, databaseURL := testdb.Open(t)
 
 	// Exports read through the same second, read-only pool production wires
 	// (ADR 0011), so a test exercises the real isolation rather than a

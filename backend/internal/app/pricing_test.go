@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 	"rekenraam/backend/internal/marketdata"
+	"rekenraam/backend/internal/testdb"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1116,12 +1116,9 @@ func (p fakeFXProvider) FetchFXRates(_ context.Context, request marketdata.FXRat
 func newPricingRefreshTestService(t *testing.T, currencyCodes []string, registry *marketdata.Registry) (*sql.DB, *PricingService) {
 	t.Helper()
 	ctx := context.Background()
-	database, err := db.Open(ctx, "file:"+filepath.Join(t.TempDir(), "pricing.sqlite"))
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, database.Close()) })
-	require.NoError(t, db.Migrate(ctx, database))
+	database, _ := testdb.Open(t)
 
-	_, err = database.ExecContext(ctx, `
+	_, err := database.ExecContext(ctx, `
 		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
 		VALUES (1, 'owner', 'hash', 1, '2026-06-12T00:00:00Z', '2026-06-12T00:00:00Z');
 		INSERT INTO books (id, owner_user_id, code, name, default_currency_commodity_id, updated_by_user_id, created_at, updated_at)

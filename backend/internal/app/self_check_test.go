@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/testdb"
 )
 
 type selfCheckHarness struct {
@@ -23,12 +23,7 @@ func newSelfCheckHarness(t *testing.T) *selfCheckHarness {
 	t.Helper()
 
 	ctx := context.Background()
-	databaseURL := "file:" + filepath.Join(t.TempDir(), "rekenraam.sqlite")
-
-	writer, err := db.Open(ctx, databaseURL)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, writer.Close()) })
-	require.NoError(t, db.Migrate(ctx, writer))
+	writer, databaseURL := testdb.Open(t)
 	seedRestoreLedger(t, writer)
 
 	readOnly, err := db.OpenReadOnly(ctx, databaseURL)
