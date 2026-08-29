@@ -1,7 +1,9 @@
 # Recurring Transactions Plan (R9)
 
-Status: **planned, not started.** Written 2026-08-29, immediately after R5's
-ordinary-bank CSV import closed. This is the implementation reference for the
+Status: **slice 1 shipped 2026-08-29; slices 2-6 open.** Written 2026-08-29,
+immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
+`internal/recur`, `backend/migrations/0003_recurring.sql`, and
+`db.RecurringRepository` behind 26 named tests. This is the implementation reference for the
 roadmap slice "R9 — recurring transactions", the first leg of the planning loop
 `R9 → R10 → R8` decided 2026-08-05 (roadmap review §3d). The roadmap keeps its
 one-paragraph summary and points here.
@@ -414,11 +416,25 @@ either.
 
 ## Slices
 
-1. **`internal/recur` + schema + repository.** The pure enumerator with its
-   eight named tests, the four tables in one migration (`0003_recurring.sql`),
-   and the repository with same-book trigger coverage. No API, no scheduler.
-   Ships alone because everything else depends on the date arithmetic being
-   right, and the date arithmetic is testable with no ledger at all.
+1. **`internal/recur` + schema + repository — done 2026-08-29.** The pure
+   enumerator (14 named tests), the four tables in one migration
+   (`0003_recurring.sql`), and `db.RecurringRepository` (12 named tests,
+   including same-book trigger coverage). No API, no scheduler. It shipped
+   alone because everything else depends on the date arithmetic being right,
+   and the date arithmetic is testable with no ledger at all — which is how
+   the duplicate-date defect below was found before any caller existed.
+
+   Two things the plan did not anticipate, corrected in place:
+
+   - **The month-skip rule needed a series origin, not a special case.**
+     Resolving "the anchor's month has already passed its nominal day" per
+     occurrence shifted index 0 and left index 1 on the same date. The origin
+     is now computed once, so shifting it keeps every later index one interval
+     apart.
+   - **A second book cannot be created**, because `books.id` carries
+     `CHECK (id = 1)`. The same-book triggers are exercised through the arm a
+     cross-book row would hit anyway — the target is not in this book — the
+     way `TestMigrationsEnforceTransactionAndVersionIntegrity` already does.
 2. **Template CRUD.** Service, handlers, OpenAPI, typed frontend client, error
    codes in six locales, PATCH omission test. Balance validation on save.
 3. **Generator, scheduler, and the origin guard.** Materialization in one

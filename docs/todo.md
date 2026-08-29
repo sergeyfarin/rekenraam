@@ -91,10 +91,17 @@ Plan: `docs/plans/recurring-transactions-plan.md`. Six slices, in order. R9 is
 the app's first machine producer of financial records, so it is also where the
 conventions' promises about `draft` finally get kept.
 
-- [ ] 1. `internal/recur` (pure date enumerator, ISO strings, no clock or DB)
-      plus the four tables in `0003_recurring.sql` and the repository. Eight
-      named enumeration tests, including monthly-on-the-31st clamping that
-      re-anchors instead of drifting to the 28th.
+- [x] 1. **Done 2026-08-29.** `internal/recur` (pure date enumerator, ISO
+      strings, no clock or DB), the four tables in `0003_recurring.sql`, and
+      `db.RecurringRepository`. 14 enumeration tests and 12 repository tests.
+      Writing them found one real defect before it shipped: the first revision
+      special-cased index 0 when the anchor's month had already passed its
+      nominal day, which shifted only that occurrence and left index 1 landing
+      on the same date —
+      `TestMonthlySkipsTheAnchorMonthWhenItsDayHasPassedWithoutDuplicating`
+      pins it. The schema refuses an unenumerable schedule (weekly with no
+      weekday, monthly with neither day rule or both, yearly with no month) so
+      a template the generator cannot read cannot be stored by any writer.
 - [ ] 2. Template CRUD: service, handlers, OpenAPI, typed client, error codes in
       six locales, and the PATCH-omission test this repo keeps needing.
 - [ ] 3. Generator, scheduler (one-a-minute tick on the owner's
