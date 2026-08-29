@@ -73,6 +73,7 @@
   }
 
   function handleRestoreClick(row: DeletedTransactionResponse) {
+    if (row.transaction_kind === 'investment') return;
     if (row.restore_blocked_by_reconciliation) {
       overrideModal = { open: true, row };
     } else {
@@ -161,22 +162,26 @@
 
   {#snippet actionsCell(row: DeletedTransactionResponse)}
     <div class="flex justify-end">
-      <button
-        type="button"
-        onclick={() => handleRestoreClick(row)}
-        disabled={restorePendingID === row.id}
-        class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-3 py-1.5 text-xs font-semibold transition
-               border border-border bg-control text-foreground hover:bg-control-hover
-               disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {#if restorePendingID === row.id}
-          {m.trash_restoring()}
-        {:else if row.restore_blocked_by_reconciliation}
-          {m.trash_restore_guarded()}
-        {:else}
-          {m.trash_restore_easy()}
-        {/if}
-      </button>
+      {#if row.transaction_kind === 'investment'}
+        <span class="max-w-48 text-right text-xs text-muted">{m.trash_investment_restore_locked()}</span>
+      {:else}
+        <button
+          type="button"
+          onclick={() => handleRestoreClick(row)}
+          disabled={restorePendingID === row.id}
+          class="inline-flex items-center gap-1.5 rounded-(--radius-control) px-3 py-1.5 text-xs font-semibold transition
+                 border border-border bg-control text-foreground hover:bg-control-hover
+                 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {#if restorePendingID === row.id}
+            {m.trash_restoring()}
+          {:else if row.restore_blocked_by_reconciliation}
+            {m.trash_restore_guarded()}
+          {:else}
+            {m.trash_restore_easy()}
+          {/if}
+        </button>
+      {/if}
     </div>
   {/snippet}
 

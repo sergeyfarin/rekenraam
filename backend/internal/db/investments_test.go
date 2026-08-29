@@ -946,10 +946,8 @@ func TestInvestmentLotsAverageCostPoolMath(t *testing.T) {
 	// pool: qty=450, basis=56000. sell qty=100 units (entire lot[0]).
 	// pool-rate reported disposal = 56000*100/450 = 12444 (truncate).
 	// lot[0] is the only lot touched and is "last" (fills entire sell qty) → reportedBasis = 12444.
-	// DB deduction for lot[0] = 10000 (full lot close).
-	// Remaining DB basis = 25000 + 21000 = 46000.
-	// DB conservation: 46000 + 10000 (deducted) = 56000 ✓
-	// Reported conservation: 12444 ≠ remaining DB — this is the blending redistribution effect.
+	// The conserved materialized remainder is 56000-12444 = 43556 and is
+	// redistributed over the surviving projection rows.
 	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
 		BookID: 1, AccountID: accountID, CommodityID: commodityID,
 		EventDate: "2026-04-01", QuantityValue: exact.New(100), QuantityScale: 0,
@@ -962,14 +960,16 @@ func TestInvestmentLotsAverageCostPoolMath(t *testing.T) {
 	// Reported basis is pool-rate: 56000 * 100 / 450 = 12444 (truncate).
 	assert.Equal(t, int64(12444), disposals[0].CostBasisValue)
 
-	// DB remaining basis: lot[0] closed (deducted 10000), lots[1]+[2] untouched.
+	// Remaining projection basis plus the reported disposal conserves the pool.
 	lots, err := repo.ListLots(ctx, 1, accountID, commodityID)
 	require.NoError(t, err)
 	var remainingBasis int64
 	for _, l := range lots {
 		remainingBasis += l.RemainingCostBasisValue
 	}
-	assert.Equal(t, int64(46000), remainingBasis)
+	assert.Equal(t, int64(43556), remainingBasis)
+	assert.Equal(t, int64(56000), remainingBasis+disposals[0].CostBasisValue)
+	assert.Equal(t, int64(10000), lots[0].CostBasisValue, "original acquisition basis is immutable")
 }
 
 func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
@@ -982,11 +982,9 @@ func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
 	// 3 lots: qty=[1,1,1], basis=[4,3,3] → pool qty=3, basis=10.
 	// Sell 2 units average_cost.
 	// Pool-rate reported disposal: 10*2/3 = 6 (truncate).
-	//   lot[0]: reportedBasis = 10*1/3 = 3; lotDeduction = 4 (full close).
-	//   lot[1]: reportedBasis = residual = 6-3 = 3; lotDeduction = 3 (full close).
-	// DB remaining: lot[2].remainingCostBasis = 3.
-	// DB conservation: deducted(4+3) + remaining(3) = 10 ✓
-	// Reported disposal total: 6 (pool rate).
+	//   lot[0]: reportedBasis = 10*1/3 = 3.
+	//   lot[1]: reportedBasis = residual = 6-3 = 3.
+	// Conserved remaining pool basis: 10-6 = 4.
 	for i, basis := range []int64{4, 3, 3} {
 		_, err := repo.CreateLot(ctx, CreateInvestmentLotParams{
 			BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
@@ -1025,8 +1023,105 @@ func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
 		assert.GreaterOrEqual(t, l.RemainingCostBasisValue, int64(0), "no lot should have negative remaining basis")
 		remainingBasis += l.RemainingCostBasisValue
 	}
-	// DB remaining should equal lot[2]'s untouched basis.
-	assert.Equal(t, int64(3), remainingBasis)
+	assert.Equal(t, int64(4), remainingBasis)
+	assert.Equal(t, int64(10), remainingBasis+totalReported)
+}
+
+func TestInvestmentLotsAverageCostSequentialSalesConserveUntilFinalClose(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+
+	var disposedTotal int64
+	for index, quantity := range []int64{100, 200, 150} {
+		disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
+			BookID: 1, AccountID: accountID, CommodityID: commodityID,
+			EventDate: fmt.Sprintf("2026-%02d-01", index+4), QuantityValue: exact.New(quantity), QuantityScale: 0,
+			CostBasisMethod: "average_cost", CreatedAt: fmt.Sprintf("2026-%02d-01T09:00:00Z", index+4),
+			ActorUserID: ownerID, OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "sequence",
+		})
+		require.NoError(t, err)
+		for _, disposal := range disposals {
+			disposedTotal += disposal.CostBasisValue
+		}
+		lots, err := repo.ListLots(ctx, 1, accountID, commodityID)
+		require.NoError(t, err)
+		var remaining int64
+		projectedBasis := exact.NewScaledInt()
+		for _, lot := range lots {
+			remaining += lot.RemainingCostBasisValue
+			projectedBasis.AddInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)
+		}
+		assert.Equal(t, int64(56000), disposedTotal+remaining, "sale %d must conserve the original pool", index+1)
+
+		// The materialized pool remainder must be reproducible from immutable
+		// acquisition and disposal events, rather than becoming a second source
+		// of truth. Fold in Go because SQLite SUM would coerce large coefficients.
+		eventRows, err := database.QueryContext(ctx, `
+			SELECT event.cost_basis_value, event.cost_basis_scale
+			FROM investment_lot_events event
+			JOIN investment_lots lot ON lot.id = event.lot_id AND lot.book_id = event.book_id
+			WHERE lot.book_id = ? AND lot.account_id = ? AND lot.commodity_id = ? AND lot.cost_commodity_id = ?
+			ORDER BY event.id
+		`, 1, accountID, commodityID, currencyID)
+		require.NoError(t, err)
+		rebuiltBasis := exact.NewScaledInt()
+		for eventRows.Next() {
+			var value int64
+			var scale int
+			require.NoError(t, eventRows.Scan(&value, &scale))
+			rebuiltBasis.AddInt64(value, scale)
+		}
+		require.NoError(t, eventRows.Err())
+		require.NoError(t, eventRows.Close())
+		assert.Equal(t, 0, projectedBasis.Cmp(rebuiltBasis), "sale %d projection must rebuild from immutable events", index+1)
+	}
+	assert.Equal(t, int64(56000), disposedTotal)
+}
+
+func TestInvestmentLotsRejectSwitchAcrossAverageCostWhilePositionOpen(t *testing.T) {
+	for _, tc := range []struct{ first, second string }{{"fifo", "average_cost"}, {"average_cost", "lifo"}} {
+		t.Run(tc.first+"_to_"+tc.second, func(t *testing.T) {
+			ctx := context.Background()
+			database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+			accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
+			repo := NewInvestmentRepository(database)
+			_, err := repo.DisposeLots(ctx, DisposeLotsParams{BookID: 1, AccountID: accountID, CommodityID: commodityID,
+				EventDate: "2026-04-01", QuantityValue: exact.New(50), QuantityScale: 0, CostBasisMethod: tc.first,
+				CreatedAt: "2026-04-01T09:00:00Z", ActorUserID: ownerID, OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "first"})
+			require.NoError(t, err)
+			_, err = repo.DisposeLots(ctx, DisposeLotsParams{BookID: 1, AccountID: accountID, CommodityID: commodityID,
+				EventDate: "2026-05-01", QuantityValue: exact.New(50), QuantityScale: 0, CostBasisMethod: tc.second,
+				CreatedAt: "2026-05-01T09:00:00Z", ActorUserID: ownerID, OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "switch"})
+			require.ErrorIs(t, err, ErrInvalidDisposalParams)
+		})
+	}
+}
+
+func TestInvestmentLotsClosedPositionStartsANewCostBasisMethodEpoch(t *testing.T) {
+	ctx := context.Background()
+	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
+	accountID := createInvestmentTestAccount(t, database, currencyID)
+	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
+	repo := NewInvestmentRepository(database)
+	create := func(date string) {
+		_, err := repo.CreateLot(ctx, CreateInvestmentLotParams{BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+			OpenedOn: date, QuantityValue: exact.New(10), QuantityScale: 0, CostBasisValue: 10000, CostBasisScale: 2,
+			CostCommodityID: currencyID, MetadataJSON: `{}`, CreatedAt: date + "T09:00:00Z", CreatedByUserID: ownerID,
+			OriginType: "browser_api", Operation: "investment.lot.acquire", ChangeReason: "epoch", EventKind: "acquisition"})
+		require.NoError(t, err)
+	}
+	create("2026-01-01")
+	_, err := repo.DisposeLots(ctx, DisposeLotsParams{BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+		EventDate: "2026-02-01", QuantityValue: exact.New(10), QuantityScale: 0, CostBasisMethod: "average_cost",
+		CreatedAt: "2026-02-01T09:00:00Z", ActorUserID: ownerID, OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "close"})
+	require.NoError(t, err)
+	create("2026-03-01")
+	_, err = repo.DisposeLots(ctx, DisposeLotsParams{BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
+		EventDate: "2026-04-01", QuantityValue: exact.New(1), QuantityScale: 0, CostBasisMethod: "fifo",
+		CreatedAt: "2026-04-01T09:00:00Z", ActorUserID: ownerID, OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "new epoch"})
+	require.NoError(t, err)
 }
 
 func TestInvestmentLotsAverageCostClosedLotHasZeroBasis(t *testing.T) {

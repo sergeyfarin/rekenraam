@@ -28,6 +28,8 @@ func writeTransactionServiceError(w http.ResponseWriter, r *http.Request, logger
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "soft-deleted transaction must be restored first")
 	case errors.Is(err, app.ErrTransactionDraftNotVoidable):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "draft transaction cannot be voided; post or delete it instead")
+	case errors.Is(err, app.ErrInvestmentWorkflowRequired):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_WORKFLOW_REQUIRED", "investment-linked transaction requires an investment workflow")
 	case errors.Is(err, app.ErrTransactionTag):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "transaction tag is invalid")
 	case errors.Is(err, app.ErrReconciliationOverrideRequired):

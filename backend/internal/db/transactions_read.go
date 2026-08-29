@@ -9,6 +9,29 @@ import (
 	"strings"
 )
 
+// TransactionHasInvestmentLinks reports whether a transaction is an investment
+// domain record or participates in the investment subledger. Generic mutation
+// must not change it without changing any lot consequences in the same operation.
+func (r *TransactionRepository) TransactionHasInvestmentLinks(ctx context.Context, bookID int64, transactionID int64) (bool, error) {
+	var linked bool
+	err := r.database.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM current_transaction_versions
+			WHERE book_id = ? AND transaction_id = ? AND transaction_kind = 'investment'
+			UNION ALL
+			SELECT 1 FROM investment_lots
+			WHERE book_id = ? AND source_transaction_id = ?
+			UNION ALL
+			SELECT 1 FROM investment_lot_events
+			WHERE book_id = ? AND transaction_id = ?
+		)
+	`, bookID, transactionID, bookID, transactionID, bookID, transactionID).Scan(&linked)
+	if err != nil {
+		return false, fmt.Errorf("check transaction investment links: %w", err)
+	}
+	return linked, nil
+}
+
 func (r *TransactionRepository) ListTransactions(ctx context.Context, params ListTransactionsParams) ([]TransactionRecord, error) {
 	where := []string{"t.book_id = ?", "t.deleted_at IS NULL"}
 	args := []any{params.BookID}

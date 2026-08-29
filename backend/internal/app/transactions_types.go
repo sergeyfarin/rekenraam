@@ -14,6 +14,7 @@ var (
 	ErrTransactionVoided              = errors.New("voided transaction cannot be edited")
 	ErrTransactionDeleted             = errors.New("soft-deleted transaction must be restored first")
 	ErrTransactionDraftNotVoidable    = errors.New("draft transaction cannot be voided; post or delete it instead")
+	ErrInvestmentWorkflowRequired     = errors.New("investment-linked transaction requires an investment workflow")
 	ErrTransactionTag                 = errors.New("transaction tag is invalid")
 	ErrReconciliationOverrideRequired = errors.New("reconciliation override is required")
 	ErrReconciliationNotFound         = errors.New("reconciliation not found")

@@ -292,6 +292,149 @@ func TestSell_PostsFourLegTransactionAndDisposesLot(t *testing.T) {
 	assert.Equal(t, "0", lots[0].RemainingQuantityValue.String())
 }
 
+func TestInvestmentWritesRejectDraftBeforeJournalOrLotMutation(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	before := f.transactionCount(t)
+
+	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0,
+		CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+		Status: "draft",
+	})
+	require.ErrorAs(t, err, &ValidationError{})
+	assert.Equal(t, before, f.transactionCount(t))
+	var lots int
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM investment_lots`).Scan(&lots))
+	assert.Zero(t, lots)
+}
+
+func TestEveryInvestmentWriteValidatorRejectsDraftStatus(t *testing.T) {
+	tests := map[string]func() error{
+		"buy_or_sell": func() error { return validateTradeInput(InvestmentTradeInput{Status: "draft"}) },
+		"write_off": func() error {
+			_, err := validateWriteOffInput(InvestmentWriteOffInput{Status: "draft"})
+			return err
+		},
+		"dividend": func() error {
+			_, err := validateDividendInput(DividendInput{Status: "draft"})
+			return err
+		},
+		"reinvested_dividend": func() error {
+			_, err := validateReinvestedDividendInput(ReinvestedDividendInput{Status: "draft"})
+			return err
+		},
+	}
+	for name, validate := range tests {
+		t.Run(name, func(t *testing.T) {
+			var validationError ValidationError
+			require.ErrorAs(t, validate(), &validationError)
+			assert.Equal(t, "investment transactions must be posted", validationError.Message)
+		})
+	}
+}
+
+func TestGenericLifecycleRejectsInvestmentLinkedTransactionsBeforeMutation(t *testing.T) {
+	actions := []struct {
+		name   string
+		mutate func(context.Context, *investmentsTestFixture, Transaction) error
+	}{
+		{"update", func(ctx context.Context, f *investmentsTestFixture, tx Transaction) error {
+			spec := transactionInputFromTransaction(tx)
+			spec.Description = "must not change"
+			_, err := f.transactionService.UpdateTransaction(ctx, UpdateTransactionInput{OwnerUserID: f.ownerUserID, TransactionID: tx.ID, Spec: spec})
+			return err
+		}},
+		{"correction", func(ctx context.Context, f *investmentsTestFixture, tx Transaction) error {
+			_, err := f.transactionService.CreateTransaction(ctx, CreateTransactionInput{OwnerUserID: f.ownerUserID, CorrectionOfTransactionID: &tx.ID, Spec: transactionInputFromTransaction(tx)})
+			return err
+		}},
+		{"void", func(ctx context.Context, f *investmentsTestFixture, tx Transaction) error {
+			_, err := f.transactionService.VoidTransaction(ctx, VoidTransactionInput{OwnerUserID: f.ownerUserID, TransactionID: tx.ID, ChangeReason: "test"})
+			return err
+		}},
+		{"soft_delete", func(ctx context.Context, f *investmentsTestFixture, tx Transaction) error {
+			_, err := f.transactionService.SoftDeleteTransaction(ctx, TransactionLifecycleInput{OwnerUserID: f.ownerUserID, TransactionID: tx.ID, ChangeReason: "test"})
+			return err
+		}},
+	}
+
+	for _, action := range actions {
+		for _, target := range []string{"buy", "fully_closing_sell"} {
+			t.Run(action.name+"_"+target, func(t *testing.T) {
+				f := newInvestmentsTestFixture(t)
+				ctx := context.Background()
+				bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+					OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+					CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+					QuantityValue: exact.New(10), QuantityScale: 0,
+					CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+				})
+				require.NoError(t, err)
+				transaction := bought.Transaction
+				expectedRemaining := "10"
+				if target == "fully_closing_sell" {
+					sold, err := f.investmentService.Sell(ctx, InvestmentTradeInput{
+						OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01",
+						CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+						QuantityValue: exact.New(10), QuantityScale: 0,
+						CashAmountValue: 120000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+					})
+					require.NoError(t, err)
+					transaction = sold.Transaction
+					expectedRemaining = "0"
+				}
+				beforeTransactions := f.transactionCount(t)
+				err = action.mutate(ctx, f, transaction)
+				require.ErrorIs(t, err, ErrInvestmentWorkflowRequired)
+				assert.Equal(t, beforeTransactions, f.transactionCount(t))
+				lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
+				require.NoError(t, err)
+				require.Len(t, lots, 1)
+				assert.Equal(t, expectedRemaining, lots[0].RemainingQuantityValue.String())
+			})
+		}
+	}
+}
+
+func TestRejectedSellEditCannotRewriteRealizedGainProceeds(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0, CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID})
+	require.NoError(t, err)
+	sold, err := f.investmentService.Sell(ctx, InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(10), QuantityScale: 0, CashAmountValue: 120000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID})
+	require.NoError(t, err)
+	before, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
+	require.NoError(t, err)
+	require.Len(t, before, 1)
+
+	spec := transactionInputFromTransaction(sold.Transaction)
+	for i := range spec.JournalEntries[0].Postings {
+		posting := &spec.JournalEntries[0].Postings[i]
+		if posting.CommodityID != f.eurCommodityID {
+			continue
+		}
+		if posting.AccountID == f.cashAccountID {
+			posting.QuantityValue = exact.New(130000)
+		} else {
+			posting.QuantityValue = exact.New(-130000)
+		}
+	}
+	_, err = f.transactionService.UpdateTransaction(ctx, UpdateTransactionInput{OwnerUserID: f.ownerUserID,
+		TransactionID: sold.Transaction.ID, Spec: spec, ChangeReason: "must be fenced"})
+	require.ErrorIs(t, err, ErrInvestmentWorkflowRequired)
+
+	after, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+}
+
 // --- 3a: write-off (T-38) ---
 
 func TestWriteOff_ClosesLotsWithZeroProceedsAndTwoCommodityLegs(t *testing.T) {

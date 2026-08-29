@@ -189,6 +189,71 @@ func TestSelfCheckCatchesEachCorruption(t *testing.T) {
 				`)
 			},
 		},
+		"a remaining basis that disagrees with immutable lot events": {
+			checkID: CheckLotReconciliation,
+			corrupt: func(t *testing.T, database *sql.DB) {
+				execRaw(t, database, `
+					INSERT INTO commodities (id, book_id, code, kind, is_builtin, created_at, created_by_user_id)
+					VALUES (2, 1, 'BASIS', 'security', 0, '2026-01-01T00:00:00Z', 1);
+					INSERT INTO commodity_versions (commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason,
+						status, symbol, display_symbol, name, standard_scale, max_quantity_scale)
+					VALUES (2, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', 'BASIS', 'BASIS', 'Basis Test', 0, 6);
+					INSERT INTO accounts (id, book_id, created_at, created_by_user_id) VALUES (3, 1, '2026-01-01T00:00:00Z', 1);
+					INSERT INTO account_versions (account_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason,
+						status, opened_on, name, account_class, account_kind, allows_postings)
+					VALUES (3, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', '2026-01-01', 'Holdings', 'asset', 'security_holding', 1);
+					INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, status,
+						quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
+						cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
+						cost_commodity_id, created_at, created_by_user_id, updated_at, updated_by_user_id)
+					VALUES (1, 1, 3, 2, '2026-06-01', 'open', '1', 0, '1', 0, 10000, 2, 12000, 2, 1,
+						'2026-06-01T00:00:00Z', 1, '2026-06-01T00:00:00Z', 1);
+					INSERT INTO investment_lot_events (book_id, lot_id, event_kind, event_date, quantity_value, quantity_scale,
+						cost_basis_value, cost_basis_scale, created_at, created_by_user_id)
+					VALUES (1, 1, 'acquisition', '2026-06-01', '1', 0, 10000, 2, '2026-06-01T00:00:00Z', 1);
+				`)
+			},
+		},
+		"a journal-only holding whose lots are all closed": {
+			checkID: CheckLotReconciliation,
+			corrupt: func(t *testing.T, database *sql.DB) {
+				execRaw(t, database, `
+					INSERT INTO commodities (id, book_id, code, kind, is_builtin, created_at, created_by_user_id)
+					VALUES (2, 1, 'CLOSED', 'security', 0, '2026-01-01T00:00:00Z', 1);
+					INSERT INTO commodity_versions (commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason,
+						status, symbol, display_symbol, name, standard_scale, max_quantity_scale)
+					VALUES (2, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', 'CLOSED', 'CLOSED', 'Closed Test', 0, 6);
+					INSERT INTO accounts (id, book_id, created_at, created_by_user_id) VALUES
+						(3, 1, '2026-01-01T00:00:00Z', 1), (4, 1, '2026-01-01T00:00:00Z', 1);
+					INSERT INTO account_versions (account_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason,
+						status, opened_on, name, account_class, account_kind, allows_postings) VALUES
+						(3, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', '2026-01-01', 'Holdings', 'asset', 'security_holding', 1),
+						(4, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', '2026-01-01', 'Trading', 'equity', 'equity', 1);
+					INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, status,
+						quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
+						cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
+						cost_commodity_id, created_at, created_by_user_id, updated_at, updated_by_user_id)
+					VALUES (1, 1, 3, 2, '2026-05-01', 'closed', '1', 0, '0', 0, 10000, 2, 0, 2, 1,
+						'2026-05-01T00:00:00Z', 1, '2026-06-01T00:00:00Z', 1);
+					INSERT INTO investment_lot_events (book_id, lot_id, event_kind, event_date, quantity_value, quantity_scale,
+						cost_basis_value, cost_basis_scale, created_at, created_by_user_id) VALUES
+						(1, 1, 'acquisition', '2026-05-01', '1', 0, 10000, 2, '2026-05-01T00:00:00Z', 1),
+						(1, 1, 'disposal', '2026-06-01', '-1', 0, -10000, 2, '2026-06-01T00:00:00Z', 1);
+					INSERT INTO transactions (id, book_id, created_at, created_by_user_id) VALUES (2, 1, '2026-07-01T00:00:00Z', 1);
+					INSERT INTO transaction_versions (id, book_id, transaction_id, version_seq, status, transaction_kind,
+						transaction_date, recorded_at, changed_by_user_id, change_reason)
+					VALUES (2, 1, 2, 1, 'posted', 'investment', '2026-07-01', '2026-07-01T00:00:00Z', 1, 'corrupt');
+					INSERT INTO journal_entries (id, book_id, transaction_version_id, entry_seq, entry_date, entry_kind)
+					VALUES (2, 1, 2, 1, '2026-07-01', 'investment');
+					INSERT INTO posting_lines (id, book_id, transaction_id, line_key, created_at, created_by_user_id) VALUES
+						(3, 1, 2, 'holding', '2026-07-01T00:00:00Z', 1), (4, 1, 2, 'trading', '2026-07-01T00:00:00Z', 1);
+					INSERT INTO posting_versions (book_id, transaction_version_id, journal_entry_id, posting_line_id, line_seq,
+						account_id, quantity_value, quantity_scale, commodity_id, reconciliation_status) VALUES
+						(1, 2, 2, 3, 1, 3, '1', 0, 2, 'uncleared'),
+						(1, 2, 2, 4, 2, 4, '-1', 0, 2, 'uncleared');
+				`)
+			},
+		},
 		"a checkpoint that no longer sums to its statement": {
 			checkID: CheckCheckpointIntegrity,
 			corrupt: func(t *testing.T, database *sql.DB) {

@@ -1088,7 +1088,16 @@ T-75b is investment lifecycle feature work in R16, not a prerequisite for safely
 continuing unrelated work while the generic fence remains. ADR 0012 governs the
 correction; R18 owns the later multi-basis reporting engine.
 
-### T-74 Average cost does not conserve the basis pool `[ ]`
+### T-74 Average cost does not conserve the basis pool `[x]`
+
+Closed 2026-08-30. Migration `0004_investment_integrity.sql` adds typed disposal
+method state and the active position method-family projection. Average-cost
+disposal now redistributes the exact conserved remainder across surviving
+projection rows without changing original `cost_basis_value`, scopes pools by
+cost commodity, and clears the method epoch only when the position closes.
+`TestInvestmentLotsAverageCostSequentialSalesConserveUntilFinalClose`,
+`TestInvestmentLotsRejectSwitchAcrossAverageCostWhilePositionOpen`, and the
+rewritten pool/residual tests prove the fix.
 
 **Files:** `backend/internal/db/investments.go`
 (`disposeAverageCostTx`, `disposeAverageCostLotTx`, `PositionsWithGains`);
@@ -1126,7 +1135,20 @@ and total disposed basis across the full sequence equals total acquired basis.
 Rewrite the current tests that bless the divergence; do not add a parallel
 “reported” total that leaves `PositionsWithGains` wrong.
 
-### T-75 Generic transaction lifecycle can strand investment lots `[ ]`
+### T-75 Generic transaction lifecycle can strand investment lots `[~]`
+
+T-75a closed 2026-08-30. Every investment-domain or lot-linked transaction now
+returns `INVESTMENT_WORKFLOW_REQUIRED` before generic update, correction,
+promotion, void/unvoid, soft-delete/restore, or draft hard-delete can write.
+Investment entry rejects non-posted status before journal or lot mutation. The
+transaction detail and trash UI remove unsafe actions. The self-check now uses
+the union of posted security-holding and lot positions and reconciles both
+quantity and basis against immutable events. Proven by
+`TestGenericLifecycleRejectsInvestmentLinkedTransactionsBeforeMutation`,
+`TestInvestmentWritesRejectDraftBeforeJournalOrLotMutation`,
+`TestRejectedSellEditCannotRewriteRealizedGainProceeds`,
+`TestInvestmentLifecycle_GenericDeleteReturnsInvestmentWorkflowRequired`, and
+the named self-check corruption cases. T-75b remains scheduled in R16.
 
 **Files:** `backend/internal/app/transactions_write.go` (update, correction,
 void/unvoid, soft-delete/restore); `backend/internal/app/investments.go` and

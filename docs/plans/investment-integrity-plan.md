@@ -1,6 +1,6 @@
 # R12a Investment Integrity Correction Plan
 
-Status: current. Opened 2026-08-29 by the ledger/subledger boundary review.
+Status: R12a complete 2026-08-30. T-76 and T-75b remain scheduled follow-ups.
 
 This plan records the immediate correctness gate and its scheduled investment
 follow-ups. It does not add multi-basis tax reporting. ADR 0012 governs the
@@ -35,7 +35,7 @@ disposable development books. If any non-disposable book exists, stop before
 resetting it, export its journal and investment events, and assess it explicitly;
 repair must be evidence-led and recorded as a separate operation.
 
-## Slice 1 — Immediate mutation fence and diagnostic coverage (T-75a)
+## Slice 1 — Immediate mutation fence and diagnostic coverage (T-75a) — complete
 
 Before changing the representation, stop creating new divergence.
 
@@ -67,7 +67,7 @@ fully-closing sell; non-posted investment creation and every unsafe action are
 refused before any row changes; the self-check detects both directions of
 disagreement and basis/event corruption.
 
-## Slice 2 — Conserved average-cost projection (T-74)
+## Slice 2 — Conserved average-cost projection (T-74) — complete
 
 - Replace the shipped split accounting in which disposal events use a pool rate
   while remaining lots use their own rate.
@@ -101,7 +101,7 @@ disposed basis equal cumulative acquired basis exactly. FIFO/LIFO/specific-lot
 regressions remain green; rebuilding from events reproduces the materialized
 state; forbidden mid-position method switches fail before mutation.
 
-## Slice 3 — R12a acceptance and R9 handoff
+## Slice 3 — R12a acceptance and R9 handoff — complete
 
 Run the backend, frontend, build, and focused browser journeys required by the
 changed surfaces. Exercise imported and manually entered investments through a

@@ -5,9 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-29 (R12a's T-75a/T-74 correctness gate interrupts R9
-after its completed first slice; T-76 and T-75b are required later work, not
-part of that gate).
+Last updated: 2026-08-30 (R12a T-75a/T-74 complete; R9 resumes at slice 2.
+T-76 and T-75b remain required later work.)
 
 ## Where things stand
 
@@ -87,28 +86,11 @@ localization item below).
 rate in `settings/currencies/+page.svelte` should truncate or round half-up.
 See `backlog.md` G-09.
 
-## Current initiative — R12a investment integrity correction
-
-Do these in order before returning to R9. Detail and acceptance gates live in
-`docs/backlog.md`, delivery slices in
-`docs/plans/investment-integrity-plan.md`, and the durable boundary in ADR 0012.
-
-- [ ] **T-75a:** reject unsafe generic lifecycle actions for investment-linked
-      transactions in the service and UI; reject non-posted investment creation;
-      pin realized proceeds against current-version drift; make self-check compare
-      journal and lot positions plus basis/event conservation.
-- [ ] **T-74:** make average-cost disposed and remaining basis conserve through
-      sequential partial sales; preserve original acquisition basis; lock unsafe
-      mid-position average-cost method switches; replace tests that bless divergence.
-- [ ] Run R12a's end-to-end acceptance review and update `implemented.md` before
-      restoring the corrected capabilities to ✅; reset/reimport disposable dev
-      books and explicitly assess any non-disposable data.
-
-## Paused after slice 1 — R9 recurring transactions
+## Current initiative — R9 recurring transactions
 
 Plan: `docs/plans/recurring-transactions-plan.md`. Slice 1 is complete; slices
-2–6 resume immediately after R12a. R9 is
-the app's first machine producer of financial records, so it is also where the
+2–6 are active after R12a closed. R9 is the app's first machine producer of
+financial records, so it is also where the
 conventions' promises about `draft` finally get kept.
 
 - [x] 1. **Done 2026-08-29.** `internal/recur` (pure date enumerator, ISO

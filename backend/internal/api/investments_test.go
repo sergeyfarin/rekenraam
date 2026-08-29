@@ -176,6 +176,29 @@ func TestInvestmentLifecycle_InstrumentBuyPreviewSellDividendReflectEverywhere(t
 	assert.Equal(t, int64(20000), gains.Realized[0].RealizedGainValue)
 }
 
+func TestInvestmentLifecycle_GenericDeleteReturnsInvestmentWorkflowRequired(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "FENCE")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	buyRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyRes.Body).Decode(&bought))
+
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/transactions/"+strconv.FormatInt(bought.Transaction.ID, 10)+"/soft-delete",
+		map[string]any{"change_reason": "must be refused"}, http.StatusConflict)
+	var envelope struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&envelope))
+	assert.Equal(t, "INVESTMENT_WORKFLOW_REQUIRED", envelope.Error.Code)
+}
+
 // --- Write-off (T-38) ---
 
 func TestWriteOffInvestment_PreviewAndCommitCloseThePositionAtALoss(t *testing.T) {

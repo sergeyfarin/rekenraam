@@ -311,6 +311,9 @@ func (input InvestmentWriteOffInput) asTradeInput() InvestmentTradeInput {
 }
 
 func validateWriteOffInput(input InvestmentWriteOffInput) (string, error) {
+	if err := validatePostedInvestmentStatus(input.Status); err != nil {
+		return "", err
+	}
 	if input.OwnerUserID <= 0 {
 		return "", ValidationError{Message: "owner user is required"}
 	}
@@ -1045,6 +1048,7 @@ func (s *InvestmentService) computeSellDisposals(ctx context.Context, input Inve
 		BookID:          BookID,
 		AccountID:       input.HoldingAccountID,
 		CommodityID:     input.CommodityID,
+		CostCommodityID: input.CashCommodityID,
 		EventDate:       input.TransactionDate,
 		QuantityValue:   input.QuantityValue,
 		QuantityScale:   input.QuantityScale,
@@ -1298,6 +1302,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		BookID:          BookID,
 		AccountID:       input.HoldingAccountID,
 		CommodityID:     input.CommodityID,
+		CostCommodityID: input.CashCommodityID,
 		EventDate:       input.TransactionDate,
 		QuantityValue:   input.QuantityValue,
 		QuantityScale:   input.QuantityScale,
@@ -2084,6 +2089,9 @@ func sellPostings(input InvestmentTradeInput, tradingAccountID int64, memo strin
 }
 
 func validateTradeInput(input InvestmentTradeInput) error {
+	if err := validatePostedInvestmentStatus(input.Status); err != nil {
+		return err
+	}
 	if input.OwnerUserID <= 0 {
 		return ValidationError{Message: "owner user is required"}
 	}
@@ -2124,6 +2132,9 @@ func validateTradeInput(input InvestmentTradeInput) error {
 }
 
 func validateDividendInput(input DividendInput) (string, error) {
+	if err := validatePostedInvestmentStatus(input.Status); err != nil {
+		return "", err
+	}
 	if input.OwnerUserID <= 0 {
 		return "", ValidationError{Message: "owner user is required"}
 	}
@@ -2144,6 +2155,9 @@ func validateDividendInput(input DividendInput) (string, error) {
 }
 
 func validateReinvestedDividendInput(input ReinvestedDividendInput) (string, error) {
+	if err := validatePostedInvestmentStatus(input.Status); err != nil {
+		return "", err
+	}
 	if input.OwnerUserID <= 0 {
 		return "", ValidationError{Message: "owner user is required"}
 	}
@@ -2167,6 +2181,14 @@ func validateReinvestedDividendInput(input ReinvestedDividendInput) (string, err
 		return "", err
 	}
 	return date, nil
+}
+
+func validatePostedInvestmentStatus(status string) error {
+	status = strings.TrimSpace(status)
+	if status != "" && status != "posted" {
+		return ValidationError{Message: "investment transactions must be posted"}
+	}
+	return nil
 }
 
 func toInvestmentInstrument(record db.InvestmentInstrumentRecord) InvestmentInstrument {

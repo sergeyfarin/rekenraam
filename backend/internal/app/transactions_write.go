@@ -12,6 +12,11 @@ import (
 )
 
 func (s *TransactionService) CreateTransaction(ctx context.Context, input CreateTransactionInput) (Transaction, error) {
+	if input.CorrectionOfTransactionID != nil {
+		if err := s.rejectInvestmentLinkedMutation(ctx, *input.CorrectionOfTransactionID); err != nil {
+			return Transaction{}, err
+		}
+	}
 	params, err := s.prepareCreateTransactionForWrite(ctx, input)
 	if err != nil {
 		return Transaction{}, err
@@ -105,6 +110,9 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	if current.Status == "voided" {
 		return Transaction{}, ErrTransactionVoided
 	}
+	if err := s.rejectInvestmentLinkedMutation(ctx, input.TransactionID); err != nil {
+		return Transaction{}, err
+	}
 
 	// The transaction's current lifecycle state decides the final effective
 	// status, not whatever the request body's Status field claims: a draft
@@ -191,6 +199,9 @@ func (s *TransactionService) PostTransaction(ctx context.Context, input PostTran
 	if current.Status == "posted" {
 		return current, nil
 	}
+	if err := s.rejectInvestmentLinkedMutation(ctx, input.TransactionID); err != nil {
+		return Transaction{}, err
+	}
 
 	spec := transactionInputFromTransaction(current)
 	spec.Status = "posted"
@@ -239,6 +250,9 @@ func (s *TransactionService) VoidTransaction(ctx context.Context, input VoidTran
 		// a stale "voided" version already blocks hard delete forever. Post or
 		// delete the draft instead.
 		return Transaction{}, ErrTransactionDraftNotVoidable
+	}
+	if err := s.rejectInvestmentLinkedMutation(ctx, input.TransactionID); err != nil {
+		return Transaction{}, err
 	}
 	invalidationRefs, err := s.periodScopedRefsFromRecord(ctx, current)
 	if err != nil {
@@ -356,6 +370,9 @@ func (s *TransactionService) prepareLifecycleChange(ctx context.Context, input T
 	if err != nil {
 		return Transaction{}, "", "", mapTransactionDBError(err)
 	}
+	if err := s.rejectInvestmentLinkedMutation(ctx, input.TransactionID); err != nil {
+		return Transaction{}, "", "", err
+	}
 	reason, err := cleanChangeReason(input.ChangeReason, "")
 	if err != nil {
 		return Transaction{}, "", "", err
@@ -373,6 +390,9 @@ func (s *TransactionService) DeleteDraftTransaction(ctx context.Context, input D
 	if input.TransactionID <= 0 {
 		return ValidationError{Message: "transaction id is required"}
 	}
+	if err := s.rejectInvestmentLinkedMutation(ctx, input.TransactionID); err != nil {
+		return err
+	}
 
 	if err := s.repository.DeleteDraftTransaction(ctx, db.DeleteDraftTransactionParams{
 		BookID:        BookID,
@@ -388,6 +408,17 @@ func (s *TransactionService) DeleteDraftTransaction(ctx context.Context, input D
 		return mapTransactionDBError(err)
 	}
 
+	return nil
+}
+
+func (s *TransactionService) rejectInvestmentLinkedMutation(ctx context.Context, transactionID int64) error {
+	linked, err := s.repository.TransactionHasInvestmentLinks(ctx, BookID, transactionID)
+	if err != nil {
+		return err
+	}
+	if linked {
+		return ErrInvestmentWorkflowRequired
+	}
 	return nil
 }
 

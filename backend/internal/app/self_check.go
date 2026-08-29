@@ -462,21 +462,29 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 	if err != nil {
 		return SelfCheckResult{}, err
 	}
+	events, err := s.repository.SelfCheckLotEvents(ctx, snapshot, BookID)
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
 
 	result := SelfCheckResult{CheckID: CheckLotReconciliation, Status: SelfCheckPassed, Summary: "lots account for exactly what the holdings hold"}
-	if len(lots) == 0 {
-		result.Summary = "no investment lots in this book"
-		return result, nil
-	}
 
 	type position struct {
 		accountID   int64
 		commodityID int64
 	}
+	type basisPosition struct {
+		accountID       int64
+		commodityID     int64
+		costCommodityID int64
+	}
 
 	remaining := map[position]*exact.ScaledInt{}
+	remainingBasis := map[basisPosition]*exact.ScaledInt{}
+	eventQuantity := map[int64]*exact.ScaledInt{}
+	eventBasis := map[basisPosition]*exact.ScaledInt{}
 	var summaries []string
-	var negative, overConsumed int64
+	var negative, overConsumed, negativeBasis int64
 
 	for _, lot := range lots {
 		remainingValue := exact.ScaledIntFromCoefficient(lot.RemainingQuantityValue, lot.RemainingQuantityScale)
@@ -490,22 +498,36 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 			overConsumed++
 			result.Sample = appendCapped(result.Sample, lot.LotID)
 		}
-		if lot.Status != "open" {
-			continue
+		if lot.RemainingCostBasisValue < 0 {
+			negativeBasis++
+			result.Sample = appendCapped(result.Sample, lot.LotID)
 		}
 		key := position{accountID: lot.AccountID, commodityID: lot.CommodityID}
 		if remaining[key] == nil {
 			remaining[key] = exact.NewScaledInt()
 		}
 		remaining[key].AddScaled(remainingValue)
+		basisKey := basisPosition{accountID: lot.AccountID, commodityID: lot.CommodityID, costCommodityID: lot.CostCommodityID}
+		if remainingBasis[basisKey] == nil {
+			remainingBasis[basisKey] = exact.NewScaledInt()
+		}
+		remainingBasis[basisKey].AddInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)
+	}
+	for _, event := range events {
+		if eventQuantity[event.LotID] == nil {
+			eventQuantity[event.LotID] = exact.NewScaledInt()
+		}
+		eventQuantity[event.LotID].AddCoefficient(event.QuantityValue, event.QuantityScale)
+		key := basisPosition{accountID: event.AccountID, commodityID: event.CommodityID, costCommodityID: event.CostCommodityID}
+		if eventBasis[key] == nil {
+			eventBasis[key] = exact.NewScaledInt()
+		}
+		eventBasis[key].AddInt64(event.CostBasisValue, event.CostBasisScale)
 	}
 
 	holdings := map[position]*exact.ScaledInt{}
-	err = s.repository.StreamPostedPostings(ctx, snapshot, BookID, func(record db.SelfCheckPostingRecord) error {
+	err = s.repository.StreamPostedInvestmentPostings(ctx, snapshot, BookID, func(record db.SelfCheckPostingRecord) error {
 		key := position{accountID: record.AccountID, commodityID: record.CommodityID}
-		if _, tracked := remaining[key]; !tracked {
-			return nil
-		}
 		if holdings[key] == nil {
 			holdings[key] = exact.NewScaledInt()
 		}
@@ -516,14 +538,57 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 		return SelfCheckResult{}, err
 	}
 
-	var mismatched int64
-	for key, lotTotal := range remaining {
+	var mismatched, eventQuantityMismatch, basisMismatch int64
+	allPositions := map[position]bool{}
+	for key := range remaining {
+		allPositions[key] = true
+	}
+	for key := range holdings {
+		allPositions[key] = true
+	}
+	for key := range allPositions {
+		lotTotal := remaining[key]
+		if lotTotal == nil {
+			lotTotal = exact.NewScaledInt()
+		}
 		holding := holdings[key]
 		if holding == nil {
 			holding = exact.NewScaledInt()
 		}
 		if lotTotal.Cmp(holding) != 0 {
 			mismatched++
+			result.Sample = appendCapped(result.Sample, key.accountID)
+		}
+	}
+	for _, lot := range lots {
+		expected := eventQuantity[lot.LotID]
+		if expected == nil {
+			expected = exact.NewScaledInt()
+		}
+		actual := exact.ScaledIntFromCoefficient(lot.RemainingQuantityValue, lot.RemainingQuantityScale)
+		if expected.Cmp(actual) != 0 {
+			eventQuantityMismatch++
+			result.Sample = appendCapped(result.Sample, lot.LotID)
+		}
+	}
+	allBasisPositions := map[basisPosition]bool{}
+	for key := range remainingBasis {
+		allBasisPositions[key] = true
+	}
+	for key := range eventBasis {
+		allBasisPositions[key] = true
+	}
+	for key := range allBasisPositions {
+		projected := remainingBasis[key]
+		if projected == nil {
+			projected = exact.NewScaledInt()
+		}
+		fromEvents := eventBasis[key]
+		if fromEvents == nil {
+			fromEvents = exact.NewScaledInt()
+		}
+		if projected.Cmp(fromEvents) != 0 {
+			basisMismatch++
 			result.Sample = appendCapped(result.Sample, key.accountID)
 		}
 	}
@@ -534,14 +599,26 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 	if overConsumed > 0 {
 		summaries = append(summaries, fmt.Sprintf("%d lots have more remaining than they ever held", overConsumed))
 	}
+	if negativeBasis > 0 {
+		summaries = append(summaries, fmt.Sprintf("%d lots have negative remaining basis", negativeBasis))
+	}
 	if mismatched > 0 {
-		summaries = append(summaries, fmt.Sprintf("%d holdings disagree with their open lots", mismatched))
+		summaries = append(summaries, fmt.Sprintf("%d holdings disagree with their current lot projection", mismatched))
+	}
+	if eventQuantityMismatch > 0 {
+		summaries = append(summaries, fmt.Sprintf("%d lots disagree with their quantity events", eventQuantityMismatch))
+	}
+	if basisMismatch > 0 {
+		summaries = append(summaries, fmt.Sprintf("%d positions disagree with their basis events", basisMismatch))
 	}
 	if len(summaries) > 0 {
 		result.Status = SelfCheckFailed
-		result.FindingCount = negative + overConsumed + mismatched
+		result.FindingCount = negative + overConsumed + negativeBasis + mismatched + eventQuantityMismatch + basisMismatch
 		result.Summary = joinSummaries(summaries)
 		sort.Slice(result.Sample, func(i, j int) bool { return result.Sample[i] < result.Sample[j] })
+	}
+	if len(lots) == 0 && len(holdings) == 0 {
+		result.Summary = "no investment lots or posted holding positions in this book"
 	}
 
 	return result, nil

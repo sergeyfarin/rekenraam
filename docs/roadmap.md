@@ -6,9 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-08-29 (investment boundary review accepted as ADR 0012;
-R12a's narrow T-75a/T-74 correctness gate precedes R9's resumption; T-76 and
-T-75b are scheduled separately; R9 slice 1 is already complete).
+Last reviewed: 2026-08-30 (R12a T-75a/T-74 closed; R9 resumes at slice 2;
+T-76 and T-75b remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -41,7 +40,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R10 | Projected balances / forecasting | ⏭ | this file |
 | R11 | Pricing/FX management UI | ⏸ | this file |
 | R12 | Investments UI + gains reporting | ✅ | `docs/plans/investments-plan.md` |
-| R12a | Investment journal/subledger integrity correction | ▶ | `docs/plans/investment-integrity-plan.md`, ADR 0012 |
+| R12a | Investment journal/subledger integrity correction | ✅ | `docs/plans/investment-integrity-plan.md`, ADR 0012 |
 | R13 | Investment return analytics (TWR/MWR) | ⏸ | this file |
 | R14 | Receipts & attachments (capture, OCR, inbox) | ⏸ | `docs/plans/receipts-plan.md` |
 | R14a | Attachment storage + manual attach (after R5) | ⏭ | `docs/plans/receipts-plan.md` |
@@ -304,49 +303,45 @@ abandonment path. The scope fence is deliberate and binding for v1:
 
 Everything outside that fence stays in the later import-rules slice.
 
-### Current — R12a investment integrity correction
+### Completed 2026-08-30 — R12a investment integrity correction
 
 The 2026-08-29 review found two reachable financial-correctness defects and one
-provenance gap in a feature previously marked complete. Correct the two defects
-before R9 adds another producer of financial records. ADR 0012 fixes the durable
+provenance gap in a feature previously marked complete. The two defects closed
+2026-08-30 before R9 resumed. ADR 0012 fixes the durable
 boundary:
 canonical journal, immutable investment subledger, named read-side projections,
 and optional explicit accounting postings.
 
-Land the corrections in the order specified by
+The corrections landed in the order specified by
 `docs/plans/investment-integrity-plan.md`; do not expand this gate into R18 reporting:
 
-1. **T-75a — immediate lifecycle fence and symmetric self-check.** Reject unsafe
-   generic investment mutation and non-posted investment creation before more
-   divergence can be created; prove current-version edits cannot rewrite realized
-   proceeds; make diagnostics cover basis and journal-only as well as lot-only
-   positions.
-2. **T-74 — average-cost conservation.** Replace the split pool-rate/per-lot-rate
-   state with a projection whose disposed plus remaining basis conserves exactly
-   through sequential partial sales. Rewrite the tests that currently bless the
-   divergence.
+1. **T-75a — lifecycle fence and symmetric self-check.** Generic investment
+   mutation and non-posted investment creation are refused before writes;
+   diagnostics cover basis and journal-only as well as lot-only positions.
+2. **T-74 — average-cost conservation.** Disposed plus remaining basis now
+   conserves exactly through sequential partial sales and final close while
+   original acquisition basis remains immutable.
 
-**Exit gate:** the named T-75a/T-74 acceptance cases pass; buy, partial sell,
-full sell, generic mutation refusal, non-posted creation refusal, import, gains,
-self-check, audit, and reconciliation agree end to end. Reset/reimport disposable
-pre-v0.1 development books; assess any non-disposable data explicitly rather than
-guessing a repair. `implemented.md` may restore average cost and the lifecycle
-fence to ✅ only after that review. R9 then resumes.
+**Exit gate passed 2026-08-30:** the named T-75a/T-74 cases, full backend race
+suite, frontend suite, integrated build, and 37-case browser suite are green. No
+local development database existed to reset or assess. Average cost is restored
+to ✅; the generic
+lifecycle fence is shipped while native correction remains deliberately open.
 
 **Required follow-up, not an R9 blocker:** T-76 snapshots and exports disposal
 method/tier/policy provenance before v0.1/schema freeze and before R16/R18. T-75b
 is the investment-native correction lifecycle in R16; the generic fence remains
 in force until it ships.
 
-### Next — planning loop
+### Current — planning loop
 
 Order decided 2026-08-05 (review §3d): **R9 → R10 → R8**. Recurring
 transactions are forecasting's data source, so R9 → R10 is a single coherent
 arc that exercises the producer-owned draft machinery once instead of twice,
 and it front-loads per-currency forecasting — the differentiator the parity
 lens below commits to protecting. Budgets are independent of both and slot in
-afterward with no rework. R9 slice 1 is complete; slices 2–6 resume immediately
-after R12a rather than competing with the integrity gate.
+afterward with no rework. R9 slice 1 is complete; slices 2–6 are active now that
+R12a has closed.
 
 1. **R9 Recurring transactions:** templates and due-entry generation into the
    reserved producer-owned draft workflow. Planned 2026-08-29 in

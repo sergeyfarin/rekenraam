@@ -13,6 +13,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   RATE_LIMITED: () => m.api_error_rate_limited(),
   RESOURCE_BUSY: () => m.api_error_resource_busy(),
   LEDGER_OVERFLOW: () => m.api_error_ledger_overflow(),
+  INVESTMENT_WORKFLOW_REQUIRED: () => m.api_error_investment_workflow_required(),
   SETUP_REQUIRED: () => m.api_error_setup_required(),
   SETUP_ALREADY_COMPLETE: () => m.api_error_setup_already_complete(),
   CONFIG_REQUIRED: () => m.api_error_config_required(),

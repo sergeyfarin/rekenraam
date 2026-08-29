@@ -65,6 +65,7 @@
   const locale = $derived(getLocale());
   const isPosted = $derived(transaction.status === 'posted');
   const isVoided = $derived(transaction.status === 'voided');
+  const isInvestment = $derived(transaction.transaction_kind === 'investment');
 
   // ── Display helpers ───────────────────────────────────────────────
   const allPostings = $derived(
@@ -472,8 +473,13 @@
   <!-- Action buttons -->
   <div class="border-t border-border pt-4">
     <p class={labelClass + ' mb-3'}>{m.transactions_detail_actions()}</p>
+    {#if isInvestment}
+      <p class="mb-3 rounded-[var(--radius-control)] border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-foreground">
+        {m.transactions_investment_lifecycle_locked()}
+      </p>
+    {/if}
     <div class="flex flex-wrap gap-2">
-      {#if isPosted}
+      {#if isPosted && !isInvestment}
         <button
           type="button"
           class={btnAction}
@@ -500,7 +506,7 @@
         </button>
       {/if}
 
-      {#if isVoided}
+      {#if isVoided && !isInvestment}
         <button
           type="button"
           class={btnAction}
@@ -512,14 +518,16 @@
       {/if}
 
       <!-- Soft-delete is available on both posted and voided rows. -->
-      <button
-        type="button"
-        class={btnAction + ' text-danger hover:border-danger/50'}
-        onclick={() => openModal('soft-delete')}
-        disabled={actionPending}
-      >
-        {m.transactions_panel_soft_delete()}
-      </button>
+      {#if !isInvestment}
+        <button
+          type="button"
+          class={btnAction + ' text-danger hover:border-danger/50'}
+          onclick={() => openModal('soft-delete')}
+          disabled={actionPending}
+        >
+          {m.transactions_panel_soft_delete()}
+        </button>
+      {/if}
 
       {#if transaction.needs_review}
         <button

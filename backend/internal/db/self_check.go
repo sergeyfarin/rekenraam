@@ -81,23 +81,68 @@ func (r *SelfCheckRepository) StreamPostedPostings(ctx context.Context, transact
 	return nil
 }
 
+// StreamPostedInvestmentPostings visits posted security quantities held by
+// security-holding accounts. Unlike filtering by lot keys, this also exposes a
+// journal-only position after every lot has been closed or removed.
+func (r *SelfCheckRepository) StreamPostedInvestmentPostings(ctx context.Context, transaction *sql.Tx, bookID int64, visit func(SelfCheckPostingRecord) error) error {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT pv.id, t.id, je.id, pv.account_id, pv.commodity_id, je.entry_date,
+			pv.quantity_value, pv.quantity_scale
+		FROM current_transaction_versions tv
+		JOIN transactions t ON t.id = tv.transaction_id
+		JOIN journal_entries je ON je.transaction_version_id = tv.id
+		JOIN posting_versions pv ON pv.journal_entry_id = je.id
+		JOIN current_account_versions av ON av.account_id = pv.account_id
+		JOIN commodities c ON c.id = pv.commodity_id
+		WHERE tv.book_id = ? AND tv.status = 'posted' AND t.deleted_at IS NULL
+			AND av.account_kind = 'security_holding' AND c.kind = 'security'
+		ORDER BY t.id, je.id, pv.id
+	`, bookID)
+	if err != nil {
+		return fmt.Errorf("read self-check investment postings: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var record SelfCheckPostingRecord
+		if err := rows.Scan(&record.PostingVersionID, &record.TransactionID, &record.JournalEntryID,
+			&record.AccountID, &record.CommodityID, &record.EntryDate,
+			&record.QuantityValue, &record.QuantityScale); err != nil {
+			return fmt.Errorf("scan self-check investment posting: %w", err)
+		}
+		if err := visit(record); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate self-check investment postings: %w", err)
+	}
+	return nil
+}
+
 // SelfCheckLotRecord is one investment lot's current standing.
 type SelfCheckLotRecord struct {
-	LotID                  int64
-	AccountID              int64
-	CommodityID            int64
-	Status                 string
-	QuantityValue          exact.Coefficient
-	QuantityScale          int
-	RemainingQuantityValue exact.Coefficient
-	RemainingQuantityScale int
+	LotID                   int64
+	AccountID               int64
+	CommodityID             int64
+	Status                  string
+	QuantityValue           exact.Coefficient
+	QuantityScale           int
+	RemainingQuantityValue  exact.Coefficient
+	RemainingQuantityScale  int
+	CostBasisValue          int64
+	CostBasisScale          int
+	RemainingCostBasisValue int64
+	RemainingCostBasisScale int
+	CostCommodityID         int64
 }
 
 func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckLotRecord, error) {
 	rows, err := transaction.QueryContext(ctx, `
 		SELECT id, account_id, commodity_id, status,
 			quantity_value, quantity_scale,
-			remaining_quantity_value, remaining_quantity_scale
+			remaining_quantity_value, remaining_quantity_scale,
+			cost_basis_value, cost_basis_scale,
+			remaining_cost_basis_value, remaining_cost_basis_scale, cost_commodity_id
 		FROM investment_lots
 		WHERE book_id = ?
 		ORDER BY account_id, commodity_id, id
@@ -112,7 +157,9 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 		var lot SelfCheckLotRecord
 		if err := rows.Scan(&lot.LotID, &lot.AccountID, &lot.CommodityID, &lot.Status,
 			&lot.QuantityValue, &lot.QuantityScale,
-			&lot.RemainingQuantityValue, &lot.RemainingQuantityScale); err != nil {
+			&lot.RemainingQuantityValue, &lot.RemainingQuantityScale,
+			&lot.CostBasisValue, &lot.CostBasisScale,
+			&lot.RemainingCostBasisValue, &lot.RemainingCostBasisScale, &lot.CostCommodityID); err != nil {
 			return nil, fmt.Errorf("scan self-check lot: %w", err)
 		}
 		lots = append(lots, lot)
@@ -121,6 +168,45 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 		return nil, fmt.Errorf("iterate self-check lots: %w", err)
 	}
 	return lots, nil
+}
+
+type SelfCheckLotEventRecord struct {
+	LotID           int64
+	AccountID       int64
+	CommodityID     int64
+	CostCommodityID int64
+	QuantityValue   exact.Coefficient
+	QuantityScale   int
+	CostBasisValue  int64
+	CostBasisScale  int
+}
+
+func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckLotEventRecord, error) {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT le.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
+			le.quantity_value, le.quantity_scale, le.cost_basis_value, le.cost_basis_scale
+		FROM investment_lot_events le
+		JOIN investment_lots l ON l.id = le.lot_id
+		WHERE le.book_id = ?
+		ORDER BY le.lot_id, le.event_date, le.id
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read self-check lot events: %w", err)
+	}
+	defer rows.Close()
+	var events []SelfCheckLotEventRecord
+	for rows.Next() {
+		var event SelfCheckLotEventRecord
+		if err := rows.Scan(&event.LotID, &event.AccountID, &event.CommodityID, &event.CostCommodityID,
+			&event.QuantityValue, &event.QuantityScale, &event.CostBasisValue, &event.CostBasisScale); err != nil {
+			return nil, fmt.Errorf("scan self-check lot event: %w", err)
+		}
+		events = append(events, event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate self-check lot events: %w", err)
+	}
+	return events, nil
 }
 
 // SelfCheckCheckpointRecord is an active reconciliation checkpoint and the
