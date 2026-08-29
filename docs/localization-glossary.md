@@ -37,6 +37,8 @@ that term wins over a more literal translation:
 | Payee | Beneficiario | Bénéficiaire | Begunstigde | Empfänger | Получатель |
 | Split (UI) | Desglose | Ventilation | Splitsing | Aufteilung | Разбивка |
 | Transfer | Transferencia | Virement | Overboeking | Umbuchung | Перевод |
+| Tag | Etiqueta | Étiquette | Label | Tag | Метка |
+| Import rule | Regla de importación | Règle d’importation | Importregel | Importregel | Правило импорта |
 
 **Transaction vs posting is the pair that matters most.** A transaction holds
 postings; both need distinct words or the reconciliation and split screens stop

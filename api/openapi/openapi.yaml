@@ -169,6 +169,10 @@ paths:
     $ref: "./paths/import-profiles.yaml"
   /api/v1/import-profiles/{profile_id}:
     $ref: "./paths/import-profile.yaml"
+  /api/v1/import-rules:
+    $ref: "./paths/import-rules.yaml"
+  /api/v1/import-rules/{rule_id}:
+    $ref: "./paths/import-rule.yaml"
   /api/v1/imports/{batch_id}:
     $ref: "./paths/import.yaml"
   /api/v1/imports/{batch_id}/preview-commit:
@@ -686,6 +690,16 @@ components:
       $ref: "./components/schemas/imports.yaml#/CreateImportProfileRequest"
     UpdateImportProfileRequest:
       $ref: "./components/schemas/imports.yaml#/UpdateImportProfileRequest"
+    ImportRuleMatchField:
+      $ref: "./components/schemas/import-rules.yaml#/ImportRuleMatchField"
+    ImportRuleResponse:
+      $ref: "./components/schemas/import-rules.yaml#/ImportRuleResponse"
+    ListImportRulesResponse:
+      $ref: "./components/schemas/import-rules.yaml#/ListImportRulesResponse"
+    CreateImportRuleRequest:
+      $ref: "./components/schemas/import-rules.yaml#/CreateImportRuleRequest"
+    UpdateImportRuleRequest:
+      $ref: "./components/schemas/import-rules.yaml#/UpdateImportRuleRequest"
     ImportConnectionResponse:
       $ref: "./components/schemas/import-connections.yaml#/ImportConnectionResponse"
     ListImportConnectionsResponse:

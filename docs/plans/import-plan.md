@@ -8,9 +8,9 @@ Governed by `docs/product-requirements.md` (Phase 4) and `docs/roadmap.md`
 (R4–R7). Aligns with `docs/conventions.md`, `docs/early-architecture-decisions.md`,
 and the ADRs (notably ADR 0010 durable background work).
 
-Status: **Slice 1 (pipeline + QIF) shipped; Slice 2 in progress** (roadmap R5 —
-see `implemented.md`, Import Pipeline). The first CSV/profile vertical cut
-shipped 2026-08-28. Last updated 2026-08-28.
+Status: **Slices 1 (pipeline + QIF) and 2 (CSV + profiles + minimal rules) shipped**
+(roadmap R4/R5 — see `implemented.md`, Import Pipeline). Last updated
+2026-08-29.
 
 ---
 
@@ -400,7 +400,10 @@ R4–R7.
 - ✅ Grouped unknown-payee resolution (2026-08-28): distinct unresolved names
   are handled once per preview; the user links an existing fuzzy near match or
   explicitly creates a payee, and the choice is applied to every matching row.
-- Remaining: roadmap R5's minimal preview-time contains-match rules.
+- ✅ Minimal preview-time rules (2026-08-29): ordered, case-insensitive literal
+  contains matching on payee or description; the first match snapshots category,
+  payee, and/or tags visibly into new staged rows. No regex, amount predicate,
+  retroactive application, or per-application audit trail.
 - **Acceptance:** two different banks' CSV layouts import via two saved profiles
   with no code changes.
 

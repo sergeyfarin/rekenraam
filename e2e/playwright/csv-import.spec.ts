@@ -7,7 +7,7 @@ function todayDMY(): string {
   return `${day}/${month}/${year}`;
 }
 
-test('[acceptance] a bank CSV mapping is reused with grouped payee resolution', async ({ page }) => {
+test('[acceptance] a bank CSV mapping is reused with payee resolution and preview rules', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
   const account = await createCashAccount(page, csrfToken, `CSV bank ${suffix}`, currencyID);
@@ -35,6 +35,15 @@ test('[acceptance] a bank CSV mapping is reused with grouped payee resolution', 
   await expect(page.getByText('2 transactions committed')).toBeVisible();
 
   await page.getByRole('button', { name: 'Import another file' }).click();
+  const ruleName = `Bakker typo ${suffix}`;
+  await page.getByRole('button', { name: 'Add rule' }).click();
+  await page.getByLabel('Name').fill(ruleName);
+  await page.getByLabel('Contains').fill('Bakkr');
+  await page.getByLabel('Set category').selectOption({ index: 1 });
+  await page.getByLabel('Set payee').selectOption({ label: 'Bakker' });
+  await page.getByRole('button', { name: 'Save rule' }).click();
+  await expect(page.getByText('Import rule saved.')).toBeVisible();
+
   await page.locator('input[type="file"]').setInputFiles({
     name: 'next-statement.csv',
     mimeType: 'text/csv',
@@ -48,7 +57,7 @@ test('[acceptance] a bank CSV mapping is reused with grouped payee resolution', 
   await expect.poll(() => profileSelect.evaluate((select: HTMLSelectElement) => select.selectedOptions[0]?.textContent?.trim())).toBe(`${profileName} updated — suggested`);
   await page.getByRole('button', { name: 'Upload & preview' }).click();
   await expect(page.getByText('-8.90')).toBeVisible();
-  await page.getByRole('button', { name: 'Bakker' }).click();
+  await expect(page.getByText(`Rule: ${ruleName}`)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Resolve payees' })).toBeHidden();
   await expect(page.getByRole('button', { name: 'Commit to ledger' })).toBeVisible();
 });

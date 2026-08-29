@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-28 (reporting currency and R3a complete; R5 CSV import is
-current, with profiles and grouped unknown-payee resolution shipped).
+Last updated: 2026-08-29 (R5 CSV import, profiles, grouped payee resolution, and
+minimal preview-time rules complete; R9 recurring transactions is next).
 
 ## Where things stand
 
@@ -240,10 +240,9 @@ button at 4.20:1; a clickable table row used `role="button"` with `aria-selected
 and nested buttons inside it; and `auth.spec.ts`'s need to run first was held up
 only by alphabetical luck, now stated as a project dependency.
 
-**Current initiative:** R5 ordinary-bank CSV import. Profile creation/reuse,
-maintenance, safe header/filename auto-suggestion, and grouped unknown-payee
-resolution now ship through the existing preview and ledger-commit pipeline.
-The next R5 cut is minimal preview-time rules v1.
+**Current initiative:** R9 recurring transactions. R5 ordinary-bank CSV import is
+complete: profiles, safe suggestions, grouped payee resolution, and minimal
+preview-time rules all reuse the staged preview and ledger-commit pipeline.
 
 ## Ready to start — unblocked by the 2026-08-19 decisions
 

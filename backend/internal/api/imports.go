@@ -140,6 +140,48 @@ type updateImportProfileRequest struct {
 	ConfigJSON *string `json:"config"`
 }
 
+type importRuleResponse struct {
+	ID           int64   `json:"id"`
+	Name         string  `json:"name"`
+	Priority     int     `json:"priority"`
+	Enabled      bool    `json:"enabled"`
+	MatchField   string  `json:"match_field"`
+	ContainsText string  `json:"contains_text"`
+	CategoryID   *int64  `json:"category_id,omitempty"`
+	PayeeID      *int64  `json:"payee_id,omitempty"`
+	TagIDs       []int64 `json:"tag_ids"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+}
+
+type listImportRulesResponse struct {
+	Rules []importRuleResponse `json:"rules"`
+}
+
+type createImportRuleRequest struct {
+	Name         string  `json:"name"`
+	Priority     *int    `json:"priority"`
+	Enabled      *bool   `json:"enabled"`
+	MatchField   string  `json:"match_field"`
+	ContainsText string  `json:"contains_text"`
+	CategoryID   *int64  `json:"category_id"`
+	PayeeID      *int64  `json:"payee_id"`
+	TagIDs       []int64 `json:"tag_ids"`
+}
+
+type updateImportRuleRequest struct {
+	Name          *string  `json:"name"`
+	Priority      *int     `json:"priority"`
+	Enabled       *bool    `json:"enabled"`
+	MatchField    *string  `json:"match_field"`
+	ContainsText  *string  `json:"contains_text"`
+	CategoryID    *int64   `json:"category_id"`
+	ClearCategory bool     `json:"clear_category"`
+	PayeeID       *int64   `json:"payee_id"`
+	ClearPayee    bool     `json:"clear_payee"`
+	TagIDs        *[]int64 `json:"tag_ids"`
+}
+
 // --- Handlers ---
 
 func startImport(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
@@ -299,6 +341,103 @@ func deleteImportProfile(logger *slog.Logger, authService *app.AuthService, impo
 		}
 		if err := importService.DeleteImportProfile(r.Context(), app.DeleteImportProfileInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), ProfileID: profileID}); err != nil {
 			writeImportServiceError(w, r, logger, "delete import profile", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+}
+
+func listImportRules(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		rules, err := importService.ListImportRules(r.Context())
+		if err != nil {
+			writeImportServiceError(w, r, logger, "list import rules", err)
+			return
+		}
+		response := make([]importRuleResponse, 0, len(rules))
+		for _, rule := range rules {
+			response = append(response, toImportRuleResponse(rule))
+		}
+		writeJSON(w, http.StatusOK, listImportRulesResponse{Rules: response})
+	}
+}
+
+func createImportRule(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		var request createImportRuleRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		priority := 100
+		if request.Priority != nil {
+			priority = *request.Priority
+		}
+		enabled := true
+		if request.Enabled != nil {
+			enabled = *request.Enabled
+		}
+		rule, err := importService.CreateImportRule(r.Context(), app.CreateImportRuleInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			Name: request.Name, Priority: priority, Enabled: enabled, MatchField: request.MatchField,
+			ContainsText: request.ContainsText, CategoryID: request.CategoryID, PayeeID: request.PayeeID, TagIDs: request.TagIDs,
+		})
+		if err != nil {
+			writeImportServiceError(w, r, logger, "create import rule", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, toImportRuleResponse(rule))
+	}))
+}
+
+func updateImportRule(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		ruleID, ok := readImportRuleID(w, r)
+		if !ok {
+			return
+		}
+		var request updateImportRuleRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		rule, err := importService.UpdateImportRule(r.Context(), app.UpdateImportRuleInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), RuleID: ruleID,
+			Name: request.Name, Priority: request.Priority, Enabled: request.Enabled, MatchField: request.MatchField,
+			ContainsText: request.ContainsText, CategoryID: request.CategoryID, ClearCategory: request.ClearCategory,
+			PayeeID: request.PayeeID, ClearPayee: request.ClearPayee, TagIDs: request.TagIDs,
+		})
+		if err != nil {
+			writeImportServiceError(w, r, logger, "update import rule", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toImportRuleResponse(rule))
+	}))
+}
+
+func deleteImportRule(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		ruleID, ok := readImportRuleID(w, r)
+		if !ok {
+			return
+		}
+		if err := importService.DeleteImportRule(r.Context(), app.DeleteImportRuleInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), RuleID: ruleID}); err != nil {
+			writeImportServiceError(w, r, logger, "delete import rule", err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -549,6 +688,8 @@ func writeImportServiceError(w http.ResponseWriter, r *http.Request, logger *slo
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "import batch is not in an open state")
 	case errors.Is(err, app.ErrImportProfileNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import profile not found")
+	case errors.Is(err, app.ErrImportRuleNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import rule not found")
 	case errors.Is(err, app.ErrImportConnectionNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import connection not found")
 	case errors.Is(err, app.ErrImportFetchInProgress):
@@ -568,6 +709,19 @@ func toImportProfileResponse(profile app.ImportProfile) importProfileResponse {
 	return importProfileResponse{ID: profile.ID, Name: profile.Name, AdapterKind: profile.AdapterKind, ConfigJSON: profile.ConfigJSON, CreatedAt: profile.CreatedAt, UpdatedAt: profile.UpdatedAt}
 }
 
+func toImportRuleResponse(rule app.ImportRule) importRuleResponse {
+	tagIDs := rule.TagIDs
+	if tagIDs == nil {
+		tagIDs = []int64{}
+	}
+	return importRuleResponse{
+		ID: rule.ID, Name: rule.Name, Priority: rule.Priority, Enabled: rule.Enabled,
+		MatchField: rule.MatchField, ContainsText: rule.ContainsText,
+		CategoryID: rule.CategoryID, PayeeID: rule.PayeeID, TagIDs: tagIDs,
+		CreatedAt: rule.CreatedAt, UpdatedAt: rule.UpdatedAt,
+	}
+}
+
 // --- ID parsing ---
 
 func readImportBatchID(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -585,6 +739,16 @@ func readImportProfileID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || id <= 0 {
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "profile_id is invalid")
+		return 0, false
+	}
+	return id, true
+}
+
+func readImportRuleID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := r.PathValue("rule_id")
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id <= 0 {
+		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "rule_id is invalid")
 		return 0, false
 	}
 	return id, true

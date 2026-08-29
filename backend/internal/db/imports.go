@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
 	ErrImportBatchNotFound             = errors.New("import batch not found")
 	ErrImportProfileNotFound           = errors.New("import profile not found")
+	ErrImportRuleNotFound              = errors.New("import rule not found")
 	ErrImportStagedRowAlreadyCommitted = errors.New("import staged row is already committed")
 )
 
@@ -77,6 +79,67 @@ type ImportProfileRecord struct {
 	ConfigJSON  string
 	CreatedAt   string
 	UpdatedAt   string
+}
+
+type ImportRuleRecord struct {
+	ID           int64
+	BookID       int64
+	Name         string
+	Priority     int
+	Enabled      bool
+	MatchField   string
+	ContainsText string
+	CategoryID   sql.NullInt64
+	PayeeID      sql.NullInt64
+	PayeeName    sql.NullString
+	TagIDs       []int64
+	CreatedAt    string
+	UpdatedAt    string
+}
+
+type ImportRuleTargetState struct {
+	CategoryActive bool
+	PayeeActive    bool
+	ActiveTagIDs   map[int64]bool
+}
+
+type ImportRuleSpec struct {
+	Name         string
+	Priority     int
+	Enabled      bool
+	MatchField   string
+	ContainsText string
+	CategoryID   sql.NullInt64
+	PayeeID      sql.NullInt64
+	TagIDs       []int64
+}
+
+type CreateImportRuleParams struct {
+	BookID        int64
+	Spec          ImportRuleSpec
+	CreatedAt     string
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+}
+
+type UpdateImportRuleParams struct {
+	BookID        int64
+	RuleID        int64
+	Spec          ImportRuleSpec
+	UpdatedAt     string
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+}
+
+type DeleteImportRuleParams struct {
+	BookID        int64
+	RuleID        int64
+	DeletedAt     string
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
 }
 
 type CreateImportProfileParams struct {
@@ -324,6 +387,289 @@ func (r *ImportRepository) DeleteImportProfile(ctx context.Context, params Delet
 		return fmt.Errorf("commit delete import profile: %w", err)
 	}
 	committed = true
+	return nil
+}
+
+func (r *ImportRepository) ListImportRules(ctx context.Context, bookID int64) ([]ImportRuleRecord, error) {
+	return listImportRules(ctx, r.database, bookID, false)
+}
+
+// ListApplicableImportRules returns the enabled rules whose current targets
+// are all still active. Archived reference data leaves the saved rule visible
+// for repair, but cannot make a newly staged row fail at commit time.
+func (r *ImportRepository) ListApplicableImportRules(ctx context.Context, bookID int64) ([]ImportRuleRecord, error) {
+	return listImportRules(ctx, r.database, bookID, true)
+}
+
+func (r *ImportRepository) ImportRuleByID(ctx context.Context, bookID, ruleID int64) (ImportRuleRecord, error) {
+	records, err := listImportRules(ctx, r.database, bookID, false)
+	if err != nil {
+		return ImportRuleRecord{}, err
+	}
+	for _, record := range records {
+		if record.ID == ruleID {
+			return record, nil
+		}
+	}
+	return ImportRuleRecord{}, ErrImportRuleNotFound
+}
+
+func (r *ImportRepository) ImportRuleTargetState(ctx context.Context, bookID int64, categoryID sql.NullInt64, payeeID sql.NullInt64, tagIDs []int64) (ImportRuleTargetState, error) {
+	state := ImportRuleTargetState{CategoryActive: !categoryID.Valid, PayeeActive: !payeeID.Valid, ActiveTagIDs: make(map[int64]bool)}
+	if categoryID.Valid {
+		err := r.database.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM accounts account
+				JOIN current_account_versions version ON version.account_id = account.id
+				WHERE account.book_id = ?
+				  AND account.id = ?
+				  AND account.system_role IS NULL
+				  AND version.account_class IN ('income', 'expense')
+				  AND version.status = 'active'
+				  AND version.allows_postings = 1
+			)
+		`, bookID, categoryID.Int64).Scan(&state.CategoryActive)
+		if err != nil {
+			return ImportRuleTargetState{}, fmt.Errorf("check import rule category: %w", err)
+		}
+	}
+	if payeeID.Valid {
+		err := r.database.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM payees payee
+				JOIN current_payee_versions version ON version.payee_id = payee.id
+				WHERE payee.book_id = ? AND payee.id = ? AND version.status = 'active'
+			)
+		`, bookID, payeeID.Int64).Scan(&state.PayeeActive)
+		if err != nil {
+			return ImportRuleTargetState{}, fmt.Errorf("check import rule payee: %w", err)
+		}
+	}
+	if len(tagIDs) > 0 {
+		placeholders := make([]string, 0, len(tagIDs))
+		args := make([]any, 0, len(tagIDs)+1)
+		args = append(args, bookID)
+		for _, tagID := range tagIDs {
+			placeholders = append(placeholders, "?")
+			args = append(args, tagID)
+		}
+		rows, err := r.database.QueryContext(ctx, `SELECT id FROM tags WHERE book_id = ? AND status = 'active' AND id IN (`+strings.Join(placeholders, ",")+`)`, args...)
+		if err != nil {
+			return ImportRuleTargetState{}, fmt.Errorf("check import rule tags: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var tagID int64
+			if err := rows.Scan(&tagID); err != nil {
+				return ImportRuleTargetState{}, fmt.Errorf("scan active import rule tag: %w", err)
+			}
+			state.ActiveTagIDs[tagID] = true
+		}
+		if err := rows.Err(); err != nil {
+			return ImportRuleTargetState{}, fmt.Errorf("iterate active import rule tags: %w", err)
+		}
+	}
+	return state, nil
+}
+
+func (r *ImportRepository) CreateImportRule(ctx context.Context, params CreateImportRuleParams) (ImportRuleRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return ImportRuleRecord{}, fmt.Errorf("begin create import rule: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return ImportRuleRecord{}, err
+	}
+	if _, err := insertAuditEvent(ctx, tx, AuditEventParams{BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID, OccurredAt: params.CreatedAt, RequestID: params.RequestID, OriginType: "browser_api", Operation: "import.rule.create", Reason: "import rule created"}); err != nil {
+		return ImportRuleRecord{}, err
+	}
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO import_rules (book_id, name, priority, enabled, match_field, contains_text, category_id, payee_id, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, params.Spec.Name, params.Spec.Priority, params.Spec.Enabled, params.Spec.MatchField, params.Spec.ContainsText, params.Spec.CategoryID, params.Spec.PayeeID, params.CreatedAt, params.CreatedAt)
+	if err != nil {
+		return ImportRuleRecord{}, fmt.Errorf("insert import rule: %w", err)
+	}
+	ruleID, err := result.LastInsertId()
+	if err != nil {
+		return ImportRuleRecord{}, fmt.Errorf("read import rule id: %w", err)
+	}
+	if err := replaceImportRuleTags(ctx, tx, params.BookID, ruleID, params.Spec.TagIDs); err != nil {
+		return ImportRuleRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return ImportRuleRecord{}, fmt.Errorf("commit create import rule: %w", err)
+	}
+	committed = true
+	return r.ImportRuleByID(ctx, params.BookID, ruleID)
+}
+
+func (r *ImportRepository) UpdateImportRule(ctx context.Context, params UpdateImportRuleParams) (ImportRuleRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return ImportRuleRecord{}, fmt.Errorf("begin update import rule: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return ImportRuleRecord{}, err
+	}
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM import_rules WHERE book_id = ? AND id = ?`, params.BookID, params.RuleID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+		return ImportRuleRecord{}, ErrImportRuleNotFound
+	} else if err != nil {
+		return ImportRuleRecord{}, fmt.Errorf("read import rule for update: %w", err)
+	}
+	if _, err := insertAuditEvent(ctx, tx, AuditEventParams{BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID, OccurredAt: params.UpdatedAt, RequestID: params.RequestID, OriginType: "browser_api", Operation: "import.rule.update", Reason: "import rule updated", MetadataJSON: fmt.Sprintf(`{"rule_id":%d}`, params.RuleID)}); err != nil {
+		return ImportRuleRecord{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE import_rules
+		SET name = ?, priority = ?, enabled = ?, match_field = ?, contains_text = ?, category_id = ?, payee_id = ?, updated_at = ?
+		WHERE book_id = ? AND id = ?
+	`, params.Spec.Name, params.Spec.Priority, params.Spec.Enabled, params.Spec.MatchField, params.Spec.ContainsText, params.Spec.CategoryID, params.Spec.PayeeID, params.UpdatedAt, params.BookID, params.RuleID); err != nil {
+		return ImportRuleRecord{}, fmt.Errorf("update import rule: %w", err)
+	}
+	if err := replaceImportRuleTags(ctx, tx, params.BookID, params.RuleID, params.Spec.TagIDs); err != nil {
+		return ImportRuleRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return ImportRuleRecord{}, fmt.Errorf("commit update import rule: %w", err)
+	}
+	committed = true
+	return r.ImportRuleByID(ctx, params.BookID, params.RuleID)
+}
+
+func (r *ImportRepository) DeleteImportRule(ctx context.Context, params DeleteImportRuleParams) error {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete import rule: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackTx(ctx, tx)
+		}
+	}()
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return err
+	}
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM import_rules WHERE book_id = ? AND id = ?`, params.BookID, params.RuleID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+		return ErrImportRuleNotFound
+	} else if err != nil {
+		return fmt.Errorf("read import rule for delete: %w", err)
+	}
+	if _, err := insertAuditEvent(ctx, tx, AuditEventParams{BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID, OccurredAt: params.DeletedAt, RequestID: params.RequestID, OriginType: "browser_api", Operation: "import.rule.delete", Reason: "import rule deleted", MetadataJSON: fmt.Sprintf(`{"rule_id":%d}`, params.RuleID)}); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM import_rules WHERE book_id = ? AND id = ?`, params.BookID, params.RuleID); err != nil {
+		return fmt.Errorf("delete import rule: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete import rule: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+func listImportRules(ctx context.Context, queryer queryer, bookID int64, applicableOnly bool) ([]ImportRuleRecord, error) {
+	where := "rule.book_id = ?"
+	if applicableOnly {
+		where += `
+			AND rule.enabled = 1
+			AND (
+				rule.category_id IS NULL OR EXISTS (
+					SELECT 1 FROM accounts account
+					JOIN current_account_versions version ON version.account_id = account.id
+					WHERE account.id = rule.category_id
+					  AND account.book_id = rule.book_id
+					  AND account.system_role IS NULL
+					  AND version.account_class IN ('income', 'expense')
+					  AND version.status = 'active'
+					  AND version.allows_postings = 1
+				)
+			)
+			AND (rule.payee_id IS NULL OR payee_version.status = 'active')
+			AND NOT EXISTS (
+				SELECT 1 FROM import_rule_tags rule_tag
+				JOIN tags tag ON tag.id = rule_tag.tag_id
+				WHERE rule_tag.rule_id = rule.id AND tag.status != 'active'
+			)`
+	}
+	rows, err := queryer.QueryContext(ctx, `
+		SELECT rule.id, rule.book_id, rule.name, rule.priority, rule.enabled,
+		       rule.match_field, rule.contains_text, rule.category_id, rule.payee_id,
+		       payee_version.name, rule.created_at, rule.updated_at
+		FROM import_rules rule
+		LEFT JOIN payees payee ON payee.id = rule.payee_id AND payee.book_id = rule.book_id
+		LEFT JOIN current_payee_versions payee_version ON payee_version.payee_id = payee.id
+		WHERE `+where+`
+		ORDER BY rule.priority ASC, rule.id ASC
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("list import rules: %w", err)
+	}
+	defer rows.Close()
+	records := make([]ImportRuleRecord, 0)
+	for rows.Next() {
+		var record ImportRuleRecord
+		if err := rows.Scan(&record.ID, &record.BookID, &record.Name, &record.Priority, &record.Enabled, &record.MatchField, &record.ContainsText, &record.CategoryID, &record.PayeeID, &record.PayeeName, &record.CreatedAt, &record.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan import rule: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate import rules: %w", err)
+	}
+	if len(records) == 0 {
+		return records, nil
+	}
+	byID := make(map[int64]*ImportRuleRecord, len(records))
+	for index := range records {
+		byID[records[index].ID] = &records[index]
+	}
+	tagRows, err := queryer.QueryContext(ctx, `SELECT rule_id, tag_id FROM import_rule_tags WHERE book_id = ? ORDER BY rule_id, tag_id`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("list import rule tags: %w", err)
+	}
+	defer tagRows.Close()
+	for tagRows.Next() {
+		var ruleID, tagID int64
+		if err := tagRows.Scan(&ruleID, &tagID); err != nil {
+			return nil, fmt.Errorf("scan import rule tag: %w", err)
+		}
+		if record := byID[ruleID]; record != nil {
+			record.TagIDs = append(record.TagIDs, tagID)
+		}
+	}
+	if err := tagRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate import rule tags: %w", err)
+	}
+	return records, nil
+}
+
+func replaceImportRuleTags(ctx context.Context, tx *sql.Tx, bookID, ruleID int64, tagIDs []int64) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM import_rule_tags WHERE book_id = ? AND rule_id = ?`, bookID, ruleID); err != nil {
+		return fmt.Errorf("delete import rule tags: %w", err)
+	}
+	for _, tagID := range tagIDs {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO import_rule_tags (rule_id, book_id, tag_id) VALUES (?, ?, ?)`, ruleID, bookID, tagID); err != nil {
+			return fmt.Errorf("insert import rule tag: %w", err)
+		}
+	}
 	return nil
 }
 

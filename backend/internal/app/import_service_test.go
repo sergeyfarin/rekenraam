@@ -105,6 +105,25 @@ func plainImportTransactionCount(t *testing.T, f *plainImportTestFixture) int {
 	return count
 }
 
+func TestApplyImportRules_DescriptionMatchAndTransferSafety(t *testing.T) {
+	categoryID := int64(41)
+	rules := []db.ImportRuleRecord{{
+		ID: 7, Name: "Rail travel", MatchField: "description", ContainsText: "train",
+		CategoryID: sql.NullInt64{Int64: categoryID, Valid: true}, TagIDs: []int64{9},
+	}}
+
+	matched := applyImportRules(StagedRow{Memo: "Night TRAIN to Berlin"}, rules)
+	require.NotNil(t, matched.CategoryID)
+	assert.Equal(t, categoryID, *matched.CategoryID)
+	assert.Equal(t, []int64{9}, matched.TagIDs)
+	assert.Equal(t, "Rail travel", matched.AppliedRuleName)
+
+	transfer := applyImportRules(StagedRow{Memo: "Train transfer", TransferHint: "Savings"}, rules)
+	assert.Nil(t, transfer.CategoryID, "a rule must not turn a transfer into spending")
+	assert.Equal(t, []int64{9}, transfer.TagIDs)
+	assert.Equal(t, "Rail travel", transfer.AppliedRuleName)
+}
+
 func TestCSVImportSavedProfileStagesAndCommitsThroughRealLedgerService(t *testing.T) {
 	f := newPlainImportTestFixture(t)
 	ctx := context.Background()

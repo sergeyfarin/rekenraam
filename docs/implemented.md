@@ -118,7 +118,7 @@ non-English locales all landed together).
 | **Batch rollback (void all committed rows)** | ⬜ | R6. |
 | **Import profiles (saved column mappings)** | ✅ | R5, 2026-08-28: audited book-scoped CSV profiles can be created, listed, edited, deleted, selected on upload, and reused from the import screen. Exact header signatures and normalized filename hints rank compatible profiles; the screen auto-selects only a uniquely best match and leaves ties to the user. Deleting a mapping retains its historical import batches. Account/category resolutions remain preview choices rather than profile defaults. |
 | **Grouped unknown-payee resolution** | ✅ | R5, 2026-08-28: preview groups every includable staged row carrying the same unresolved name. One explicit link-or-create choice fills `payee_id` on the whole group; fuzzy near matches are offered first, exact existing names remain silent, and duplicate/excluded rows are left alone. |
-| **Minimal import rules v1** | ⬜ | Remaining R5: ordered contains-match rules applied visibly during preview only. |
+| **Minimal import rules v1** | ✅ | R5, 2026-08-29: audited book-scoped rules match case-insensitive literal text in payee or description, ordered by numeric priority then rule ID. The first applicable match snapshots category, payee, and/or tags into the newly staged row; transfers reject category conversion, disabled or stale-target rules do not apply, and the preview names the rule and every result before the normal ledger commit path. Rules never re-run over existing batches or committed transactions. |
 
 ## Reconciliation (Phase 3) — ✅ Core workflow shipped
 

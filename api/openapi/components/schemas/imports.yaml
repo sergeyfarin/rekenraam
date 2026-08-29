@@ -127,6 +127,16 @@ ImportResolution:
     transfer_account_id:
       type: integer
       format: int64
+    tag_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+    applied_rule_id:
+      type: integer
+      format: int64
+    applied_rule_name:
+      type: string
     exclude:
       type: boolean
 ImportStagedRowResponse:

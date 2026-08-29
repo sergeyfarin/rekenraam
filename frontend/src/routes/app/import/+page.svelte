@@ -11,11 +11,13 @@
   import Panel from '$lib/components/panel.svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import PayeeResolutionPanel from '$lib/imports/payee-resolution-panel.svelte';
+  import ImportRulesPanel from '$lib/imports/import-rules-panel.svelte';
   import type { PayeeResponse } from '$lib/api/payees';
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { accountsQueryOptions } from '$lib/api/accounts';
   import { currenciesQueryOptions } from '$lib/api/currencies';
   import { categoriesQueryOptions } from '$lib/api/categories';
+  import { tagsQueryOptions } from '$lib/api/tags';
   import {
     startImport,
     startOnlineImport,
@@ -123,10 +125,12 @@
   const accountsQuery = createQuery(() => accountsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
   const categoriesQuery = createQuery(() => categoriesQueryOptions());
+  const tagsQuery = createQuery(() => tagsQueryOptions());
 
   const accounts = $derived(accountsQuery.data?.accounts ?? []);
   const currencies = $derived(currenciesQuery.data?.currencies ?? []);
   const categories = $derived(categoriesQuery.data?.categories ?? []);
+  const tags = $derived(tagsQuery.data?.tags ?? []);
 
   // ── Upload ─────────────────────────────────────────────────────────
   const profilesQuery = createQuery(() => ({ queryKey: importProfilesQueryKey, queryFn: listImportProfiles, retry: false }));
@@ -300,8 +304,7 @@
       const result = await startImport(selectedFile, csrfToken, profileId);
       previewData = result;
       batchId = result.batch.id;
-      // Initialize resolutions from existing data
-      rowResolutions = new Map();
+      rowResolutions = new Map(result.rows.map((row) => [row.id, parseResolution(row)]));
       step = 'preview';
     } catch (err) {
       uploadError = err;
@@ -361,7 +364,7 @@
             date_to: meta.date_to
           }
         };
-        rowResolutions = new Map();
+        rowResolutions = new Map(result.rows.map((row) => [row.id, parseResolution(row)]));
         step = 'preview';
         return;
       }
@@ -454,6 +457,13 @@
       case 'excluded': return m.import_preview_dedupe_excluded();
       default: return m.import_preview_dedupe_new();
     }
+  }
+
+  function appliedRuleSummary(resolution: ImportResolution): string {
+    const tagNames = (resolution.tag_ids ?? []).map((id) => tags.find((tag) => tag.id === id)?.name ?? String(id));
+    return tagNames.length > 0
+      ? m.import_preview_rule_applied_with_tags({ name: resolution.applied_rule_name ?? '', tags: tagNames.join(', ') })
+      : m.import_preview_rule_applied({ name: resolution.applied_rule_name ?? '' });
   }
 
   // ── Commit ─────────────────────────────────────────────────────────
@@ -811,6 +821,8 @@
         </button>
       </div>
     </Panel>
+
+    <ImportRulesPanel {csrfToken} />
 
     <!-- MS Money help panel -->
     <Panel variant="subtle">
@@ -1229,9 +1241,14 @@
                 class="border-b border-border last:border-b-0"
               >
                 <td class="px-4 py-2.5 tabular-nums text-muted">{norm.date}</td>
-                <td class="px-4 py-2.5 font-medium text-foreground">{norm.payee_hint || '—'}</td>
+                <td class="px-4 py-2.5 font-medium text-foreground">{res.payee_name || norm.payee_hint || '—'}</td>
                 <td class="px-4 py-2.5 tabular-nums text-right text-foreground">{norm.amount}</td>
-                <td class="max-w-xs truncate px-4 py-2.5 text-muted">{norm.memo || '—'}</td>
+                <td class="max-w-xs px-4 py-2.5 text-muted">
+                  <span class="block truncate">{norm.memo || '—'}</span>
+                  {#if res.applied_rule_name}
+                    <span class="mt-1 block text-xs font-medium text-foreground">{appliedRuleSummary(res)}</span>
+                  {/if}
+                </td>
                 <td class="px-4 py-2.5">
                   <span
                     class:text-warning={row.dedupe_status === 'needs_attention'}

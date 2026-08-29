@@ -256,6 +256,184 @@ func toImportProfile(record db.ImportProfileRecord) ImportProfile {
 	return ImportProfile{ID: record.ID, BookID: record.BookID, Name: record.Name, AdapterKind: record.AdapterKind, ConfigJSON: record.ConfigJSON, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
 }
 
+const (
+	importRuleNameMaxBytes     = 200
+	importRuleContainsMaxBytes = 500
+	importRulePriorityMax      = 1000000
+)
+
+func (s *ImportService) ListImportRules(ctx context.Context) ([]ImportRule, error) {
+	records, err := s.repository.ListImportRules(ctx, BookID)
+	if err != nil {
+		return nil, fmt.Errorf("list import rules: %w", err)
+	}
+	return toImportRules(records), nil
+}
+
+func (s *ImportService) CreateImportRule(ctx context.Context, input CreateImportRuleInput) (ImportRule, error) {
+	if input.OwnerUserID <= 0 {
+		return ImportRule{}, ValidationError{Message: "owner user is required"}
+	}
+	spec, err := s.cleanImportRuleSpec(ctx, db.ImportRuleSpec{
+		Name: input.Name, Priority: input.Priority, Enabled: input.Enabled,
+		MatchField: input.MatchField, ContainsText: input.ContainsText,
+		CategoryID: nullableInt64(input.CategoryID), PayeeID: nullableInt64(input.PayeeID), TagIDs: input.TagIDs,
+	})
+	if err != nil {
+		return ImportRule{}, err
+	}
+	now := s.now().UTC().Format(time.RFC3339)
+	record, err := s.repository.CreateImportRule(ctx, db.CreateImportRuleParams{
+		BookID: BookID, Spec: spec, CreatedAt: now,
+		ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
+	})
+	if err != nil {
+		return ImportRule{}, fmt.Errorf("create import rule: %w", err)
+	}
+	return toImportRule(record), nil
+}
+
+func (s *ImportService) UpdateImportRule(ctx context.Context, input UpdateImportRuleInput) (ImportRule, error) {
+	if input.OwnerUserID <= 0 || input.RuleID <= 0 {
+		return ImportRule{}, ValidationError{Message: "import rule id is invalid"}
+	}
+	existing, err := s.repository.ImportRuleByID(ctx, BookID, input.RuleID)
+	if errors.Is(err, db.ErrImportRuleNotFound) {
+		return ImportRule{}, ErrImportRuleNotFound
+	}
+	if err != nil {
+		return ImportRule{}, fmt.Errorf("read import rule for update: %w", err)
+	}
+	spec := db.ImportRuleSpec{
+		Name: existing.Name, Priority: existing.Priority, Enabled: existing.Enabled,
+		MatchField: existing.MatchField, ContainsText: existing.ContainsText,
+		CategoryID: existing.CategoryID, PayeeID: existing.PayeeID, TagIDs: existing.TagIDs,
+	}
+	if input.Name != nil {
+		spec.Name = *input.Name
+	}
+	if input.Priority != nil {
+		spec.Priority = *input.Priority
+	}
+	if input.Enabled != nil {
+		spec.Enabled = *input.Enabled
+	}
+	if input.MatchField != nil {
+		spec.MatchField = *input.MatchField
+	}
+	if input.ContainsText != nil {
+		spec.ContainsText = *input.ContainsText
+	}
+	if input.ClearCategory {
+		spec.CategoryID = sql.NullInt64{}
+	} else if input.CategoryID != nil {
+		spec.CategoryID = nullableInt64(input.CategoryID)
+	}
+	if input.ClearPayee {
+		spec.PayeeID = sql.NullInt64{}
+	} else if input.PayeeID != nil {
+		spec.PayeeID = nullableInt64(input.PayeeID)
+	}
+	if input.TagIDs != nil {
+		spec.TagIDs = *input.TagIDs
+	}
+	spec, err = s.cleanImportRuleSpec(ctx, spec)
+	if err != nil {
+		return ImportRule{}, err
+	}
+	now := s.now().UTC().Format(time.RFC3339)
+	record, err := s.repository.UpdateImportRule(ctx, db.UpdateImportRuleParams{
+		BookID: BookID, RuleID: input.RuleID, Spec: spec, UpdatedAt: now,
+		ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
+	})
+	if errors.Is(err, db.ErrImportRuleNotFound) {
+		return ImportRule{}, ErrImportRuleNotFound
+	}
+	if err != nil {
+		return ImportRule{}, fmt.Errorf("update import rule: %w", err)
+	}
+	return toImportRule(record), nil
+}
+
+func (s *ImportService) DeleteImportRule(ctx context.Context, input DeleteImportRuleInput) error {
+	if input.OwnerUserID <= 0 || input.RuleID <= 0 {
+		return ValidationError{Message: "import rule id is invalid"}
+	}
+	now := s.now().UTC().Format(time.RFC3339)
+	err := s.repository.DeleteImportRule(ctx, db.DeleteImportRuleParams{
+		BookID: BookID, RuleID: input.RuleID, DeletedAt: now,
+		ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
+	})
+	if errors.Is(err, db.ErrImportRuleNotFound) {
+		return ErrImportRuleNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("delete import rule: %w", err)
+	}
+	return nil
+}
+
+func (s *ImportService) cleanImportRuleSpec(ctx context.Context, spec db.ImportRuleSpec) (db.ImportRuleSpec, error) {
+	spec.Name = strings.TrimSpace(spec.Name)
+	spec.MatchField = strings.TrimSpace(spec.MatchField)
+	spec.ContainsText = strings.TrimSpace(spec.ContainsText)
+	if spec.Name == "" || len(spec.Name) > importRuleNameMaxBytes {
+		return db.ImportRuleSpec{}, ValidationError{Message: "import rule name is invalid"}
+	}
+	if spec.Priority < 0 || spec.Priority > importRulePriorityMax {
+		return db.ImportRuleSpec{}, ValidationError{Message: "import rule priority is invalid"}
+	}
+	if spec.MatchField != "payee" && spec.MatchField != "description" {
+		return db.ImportRuleSpec{}, ValidationError{Message: "import rule match field is invalid"}
+	}
+	if spec.ContainsText == "" || len(spec.ContainsText) > importRuleContainsMaxBytes {
+		return db.ImportRuleSpec{}, ValidationError{Message: "import rule contains text is invalid"}
+	}
+	slices.Sort(spec.TagIDs)
+	spec.TagIDs = slices.Compact(spec.TagIDs)
+	for _, tagID := range spec.TagIDs {
+		if tagID <= 0 {
+			return db.ImportRuleSpec{}, ValidationError{Message: "import rule tag is invalid"}
+		}
+	}
+	if !spec.CategoryID.Valid && !spec.PayeeID.Valid && len(spec.TagIDs) == 0 {
+		return db.ImportRuleSpec{}, ValidationError{Message: "import rule must set a category, payee, or tag"}
+	}
+	state, err := s.repository.ImportRuleTargetState(ctx, BookID, spec.CategoryID, spec.PayeeID, spec.TagIDs)
+	if err != nil {
+		return db.ImportRuleSpec{}, fmt.Errorf("validate import rule targets: %w", err)
+	}
+	if !state.CategoryActive {
+		return db.ImportRuleSpec{}, ValidationError{Message: "import rule category is invalid"}
+	}
+	if !state.PayeeActive {
+		return db.ImportRuleSpec{}, ValidationError{Message: "import rule payee is invalid"}
+	}
+	for _, tagID := range spec.TagIDs {
+		if !state.ActiveTagIDs[tagID] {
+			return db.ImportRuleSpec{}, ValidationError{Message: "import rule tag is invalid"}
+		}
+	}
+	return spec, nil
+}
+
+func toImportRule(record db.ImportRuleRecord) ImportRule {
+	return ImportRule{
+		ID: record.ID, BookID: record.BookID, Name: record.Name, Priority: record.Priority,
+		Enabled: record.Enabled, MatchField: record.MatchField, ContainsText: record.ContainsText,
+		CategoryID: int64Ptr(record.CategoryID), PayeeID: int64Ptr(record.PayeeID), TagIDs: record.TagIDs,
+		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+	}
+}
+
+func toImportRules(records []db.ImportRuleRecord) []ImportRule {
+	rules := make([]ImportRule, 0, len(records))
+	for _, record := range records {
+		rules = append(rules, toImportRule(record))
+	}
+	return rules
+}
+
 // stageParseResult takes a SourceAdapter's ParseResult and runs the
 // fingerprint-hash → dedupe → insert pipeline against an existing batch.
 // Shared by StartImport (file path, always exactly one call per batch) and
@@ -306,6 +484,10 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 	}
 
 	// Insert staged rows.
+	rules, err := s.repository.ListApplicableImportRules(ctx, BookID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list applicable import rules: %w", err)
+	}
 	var dbRows []db.CreateImportStagedRowParams
 	for i, row := range parseResult.Rows {
 		rawJSON, _ := json.Marshal(row.Raw)
@@ -332,6 +514,15 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 		}
 		seenInBatch[row.DedupeFingerprint] = true
 
+		resolutionJSON := "{}"
+		if resolution := applyImportRules(row, rules); resolution.AppliedRuleID != nil {
+			encoded, err := json.Marshal(resolution)
+			if err != nil {
+				return nil, 0, fmt.Errorf("encode import rule resolution: %w", err)
+			}
+			resolutionJSON = string(encoded)
+		}
+
 		dbRows = append(dbRows, db.CreateImportStagedRowParams{
 			BatchID:           batchID,
 			BookID:            BookID,
@@ -340,7 +531,7 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 			RawJSON:           string(rawJSON),
 			NormalizedJSON:    string(normalizedJSON),
 			DedupeStatus:      dedupeStatus,
-			ResolutionJSON:    "{}",
+			ResolutionJSON:    resolutionJSON,
 		})
 	}
 
@@ -353,6 +544,42 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 		return nil, 0, fmt.Errorf("list staged rows: %w", err)
 	}
 	return stagedRows, baseIndex, nil
+}
+
+// applyImportRules snapshots the first matching enabled rule into a staged
+// row's resolution. Rules never touch committed transactions and are never
+// re-run over an existing batch. A category action is deliberately ignored for
+// a transfer hint so a broad text match cannot turn a transfer into spending.
+func applyImportRules(row StagedRow, rules []db.ImportRuleRecord) ImportRowResolution {
+	for _, rule := range rules {
+		candidate := row.PayeeHint
+		if rule.MatchField == "description" {
+			candidate = row.Memo
+		}
+		if !strings.Contains(strings.ToLower(candidate), strings.ToLower(rule.ContainsText)) {
+			continue
+		}
+
+		resolution := ImportRowResolution{}
+		if rule.CategoryID.Valid && strings.TrimSpace(row.TransferHint) == "" {
+			categoryID := rule.CategoryID.Int64
+			resolution.CategoryID = &categoryID
+		}
+		if rule.PayeeID.Valid {
+			payeeID := rule.PayeeID.Int64
+			resolution.PayeeID = &payeeID
+			resolution.PayeeName = rule.PayeeName.String
+		}
+		resolution.TagIDs = append([]int64(nil), rule.TagIDs...)
+		if resolution.CategoryID == nil && resolution.PayeeID == nil && len(resolution.TagIDs) == 0 {
+			continue
+		}
+		ruleID := rule.ID
+		resolution.AppliedRuleID = &ruleID
+		resolution.AppliedRuleName = rule.Name
+		return resolution
+	}
+	return ImportRowResolution{}
 }
 
 // GetImportBatch returns a batch with its staged rows (paginated).
@@ -1119,6 +1346,7 @@ func buildTransactionSpec(row db.ImportStagedRowRecord, resolution ImportRowReso
 		Description:     normalized.Memo,
 		ExternalRefHint: normalized.ExternalRef,
 		NeedsReview:     true,
+		TagIDs:          append([]int64(nil), resolution.TagIDs...),
 		JournalEntries: []JournalEntryInput{
 			{
 				EntryDate: date,

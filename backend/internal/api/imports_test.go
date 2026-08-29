@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/app"
 )
 
 // --- Bootstrap ---
@@ -217,6 +219,36 @@ func resolutionPatchBody(t *testing.T, accountID, commodityID, categoryID int64,
 	return string(body)
 }
 
+func createImportRuleForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken, body string) importRuleResponse {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/import-rules", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, http.StatusCreated, res.Code, res.Body.String())
+	var response importRuleResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&response))
+	return response
+}
+
+func resolutionPatchPreservingRules(t *testing.T, row importStagedRowResponse, accountID, commodityID int64) string {
+	t.Helper()
+	var resolution map[string]any
+	require.NoError(t, json.Unmarshal([]byte(row.ResolutionJSON), &resolution))
+	resolution["account_id"] = accountID
+	resolution["commodity_id"] = commodityID
+	resolutionJSON, err := json.Marshal(resolution)
+	require.NoError(t, err)
+	body, err := json.Marshal(patchImportBatchRequest{RowResolutions: []rowResolutionPatchRequest{{
+		RowID: row.ID, ResolutionJSON: string(resolutionJSON),
+	}}})
+	require.NoError(t, err)
+	return string(body)
+}
+
 // --- Lifecycle ---
 
 func TestImportQIFLifecycle_StartPatchPreviewCommitCreatesLedgerTransaction(t *testing.T) {
@@ -264,6 +296,93 @@ func TestImportQIFLifecycle_StartPatchPreviewCommitCreatesLedgerTransaction(t *t
 	batches := listImportBatchesForSession(t, handler, sessionCookie, "", http.StatusOK)
 	require.Len(t, batches.Batches, 1)
 	assert.Equal(t, "committed", batches.Batches[0].Status)
+}
+
+func TestImportRules_FirstContainsMatchIsVisibleAndCommitsThroughLedger(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID, checking, groceries := bootstrapImportAPITest(t, handler)
+	travel := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Travel","category_type":"expense"}`)
+	merchant := createPayeeForSession(t, handler, sessionCookie, csrfToken, `{"name":"Market Hall"}`)
+	project := createTagForSession(t, handler, sessionCookie, csrfToken, `{"name":"City break","kind":"project"}`)
+
+	// The lower numeric priority wins even though the broader rule was created first.
+	_ = createImportRuleForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Any market","priority":200,"match_field":"payee","contains_text":"market","category_id":`+strconvFormatInt(groceries.ID)+`
+	}`)
+	winner := createImportRuleForSession(t, handler, sessionCookie, csrfToken, `{
+		"name":"Market Hall travel","priority":10,"match_field":"payee","contains_text":"MARKET HALL",
+		"category_id":`+strconvFormatInt(travel.ID)+`,"payee_id":`+strconvFormatInt(merchant.ID)+`,"tag_ids":[`+strconvFormatInt(project.ID)+`]
+	}`)
+
+	started := startQIFImportForSession(t, handler, sessionCookie, csrfToken, "bank.qif", qifRow("08/28/26", "-24.75", "Market Hall Amsterdam"), http.StatusCreated)
+	require.Len(t, started.Rows, 1)
+	var resolution app.ImportRowResolution
+	require.NoError(t, json.Unmarshal([]byte(started.Rows[0].ResolutionJSON), &resolution))
+	require.NotNil(t, resolution.AppliedRuleID)
+	assert.Equal(t, winner.ID, *resolution.AppliedRuleID)
+	assert.Equal(t, "Market Hall travel", resolution.AppliedRuleName)
+	require.NotNil(t, resolution.CategoryID)
+	assert.Equal(t, travel.ID, *resolution.CategoryID)
+	require.NotNil(t, resolution.PayeeID)
+	assert.Equal(t, merchant.ID, *resolution.PayeeID)
+	assert.Equal(t, []int64{project.ID}, resolution.TagIDs)
+
+	patchBody := resolutionPatchPreservingRules(t, started.Rows[0], checking.ID, commodityID)
+	patchImportBatchForSession(t, handler, sessionCookie, csrfToken, started.Batch.ID, patchBody, http.StatusNoContent)
+	commit := commitImportBatchForSession(t, handler, sessionCookie, csrfToken, started.Batch.ID, "", http.StatusOK)
+	require.Equal(t, 1, commit.CommittedCount)
+
+	transactions := listTransactionsForSession(t, handler, sessionCookie, "?payee_id="+strconvFormatInt(merchant.ID))
+	require.Len(t, transactions.Transactions, 1)
+	assert.ElementsMatch(t, []int64{project.ID}, transactions.Transactions[0].TagIDs)
+	require.Len(t, transactions.Transactions[0].JournalEntries, 1)
+	assert.Equal(t, travel.ID, transactions.Transactions[0].JournalEntries[0].Postings[1].AccountID)
+}
+
+func TestImportRules_CRUDIsOrderedAndAudited(t *testing.T) {
+	t.Parallel()
+
+	handler, database := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _, _, groceries := bootstrapImportAPITest(t, handler)
+	late := createImportRuleForSession(t, handler, sessionCookie, csrfToken, `{"name":"Late","priority":200,"match_field":"payee","contains_text":"shop","category_id":`+strconvFormatInt(groceries.ID)+`}`)
+	early := createImportRuleForSession(t, handler, sessionCookie, csrfToken, `{"name":"Early","priority":10,"match_field":"description","contains_text":"coffee","category_id":`+strconvFormatInt(groceries.ID)+`}`)
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/v1/import-rules", nil)
+	listRequest.AddCookie(sessionCookie)
+	listResponse := httptest.NewRecorder()
+	handler.ServeHTTP(listResponse, listRequest)
+	require.Equal(t, http.StatusOK, listResponse.Code, listResponse.Body.String())
+	var listed listImportRulesResponse
+	require.NoError(t, json.NewDecoder(listResponse.Body).Decode(&listed))
+	require.Len(t, listed.Rules, 2)
+	assert.Equal(t, []int64{early.ID, late.ID}, []int64{listed.Rules[0].ID, listed.Rules[1].ID})
+
+	patchRequest := httptest.NewRequest(http.MethodPatch, "/api/v1/import-rules/"+strconvFormatInt(late.ID), strings.NewReader(`{"name":"Late disabled","enabled":false}`))
+	patchRequest.Header.Set("Content-Type", "application/json")
+	patchRequest.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(patchRequest)
+	patchRequest.AddCookie(sessionCookie)
+	patchResponse := httptest.NewRecorder()
+	handler.ServeHTTP(patchResponse, patchRequest)
+	require.Equal(t, http.StatusOK, patchResponse.Code, patchResponse.Body.String())
+	var updated importRuleResponse
+	require.NoError(t, json.NewDecoder(patchResponse.Body).Decode(&updated))
+	assert.Equal(t, "Late disabled", updated.Name)
+	assert.False(t, updated.Enabled)
+
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/import-rules/"+strconvFormatInt(early.ID), nil)
+	deleteRequest.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(deleteRequest)
+	deleteRequest.AddCookie(sessionCookie)
+	deleteResponse := httptest.NewRecorder()
+	handler.ServeHTTP(deleteResponse, deleteRequest)
+	require.Equal(t, http.StatusNoContent, deleteResponse.Code, deleteResponse.Body.String())
+
+	var auditCount int
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM audit_events WHERE operation IN ('import.rule.create', 'import.rule.update', 'import.rule.delete')`).Scan(&auditCount))
+	assert.Equal(t, 4, auditCount)
 }
 
 // --- Malformed / missing input ---

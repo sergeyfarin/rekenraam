@@ -228,6 +228,11 @@ Goal: make records trustworthy over time.
 Goal: reduce manual entry without sacrificing trust.
 
 - CSV import preview and commit.
+- Saved import rules may match a case-insensitive literal substring in the
+  staged payee or description and set category, payee, or tags. Rules run in
+  explicit priority order only when rows are first staged, and every applied
+  transformation remains visible and editable in preview. They never re-run
+  retroactively over committed transactions.
 - Duplicate detection.
 - Source metadata retention.
 - Import rollback or cleanup workflow.

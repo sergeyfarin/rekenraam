@@ -7607,6 +7607,235 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/import-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List ordered preview-time import rules */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Rules in application order */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ListImportRulesResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create a preview-time import rule */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateImportRuleRequest"];
+                };
+            };
+            responses: {
+                /** @description Rule created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportRuleResponse"];
+                    };
+                };
+                /** @description Invalid rule or target */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a preview-time import rule */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    rule_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Rule deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Rule not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update a preview-time import rule */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    rule_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateImportRuleRequest"];
+                };
+            };
+            responses: {
+                /** @description Rule updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportRuleResponse"];
+                    };
+                };
+                /** @description Invalid rule or target */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Rule not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/api/v1/imports/{batch_id}": {
         parameters: {
             query?: never;
@@ -13901,6 +14130,10 @@ export interface components {
             category_id?: number;
             /** Format: int64 */
             transfer_account_id?: number;
+            tag_ids?: number[];
+            /** Format: int64 */
+            applied_rule_id?: number;
+            applied_rule_name?: string;
             exclude?: boolean;
         };
         ImportStagedRowResponse: {
@@ -14020,6 +14253,59 @@ export interface components {
             name?: string;
             /** @description JSON object string containing header mappings, matching hints, and locale/sign rules. */
             config?: string;
+        };
+        /** @enum {string} */
+        ImportRuleMatchField: "payee" | "description";
+        ImportRuleResponse: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @description Lower priorities run first; ties are resolved by rule ID. */
+            priority: number;
+            enabled: boolean;
+            match_field: components["schemas"]["ImportRuleMatchField"];
+            /** @description Case-insensitive literal substring; regular expressions are not supported. */
+            contains_text: string;
+            /** Format: int64 */
+            category_id?: number;
+            /** Format: int64 */
+            payee_id?: number;
+            tag_ids: number[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ListImportRulesResponse: {
+            rules: components["schemas"]["ImportRuleResponse"][];
+        };
+        CreateImportRuleRequest: {
+            name: string;
+            /** @default 100 */
+            priority: number;
+            /** @default true */
+            enabled: boolean;
+            match_field: components["schemas"]["ImportRuleMatchField"];
+            contains_text: string;
+            /** Format: int64 */
+            category_id?: number;
+            /** Format: int64 */
+            payee_id?: number;
+            tag_ids?: number[];
+        };
+        UpdateImportRuleRequest: {
+            name?: string;
+            priority?: number;
+            enabled?: boolean;
+            match_field?: components["schemas"]["ImportRuleMatchField"];
+            contains_text?: string;
+            /** Format: int64 */
+            category_id?: number;
+            clear_category?: boolean;
+            /** Format: int64 */
+            payee_id?: number;
+            clear_payee?: boolean;
+            tag_ids?: number[];
         };
         ImportConnectionResponse: {
             /** Format: int64 */

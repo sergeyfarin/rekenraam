@@ -6,8 +6,7 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-08-28 (reporting currency and R3a complete; R5 is current,
-with its first CSV/profile vertical slice shipped).
+Last reviewed: 2026-08-29 (R5 complete; R9 recurring transactions is next).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -31,12 +30,12 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R3 | Portable **and protected** core data (CSV/QIF export, backups, restore, self-check) | ✅ | `docs/plans/data-portability-plan.md` |
 | R3a | Accessibility regression coverage | ✅ | this file |
 | R4 | QIF import | ✅ | `docs/implemented.md` (Import Pipeline) |
-| R5 | Ordinary-bank CSV import + profiles | ▶ | `docs/plans/import-plan.md` |
+| R5 | Ordinary-bank CSV import + profiles | ✅ | `docs/plans/import-plan.md` |
 | R6 | Import depth (XLSX/OFX, matching, rollback) | ⏸ | `docs/plans/import-plan.md` |
 | R7 | Trading 212 online connections + lots | ✅ | `docs/plans/trading212-import-plan.md` |
 | R7a | Daily-entry convenience | ⏸ | this file |
 | R8 | Budgets | ⏭ | this file |
-| R9 | Recurring transactions | ⏭ | this file |
+| R9 | Recurring transactions | ▶ | this file |
 | R10 | Projected balances / forecasting | ⏭ | this file |
 | R11 | Pricing/FX management UI | ⏸ | this file |
 | R12 | Investments UI + gains reporting | ✅ | `docs/plans/investments-plan.md` |
@@ -249,7 +248,7 @@ journeys in the broader Playwright suite.
 
 </details>
 
-### Current — R5: ordinary-bank CSV import
+### Shipped — R5: ordinary-bank CSV import
 
 Ship CSV import plus saved mapping profiles. The user maps a bank statement once
 and can reuse that profile for the next statement. Reuse the staged review and
@@ -267,8 +266,10 @@ editing/deletion and safe header/filename auto-suggestion followed on 2026-08-28
 only a uniquely best compatible mapping is selected automatically, while ties
 remain explicit. Grouped unknown-payee resolution followed the same day: one
 explicit link-or-create choice applies to every staged row carrying that name,
-with fuzzy near matches offered before a new record is created. Remaining R5:
-the deliberately small preview-time rules v1.
+with fuzzy near matches offered before a new record is created. Minimal
+preview-time rules v1 completed R5 on 2026-08-29: ordered literal contains
+matches on payee or description visibly snapshot category, payee, and/or tags
+into new staged rows before the normal review and commit path.
 
 **Done ahead of R5:** the EU import-correctness defects T-35 (QIF `MM/DD`
 parsed before `DD/MM`, profile override stubbed) and T-36 (decimal-comma
@@ -298,7 +299,7 @@ abandonment path. The scope fence is deliberate and binding for v1:
 
 Everything outside that fence stays in the later import-rules slice.
 
-### After that — planning loop
+### Current — planning loop
 
 Order decided 2026-08-05 (review §3d): **R9 → R10 → R8**. Recurring
 transactions are forecasting's data source, so R9 → R10 is a single coherent

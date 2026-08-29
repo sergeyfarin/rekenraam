@@ -6,6 +6,7 @@ var (
 	ErrImportBatchNotFound   = errors.New("import batch not found")
 	ErrImportBatchNotOpen    = errors.New("import batch is not in previewing state")
 	ErrImportProfileNotFound = errors.New("import profile not found")
+	ErrImportRuleNotFound    = errors.New("import rule not found")
 )
 
 // ImportBatch is the service-layer representation of an import batch.
@@ -135,15 +136,71 @@ type DeleteImportProfileInput struct {
 	ProfileID     int64
 }
 
+type ImportRule struct {
+	ID           int64
+	BookID       int64
+	Name         string
+	Priority     int
+	Enabled      bool
+	MatchField   string
+	ContainsText string
+	CategoryID   *int64
+	PayeeID      *int64
+	TagIDs       []int64
+	CreatedAt    string
+	UpdatedAt    string
+}
+
+type CreateImportRuleInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	Name          string
+	Priority      int
+	Enabled       bool
+	MatchField    string
+	ContainsText  string
+	CategoryID    *int64
+	PayeeID       *int64
+	TagIDs        []int64
+}
+
+type UpdateImportRuleInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	RuleID        int64
+	Name          *string
+	Priority      *int
+	Enabled       *bool
+	MatchField    *string
+	ContainsText  *string
+	CategoryID    *int64
+	ClearCategory bool
+	PayeeID       *int64
+	ClearPayee    bool
+	TagIDs        *[]int64
+}
+
+type DeleteImportRuleInput struct {
+	OwnerUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	RuleID        int64
+}
+
 // ImportRowResolution carries the user-chosen account/category/payee for a staged row.
 type ImportRowResolution struct {
-	AccountID         int64  `json:"account_id,omitempty"`
-	CommodityID       int64  `json:"commodity_id,omitempty"`
-	PayeeID           *int64 `json:"payee_id,omitempty"`
-	PayeeName         string `json:"payee_name,omitempty"`
-	CategoryID        *int64 `json:"category_id,omitempty"`
-	TransferAccountID *int64 `json:"transfer_account_id,omitempty"`
-	Exclude           bool   `json:"exclude,omitempty"`
+	AccountID         int64   `json:"account_id,omitempty"`
+	CommodityID       int64   `json:"commodity_id,omitempty"`
+	PayeeID           *int64  `json:"payee_id,omitempty"`
+	PayeeName         string  `json:"payee_name,omitempty"`
+	CategoryID        *int64  `json:"category_id,omitempty"`
+	TransferAccountID *int64  `json:"transfer_account_id,omitempty"`
+	TagIDs            []int64 `json:"tag_ids,omitempty"`
+	AppliedRuleID     *int64  `json:"applied_rule_id,omitempty"`
+	AppliedRuleName   string  `json:"applied_rule_name,omitempty"`
+	Exclude           bool    `json:"exclude,omitempty"`
 }
 
 // --- Input types for service methods ---
