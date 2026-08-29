@@ -29,6 +29,13 @@ Last updated 2026-07-03.
 >   `CommitImportBatch` routing to `Buy`/`Sell`/`Dividend`) and its one
 >   deliberate scope cut (no confirmation UI for linking to a pre-existing
 >   holding account — always creates a new one instead).
+>
+> **Correctness review 2026-08-29.** R12's UI and endpoints shipped, but three
+> foundations are reopened as the immediate R12a integrity gate: average-cost
+> pool conservation (T-74), atomic journal/subledger lifecycle behavior (T-75),
+> and durable disposal-policy provenance (T-76). The later multi-basis reporting
+> design is now governed by ADR 0012 and R18. Do not read this plan's historical
+> “complete” status as certifying those newly discovered properties.
 
 ---
 
@@ -166,12 +173,22 @@ considered:
    today); on an average-cost sale, compute one weighted-average unit cost across
    open lots and dispose the sold quantity across lots at *that pooled rate*.
 
-Model 2 wins: it coexists with the other three methods on the existing
+Model 2 was chosen: it coexists with the other three methods on the existing
 `investment_lots` tables, keeps the lot read model intact, and leaves any
-pooled-reporting view derivable. **No further confirmation gates Slice 1** — the
-representation is fixed; only the reporting *views* (Slice 4 / I-03) remain open.
+pooled-reporting view derivable. The 2026-08-29 review found the shipped
+materialization violates the conservation contract below; T-74 may change that
+materialization while preserving the decision to keep immutable lot identity.
+The alternative reporting views remain R18 work.
 
 ### `average_cost` disposal algorithm + persistence invariants (specify, don't improvise)
+
+> **Open defect T-74 (reviewed 2026-08-29).** The shipped implementation does
+> not satisfy the invariant below. It writes pool-rate basis to disposal events
+> but subtracts per-lot-own-rate basis from current lots. After a partial sale,
+> reported disposed basis plus remaining basis can exceed the acquired pool, and
+> the next sale starts from that wrong remainder. The tests currently encode the
+> divergence as expected behavior. R12a must restore one conserved pool and add
+> a sequential-sales regression before average cost is again called complete.
 
 The existing helper `proratedCostBasis` (`backend/internal/db/investments.go:1599`,
 used by `disposeLotTx`) prorates basis **within a single lot** by truncating integer
@@ -228,23 +245,27 @@ The user noted that tax vs. performance reporting can legitimately need *differe
 methods. This is real but does **not** mean multiple authoritative postings. The
 seam, recorded now so the data model does not preclude it later:
 
-- The **authoritative** method (above) drives lot disposal and the realized-gain
-  figure computed from it. Unchanged.
+- The operational method drives the committed disposal election and the default
+  realized-gain view. It is snapshotted with its policy source and version; a
+  later default change cannot reinterpret it.
 - **Analytical reports** re-derive realized/unrealized gains under *alternative*
-  methods directly from the immutable **lot + disposal history**, at report time,
+  methods directly from immutable journal and investment-subledger events, at report time,
   **without mutating lots**. A "gains under average-cost vs. FIFO" comparison is a
   read-side computation. (Neither the authoritative nor the analytical path posts a
   gain to a ledger account today — gain is computed, not posted; see the realized-
   gain note above and I-04.)
-- Requirement on the data model **now**: keep the full per-lot acquisition and
-  disposal history (already true) so any method can be recomputed after the fact.
+- Requirement on the data model **now**: keep the full acquisition, disposal,
+  transfer, corporate-action, basis-adjustment, election, and policy history so
+  any supported method can be recomputed after the fact. The 2026-08-29 review
+  found this only partly true: lot events exist, but the resolved method/policy
+  provenance is absent and generic transaction lifecycle changes can strand the
+  subledger (T-75/T-76).
   Do **not** collapse lots irreversibly (another reason to prefer average-cost
   model (2) above). This is the only thing this plan must protect; the reporting
-  itself is designed when Slice 4's gains reporting is specified.
+  itself is the later R18 projection slice governed by ADR 0012.
 
-Tracked as **I-03** (was "implement remaining methods"; now repurposed to
-multi-method analytical reporting, since the four authoritative methods ship in
-Slice 1).
+Tracked as **I-03 / R18** (multi-method analytical reporting). R12a repairs the
+write model first; it does not opportunistically build the reporting engine.
 
 ---
 
@@ -793,9 +814,10 @@ store, durable fetch, dedupe) was unchanged, as planned.
    before Slice 2.~~ **Resolved** — all investment paths (incl. `/investments/gains`)
    are now in `api/openapi/` with generated TS types.
 2. **Realized-gain posting (I-04):** gain is currently *computed* from disposals,
-   not posted to a gain/loss account (none exists in the taxonomy). If product later
-   wants gain as a ledger movement, that is a separate transaction-shape + account-
-   mapping change — scope it with Slice 4 gains reporting, not inside this work.
+   not posted to a gain/loss account (none exists in the taxonomy). ADR 0012 now
+   fixes the boundary: viewing a report never posts. If product later wants gain
+   as a ledger movement, it is a separate, explicit workflow linked to the named
+   projection that produced it; R18 decides whether to scope that workflow.
 3. **Market price availability** for unrealized gains depends on the pricing
    backend having instrument prices (distinct from FX). Read-only UI must degrade
    gracefully (cost-only) when no price exists rather than fabricate one.
@@ -815,3 +837,21 @@ store, durable fetch, dedupe) was unchanged, as planned.
    and `Sell` are both routed through the same resolver function and not
    copy-pasted — the spec says "shared function so preview and commit never
    diverge."
+6. **Investment lifecycle coupling (T-75, open 2026-08-29):** the ordinary
+   transaction editor/lifecycle endpoints can update, void, soft-delete, restore,
+   or correct an investment transaction without reversing or rebuilding its lot
+   consequences. R12a first blocks unsafe generic paths, then provides one
+   investment-native correction lifecycle that changes journal and subledger in
+   the same database transaction. The self-check must compare the union of
+   journal and lot position keys, including positions whose lots are all closed.
+7. **Disposal provenance (T-76, open 2026-08-29):** the resolved method is used
+   during commit but is not a dedicated field on the disposal/event or committed
+   response. Persist the method, resolution tier, policy/profile version, and
+   explicit allocations before more history accumulates. Arbitrary metadata JSON
+   is not the canonical contract.
+8. **Current gains are operational, not report-grade (I-03 / R18):** realized
+   rows expose only the committed operational basis; unrealized rows always use
+   the latest price and have no `as_of`, knowledge cutoff, staleness, source/FX
+   policy, or reporting currency. Keep the UI, label its semantics honestly, and
+   build the reproducible named projection only after R12a, R16, and R17 supply
+   trustworthy events and prices.

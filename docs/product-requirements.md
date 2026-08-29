@@ -158,6 +158,17 @@ These apply across all feature phases.
 - Import workflows must preserve source metadata where practical.
 - Duplicate detection, reconciliation, and correction behavior must be explicit.
 - Reports and exports must reflect durable accounting semantics rather than ad hoc UI summaries.
+- Investment settlement facts belong to the canonical journal; lot relationships,
+  basis adjustments, corporate actions, and actual lot elections belong to an
+  auditable investment subledger. They must share one atomic lifecycle so editing,
+  voiding, deleting, restoring, or correcting an investment transaction cannot
+  leave holdings and lots disagreeing.
+- Cost-basis, period, jurisdiction/accounting-purpose, price, FX, and knowledge-time
+  choices belong to named reporting projections. Multiple analytical projections
+  may coexist without rewriting canonical facts. Any future realized-gain,
+  revaluation, or tax-liability ledger posting is an explicit opt-in accounting
+  workflow linked to the projection that produced it, never a side effect of viewing
+  a report. See ADR 0012.
 
 ## Delivery Phases
 
@@ -275,7 +286,9 @@ Goal: add power-user workflows after the core ledger is stable.
   metadata, and effective-dated version history.
 - Lots and cost-basis foundations from the first investment slice. FIFO is the
   first implemented default, but durable policy values include FIFO, LIFO,
-  average cost, and specific lot.
+  average cost, and specific lot. A committed disposal preserves the resolved
+  method and policy provenance; alternative methods are read-side projections,
+  not destructive rematching of the operational lots.
 - Dividend and reinvested-dividend workflows with optional per-security income
   and withholding defaults.
 - Provider events and reviewable suggestions for dividends, distributions,
@@ -287,7 +300,10 @@ Goal: add power-user workflows after the core ledger is stable.
   then declarative HTTP adapters for simple source mappings, and only later
   external process plugins for complex/community providers.
 - Realized gain/loss reporting.
-- Report snapshots where reproducibility matters.
+- Reproducible investment reporting with an explicit as-of date, price-knowledge
+  cutoff, basis profile, valuation/FX method, staleness policy, reporting currency,
+  period/date basis, and rounding. Persist report snapshots where reproducibility
+  cannot be guaranteed cheaply from immutable facts and versioned policies.
 
 ### Later
 

@@ -190,10 +190,11 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
    SimpleFIN Bridge (US) close the manual-entry objection without coverage
    promises; both follow the Trading 212 pattern.
 6. **Jurisdiction-aware capital-gains reporting** — no competitor, commercial
-   or OSS, ships it; the long-term moat. Gated on the I-03/I-04 research task
-   (escalated 2026-08-19 from a decision to research): realized versus
-   unrealized answer different questions, countries differ in which they tax,
-   and unrealized figures flip-flop with every price refresh. See
-   `roadmap.md` § Open product decisions.
+   or OSS, ships it; the long-term moat. ADR 0012 fixes the journal/subledger/
+   reporting boundary, R12a repairs the inputs, and R18 plans named read-side
+   projections after R16/R17. Realized versus unrealized answer different
+   questions, jurisdictions differ in treatment, and unrealized figures move
+   with every price refresh; the product must express purpose without claiming
+   to be a tax-compliance engine. See `roadmap.md` R18.
 7. **Adoption assets** — public demo instance with seeded data (Ghostfolio's
    playbook), README screenshots, migration screencast.

@@ -125,6 +125,18 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   `resolveCostBasisMethod` (`app/investments.go`). Explicit lot allocations are
   only legal for `specific_lot`. Never infer cost basis from current holdings.
 - Never collapse per-lot acquisition/disposal history irreversibly.
+- ADR 0012 separates the canonical journal, investment subledger, read-side
+  basis/valuation projections, and optional explicit accounting postings. A
+  report choosing FIFO/LIFO/average or an as-of price never mutates journal or
+  operational lot facts.
+- Every investment lifecycle mutation must preserve journal and subledger
+  atomically. Generic transaction edit/correct/void/unvoid/soft-delete/restore
+  must reject an investment-linked transaction unless the path also appends the
+  necessary corrective lot/election events in the same database transaction.
+- A committed disposal snapshots the resolved method, resolution tier,
+  policy/profile version, allocations, and audit provenance. Later defaults do
+  not reinterpret it. Current lot state is a rebuildable projection and must
+  conserve quantity and basis across sequential events.
 
 ## Dates and times
 

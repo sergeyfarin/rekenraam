@@ -1077,6 +1077,114 @@ enough; this does not need to run on every push.
 Related: T-70, which is about the *test suite's* runtime rather than the
 app's.
 
+## Investment integrity gate (R12a — do before further feature work)
+
+These three findings were opened by the 2026-08-29 ledger/subledger boundary
+review. They are sequenced as R12a ahead of the remaining R9 slices because two
+can already produce incorrect financial state and the third loses provenance on
+every new disposal. ADR 0012 governs the correction; R18 owns the later
+multi-basis reporting engine and must not be pulled into these fixes.
+
+### T-74 Average cost does not conserve the basis pool `[ ]`
+
+**Files:** `backend/internal/db/investments.go`
+(`disposeAverageCostTx`, `disposeAverageCostLotTx`, `PositionsWithGains`);
+`backend/internal/db/investments_test.go`
+(`TestInvestmentLotsAverageCostPoolMath`,
+`TestInvestmentLotsAverageCostResidualConservation`);
+`docs/plans/investments-plan.md` (average-cost invariants).
+
+The disposal event reports pooled average basis, but the mutable lot projection
+subtracts basis at each touched lot's own acquisition rate. The checked-in test
+demonstrates the defect: an original pool basis of 56000 reports 12444 disposed
+and leaves 46000 remaining, so the two views claim 58444 of basis. A later sale
+then calculates its pool from that overstated remainder, corrupting both realized
+and unrealized gain across a sequence of sales.
+
+Fix the projection so `reported disposed basis + remaining basis == prior pool
+basis` after every disposal, with exact residual assignment and no negative
+per-lot remainder. Whether the materialized representation redistributes basis
+over surviving per-lot rows or introduces an explicit pool projection is an
+implementation choice, but it must remain rebuildable from immutable events and
+must not erase lot identity needed by FIFO/LIFO/specific-lot projections.
+
+**Acceptance gate:** named tests cover two differently priced lots, a partial
+average-cost sale followed by a second sale and a final close; after each step,
+quantity and basis conserve exactly, the position's remaining basis is correct,
+and total disposed basis across the full sequence equals total acquired basis.
+Rewrite the current tests that bless the divergence; do not add a parallel
+“reported” total that leaves `PositionsWithGains` wrong.
+
+### T-75 Generic transaction lifecycle can strand investment lots `[ ]`
+
+**Files:** `backend/internal/app/transactions_write.go` (update, correction,
+void/unvoid, soft-delete/restore); `backend/internal/app/investments.go` and
+`backend/internal/db/investments.go` (atomic trade/lot writes);
+`frontend/src/lib/transactions/transaction-detail-panel.svelte` (unconditional
+actions); `backend/internal/app/self_check.go` (`lotReconciliationCheck`).
+
+Investment creation commits journal postings and lot consequences together, but
+the ordinary transaction lifecycle later changes only the journal. Editing or
+voiding a buy can leave an open lot the posted ledger no longer holds; editing or
+voiding a sell can leave its lots consumed. Soft-delete and restore have the same
+problem, and realized-gain reads continue to consume the durable disposal events.
+The current self-check is diagnostic after the damage and constructs its key set
+only from open lots, so it misses a journal position whose relevant lots are all
+closed.
+
+Land in two safe increments:
+
+1. **Immediate fence:** identify transactions referenced by investment lots or
+   lot events and reject generic financial edit/correction/lifecycle mutations
+   with a stable error directing the caller to an investment workflow. Hide or
+   replace the unsafe UI actions, but enforce the rule in the service so API
+   callers cannot bypass it. Non-financial descriptive edits may remain allowed
+   only when proven not to affect the subledger.
+2. **Complete lifecycle:** add investment-native correction/reversal behavior
+   that versions or appends compensating subledger events and changes the journal
+   in the same SQLite transaction, through the existing reconciliation guard.
+   Never delete the original lot history.
+
+Strengthen the self-check in the first increment: compare the union of posted
+holding keys and lot keys, include zero/open/closed edge cases, validate event
+quantity and basis conservation, and name the transaction/position causing a
+failure. Detection does not replace the write guard.
+
+**Acceptance gate:** end-to-end service tests attempt every generic lifecycle
+action against a buy and a fully-closing sell and prove no partial mutation;
+investment-native correction tests prove journal, lots, gains, audit event, and
+reconciliation invalidation commit or roll back together; the self-check catches
+both lot-only and journal-only positions, including all-lots-closed.
+
+### T-76 A disposal does not preserve its resolved policy provenance `[ ]`
+
+**Files:** `backend/internal/app/investments.go`
+(`resolveCostBasisMethod`, `sell`); `backend/internal/db/investments.go`
+(`DisposeLotsParams`, lot-event writes); `backend/migrations/0001_initial_schema.sql`
+(`cost_basis_profiles`, `investment_lot_events`); investment OpenAPI and export
+contracts.
+
+The service resolves transaction override → account default → global default →
+FIFO and uses the result, but only the preview returns the method. The committed
+lot event stores quantities and basis in generic metadata, with no canonical
+resolved method, resolution tier, or policy/profile version. Global profiles are
+updated in place. After a default changes, the book cannot reliably explain why
+a historical allocation occurred, and an alternative projection cannot distinguish
+an actual specific-identification election from an implementation choice.
+
+Add a durable disposal/election contract that snapshots the resolved method,
+resolution tier (`transaction`, `account`, `global`, `fallback`), policy/profile
+identity and version/effective state, explicit allocations, and audit linkage.
+Provider-reported basis remains sourced evidence rather than silently becoming
+the book policy. Prefer typed columns/relations for canonical fields; arbitrary
+metadata JSON is not the contract. Include the information in the committed API
+response and durable structured export before the schema contract freezes.
+
+**Acceptance gate:** change account and global defaults after a sale and prove the
+historical disposal still explains the original method/source; round-trip it
+through the export; preview and commit return the same resolved decision; named
+tests cover every resolution tier and specific-lot allocations.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

@@ -70,7 +70,28 @@ When a feature introduces a durable new rule, update one of those documents in t
   transactions balanced by commodity.
 - Investment lots and lot events are durable accounting facts. FIFO is the
   default disposal method until a user-selected cost-basis policy says
-  otherwise; never infer cost basis from current holdings alone.
+  otherwise; never infer cost basis from current holdings alone. ADR 0012
+  separates the canonical journal, investment subledger, read-side basis and
+  valuation projections, and optional accounting postings.
+- An investment write is one domain operation across the journal and investment
+  subledger. Buy, sell, write-off, transfer, corporate-action, edit, correction,
+  void, unvoid, soft-delete, and restore paths must commit, reverse, or correct
+  both sides atomically. Generic transaction mutation must reject an investment
+  transaction when it cannot preserve its subledger consequences.
+- A committed disposal must snapshot its resolved cost-basis method, where that
+  choice came from, the applicable policy/profile version, explicit allocations,
+  and audit provenance. Later changes to account or global defaults must not
+  reinterpret the historical election.
+- Current lot balances and remaining basis are rebuildable projections over
+  immutable acquisition, disposal, transfer, corporate-action, and basis-adjustment
+  events. Every projection must conserve quantity and basis across sequential
+  events. Alternative reporting methods run as separate read-side projections;
+  they never repeatedly mutate the operational lots.
+- Realized/unrealized gains are server-computed read models with named policy.
+  Reproducible investment reports state their `as_of` date, price-knowledge
+  cutoff, valuation/FX method, staleness policy, reporting currency, basis profile,
+  period/date basis, and rounding. A report does not silently post gain, revaluation,
+  or tax entries; a future accounting workflow may create explicit linked postings.
 - A commodity's first version is effective from `db.CommodityGenesisDate`
   (`0001-01-01`), not its creation date. When you enabled a currency or added
   an instrument is app bookkeeping, not a financial fact, and posting rules

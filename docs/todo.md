@@ -5,9 +5,9 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-29 (R5 CSV import, profiles, grouped payee resolution, and
-minimal preview-time rules complete; R9 recurring transactions is next and now
-has a plan).
+Last updated: 2026-08-29 (R12a investment integrity correction interrupts R9
+after its completed first slice; ADR 0012 and backlog T-74–T-76 are the source
+of truth for the gate).
 
 ## Where things stand
 
@@ -60,9 +60,11 @@ Recorded here as pointers; the source of truth is `roadmap.md` and
   themselves are closed — throttle, auth events, and MFA all shipped — so
   unparking means enrolling the owner account and re-reading
   `docs/deployment-security.md`, not building anything.
-- **Gains reporting (I-03 / I-04): research task, not a decision.** See
-  `roadmap.md` — realized vs unrealized, per-country tax treatment, and
-  presentation stability all need study first. Does not block R16 slice 1.
+- **Gains reporting (I-03 / I-04): boundary decided in ADR 0012.** R18 owns the
+  later named, read-only basis/valuation projections after R12a/R16/R17.
+  Realized vs unrealized placement, jurisdiction-purpose labeling, and
+  presentation stability remain research questions for that plan; merely viewing
+  a report never posts a ledger entry.
 - **First non-English languages: Spanish, French, Dutch, German, Russian.**
 
 ## Decisions — none otherwise pending
@@ -85,9 +87,28 @@ localization item below).
 rate in `settings/currencies/+page.svelte` should truncate or round half-up.
 See `backlog.md` G-09.
 
-## Current initiative — R9 recurring transactions — **planned 2026-08-29**
+## Current initiative — R12a investment integrity correction
 
-Plan: `docs/plans/recurring-transactions-plan.md`. Six slices, in order. R9 is
+Do these in order before returning to R9. Detail and acceptance gates live in
+`docs/backlog.md`, delivery slices in
+`docs/plans/investment-integrity-plan.md`, and the durable boundary in ADR 0012.
+
+- [ ] **T-75a:** reject unsafe generic lifecycle actions for investment-linked
+      transactions in the service and UI; make self-check compare the union of
+      journal and lot positions, including all-lots-closed.
+- [ ] **T-74:** make average-cost disposed and remaining basis conserve through
+      sequential partial sales; replace the tests that currently bless divergence.
+- [ ] **T-76:** persist and export resolved disposal method, resolution tier,
+      policy/profile version, allocations, and audit provenance.
+- [ ] **T-75b:** add the investment-native correction/reversal lifecycle, atomic
+      with journal changes and reconciliation invalidation.
+- [ ] Run R12a's end-to-end acceptance review and update `implemented.md` before
+      restoring any affected capability to ✅.
+
+## Paused after slice 1 — R9 recurring transactions
+
+Plan: `docs/plans/recurring-transactions-plan.md`. Slice 1 is complete; slices
+2–6 resume immediately after R12a. R9 is
 the app's first machine producer of financial records, so it is also where the
 conventions' promises about `draft` finally get kept.
 
@@ -360,7 +381,8 @@ only by alphabetical luck, now stated as a project dependency.
 - [x] T-38 zero-proceeds write-off — done 2026-08-06, extended 2026-08-20
       (`POST /investments/write-off` + `/preview`; dedicated
       `InvestmentWriteOffInput` type, not a zero-amount sell; loss stays a
-      computed gains value, see I-04; reconciliation-override support added
+      computed gains value; ADR 0012 reserves any posted accounting treatment
+      for an explicit linked workflow; reconciliation-override support added
       2026-08-20 as T-53).
 - [x] T-41 scaled-integer arithmetic consolidated — done 2026-08-06
       (`internal/exact/scaled.go`: `exact.ScaledInt` + `exact.Pow10` replace

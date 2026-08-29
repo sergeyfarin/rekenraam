@@ -1,6 +1,8 @@
 # Recurring Transactions Plan (R9)
 
-Status: **slice 1 shipped 2026-08-29; slices 2-6 open.** Written 2026-08-29,
+Status: **slice 1 shipped 2026-08-29; slices 2-6 open and paused behind the
+R12a investment integrity gate.** Resume immediately after R12a's acceptance
+review; `docs/roadmap.md` owns that sequence. Written 2026-08-29,
 immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
 `internal/recur`, `backend/migrations/0003_recurring.sql`, and
 `db.RecurringRepository` behind 26 named tests. This is the implementation reference for the

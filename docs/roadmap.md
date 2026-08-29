@@ -6,8 +6,9 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-08-29 (R5 complete; R9 recurring transactions is next, and
-its plan is written — `docs/plans/recurring-transactions-plan.md`).
+Last reviewed: 2026-08-29 (investment boundary review accepted as ADR 0012;
+R12a is the immediate integrity gate before R9 resumes; R9 slice 1 is already
+complete).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -36,16 +37,18 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R7 | Trading 212 online connections + lots | ✅ | `docs/plans/trading212-import-plan.md` |
 | R7a | Daily-entry convenience | ⏸ | this file |
 | R8 | Budgets | ⏭ | this file |
-| R9 | Recurring transactions | ▶ | `docs/plans/recurring-transactions-plan.md` |
+| R9 | Recurring transactions | ⏭ | `docs/plans/recurring-transactions-plan.md` |
 | R10 | Projected balances / forecasting | ⏭ | this file |
 | R11 | Pricing/FX management UI | ⏸ | this file |
 | R12 | Investments UI + gains reporting | ✅ | `docs/plans/investments-plan.md` |
+| R12a | Investment journal/subledger integrity correction | ▶ | `docs/plans/investment-integrity-plan.md`, ADR 0012 |
 | R13 | Investment return analytics (TWR/MWR) | ⏸ | this file |
 | R14 | Receipts & attachments (capture, OCR, inbox) | ⏸ | `docs/plans/receipts-plan.md` |
 | R14a | Attachment storage + manual attach (after R5) | ⏭ | `docs/plans/receipts-plan.md` |
 | R15 | Connections expansion (IBKR Flex → GoCardless → T-34 producer) | ⏸ | `docs/plans/connections-plan.md` |
 | R16 | Investment lifecycle completeness (write-off, price void, return of capital, manual splits) | ◐ | this file |
 | R17 | Crypto instrument type + `PriceProvider` registry and quote adapters | ⏭ | this file |
+| R18 | Reproducible investment basis + gains projections | ⏭ | ADR 0012; plan required after R16/R17 |
 
 ## Decisions adopted 2026-08-05
 
@@ -87,8 +90,9 @@ Build a polished, self-hosted personal-finance daily driver first. The order is:
 
 1. Trust and visibility: reports and exports.
 2. Lower manual effort: CSV import with reusable profiles.
-3. Daily planning: budgets and recurring transactions.
-4. Differentiate for multi-currency, cross-border households and investors.
+3. Repair any trust-boundary defect before adding more financial producers.
+4. Daily planning: budgets and recurring transactions.
+5. Differentiate for multi-currency, cross-border households and investors.
 
 The product is deliberately single-user and self-hosted. Connections are
 bring-your-own-key adapters, never guaranteed coverage. Native apps,
@@ -300,14 +304,44 @@ abandonment path. The scope fence is deliberate and binding for v1:
 
 Everything outside that fence stays in the later import-rules slice.
 
-### Current — planning loop
+### Current — R12a investment integrity correction
+
+The 2026-08-29 review found two reachable financial-correctness defects and one
+provenance gap in a feature previously marked complete. Correct them before R9
+adds another producer of financial records. ADR 0012 fixes the durable boundary:
+canonical journal, immutable investment subledger, named read-side projections,
+and optional explicit accounting postings.
+
+Land the corrections in the order specified by
+`docs/plans/investment-integrity-plan.md`; do not expand this gate into R18 reporting:
+
+1. **T-75a — immediate lifecycle fence and symmetric self-check.** Reject unsafe
+   generic investment mutation before more divergence can be created, and make
+   diagnostics cover journal-only as well as lot-only positions.
+2. **T-74 — average-cost conservation.** Replace the split pool-rate/per-lot-rate
+   state with a projection whose disposed plus remaining basis conserves exactly
+   through sequential partial sales. Rewrite the tests that currently bless the
+   divergence.
+3. **T-76 — disposal provenance.** Snapshot resolved method, resolution tier,
+   policy/profile version, allocations, and audit linkage on commit; expose and
+   export it. A later default change must not reinterpret an earlier sale.
+4. **T-75b — investment-native correction lifecycle.** Change journal and
+   subledger atomically, preserve original events, and keep generic mutation fenced.
+
+**Exit gate:** the named acceptance cases in T-74–T-76 pass; buy, partial sell,
+full sell, correction, void/delete refusal, restore/reversal, import, gains, export,
+self-check, audit, and reconciliation all agree end to end. `implemented.md` may
+restore the affected rows to ✅ only after that review.
+
+### Next — planning loop
 
 Order decided 2026-08-05 (review §3d): **R9 → R10 → R8**. Recurring
 transactions are forecasting's data source, so R9 → R10 is a single coherent
 arc that exercises the producer-owned draft machinery once instead of twice,
 and it front-loads per-currency forecasting — the differentiator the parity
 lens below commits to protecting. Budgets are independent of both and slot in
-afterward with no rework.
+afterward with no rework. R9 slice 1 is complete; slices 2–6 resume immediately
+after R12a rather than competing with the integrity gate.
 
 1. **R9 Recurring transactions:** templates and due-entry generation into the
    reserved producer-owned draft workflow. Planned 2026-08-29 in
@@ -365,6 +399,28 @@ staleness gap the 2026-07-19 audit flagged (§4), well before R15.
 manually/CSV-entered, priced holdings with lots. Exchange integrations, DeFi
 positions, staking, and NFTs are **rejected, not deferred** — they are a
 coverage promise the adapter rule forbids and a maintenance tarpit.
+
+### R18 — reproducible investment basis and gains projections
+
+Build after R12a has trustworthy immutable events, R16 supplies the missing
+corporate-action/basis-adjustment lifecycle, and R17 supplies explicit quote
+provider and staleness policy. Write a dedicated plan before implementation.
+
+The plan must specify named basis profiles rather than a tax-engine promise. A
+profile states purpose/scope, cost-basis method, effective period/date basis,
+valuation date and recorded-at knowledge cutoff, quote/source policy, FX method,
+staleness, reporting currency, and rounding. It produces read-only operational,
+alternative-method, broker-comparison, and as-of realized/unrealized projections
+without mutating operational lots. Persist a report definition/run or snapshot
+only where immutable inputs plus versioned policy cannot cheaply reproduce it.
+
+Research inside the planning slice must answer which measures belong on the
+portfolio dashboard versus a period report, how a user labels a jurisdiction or
+accounting purpose without Rekenraam claiming tax compliance, and how unrealized
+movement is presented without price-refresh flip-flop. I-04 is narrowed by ADR
+0012: reports never silently post gains; if formal realized-gain, revaluation, or
+tax-liability entries are wanted, scope an explicit linked accounting workflow
+and decide separately whether it belongs in R18.
 
 ## Deliberately later
 
@@ -489,9 +545,9 @@ Resolve these only when their related slice becomes current work:
 - Attachment storage, retention, access-control, backup, and encryption model
   — a proposed resolution now exists in `docs/plans/receipts-plan.md` (R14a);
   decide when that slice is scheduled.
-- I-03 / I-04 (gains reporting): **escalated 2026-08-19 from a decision to a
-  research task.** The owner's position is that this is not a yes/no choice and
-  needs dedicated research before any implementation, because:
+- I-03 / I-04 (gains reporting): **architectural boundary decided 2026-08-29
+  in ADR 0012; product research is scheduled inside R18 after R12a/R16/R17.**
+  The remaining work is not a yes/no choice because:
   - realized and unrealized gains answer different questions, and which one a
     user should see depends on what they are trying to learn;
   - tax treatment differs by country — some tax realized gains, some tax
@@ -499,13 +555,14 @@ Resolve these only when their related slice becomes current work:
   - unrealized figures move with every price refresh, so a naive presentation
     flip-flops and reads as instability rather than information.
 
-  The research must produce a recommendation for: which measure is authoritative
+  The R18 plan must produce a recommendation for: which measure is authoritative
   where, when each is shown, how the jurisdiction difference is expressed
   without turning the app into a tax engine, and how to present unrealized
-  movement without flip-flopping. Only then do I-03 (read-only analytical
-  methods) and I-04 (computed values vs ledger postings) become answerable.
+  movement without flip-flopping. I-03 is a named read-side projection. ADR 0012
+  answers I-04's boundary now: viewing a report never posts; any accounting entry
+  is a separate explicit linked workflow whose inclusion remains an R18 scope choice.
 
-  **This does not block R16 slice 1.** Zero-proceeds write-off (T-38), price
+  **This does not block R12a, R16 slice 1, or R17.** Zero-proceeds write-off (T-38), price
   observation voiding (T-37), and return of capital are lot-lifecycle work; they
   use whatever gains treatment is current and do not depend on this outcome.
 
