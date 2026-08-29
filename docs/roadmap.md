@@ -6,7 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-08-29 (R5 complete; R9 recurring transactions is next).
+Last reviewed: 2026-08-29 (R5 complete; R9 recurring transactions is next, and
+its plan is written — `docs/plans/recurring-transactions-plan.md`).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -35,7 +36,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R7 | Trading 212 online connections + lots | ✅ | `docs/plans/trading212-import-plan.md` |
 | R7a | Daily-entry convenience | ⏸ | this file |
 | R8 | Budgets | ⏭ | this file |
-| R9 | Recurring transactions | ▶ | this file |
+| R9 | Recurring transactions | ▶ | `docs/plans/recurring-transactions-plan.md` |
 | R10 | Projected balances / forecasting | ⏭ | this file |
 | R11 | Pricing/FX management UI | ⏸ | this file |
 | R12 | Investments UI + gains reporting | ✅ | `docs/plans/investments-plan.md` |
@@ -309,7 +310,11 @@ lens below commits to protecting. Budgets are independent of both and slot in
 afterward with no rework.
 
 1. **R9 Recurring transactions:** templates and due-entry generation into the
-   reserved producer-owned draft workflow.
+   reserved producer-owned draft workflow. Planned 2026-08-29 in
+   `docs/plans/recurring-transactions-plan.md`: six slices, a pure
+   `internal/recur` enumerator that R10 reuses for projections, drafts-only
+   generation with a dedicated review inbox, and the `status="draft"` origin
+   guard the ledger-core plan deferred until a real producer existed.
 2. **R10 Projected balances:** per-currency projections first; converted totals
    only with explicit FX semantics. Loan helpers are optional follow-up work.
 3. **R8 Budgets:** period budgets with actual-versus-budget reporting.

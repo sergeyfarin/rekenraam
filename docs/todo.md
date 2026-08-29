@@ -6,7 +6,8 @@ Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-08-29 (R5 CSV import, profiles, grouped payee resolution, and
-minimal preview-time rules complete; R9 recurring transactions is next).
+minimal preview-time rules complete; R9 recurring transactions is next and now
+has a plan).
 
 ## Where things stand
 
@@ -84,7 +85,41 @@ localization item below).
 rate in `settings/currencies/+page.svelte` should truncate or round half-up.
 See `backlog.md` G-09.
 
-## Current initiative — R2 reports — **complete, 2026-08-19**
+## Current initiative — R9 recurring transactions — **planned 2026-08-29**
+
+Plan: `docs/plans/recurring-transactions-plan.md`. Six slices, in order. R9 is
+the app's first machine producer of financial records, so it is also where the
+conventions' promises about `draft` finally get kept.
+
+- [ ] 1. `internal/recur` (pure date enumerator, ISO strings, no clock or DB)
+      plus the four tables in `0003_recurring.sql` and the repository. Eight
+      named enumeration tests, including monthly-on-the-31st clamping that
+      re-anchors instead of drifting to the 28th.
+- [ ] 2. Template CRUD: service, handlers, OpenAPI, typed client, error codes in
+      six locales, and the PATCH-omission test this repo keeps needing.
+- [ ] 3. Generator, scheduler (one-a-minute tick on the owner's
+      `user_preferences.time_zone`, following `app/backup_scheduler.go`), and
+      the `status="draft"` origin guard — rejecting `browser_api` drafts, which
+      `plans/transaction-ledger-core-plan.md` deferred until a real producer
+      existed. The existing draft-lifecycle tests move onto that producer.
+- [ ] 4. Due inbox read model and review actions (skip, run-now,
+      reconciliation-impact preview on post).
+- [ ] 5. Frontend `/app/recurring` — templates and due inbox, all four screen
+      states, six locales, an `[acceptance]`-tagged browser case.
+- [ ] 6. Acceptance review, R2/R3 pattern.
+
+Three decisions in the plan are worth knowing without reading it: generated
+entries are **drafts only** (no auto-post in v1 — a stale auto-posted rent
+corrupts reconciliations silently), creating a template **never backfills
+history** (a past `starts_on` is a phase anchor, not eighty-eight drafts), and
+future occurrences are **computed, not stored**, which is the contract R10's
+projections consume.
+
+Three owner questions are answered by shipping the recommendation unless
+overridden: default `lead_days` (5), a due-count badge in the nav (yes), and
+whether `run-now` is user-visible (yes, for the reason "back up now" is).
+
+## Previous initiative — R2 reports — **complete, 2026-08-19**
 
 - [x] Shared report filter contract (`account_id`, `include_descendants`,
       `commodity_id`) on the backend, with a `query.filters` echo carrying the
@@ -239,10 +274,6 @@ a `<title>`; the light theme's accent family missed AA, including every primary
 button at 4.20:1; a clickable table row used `role="button"` with `aria-selected`
 and nested buttons inside it; and `auth.spec.ts`'s need to run first was held up
 only by alphabetical luck, now stated as a project dependency.
-
-**Current initiative:** R9 recurring transactions. R5 ordinary-bank CSV import is
-complete: profiles, safe suggestions, grouped payee resolution, and minimal
-preview-time rules all reuse the staged preview and ledger-commit pipeline.
 
 ## Ready to start — unblocked by the 2026-08-19 decisions
 
