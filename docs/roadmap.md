@@ -383,7 +383,15 @@ These are valuable, but they are not allowed to displace the current plan:
   `docs/plans/connections-plan.md`. Both first slices carry blocking
   provider-verification preconditions — see that plan.
 - R7a daily-entry convenience: transaction templates, payee defaults, saved
-  views, and keyboard-first entry.
+  views, and keyboard-first entry plus general entry review/edit helpers such
+  as previous/next entry, open/edit, save-and-next, duplicate, split, and
+  audit-safe bulk changes. Add user-customizable action bindings and selectable
+  shortcut presets modelled on Rekenraam, Quicken, Microsoft Money, and other
+  documented schemes (for example, an MS Money-style `Ctrl+M` reconciled
+  action). Presets are starting points rather than claims of full compatibility:
+  conflicts and platform differences must be visible, commands must remain
+  discoverable and have mouse/touch equivalents, and no shortcut may bypass
+  reconciliation guards, confirmations, or audit history.
 - R11 pricing/FX management UI.
 - R13 investment return analytics (TWR/MWR, allocation, benchmark comparison).
 - R14 receipts & attachments: durable attachment storage (resolves the open
