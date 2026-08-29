@@ -7,8 +7,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 short-horizon working queue is `docs/todo.md`.
 
 Last reviewed: 2026-08-29 (investment boundary review accepted as ADR 0012;
-R12a is the immediate integrity gate before R9 resumes; R9 slice 1 is already
-complete).
+R12a's narrow T-75a/T-74 correctness gate precedes R9's resumption; T-76 and
+T-75b are scheduled separately; R9 slice 1 is already complete).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -307,8 +307,9 @@ Everything outside that fence stays in the later import-rules slice.
 ### Current — R12a investment integrity correction
 
 The 2026-08-29 review found two reachable financial-correctness defects and one
-provenance gap in a feature previously marked complete. Correct them before R9
-adds another producer of financial records. ADR 0012 fixes the durable boundary:
+provenance gap in a feature previously marked complete. Correct the two defects
+before R9 adds another producer of financial records. ADR 0012 fixes the durable
+boundary:
 canonical journal, immutable investment subledger, named read-side projections,
 and optional explicit accounting postings.
 
@@ -316,22 +317,26 @@ Land the corrections in the order specified by
 `docs/plans/investment-integrity-plan.md`; do not expand this gate into R18 reporting:
 
 1. **T-75a — immediate lifecycle fence and symmetric self-check.** Reject unsafe
-   generic investment mutation before more divergence can be created, and make
-   diagnostics cover journal-only as well as lot-only positions.
+   generic investment mutation and non-posted investment creation before more
+   divergence can be created; prove current-version edits cannot rewrite realized
+   proceeds; make diagnostics cover basis and journal-only as well as lot-only
+   positions.
 2. **T-74 — average-cost conservation.** Replace the split pool-rate/per-lot-rate
    state with a projection whose disposed plus remaining basis conserves exactly
    through sequential partial sales. Rewrite the tests that currently bless the
    divergence.
-3. **T-76 — disposal provenance.** Snapshot resolved method, resolution tier,
-   policy/profile version, allocations, and audit linkage on commit; expose and
-   export it. A later default change must not reinterpret an earlier sale.
-4. **T-75b — investment-native correction lifecycle.** Change journal and
-   subledger atomically, preserve original events, and keep generic mutation fenced.
 
-**Exit gate:** the named acceptance cases in T-74–T-76 pass; buy, partial sell,
-full sell, correction, void/delete refusal, restore/reversal, import, gains, export,
-self-check, audit, and reconciliation all agree end to end. `implemented.md` may
-restore the affected rows to ✅ only after that review.
+**Exit gate:** the named T-75a/T-74 acceptance cases pass; buy, partial sell,
+full sell, generic mutation refusal, non-posted creation refusal, import, gains,
+self-check, audit, and reconciliation agree end to end. Reset/reimport disposable
+pre-v0.1 development books; assess any non-disposable data explicitly rather than
+guessing a repair. `implemented.md` may restore average cost and the lifecycle
+fence to ✅ only after that review. R9 then resumes.
+
+**Required follow-up, not an R9 blocker:** T-76 snapshots and exports disposal
+method/tier/policy provenance before v0.1/schema freeze and before R16/R18. T-75b
+is the investment-native correction lifecycle in R16; the generic fence remains
+in force until it ships.
 
 ### Next — planning loop
 
@@ -375,6 +380,9 @@ split by risk:
    ledger code both 2026-07 audits certified as correct. Write the
    lot-mutation design before the code. A migrant's first AAPL split must not
    require deleting and re-entering lots.
+3. **Investment-native correction/reversal (T-75b).** Build domain commands that
+   change journal and subledger atomically, preserve original events, and retain
+   the generic mutation fence. T-76 disposal provenance is a prerequisite.
 
 ### R17 — crypto instrument type
 
@@ -402,7 +410,8 @@ coverage promise the adapter rule forbids and a maintenance tarpit.
 
 ### R18 — reproducible investment basis and gains projections
 
-Build after R12a has trustworthy immutable events, R16 supplies the missing
+Build after R12a has trustworthy immutable events, T-76 preserves disposal
+policy provenance, R16 supplies the missing
 corporate-action/basis-adjustment lifecycle, and R17 supplies explicit quote
 provider and staleness policy. Write a dedicated plan before implementation.
 

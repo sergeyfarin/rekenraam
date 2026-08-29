@@ -67,7 +67,10 @@ When a feature introduces a durable new rule, update one of those documents in t
   `account_kind = 'security_holding'`. Brokerage cash accounts remain ordinary
   currency-denominated asset accounts.
 - Investment trades use the `commodity_trading` system account to keep posted
-  transactions balanced by commodity.
+  transactions balanced by commodity. For an open position its balance is a raw
+  clearing/cash-flow residual, not a method-independent realized gain; an explicit
+  future gain posting is a policy-linked reclassification, never a side effect of
+  viewing a report.
 - Investment lots and lot events are durable accounting facts. FIFO is the
   default disposal method until a user-selected cost-basis policy says
   otherwise; never infer cost basis from current holdings alone. ADR 0012
@@ -78,6 +81,9 @@ When a feature introduces a durable new rule, update one of those documents in t
   void, unvoid, soft-delete, and restore paths must commit, reverse, or correct
   both sides atomically. Generic transaction mutation must reject an investment
   transaction when it cannot preserve its subledger consequences.
+- Investment domain writes are `posted` only until an investment-aware draft
+  workflow defines atomic lot activation on promotion and no lot effects on
+  discard. A caller-supplied draft must never create or consume lots.
 - A committed disposal must snapshot its resolved cost-basis method, where that
   choice came from, the applicable policy/profile version, explicit allocations,
   and audit provenance. Later changes to account or global defaults must not
@@ -87,6 +93,10 @@ When a feature introduces a durable new rule, update one of those documents in t
   events. Every projection must conserve quantity and basis across sequential
   events. Alternative reporting methods run as separate read-side projections;
   they never repeatedly mutate the operational lots.
+- A lot's original `cost_basis_value` is immutable acquisition evidence; average
+  cost may redistribute only the remaining-basis projection. While the runtime has
+  one operational projection, reject switching into or out of average cost after
+  a partial disposal until the position closes and starts a new method epoch.
 - Realized/unrealized gains are server-computed read models with named policy.
   Reproducible investment reports state their `as_of` date, price-knowledge
   cutoff, valuation/FX method, staleness policy, reporting currency, basis profile,

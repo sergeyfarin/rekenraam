@@ -1077,13 +1077,16 @@ enough; this does not need to run on every push.
 Related: T-70, which is about the *test suite's* runtime rather than the
 app's.
 
-## Investment integrity gate (R12a — do before further feature work)
+## Investment integrity work (R12a correctness gate, then scheduled follow-up)
 
 These three findings were opened by the 2026-08-29 ledger/subledger boundary
-review. They are sequenced as R12a ahead of the remaining R9 slices because two
-can already produce incorrect financial state and the third loses provenance on
-every new disposal. ADR 0012 governs the correction; R18 owns the later
-multi-basis reporting engine and must not be pulled into these fixes.
+review. T-75a and T-74 are the narrow R12a gate ahead of the remaining R9
+slices because they can already create or preserve incorrect financial state.
+T-76 is required before the v0.1 schema/export contract freezes and before R16
+or R18, but it does not block R9's ordinary/transfer-only recurring templates.
+T-75b is investment lifecycle feature work in R16, not a prerequisite for safely
+continuing unrelated work while the generic fence remains. ADR 0012 governs the
+correction; R18 owns the later multi-basis reporting engine.
 
 ### T-74 Average cost does not conserve the basis pool `[ ]`
 
@@ -1108,6 +1111,14 @@ over surviving per-lot rows or introduces an explicit pool projection is an
 implementation choice, but it must remain rebuildable from immutable events and
 must not erase lot identity needed by FIFO/LIFO/specific-lot projections.
 
+`investment_lots.cost_basis_value` is the immutable original acquisition basis;
+average-cost processing must never rewrite it. Only the rebuildable remaining-
+basis projection may be redistributed. Because the current runtime maintains one
+operational projection, it must also persist a minimal position-level method lock:
+reject switching into or out of `average_cost` while a position remains open
+after any disposal under a different method. A closed position starts a new
+method epoch. Full per-disposal policy provenance remains T-76.
+
 **Acceptance gate:** named tests cover two differently priced lots, a partial
 average-cost sale followed by a second sale and a final close; after each step,
 quantity and basis conserve exactly, the position's remaining basis is correct,
@@ -1123,14 +1134,26 @@ void/unvoid, soft-delete/restore); `backend/internal/app/investments.go` and
 `frontend/src/lib/transactions/transaction-detail-panel.svelte` (unconditional
 actions); `backend/internal/app/self_check.go` (`lotReconciliationCheck`).
 
-Investment creation commits journal postings and lot consequences together, but
-the ordinary transaction lifecycle later changes only the journal. Editing or
-voiding a buy can leave an open lot the posted ledger no longer holds; editing or
-voiding a sell can leave its lots consumed. Soft-delete and restore have the same
+Posted investment creation commits journal postings and lot consequences
+together, but the ordinary transaction lifecycle later changes only the journal.
+Editing or voiding a buy can leave an open lot the posted ledger no longer holds;
+editing or voiding a sell can leave its lots consumed. Soft-delete and restore have the same
 problem, and realized-gain reads continue to consume the durable disposal events.
 The current self-check is diagnostic after the damage and constructs its key set
 only from open lots, so it misses a journal position whose relevant lots are all
 closed.
+
+There are two additional reachable forms of the same disagreement:
+
+- investment inputs accept a caller-supplied `status`; a `draft` therefore
+  creates or consumes lots even though drafts are outside the ledger;
+- realized-gain proceeds join the disposal back to
+  `current_transaction_versions`, so a generic edit of the sell cash posting can
+  rewrite historical proceeds while the stored disposed basis stays frozen.
+
+The current self-check compares quantities only. It cannot detect the T-74 basis
+divergence, so basis/event checks are required rather than merely strengthening
+the existing quantity comparison.
 
 Land in two safe increments:
 
@@ -1138,8 +1161,10 @@ Land in two safe increments:
    lot events and reject generic financial edit/correction/lifecycle mutations
    with a stable error directing the caller to an investment workflow. Hide or
    replace the unsafe UI actions, but enforce the rule in the service so API
-   callers cannot bypass it. Non-financial descriptive edits may remain allowed
-   only when proven not to affect the subledger.
+   callers cannot bypass it. Require investment creation to be `posted` until a
+   future investment-aware draft promotion/discard workflow exists. Non-financial
+   descriptive edits may remain allowed only when proven not to affect the
+   subledger.
 2. **Complete lifecycle:** add investment-native correction/reversal behavior
    that versions or appends compensating subledger events and changes the journal
    in the same SQLite transaction, through the existing reconciliation guard.
@@ -1150,13 +1175,19 @@ holding keys and lot keys, include zero/open/closed edge cases, validate event
 quantity and basis conservation, and name the transaction/position causing a
 failure. Detection does not replace the write guard.
 
-**Acceptance gate:** end-to-end service tests attempt every generic lifecycle
+**R12a acceptance gate:** end-to-end service tests attempt every generic lifecycle
 action against a buy and a fully-closing sell and prove no partial mutation;
-investment-native correction tests prove journal, lots, gains, audit event, and
-reconciliation invalidation commit or roll back together; the self-check catches
-both lot-only and journal-only positions, including all-lots-closed.
+draft investment creation is refused before journal or lot writes; realized
+proceeds cannot be rewritten through a generic transaction version; the
+self-check catches both lot-only and journal-only positions, including
+all-lots-closed. **R16 acceptance:** investment-native correction tests prove
+journal, lots, gains, audit event, and reconciliation invalidation commit or roll
+back together.
 
 ### T-76 A disposal does not preserve its resolved policy provenance `[ ]`
+
+**Schedule:** required before v0.1/schema freeze and before R16/R18; not an R9
+blocker.
 
 **Files:** `backend/internal/app/investments.go`
 (`resolveCostBasisMethod`, `sell`); `backend/internal/db/investments.go`

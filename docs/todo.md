@@ -5,9 +5,9 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-29 (R12a investment integrity correction interrupts R9
-after its completed first slice; ADR 0012 and backlog T-74–T-76 are the source
-of truth for the gate).
+Last updated: 2026-08-29 (R12a's T-75a/T-74 correctness gate interrupts R9
+after its completed first slice; T-76 and T-75b are required later work, not
+part of that gate).
 
 ## Where things stand
 
@@ -94,16 +94,15 @@ Do these in order before returning to R9. Detail and acceptance gates live in
 `docs/plans/investment-integrity-plan.md`, and the durable boundary in ADR 0012.
 
 - [ ] **T-75a:** reject unsafe generic lifecycle actions for investment-linked
-      transactions in the service and UI; make self-check compare the union of
-      journal and lot positions, including all-lots-closed.
+      transactions in the service and UI; reject non-posted investment creation;
+      pin realized proceeds against current-version drift; make self-check compare
+      journal and lot positions plus basis/event conservation.
 - [ ] **T-74:** make average-cost disposed and remaining basis conserve through
-      sequential partial sales; replace the tests that currently bless divergence.
-- [ ] **T-76:** persist and export resolved disposal method, resolution tier,
-      policy/profile version, allocations, and audit provenance.
-- [ ] **T-75b:** add the investment-native correction/reversal lifecycle, atomic
-      with journal changes and reconciliation invalidation.
+      sequential partial sales; preserve original acquisition basis; lock unsafe
+      mid-position average-cost method switches; replace tests that bless divergence.
 - [ ] Run R12a's end-to-end acceptance review and update `implemented.md` before
-      restoring any affected capability to ✅.
+      restoring the corrected capabilities to ✅; reset/reimport disposable dev
+      books and explicitly assess any non-disposable data.
 
 ## Paused after slice 1 — R9 recurring transactions
 
@@ -142,6 +141,18 @@ corrupts reconciliations silently), creating a template **never backfills
 history** (a past `starts_on` is a phase anchor, not eighty-eight drafts), and
 future occurrences are **computed, not stored**, which is the contract R10's
 projections consume.
+
+R9 v1 templates are deliberately limited to `ordinary` and `transfer`; they
+cannot generate investments. Any future recurring-investment producer must first
+define when draft lot effects activate on promotion and reverse on discard.
+
+## Required investment follow-up — before v0.1/R16/R18
+
+- [ ] **T-76:** persist and export resolved disposal method, resolution tier,
+      policy/profile version, allocations, and audit provenance before schema and
+      export contracts freeze.
+- [ ] **T-75b (R16):** add investment-native correction/reversal, atomic with
+      journal changes and reconciliation invalidation; keep generic mutation fenced.
 
 Three owner questions are answered by shipping the recommendation unless
 overridden: default `lead_days` (5), a due-count badge in the nav (yes), and

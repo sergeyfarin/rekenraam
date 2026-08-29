@@ -128,15 +128,23 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
 - ADR 0012 separates the canonical journal, investment subledger, read-side
   basis/valuation projections, and optional explicit accounting postings. A
   report choosing FIFO/LIFO/average or an as-of price never mutates journal or
-  operational lot facts.
+  operational lot facts. For an open position, `commodity_trading` contains a raw
+  clearing/cash-flow residual, not a method-independent realized gain.
 - Every investment lifecycle mutation must preserve journal and subledger
   atomically. Generic transaction edit/correct/void/unvoid/soft-delete/restore
   must reject an investment-linked transaction unless the path also appends the
   necessary corrective lot/election events in the same database transaction.
+- Investment domain writes are posted-only until an investment-aware draft
+  workflow exists. A draft must not create or consume lots; promotion would need
+  to activate journal and subledger effects atomically.
 - A committed disposal snapshots the resolved method, resolution tier,
   policy/profile version, allocations, and audit provenance. Later defaults do
   not reinterpret it. Current lot state is a rebuildable projection and must
   conserve quantity and basis across sequential events.
+- Original lot `cost_basis_value` is immutable acquisition evidence. Average cost
+  may redistribute only remaining-basis projection state. With one operational
+  projection, switching into or out of average cost after a partial disposal is
+  rejected until the position closes.
 
 ## Dates and times
 

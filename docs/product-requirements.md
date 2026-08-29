@@ -163,6 +163,10 @@ These apply across all feature phases.
   auditable investment subledger. They must share one atomic lifecycle so editing,
   voiding, deleting, restoring, or correcting an investment transaction cannot
   leave holdings and lots disagreeing.
+- A persisted draft is outside the ledger and must not create or consume
+  investment lots. Investment entry remains posted-only until a future producer
+  defines promotion/discard semantics that activate or remove journal and
+  subledger consequences atomically.
 - Cost-basis, period, jurisdiction/accounting-purpose, price, FX, and knowledge-time
   choices belong to named reporting projections. Multiple analytical projections
   may coexist without rewriting canonical facts. Any future realized-gain,

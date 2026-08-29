@@ -1,8 +1,8 @@
 # Recurring Transactions Plan (R9)
 
 Status: **slice 1 shipped 2026-08-29; slices 2-6 open and paused behind the
-R12a investment integrity gate.** Resume immediately after R12a's acceptance
-review; `docs/roadmap.md` owns that sequence. Written 2026-08-29,
+R12a T-75a/T-74 investment correctness gate.** Resume immediately after R12a's
+acceptance review; `docs/roadmap.md` owns that sequence. Written 2026-08-29,
 immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
 `internal/recur`, `backend/migrations/0003_recurring.sql`, and
 `db.RecurringRepository` behind 26 named tests. This is the implementation reference for the
@@ -54,6 +54,13 @@ zone both `app/pricing_scheduler.go` and `app/backup_scheduler.go` read. R9 uses
 the same one and adds no per-template zone — see the decision below.
 
 ## Decisions
+
+R9 v1 templates contain only `ordinary` and `transfer` transactions (enforced by
+the schema). They do not call investment services and cannot create lot effects,
+so T-76 provenance and T-75b investment correction do not block R9. This is a
+deliberate boundary, not accidental compatibility: a future recurring-investment
+producer must first specify that drafts have no lot effects, promotion activates
+journal and subledger atomically, and discard leaves neither behind.
 
 Each of these is a decision with a named alternative, not a default that fell
 out of the first draft. They are binding for v1; the acceptance review at the

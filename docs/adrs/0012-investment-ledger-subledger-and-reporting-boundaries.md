@@ -29,9 +29,13 @@ mutable projection cannot represent several legitimate bases at once.
 Investment accounting has four explicit layers.
 
 1. **Canonical journal.** Posted transactions record the economic event: exact
-   security and cash quantities, fees, income, withholding and tax postings. The
-   journal does not change when a report selects FIFO, LIFO, average cost, or a
-   valuation method.
+   security and cash quantities, fees, income, withholding and tax postings. Buy
+   and sell settlement balances through the `commodity_trading` equity account.
+   For an open position that account contains a raw per-commodity clearing/cash-
+   flow residual, not a method-independent realized gain: part of the cash
+   residual is still capital attributable to the remaining holding. A basis
+   policy is required to split it. The journal does not change merely because a
+   report selects FIFO, LIFO, average cost, or a valuation method.
 2. **Investment subledger.** Immutable acquisition, disposal, transfer,
    corporate-action, basis-adjustment, and lot-election events record the
    relationships the journal alone cannot express. An investment mutation is one
@@ -47,7 +51,13 @@ Investment accounting has four explicit layers.
 4. **Optional accounting postings.** If a future workflow needs realized gain,
    unrealized revaluation, or a tax liability in formal statements, it creates an
    explicit, auditable transaction linked to the projection/run and policy that
-   produced it. A report must never silently manufacture ledger postings.
+   produced it. For realized gain this would be an explicit method-specific
+   reclassification between `commodity_trading` equity and the chosen income or
+   expense account, leaving the selected basis of the open position in clearing.
+   This is not a second recognition of gain: a fully closed position's clearing
+   residual already nets to its economic gain or loss, while an open position's
+   residual has not yet been split. A report must never silently manufacture
+   ledger postings.
 
 The operational disposal decision remains durable even when alternative reports
 are available. Every committed disposal snapshots its resolved method, the tier
