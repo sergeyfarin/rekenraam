@@ -39,6 +39,8 @@ that term wins over a more literal translation:
 | Transfer | Transferencia | Virement | Overboeking | Umbuchung | Перевод |
 | Tag | Etiqueta | Étiquette | Label | Tag | Метка |
 | Import rule | Regla de importación | Règle d’importation | Importregel | Importregel | Правило импорта |
+| Recurring transaction | Transacción periódica | Transaction récurrente | Periodieke transactie | Wiederkehrende Buchung | Регулярная транзакция |
+| Recurring template | Plantilla de transacción periódica | Modèle de transaction récurrente | Sjabloon voor periodieke transacties | Vorlage für wiederkehrende Buchungen | Шаблон регулярной транзакции |
 
 **Transaction vs posting is the pair that matters most.** A transaction holds
 postings; both need distinct words or the reconciliation and split screens stop

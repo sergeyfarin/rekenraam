@@ -15,6 +15,9 @@ import (
 // say which thing was missing.
 var ErrRecurringTemplateNotFound = errors.New("recurring template not found")
 
+var ErrRecurringTemplateArchived = errors.New("recurring template is archived")
+var ErrRecurringTemplateConflict = errors.New("recurring template changed concurrently")
+
 // ErrRecurringOccurrenceExists means the template already has a row for this
 // date. Like ErrBackupOccurrenceExists it is a normal outcome — two schedulers
 // agreeing on the same due date, or a restart mid-tick — and the caller adopts
@@ -36,6 +39,7 @@ func isRecurringOccurrenceConflict(err error) bool {
 // holds no SQL.
 type RecurringTemplateRecord struct {
 	ID              int64
+	Revision        int64
 	BookID          int64
 	Name            string
 	Enabled         bool
@@ -125,13 +129,14 @@ type CreateRecurringTemplateParams struct {
 }
 
 type UpdateRecurringTemplateParams struct {
-	BookID        int64
-	TemplateID    int64
-	ActorUserID   int64
-	AuthSessionID int64
-	RequestID     string
-	UpdatedAt     string
-	Spec          RecurringTemplateSpec
+	BookID           int64
+	TemplateID       int64
+	ActorUserID      int64
+	AuthSessionID    int64
+	RequestID        string
+	UpdatedAt        string
+	Spec             RecurringTemplateSpec
+	ExpectedRevision *int64
 }
 
 type ArchiveRecurringTemplateParams struct {
@@ -243,6 +248,17 @@ func (r *RecurringRepository) UpdateRecurringTemplate(ctx context.Context, param
 	if err := requireRecurringTemplate(ctx, tx, params.BookID, params.TemplateID); err != nil {
 		return RecurringTemplateRecord{}, err
 	}
+	var revision int64
+	var archived sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT revision, archived_at FROM recurring_templates WHERE book_id = ? AND id = ?`, params.BookID, params.TemplateID).Scan(&revision, &archived); err != nil {
+		return RecurringTemplateRecord{}, fmt.Errorf("read recurring template revision: %w", err)
+	}
+	if archived.Valid {
+		return RecurringTemplateRecord{}, ErrRecurringTemplateArchived
+	}
+	if params.ExpectedRevision != nil && revision != *params.ExpectedRevision {
+		return RecurringTemplateRecord{}, ErrRecurringTemplateConflict
+	}
 	if _, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
 		ActorUserID:   params.ActorUserID,
@@ -264,7 +280,7 @@ func (r *RecurringRepository) UpdateRecurringTemplate(ctx context.Context, param
 			description = ?, note_markdown = ?, frequency = ?, interval_count = ?,
 			by_weekday = ?, day_of_month = ?, last_day_of_month = ?, month_of_year = ?,
 			starts_on = ?, ends_on = ?, max_occurrences = ?, lead_days = ?,
-			generate_from = ?, updated_at = ?, updated_by_user_id = ?
+			generate_from = ?, updated_at = ?, updated_by_user_id = ?, revision = revision + 1
 		WHERE book_id = ? AND id = ?
 	`,
 		spec.Name, spec.Enabled, spec.TransactionKind,
@@ -311,6 +327,17 @@ func (r *RecurringRepository) ArchiveRecurringTemplate(ctx context.Context, para
 	if err := requireRecurringTemplate(ctx, tx, params.BookID, params.TemplateID); err != nil {
 		return RecurringTemplateRecord{}, err
 	}
+	var archived sql.NullString
+	if err := tx.QueryRowContext(ctx, `SELECT archived_at FROM recurring_templates WHERE book_id = ? AND id = ?`, params.BookID, params.TemplateID).Scan(&archived); err != nil {
+		return RecurringTemplateRecord{}, fmt.Errorf("read recurring archive state: %w", err)
+	}
+	if archived.Valid {
+		records, err := listRecurringTemplates(ctx, tx, ListRecurringTemplatesParams{BookID: params.BookID, IncludeArchived: true}, params.TemplateID)
+		if err != nil {
+			return RecurringTemplateRecord{}, err
+		}
+		return records[0], nil
+	}
 	if _, err := insertAuditEvent(ctx, tx, AuditEventParams{
 		BookID:        params.BookID,
 		ActorUserID:   params.ActorUserID,
@@ -326,7 +353,7 @@ func (r *RecurringRepository) ArchiveRecurringTemplate(ctx context.Context, para
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE recurring_templates
-		SET archived_at = ?, enabled = 0, updated_at = ?, updated_by_user_id = ?
+		SET archived_at = ?, enabled = 0, updated_at = ?, updated_by_user_id = ?, revision = revision + 1
 		WHERE book_id = ? AND id = ?
 	`, params.ArchivedAt, params.ArchivedAt, params.ActorUserID, params.BookID, params.TemplateID); err != nil {
 		return RecurringTemplateRecord{}, fmt.Errorf("archive recurring template: %w", err)
@@ -344,7 +371,7 @@ func (r *RecurringRepository) ArchiveRecurringTemplate(ctx context.Context, para
 func (r *RecurringRepository) SetRecurringTemplateGenerateFrom(ctx context.Context, bookID int64, templateID int64, generateFrom string, updatedAt string) error {
 	result, err := r.database.ExecContext(ctx, `
 		UPDATE recurring_templates
-		SET generate_from = ?, updated_at = ?
+		SET generate_from = ?, updated_at = ?, revision = revision + 1
 		WHERE book_id = ? AND id = ? AND generate_from < ?
 	`, generateFrom, updatedAt, bookID, templateID, generateFrom)
 	if err != nil {
@@ -388,7 +415,7 @@ func listRecurringTemplates(ctx context.Context, queryer queryer, params ListRec
 	}
 
 	rows, err := queryer.QueryContext(ctx, `
-		SELECT template.id, template.book_id, template.name, template.enabled,
+		SELECT template.id, template.revision, template.book_id, template.name, template.enabled,
 		       template.archived_at, template.transaction_kind, template.payee_id,
 		       COALESCE(payee_version.name, template.payee_name),
 		       template.description, template.note_markdown,
@@ -412,7 +439,7 @@ func listRecurringTemplates(ctx context.Context, queryer queryer, params ListRec
 	for rows.Next() {
 		var record RecurringTemplateRecord
 		if err := rows.Scan(
-			&record.ID, &record.BookID, &record.Name, &record.Enabled,
+			&record.ID, &record.Revision, &record.BookID, &record.Name, &record.Enabled,
 			&record.ArchivedAt, &record.TransactionKind, &record.PayeeID,
 			&record.PayeeName, &record.Description, &record.NoteMarkdown,
 			&record.Frequency, &record.IntervalCount, &record.ByWeekday,

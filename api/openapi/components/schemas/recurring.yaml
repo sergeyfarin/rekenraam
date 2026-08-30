@@ -1,0 +1,304 @@
+RecurringPosting:
+  type: object
+  additionalProperties: false
+  required: [account_id, quantity_value, quantity_scale, commodity_id]
+  properties:
+    line_key:
+      type: string
+      description: Stable within the template; generated when omitted.
+    account_id:
+      type: integer
+      minimum: 1
+    quantity_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
+    commodity_id:
+      type: integer
+      minimum: 1
+    memo:
+      type: string
+      maxLength: 500
+RecurringTemplatePatch:
+  type: object
+  additionalProperties: false
+  description: |
+    Omitted fields are preserved. Nullable fields accept explicit null to clear;
+    empty tag_ids clears tags. Changing frequency requires clearing obsolete
+    schedule fields in the same PATCH. Schedule edits reset generate_from to
+    max(local today, starts_on), leaving materialized occurrences unchanged.
+    A concurrent edit, archive, or watermark advance rejects a stale merge.
+  properties:
+    name:
+      type: string
+      maxLength: 500
+      minLength: 1
+    enabled:
+      type: boolean
+    transaction_kind:
+      type: string
+      enum: [ordinary, transfer]
+    payee_id:
+      type: [integer, 'null']
+      minimum: 1
+      description: Null clears the payee link and name unless payee_name is also supplied.
+    payee_name:
+      type: string
+      maxLength: 500
+      description: A supplied name replaces the previous link unless payee_id is also supplied; known active names resolve without creating a payee.
+    description:
+      type: string
+      maxLength: 500
+    note_markdown:
+      type: string
+      maxLength: 10000
+    frequency:
+      type: string
+      enum: [daily, weekly, monthly, yearly]
+    interval_count:
+      type: integer
+      minimum: 1
+      maximum: 10000
+    by_weekday:
+      type: [integer, 'null']
+      minimum: 0
+      maximum: 6
+      description: Sunday is 0. Weekly only; null clears.
+    day_of_month:
+      type: [integer, 'null']
+      minimum: 1
+      maximum: 31
+      description: Monthly or yearly only; null clears.
+    last_day_of_month:
+      type: boolean
+      description: Monthly or yearly only, mutually exclusive with day_of_month.
+    month_of_year:
+      type: [integer, 'null']
+      minimum: 1
+      maximum: 12
+      description: Yearly only; null clears.
+    starts_on:
+      type: string
+      format: date
+      description: Phase anchor, not a request to backfill history.
+    ends_on:
+      type: [string, 'null']
+      format: date
+      description: Inclusive end date; null clears.
+    max_occurrences:
+      type: [integer, 'null']
+      minimum: 1
+      description: Counted from the phase anchor; null removes the limit.
+    lead_days:
+      type: integer
+      minimum: 0
+      maximum: 90
+    postings:
+      type: array
+      minItems: 2
+      maxItems: 500
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/RecurringPosting'
+    tag_ids:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+CreateRecurringTemplateRequest:
+  type: object
+  additionalProperties: false
+  description: 'Defaults: enabled=true, transaction_kind=ordinary, interval_count=1, last_day_of_month=false, lead_days=5.'
+  required: [name, frequency, starts_on, postings]
+  properties:
+    name:
+      type: string
+      maxLength: 500
+      minLength: 1
+    enabled:
+      type: boolean
+    transaction_kind:
+      type: string
+      enum: [ordinary, transfer]
+    payee_id:
+      type: [integer, 'null']
+      minimum: 1
+      description: Null clears the payee link and name unless payee_name is also supplied.
+    payee_name:
+      type: string
+      maxLength: 500
+      description: A supplied name replaces the previous link unless payee_id is also supplied; known active names resolve without creating a payee.
+    description:
+      type: string
+      maxLength: 500
+    note_markdown:
+      type: string
+      maxLength: 10000
+    frequency:
+      type: string
+      enum: [daily, weekly, monthly, yearly]
+    interval_count:
+      type: integer
+      minimum: 1
+      maximum: 10000
+    by_weekday:
+      type: [integer, 'null']
+      minimum: 0
+      maximum: 6
+      description: Sunday is 0. Weekly only; null clears.
+    day_of_month:
+      type: [integer, 'null']
+      minimum: 1
+      maximum: 31
+      description: Monthly or yearly only; null clears.
+    last_day_of_month:
+      type: boolean
+      description: Monthly or yearly only, mutually exclusive with day_of_month.
+    month_of_year:
+      type: [integer, 'null']
+      minimum: 1
+      maximum: 12
+      description: Yearly only; null clears.
+    starts_on:
+      type: string
+      format: date
+      description: Phase anchor, not a request to backfill history.
+    ends_on:
+      type: [string, 'null']
+      format: date
+      description: Inclusive end date; null clears.
+    max_occurrences:
+      type: [integer, 'null']
+      minimum: 1
+      description: Counted from the phase anchor; null removes the limit.
+    lead_days:
+      type: integer
+      minimum: 0
+      maximum: 90
+    postings:
+      type: array
+      minItems: 2
+      maxItems: 500
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/RecurringPosting'
+    tag_ids:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+RecurringTemplateResponse:
+  type: object
+  required: [id, revision, name, enabled, transaction_kind, payee_id, payee_name, description, note_markdown, frequency, interval_count, by_weekday, day_of_month, last_day_of_month, month_of_year, starts_on, ends_on, max_occurrences, lead_days, generate_from, next_due_on, archived_at, created_at, updated_at, postings, tag_ids]
+  properties:
+    name:
+      type: string
+      maxLength: 500
+      minLength: 1
+    enabled:
+      type: boolean
+      default: true
+    transaction_kind:
+      type: string
+      enum: [ordinary, transfer]
+      default: ordinary
+    payee_id:
+      type: [integer, 'null']
+      minimum: 1
+      description: Null clears the payee link and name unless payee_name is also supplied.
+    payee_name:
+      type: string
+      maxLength: 500
+      description: A supplied name replaces the previous link unless payee_id is also supplied; known active names resolve without creating a payee.
+    description:
+      type: string
+      maxLength: 500
+    note_markdown:
+      type: string
+      maxLength: 10000
+    frequency:
+      type: string
+      enum: [daily, weekly, monthly, yearly]
+    interval_count:
+      type: integer
+      minimum: 1
+      maximum: 10000
+      default: 1
+    by_weekday:
+      type: [integer, 'null']
+      minimum: 0
+      maximum: 6
+      description: Sunday is 0. Weekly only; null clears.
+    day_of_month:
+      type: [integer, 'null']
+      minimum: 1
+      maximum: 31
+      description: Monthly or yearly only; null clears.
+    last_day_of_month:
+      type: boolean
+      default: false
+      description: Monthly or yearly only, mutually exclusive with day_of_month.
+    month_of_year:
+      type: [integer, 'null']
+      minimum: 1
+      maximum: 12
+      description: Yearly only; null clears.
+    starts_on:
+      type: string
+      format: date
+      description: Phase anchor, not a request to backfill history.
+    ends_on:
+      type: [string, 'null']
+      format: date
+      description: Inclusive end date; null clears.
+    max_occurrences:
+      type: [integer, 'null']
+      minimum: 1
+      description: Counted from the phase anchor; null removes the limit.
+    lead_days:
+      type: integer
+      minimum: 0
+      maximum: 90
+      default: 5
+    postings:
+      type: array
+      minItems: 2
+      maxItems: 500
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/RecurringPosting'
+    tag_ids:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+    id:
+      type: integer
+    revision:
+      type: integer
+      description: Incremented by edits, archival, and generation watermark advances.
+    generate_from:
+      type: string
+      format: date
+    next_due_on:
+      type: [string, 'null']
+      format: date
+      description: First scheduled date at or beyond the generation watermark; null when disabled, archived, or exhausted.
+    archived_at:
+      type: [string, 'null']
+      format: date-time
+    created_at:
+      type: string
+      format: date-time
+    updated_at:
+      type: string
+      format: date-time
+RecurringTemplatesResponse:
+  type: object
+  required: [templates]
+  properties:
+    templates:
+      type: array
+      description: Complete configuration set, including postings and tags; not silently truncated.
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/RecurringTemplateResponse'

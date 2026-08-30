@@ -1238,6 +1238,34 @@ historical disposal still explains the original method/source; round-trip it
 through the export; preview and commit return the same resolved decision; named
 tests cover every resolution tier and specific-lot allocations.
 
+## Recurring producer activation gate
+
+### T-77 Generated recurring drafts cannot use the current hard-discard path `[ ]`
+
+**Schedule:** R9 slice 3, before linked draft generation is activated; public
+scheduler/run-now activation additionally waits for slice 5's review UI.
+
+**Files:** `backend/migrations/0003_recurring.sql` (`recurring_occurrences`);
+`backend/internal/db/transactions_write.go` (`DeleteDraftTransaction`);
+`backend/internal/app/transactions_write.go` (`DeleteDraftTransaction`).
+
+Verified during R9 slice 2 (2026-08-30): the occurrence's transaction FK is
+`ON DELETE RESTRICT`, `generated` requires a non-null transaction ID, and the
+generic draft-delete path does not update occurrences. A future generated draft
+therefore cannot be discarded through the existing route. Simply deleting the
+occurrence would erase the idempotency identity and allow regeneration.
+
+In one repository transaction, preserve an explicit discarded/skipped occurrence
+tombstone and reason, remove its live transaction link, and apply the ordinary
+never-posted-draft deletion/audit checks. Keep the current public DELETE route;
+do not create a second path that bypasses the producer's identity. Decide the
+tombstone representation in slice 3 and migrate constraints if needed. Posted
+records must remain protected. A failure at any step must roll back all steps.
+
+**Acceptance:** `TestDiscardingGeneratedDraftPreservesOccurrenceAndCannotRegenerate`
+drives real generation → existing DELETE endpoint → next tick; no duplicate or
+orphan remains. Cover rollback, audit attribution, and refusal after posting.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

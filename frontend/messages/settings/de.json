@@ -1,4 +1,7 @@
 {
+  "api_error_recurring_template_unbalanced": "Die Vorlage für wiederkehrende Buchungen muss für jedes Instrument ausgeglichen sein.",
+  "api_error_recurring_schedule_invalid": "Der Wiederholungsplan ist ungültig. Prüfen Sie die Datumsangaben und Wiederholungsfelder.",
+  "api_error_recurring_template_archived": "Diese Vorlage für wiederkehrende Buchungen ist archiviert und kann nicht geändert werden.",
   "account_class_asset": "Vermögen",
   "account_class_equity": "Eigenkapital",
   "account_class_expense": "Ausgaben",

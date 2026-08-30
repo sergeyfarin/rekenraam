@@ -226,6 +226,7 @@ type PostingAccountSummary struct {
 	Code         sql.NullString
 	SystemRole   sql.NullString
 	AccountClass string
+	AccountKind  string
 	BuiltinKey   sql.NullString // json_extract(metadata_json, '$.category.builtin_key')
 }
 
@@ -251,6 +252,7 @@ func (r *AccountRepository) AccountsByIDs(ctx context.Context, bookID int64, ids
 			av.code,
 			a.system_role,
 			av.account_class,
+			av.account_kind,
 			json_extract(av.metadata_json, '$.category.builtin_key')
 		FROM accounts a
 		JOIN current_account_versions av ON av.account_id = a.id
@@ -266,7 +268,7 @@ func (r *AccountRepository) AccountsByIDs(ctx context.Context, bookID int64, ids
 	result := make(map[int64]PostingAccountSummary, len(ids))
 	for rows.Next() {
 		var s PostingAccountSummary
-		if err := rows.Scan(&s.ID, &s.Name, &s.Code, &s.SystemRole, &s.AccountClass, &s.BuiltinKey); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Code, &s.SystemRole, &s.AccountClass, &s.AccountKind, &s.BuiltinKey); err != nil {
 			return nil, fmt.Errorf("scan posting account summary: %w", err)
 		}
 		result[s.ID] = s

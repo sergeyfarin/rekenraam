@@ -3,6 +3,12 @@ info:
   title: Rekenraam API
   version: 0.0.0
 paths:
+  /api/v1/recurring/templates:
+    $ref: "./paths/recurring-templates.yaml"
+  /api/v1/recurring/templates/{template_id}:
+    $ref: "./paths/recurring-template.yaml"
+  /api/v1/recurring/templates/{template_id}/archive:
+    $ref: "./paths/recurring-template-archive.yaml"
   /api/v1/health:
     $ref: "./paths/health.yaml"
   /api/v1/auth/session:
@@ -382,6 +388,16 @@ components:
         type: integer
         format: int64
   schemas:
+    RecurringPosting:
+      $ref: "./components/schemas/recurring.yaml#/RecurringPosting"
+    RecurringTemplatePatch:
+      $ref: "./components/schemas/recurring.yaml#/RecurringTemplatePatch"
+    CreateRecurringTemplateRequest:
+      $ref: "./components/schemas/recurring.yaml#/CreateRecurringTemplateRequest"
+    RecurringTemplateResponse:
+      $ref: "./components/schemas/recurring.yaml#/RecurringTemplateResponse"
+    RecurringTemplatesResponse:
+      $ref: "./components/schemas/recurring.yaml#/RecurringTemplatesResponse"
     HealthResponse:
       $ref: "./components/schemas/common.yaml#/HealthResponse"
     LoginRequest:

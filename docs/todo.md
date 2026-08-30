@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-30 (R12a T-75a/T-74 complete; R9 resumes at slice 2.
+Last updated: 2026-08-30 (R12a T-75a/T-74 complete; R9 slices 1–2 complete.
 T-76 and T-75b remain required later work.)
 
 ## Where things stand
@@ -88,8 +88,8 @@ See `backlog.md` G-09.
 
 ## Current initiative — R9 recurring transactions
 
-Plan: `docs/plans/recurring-transactions-plan.md`. Slice 1 is complete; slices
-2–6 are active after R12a closed. R9 is the app's first machine producer of
+Plan: `docs/plans/recurring-transactions-plan.md`. Slices 1–2 are complete;
+slice 3 is next. R9 is the app's first machine producer of
 financial records, so it is also where the
 conventions' promises about `draft` finally get kept.
 
@@ -104,13 +104,17 @@ conventions' promises about `draft` finally get kept.
       pins it. The schema refuses an unenumerable schedule (weekly with no
       weekday, monthly with neither day rule or both, yearly with no month) so
       a template the generator cannot read cannot be stored by any writer.
-- [ ] 2. Template CRUD: service, handlers, OpenAPI, typed client, error codes in
-      six locales, and the PATCH-omission test this repo keeps needing.
+- [x] 2. **Done 2026-08-30.** Template CRUD service/API, OpenAPI, typed client,
+      localized errors, exact balance checks, nullable PATCH semantics, and
+      revision conflict protection. No ledger-producing endpoint is active yet.
 - [ ] 3. Generator, scheduler (one-a-minute tick on the owner's
       `user_preferences.time_zone`, following `app/backup_scheduler.go`), and
       the `status="draft"` origin guard — rejecting `browser_api` drafts, which
       `plans/transaction-ledger-core-plan.md` deferred until a real producer
       existed. The existing draft-lifecycle tests move onto that producer.
+      Close **T-77** (atomic occurrence-aware draft discard) and test concurrent
+      schedule-edit/watermark races before producing linked drafts. Keep
+      production scheduling and public run-now off until slice 5's review UI.
 - [ ] 4. Due inbox read model and review actions (skip, run-now,
       reconciliation-impact preview on post).
 - [ ] 5. Frontend `/app/recurring` — templates and due inbox, all four screen

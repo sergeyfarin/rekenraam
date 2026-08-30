@@ -1,4 +1,7 @@
 {
+  "api_error_recurring_template_unbalanced": "Le modèle de transaction récurrente doit être équilibré pour chaque instrument.",
+  "api_error_recurring_schedule_invalid": "La planification récurrente n’est pas valide. Vérifiez les dates et les paramètres de répétition.",
+  "api_error_recurring_template_archived": "Ce modèle de transaction récurrente est archivé et ne peut pas être modifié.",
   "account_class_asset": "Actifs",
   "account_class_equity": "Capitaux propres",
   "account_class_expense": "Dépenses",

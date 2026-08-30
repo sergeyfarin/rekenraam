@@ -1,4 +1,7 @@
 {
+  "api_error_recurring_template_unbalanced": "Шаблон регулярной транзакции должен быть сбалансирован по каждому инструменту.",
+  "api_error_recurring_schedule_invalid": "Расписание регулярной транзакции недействительно. Проверьте даты и параметры повторения.",
+  "api_error_recurring_template_archived": "Этот шаблон регулярной транзакции находится в архиве и не может быть изменён.",
   "account_class_asset": "Активы",
   "account_class_equity": "Капитал",
   "account_class_expense": "Расходы",

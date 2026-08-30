@@ -4,6 +4,423 @@
  */
 
 export interface paths {
+    "/api/v1/recurring/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recurring templates with next-due dates */
+        get: {
+            parameters: {
+                query?: {
+                    include_archived?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RecurringTemplatesResponse"];
+                    };
+                };
+                /** @description Invalid request or template */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database temporarily busy */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create a balanced recurring template */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateRecurringTemplateRequest"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RecurringTemplateResponse"];
+                    };
+                };
+                /** @description Invalid request or template */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Archived template or concurrent modification */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Exact quantity overflow */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database temporarily busy */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recurring/templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a recurring template */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    template_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RecurringTemplateResponse"];
+                    };
+                };
+                /** @description Invalid request or template */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Template not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database temporarily busy */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update a recurring template */
+        patch: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    template_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RecurringTemplatePatch"];
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RecurringTemplateResponse"];
+                    };
+                };
+                /** @description Invalid request or template */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Template not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Archived template or concurrent modification */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Exact quantity overflow */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database temporarily busy */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/recurring/templates/{template_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a template without changing its occurrences or drafts */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    template_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            responses: {
+                /** @description Success */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RecurringTemplateResponse"];
+                    };
+                };
+                /** @description Invalid request or template */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Template not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Archived template or concurrent modification */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Exact quantity overflow */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database temporarily busy */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -12493,6 +12910,166 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        RecurringPosting: {
+            /** @description Stable within the template; generated when omitted. */
+            line_key?: string;
+            account_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            commodity_id: number;
+            memo?: string;
+        };
+        /**
+         * @description Omitted fields are preserved. Nullable fields accept explicit null to clear;
+         *     empty tag_ids clears tags. Changing frequency requires clearing obsolete
+         *     schedule fields in the same PATCH. Schedule edits reset generate_from to
+         *     max(local today, starts_on), leaving materialized occurrences unchanged.
+         *     A concurrent edit, archive, or watermark advance rejects a stale merge.
+         */
+        RecurringTemplatePatch: {
+            name?: string;
+            enabled?: boolean;
+            /** @enum {string} */
+            transaction_kind?: "ordinary" | "transfer";
+            /** @description Null clears the payee link and name unless payee_name is also supplied. */
+            payee_id?: number | null;
+            /** @description A supplied name replaces the previous link unless payee_id is also supplied; known active names resolve without creating a payee. */
+            payee_name?: string;
+            description?: string;
+            note_markdown?: string;
+            /** @enum {string} */
+            frequency?: "daily" | "weekly" | "monthly" | "yearly";
+            interval_count?: number;
+            /** @description Sunday is 0. Weekly only; null clears. */
+            by_weekday?: number | null;
+            /** @description Monthly or yearly only; null clears. */
+            day_of_month?: number | null;
+            /** @description Monthly or yearly only, mutually exclusive with day_of_month. */
+            last_day_of_month?: boolean;
+            /** @description Yearly only; null clears. */
+            month_of_year?: number | null;
+            /**
+             * Format: date
+             * @description Phase anchor, not a request to backfill history.
+             */
+            starts_on?: string;
+            /**
+             * Format: date
+             * @description Inclusive end date; null clears.
+             */
+            ends_on?: string | null;
+            /** @description Counted from the phase anchor; null removes the limit. */
+            max_occurrences?: number | null;
+            lead_days?: number;
+            postings?: components["schemas"]["RecurringPosting"][];
+            tag_ids?: number[];
+        };
+        /** @description Defaults: enabled=true, transaction_kind=ordinary, interval_count=1, last_day_of_month=false, lead_days=5. */
+        CreateRecurringTemplateRequest: {
+            name: string;
+            enabled?: boolean;
+            /** @enum {string} */
+            transaction_kind?: "ordinary" | "transfer";
+            /** @description Null clears the payee link and name unless payee_name is also supplied. */
+            payee_id?: number | null;
+            /** @description A supplied name replaces the previous link unless payee_id is also supplied; known active names resolve without creating a payee. */
+            payee_name?: string;
+            description?: string;
+            note_markdown?: string;
+            /** @enum {string} */
+            frequency: "daily" | "weekly" | "monthly" | "yearly";
+            interval_count?: number;
+            /** @description Sunday is 0. Weekly only; null clears. */
+            by_weekday?: number | null;
+            /** @description Monthly or yearly only; null clears. */
+            day_of_month?: number | null;
+            /** @description Monthly or yearly only, mutually exclusive with day_of_month. */
+            last_day_of_month?: boolean;
+            /** @description Yearly only; null clears. */
+            month_of_year?: number | null;
+            /**
+             * Format: date
+             * @description Phase anchor, not a request to backfill history.
+             */
+            starts_on: string;
+            /**
+             * Format: date
+             * @description Inclusive end date; null clears.
+             */
+            ends_on?: string | null;
+            /** @description Counted from the phase anchor; null removes the limit. */
+            max_occurrences?: number | null;
+            lead_days?: number;
+            postings: components["schemas"]["RecurringPosting"][];
+            tag_ids?: number[];
+        };
+        RecurringTemplateResponse: {
+            name: string;
+            /** @default true */
+            enabled: boolean;
+            /**
+             * @default ordinary
+             * @enum {string}
+             */
+            transaction_kind: "ordinary" | "transfer";
+            /** @description Null clears the payee link and name unless payee_name is also supplied. */
+            payee_id: number | null;
+            /** @description A supplied name replaces the previous link unless payee_id is also supplied; known active names resolve without creating a payee. */
+            payee_name: string;
+            description: string;
+            note_markdown: string;
+            /** @enum {string} */
+            frequency: "daily" | "weekly" | "monthly" | "yearly";
+            /** @default 1 */
+            interval_count: number;
+            /** @description Sunday is 0. Weekly only; null clears. */
+            by_weekday: number | null;
+            /** @description Monthly or yearly only; null clears. */
+            day_of_month: number | null;
+            /**
+             * @description Monthly or yearly only, mutually exclusive with day_of_month.
+             * @default false
+             */
+            last_day_of_month: boolean;
+            /** @description Yearly only; null clears. */
+            month_of_year: number | null;
+            /**
+             * Format: date
+             * @description Phase anchor, not a request to backfill history.
+             */
+            starts_on: string;
+            /**
+             * Format: date
+             * @description Inclusive end date; null clears.
+             */
+            ends_on: string | null;
+            /** @description Counted from the phase anchor; null removes the limit. */
+            max_occurrences: number | null;
+            /** @default 5 */
+            lead_days: number;
+            postings: components["schemas"]["RecurringPosting"][];
+            tag_ids: number[];
+            id: number;
+            /** @description Incremented by edits, archival, and generation watermark advances. */
+            revision: number;
+            /** Format: date */
+            generate_from: string;
+            /**
+             * Format: date
+             * @description First scheduled date at or beyond the generation watermark; null when disabled, archived, or exhausted.
+             */
+            next_due_on: string | null;
+            /** Format: date-time */
+            archived_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RecurringTemplatesResponse: {
+            /** @description Complete configuration set, including postings and tags; not silently truncated. */
+            templates: components["schemas"]["RecurringTemplateResponse"][];
+        };
         HealthResponse: {
             /** @example ok */
             status: string;
@@ -15154,7 +15731,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "INVESTMENT_WORKFLOW_REQUIRED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "INVESTMENT_WORKFLOW_REQUIRED" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

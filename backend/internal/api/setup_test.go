@@ -372,6 +372,7 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 		Category:    categoryService,
 		Payee:       payeeService,
 		Transaction: transactionService,
+		Recurring:   app.NewRecurringService(db.NewRecurringRepository(database), transactionService, settingsService),
 		Pricing:     pricingService,
 		Investment:  investmentService,
 		Import:      importService,

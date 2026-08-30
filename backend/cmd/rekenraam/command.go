@@ -154,6 +154,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 		Category:         categoryService,
 		Payee:            payeeService,
 		Transaction:      transactionService,
+		Recurring:        app.NewRecurringService(db.NewRecurringRepository(database), transactionService, settingsService),
 		Pricing:          pricingService,
 		Investment:       investmentService,
 		Import:           importService,

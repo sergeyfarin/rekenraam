@@ -1,7 +1,8 @@
 # Recurring Transactions Plan (R9)
 
-Status: **slice 1 shipped 2026-08-29; slices 2-6 active after R12a closed
-2026-08-30.** `docs/roadmap.md` owns that sequence. Written 2026-08-29,
+Status: **slices 1–2 shipped; slice 2 closed 2026-08-30. Slice 3 is next;
+production generation stays off until slice 5 delivers review/discard.**
+`docs/roadmap.md` owns that sequence. Written 2026-08-29,
 immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
 `internal/recur`, `backend/migrations/0003_recurring.sql`, and
 `db.RecurringRepository` behind 26 named tests. This is the implementation reference for the
@@ -60,6 +61,13 @@ so T-76 provenance and T-75b investment correction do not block R9. This is a
 deliberate boundary, not accidental compatibility: a future recurring-investment
 producer must first specify that drafts have no lot effects, promotion activates
 journal and subledger atomically, and discard leaves neither behind.
+
+Slice 2 enforces the boundary on postings as well as the transaction-kind label:
+security commodities and security-holding accounts are rejected even in an
+`ordinary` template. Currency-only `commodity_trading` postings remain allowed
+for balanced FX exchanges: the system account is not exclusively investment
+infrastructure. A kind label alone was insufficient;
+`TestRecurringTemplateRejectsInvestmentPostingsDespiteOrdinaryKind` proves it.
 
 Each of these is a decision with a named alternative, not a default that fell
 out of the first draft. They are binding for v1; the acceptance review at the
@@ -207,6 +215,7 @@ max_occurrences      INTEGER NULL CHECK (>= 1)
 lead_days            INTEGER NOT NULL DEFAULT 5 CHECK (0..90)
 generate_from        TEXT  GLOB '????-??-??'        -- the D2 watermark
 created_at, updated_at, created_by_user_id, updated_by_user_id
+revision             INTEGER, starts at 1; incremented by edits/archive/watermark
 ```
 
 `ends_on` and `max_occurrences` are both nullable and may both be set; whichever
@@ -313,6 +322,11 @@ A once-a-minute ticker on `RecurringService`, started from `command.go`
 alongside the pricing, import, and backup schedulers, following
 `app/backup_scheduler.go`:
 
+**Activation gate:** slice 3 builds/tests generation and the scheduler but does
+not start it in production or expose public `run-now` yet. Slice 5 enables those
+entry points only once the dedicated review/discard surface exists. Otherwise
+this slice order would violate the producer-owned draft rule above.
+
 1. Read the owner's `user_preferences.time_zone`; `localToday` is today in it.
 2. For each enabled, unarchived template: `window = [generate_from,
    localToday + lead_days]`, `due = recur.Occurrences(spec, window...)` minus
@@ -338,6 +352,13 @@ Per-tick materialization is capped (`maxOccurrencesPerTick`, 50) so a long
 outage resolves over a few ticks instead of one long write transaction. Losing
 the race on the unique constraint is a normal outcome, not an error — same
 handling as `db.ErrBackupOccurrenceExists`.
+
+**Template-edit races:** materialization and watermark advancement must verify
+the template's captured revision, enabled/archive state, and schedule inside the
+same write transaction. The slice-2 revision column exists for this purpose as
+well as PATCH safety. A tick based on an old schedule must not advance a newly
+edited template's watermark past dates that have never been handled; re-read on
+conflict. Add the named race test in slice 3.
 
 **Drafts and FX coverage.** `fx_work_after_posting_version_insert` fires on
 `posted` versions only, so a generated draft triggers no coverage work. That is
@@ -366,9 +387,15 @@ Two consequences to handle rather than discover:
   draft→discard lifecycle. Those tests move onto the recurring producer (which
   is what they were always standing in for) or an explicitly internal origin;
   they do not get an exemption in the handler.
-- `POST /transactions/{id}/post` and `DELETE /transactions/{id}` (never-posted
-  draft hard delete, allowed by the conventions) both already exist and are
-  unchanged. R9 adds no second way to promote or discard a draft.
+- `POST /transactions/{id}/post` and `DELETE /transactions/{id}` remain the
+  public promotion/discard routes. **Their implementation is not unchanged:**
+  the occurrence FK is `ON DELETE RESTRICT` and a generated occurrence requires
+  a non-null transaction ID. Before slice 3 can produce linked drafts, close
+  backlog **T-77**: discard must atomically preserve an occurrence tombstone,
+  remove its live transaction link, and delete the never-posted draft with the
+  existing audit/lifecycle checks. It must not regenerate on the next tick, nor
+  leave a dangling generated row. Keep the same route rather than adding a
+  competing generic deletion path.
 
 ## API surface
 
@@ -396,6 +423,35 @@ per commodity — one request, because the inbox is one screen.
 plain `bool` or zero value in a PATCH struct overwriting a field the caller
 never sent. Template PATCH uses pointer fields throughout, and the test for it
 is named and required in slice 2: `TestUpdateRecurringTemplateLeavesOmittedFieldsAlone`.
+
+Implemented slice-2 contract:
+
+- Omitted fields preserve current values. Explicit `null` clears `payee_id`,
+  `by_weekday`, `day_of_month`, `month_of_year`, `ends_on`, or `max_occurrences`.
+  Empty arrays replace postings/tags (empty postings are rejected); false and
+  zero are real values. `max_occurrences=0` is invalid, not an alias for null.
+- A changed frequency does not silently reinterpret leftover fields: clear
+  fields that no longer apply in the same PATCH. `last_day_of_month=true`
+  likewise requires `day_of_month=null` if a nominal day was previously set.
+- Supplying `payee_name` replaces the old link unless an ID is also supplied.
+  Known active names resolve through the existing payee matcher; unknown names
+  remain unlinked. `payee_id=null` alone clears both the link and its name.
+- A schedule-field edit resets `generate_from` to `max(owner-local today,
+  starts_on)`; descriptive, enabled, lead-day, and posting edits preserve it.
+  Existing occurrences/drafts are never rewritten. Re-enabling therefore keeps
+  the catch-up watermark; the per-tick cap in slice 3 bounds the work.
+- A read/merge/write PATCH uses a revision check in the repository transaction;
+  a concurrent edit/archive/watermark move returns conflict without child or
+  audit changes. `revision` is returned for inspection, not required as input.
+- List returns the complete template configuration set, with postings and tags;
+  there is no hidden limit or per-row HTTP fetch. `next_due_on` is the first
+  scheduled date at/after the watermark, including overdue dates, or null for
+  disabled/archived/exhausted templates. Slice 4 must exclude already-skipped
+  future identities when its skip action becomes public.
+- Save validates a balanced prospective entry at `max(local today, starts_on)`
+  through the real transaction validator without writing a transaction. Actual
+  generation must revalidate at each occurrence date. Investment postings are
+  outside this producer's scope even if the entry's kind says `ordinary`.
 
 Errors: `RECURRING_TEMPLATE_UNBALANCED`, `RECURRING_SCHEDULE_INVALID`,
 `RECURRING_OCCURRENCE_ALREADY_MATERIALIZED`, `RECURRING_TEMPLATE_ARCHIVED`,
@@ -443,16 +499,33 @@ either.
      `CHECK (id = 1)`. The same-book triggers are exercised through the arm a
      cross-book row would hit anyway — the target is not in this book — the
      way `TestMigrationsEnforceTransactionAndVersionIntegrity` already does.
-2. **Template CRUD.** Service, handlers, OpenAPI, typed frontend client, error
-   codes in six locales, PATCH omission test. Balance validation on save.
+2. **Template CRUD — done 2026-08-30.** `app/recurring.go`, five authenticated
+   template routes, OpenAPI, typed frontend client, three error codes in six
+   locales, and exact per-commodity balance validation on save. Migration
+   `0005_recurring_template_revision.sql` protects stale merges. Service/API
+   tests cover omission/null/false/zero, payee resolution, owner-local date,
+   immutable occurrence identity on schedule edit, no ledger side effects, and
+   a real draft transaction consumer. Repository tests cover edit/archive/tick
+   revision conflicts without partial writes. The now-public enumerator also
+   rejects year zero and ends at 9999 rather than returning five-digit dates.
+
+   **Validation:** full backend race suite (including formatting/vet), frontend
+   type check and all 349 unit tests, and the integrated production build passed
+   on 2026-08-30. The new HTTP journeys are API integration tests; browser
+   acceptance remains in slice 5 because this slice adds no recurring screen.
 3. **Generator, scheduler, and the origin guard.** Materialization in one
    transaction, blocked-occurrence handling, the per-tick cap, `run-now`, and
    the `status="draft"` rejection for `browser_api` with the existing draft
-   lifecycle tests moved onto the real producer.
+   lifecycle tests moved onto the real producer. Close T-77 and prove concurrent
+   schedule edits cannot skip occurrences. Keep production scheduler startup and
+   public `run-now` gated until slice 5; exercise service entry points in tests.
 4. **Due inbox read model and review actions.** `GET /recurring/due`, skip, and
-   the reconciliation-impact preview wired to the existing route.
+   the reconciliation-impact preview wired to the existing route. Include
+   materialized future identities in next-due reads so skipped dates do not
+   appear due. Wire public run-now at the activation gate, not ahead of review.
 5. **Frontend.** Both views, all states, six locales, the acceptance browser
-   case.
+   case. Then enable production scheduling/public run-now and prove every
+   generated draft is reachable through review and discard.
 6. **Acceptance review.** Every commitment above checked against the code, every
    deferred item answered yes or no with a reason, and any planning claim the
    implementation disproved corrected in place — the R2/R3 pattern.
@@ -480,6 +553,9 @@ Beyond the enumeration tests in slice 1, these are required and named:
 - `TestSkippingAFutureOccurrenceStopsItGenerating`.
 - `TestArchivingATemplateLeavesItsGeneratedDraftsAlone`.
 - `TestUpdateRecurringTemplateLeavesOmittedFieldsAlone`.
+- `TestDiscardingGeneratedDraftPreservesOccurrenceAndCannotRegenerate` — T-77,
+  required in slice 3 before generation can ship.
+- `TestConcurrentTemplateEditCannotAdvanceAStaleGenerationWatermark` — slice 3.
 
 ## Out of scope, with reasons
 

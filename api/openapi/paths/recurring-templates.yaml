@@ -1,0 +1,89 @@
+get:
+  summary: List recurring templates with next-due dates
+  parameters:
+    - in: query
+      name: include_archived
+      schema:
+        type: boolean
+  responses:
+    "200":
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RecurringTemplatesResponse'
+    "400":
+      description: Invalid request or template
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "503":
+      description: Database temporarily busy
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+post:
+  summary: Create a balanced recurring template
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/CreateRecurringTemplateRequest'
+  responses:
+    "201":
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RecurringTemplateResponse'
+    "400":
+      description: Invalid request or template
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "409":
+      description: Archived template or concurrent modification
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "422":
+      description: Exact quantity overflow
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "503":
+      description: Database temporarily busy
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'

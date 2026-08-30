@@ -1,4 +1,7 @@
 {
+  "api_error_recurring_template_unbalanced": "The recurring template must balance for each instrument.",
+  "api_error_recurring_schedule_invalid": "The recurring schedule is invalid. Check its dates and recurrence fields.",
+  "api_error_recurring_template_archived": "This recurring template is archived and cannot be changed.",
   "account_class_asset": "Assets",
   "account_class_equity": "Equity",
   "account_class_expense": "Expenses",

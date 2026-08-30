@@ -239,6 +239,11 @@ func walk(spec ScheduleSpec, visit func(index int, date time.Time) (bool, error)
 			return nil
 		}
 		date := series.at(index)
+		// API and ledger dates have exactly four year digits. Exhausting that
+		// calendar is an ended series, not a malformed next_due_on value.
+		if date.Year() > 9999 || date.Year() < 1 {
+			return nil
+		}
 		if hasSeriesEnd && date.After(seriesEnd) {
 			return nil
 		}
@@ -337,9 +342,8 @@ func parseDate(value string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("%w: %q", ErrDateInvalid, value)
 	}
-	// time.Parse accepts 2026-02-30 and normalizes it; a calendar date that
-	// does not exist must not silently become one that does.
-	if parsed.Format(time.DateOnly) != value {
+	// Require the canonical ledger calendar, including the year boundary.
+	if parsed.Year() < 1 || parsed.Year() > 9999 || parsed.Format(time.DateOnly) != value {
 		return time.Time{}, fmt.Errorf("%w: %q", ErrDateInvalid, value)
 	}
 	return parsed, nil

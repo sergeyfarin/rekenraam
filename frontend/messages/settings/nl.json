@@ -1,4 +1,7 @@
 {
+  "api_error_recurring_template_unbalanced": "Het sjabloon voor periodieke transacties moet voor elk instrument in evenwicht zijn.",
+  "api_error_recurring_schedule_invalid": "Het herhalingsschema is ongeldig. Controleer de datums en herhalingsvelden.",
+  "api_error_recurring_template_archived": "Dit sjabloon voor periodieke transacties is gearchiveerd en kan niet worden gewijzigd.",
   "account_class_asset": "Activa",
   "account_class_equity": "Eigen vermogen",
   "account_class_expense": "Uitgaven",

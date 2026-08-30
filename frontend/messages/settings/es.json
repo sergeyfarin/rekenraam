@@ -1,4 +1,7 @@
 {
+  "api_error_recurring_template_unbalanced": "La plantilla de transacción periódica debe estar equilibrada para cada instrumento.",
+  "api_error_recurring_schedule_invalid": "La programación periódica no es válida. Revise las fechas y los campos de repetición.",
+  "api_error_recurring_template_archived": "Esta plantilla de transacción periódica está archivada y no se puede modificar.",
   "account_class_asset": "Activos",
   "account_class_equity": "Patrimonio",
   "account_class_expense": "Gastos",
