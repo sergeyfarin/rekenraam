@@ -1,11 +1,14 @@
 # Receipts & Attachments Plan (proposed R14)
 
-Status: **proposed** (2026-07-19). Feature plan for receipt capture,
+Status: **design proposed; no attachment feature implemented**. Written
+2026-07-19; roadmap placement decided 2026-08-05, current status checked
+2026-08-31. Feature plan for receipt capture,
 automatic recognition, and attachment storage. Resolves the open product
 decision "attachment storage, retention, access-control, backup, and
 encryption model" (`docs/product-requirements.md`), which currently lists
 attachments as deliberately out of scope. Sequencing is decided in
-`docs/roadmap.md`; this plan proposes the slot.
+`docs/roadmap.md`; this plan does not authorize starting attachments ahead
+of the current R9 initiative.
 
 ## Goal
 

@@ -1287,6 +1287,47 @@ promotion retains its stored-position check. The API test
 draft after a later checkpoint already exists, proves that neither operation
 changes the checkpoint, and requires an explicit override on posting.
 
+## Documentation/code audit follow-ups (2026-08-31)
+
+### T-79 Caller-supplied request IDs replace the required server UUID `[ ]`
+
+**Files:** `backend/internal/api/middleware.go` (`withRequestID`),
+`backend/internal/api/middleware_test.go`.
+
+`docs/product-requirements.md` and `docs/conventions.md` require a new server
+UUID for every inbound request; a caller ID may be retained separately.
+The middleware instead adopts any non-empty `X-Request-ID` verbatim, using it
+in response headers, request context, logs, and downstream audit attribution.
+The current middleware test proves generation only when the header is absent.
+
+Keep the requirement; fix the implementation rather than weakening the docs.
+Acceptance: requests with absent, arbitrary, and repeated caller IDs each get a
+fresh server UUID consistently in the response, logs, and audit context. If the
+caller ID is retained, it must have a distinct field and bounded validation.
+This documentation audit records the gap; it does not change runtime behavior.
+
+### T-80 Shipped non-English catalogs lack 65 current message keys each `[ ]`
+
+**Files:** `frontend/messages/app/{en,es,fr,nl,de,ru}.json`,
+`frontend/messages/settings/{en,es,fr,nl,de,ru}.json`.
+
+Measured 2026-08-31 against the checked-in English catalogs: 379 app keys and
+979 settings keys (1,358 total, excluding `$schema`). Each non-English locale
+has 343 current app keys and 950 current settings keys. The missing 36 app
+keys are `import_csv_*`; the missing 29 settings keys cover MFA/security plus
+`investments_form_negative_number`. Each also retains the obsolete
+`categories_field_opened_on` settings key. Shared-key placeholder sets match.
+
+English fallback keeps the screens usable, but the docs' former claim that
+all current messages were translated was false. Translation completion and
+native terminology review are separate tasks; neither is complete.
+
+Acceptance: all five locales match the current English key sets, preserve
+placeholder sets, and render the CSV-mapping and MFA/security workflows in the
+selected language. Add a catalog-parity validation gate so future English-only
+additions cannot silently reintroduce the gap. Do not count English fallback
+as a completed translation.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

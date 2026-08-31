@@ -11,7 +11,7 @@ Sonnet model to implement, grounded in the actual code as of 2026-06-27.
 
 Status: Slices 1, 2, 3, and 4 **complete** (R12 shipped). Slice 5 (Trading 212
 lots) shipped 2026-07-03 as Slice 4b of `docs/plans/trading212-import-plan.md`.
-Last updated 2026-07-03.
+Current-status notes reconciled 2026-08-31; original delivery was 2026-07-03.
 
 > **Outcome (kept as the design record).** This plan is **done** through Slice 4 —
 > see `implemented.md` (Investments) and `roadmap.md` R12 for the shipped state. The
@@ -30,12 +30,13 @@ Last updated 2026-07-03.
 >   deliberate scope cut (no confirmation UI for linking to a pre-existing
 >   holding account — always creates a new one instead).
 >
-> **Correctness review 2026-08-29.** R12's UI and endpoints shipped, but three
-> foundations are reopened as the immediate R12a integrity gate: average-cost
-> pool conservation (T-74), atomic journal/subledger lifecycle behavior (T-75),
-> and durable disposal-policy provenance (T-76). The later multi-basis reporting
-> design is now governed by ADR 0012 and R18. Do not read this plan's historical
-> “complete” status as certifying those newly discovered properties.
+> **Current integrity status (2026-08-31).** R12a closed on 2026-08-30:
+> average-cost pool conservation (T-74) is fixed, and unsafe generic investment
+> lifecycle mutations are fenced off (T-75a). Investment-native correction and
+> reversal remain R16 work (T-75b); durable disposal-policy provenance (T-76)
+> remains required before v0.1/schema freeze and R16/R18, but does not block R9.
+> ADR 0012 and R18 govern future reproducible reporting. See
+> `docs/plans/investment-integrity-plan.md` for the acceptance evidence.
 
 ---
 
@@ -50,7 +51,7 @@ return to Trading 212** and lift the `needs_attention` restriction on order rows
 
 ---
 
-## Current state (verified against code, not docs)
+## Starting state (verified 2026-06-27; historical)
 
 **Backend exists and is wired** (`RegisterRoutesWithAuth`, 23 investment routes):
 
@@ -78,7 +79,7 @@ items + schemas for all 23 (24 after the sell-preview endpoint below) investment
 routes and generate TS types — same convention the import endpoints violated
 (T-07). Do **not** hand-roll a second typed client.
 
-### Correctness gaps that gate the sell UI (found while reviewing)
+### Original correctness gaps that gated the sell UI (resolved in Slice 1)
 
 Both the roadmap and `implemented.md` say "verify FIFO lot-matching is enforced
 server-side before exposing sell flows." That verification is done — and it found

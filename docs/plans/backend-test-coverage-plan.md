@@ -4,9 +4,11 @@
 section below. Workstream 3 also fixed two confirmed product gaps found while
 writing its tests (automation-rules replace, suggestion
 accept-posts-transaction — see its status note). **Workstream 6 is the only
-one still open**, and deliberately so: 6a/6b/6c are harnesses that must land
-with their first real consumer (R5 CSV import, IBKR Flex, R13 analytics), none
-of which has started.
+one still partly open**. As checked 2026-08-31, R5 CSV import has shipped
+with named parser/API/browser tests, but not the proposed shared golden-file
+harness (6a). The second-provider and analytics harnesses (6b/6c) still await
+IBKR Flex and R13; recurring draft-lifecycle coverage (6d) shipped in R9 slice 3.
+The coverage percentages below remain dated measurements, not a current run.
 
 A concrete plan to close the backend coverage gaps identified in
 `docs/reviews/test-coverage-review-2026-07.md`, verified against a fresh merged
@@ -471,7 +473,11 @@ Small, targeted scaffolding so the roadmap's next items start tested. Build
 each **alongside its first consumer** in Workstreams 1–4 — no speculative
 abstraction beyond what those tests already need.
 
-- **6a. Statement-parser golden-file harness** (for R5 CSV, later R6
+- **6a. Statement-parser golden-file harness — open.** R5 shipped with
+  inline named fixtures in `backend/internal/app/import_csv_test.go`, API
+  integration cases, and `e2e/playwright/csv-import.spec.ts`; it did not build
+  this shared harness. Retain it as unscheduled work for additional parsers,
+  rather than implying CSV has not started. Original design (for R5 CSV, later R6
   OFX/QFX/XLSX). Generalize the QIF test approach: a directory of input
   fixtures + expected staged-row JSON, one table-driven runner. Adding a
   parser or a bank quirk = dropping in two files. Include today's QIF
@@ -489,9 +495,12 @@ abstraction beyond what those tests already need.
   seed helpers so TWR/MWR/allocation tests reuse the same books —
   return-analytics results can then be cross-checked against the already-
   verified realized/unrealized figures.
-- **6d. Draft-workflow seams (R9).** No tests yet (feature doesn't exist),
-  but note: the transaction-lifecycle taxonomy tests around draft/posted are
-  the acceptance harness R9 plugs into; keep them invariant-shaped.
+- **6d. Draft-workflow seams (R9) — implemented 2026-08-31.**
+  `backend/internal/app/recurring_generation_test.go` and
+  `backend/internal/api/recurring_generation_test.go` drive real generation,
+  safe discard, rollback, and reconciliation-guarded promotion. Existing API
+  draft lifecycle/filter tests now use the producer. Production generation
+  and browser acceptance remain gated on the slice-5 review UI.
 
 ---
 
@@ -535,7 +544,7 @@ including debugging.
 | 3 | Investment service + HTTP (W3) | 3–4 sessions | — | **done 2026-07-15** |
 | 4 | Pricing config/scheduler/worker (W4) | 2 sessions | — | **done 2026-07-15** |
 | 5 | Financial-core invariant suite (W5) | 1–2 sessions | helps to have W3 seeds | **done 2026-07-15** |
-| 6 | Future-proofing harnesses (W6) | folded into W1/W3/W4 | its consumers | partial (6a/6b/6c wait for their first consumer) |
+| 6 | Future-proofing harnesses (W6) | folded into W1/W3/W4 | its consumers | partial (6a remains open after R5; 6b/6c await consumers; 6d implemented) |
 | 7 | CI coverage signal (W7) | ½ session | best after W1–W4 for the floor | **done 2026-08-07** |
 
 W1–W4 are independent and can be interleaved; each should land as its own

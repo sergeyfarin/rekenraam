@@ -35,7 +35,7 @@ pnpm dev:frontend
 Checks formatting (`gofmt -l`), runs `go vet ./...`, then the full Go suite with
 the race detector. The formatting and vet gates live inside the wrapper script
 so CI enforces them too — before they were added, `gofmt` drift could sit in the
-tree with a green pipeline (backlog T-43).
+tree with a green pipeline (backlog T-49).
 
 The script resolves gofmt as `"$(go env GOROOT)/bin/gofmt"` rather than trusting
 PATH. Run it that way by hand too: a version manager pinning an older Go leaves
@@ -155,7 +155,7 @@ pnpm test:release-preflight
   installs atomically).
 - Frontend code lives in `frontend/`; SvelteKit builds static output that is copied into `backend/internal/web/dist/` for the single binary.
 - Frontend foundation libraries are pinned in `frontend/package.json`: Tailwind CSS, Bits UI, shadcn-svelte, Paraglide JS, `@tanstack/svelte-query`, `@tanstack/svelte-table`, `openapi-typescript`, `openapi-fetch`, `date-fns`, and Dinero.js. Add TanStack Virtual only when a concrete screen needs it.
-- The frontend stays on **TypeScript 6**. TypeScript 7 (the native port) drops the JS compiler API that `openapi-typescript` builds `src/lib/api/schema.d.ts` with — `openapi-typescript` still declares `peerDependencies.typescript: ^5.x`, and under TS 7 `pnpm run openapi:generate` dies with `Cannot read properties of undefined (reading 'createKeywordTypeNode')`. See backlog T-42.
+- The frontend stays on **TypeScript 6**. TypeScript 7 (the native port) drops the JS compiler API that `openapi-typescript` builds `src/lib/api/schema.d.ts` with — `openapi-typescript` still declares `peerDependencies.typescript: ^5.x`, and under TS 7 `pnpm run openapi:generate` dies with `Cannot read properties of undefined (reading 'createKeywordTypeNode')`. See backlog T-48.
 - Frontend message catalogs live in `frontend/messages/`, split by domain as `frontend/messages/<domain>/<locale>.json`. Keep message IDs flat and prefixed by domain or screen intent instead of using one growing locale file or deep nested objects. Generated Paraglide output lives in `frontend/src/lib/paraglide/`. Regenerate the typed message layer with `pnpm --dir frontend run paraglide:compile` when changing catalog structure outside the normal `dev`, `check`, or `build` scripts.
 - Shipping locales are `en, es, fr, nl, de, ru`, listed in `frontend/project.inlang/settings.json`. Both message directories compile into the single `m` namespace, so **a key must be unique across `messages/app/` and `messages/settings/`** — which file it lives in is grouping, not namespacing.
 - Adding an English string is safe on its own: a locale missing that key falls back to English per message rather than rendering blank. Adding a *term* is not — put it in `docs/localization-glossary.md` first, because a plausible-but-wrong financial term is worse than English.

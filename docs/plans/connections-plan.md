@@ -1,6 +1,7 @@
 # Connections Plan — banks, brokers, analytics providers
 
-Status: **proposed** (2026-07-19). Feature plan for expanding online
+Status: **planned, not implemented**. Written 2026-07-19; sequencing adopted
+and amended 2026-08-05, current status checked 2026-08-31. Feature plan for expanding online
 connections beyond Trading 212 (R7, shipped). Governed by
 `docs/product-requirements.md`; sequencing is decided in `docs/roadmap.md`
 (see the pointer added under "Deliberately later"). Detailed designs below
@@ -294,7 +295,7 @@ existing seams (`PriceProvider`, `DividendProvider`,
 `CorporateActionProvider` interfaces are declared and unimplemented; the FX
 registry shows the adapter pattern):
 
-1. **Security quotes — now delivered in R17, not R15** (decided 2026-08-05;
+1. **Security quotes — scheduled for R17, not yet implemented** (decided 2026-08-05;
    closes the unrealized-gains staleness gap, 2026-07-19 audit §4):
    implement the `PriceProvider` registry mirroring
    the FX one; first adapter Twelve Data or Alpha Vantage (BYO free key —

@@ -4,9 +4,13 @@ Status: **design reference — implemented.** The transaction-ledger schema,
 lifecycle, reconciliation guard, and API slice described here all shipped (Phase 2,
 see `implemented.md`). This document is kept for the schema/design rationale only;
 it is not an active tracker. For current state see `docs/implemented.md`; for
-what's next, `docs/roadmap.md`. Re-verified against the code on 2026-07-14: every
-table, trigger, endpoint, and lifecycle rule below matches
-`backend/migrations/0001_initial_schema.sql` and `backend/internal/{app,api}`.
+what's next, `docs/roadmap.md`. The original verification was 2026-07-14;
+this is not a certification of every historical detail against today's code.
+Current schema lives in all SQL files under `backend/migrations/`, and current
+lifecycle behavior in `backend/internal/{app,api}`. R12a subsequently restricted
+generic investment lifecycle mutations, and R9 slices 1–3 added recurring
+draft generation/discard; see their plans and the feature ledger for those
+amendments (status reconciled 2026-08-31).
 The two items this document deliberately deferred (`rounding_adjustment`,
 closed-period posting guards) are still deferred — neither has a roadmap item —
 and remain the right call until a concrete workflow needs them. The "Investment

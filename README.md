@@ -63,7 +63,7 @@ conventions are in [docs/developer-workflow.md](docs/developer-workflow.md).
 
 Keep these documents current when a feature introduces a durable product or technical constraint.
 
-The production frontend is static SvelteKit output built with `@sveltejs/adapter-static`. The Go binary embeds those files, serves real assets directly, returns API 404s under `/api/`, and falls back to the SvelteKit app shell for browser routes such as `/accounts` or `/transactions/import`.
+The production frontend is static SvelteKit output built with `@sveltejs/adapter-static`. The Go binary embeds those files, serves real assets directly, returns API 404s under `/api/`, and falls back to the SvelteKit app shell for browser routes such as `/app/accounts` or `/app/import`.
 
 ## Documentation Shape
 

@@ -38,7 +38,7 @@ have exactly one home.
   architecture decisions predating the ADR series.
 - [localization-glossary.md](localization-glossary.md) — the terminology every
   translated catalog follows. Read it before adding a domain term or reviewing
-  a translation; it is far shorter than the 1,170 strings it governs.
+  a translation; it is far shorter than the message catalogs it governs.
 - [adrs/](adrs/) — accepted decision records (numbered, immutable).
 
 ## Folders
@@ -62,6 +62,10 @@ have exactly one home.
 - **[archive/](archive/)** — superseded documents kept for history: completed
   per-step implementation trackers (replaced by `implemented.md`) and
   reviews of the pre-Go experimental stacks. Never cite these as current.
+
+Latest cross-document code reconciliation:
+[2026-08-31 documentation review](reviews/documentation-code-review-2026-08-31.md).
+It records corrected status claims, evidence, and open code gaps T-79/T-80.
 
 ## Rules of thumb
 

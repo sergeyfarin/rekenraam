@@ -15,12 +15,13 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-No row cites a migration number. T-64 collapsed every migration into
-`backend/migrations/0001_initial_schema.sql` on 2026-08-24, so a table's home is
-the schema file, not a numbered step — and citing a step that no longer exists
-sends a reader looking for a file that is not there.
+T-64 consolidated the schema then present into
+`backend/migrations/0001_initial_schema.sql` on 2026-08-24. Subsequent import-rule,
+recurring, and investment-integrity changes use additive migrations under
+`backend/migrations/`; the baseline alone no longer describes the whole schema.
 
-Last reconciled with the codebase: 2026-08-30. The investment boundary review
+Last documentation reconciliation: 2026-08-31 (see
+`docs/reviews/documentation-code-review-2026-08-31.md`). The investment boundary review
 reclassified average cost, investment transaction lifecycle coupling, disposal
 provenance, and gains reproducibility honestly below. R12a closed 2026-08-30;
 ADR 0012 governs the durable split.
@@ -37,7 +38,7 @@ ADR 0012 governs the durable split.
 | Two-factor authentication (TOTP + recovery codes) | ✅ | `app/auth_mfa.go`, `api/auth_mfa.go`, `internal/totp/` (dependency-free RFC 6238), S-06 — backend **and** UI (`settings/security`, plus the code step in the install gate). Once active, a verified password yields a five-minute single-use challenge cookie instead of a session; `POST /api/v1/auth/login/mfa` completes it with an authenticator code or one of ten single-use recovery codes. The shared secret is sealed with `REKENRAAM_SECRET_KEY` (absent ⇒ enrolment refused, never plaintext); recovery codes are SHA-256 hashed and stay usable even if the key is lost. Replay guard on the accepted time step; wrong codes spend the same 5-in-15 throttle budget as wrong passwords; enrol/disable/regenerate each re-confirm the password. A pending enrolment never gates a login. |
 | Authentication-event visibility | 🟡 | `authentication_events` + `GET /api/v1/auth/events`, S-07 — backend only, no UI. Records login success/failure/blocked and logout with the proxy-aware client IP, attempted username, failure reason and request id; mirrored to structured `slog` (failures at WARN) so a log shipper works without querying SQLite. Never stores password material or session tokens. `failed_last_24h` is the brute-force signal. Pruned to a 90-day retention window by the existing daily session-cleanup pass. |
 | Operator owner-recovery (backup-first, override) | ✅ | `recover-owner` command. |
-| `/api/v1` envelope, error codes, request IDs | ✅ | Inbound `X-Request-ID` honored. |
+| `/api/v1` envelope, error codes, request IDs | 🟦 | Error envelope and response IDs ship. The middleware generates a UUID only when `X-Request-ID` is absent; caller-supplied IDs replace it, contrary to the server-generated-ID requirement. Tracked as T-79. |
 | i18n boundary (Paraglide/Inlang) | ✅ | All UI copy and built-in labels keyed. |
 | Light/dark semantic theme tokens | ✅ | `settings/appearance`. |
 | OpenAPI-first contract + generated TS client | ✅ | `api/openapi/`, `frontend/src/lib/api/schema.d.ts`. |
@@ -62,7 +63,7 @@ ADR 0012 governs the durable split.
 |---|---|---|
 | Transactions → versions → journal entries → postings model | ✅ | Immutable versioned ledger; debit-positive sign convention. |
 | Per-commodity, scale-aware double-entry balancing | ✅ | `transactions_validate.go`. |
-| Lifecycle: post, void, unvoid, soft-delete, restore, correct, approve | ✅ | See `docs/transaction-lifecycle` taxonomy. |
+| Lifecycle: post, void, unvoid, soft-delete, restore, correct, approve | ✅ | See `docs/plans/transaction-ledger-core-plan.md` taxonomy; investment-specific lifecycle restrictions are tracked below. |
 | Same-day ordering (global + per-account register) | ✅ | `transactions_move.go`, day-sequence migration. |
 | Cursor pagination + FTS5 search | ✅ | Sanitized FTS phrase quoting. |
 | Categories as income/expense accounts | ✅ | `routes/app/categories`; built-in keys localized. |
@@ -83,15 +84,15 @@ ADR 0012 governs the durable split.
 | `SESSION_LIFETIME_HOURS` config | ✅ | `internal/config/config.go`; default `720`, must be a positive integer number of hours; controls login-created session expiry. |
 | Beta schema baseline (`0001_initial_schema.sql`) | ✅ | `import_connections` table + `connection_id` FK on `import_batches`. |
 | `ImportConnectionRepository` (CRUD) | ✅ | `internal/db/import_connections.go`; conditional key rotation on update. |
-| `ImportConnectionService` (probe-before-store, key masking) | ✅ | `internal/app/import_connections.go`; `ConnectionProber` interface; `NoOpProber` for Slice 1. |
+| `ImportConnectionService` (probe-before-store, key masking) | ✅ | `internal/app/import_connections.go`; `ConnectionProber` interface; Trading 212 uses the real `Trading212Prober` in production; `NoOpProber` remains a fallback/test seam. |
 | 4 REST endpoints (`GET/POST /import-connections`, `PATCH/DELETE /{id}`) | ✅ | `internal/api/import_connections.go`; `CONFIG_REQUIRED`/`PROVIDER_ERROR`/`CONFLICT` error codes. |
 | OpenAPI spec + generated TS types | ✅ | `api/openapi/components/schemas/import-connections.yaml` + path files; `schema.d.ts` regenerated. |
 | Frontend connections client | ✅ | `frontend/src/lib/api/connections.ts`; typed against generated schema. |
 | Connections UI on import page | ✅ | Masked key hint list, add-connection form (probe-then-store), inline delete confirm. |
-| **Slice 2: Trading 212 HTTP fetcher + adapter** | ✅ | `internal/onlinesource/trading212` (`Fetcher`: paging, 429/`Retry-After` backoff, cursor); `Trading212Adapter` (`internal/app/import_trading212.go`) registered in `NewImportService`; real `Trading212Prober` closes T-11. `stageParseResult` extracted from `StartImport` so file and fetch paths share staging logic (no queue wiring yet — Slice 3). |
+| **Slice 2: Trading 212 HTTP fetcher + adapter** | ✅ | `internal/onlinesource/trading212` (`Fetcher`: paging, 429/`Retry-After` backoff, cursor); `Trading212Adapter` (`internal/app/import_trading212.go`) registered in `NewImportService`; real `Trading212Prober` closes T-11. `stageParseResult` extracted from `StartImport` so file and fetch paths share staging logic; durable queue wiring shipped in Slice 3. |
 | **Slice 3: Durable fetch worker + online batch flow** | ✅ | `app/import_fetch_worker.go` (`kind="import.fetch.trading212"`, same claim/lease/retry shape as `pricing_worker.go`); `POST /imports` content-negotiated (`application/json` → `202` fetch-driven batch, `multipart/form-data` unchanged `201`); `POST /import-connections/{id}/refresh` (incremental, `202`); atomic guard+create+enqueue via `ImportRepository.StartOnlineImportBatch` (one transaction, closing a real TOCTOU race — T-16) → `ErrImportFetchInProgress`/`409 CONFLICT`; terminal-vs-retryable fetch failure classification (401/403 fail fast, other errors retry up to 8 attempts) written to both `import_batches.status` and `source_meta_json` (the field the frontend actually polls); `import_batches.connection_id` now written + `connection_display_name` snapshotted into `source_meta_json` so deleting a connection doesn't erase batch provenance (closes T-12); pagination continuation past the fetcher's 50-page-per-call budget (T-14) via `reason="continuation"` work-item chaining; incremental cursor re-scans same-timestamp movements instead of dropping them, and refuses to follow an absolute `nextPagePath` (T-17). Frontend: per-connection Import/Refresh button + polling "fetching" step, handing off to the existing preview/commit UI unchanged. 15 service-level Go tests (`import_fetch_worker_test.go`, `fetcher_test.go`) including a 12-goroutine concurrency race test and a multi-chunk continuation test, a frontend unit test for the `source_meta` polling contract, plus manual HTTP smoke tests against a fake Trading 212 server. |
-| **Slice 4a: scheduled auto-refresh (B-T212-SCHED)** | ✅ | Per-connection `auto_refresh_enabled` toggle drives `ImportService.StartScheduler`/`runDueTrading212AutoRefreshes` (`app/import_scheduler.go`) — a 24h-since-last-fetch cadence (not a fixed wall-clock time), reusing the existing manual-refresh path and its in-flight guard. Migration `0008`. |
-| **Slice 4b: investment lot import (B-T212-INVST)** | ✅ | Order fills route through `InvestmentService.Buy`/`Sell` (real lots via `import_connection_holdings`, a per-connection per-instrument holding-account mapping); dividends through `InvestmentService.Dividend`. Instrument resolution: ISIN → ticker/symbol → create (`ResolveOrCreateInstrumentForImport`), creation deferred to commit time only (`docs/plans/import-connection-accounts-plan.md`, migration `0009`: `cash_account_id` + `import_connection_holdings`). Fetcher gained `FetchOrders`/`FetchDividends` against the real, spec-verified `/equity/history/orders`/`/equity/history/dividends` endpoints, sharing one generic `fetchPaginated[T]` pagination engine with the original cash-history `Fetch`. Multi-endpoint cursor tracking: `fetch_cursor` renamed to `transactions_cursor` + new `orders_cursor`/`dividends_cursor` (migration `0010`), the worker walking three stages per logical fetch. Rows that can't resolve (no cash account, no instrument match, insufficient lots, no dividend default) fall back to the pre-4b plain-cash-row behavior unchanged. P1 follow-up 2026-07-11: order fills now retain and sort on full `filled_at` to preserve intraday buy→sell lot order (T-28), and the investment transaction, lot/disposal, import identity, and staged-row commit marker are atomic in one SQLite transaction (T-26). P2 follow-up 2026-07-12: failed or fallback investment routing compensates its never-used setup without deleting referenced history (migration `0011`, T-29); settlement accounts require active, non-system assets (T-30/T-33); and transactions/lots carry Trading 212 provider provenance (T-31). Also found and fixed while building this: a severity-1, source-agnostic bug where `EntryKind: "main"` made every single `CommitImportBatch` call fail real validation since the import feature's first commit (T-22), and a holding-account creation date defaulting to "today" instead of the trade's own date (later superseded by the genesis-date fix, T-42). |
+| **Slice 4a: scheduled auto-refresh (B-T212-SCHED)** | ✅ | Per-connection `auto_refresh_enabled` toggle drives `ImportService.StartScheduler`/`runDueTrading212AutoRefreshes` (`app/import_scheduler.go`) — a 24h-since-last-fetch cadence (not a fixed wall-clock time), reusing the existing manual-refresh path and its in-flight guard. Schema is in the consolidated baseline. |
+| **Slice 4b: investment lot import (B-T212-INVST)** | ✅ | Order fills route through `InvestmentService.Buy`/`Sell` (real lots via `import_connection_holdings`, a per-connection per-instrument holding-account mapping); dividends through `InvestmentService.Dividend`. Instrument resolution: ISIN → ticker/symbol → create (`ResolveOrCreateInstrumentForImport`), creation deferred to commit time only (`docs/plans/import-connection-accounts-plan.md`: `cash_account_id` + `import_connection_holdings` in the consolidated baseline). Fetcher gained `FetchOrders`/`FetchDividends` against the real, spec-verified `/equity/history/orders`/`/equity/history/dividends` endpoints, sharing one generic `fetchPaginated[T]` pagination engine with the original cash-history `Fetch`. Multi-endpoint cursor tracking: `fetch_cursor` renamed to `transactions_cursor` + new `orders_cursor`/`dividends_cursor`, the worker walking three stages per logical fetch. Rows that can't resolve (no cash account, no instrument match, insufficient lots, no dividend default) fall back to the pre-4b plain-cash-row behavior unchanged. P1 follow-up 2026-07-11: order fills now retain and sort on full `filled_at` to preserve intraday buy→sell lot order (T-28), and the investment transaction, lot/disposal, import identity, and staged-row commit marker are atomic in one SQLite transaction (T-26). P2 follow-up 2026-07-12: failed or fallback investment routing compensates its never-used setup without deleting referenced history (T-29); settlement accounts require active, non-system assets (T-30/T-33); and transactions/lots carry Trading 212 provider provenance (T-31). Also found and fixed while building this: a severity-1, source-agnostic bug where `EntryKind: "main"` made every single `CommitImportBatch` call fail real validation since the import feature's first commit (T-22), and a holding-account creation date defaulting to "today" instead of the trade's own date (later superseded by the genesis-date fix, T-44). |
 
 ## Import Pipeline (Phase 4) — 🟦 QIF plus CSV/profile lifecycle shipped
 
@@ -252,10 +253,10 @@ ADR 0012 governs the durable split.
 | Capability | State | Notes |
 | --- | --- | --- |
 | Translation boundary | ✅ | Paraglide JS over `frontend/messages/{app,settings}/<locale>.json`. All user-facing copy goes through it; built-in database records keep stable codes and resolve display labels here. |
-| **Five non-English locales** | 🟡 | `es, fr, nl, de, ru` — all **1,170** messages translated in every locale (283 app + 887 settings), key sets and placeholder sets verified against `en.json`. 🟡 because they are **drafted from a glossary, not reviewed by native speakers**; the language settings page says so to anyone using a non-English locale. First three items for a reviewer: Spanish *Punteado* ("cleared"), Russian *партия* (tax lot), Dutch *Instelling* (financial institution, collides with *instellingen*). |
+| **Five non-English locales** | 🟦 | `es, fr, nl, de, ru` — The English catalogs contain **1,358** messages (379 app + 979 settings). Each other locale covers 343 app and 950 current settings keys: **65 English keys are missing per locale** (36 CSV mapping, 29 MFA/security and investment validation), with English fallback. Each also retains one obsolete settings key. Shared-key placeholders match; missing translations are T-80. The translations are also **drafted from a glossary, not reviewed by native speakers**; the language settings page says so to anyone using a non-English locale. First three items for a reviewer: Spanish *Punteado* ("cleared"), Russian *партия* (tax lot), Dutch *Instelling* (financial institution, collides with *instellingen*). |
 | Terminology governance | ✅ | `docs/localization-glossary.md` decides terms before strings are written, anchored to GnuCash, localized MS Money/Quicken, and per-market banking language. Two deliberate departures from the literal are recorded there: *commodity* → *instrument* (the literal means physical goods in all five), and *cleared* vs *reconciled* must not collapse into one word. |
 | Language picker | ✅ | `/app/settings/language`, each locale offered by its own autonym. Resolution is `localStorage → browser preference → English`, with per-message English fallback so a missing key never renders blank. Covered by `e2e/playwright/language.spec.ts`. |
-| Backend translation | 🟦 | Export headers and server-generated content are still English only — deferred to Phase 3 (`nicksnyder/go-i18n`). |
+| Backend translation | 🟦 | Export headers and server-generated content remain English only. The original Phase 3 target has not been implemented; backend localization is not scheduled in the current roadmap. |
 | Locale-aware formatting | ✅ | Numbers, dates, and money are formatted by `Intl` from the active locale; catalogs never bake in a separator or currency symbol. `$lib/money/format.ts` (`formatQuantity`) is the sole read-only display formatter; `$lib/money/amount.ts` is the sole editable-amount parser/formatter (G-08 display half; input-parsing half of G-08 stays open, see `backlog.md`). |
 
 ## Cross-cutting — ✅ in place
@@ -268,10 +269,12 @@ ADR 0012 governs the durable split.
 
 ## Not started (see roadmap)
 
-CSV/OFX/QFX import adapters, import profiles,
-budgets, recurring generation/review UI (template API is shipped), projected balances, loan/liability helpers,
-multi-currency reporting, report snapshots, and pricing UI. (Reports UI itself
-shipped in R2 — see the Reports section above.)
+XLSX/OFX/QFX import adapters, per-split import mapping and batch rollback,
+budgets, the recurring due inbox/review UI, projected balances, loan/liability
+helpers, report snapshots, and pricing-management UI. CSV import, profiles and
+minimal rules are shipped. Reporting-currency conversion is shipped. Recurring
+template CRUD and generation are implemented, but production generation remains
+disabled until the review/discard UI ships.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

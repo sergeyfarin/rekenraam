@@ -5,8 +5,10 @@ open-source personal finance software. The roadmap
 (`docs/roadmap.md`) links here instead of carrying its own gap table; update
 this file when the landscape shifts. Point-in-time deep dives:
 `docs/reviews/competitive-analysis-2026-07.md`. Last full revision: 2026-07-07;
-spot-corrected 2026-08-20 (R2 reports closed; write-off and price-void shipped,
-backend-only).
+Rekenraam's code/status column reconciled 2026-08-31 (R3, R5, reporting currency,
+R12a, and R9 slices 1–3). External product features, prices, and positioning
+claims remain the July research snapshot, **not newly verified market facts**;
+verify them separately before using them for purchasing or launch claims.
 
 ## Positioning
 
@@ -14,7 +16,7 @@ backend-only).
 > in more than one country — exact double-entry ledger, lot-level
 > investments, real multi-currency.
 
-No product, commercial or open-source, currently combines all three of:
+The July review's positioning hypothesis was that no product combined all three of:
 (1) a correct double-entry multi-currency ledger, (2) lot-level investment
 cost basis with dividends and gains, (3) self-hosted web deployment. Users in
 Rekenraam's target persona today run "Firefly III + Ghostfolio + a
@@ -44,16 +46,16 @@ spreadsheet."
 | Multi-currency accounts | ✅ | ✅ | ✅ | limited | display only | ✅ | ✅ | ✅ |
 | Reconciliation workflow | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | 🟦 (assert) |
 | Core reports UI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Fava) |
-| CSV import + profiles | ⬜ (R5) | ✅ | ✅ (importer) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CSV import + profiles | ✅ (R5) | ✅ | ✅ (importer) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | QIF/OFX import | ✅ QIF | ✅ | partial | ⬜ | ⬜ | partial | ✅ | via tools |
-| Import rules engine | ⬜ | partial | ✅ (strongest) | ✅ | ⬜ | ⬜ | partial | ✅ (code) |
+| Import rules engine | ✅ (literal contains, preview-time only) | partial | ✅ (strongest) | ✅ | ⬜ | ⬜ | partial | ✅ (code) |
 | Budgets | ⬜ (R8) | ✅ | ✅ | ✅ (core) | ⬜ | ⬜ | ✅ | 🟦 |
-| Recurring/scheduled txns | ⬜ (R9) | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| Recurring/scheduled txns | 🟦 (templates + generator; inactive until review UI) | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
 | Cashflow forecasting | ⬜ (R10) | partial | partial | ⬜ | ⬜ | ⬜ | ⬜ | 🟦 |
 | Investment lots & cost basis | ✅ (4 methods) | ✅ | ⬜ | ⬜ | ⬜ | basic FIFO/avg | partial | ✅ |
 | Dividends (incl. withholding, reinvest) | ✅ | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ |
 | Corporate actions (splits/mergers/delist) | ⬜ (T-34; splits/mergers have no manual entry either — only a worthless-holding write-off, backend-only, ships today) | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ (manual) |
-| Realized/unrealized gains | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | partial | ✅ |
+| Realized/unrealized gains | 🟦 (operational view; reproducible basis reports R18) | ✅ | ⬜ | ⬜ | ⬜ | ✅ | partial | ✅ |
 | Returns analytics (TWR/MWR) | ⬜ (R13) | ⬜ | ⬜ | ⬜ | ✅ | ✅ (strongest) | ⬜ | via tools |
 | Price/FX history + refresh | 🟦 (R11; backend incl. voiding, no UI) | ✅ | ✅ | ⬜ | ✅ | ✅ | partial | ✅ |
 | Broker/bank online feeds | ✅ T212 (BYO-key) | partial | via importer | via SimpleFIN | partial | partial | ⬜ | via tools |
@@ -174,21 +176,25 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
      returns, allocation, and benchmarks stay R13. R2 makes no accidental
      partial promise about them.
 
-   The one honest caveat against the commercial tools: they show a single
-   blended base-currency figure and Rekenraam still refuses to. A
-   reporting-currency selector was approved on 2026-08-19 and is sequenced after
-   R3; until it lands, a multi-currency user sees per-commodity totals rather
-   than one number.
-2. **Import rules engine** — Firefly's stickiest feature; belongs in R7's
-   scope as persistent user-defined rules over the staged pipeline.
+   **Reporting currency shipped 2026-08-26.** Users can request a combined
+   figure using `observed_on_or_before`, with coverage/provenance metadata and
+   unchanged per-commodity totals. Incomplete conversions are omitted rather
+   than presented as complete.
+2. **CSV import and minimal rules (R5) — shipped 2026-08-29.** Saved mapping
+   profiles, grouped payee resolution, and ordered literal contains rules feed
+   the staged preview/commit pipeline. Rules are preview-time only; broader
+   matching and retroactive application are not claimed. Recurring templates
+   and generation followed in R9 slices 1–3, but generation remains inactive
+   until the review/discard UI ships.
 3. **Returns analytics (TWR/MWR, allocation, benchmark)** — expected by
    Ghostfolio/Portfolio Performance users; Rekenraam has better underlying
    data (exact lots + FX). Roadmap R13.
 4. **Multi-currency cashflow forecasting** — PocketSmith's moat; no OSS
    equivalent; the niche-defining feature for R10.
-5. **BYO-key feed adapters** — GoCardless Bank Account Data (EU) and
-   SimpleFIN Bridge (US) close the manual-entry objection without coverage
-   promises; both follow the Trading 212 pattern.
+5. **BYO-key feed adapters** — Trading 212 ships. R15 is planned as IBKR
+   Flex → GoCardless → the investment-event producer; no second provider is
+   implemented. Quotes belong to R17. Other adapters remain research options,
+   not promised coverage.
 6. **Jurisdiction-aware capital-gains reporting** — no competitor, commercial
    or OSS, ships it; the long-term moat. ADR 0012 fixes the journal/subledger/
    reporting boundary, R12a repairs the inputs, and R18 plans named read-side

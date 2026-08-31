@@ -10,7 +10,8 @@ T-76 and T-75b remain required later work.)
 
 ## Where things stand
 
-Everything below is merged. To pick this up on a local machine:
+Completed entries below are merged; unchecked entries remain future work.
+To pick this up on a local machine:
 
 ```sh
 pnpm install
@@ -43,9 +44,9 @@ Recorded here as pointers; the source of truth is `roadmap.md` and
 - **Free-text payees (backlog T-50): resolve on entry, but never silently.**
   Typing a new payee name prompts for confirmation, offering existing payees
   through a fuzzy search before creating a record.
-- **Zero-proceeds write-off (T-38): a disposal at zero proceeds**, booking
-  through the existing realized gain/loss treatment rather than a dedicated
-  expense category. Shipped as a dedicated `InvestmentWriteOffInput` type with
+- **Zero-proceeds write-off (T-38): a disposal at zero proceeds**, using
+  the existing computed gains treatment rather than posting a dedicated
+  expense category (ADR 0012). Shipped as a dedicated `InvestmentWriteOffInput` type with
   its own required `reason` and preview endpoint — see `backlog.md` and
   `implemented.md`.
 - **Cashflow keeps its reconciliation guarantee.** Category and payee filters
@@ -89,8 +90,8 @@ See `backlog.md` G-09.
 ## Current initiative — R9 recurring transactions
 
 Plan: `docs/plans/recurring-transactions-plan.md`. Slices 1–3 are complete;
-slice 4 is next. R9 is the app's first machine producer of
-financial records, so it is also where the
+slice 4 is next. R9 is the app's first producer of
+persisted draft transactions, so it is also where the
 conventions' promises about `draft` finally get kept.
 
 - [x] 1. **Done 2026-08-29.** `internal/recur` (pure date enumerator, ISO
@@ -113,8 +114,8 @@ conventions' promises about `draft` finally get kept.
       Tests cover duplicate races across independent pools and schedule edits,
       rollback, owner-local dates, and draft-only reconciliation behavior (T-78).
       Production scheduling and public run-now remain off until slice 5.
-- [ ] 4. Due inbox read model and review actions (skip, run-now,
-      reconciliation-impact preview on post).
+- [ ] 4. Due inbox read model and review actions (skip, blocked retry,
+      explicit promotion-impact preview; public run-now remains gated to slice 5).
 - [ ] 5. Frontend `/app/recurring` — templates and due inbox, all four screen
       states, six locales, an `[acceptance]`-tagged browser case.
 - [ ] 6. Acceptance review, R2/R3 pattern.
@@ -283,8 +284,8 @@ defect (a 404 about a run that exists, fixed with T-68):
 
 **Six further review passes remain**, listed in the review in value order:
 claim audit, money-path coverage, failure-branch walk, contract-vs-code diff,
-concurrency, and the Data screen's states. They are not scheduled — R3a starts
-next — but they are the queue if another verification pass is wanted.
+concurrency, and the Data screen's states. They remain unscheduled; R3a is complete and R9 is current. Use them as
+review input, with current findings tracked in `docs/backlog.md`.
 
 ## Previous initiative — R3a accessibility coverage — **complete 2026-08-24**
 
@@ -309,22 +310,22 @@ only by alphabetical luck, now stated as a project dependency.
          never blocks an unrelated edit.
    - [x] **History tool dropped** — the owner confirmed 2026-08-19 that the app
          carries no real data yet, so there is nothing to backfill.
-   - Imports still commit unrecognized names as free text by design; resolving
-     them in import review is follow-up work under import (R5/R6), not this
-     item.
+   - Imports can still commit unrecognized names as free text. R5 now also
+     offers grouped link-or-create resolution in preview; that follow-up shipped
+     2026-08-28.
 2. **Localization of the five target languages — drafted 2026-08-19.** The
    catalog is far larger than the earlier "roughly 250 messages" estimate: it is
-   **1,170 messages** — 283 in `frontend/messages/app/` and 887 in
-   `frontend/messages/settings/`.
+   **1,170 messages at the 2026-08-19 delivery**. The 2026-08-31 audit
+   counts 1,358 English messages (379 app + 979 settings).
    - Terminology is decided first and written down in
      `docs/localization-glossary.md`, anchored to GnuCash, localized MS Money
      and Quicken, and per-market banking language. **Review that file, not the
      strings.** Two deliberate departures from the literal are recorded there
      (*commodity* → *instrument*; *cleared* and *reconciled* must not collapse).
-   - **All 1,170 messages are translated in all five languages**:
-     `frontend/messages/app/{es,fr,nl,de,ru}.json` at 283/283 each and
-     `frontend/messages/settings/{es,fr,nl,de,ru}.json` at 887/887 each. Key
-     sets and placeholder sets are verified against `en.json` for every file.
+   - **Current coverage is incomplete (T-80).** Every non-English locale is
+     missing 36 app keys and 29 settings keys from English; one obsolete
+     settings key remains. Shared-key placeholder sets match. CSV mapping and
+     MFA/security screens therefore still use English fallback for missing copy.
    - A missing translation still falls back to English per message rather than
      going blank, so adding a new English string never blanks a screen.
    - A language picker lives at `/app/settings/language`; the locale resolves
@@ -390,7 +391,9 @@ only by alphabetical luck, now stated as a project dependency.
       scripts/test-backend.sh` + non-gating `backend-coverage` job + soft floor
       `scripts/check-coverage-floor.sh`; merged total 75.2%, floor 73.0%).
       Closes the last open item of `plans/backend-test-coverage-plan.md`
-      besides Workstream 6, whose harnesses wait for their first consumer.
+      besides Workstream 6: the shared parser golden harness remains open
+      despite R5 shipping; provider/analytics harnesses await consumers, and
+      R9 draft-lifecycle coverage is now implemented.
 - [x] T-49 (was remote's T-43) gofmt drift cleared — done 2026-08-17; `gofmt -l`
       and `go vet` moved into `scripts/test-backend.sh` so CI enforces them.
 - [x] T-51 (was remote's T-45) net-worth series re-reads the ledger per bucket
@@ -413,6 +416,13 @@ Still open, listed under "Open, unscheduled" below rather than here: T-48 (was
 remote's T-42, TypeScript 7) and T-34.
 
 ## Open, unscheduled (from the doc sweep of 2026-08-07)
+
+Additional findings from the 2026-08-31 documentation/code audit:
+
+- [ ] **T-79:** generate server request UUIDs even when the caller supplies
+      `X-Request-ID`; current behavior does not meet the existing requirement.
+- [ ] **T-80:** fill 65 missing translation keys per non-English locale and
+      enforce catalog parity. Native-language review remains a separate task.
 
 - [x] G-02 frontend money logic untested — **done 2026-08-08**. The editor and
       reconcile form landed first (turning up two decimal-comma/zero-posting

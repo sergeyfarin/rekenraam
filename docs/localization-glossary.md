@@ -6,7 +6,7 @@ wearing a personal-finance coat, so half the vocabulary is accounting
 vocabulary with an established word in each language, and the other half is
 consumer banking vocabulary with a *different* established word.
 
-**Review this file, not the 1,170 strings.** Every catalog follows these
+**Review this glossary before reviewing individual catalog strings.** Every catalog follows these
 choices; if a term is wrong here it is wrong in a hundred places, and if it is
 right here the rest is mechanical.
 

@@ -9,7 +9,9 @@ reason for every retained item.
 
 Two gaps are deliberate and recorded below, not oversights: the net-worth series
 carries no asset/liability split, and cashflow takes no category or payee
-filter. Last verified against the codebase: 2026-08-23.
+filter. Reporting-currency conversion shipped 2026-08-26; current-status
+notes reconciled with the code on 2026-08-31. The R2 acceptance review remains
+the dated record of its original scope.
 
 This plan delivers the first daily-driver reports: net worth over time,
 spending by category or payee, and cashflow. It is governed by
@@ -64,28 +66,25 @@ at the R2 acceptance review (see the table at the end of this document):
 - named saved report definitions and live report runs;
 - immutable/reproducible report snapshots;
 - **a reporting-currency selector and named FX/price valuation method —
-  approved 2026-08-19**, sequenced after R3, so this one is no longer an open
-  review item;
+  approved 2026-08-19 and shipped 2026-08-26** after R3;
 - country, jurisdiction, tax, investment, and benchmark dimensions;
 - a user-configurable report builder.
 
-**Reporting-currency selector, as approved.** One reporting currency with a
-named valuation method, and per-commodity exact totals kept in every response —
-the conversion is additive, never replacing, because outcome 3 above forbids the
-UI inventing a combined total. Three sub-decisions belong to that slice and are
-not settled here:
+**Reporting-currency selector — shipped 2026-08-26.** All three reports retain
+exact per-commodity totals and add optional conversions using
+`observed_on_or_before` (`backend/internal/app/valuation.go`). The frontend
+selector, restated rows, coverage notices, charts, and CSV output ship in
+`frontend/src/lib/reports/` and `/app/reports`.
 
-- *Which rate date.* The recommendation on record is bucket-end for net worth
-  (it is a stock measured at a date) and posting entry date for the flows
-  (spending, cashflow). Converting a flow at a single range-end rate is cheaper
-  and reproducible from the displayed subtotals, but misattributes across a
-  large mid-period move.
-- *Missing coverage.* Recommended: fall back to the nearest earlier observation
-  inside a named window and say so in the response; when nothing exists in the
-  window, omit the converted total with an explanation. Never silently.
-- *Prerequisite.* T-37 (price observations cannot be voided) should land first.
-  Once rates drive headline figures, an unvoidable poisoned observation is no
-  longer cosmetic.
+- *Rate date:* bucket-end for net worth; each posting's entry date for spending
+  and cashflow, with converted flows then summed.
+- *Coverage:* use the nearest on-or-before observation within the requested
+  staleness window (default seven days). Responses identify stale uses and gaps;
+  incomplete converted figures are omitted, never shown as complete totals.
+- *Withdrawn observations:* T-37 is complete. Voided observations and dependent
+  derived rates are excluded from reporting-rate reads.
+- *Remaining scope:* this is live reporting-currency valuation, not saved
+  snapshots or the reproducible investment-basis projections planned in R18.
 
 ## Shared contract
 
@@ -156,7 +155,7 @@ their own.
   postings valid through that date. Do not derive a time series by summing
   current account balances backward in the frontend.
 - Return separate exact totals per commodity. A combined display is unavailable
-  until the caller chooses a future reporting-currency/valuation method.
+  unless the caller selects the shipped reporting currency and named valuation method.
 - An account filter may power full net worth, one account’s historical balance,
   or a selected account group. The same endpoint can later power compact account
   detail history without changing the financial calculation.
@@ -586,8 +585,8 @@ implies" now records the outcome per competitor: Money/Quicken/Monarch and
 Firefly III parity met, PocketSmith differentiation groundwork laid through
 exact per-currency cashflow, and the Ghostfolio/Portfolio Performance returns
 gap deliberately retained for R13. The one honest caveat recorded there is that
-the commercial tools show a single blended base-currency figure and Rekenraam
-still refuses to until the approved reporting-currency selector lands.
+at R2 acceptance Rekenraam had only per-commodity totals. The reporting-currency
+selector closed that specific gap on 2026-08-26 while retaining the exact totals.
 
 ## R2 acceptance review — closed 2026-08-19
 
@@ -597,7 +596,7 @@ document gets a disposition and a reason; nothing is left as "reconsider later".
 
 | Retained item | Decision | Reason |
 | --- | --- | --- |
-| Reporting-currency selector and named FX/price valuation method | **Yes, after R3** | The one item worth building. Every report is exact per commodity today, which is correct but leaves a multi-currency holder without a single figure. It needs a *named* valuation method and a rate provenance trail, so it is its own slice rather than a flag on these three reports. |
+| Reporting-currency selector and named FX/price valuation method | **Approved after R3; shipped 2026-08-26** | Implemented as `observed_on_or_before`, with rate-date/coverage metadata, optional restated totals, and unchanged exact commodity totals. See the delivered contract above. |
 | Named saved report definitions and live report runs | **No, deferred** | The URL already is the saved definition: every control writes it and a link reproduces the exact report. A saved-definition store adds a second source of truth and a migration story for a convenience the address bar covers. Revisit when a report acquires state a URL cannot carry. |
 | Immutable/reproducible report snapshots | **No, deferred** | Reproducibility here would mean freezing the ledger as it was read, which is a point-in-time query over the version tables — a capability worth having on its own terms, not a report feature. The audit model already records what changed and when. |
 | Country, jurisdiction, tax, investment, and benchmark dimensions | **No, deferred** | These are report *questions*, and the ledger does not yet carry the facts most of them need. Tax and jurisdiction have no schema; investment returns are R13's subject and are tracked there. Adding dimensions before the facts exist would ship empty columns. |

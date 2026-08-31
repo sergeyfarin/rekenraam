@@ -76,10 +76,9 @@ The three remaining `plans/` questions were decided the same day:
 | Receipts R14a pull-forward | **No** — but R3 designs the backup/self-check with a documented attachments hook, and R14a ships after R5 |
 | GoCardless / IBKR "verify" items | Not a decision — reclassified as blocking slice-start preconditions on GC-1 and IBKR-1 in `connections-plan.md` |
 
-The R14/R15 plans (2026-07-19) are scoped and sliced but deliberately later:
-their internal sequencing proposals are adopted or amended here when each
-becomes current work (IBKR → quotes → GoCardless → T-34 producer; R14a
-storage possibly pulled forward next to R3's backup work). The Yahoo Finance
+The R14/R15 plans (2026-07-19) remain deliberately later. Their sequencing
+was decided on 2026-08-05: quotes belong to R17; R15 is IBKR → GoCardless →
+T-34 producer. R14a stays after R5 and was not pulled forward alongside R3. The Yahoo Finance
 quote-provider question inside R15 was decided 2026-08-05 (ship it, labeled
 unofficial) — `docs/plans/connections-plan.md`.
 
@@ -237,8 +236,8 @@ The suite also surfaced an ordering dependency that had been held up by luck:
 it only ran first because "auth" sorted before every other filename. A Playwright
 project dependency now states that requirement.
 
-**Next initiative:** the reporting-currency selector, approved 2026-08-19 and
-sequenced after R3.
+**Subsequent delivery:** the reporting-currency selector shipped 2026-08-26.
+The current initiative is R9; see the planning loop below.
 
 <details>
 <summary>R3a as planned</summary>
@@ -467,8 +466,9 @@ These are valuable, but they are not allowed to displace the current plan:
   `docs/plans/receipts-plan.md`. **R14a ships after R5**, not alongside R3
   (decided 2026-08-05): it is not an announcement gate, so it does not go
   between two slices that are. R3 carries the attachments hook instead.
-- Multi-currency reporting, report snapshots, multi-user, and household
-  features.
+- Reproducible investment reporting projections (R18), report snapshots,
+  multi-user, and household features. Core reporting-currency conversion is
+  already shipped; it is not part of this deferred list.
 
 ## Competitor and parity check
 

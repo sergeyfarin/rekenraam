@@ -179,8 +179,11 @@ CREATE TABLE import_connection_holdings (
 This makes scenario 1 and scenario 2 the same code path with one branch
 ("did we find a reusable candidate") rather than two separate flows.
 
-> **Open concern (flagged in review, not yet resolved): timing of durable
-> creation vs. discard.** As written above, "resolution at fetch-worker/commit
+> **Historical concern — resolved in Slice 4b: timing of durable
+> creation vs. discard.** Creation is now deferred to commit, as recorded in
+> the shipped-status notes above and implemented in
+> `backend/internal/app/import_trading212_invest.go`. The original concern and
+> recommendation below are retained as rationale. As written above, "resolution at fetch-worker/commit
 > time" is ambiguous about *when* the auto-create branch runs, and
 > `trading212-import-plan.md`'s Slice 4b section currently says instrument
 > resolution/creation runs **at fetch-worker time** so the preview UI can show

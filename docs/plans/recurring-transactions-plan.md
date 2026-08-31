@@ -23,7 +23,7 @@ R9 exists to deliver one sentence end to end:
 Both halves are load-bearing. The first is the daily-driver value — rent,
 salary, subscriptions, standing transfers. The second is why R9 is allowed to
 touch the ledger at all: recurring generation is the app's **first machine
-producer of financial records**, and the conventions already say what such a
+producer of persisted draft transactions**, and the conventions already say what such a
 producer owes the user.
 
 ## What R9 inherits
