@@ -950,5 +950,10 @@
   "settings_data_status_running": "En cours",
   "settings_data_status_completed": "Vérifiée",
   "settings_data_backups_will_retry": "Nouvelle tentative prévue",
-  "settings_data_backups_gave_up": "Abandonnée"
+  "settings_data_backups_gave_up": "Abandonnée",
+  "account_system_role_import_imbalance": "Écart d’importation",
+  "account_system_role_retained_earnings": "Bénéfices non distribués",
+  "account_system_role_unassigned_income": "Revenus non affectés",
+  "account_system_role_unassigned_expense": "Dépenses non affectées",
+  "account_system_role_commodity_trading": "Compensation de devises et d’instruments"
 }

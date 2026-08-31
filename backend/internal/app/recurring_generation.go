@@ -17,8 +17,8 @@ type GenerateRecurringInput struct {
 	OwnerUserID   int64
 	AuthSessionID int64
 	RequestID     string
-	// Zero sweeps all enabled templates; a positive ID is the service-only
-	// run-now entry point. Neither is exposed publicly before slice 5.
+	// Zero sweeps all enabled templates; a positive ID runs one template
+	// through the authenticated run-now endpoint. Both create drafts only.
 	TemplateID int64
 }
 
@@ -168,8 +168,8 @@ func (s *RecurringService) materializeOccurrenceAttempt(ctx context.Context, inp
 	return draft == nil, s.repository.MaterializeRecurringOccurrence(ctx, template.Revision, occurrence, draft, audit)
 }
 
-// StartScheduler is intentionally NOT wired in command.go. Activation waits
-// for the dedicated review/discard UI in R9 slice 5.
+// StartScheduler checks due occurrences at startup and once per minute.
+// Generated drafts are reachable through the dedicated recurring review UI.
 func (s *RecurringService) StartScheduler(ctx context.Context, logger *slog.Logger) {
 	if logger == nil {
 		logger = slog.Default()

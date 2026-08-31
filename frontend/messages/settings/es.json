@@ -950,5 +950,10 @@
   "settings_data_status_running": "En curso",
   "settings_data_status_completed": "Verificada",
   "settings_data_backups_will_retry": "Se reintentará",
-  "settings_data_backups_gave_up": "Se dio por vencida"
+  "settings_data_backups_gave_up": "Se dio por vencida",
+  "account_system_role_import_imbalance": "Descuadre de importación",
+  "account_system_role_retained_earnings": "Beneficios retenidos",
+  "account_system_role_unassigned_income": "Ingresos sin asignar",
+  "account_system_role_unassigned_expense": "Gastos sin asignar",
+  "account_system_role_commodity_trading": "Compensación de divisas e instrumentos"
 }

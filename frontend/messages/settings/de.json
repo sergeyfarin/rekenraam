@@ -950,5 +950,10 @@
   "settings_data_status_running": "Läuft",
   "settings_data_status_completed": "Geprüft",
   "settings_data_backups_will_retry": "Wird erneut versucht",
-  "settings_data_backups_gave_up": "Aufgegeben"
+  "settings_data_backups_gave_up": "Aufgegeben",
+  "account_system_role_import_imbalance": "Importdifferenz",
+  "account_system_role_retained_earnings": "Gewinnrücklagen",
+  "account_system_role_unassigned_income": "Nicht zugeordnete Einnahmen",
+  "account_system_role_unassigned_expense": "Nicht zugeordnete Ausgaben",
+  "account_system_role_commodity_trading": "Währungs- und Instrumentverrechnung"
 }

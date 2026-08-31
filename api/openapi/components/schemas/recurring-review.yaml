@@ -113,8 +113,33 @@ RecurringGenerationResponse:
     generated:
       type: integer
       minimum: 0
-      maximum: 1
+      maximum: 50
     blocked:
       type: integer
       minimum: 0
-      maximum: 1
+      maximum: 50
+
+RecurringPreviewResponse:
+  type: object
+  required: [dates]
+  properties:
+    dates:
+      type: array
+      maxItems: 5
+      items:
+        type: string
+        format: date
+RecurringSummaryResponse:
+  type: object
+  required: [draft_count, blocked_count, today]
+  properties:
+    draft_count:
+      type: integer
+      minimum: 0
+    blocked_count:
+      type: integer
+      minimum: 0
+    today:
+      type: string
+      format: date
+      description: Current calendar date in the owner's configured time zone.

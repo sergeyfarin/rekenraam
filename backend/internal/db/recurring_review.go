@@ -166,3 +166,16 @@ func guardRecurringOccurrence(ctx context.Context, tx *sql.Tx, occurrence Create
 	}
 	return ErrRecurringOccurrenceExists
 }
+
+func (r *RecurringRepository) RecurringReviewCounts(ctx context.Context, bookID int64) (int, int, error) {
+	var drafts, blocked int
+	err := r.database.QueryRowContext(ctx, `SELECT
+ COUNT(CASE WHEN o.status='generated' AND tv.status='draft' AND t.deleted_at IS NULL THEN 1 END),
+ COUNT(CASE WHEN o.status='blocked' THEN 1 END)
+ FROM recurring_occurrences o LEFT JOIN transactions t ON t.id=o.transaction_id AND t.book_id=o.book_id
+ LEFT JOIN current_transaction_versions tv ON tv.transaction_id=t.id WHERE o.book_id=?`, bookID).Scan(&drafts, &blocked)
+	if err != nil {
+		return 0, 0, fmt.Errorf("read recurring review counts: %w", err)
+	}
+	return drafts, blocked, nil
+}

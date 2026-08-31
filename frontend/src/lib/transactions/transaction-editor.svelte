@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
+  import { tagsQueryOptions } from '$lib/api/tags';
   import Plus from '@lucide/svelte/icons/plus';
   import Save from '@lucide/svelte/icons/save';
   import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -36,6 +38,8 @@
   type JournalEntryPostingRequest = NonNullable<
     NonNullable<TransactionRequest['journal_entries']>[number]['postings']
   >[number];
+  import { accountDisplayName } from '$lib/accounts/account-labels';
+  import { systemRoleLabel } from './transaction-labels';
   import { categoryDisplayName } from '$lib/categories/category-labels';
   import { APIClientError } from '$lib/api/client';
   import {
@@ -55,28 +59,42 @@
     commodityID: string;     // '' means unset
     amountStr: string;       // user-entered, e.g. "25.00" or "-25.00"
     memo: string;
+    lineKey?: string;
   };
 
   // ── Props ─────────────────────────────────────────────────────────
-  type EditorMode = 'create' | 'edit' | 'correct';
+  type EditorMode = 'create' | 'edit' | 'correct' | 'template';
 
   let {
     mode,
     transaction,
     csrfToken,
     onSaved,
-    onCancel
+    onCancel,
+    initialValues,
+    templateFields,
+    saveTemplate,
+    onPendingChange,
+    preservePostings = false
   } = $props<{
     mode: EditorMode;
     transaction?: TransactionResponse;
     csrfToken?: string;
-    onSaved: (saved: TransactionResponse) => Promise<void> | void;
+    onSaved?: (saved: TransactionResponse) => Promise<void> | void;
+    initialValues?: TransactionRequest;
+    templateFields?: Snippet;
+    saveTemplate?: (payload: TransactionRequest) => Promise<void>;
+    preservePostings?: boolean;
+    onPendingChange?: (pending: boolean) => void;
     onCancel: () => void;
   }>();
 
+  let tagIDs = $state<number[]>([]);
+  const tagsQuery = createQuery(() => tagsQueryOptions());
+
   // ── Queries ───────────────────────────────────────────────────────
   // Load accounts (asset/liability for the account leg; income/expense categories loaded separately)
-  const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
+  const accountsQuery = createQuery(() => accountsQueryOptions(false, mode === 'template' || preservePostings));
   const categoriesQuery = createQuery(() => categoriesQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
@@ -139,6 +157,7 @@
 
   // ── Form state ────────────────────────────────────────────────────
   let pending = $state(false);
+  $effect(() => { onPendingChange?.(pending); });
   let formError = $state<unknown>(undefined);
 
   // Reconciliation override modal
@@ -153,8 +172,8 @@
     (accountsQuery.data?.accounts ?? []).filter(
       (a: AccountResponse) =>
         (a.account_class === 'asset' || a.account_class === 'liability') &&
-        a.status === 'active' &&
-        a.allows_postings
+        a.status === 'active' && !a.is_system &&
+        a.allows_postings && (mode !== 'template' || a.account_kind !== 'security_holding')
     )
   );
 
@@ -197,7 +216,7 @@
   const splitImbalance = $derived.by(() => commodityImbalance(splitLegs));
 
   const title = $derived(
-    mode === 'correct'
+    mode === 'template' ? m.recurring_entry_title() : mode === 'correct'
       ? m.transactions_form_correction_title()
       : mode === 'edit'
         ? m.transactions_form_edit_title()
@@ -205,7 +224,7 @@
   );
 
   const submitLabel = $derived(
-    pending
+    mode === 'template' ? (pending ? m.recurring_saving() : m.recurring_save_template()) : pending
       ? mode === 'edit'
         ? m.transactions_form_save_pending()
         : m.transactions_form_create_pending()
@@ -218,6 +237,24 @@
 
   // ── Initialise from existing transaction (edit mode) ──────────────
   $effect(() => {
+    tagIDs = [...(transaction?.tag_ids ?? initialValues?.tag_ids ?? [])];
+    if (mode === 'template' && initialValues) {
+      transactionDate = initialValues.transaction_date ?? todayISO();
+      payeeID = initialValues.payee_id ?? undefined;
+      payeeSearch = initialValues.payee_name ?? '';
+      initialPayeeName = payeeSearch;
+      description = initialValues.description ?? '';
+      transactionKind = initialValues.transaction_kind ?? 'ordinary';
+      noteMarkdown = initialValues.note_markdown ?? '';
+      const postings = initialValues.journal_entries?.flatMap((e: NonNullable<TransactionRequest['journal_entries']>[number]) => e.postings ?? []) ?? [];
+      tier = postings.length ? 'split' : 'simple';
+      if (postings.length) splitLegs = postings.map((p: JournalEntryPostingRequest) => ({
+        accountID: String(p.account_id), commodityID: String(p.commodity_id),
+        amountStr: formatLedgerAmount(p.quantity_value ?? '0', p.quantity_scale ?? 0),
+        memo: p.memo ?? '', lineKey: p.line_key
+      }));
+      return;
+    }
     if (!transaction) {
       transactionDate = todayISO();
       payeeID = undefined;
@@ -256,7 +293,7 @@
     const postings: PostingResponse[] = entries.flatMap((e: JournalEntryResponse) => e.postings ?? []);
     const nonSystemPostings: PostingResponse[] = postings.filter((p: PostingResponse) => !p.account_system_role);
 
-    if (nonSystemPostings.length <= 2) {
+    if (!preservePostings && nonSystemPostings.length <= 2) {
       tier = 'simple';
       // Find the asset/liability leg and the income/expense leg.
       const assetLeg = nonSystemPostings.find(
@@ -279,11 +316,12 @@
       }
     } else {
       tier = 'split';
-      splitLegs = nonSystemPostings.map((p: PostingResponse) => ({
+      splitLegs = (preservePostings ? postings : nonSystemPostings).map((p: PostingResponse) => ({
         accountID: String(p.account_id),
         commodityID: String(p.commodity_id),
         amountStr: formatLedgerAmount(p.quantity_value, p.quantity_scale),
-        memo: p.memo ?? ''
+        memo: p.memo ?? '',
+        lineKey: p.line_key
       }));
     }
   });
@@ -400,6 +438,11 @@
   }
 
   async function submitPayload(payload: TransactionRequest, withOverride: boolean) {
+    if (mode === 'template') {
+      if (!saveTemplate) throw new Error(m.recurring_unavailable());
+      await saveTemplate(payload);
+      return;
+    }
     const finalPayload = withOverride
       ? { ...payload, reconciliation_override: true }
       : payload;
@@ -414,7 +457,7 @@
       saved = await createTransaction(finalPayload, csrfToken!);
     }
 
-    await onSaved(saved);
+    await onSaved?.(saved);
   }
 
   async function fetchImpact(payload: TransactionRequest): Promise<ReconciliationImpactResponse> {
@@ -427,7 +470,8 @@
   // ── Payload construction ──────────────────────────────────────────
   function buildPayload(): TransactionRequest {
     const payload: TransactionRequest = {
-      status: 'posted',
+      status: mode === 'edit' ? transaction?.status : 'posted',
+      tag_ids: [...tagIDs],
       transaction_date: transactionDate || undefined,
       description: description.trim() || undefined,
       note_markdown: noteMarkdown.trim() || undefined,
@@ -508,6 +552,7 @@
       // zero posting — refuse to build the payload, as the simple tier does.
       if (parsed === null) return [];
       postings.push({
+        line_key: leg.lineKey,
         account_id: Number(leg.accountID),
         commodity_id: Number(leg.commodityID),
         quantity_value: parsed.value,
@@ -584,24 +629,21 @@
     tier = 'simple';
   }
 
-  // For split leg commodity options — all active account commodities from accounts list.
-  const allActiveCommodities = $derived.by(() => {
-    const seen = new Map<number, { id: number; code: string }>();
-    for (const a of (accountsQuery.data?.accounts ?? [])) {
-      if (a.default_commodity_id && !seen.has(a.default_commodity_id)) {
-        const code = currenciesByID.get(a.default_commodity_id)?.code ?? String(a.default_commodity_id);
-        seen.set(a.default_commodity_id, { id: a.default_commodity_id, code });
-      }
-    }
-    return [...seen.values()];
-  });
+  // Currency choices include currencies used by clearing accounts with no default.
+  const allActiveCommodities = $derived(currenciesQuery.data?.currencies ?? []);
 
   // All accounts for split leg account selector.
   const allPostingAccounts = $derived(
     (accountsQuery.data?.accounts ?? []).filter(
-      (a: AccountResponse) => a.status === 'active' && a.allows_postings
+      (a: AccountResponse) => a.status === 'active' && a.allows_postings && (mode !== 'template' || a.account_kind !== 'security_holding')
     )
   );
+
+  function postingAccountLabel(account: AccountResponse): string {
+    if (account.system_role) return systemRoleLabel(account.system_role);
+    const category = categoriesQuery.data?.categories.find(c => c.id === account.id);
+    return category ? categoryDisplayName(category) : accountDisplayName(account);
+  }
 
   // Commodity from a specific account (for split legs).
   function commodityForAccount(accIDStr: string): string {
@@ -686,12 +728,16 @@
       type="button"
       class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
+      disabled={pending}
       aria-label={m.transactions_form_cancel()}
       title={m.transactions_form_cancel()}
     >
       <X size={16} aria-hidden="true" />
     </button>
   </div>
+
+  <fieldset disabled={pending} class="space-y-4">
+  {#if templateFields}{@render templateFields()}{/if}
 
   <!-- Correction banner -->
   {#if mode === 'correct'}
@@ -713,6 +759,7 @@
   <!-- ── Tier 1 / shared fields ───────────────────────────────────── -->
   <div class="grid gap-3 sm:grid-cols-2">
     <!-- Date -->
+    {#if mode !== 'template'}
     <label>
       <span class={labelClass}>{m.transactions_field_date()}</span>
       <input
@@ -724,6 +771,7 @@
       />
     </label>
 
+    {/if}
     <!-- Payee autocomplete -->
     <label class="relative">
       <span class={labelClass}>{m.transactions_field_payee()}</span>
@@ -852,7 +900,7 @@
         >
           <option value="">—</option>
           {#each assetLiabilityAccounts as a (a.id)}
-            <option value={a.id}>{a.name ?? a.code ?? String(a.id)}</option>
+            <option value={a.id}>{postingAccountLabel(a)}</option>
           {/each}
         </select>
       </label>
@@ -902,7 +950,7 @@
               type="button"
               class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-muted transition hover:bg-control-hover hover:text-foreground"
               onclick={clearCategory}
-              aria-label="Clear category"
+              aria-label={m.reports_filter_clear_dimension()}
               disabled={isVoided && mode === 'edit'}
             >
               <X size={14} aria-hidden="true" />
@@ -983,7 +1031,7 @@
               >
                 <option value="">—</option>
                 {#each allPostingAccounts as a (a.id)}
-                  <option value={String(a.id)}>{a.name ?? a.code ?? String(a.id)}</option>
+                  <option value={String(a.id)}>{postingAccountLabel(a)}</option>
                 {/each}
               </select>
             </label>
@@ -1013,6 +1061,16 @@
                 <Trash2 size={14} aria-hidden="true" />
               </button>
             </div>
+
+            {#if mode === 'template' || preservePostings}
+              <label class="sm:col-span-3">
+                <span class={labelClass}>{m.transactions_field_posting_commodity()}</span>
+                <select class={inputClass} value={leg.commodityID} required onchange={(e) => { const legs=[...splitLegs]; legs[i]={...legs[i],commodityID:e.currentTarget.value}; splitLegs=legs; }}>
+                  <option value="">—</option>
+                  {#each allActiveCommodities as commodity (commodity.id)}<option value={String(commodity.id)}>{commodity.code}</option>{/each}
+                </select>
+              </label>
+            {/if}
 
             <!-- Memo (full width) -->
             <label class="sm:col-span-3">
@@ -1051,6 +1109,18 @@
     </div>
   {/if}
 
+  <fieldset class="rounded-(--radius-control) border border-border p-3">
+    <legend class="px-1 text-sm font-semibold">{m.recurring_tags()}</legend>
+    {#if tagsQuery.isPending}<p class="text-sm text-muted">{m.recurring_loading()}</p>
+    {:else if tagsQuery.isError}<APIFormError error={tagsQuery.error} /><button type="button" onclick={() => tagsQuery.refetch()}>{m.recurring_refresh()}</button>
+    {:else if !tagsQuery.data?.tags.length}<p class="text-sm text-muted">{m.recurring_no_tags()}</p>
+    {:else}<div class="flex flex-wrap gap-3">
+      {#each tagsQuery.data.tags as tag (tag.id)}
+        <label class="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" value={tag.id} bind:group={tagIDs} disabled={pending} />{tag.name}</label>
+      {/each}
+    </div>{/if}
+  </fieldset>
+
   <!-- ── Tier 2: Advanced section ───────────────────────────────── -->
   <details class="rounded-[var(--radius-control)] border border-border bg-surface">
     <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-foreground">{m.form_advanced()}</summary>
@@ -1060,11 +1130,16 @@
         <span class={labelClass}>{m.transactions_field_kind()}</span>
         <select bind:value={transactionKind} class={inputClass} disabled={isVoided && mode === 'edit'}>
           <option value="ordinary">{m.transaction_kind_ordinary()}</option>
-          <option value="adjustment">{m.transaction_kind_adjustment()}</option>
+          {#if mode === 'template' || preservePostings}
+            <option value="transfer">{m.transaction_kind_transfer()}</option>
+          {:else}
+            <option value="adjustment">{m.transaction_kind_adjustment()}</option>
+          {/if}
         </select>
       </label>
 
       <!-- External reference -->
+      {#if mode !== 'template'}
       <label>
         <span class={labelClass}>{m.transactions_field_external_ref()}</span>
         <input
@@ -1076,6 +1151,7 @@
         />
       </label>
 
+      {/if}
       <!-- Note (full width) -->
       <label class="sm:col-span-2">
         <span class={labelClass}>{m.transactions_field_note()}</span>
@@ -1095,6 +1171,7 @@
       type="button"
       class="inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
+      disabled={pending}
     >
       <X size={16} aria-hidden="true" />
       {m.transactions_form_cancel()}
@@ -1111,4 +1188,5 @@
       </button>
     {/if}
   </div>
+  </fieldset>
 </form>

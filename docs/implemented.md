@@ -216,17 +216,17 @@ ADR 0012 governs the durable split.
 | Manual/scheduled refresh runs + history | 🟡 | API only. |
 | **Pricing/FX management UI** | ⬜ | R11. |
 
-## Recurring transactions (R9) — 🟡 slices 1–4 complete; generation inactive pending UI
+## Recurring transactions (R9) — 🟡 slices 1–5 complete; acceptance review next
 
 | Capability | Status | Notes |
 |---|---|---|
 | Date enumeration and durable templates | ✅ | `internal/recur`, `db.RecurringRepository`; daily/weekly/monthly/yearly, clamp-and-reanchor, date/occurrence limits, materialized occurrence identities. Dates stop at year 9999. |
 | Template CRUD API and typed client | ✅ | `app/recurring.go`, `api/recurring.go`, `lib/api/recurring.ts`: create/list/read/PATCH/archive, complete postings/tags and next scheduled date. Three stable errors translated in six locales. |
 | Template validation and PATCH safety | ✅ | Existing transaction validation plus exact per-commodity balancing; investment postings excluded independently of kind. Omission preserves, explicit null clears optional fields, revision checks reject stale merges. Owner-local creation watermark prevents historical backfill. Saving a template has no ledger/FX/lot/reconciliation effects. |
-| Generation, draft origin guard and discard linkage | ✅ | Atomic draft + occurrence + audit, blocked validation failures, a 50-occurrence global tick cap, owner-local dates, revision-guarded generation/watermarks, independent-pool idempotency, and audited skipped tombstones on draft discard (T-77). Browser draft creation is rejected with a code translated in six locales. Draft-only creation/edits never invalidate reconciliation; promotion remains guarded (T-78). Production scheduler/public run-now stay off until review/discard UI ships. |
-| Due inbox read model and occurrence preview | 🟡 | `app/recurring_review.go`, `db/recurring_review.go`: cursor-paginated current drafts + blocked occurrences, exact debit/credit totals per commodity, one composed query per page. Generated rows reflect edits; archived/disabled templates do not hide outstanding review. Date-range preview merges the current schedule with persisted identities. Next-due reads exclude all materialized identities. |
-| Review actions and posting-impact preview | 🟡 | Authenticated skip with reason and blocked retry; atomic occurrence/audit updates guarded by template revision and prior attempt audit ID. Archived blocked items remain skippable; retry requires enabled/unarchived. `GET /transactions/{id}/post/reconciliation-impact` validates the saved draft as posted and previews stored-position checkpoint impact. Posting still rechecks. Existing DELETE now discards edited drafts newest-version first (T-81), preserving the skipped identity and audits. OpenAPI, typed client and six-locale conflict message ship. |
-| Recurring screens | ⬜ | Slice 5 is next. R9 is not yet an end-to-end user workflow; scheduler/public run-now remain inactive until review/discard is reachable. |
+| Generation, draft origin guard and discard linkage | ✅ | Atomic draft + occurrence + audit, blocked validation failures, a 50-occurrence global tick cap, owner-local dates, revision-guarded generation/watermarks, independent-pool idempotency, and audited skipped tombstones on draft discard (T-77). Browser draft creation is rejected with a code translated in six locales. Draft-only creation/edits never invalidate reconciliation; promotion remains guarded (T-78). Production startup/minute scheduling and authenticated public run-now are active; both create reviewable drafts only. |
+| Due inbox read model and occurrence preview | ✅ | `app/recurring_review.go`, `db/recurring_review.go`: cursor-paginated current drafts + blocked occurrences, exact debit/credit totals per commodity, one composed query per page. Generated rows reflect edits; archived/disabled templates do not hide outstanding review. Date-range preview merges the current schedule with persisted identities. Next-due reads exclude all materialized identities. Read-only unsaved preview returns up to five owner-local scheduled dates; summary counts are independent of pagination. |
+| Review actions and posting-impact preview | ✅ | Authenticated skip with reason and blocked retry; atomic occurrence/audit updates guarded by template revision and prior attempt audit ID. Archived blocked items remain skippable; retry requires enabled/unarchived. `GET /transactions/{id}/post/reconciliation-impact` validates the saved draft as posted and previews stored-position checkpoint impact. Posting still rechecks. Existing DELETE now discards edited drafts newest-version first (T-81), preserving the skipped identity and audits. OpenAPI, typed client and six-locale conflict message ship. |
+| Recurring screens | ✅ | `/app/recurring`: templates and paginated due inbox, all states, six locales, draft-count nav badge and mobile/keyboard review dialogs. Shared editor saves templates without transactions and edits drafts without posting, preserving exact amounts, tags and clearing legs. Pause/resume/archive, skip/retry, explicit post/discard and bulk post with per-draft reconciliation checks. Partial bulk failures keep completed posts and leave only remaining drafts for review. R9 acceptance review is next. |
 
 ## Investments (Phase 6) — 🟦 User workflows shipped; R12a correction complete, provenance/correction follow-ups open
 
@@ -255,7 +255,7 @@ ADR 0012 governs the durable split.
 | Capability | State | Notes |
 | --- | --- | --- |
 | Translation boundary | ✅ | Paraglide JS over `frontend/messages/{app,settings}/<locale>.json`. All user-facing copy goes through it; built-in database records keep stable codes and resolve display labels here. |
-| **Five non-English locales** | 🟦 | `es, fr, nl, de, ru` — The English catalogs contain **1,359** messages (379 app + 980 settings). Each other locale covers 343 app and 951 current settings keys: **65 English keys are missing per locale** (36 CSV mapping, 29 MFA/security and investment validation), with English fallback. Each also retains one obsolete settings key. Shared-key placeholders match; missing translations are T-80. The translations are also **drafted from a glossary, not reviewed by native speakers**; the language settings page says so to anyone using a non-English locale. First three items for a reviewer: Spanish *Punteado* ("cleared"), Russian *партия* (tax lot), Dutch *Instelling* (financial institution, collides with *instellingen*). |
+| **Five non-English locales** | 🟦 | `es, fr, nl, de, ru` — The English catalogs contain **1,454** messages (469 app + 985 settings). Each other locale covers 433 app and 956 current settings keys: **65 English keys are missing per locale** (36 CSV mapping, 29 MFA/security and investment validation), with English fallback. Each also retains one obsolete settings key. Shared-key placeholders match; missing translations are T-80. The translations are also **drafted from a glossary, not reviewed by native speakers**; the language settings page says so to anyone using a non-English locale. First three items for a reviewer: Spanish *Punteado* ("cleared"), Russian *партия* (tax lot), Dutch *Instelling* (financial institution, collides with *instellingen*). |
 | Terminology governance | ✅ | `docs/localization-glossary.md` decides terms before strings are written, anchored to GnuCash, localized MS Money/Quicken, and per-market banking language. Two deliberate departures from the literal are recorded there: *commodity* → *instrument* (the literal means physical goods in all five), and *cleared* vs *reconciled* must not collapse into one word. |
 | Language picker | ✅ | `/app/settings/language`, each locale offered by its own autonym. Resolution is `localStorage → browser preference → English`, with per-message English fallback so a missing key never renders blank. Covered by `e2e/playwright/language.spec.ts`. |
 | Backend translation | 🟦 | Export headers and server-generated content remain English only. The original Phase 3 target has not been implemented; backend localization is not scheduled in the current roadmap. |
@@ -272,11 +272,11 @@ ADR 0012 governs the durable split.
 ## Not started (see roadmap)
 
 XLSX/OFX/QFX import adapters, per-split import mapping and batch rollback,
-budgets, the recurring templates/due inbox UI, projected balances, loan/liability
+budgets, projected balances, loan/liability
 helpers, report snapshots, and pricing-management UI. CSV import, profiles and
 minimal rules are shipped. Reporting-currency conversion is shipped. Recurring
-template CRUD and generation are implemented, but production generation remains
-disabled until the review/discard UI ships.
+templates, generation and dedicated review/discard screens are shipped.
+Production scheduling is active; R9 acceptance review remains next.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

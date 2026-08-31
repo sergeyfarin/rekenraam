@@ -299,3 +299,20 @@ func TestArchivingATemplateLeavesItsGeneratedDraftsAlone(t *testing.T) {
 	assert.Equal(t, before, recurringCounts(t, f.database))
 	assert.Equal(t, 1, before["transactions"])
 }
+
+func TestRecurringSchedulerStartupCreatesAReachableDraft(t *testing.T) {
+	f, s, input := recurringFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	template, err := s.CreateTemplate(ctx, input)
+	require.NoError(t, err)
+	s.StartScheduler(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	require.Eventually(t, func() bool {
+		summary, err := s.Summary(ctx, input.OwnerUserID)
+		return err == nil && summary.DraftCount == 1
+	}, 5*time.Second, 10*time.Millisecond)
+	cancel()
+	var count int
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM recurring_occurrences o JOIN current_transaction_versions v ON v.transaction_id=o.transaction_id WHERE o.template_id=? AND v.status='draft'`, template.ID).Scan(&count))
+	assert.Equal(t, 1, count)
+}

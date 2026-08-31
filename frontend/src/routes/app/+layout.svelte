@@ -5,6 +5,9 @@
   import { createQuery } from '@tanstack/svelte-query';
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
   import LogOut from '@lucide/svelte/icons/log-out';
+  import { recurringSummaryQueryOptions } from '$lib/api/recurring';
+  import { getLocale } from '$lib/paraglide/runtime.js';
+  import Repeat from '@lucide/svelte/icons/repeat';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import Settings from '@lucide/svelte/icons/settings';
   import Tags from '@lucide/svelte/icons/tags';
@@ -80,6 +83,8 @@
     }
   });
 
+  const recurringSummary = createQuery(() => ({ ...recurringSummaryQueryOptions(), enabled: shellState === 'ready' && !shouldRedirectHome }));
+  const isRecurringRoute = $derived($page.url.pathname.startsWith('/app/recurring'));
   const isOverviewRoute = $derived($page.url.pathname === '/app');
   const isAccountsRoute = $derived($page.url.pathname.startsWith('/app/accounts'));
   const isCategoriesRoute = $derived($page.url.pathname.startsWith('/app/categories'));
@@ -91,7 +96,7 @@
   const isReportsRoute = $derived($page.url.pathname.startsWith('/app/reports'));
 
   const headerTitle = $derived(
-    isAccountsRoute
+    isRecurringRoute ? m.recurring_title() : isAccountsRoute
       ? m.accounts_title()
       : isCategoriesRoute
         ? m.categories_title()
@@ -110,7 +115,7 @@
                   : m.app_shell_header_title()
   );
   const headerCopy = $derived(
-    isAccountsRoute
+    isRecurringRoute ? m.recurring_shell_copy() : isAccountsRoute
       ? m.accounts_shell_copy()
       : isCategoriesRoute
         ? m.categories_shell_copy()
@@ -270,6 +275,14 @@
         >
           <Receipt size={16} aria-hidden="true" />
           {m.app_shell_nav_transactions()}
+        </a>
+        <a href="/app/recurring" aria-current={isRecurringRoute ? 'page' : undefined}
+          class:bg-selected={isRecurringRoute} class:text-selected-foreground={isRecurringRoute}
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover">
+          <Repeat size={16} aria-hidden="true" />{m.recurring_title()}
+          {#if recurringSummary.data?.draft_count}
+            <span class="rounded-full bg-foreground px-2 text-xs text-background" aria-label={m.recurring_badge({count:new Intl.NumberFormat(getLocale()).format(recurringSummary.data.draft_count)})}>{new Intl.NumberFormat(getLocale()).format(recurringSummary.data.draft_count)}</span>
+          {/if}
         </a>
         <a
           href="/app/reconcile"

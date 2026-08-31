@@ -950,5 +950,10 @@
   "settings_data_status_running": "Выполняется",
   "settings_data_status_completed": "Проверена",
   "settings_data_backups_will_retry": "Будет повторено",
-  "settings_data_backups_gave_up": "Отменено"
+  "settings_data_backups_gave_up": "Отменено",
+  "account_system_role_import_imbalance": "Расхождение импорта",
+  "account_system_role_retained_earnings": "Нераспределённая прибыль",
+  "account_system_role_unassigned_income": "Нераспределённые доходы",
+  "account_system_role_unassigned_expense": "Нераспределённые расходы",
+  "account_system_role_commodity_trading": "Клиринг валют и инструментов"
 }

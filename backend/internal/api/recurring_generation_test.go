@@ -92,7 +92,7 @@ func TestBrowserApiCannotCreateADraft(t *testing.T) {
 	assert.Zero(t, count)
 	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM audit_events`).Scan(&count))
 	assert.Equal(t, before, count)
-	// Activation is gated: no public generation route without a review UI.
+	// Run-now cannot generate an unknown template.
 	recurringAPIRequest(t, handler, cookie, csrf, http.MethodPost, "/api/v1/recurring/templates/1/run-now", `{}`, http.StatusNotFound)
 }
 

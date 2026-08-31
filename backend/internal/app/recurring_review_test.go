@@ -400,3 +400,46 @@ func TestRecurringDueAmountsKeepCommoditiesSeparateAndRejectOverflow(t *testing.
 	var overflow LedgerOverflowError
 	require.ErrorAs(t, err, &overflow)
 }
+
+func TestUnsavedSchedulePreviewUsesCalendarRulesWithoutWrites(t *testing.T) {
+	f, s, input := recurringFixture(t)
+	before := recurringCounts(t, f.database)
+	patch := RecurringTemplatePatch{Frequency: recurringTestPtr("monthly"), StartsOn: recurringTestPtr("2026-08-31"), DayOfMonth: NullablePatch[int]{Set: true, Value: recurringTestPtr(31)}}
+	dates, err := s.PreviewSchedule(context.Background(), input.OwnerUserID, patch)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"2026-08-31", "2026-09-30", "2026-10-31", "2026-11-30", "2026-12-31"}, dates)
+	patch.Frequency = recurringTestPtr("yearly")
+	patch.MonthOfYear = NullablePatch[int]{Set: true, Value: recurringTestPtr(2)}
+	patch.DayOfMonth.Value = recurringTestPtr(29)
+	dates, err = s.PreviewSchedule(context.Background(), input.OwnerUserID, patch)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"2027-02-28", "2028-02-29", "2029-02-28", "2030-02-28", "2031-02-28"}, dates)
+	patch.MaxOccurrences = NullablePatch[int]{Set: true, Value: recurringTestPtr(2)}
+	dates, err = s.PreviewSchedule(context.Background(), input.OwnerUserID, patch)
+	require.NoError(t, err)
+	assert.Len(t, dates, 2)
+	patch.ByWeekday = NullablePatch[int]{Set: true, Value: recurringTestPtr(1)}
+	_, err = s.PreviewSchedule(context.Background(), input.OwnerUserID, patch)
+	require.ErrorIs(t, err, ErrRecurringScheduleInvalid)
+	assert.Equal(t, before, recurringCounts(t, f.database))
+}
+
+func TestRecurringSummaryCountsArchivedDraftsAndBlockedSeparately(t *testing.T) {
+	f, s, input := recurringFixture(t)
+	ctx := context.Background()
+	template, err := s.CreateTemplate(ctx, input)
+	require.NoError(t, err)
+	_, err = s.GenerateDue(ctx, GenerateRecurringInput{OwnerUserID: input.OwnerUserID})
+	require.NoError(t, err)
+	_, err = f.database.Exec(`UPDATE recurring_templates SET archived_at='2026-08-30T12:00:00Z',enabled=0 WHERE id=?`, template.ID)
+	require.NoError(t, err)
+	blocked, err := s.CreateTemplate(ctx, input)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`UPDATE recurring_template_postings SET quantity_value='1' WHERE template_id=? AND line_seq=1`, blocked.ID)
+	require.NoError(t, err)
+	_, err = s.GenerateDue(ctx, GenerateRecurringInput{OwnerUserID: input.OwnerUserID})
+	require.NoError(t, err)
+	summary, err := s.Summary(ctx, input.OwnerUserID)
+	require.NoError(t, err)
+	assert.Equal(t, RecurringSummary{DraftCount: 1, BlockedCount: 1, Today: "2026-08-30"}, summary)
+}

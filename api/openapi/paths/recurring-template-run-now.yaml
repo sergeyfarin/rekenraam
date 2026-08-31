@@ -1,0 +1,72 @@
+post:
+  summary: Generate due recurring drafts now
+  description: >
+    Generates at most 50 due occurrences within the owner-local lead window. Never posts. Disabled or archived templates generate nothing; blocked and skipped identities are not retried. Repeat to finish capped catch-up; subsequent scheduler ticks also continue it.
+  parameters:
+    - in: path
+      name: template_id
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          additionalProperties: false
+  responses:
+    "200":
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RecurringGenerationResponse'
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "404":
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "409":
+      description: State changed or action not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "422":
+      description: Exact quantity overflow
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "503":
+      description: Database temporarily busy
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'

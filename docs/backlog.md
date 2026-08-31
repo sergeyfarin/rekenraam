@@ -1252,7 +1252,8 @@ drives real generation → HTTP DELETE → re-enumeration; the rollback case
 posted drafts cannot be hard-deleted.
 
 **Schedule:** R9 slice 3, before linked draft generation is activated; public
-scheduler/run-now activation additionally waits for slice 5's review UI.
+scheduler/run-now activation additionally waited for slice 5's review UI,
+which shipped on 2026-08-31. Both entry points are now active.
 
 **Files:** `backend/migrations/0003_recurring.sql` (`recurring_occurrences`);
 `backend/internal/db/transactions_write.go` (`DeleteDraftTransaction`);

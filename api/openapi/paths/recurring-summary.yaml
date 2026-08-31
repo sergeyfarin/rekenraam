@@ -1,0 +1,28 @@
+get:
+  summary: Recurring review counts and owner-local date
+  description: Counts all remaining generated drafts and blocked occurrences, including archived templates. Small read model for navigation badges and schedule defaults.
+  responses:
+    "200":
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/RecurringSummaryResponse"
+    "400":
+      description: Request failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Request failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "503":
+      description: Request failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

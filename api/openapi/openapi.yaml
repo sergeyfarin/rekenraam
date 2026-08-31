@@ -3,6 +3,12 @@ info:
   title: Rekenraam API
   version: 0.0.0
 paths:
+  /api/v1/recurring/preview:
+    $ref: "./paths/recurring-preview.yaml"
+  /api/v1/recurring/summary:
+    $ref: "./paths/recurring-summary.yaml"
+  /api/v1/recurring/templates/{template_id}/run-now:
+    $ref: "./paths/recurring-template-run-now.yaml"
   /api/v1/recurring/due:
     $ref: "./paths/recurring-due.yaml"
   /api/v1/recurring/templates/{template_id}/occurrences:
@@ -398,6 +404,10 @@ components:
         type: integer
         format: int64
   schemas:
+    RecurringPreviewResponse:
+      $ref: "./components/schemas/recurring-review.yaml#/RecurringPreviewResponse"
+    RecurringSummaryResponse:
+      $ref: "./components/schemas/recurring-review.yaml#/RecurringSummaryResponse"
     RecurringAmount:
       $ref: "./components/schemas/recurring-review.yaml#/RecurringAmount"
     RecurringDueItem:

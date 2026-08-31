@@ -950,5 +950,10 @@
   "settings_data_status_running": "Bezig",
   "settings_data_status_completed": "Geverifieerd",
   "settings_data_backups_will_retry": "Probeert opnieuw",
-  "settings_data_backups_gave_up": "Opgegeven"
+  "settings_data_backups_gave_up": "Opgegeven",
+  "account_system_role_import_imbalance": "Importverschil",
+  "account_system_role_retained_earnings": "Ingehouden winst",
+  "account_system_role_unassigned_income": "Niet-toegewezen inkomsten",
+  "account_system_role_unassigned_expense": "Niet-toegewezen uitgaven",
+  "account_system_role_commodity_trading": "Valuta- en instrumentverrekening"
 }

@@ -45,7 +45,7 @@ func TestRecurringReviewAPIReadsSkipAndSecurity(t *testing.T) {
 	assert.Greater(t, *updated.NextDueOn, date)
 	res = recurringAPIRequest(t, handler, cookie, csrf, http.MethodPost, path+"/retry", `{"occurrence_date":"`+date+`"}`, http.StatusConflict)
 	assert.Contains(t, res.Body.String(), "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED")
-	recurringAPIRequest(t, handler, cookie, csrf, http.MethodPost, path+"/run-now", `{}`, http.StatusNotFound)
+	recurringAPIRequest(t, handler, cookie, csrf, http.MethodPost, path+"/run-now", `{}`, http.StatusOK)
 }
 
 func TestRecurringDueAPIReflectsDraftEditsAndPosting(t *testing.T) {
@@ -144,4 +144,37 @@ func TestDiscardEditedGeneratedDraftPreservesAuditAndSkippedIdentity(t *testing.
 	defer rows.Close()
 	assert.False(t, rows.Next())
 	require.NoError(t, rows.Err())
+}
+
+func TestRecurringPreviewSummaryAndRunNowAPI(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	cookie, csrf, commodityID := setupAccountAPITest(t, handler)
+	input := recurringAPIInput(t, handler, cookie, csrf, commodityID)
+	input["frequency"] = "daily"
+	input["lead_days"] = 0
+	delete(input, "day_of_month")
+	template := recurringResponse(t, recurringAPIRequest(t, handler, cookie, csrf, http.MethodPost, "/api/v1/recurring/templates", recurringJSON(t, input), http.StatusCreated))
+	path := "/api/v1/recurring/templates/" + strconvFormatInt(template.ID) + "/run-now"
+	var before, after int
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM audit_events`).Scan(&before))
+	recurringAPIRequest(t, handler, nil, "", http.MethodPost, "/api/v1/recurring/preview", `{}`, http.StatusUnauthorized)
+	recurringAPIRequest(t, handler, nil, "", http.MethodGet, "/api/v1/recurring/summary", "", http.StatusUnauthorized)
+	preview := `{"frequency":"monthly","interval_count":1,"starts_on":"2026-01-31","day_of_month":31}`
+	res := recurringAPIRequest(t, handler, cookie, "", http.MethodPost, "/api/v1/recurring/preview", preview, http.StatusOK)
+	var dates recurringPreviewResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &dates))
+	assert.Len(t, dates.Dates, 5)
+	recurringAPIRequest(t, handler, cookie, "", http.MethodPost, path, `{}`, http.StatusForbidden)
+	recurringAPIRequest(t, handler, cookie, csrf, http.MethodPost, path, `{"unexpected":true}`, http.StatusBadRequest)
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM audit_events`).Scan(&after))
+	assert.Equal(t, before, after)
+	recurringAPIRequest(t, handler, cookie, csrf, http.MethodPost, path, `{}`, http.StatusOK)
+	res = recurringAPIRequest(t, handler, cookie, "", http.MethodGet, "/api/v1/recurring/summary", "", http.StatusOK)
+	var summary recurringSummaryResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &summary))
+	require.NotEmpty(t, summary.Today)
+	var count int
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM transactions t JOIN current_transaction_versions v ON v.transaction_id=t.id WHERE v.status='draft'`).Scan(&count))
+	assert.Equal(t, 1, count)
+	assert.Equal(t, count, summary.DraftCount)
 }

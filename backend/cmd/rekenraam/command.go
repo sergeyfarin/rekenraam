@@ -142,6 +142,8 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	backupService.SetSelfCheck(selfCheckService)
 	backupService.StartBackgroundWorker(ctx, logger)
 	backupService.StartScheduler(ctx, logger)
+	recurringService := app.NewRecurringService(db.NewRecurringRepository(database), transactionService, settingsService)
+	recurringService.StartScheduler(ctx, logger)
 	handler := api.NewHandler(logger, web.Handler(), api.Services{
 		Setup:            setupService,
 		Auth:             authService,
@@ -154,7 +156,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 		Category:         categoryService,
 		Payee:            payeeService,
 		Transaction:      transactionService,
-		Recurring:        app.NewRecurringService(db.NewRecurringRepository(database), transactionService, settingsService),
+		Recurring:        recurringService,
 		Pricing:          pricingService,
 		Investment:       investmentService,
 		Import:           importService,

@@ -281,17 +281,8 @@ func (s *RecurringService) cleanTemplate(ctx context.Context, spec db.RecurringT
 	spec.Frequency = strings.TrimSpace(spec.Frequency)
 	spec.StartsOn = strings.TrimSpace(spec.StartsOn)
 	spec.EndsOn = strings.TrimSpace(spec.EndsOn)
-	if err := recurringSchedule(spec).Validate(); err != nil {
-		return spec, ErrRecurringScheduleInvalid
-	}
-	// The enumerator ignores irrelevant fields; the persisted template must
-	// still mean exactly one thing (and satisfy the schema's stronger checks).
-	if (spec.Frequency != "weekly" && spec.ByWeekday != nil) ||
-		(spec.Frequency != "yearly" && spec.MonthOfYear != nil) ||
-		((spec.Frequency == "daily" || spec.Frequency == "weekly") && (spec.DayOfMonth != nil || spec.LastDayOfMonth)) ||
-		(spec.LastDayOfMonth && spec.DayOfMonth != nil) ||
-		(spec.MaxOccurrences != nil && *spec.MaxOccurrences < 1) || spec.IntervalCount > 10000 {
-		return spec, ErrRecurringScheduleInvalid
+	if err := validateRecurringSchedule(spec); err != nil {
+		return spec, err
 	}
 	if spec.LeadDays < 0 || spec.LeadDays > 90 {
 		return spec, ErrRecurringScheduleInvalid
@@ -450,4 +441,20 @@ func mapRecurringError(err error) error {
 	default:
 		return err
 	}
+}
+
+func validateRecurringSchedule(spec db.RecurringTemplateSpec) error {
+	if err := recurringSchedule(spec).Validate(); err != nil {
+		return ErrRecurringScheduleInvalid
+	}
+	// The enumerator ignores irrelevant fields; the persisted template must
+	// still mean exactly one thing (and satisfy the schema's stronger checks).
+	if (spec.Frequency != "weekly" && spec.ByWeekday != nil) ||
+		(spec.Frequency != "yearly" && spec.MonthOfYear != nil) ||
+		((spec.Frequency == "daily" || spec.Frequency == "weekly") && (spec.DayOfMonth != nil || spec.LastDayOfMonth)) ||
+		(spec.LastDayOfMonth && spec.DayOfMonth != nil) ||
+		(spec.MaxOccurrences != nil && *spec.MaxOccurrences < 1) || spec.IntervalCount > 10000 {
+		return ErrRecurringScheduleInvalid
+	}
+	return nil
 }

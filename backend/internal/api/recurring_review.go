@@ -175,3 +175,69 @@ func reviewRecurringOccurrence(logger *slog.Logger, auth *app.AuthService, servi
 		writeJSON(w, http.StatusOK, recurringGenerationResponse{Generated: result.Generated, Blocked: result.Blocked})
 	}))
 }
+
+type recurringPreviewResponse struct {
+	Dates []string `json:"dates"`
+}
+type recurringSummaryResponse struct {
+	DraftCount   int    `json:"draft_count"`
+	BlockedCount int    `json:"blocked_count"`
+	Today        string `json:"today"`
+}
+
+func previewRecurringSchedule(logger *slog.Logger, auth *app.AuthService, service *app.RecurringService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, auth)
+		if !ok {
+			return
+		}
+		var request recurringTemplateRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		dates, err := service.PreviewSchedule(r.Context(), owner.ID, request.patch())
+		if err != nil {
+			writeRecurringServiceError(w, r, logger, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, recurringPreviewResponse{Dates: dates})
+	}
+}
+func recurringSummary(logger *slog.Logger, auth *app.AuthService, service *app.RecurringService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, auth)
+		if !ok {
+			return
+		}
+		summary, err := service.Summary(r.Context(), owner.ID)
+		if err != nil {
+			writeRecurringServiceError(w, r, logger, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, recurringSummaryResponse{DraftCount: summary.DraftCount, BlockedCount: summary.BlockedCount, Today: summary.Today})
+	}
+}
+func runRecurringNow(logger *slog.Logger, auth *app.AuthService, service *app.RecurringService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, auth, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		id, ok := readRecurringTemplateID(w, r)
+		if !ok {
+			return
+		}
+		var request struct{}
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := service.GenerateDue(r.Context(), app.GenerateRecurringInput{OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()), TemplateID: id})
+		if err != nil {
+			writeRecurringServiceError(w, r, logger, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, recurringGenerationResponse{Generated: result.Generated, Blocked: result.Blocked})
+	}))
+}

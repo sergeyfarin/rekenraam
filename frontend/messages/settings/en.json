@@ -978,5 +978,10 @@
   "settings_data_status_running": "Running",
   "settings_data_status_completed": "Verified",
   "settings_data_backups_will_retry": "Will try again",
-  "settings_data_backups_gave_up": "Gave up"
+  "settings_data_backups_gave_up": "Gave up",
+  "account_system_role_import_imbalance": "Import imbalance",
+  "account_system_role_retained_earnings": "Retained earnings",
+  "account_system_role_unassigned_income": "Unassigned income",
+  "account_system_role_unassigned_expense": "Unassigned expense",
+  "account_system_role_commodity_trading": "Currency and instrument clearing"
 }

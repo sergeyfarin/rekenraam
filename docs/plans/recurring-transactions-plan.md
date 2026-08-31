@@ -1,7 +1,7 @@
 # Recurring Transactions Plan (R9)
 
-Status: **slices 1–4 shipped; slice 4 closed 2026-08-31. Slice 5 is next;
-production generation stays off until slice 5 delivers review/discard.**
+Status: **slices 1–5 shipped; slice 5 closed 2026-08-31. Production generation
+and public run-now are active. Slice 6 acceptance review is next.**
 `docs/roadmap.md` owns that sequence. Written 2026-08-29,
 immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
 `internal/recur`, `backend/migrations/0003_recurring.sql`, and
@@ -333,7 +333,9 @@ alongside the pricing, import, and backup schedulers, following
 **Activation gate:** slice 3 builds/tests generation and the scheduler but does
 not start it in production or expose public `run-now` yet. Slice 5 enables those
 entry points only once the dedicated review/discard surface exists. Otherwise
-this slice order would violate the producer-owned draft rule above.
+this slice order would violate the producer-owned draft rule above. The gate
+was satisfied in slice 5 on 2026-08-31: startup and minute ticks now run from
+`command.go`, and generated drafts are reachable at `/app/recurring`.
 
 1. Read the owner's `user_preferences.time_zone`; `localToday` is today in it.
 2. For each enabled, unarchived template: `window = [generate_from,
@@ -427,6 +429,8 @@ New paths under `/api/v1/recurring/`, each with its own file in
 | `POST` | `/recurring/templates/{id}/retry` | explicitly retry one blocked occurrence with `{occurrence_date}` |
 | `POST` | `/recurring/templates/{id}/run-now` | materialize what is due now, the "back up now" analogue |
 | `GET` | `/recurring/due` | the review inbox read model |
+| `GET` | `/recurring/summary` | unpaginated draft/blocked counts and owner-local today |
+| `POST` | `/recurring/preview` | read-only next five dates for an unsaved schedule |
 
 **Slice-4 review contract (shipped 2026-08-31):**
 
@@ -461,8 +465,18 @@ New paths under `/api/v1/recurring/`, each with its own file in
   as posted and names the affected checkpoints using stored posting positions.
   It never posts or invalidates anything; posting always rechecks current state.
 - The new occurrence-conflict error is translated in all six locales. The
-  typed client supplies cursor continuation; screens and public run-now remain
-  slice 5 work.
+  typed client supplies cursor continuation. Slice 5 adds screens and public
+  run-now, with the same authentication/origin/CSRF guards as other mutations.
+- `POST /recurring/preview` requires authentication but makes no writes. It
+  applies the same strict schedule validation and enumerator as saved templates,
+  returning up to five dates from owner-local today (or the later anchor). It
+  counts occurrence limits from the anchor. Non-schedule patch fields are ignored.
+- `GET /recurring/summary` counts all outstanding drafts and blocked occurrences
+  independently of inbox pagination, including archived templates. The shell
+  badge counts drafts only; the response also supplies owner-local today.
+- Public run-now accepts an empty JSON object and generates at most 50 due
+  occurrences for one template. It never posts or implicitly retries blocked
+  identities. Disabled or archived templates return zero changes.
 
 **PATCH omission semantics.** This repo's recurring bug class (see
 `import_connections_test.go`, and T-36/T-45/T-47 for the money variant) is a
@@ -510,13 +524,22 @@ plus the `TRANSACTION_DRAFT_NOT_USER_CREATABLE` above. Six locales each.
 - **Templates** — list with name, schedule in words ("Monthly on the 1st"),
   amount, next due, enabled toggle. Editor reuses the transaction entry form's
   posting rows, payee resolution (including the confirm-and-search path from
-  T-50), category picker, and tag input; the schedule block is the only new UI.
-  A live "next five occurrences" preview under the schedule block, fed by
-  `GET /occurrences` — the fastest way to tell someone their monthly-on-the-31st
-  rule does what they meant.
+  T-50), and category picker. Slice 5 adds the missing shared tag input and
+  explicit currency selection for recurring split/clearing legs. Template mode
+  saves through template CRUD without creating a transaction. Unchanged schedule
+  fields are omitted from edits so amount/name changes preserve catch-up.
+  A live "next five scheduled dates" preview under the schedule block uses
+  `POST /recurring/preview`. The planned `GET /occurrences` was insufficient:
+  it requires a saved template and its 367-day range cannot preview five yearly
+  dates. Saved occurrence history still uses that GET endpoint.
 - **Due** — the review inbox. Each row: post, edit then post, skip, discard.
-  Blocked rows show the reason and a retry. Bulk post for a checked set, because
-  the first of the month produces several at once.
+  Blocked rows show diagnostic details and a retry; they can also be skipped
+  with a reason. Generated drafts are skipped by discarding them, preserving
+  the audited occurrence identity. Bulk post confirms a checked set, names
+  reconciliation impacts, and rechecks before each post. Posts commit separately;
+  after a later failure only the remaining drafts stay in the confirmation.
+  Archived templates never hide outstanding drafts. The nav badge polls the
+  summary every 30 seconds; review actions invalidate the relevant read models.
 
 All four screen states on both views (loading, empty, error, populated), six
 locales, and an `[acceptance]`-tagged browser case covering create → generate →
@@ -578,8 +601,8 @@ either.
    The named API test creates and edits a backdated draft *after* reconciliation,
    proves checkpoints remain unchanged, then exercises guarded promotion.
 
-   **Activation remains off:** scheduler startup is not wired in `command.go`,
-   and run-now exists only as a service input. Slice 5 enables both after the
+   **At slice 3 close, activation remained off:** scheduler startup was not wired
+   in `command.go`, and run-now existed only as a service input. Slice 5 enables both after the
    review/discard UI exists. Blocked retry and its read model belong to slice 4.
 
    **Validation:** the full backend race suite, formatting/vet, frontend type
@@ -599,7 +622,8 @@ either.
    existing occurrence-tombstone/audit transaction. The named API regression
    first failed with HTTP 500, then passed after two draft edits and discard.
 
-   Public run-now and scheduler activation remain gated to slice 5. Named tests
+   At slice 4 close, public run-now and scheduler activation remained gated
+   to slice 5. Named tests
    cover blocked revalidation, stale attempts, independent-pool retry races,
    rollback, archived cleanup, date validation, mixed-scale exact totals and
    overflow, cursor continuation beyond 200 items, and draft edit/post/discard.
@@ -609,9 +633,28 @@ either.
    build passed. Seventeen new named backend tests and three client tests cover
    this slice. Browser acceptance remains in slice 5; no recurring screen was
    added or claimed here.
-5. **Frontend.** Both views, all states, six locales, the acceptance browser
-   case. Then enable production scheduling/public run-now and prove every
-   generated draft is reachable through review and discard.
+5. **Frontend — done 2026-08-31.** `/app/recurring` supplies templates and a
+   cursor-paginated due inbox, loading/empty/error/success states, six locales,
+   accessible native review dialogs, mobile layout, and a draft-count nav badge.
+   The shared transaction editor preserves tags, line keys, exact quantities
+   and clearing legs. Template saves never create transactions; draft edits
+   remain drafts. Template pause/resume/archive, scheduled skip, blocked retry,
+   edit/post/discard and partial-failure-safe bulk post are reachable.
+
+   Production startup/minute scheduling and authenticated public run-now are
+   now enabled after the create/generate/edit/post and archived mobile discard
+   browser journeys passed. Preview/summary read models are documented above.
+   The missing shared tag input and unsaved preview endpoint are small additions
+   to the original frontend plan, not a second transaction editor or calendar.
+
+   Validation covers strict no-write month-end/yearly preview, separate summary
+   counts, route security, exact editor payloads and omission/null semantics,
+   real browser posting/discard/retry and partial bulk failure. Changed
+   reconciliation impacts stop posting and show a translated request for a
+   fresh review (the named browser regression first caught a generic error).
+   Full backend formatting/vet/race checks, frontend type checks and 355 unit
+   tests, and the production build with 18 browser tests pass. The broader
+   commitment-by-commitment acceptance review remains slice 6.
 6. **Acceptance review.** Every commitment above checked against the code, every
    deferred item answered yes or no with a reason, and any planning claim the
    implementation disproved corrected in place — the R2/R3 pattern.

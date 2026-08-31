@@ -156,3 +156,40 @@ export async function retryRecurringOccurrence(templateID: number, occurrenceDat
     throw toNetworkError(error);
   }
 }
+
+export const recurringSummaryQueryKey = ['api', 'recurring', 'summary'] as const;
+export function recurringSummaryQueryOptions() {
+  return { queryKey: recurringSummaryQueryKey, queryFn: getRecurringSummary, staleTime: 5_000, refetchInterval: 30_000 };
+}
+export async function getRecurringSummary(): Promise<components['schemas']['RecurringSummaryResponse']> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/recurring/summary');
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+export async function previewRecurringSchedule(schedule: RecurringTemplatePatch): Promise<components['schemas']['RecurringPreviewResponse']> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/recurring/preview', { body: schedule });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+export async function runRecurringNow(templateID: number, csrfToken: string): Promise<RecurringGenerationResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/recurring/templates/{template_id}/run-now', {
+      params: { path: { template_id: templateID }, header: { 'X-CSRF-Token': csrfToken } }, body: {}
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}

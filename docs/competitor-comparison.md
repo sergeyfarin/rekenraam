@@ -50,7 +50,7 @@ spreadsheet."
 | QIF/OFX import | ✅ QIF | ✅ | partial | ⬜ | ⬜ | partial | ✅ | via tools |
 | Import rules engine | ✅ (literal contains, preview-time only) | partial | ✅ (strongest) | ✅ | ⬜ | ⬜ | partial | ✅ (code) |
 | Budgets | ⬜ (R8) | ✅ | ✅ | ✅ (core) | ⬜ | ⬜ | ✅ | 🟦 |
-| Recurring/scheduled txns | 🟦 (templates + generator; inactive until review UI) | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
+| Recurring/scheduled txns | ✅ (templates, draft generation and review) | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
 | Cashflow forecasting | ⬜ (R10) | partial | partial | ⬜ | ⬜ | ⬜ | ⬜ | 🟦 |
 | Investment lots & cost basis | ✅ (4 methods) | ✅ | ⬜ | ⬜ | ⬜ | basic FIFO/avg | partial | ✅ |
 | Dividends (incl. withholding, reinvest) | ✅ | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ |
@@ -184,8 +184,9 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
    profiles, grouped payee resolution, and ordered literal contains rules feed
    the staged preview/commit pipeline. Rules are preview-time only; broader
    matching and retroactive application are not claimed. Recurring templates
-   and generation followed in R9 slices 1–3, but generation remains inactive
-   until the review/discard UI ships.
+   and generation followed in R9 slices 1–5. The localized review/discard UI
+   now ships, so scheduled generation is active; entries remain drafts until
+   explicitly posted. The R9 acceptance review is next.
 3. **Returns analytics (TWR/MWR, allocation, benchmark)** — expected by
    Ghostfolio/Portfolio Performance users; Rekenraam has better underlying
    data (exact lots + FX). Roadmap R13.

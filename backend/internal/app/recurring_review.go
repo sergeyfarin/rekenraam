@@ -260,3 +260,51 @@ func (s *RecurringService) RetryOccurrence(ctx context.Context, input ReviewRecu
 	}
 	return RecurringGenerationResult{Generated: 1}, nil
 }
+
+// PreviewSchedule enumerates an unsaved schedule without writing a template or
+// draft. Reusing the server enumerator keeps month-end and count rules identical.
+func (s *RecurringService) PreviewSchedule(ctx context.Context, ownerID int64, patch RecurringTemplatePatch) ([]string, error) {
+	today, err := s.localToday(ctx, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	spec := db.RecurringTemplateSpec{IntervalCount: 1}
+	mergeRecurringPatch(&spec, patch)
+	schedule := recurringSchedule(spec)
+	if err := validateRecurringSchedule(spec); err != nil {
+		return nil, err
+	}
+	from, err := time.Parse(time.DateOnly, max(today, spec.StartsOn))
+	if err != nil {
+		return nil, ErrRecurringScheduleInvalid
+	}
+	after := from.AddDate(0, 0, -1).Format(time.DateOnly)
+	dates := make([]string, 0, 5)
+	for range 5 {
+		next, found, err := recur.Next(schedule, after)
+		if err != nil {
+			return nil, ErrRecurringScheduleInvalid
+		}
+		if !found {
+			break
+		}
+		dates = append(dates, next)
+		after = next
+	}
+	return dates, nil
+}
+
+type RecurringSummary struct {
+	DraftCount   int
+	BlockedCount int
+	Today        string
+}
+
+func (s *RecurringService) Summary(ctx context.Context, ownerID int64) (RecurringSummary, error) {
+	today, err := s.localToday(ctx, ownerID)
+	if err != nil {
+		return RecurringSummary{}, err
+	}
+	drafts, blocked, err := s.repository.RecurringReviewCounts(ctx, BookID)
+	return RecurringSummary{DraftCount: drafts, BlockedCount: blocked, Today: today}, err
+}
