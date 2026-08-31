@@ -186,12 +186,14 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
    matching and retroactive application are not claimed. Recurring templates
    and generation followed in R9 slices 1–5. The localized review/discard UI
    now ships, so scheduled generation is active; entries remain drafts until
-   explicitly posted. R9 acceptance closed 2026-08-31; R10 planning is next.
+   explicitly posted. R9 acceptance closed 2026-08-31; R10 is planned, not
+   implemented.
 3. **Returns analytics (TWR/MWR, allocation, benchmark)** — expected by
    Ghostfolio/Portfolio Performance users; Rekenraam has better underlying
    data (exact lots + FX). Roadmap R13.
 4. **Multi-currency cashflow forecasting** — PocketSmith's moat; no OSS
-   equivalent; the niche-defining feature for R10.
+   equivalent; the niche-defining feature for R10. The execution plan is
+   `docs/plans/projected-balances-plan.md`; forecasting remains unshipped.
 5. **BYO-key feed adapters** — Trading 212 ships. R15 is planned as IBKR
    Flex → GoCardless → the investment-event producer; no second provider is
    implemented. Quotes belong to R17. Other adapters remain research options,

@@ -6,7 +6,8 @@ Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-08-31 (R12a T-75a/T-74 complete; R9 acceptance complete;
-R10 planning next. T-76 and T-75b remain required later work.)
+R10 plan written; implementation slice 1 next. T-76 and T-75b remain required
+later work.)
 
 ## Where things stand
 
@@ -87,12 +88,27 @@ localization item below).
 rate in `settings/currencies/+page.svelte` should truncate or round half-up.
 See `backlog.md` G-09.
 
-## Next initiative — R10 projected balances planning
+## Current initiative — R10 projected balances
 
-Write the R10 plan before implementation: reuse the pure recurring enumerator,
-start with per-currency projections, and specify draft/materialized-occurrence
-handling to avoid double counting. Converted totals require explicit FX semantics;
-loan helpers remain optional follow-up. See `docs/roadmap.md`.
+Plan written 2026-08-31: `docs/plans/projected-balances-plan.md`. This is a
+planning milestone only; no forecast endpoint or screen is implemented.
+The plan fixes source precedence, owner-local date/overdue semantics, exact
+arithmetic, constant-FX policy, snapshot reads, API/UI contracts, budgets,
+worked fixtures and named tests for an agent executing one slice at a time.
+
+**Next action: implement slice 1 only.** Use section 13's execution prompt.
+
+- [ ] 1. Coherent read-only snapshot inputs and repository tests.
+- [ ] 2. Exact per-currency projection, occurrence precedence and worked fixtures.
+- [ ] 3. Authenticated balances/event API, pagination and stale-basis handling.
+- [ ] 4. Constant-as-of FX, complete coverage, provenance and rounding.
+- [ ] 5. Forecast screen, filters, exact tables/charts and six locales.
+- [ ] 6. Event explanations, stale-detail recovery and refresh integration.
+- [ ] 7. Cross-system isolation, concurrency, bounds and browser acceptance.
+- [ ] 8. Dated acceptance review, documentation closure; then R8 planning.
+
+Do not start loan helpers, scenarios, automatic posting or investment forecasts.
+The execution record in the plan owns detailed slice evidence.
 
 ## Completed — R9 recurring transactions
 
@@ -300,8 +316,9 @@ defect (a 404 about a run that exists, fixed with T-68):
 
 **Six further review passes remain**, listed in the review in value order:
 claim audit, money-path coverage, failure-branch walk, contract-vs-code diff,
-concurrency, and the Data screen's states. They remain unscheduled; R3a and R9 are complete; R10 planning is next. Use them as
-review input, with current findings tracked in `docs/backlog.md`.
+concurrency, and the Data screen's states. They remain unscheduled; R3a and R9
+are complete, and R10 snapshot-input implementation is next. Use them as review
+input, with current findings tracked in `docs/backlog.md`.
 
 ## Previous initiative — R3a accessibility coverage — **complete 2026-08-24**
 

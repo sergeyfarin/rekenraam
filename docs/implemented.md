@@ -276,7 +276,10 @@ budgets, projected balances, loan/liability
 helpers, report snapshots, and pricing-management UI. CSV import, profiles and
 minimal rules are shipped. Reporting-currency conversion is shipped. Recurring
 templates, generation and dedicated review/discard screens are shipped.
-Production scheduling and R9 acceptance are complete; R10 planning is next.
+Production scheduling and R9 acceptance are complete. R10's detailed plan is
+written (`docs/plans/projected-balances-plan.md`); all eight implementation
+slices remain unstarted. Next is the read-only forecast input snapshot. No
+forecast endpoint, UI or constant-FX projection is shipped.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

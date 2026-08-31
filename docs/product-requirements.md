@@ -74,9 +74,10 @@ These decisions must be locked before the first real domain slice beyond setup/a
 - Domain lifecycle status taxonomy. For transactions this is now locked: an
   unsaved manual entry (UI working copy, no row, no side effects) saves directly
   as `posted` (in the ledger, directly editable). `draft` remains a reserved,
-  system-only persisted status for future producer-owned workflows such as import
-  review or crash recovery; no current UI workflow creates it. Posted records are removed
-  by **void** (stays visible, marked voided, reversible) or **soft-delete**
+  system-only persisted status used by R9 scheduled generation and its dedicated
+  review/discard surface. Future producers such as import review or crash
+  recovery must supply equivalent surfaces before activation. Posted records
+  are removed by **void** (stays visible, marked voided, reversible) or **soft-delete**
   (hidden from the table, durable, recoverable) — two distinct workflows — or by
   a corrective entry; never by hard delete. `reconciled` is an independent
   posting-verification axis. See `docs/plans/transaction-ledger-core-plan.md`.
@@ -261,7 +262,19 @@ Goal: support forward-looking personal finance.
 - Account budget treatment as a separate account-facing planning axis, not an
   account kind.
 - Scheduled transactions.
-- Projected balances.
+- Projected balances are read-only projections from current posted facts and
+  separately identified recurring assumptions; viewing them never creates
+  transactions, occurrences, rate-download work or investment effects. The R10
+  implementation contract is `docs/plans/projected-balances-plan.md` (planned,
+  not shipped). It uses owner-local today, exact per-account/per-currency
+  balances, and acted-on occurrence identity to avoid counting both a template
+  and its generated/posted transaction. Overdue unposted assumptions are visibly
+  carried to tomorrow without changing saved dates.
+- Forecast conversion, when requested, is additive and explicitly assumes
+  constant stored FX rates available on the forecast's as-of date. Missing
+  coverage omits the combined series, never the exact source-currency balances.
+  It does not claim to predict future exchange rates. Financial forecasting
+  remains separate from historical actuals and canonical ledger exports.
 - Simple loan/liability helpers if they fit the existing ledger model.
 
 ### Phase 6: Advanced Finance

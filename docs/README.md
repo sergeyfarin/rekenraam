@@ -41,6 +41,13 @@ have exactly one home.
   a translation; it is far shorter than the message catalogs it governs.
 - [adrs/](adrs/) — accepted decision records (numbered, immutable).
 
+## Current execution plan
+
+[R10 projected balances](plans/projected-balances-plan.md) is planned, not
+implemented. It includes financial/source rules, worked numerical fixtures,
+OpenAPI/UI contracts, eight ordered slices, a named test matrix and an agent
+handoff prompt. Start with slice 1 (read-only snapshots), not the screen.
+
 ## Folders
 
 - **[plans/](plans/)** — feature plans: design + acceptance criteria for one

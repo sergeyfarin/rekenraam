@@ -7,7 +7,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 short-horizon working queue is `docs/todo.md`.
 
 Last reviewed: 2026-08-31 (R12a T-75a/T-74 closed; R9 acceptance complete;
-R10 planning next; T-76 and T-75b remain scheduled separately).
+R10 plan written; snapshot-input slice next; T-76 and T-75b remain scheduled
+separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -37,7 +38,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R7a | Daily-entry convenience | ⏸ | this file |
 | R8 | Budgets | ⏭ | this file |
 | R9 | Recurring transactions | ✅ | `docs/plans/recurring-transactions-plan.md` |
-| R10 | Projected balances / forecasting | ⏭ | this file |
+| R10 | Projected balances / forecasting | ▶ | `docs/plans/projected-balances-plan.md` |
 | R11 | Pricing/FX management UI | ⏸ | this file |
 | R12 | Investments UI + gains reporting | ✅ | `docs/plans/investments-plan.md` |
 | R12a | Investment journal/subledger integrity correction | ✅ | `docs/plans/investment-integrity-plan.md`, ADR 0012 |
@@ -237,7 +238,8 @@ it only ran first because "auth" sorted before every other filename. A Playwrigh
 project dependency now states that requirement.
 
 **Subsequent delivery:** the reporting-currency selector shipped 2026-08-26.
-The next initiative is R10 planning; see the planning loop below.
+R10 is current: its plan is written and implementation starts with read-only
+snapshot inputs; see the planning loop below.
 
 <details>
 <summary>R3a as planned</summary>
@@ -340,7 +342,9 @@ arc that exercises the producer-owned draft machinery once instead of twice,
 and it front-loads per-currency forecasting — the differentiator the parity
 lens below commits to protecting. Budgets are independent of both and slot in
 afterward with no rework. R9 is complete, including acceptance on 2026-08-31
-(`docs/reviews/r9-acceptance-review-2026-08-31.md`); R10 planning is next.
+(`docs/reviews/r9-acceptance-review-2026-08-31.md`); R10
+planning is complete; implementation slice 1 is next in
+`docs/plans/projected-balances-plan.md`. No forecast is implemented yet.
 The localized templates and due-inbox screens now expose
 create/edit, skip/blocked retry, explicit post/discard and bulk review with
 reconciliation checks. Startup/minute generation and public run-now are active;
@@ -354,8 +358,15 @@ unpaginated summary counts support the editor and navigation badge.
    `internal/recur` enumerator that R10 reuses for projections, drafts-only
    generation with a dedicated review inbox, and the `status="draft"` origin
    guard the ledger-core plan deferred until a real producer existed.
-2. **R10 Projected balances:** per-currency projections first; converted totals
-   only with explicit FX semantics. Loan helpers are optional follow-up work.
+2. **R10 Projected balances — current, planned 2026-08-31:**
+   `docs/plans/projected-balances-plan.md` is the detailed eight-slice execution
+   contract. Read-only owner-local daily balances combine posted facts with
+   separately labeled recurring drafts/computed dates, using occurrence identity
+   to prevent double counting. Exact per-account/per-currency series come first;
+   optional combined totals use explicit constant-as-of FX and complete coverage.
+   Overdue assumptions carry to tomorrow visibly. Coherent snapshots, event
+   explanations, bounds, named tests and acceptance are required. **Start with
+   slice 1 only: snapshot inputs.** Loan helpers remain optional later work.
 3. **R8 Budgets:** period budgets with actual-versus-budget reporting.
 
 ### R16 — investment lifecycle completeness

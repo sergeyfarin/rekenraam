@@ -1,7 +1,8 @@
 # Recurring Transactions Plan (R9)
 
 Status: **complete; all six slices accepted 2026-08-31. Production generation
-and public run-now are active. R10 planning is next.**
+and public run-now are active. R10 follows under its execution plan.**
+Next: slice 1 of `docs/plans/projected-balances-plan.md` (read-only snapshots).
 Acceptance evidence: `docs/reviews/r9-acceptance-review-2026-08-31.md`.
 `docs/roadmap.md` owns that sequence. Written 2026-08-29,
 immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
