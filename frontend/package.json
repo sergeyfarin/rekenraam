@@ -16,7 +16,7 @@
         "@inlang/plugin-m-function-matcher": "2.2.12",
         "@inlang/plugin-message-format": "4.4.3",
         "@internationalized/date": "3.12.3",
-        "@lucide/svelte": "1.33.0",
+        "@lucide/svelte": "1.35.0",
         "@sveltejs/adapter-static": "3.0.10",
         "@sveltejs/kit": "2.70.3",
         "@sveltejs/vite-plugin-svelte": "7.3.0",
