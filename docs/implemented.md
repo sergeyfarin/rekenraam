@@ -279,8 +279,12 @@ templates, generation and dedicated review/discard screens are shipped.
 Production scheduling and R9 acceptance are complete. R10's detailed plan is
 written (`docs/plans/projected-balances-plan.md`), with an approved lightweight
 learning extension (`docs/plans/forecast-learning-plan.md`) for daily/weekly,
-monthly and annual seasonal spending. All eight core slices and M1–M4 remain
-unstarted. Next is the read-only forecast input snapshot. No forecast endpoint,
+monthly and annual seasonal spending. Slice 1 is complete internally:
+`db.ForecastRepository` takes one `OpenReadOnly` snapshot and bulk-loads current
+posted selected-account legs, full account/commodity versions, relevant
+templates/occurrences, and every counterpart of linked current drafts. It has no
+route, application projection, ledger write or FX query. Core slices 2–8 and
+learning M1–M4 remain unstarted. Next is exact projection. No forecast endpoint,
 UI, constant-FX projection or learned-spending model is shipped.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,

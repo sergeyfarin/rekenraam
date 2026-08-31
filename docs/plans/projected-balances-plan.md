@@ -1225,7 +1225,7 @@ Suggested commit: `docs(forecast): accept R10 core forecast`.
 
 | Slice | Status at planning | Completion commit/date | Evidence / remaining work |
 |---|---|---|---|
-| 1. Read-only snapshot inputs | [ ] Not started | — | — |
+| 1. Read-only snapshot inputs | [x] Complete | This commit, 2026-08-31 | `ForecastRepository` reads all source rows through one `OpenReadOnly` transaction. Seven named repository tests cover current posted versions, the posted bulk query plan using `posting_versions_account_idx`, archived/edit-changed template drafts, full draft counterparts, concurrent write isolation, limit+1 failure and empty scope. Existing recurring occurrence/template and entry/version indexes cover the remaining joins; no new index was justified. Next: slice 2 exact projection. |
 | 2. Exact projection | [ ] Not started | — | — |
 | 3. Balances/events API | [ ] Not started | — | — |
 | 4. Constant FX | [ ] Not started | — | — |

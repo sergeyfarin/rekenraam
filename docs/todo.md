@@ -6,7 +6,7 @@ Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-08-31 (R12a T-75a/T-74 complete; R9 acceptance complete;
-R10 core and learning plans written; implementation slice 1 next. T-76 and T-75b
+R10 snapshot-input slice complete; exact projection slice 2 next. T-76 and T-75b
 remain required later work.)
 
 ## Where things stand
@@ -96,9 +96,9 @@ The plan fixes source precedence, owner-local date/overdue semantics, exact
 arithmetic, constant-FX policy, snapshot reads, API/UI contracts, budgets,
 worked fixtures and named tests for an agent executing one slice at a time.
 
-**Next action: implement slice 1 only.** Use section 13's execution prompt.
+**Next action: implement slice 2 only.** Use section 13's execution prompt.
 
-- [ ] 1. Coherent read-only snapshot inputs and repository tests.
+- [x] 1. Coherent read-only snapshot inputs and repository tests.
 - [ ] 2. Exact per-currency projection, occurrence precedence and worked fixtures.
 - [ ] 3. Authenticated balances/event API, pagination and stale-basis handling.
 - [ ] 4. Constant-as-of FX, complete coverage, provenance and rounding.
