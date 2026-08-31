@@ -46,7 +46,11 @@ have exactly one home.
 [R10 projected balances](plans/projected-balances-plan.md) is planned, not
 implemented. It includes financial/source rules, worked numerical fixtures,
 OpenAPI/UI contracts, eight ordered slices, a named test matrix and an agent
-handoff prompt. Start with slice 1 (read-only snapshots), not the screen.
+handoff prompt. Its [lightweight learning extension](plans/forecast-learning-plan.md)
+adds four subsequent slices for opt-in local spending models across daily/weekly,
+monthly and annual patterns, with explicit quality and hardware gates. Both
+plans are unimplemented. Start with core slice 1 (read-only snapshots), not the
+screen.
 
 ## Folders
 

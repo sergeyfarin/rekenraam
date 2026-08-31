@@ -6,8 +6,8 @@ Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-08-31 (R12a T-75a/T-74 complete; R9 acceptance complete;
-R10 plan written; implementation slice 1 next. T-76 and T-75b remain required
-later work.)
+R10 core and learning plans written; implementation slice 1 next. T-76 and T-75b
+remain required later work.)
 
 ## Where things stand
 
@@ -105,7 +105,15 @@ worked fixtures and named tests for an agent executing one slice at a time.
 - [ ] 5. Forecast screen, filters, exact tables/charts and six locales.
 - [ ] 6. Event explanations, stale-detail recovery and refresh integration.
 - [ ] 7. Cross-system isolation, concurrency, bounds and browser acceptance.
-- [ ] 8. Dated acceptance review, documentation closure; then R8 planning.
+- [ ] 8. Dated core acceptance review; then learning extension M1.
+- [ ] M1. Complete-history reads, cadence bins, baselines and exact residual allocation.
+- [ ] M2. Weekly/monthly smoothing, annual seasonal model, quality and hardware gates.
+- [ ] M3. Opt-in API/UI, pattern controls, variation/coverage and separate estimated curve.
+- [ ] M4. Learning acceptance and final R10 closure; then R8 planning.
+
+M1–M4 contract: `docs/plans/forecast-learning-plan.md`. It covers daily/weekly,
+monthly and annual patterns, including summer leave spending, without flattening
+seasonal peaks or adding estimates on top of known recurring bills.
 
 Do not start loan helpers, scenarios, automatic posting or investment forecasts.
 The execution record in the plan owns detailed slice evidence.

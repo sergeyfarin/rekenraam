@@ -5,6 +5,13 @@ after R9 acceptance. This is the execution specification for the next initiative
 in `docs/roadmap.md`: **R9 → R10 → R8**. Planning is complete when this document
 lands; no R10 endpoint, screen, forecast or conversion is claimed to ship yet.
 
+Scope amendment (2026-08-31): after these eight **core** slices, execute M1–M4
+in [lightweight learned spending](forecast-learning-plan.md). The owner requested
+local CPU learning with daily/weekly fluctuations, monthly costs and annual
+seasonality (for example July–August travel). That companion specifies opt-in
+models, history/quality/resource gates and final R10 acceptance. Core slice 1
+remains next; no forecast or learning code is implemented by either plan.
+
 Navigation: [decisions](#3-financial-and-date-decisions) ·
 [backend algorithm](#4-backend-read-model-and-algorithm) ·
 [API contract](#5-http-contract-openapi-first-in-slice-3) ·
@@ -69,7 +76,7 @@ a promise of future cash, a budget, or an investment-return forecast. It never
 saves or posts a transaction, generates a recurring occurrence, fetches rates,
 or changes a checkpoint merely because the user opens or refreshes it.
 
-### Required for R10 acceptance
+### Required for core R10 acceptance
 
 - `/app/forecast`, linked from the main navigation, with URL-addressable filters.
 - A recorded opening balance and daily future balance series, exact per account
@@ -93,16 +100,16 @@ or changes a checkpoint merely because the user opens or refreshes it.
 
 ### Deliberately excluded
 
-| Not in R10 v1 | Why / later home |
+| Excluded from core slices 1–8 | Why / later home |
 |---|---|
 | Automatic posting or a forecast “commit” button | R9 owns explicit review/post/discard. |
 | Manual what-if adjustments, saved scenarios, probability ranges | Requires scenario identity and editing semantics; no need for baseline v1. |
-| Historical averages, inferred bills, variable amount estimates | R9 has fixed templates; inference is a different source with different trust. |
+| Historical averages and learned variable/seasonal spending | Approved in the separate `forecast-learning-plan.md` extension M1–M4, after core acceptance. Automatic inferred bill creation remains excluded. |
 | Loan amortization, interest accrual, card due-date/payment calculation | Optional later work, not something inferred from an account balance. |
 | Forecasted FX, securities/crypto/reward prices, portfolio returns | Only currency postings and a labeled constant-FX assumption are in scope. |
 | Forecast snapshots, exports/CSV, print layouts, notifications | Future work only; existing ledger exports remain actual posted facts. |
 | Arbitrary historical/future as-of dates | v1 means “from today, using current records,” not knowledge-time reporting. |
-| Budget integration, seasonal models, RRULE or banking calendars | R8 or a later recurrence/projection decision. |
+| Budget integration, RRULE or banking calendars | R8 or a later recurrence/projection decision. Lightweight calendar expense profiles are in the learning extension; known daily/weekly/monthly/yearly schedules reuse R9. |
 | New storage tables, workers, provider calls or schedule mutation | This feature computes read models from existing records. |
 
 The defaults below are design decisions for this plan, not findings from user
@@ -1185,9 +1192,10 @@ recurring + transactions + accessibility browser run, sequential frontend builds
 All cases must actually run; dependency-skipped browser cases are not passes.
 Suggested commit: `test(forecast): verify lifecycle isolation and acceptance edges`.
 
-### Slice 8 — Acceptance review and documentation closure
+### Slice 8 — Core acceptance review and documentation milestone
 
-**Goal:** close R10 honestly, using the R9 review pattern.
+**Goal:** accept the core forecast honestly, using the R9 review pattern;
+leave the approved learning extension explicitly open.
 
 1. Write a dated `docs/reviews/r10-acceptance-review-YYYY-MM-DD.md` mapping every
    required scope item and D1–D8 to actual code and tests. Record final commands,
@@ -1204,12 +1212,14 @@ Suggested commit: `test(forecast): verify lifecycle isolation and acceptance edg
 5. Update any durable rule changed during implementation in the governing docs;
    use an ADR if a new long-lived architectural tradeoff departs from existing
    read-model/precision/background-work boundaries.
-6. Mark R10 complete only after its screen and all gates are satisfied. R8
-   budget planning is then next under the accepted roadmap, unless the owner
-   explicitly changes sequence. Do not start R8 in the acceptance commit.
+6. Mark the eight core slices accepted only after their screen and all gates
+   are satisfied. Next is M1 in `forecast-learning-plan.md`; R10 remains open
+   until M4 accepts that extension. R8 budget planning follows final R10 closure.
+   Do not begin M1 or R8 in this acceptance commit.
 
-**Gate:** all required rows below have evidence; no untracked R10 blocker remains.
-Suggested commit: `docs(forecast): close R10 acceptance review`.
+**Gate:** all required rows below have evidence; no untracked core blocker
+remains; learning remains planned.
+Suggested commit: `docs(forecast): accept R10 core forecast`.
 
 ### Execution record — maintain this table after every slice
 
@@ -1311,7 +1321,9 @@ to the same test file only for concurrency cases.
 
 ## 12. Definition of done
 
-R10 is complete only when all are true:
+The eight core slices are accepted only when all are true. Full R10 completion
+also requires M1–M4 and their dated acceptance evidence in
+`docs/plans/forecast-learning-plan.md`:
 
 - [ ] All section 1 required scope items and D1–D8 have implementation evidence.
 - [ ] Every test-matrix case has run and passed, or an equivalent named test is
@@ -1358,7 +1370,8 @@ Warnings: <environment restrictions or unrelated user changes preserved>
 ```
 
 Do not report “R10 done” after the calculation engine or first graph. The last
-step is acceptance against this contract, not the first plausible forecast.
+step is acceptance against this contract and the approved learning extension,
+not the first plausible forecast. After core slice 8 hand off M1, not R8.
 
 
 Planning validation (2026-08-31): existing source paths and helper names were

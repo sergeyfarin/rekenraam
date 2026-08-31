@@ -7,8 +7,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 short-horizon working queue is `docs/todo.md`.
 
 Last reviewed: 2026-08-31 (R12a T-75a/T-74 closed; R9 acceptance complete;
-R10 plan written; snapshot-input slice next; T-76 and T-75b remain scheduled
-separately).
+R10 core and learning plans written; snapshot-input slice next; T-76 and T-75b
+remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -359,13 +359,19 @@ unpaginated summary counts support the editor and navigation badge.
    generation with a dedicated review inbox, and the `status="draft"` origin
    guard the ledger-core plan deferred until a real producer existed.
 2. **R10 Projected balances — current, planned 2026-08-31:**
-   `docs/plans/projected-balances-plan.md` is the detailed eight-slice execution
-   contract. Read-only owner-local daily balances combine posted facts with
+   `docs/plans/projected-balances-plan.md` is the detailed eight-slice core
+   execution contract. Read-only owner-local daily balances combine posted facts
+   with
    separately labeled recurring drafts/computed dates, using occurrence identity
    to prevent double counting. Exact per-account/per-currency series come first;
    optional combined totals use explicit constant-as-of FX and complete coverage.
    Overdue assumptions carry to tomorrow visibly. Coherent snapshots, event
-   explanations, bounds, named tests and acceptance are required. **Start with
+   explanations, bounds, named tests and core acceptance are required. Then M1–M4
+   in `docs/plans/forecast-learning-plan.md` add opt-in local CPU spending models:
+   daily/weekly fluctuations, monthly costs and annual calendar peaks, with
+   confirmed history, no overlap with recurring bills, chronological evaluation
+   and measured hardware budgets. All learning remains unimplemented. Final R10
+   acceptance follows M4; R8 remains next afterward. **Start with
    slice 1 only: snapshot inputs.** Loan helpers remain optional later work.
 3. **R8 Budgets:** period budgets with actual-versus-budget reporting.
 

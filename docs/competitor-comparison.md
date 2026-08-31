@@ -193,7 +193,9 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
    data (exact lots + FX). Roadmap R13.
 4. **Multi-currency cashflow forecasting** — PocketSmith's moat; no OSS
    equivalent; the niche-defining feature for R10. The execution plan is
-   `docs/plans/projected-balances-plan.md`; forecasting remains unshipped.
+   `docs/plans/projected-balances-plan.md`, followed by the local, opt-in spending
+   models in `docs/plans/forecast-learning-plan.md` (daily/weekly, monthly and
+   annual seasonal patterns). Both core and learned forecasting remain unshipped.
 5. **BYO-key feed adapters** — Trading 212 ships. R15 is planned as IBKR
    Flex → GoCardless → the investment-event producer; no second provider is
    implemented. Quotes belong to R17. Other adapters remain research options,

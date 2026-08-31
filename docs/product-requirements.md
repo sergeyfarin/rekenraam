@@ -275,6 +275,15 @@ Goal: support forward-looking personal finance.
   coverage omits the combined series, never the exact source-currency balances.
   It does not claim to predict future exchange rates. Financial forecasting
   remains separate from historical actuals and canonical ledger exports.
+- Optional learned spending is a separate, explicitly estimated forecast source.
+  It runs locally on bounded CPU/memory without cloud calls, ledger writes or
+  model services. Daily/weekly fluctuations, monthly costs and annual calendar
+  peaks must use appropriate periods; summer spending is not spread uniformly
+  across the year. Known recurring bills take precedence without double counting.
+  Confirmed history, chronological testing, honest fallback/coverage disclosures
+  and measured resource limits are required. Insufficient seasonal history never
+  becomes a confident annual prediction. See `docs/plans/forecast-learning-plan.md`
+  (planned, not shipped); historical variation is not a probability interval.
 - Simple loan/liability helpers if they fit the existing ledger model.
 
 ### Phase 6: Advanced Finance
