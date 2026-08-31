@@ -64,6 +64,18 @@ func (s *RecurringService) GenerateDue(ctx context.Context, input GenerateRecurr
 		if template.Spec.GenerateFrom > to {
 			continue
 		}
+		// Bound enumeration as well as writes. A long outage must still make
+		// progress without exceeding the pure enumerator's occurrence cap.
+		// Every supported schedule produces at most one occurrence per day.
+		from, err := time.Parse(time.DateOnly, template.Spec.GenerateFrom)
+		if err != nil {
+			return result, fmt.Errorf("parse recurring watermark: %w", err)
+		}
+		windowEnd := from.AddDate(0, 0, recur.MaxOccurrencesPerWindow-1)
+		if windowEnd.Before(end) {
+			end = windowEnd
+			to = end.Format(time.DateOnly)
+		}
 		dates, err := recur.Occurrences(recurringSchedule(template.Spec), template.Spec.GenerateFrom, to)
 		if err != nil {
 			return result, fmt.Errorf("enumerate recurring dates: %w", err)

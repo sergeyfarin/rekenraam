@@ -8,9 +8,9 @@ what's next, `docs/roadmap.md`. The original verification was 2026-07-14;
 this is not a certification of every historical detail against today's code.
 Current schema lives in all SQL files under `backend/migrations/`, and current
 lifecycle behavior in `backend/internal/{app,api}`. R12a subsequently restricted
-generic investment lifecycle mutations, and R9 slices 1–3 added recurring
-draft generation/discard; see their plans and the feature ledger for those
-amendments (status reconciled 2026-08-31).
+generic investment lifecycle mutations, and completed R9 added recurring
+draft generation, review and discard; see their plans and the feature ledger
+for those amendments (status reconciled 2026-08-31).
 The two items this document deliberately deferred (`rounding_adjustment`,
 closed-period posting guards) are still deferred — neither has a roadmap item —
 and remain the right call until a concrete workflow needs them. The "Investment
@@ -181,11 +181,11 @@ persists it. "Unsaved entry" must never be called a "draft," and persisted
 - `draft`: reserved durable but unposted work that exists in the database and is
   intentionally excluded from the posted ledger and reports. It is **system-only,
   not a user-facing maturity step**. Manual entry never produces a draft and
-  there is no user-facing "save as draft." No current workflow produces drafts;
-  future import review, scheduled generation, or explicit crash-recovery
-  autosave may activate the status and must own a dedicated review/discard
-  surface. A future Unfinished Work inbox may link to those producer-owned
-  surfaces. Draft does not mean unreconciled and never affects the posted ledger.
+  there is no user-facing "save as draft." R9 scheduled generation produces
+  drafts with its dedicated recurring review/discard surface. Future import
+  review or explicit crash-recovery autosave must own equivalent surfaces
+  before producing drafts. A future Unfinished Work inbox may link to those
+  producer-owned surfaces. Draft does not mean unreconciled and never affects the posted ledger.
 - `posted`: entered and participating in current ledger views and reports.
   "Entered" covers manual entry (the default and only outcome of manual entry),
   bank/file import after commit, and anything already existing in the ledger.
@@ -221,11 +221,11 @@ reconciliation guard below.
 
 ### Background preparation and FX
 
-Persisted work triggers FX/commodity-rate coverage: a future producer-created
-`draft` row and every `posted` transaction both count. That preparation never
-makes a draft part of ledger balances or reports. Unsaved entries and import
-previews trigger nothing; future import rows trigger only after commit persists
-them. Manual entry always saves directly to `posted`.
+Posted transactions trigger FX/commodity-rate coverage. Producer drafts do not
+enqueue coverage or extend refresh planning; explicit promotion to posted does.
+This follows ADR 0010 as amended at R9 acceptance on 2026-08-31. Unsaved entries
+and import previews trigger nothing; import rows trigger only after posting.
+Manual entry always saves directly to `posted`.
 
 ### Delete and discard
 
@@ -1060,7 +1060,8 @@ through the real recurring producer. Creation and edits that remain draft do
 not affect reconciliation; posting still checks the stored posting positions.
 Discarding a generated never-posted draft preserves its occurrence as an audited
 skipped tombstone in the same transaction as deletion. Recurring scheduler and
-public run-now activation wait for R9's dedicated review/discard surface.
+public run-now were enabled with the dedicated review/discard surface in R9
+slice 5 on 2026-08-31.
 
 `POST /api/v1/transactions/{transaction_id}/void` must accept a JSON request
 body with `change_reason` so the appended `status='voided'` transaction version

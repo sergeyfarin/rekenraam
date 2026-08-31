@@ -298,7 +298,7 @@ func (r *PricingRepository) FXCoverageStartDates(ctx context.Context, bookID int
 			JOIN journal_entries je ON je.transaction_version_id = tv.id
 			JOIN posting_versions pv ON pv.journal_entry_id = je.id
 			JOIN commodities c ON c.id = pv.commodity_id
-			WHERE tv.book_id = ? AND tv.status IN ('draft', 'posted') AND c.kind = 'currency'
+			WHERE tv.book_id = ? AND tv.status = 'posted' AND c.kind = 'currency'
 		)
 		SELECT commodity_id, MIN(required_date)
 		FROM required_dates

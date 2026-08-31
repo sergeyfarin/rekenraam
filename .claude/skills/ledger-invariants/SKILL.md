@@ -59,9 +59,10 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
 - **Unsaved entry**: browser-only working copy, no DB row, triggers nothing
   (no FX coverage, no side effects). Not a status.
 - **`draft`**: a real persisted `transaction_versions` row, excluded from ledger
-  and reports. **System-only** — no user-facing "save as draft"; reserved for
-  future producers (import review, scheduled generation). Drafts do **not**
-  trigger background FX coverage — the coverage trigger fires on posted
+  and reports. **System-only** — no user-facing "save as draft". R9 scheduled
+  generation owns its review/discard surface; future producers need equivalent
+  surfaces. Drafts do **not** enqueue FX coverage or extend refresh planning
+  (ADR 0010, amended 2026-08-31) — the coverage trigger fires on posted
   versions only, so a promoted draft's foreign-currency dates get coverage at
   promotion (see `implemented.md`: "Drafts/previews do not trigger downloads").
 - **`posted`**: in the ledger and reports. Manual entry goes directly to posted.

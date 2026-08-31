@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-31 (R12a T-75a/T-74 complete; R9 slices 1–5 complete.
-T-76 and T-75b remain required later work.)
+Last updated: 2026-08-31 (R12a T-75a/T-74 complete; R9 acceptance complete;
+R10 planning next. T-76 and T-75b remain required later work.)
 
 ## Where things stand
 
@@ -87,10 +87,17 @@ localization item below).
 rate in `settings/currencies/+page.svelte` should truncate or round half-up.
 See `backlog.md` G-09.
 
-## Current initiative — R9 recurring transactions
+## Next initiative — R10 projected balances planning
 
-Plan: `docs/plans/recurring-transactions-plan.md`. Slices 1–5 are complete;
-slice 6 acceptance review is next. R9 is the app's first producer of
+Write the R10 plan before implementation: reuse the pure recurring enumerator,
+start with per-currency projections, and specify draft/materialized-occurrence
+handling to avoid double counting. Converted totals require explicit FX semantics;
+loan helpers remain optional follow-up. See `docs/roadmap.md`.
+
+## Completed — R9 recurring transactions
+
+Plan: `docs/plans/recurring-transactions-plan.md`. All six slices are complete;
+see `docs/reviews/r9-acceptance-review-2026-08-31.md`. R9 is the app's first producer of
 persisted draft transactions, so it is also where the
 conventions' promises about `draft` finally get kept.
 
@@ -125,7 +132,9 @@ conventions' promises about `draft` finally get kept.
       summary counts support the editor/nav. Startup/minute scheduling and
       public run-now are enabled now that review/post/discard is reachable.
       Bulk failure preserves completed posts and leaves the rest for review.
-- [ ] 6. Acceptance review, R2/R3 pattern.
+- [x] 6. **Done 2026-08-31.** Acceptance maps commitments and deferred scope,
+      closes T-82/T-83/T-84, verifies real drafts against reports and CSV/QIF,
+      and reconciles the FX policy with an explicit ADR 0010 amendment.
 
 Three decisions in the plan are worth knowing without reading it: generated
 entries are **drafts only** (no auto-post in v1 — a stale auto-posted rent
@@ -291,7 +300,7 @@ defect (a 404 about a run that exists, fixed with T-68):
 
 **Six further review passes remain**, listed in the review in value order:
 claim audit, money-path coverage, failure-branch walk, contract-vs-code diff,
-concurrency, and the Data screen's states. They remain unscheduled; R3a is complete and R9 is current. Use them as
+concurrency, and the Data screen's states. They remain unscheduled; R3a and R9 are complete; R10 planning is next. Use them as
 review input, with current findings tracked in `docs/backlog.md`.
 
 ## Previous initiative — R3a accessibility coverage — **complete 2026-08-24**

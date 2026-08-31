@@ -316,3 +316,26 @@ func TestRecurringSchedulerStartupCreatesAReachableDraft(t *testing.T) {
 	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM recurring_occurrences o JOIN current_transaction_versions v ON v.transaction_id=o.transaction_id WHERE o.template_id=? AND v.status='draft'`, template.ID).Scan(&count))
 	assert.Equal(t, 1, count)
 }
+
+func TestDowntimeCatchUpBeyondEnumerationCapMakesProgress(t *testing.T) {
+	f, s, input := recurringFixture(t)
+	input.Patch.Frequency = recurringTestPtr("daily")
+	input.Patch.DayOfMonth = NullablePatch[int]{}
+	input.Patch.LeadDays = recurringTestPtr(0)
+	template, err := s.CreateTemplate(context.Background(), input)
+	require.NoError(t, err)
+	s.now = func() time.Time { return time.Date(2038, 1, 1, 12, 0, 0, 0, time.UTC) }
+	for range 2 {
+		result, err := s.GenerateDue(context.Background(), GenerateRecurringInput{OwnerUserID: input.OwnerUserID})
+		require.NoError(t, err)
+		assert.Equal(t, 50, result.Generated)
+	}
+	assert.Equal(t, 100, recurringCounts(t, f.database)["transactions"])
+	partial, err := s.Template(context.Background(), input.OwnerUserID, template.ID)
+	require.NoError(t, err)
+	assert.Equal(t, template.Spec.GenerateFrom, partial.Spec.GenerateFrom)
+	var first, last string
+	require.NoError(t, f.database.QueryRow(`SELECT MIN(occurrence_date), MAX(occurrence_date) FROM recurring_occurrences`).Scan(&first, &last))
+	assert.Equal(t, "2026-08-30", first)
+	assert.Equal(t, "2026-12-07", last)
+}

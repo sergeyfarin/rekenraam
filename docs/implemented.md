@@ -216,7 +216,7 @@ ADR 0012 governs the durable split.
 | Manual/scheduled refresh runs + history | 🟡 | API only. |
 | **Pricing/FX management UI** | ⬜ | R11. |
 
-## Recurring transactions (R9) — 🟡 slices 1–5 complete; acceptance review next
+## Recurring transactions (R9) — ✅ complete; acceptance closed 2026-08-31
 
 | Capability | Status | Notes |
 |---|---|---|
@@ -226,7 +226,7 @@ ADR 0012 governs the durable split.
 | Generation, draft origin guard and discard linkage | ✅ | Atomic draft + occurrence + audit, blocked validation failures, a 50-occurrence global tick cap, owner-local dates, revision-guarded generation/watermarks, independent-pool idempotency, and audited skipped tombstones on draft discard (T-77). Browser draft creation is rejected with a code translated in six locales. Draft-only creation/edits never invalidate reconciliation; promotion remains guarded (T-78). Production startup/minute scheduling and authenticated public run-now are active; both create reviewable drafts only. |
 | Due inbox read model and occurrence preview | ✅ | `app/recurring_review.go`, `db/recurring_review.go`: cursor-paginated current drafts + blocked occurrences, exact debit/credit totals per commodity, one composed query per page. Generated rows reflect edits; archived/disabled templates do not hide outstanding review. Date-range preview merges the current schedule with persisted identities. Next-due reads exclude all materialized identities. Read-only unsaved preview returns up to five owner-local scheduled dates; summary counts are independent of pagination. |
 | Review actions and posting-impact preview | ✅ | Authenticated skip with reason and blocked retry; atomic occurrence/audit updates guarded by template revision and prior attempt audit ID. Archived blocked items remain skippable; retry requires enabled/unarchived. `GET /transactions/{id}/post/reconciliation-impact` validates the saved draft as posted and previews stored-position checkpoint impact. Posting still rechecks. Existing DELETE now discards edited drafts newest-version first (T-81), preserving the skipped identity and audits. OpenAPI, typed client and six-locale conflict message ship. |
-| Recurring screens | ✅ | `/app/recurring`: templates and paginated due inbox, all states, six locales, draft-count nav badge and mobile/keyboard review dialogs. Shared editor saves templates without transactions and edits drafts without posting, preserving exact amounts, tags and clearing legs. Pause/resume/archive, skip/retry, explicit post/discard and bulk post with per-draft reconciliation checks. Partial bulk failures keep completed posts and leave only remaining drafts for review. R9 acceptance review is next. |
+| Recurring screens | ✅ | `/app/recurring`: templates and paginated due inbox, all states, six locales, draft-count nav badge and mobile/keyboard review dialogs. Shared editor saves templates without transactions and edits drafts without posting, preserving exact amounts, tags and clearing legs. Pause/resume/archive, skip/retry, explicit post/discard and bulk post with per-draft reconciliation checks. Partial bulk failures keep completed posts and leave only remaining drafts for review. Acceptance closed T-82/T-83/T-84; see `docs/reviews/r9-acceptance-review-2026-08-31.md`. |
 
 ## Investments (Phase 6) — 🟦 User workflows shipped; R12a correction complete, provenance/correction follow-ups open
 
@@ -276,7 +276,7 @@ budgets, projected balances, loan/liability
 helpers, report snapshots, and pricing-management UI. CSV import, profiles and
 minimal rules are shipped. Reporting-currency conversion is shipped. Recurring
 templates, generation and dedicated review/discard screens are shipped.
-Production scheduling is active; R9 acceptance review remains next.
+Production scheduling and R9 acceptance are complete; R10 planning is next.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

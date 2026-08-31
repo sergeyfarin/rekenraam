@@ -152,3 +152,57 @@ func TestDiscardGeneratedDraftRollsBackTombstoneAndAuditOnDeleteFailure(t *testi
 	assert.Equal(t, "generated", status)
 	assert.Equal(t, draft.ID, id)
 }
+
+func TestGeneratedDraftDoesNotExtendFXCoverageUntilPosted(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	f := newExportFixture(t, handler)
+	eur := createCurrencyForSession(t, handler, f.sessionCookie, f.csrfToken, `{"code":"EUR","name":"Euro"}`)
+	account := createLedgerAccountNoCommodity(t, handler, f.sessionCookie, f.csrfToken, "Multi-currency receivable", "asset", "receivable")
+	pricing := db.NewPricingRepository(database)
+	before, err := pricing.FXCoverageStartDates(context.Background(), 1)
+	require.NoError(t, err)
+	var workBefore, workAfter int
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM background_work_items`).Scan(&workBefore))
+	draft := generateRecurringDraft(t, handler, database, f.sessionCookie, "2026-06-17", account.ID, f.groceries.ID, eur.ID, 10000)
+	after, err := pricing.FXCoverageStartDates(context.Background(), 1)
+	require.NoError(t, err)
+	assert.Equal(t, before, after, "draft must not extend planned coverage")
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM background_work_items`).Scan(&workAfter))
+	assert.Equal(t, workBefore, workAfter)
+	mutateTransaction(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(draft.ID)+"/post", `{}`, http.StatusOK)
+	after, err = pricing.FXCoverageStartDates(context.Background(), 1)
+	require.NoError(t, err)
+	assert.Contains(t, after, db.PricingCurrencyCoverageRecord{CommodityID: eur.ID, StartDate: "2026-06-17"})
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM background_work_items`).Scan(&workAfter))
+	assert.Greater(t, workAfter, workBefore)
+}
+
+func TestGeneratedDraftIsExcludedFromLedgerReportsAndExport(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	f := newExportFixture(t, handler)
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-16", posting(f.checking.ID, -1000, 2, f.usdID), posting(f.groceries.ID, 1000, 2, f.usdID)), http.StatusCreated)
+	paths := []string{
+		"/api/v1/reports/net-worth?start_date=2026-06-01&end_date=2026-06-30&bucket=month",
+		"/api/v1/reports/spending?start_date=2026-06-01&end_date=2026-06-30&group_by=category",
+		"/api/v1/reports/cashflow?start_date=2026-06-01&end_date=2026-06-30&bucket=month",
+	}
+	before := make([]string, len(paths))
+	for i, path := range paths {
+		before[i] = recurringAPIRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodGet, path, "", http.StatusOK).Body.String()
+	}
+	csvBefore := downloadLedgerCSV(t, handler, f.sessionCookie, "/api/v1/exports/ledger.csv").body
+	qifQuery := "?account_id=" + strconvFormatInt(f.checking.ID) + "&qif_date_layout=mdy"
+	qifBefore := downloadQIF(t, handler, f.sessionCookie, qifQuery, http.StatusOK).body
+	draft := generateRecurringDraft(t, handler, database, f.sessionCookie, "2026-06-17", f.checking.ID, f.groceries.ID, f.usdID, 10000)
+	for i, path := range paths {
+		assert.JSONEq(t, before[i], recurringAPIRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodGet, path, "", http.StatusOK).Body.String(), path)
+	}
+	assert.Equal(t, csvBefore, downloadLedgerCSV(t, handler, f.sessionCookie, "/api/v1/exports/ledger.csv").body)
+	assert.Equal(t, qifBefore, downloadQIF(t, handler, f.sessionCookie, qifQuery, http.StatusOK).body)
+	mutateTransaction(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(draft.ID)+"/post", `{}`, http.StatusOK)
+	for i, path := range paths {
+		assert.NotEqual(t, before[i], recurringAPIRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodGet, path, "", http.StatusOK).Body.String(), path)
+	}
+	assert.NotEqual(t, csvBefore, downloadLedgerCSV(t, handler, f.sessionCookie, "/api/v1/exports/ledger.csv").body)
+	assert.NotEqual(t, qifBefore, downloadQIF(t, handler, f.sessionCookie, qifQuery, http.StatusOK).body)
+}

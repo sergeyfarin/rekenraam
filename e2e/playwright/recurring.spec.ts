@@ -205,3 +205,34 @@ test('changed reconciliation impact stops posting and asks for a new review',asy
  await page.getByRole('dialog').getByRole('button',{name:'Confirm',exact:true}).click();
  }finally{await archive(page,template.id);}
 });
+
+
+test('editing a recurring template preserves payee, description and posting details', async ({page}) => {
+ const {csrfToken,currencyID}=await readyForLedger(page);
+ const name=`Template preservation ${Date.now()}`;
+ const account=await createCashAccount(page,csrfToken,name,currencyID);
+ const payee=await apiJSON<{id:number;name:string}>(page,'POST','/api/v1/payees',csrfToken,{name:`Payee ${Date.now()}`},[201]);
+ const template=await seedDue(page,name,account.id,currencyID,false);
+ try {
+ await apiJSON(page,'PATCH',`/api/v1/recurring/templates/${template.id}`,csrfToken,{payee_id:payee.id});
+ const before=await apiJSON<{postings:unknown[]}>(page,'GET',`/api/v1/recurring/templates/${template.id}`);
+ await page.goto('/app/recurring');
+ await page.getByRole('button',{name:'Templates',exact:true}).click();
+ await page.getByRole('article',{name,exact:true}).getByRole('button',{name:'Edit template'}).click();
+ const dialog=page.getByRole('dialog');
+ const payeeInput=dialog.getByPlaceholder('Search or enter payee name');
+ await expect(payeeInput).toHaveValue(payee.name);
+ await dialog.getByLabel('Description',{exact:true}).fill(`${name} edited`);
+ await payeeInput.fill('Changed payee');
+ await expect(payeeInput).toHaveValue('Changed payee');
+ await expect(dialog.getByLabel('Description',{exact:true})).toHaveValue(`${name} edited`);
+ await payeeInput.fill(payee.name);
+ await dialog.getByRole('option',{name:payee.name,exact:true}).click();
+ await dialog.getByRole('button',{name:'Save template',exact:true}).click();
+ await expect(dialog).not.toBeVisible();
+ const after=await apiJSON<{payee_id:number;description:string;postings:unknown[]}>(page,'GET',`/api/v1/recurring/templates/${template.id}`);
+ expect(after.payee_id).toBe(payee.id);
+ expect(after.description).toBe(`${name} edited`);
+ expect(after.postings).toEqual(before.postings);
+ } finally { await archive(page,template.id); }
+});

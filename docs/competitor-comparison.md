@@ -6,7 +6,7 @@ open-source personal finance software. The roadmap
 this file when the landscape shifts. Point-in-time deep dives:
 `docs/reviews/competitive-analysis-2026-07.md`. Last full revision: 2026-07-07;
 Rekenraam's code/status column reconciled 2026-08-31 (R3, R5, reporting currency,
-R12a, and R9 slices 1–3). External product features, prices, and positioning
+R12a, and completed R9). External product features, prices, and positioning
 claims remain the July research snapshot, **not newly verified market facts**;
 verify them separately before using them for purchasing or launch claims.
 
@@ -186,7 +186,7 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
    matching and retroactive application are not claimed. Recurring templates
    and generation followed in R9 slices 1–5. The localized review/discard UI
    now ships, so scheduled generation is active; entries remain drafts until
-   explicitly posted. The R9 acceptance review is next.
+   explicitly posted. R9 acceptance closed 2026-08-31; R10 planning is next.
 3. **Returns analytics (TWR/MWR, allocation, benchmark)** — expected by
    Ghostfolio/Portfolio Performance users; Rekenraam has better underlying
    data (exact lots + FX). Roadmap R13.

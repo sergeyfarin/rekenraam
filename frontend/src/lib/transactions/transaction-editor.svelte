@@ -242,7 +242,7 @@
       transactionDate = initialValues.transaction_date ?? todayISO();
       payeeID = initialValues.payee_id ?? undefined;
       payeeSearch = initialValues.payee_name ?? '';
-      initialPayeeName = payeeSearch;
+      initialPayeeName = initialValues.payee_name ?? '';
       description = initialValues.description ?? '';
       transactionKind = initialValues.transaction_kind ?? 'ordinary';
       noteMarkdown = initialValues.note_markdown ?? '';

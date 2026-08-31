@@ -6,8 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-08-31 (R12a T-75a/T-74 closed; R9 slices 1–5 complete;
-T-76 and T-75b remain scheduled separately).
+Last reviewed: 2026-08-31 (R12a T-75a/T-74 closed; R9 acceptance complete;
+R10 planning next; T-76 and T-75b remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -36,7 +36,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R7 | Trading 212 online connections + lots | ✅ | `docs/plans/trading212-import-plan.md` |
 | R7a | Daily-entry convenience | ⏸ | this file |
 | R8 | Budgets | ⏭ | this file |
-| R9 | Recurring transactions | ▶ | `docs/plans/recurring-transactions-plan.md` |
+| R9 | Recurring transactions | ✅ | `docs/plans/recurring-transactions-plan.md` |
 | R10 | Projected balances / forecasting | ⏭ | this file |
 | R11 | Pricing/FX management UI | ⏸ | this file |
 | R12 | Investments UI + gains reporting | ✅ | `docs/plans/investments-plan.md` |
@@ -237,7 +237,7 @@ it only ran first because "auth" sorted before every other filename. A Playwrigh
 project dependency now states that requirement.
 
 **Subsequent delivery:** the reporting-currency selector shipped 2026-08-26.
-The current initiative is R9; see the planning loop below.
+The next initiative is R10 planning; see the planning loop below.
 
 <details>
 <summary>R3a as planned</summary>
@@ -339,8 +339,9 @@ transactions are forecasting's data source, so R9 → R10 is a single coherent
 arc that exercises the producer-owned draft machinery once instead of twice,
 and it front-loads per-currency forecasting — the differentiator the parity
 lens below commits to protecting. Budgets are independent of both and slot in
-afterward with no rework. R9 slices 1–5 are complete; slice 6 acceptance
-review is next. The localized templates and due-inbox screens now expose
+afterward with no rework. R9 is complete, including acceptance on 2026-08-31
+(`docs/reviews/r9-acceptance-review-2026-08-31.md`); R10 planning is next.
+The localized templates and due-inbox screens now expose
 create/edit, skip/blocked retry, explicit post/discard and bulk review with
 reconciliation checks. Startup/minute generation and public run-now are active;
 every generated entry stays a draft until posted. Edited-draft discard retains
@@ -349,7 +350,7 @@ unpaginated summary counts support the editor and navigation badge.
 
 1. **R9 Recurring transactions:** templates and due-entry generation into the
    reserved producer-owned draft workflow. Planned 2026-08-29 in
-   `docs/plans/recurring-transactions-plan.md`: six slices, a pure
+   `docs/plans/recurring-transactions-plan.md`: all six slices accepted, a pure
    `internal/recur` enumerator that R10 reuses for projections, drafts-only
    generation with a dedicated review inbox, and the `status="draft"` origin
    guard the ledger-core plan deferred until a real producer existed.

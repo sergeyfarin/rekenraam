@@ -276,12 +276,12 @@ Goal: add power-user workflows after the core ledger is stable.
   Corrections supersede or void prior observations rather than mutating them in
   place.
 - FX coverage is demand-driven and restart-safe. Activating a currency or durably
-  entering an older transaction — a future producer-created `draft` or a `posted`
-  transaction — extends required provider history from the earliest needed date
-  through today. Unsaved entries (in-progress UI working copies with no database
-  row) and import previews do not trigger downloads; import rows trigger only
-  after the commit step persists them. Manual,
-  daily, and domain-triggered refreshes use durable background work that resumes
+  posting an older transaction extends required provider history from the
+  earliest needed date through today. Persisted producer drafts do not enqueue
+  or extend FX coverage; explicit posting does. Unsaved entries (in-progress UI
+  working copies with no database row) and import previews do not trigger
+  downloads; import rows trigger only after commit posts them. Manual, daily,
+  and domain-triggered refreshes use durable background work that resumes
   after network loss or an app restart.
 - Investment accounts for stocks and ETFs using the existing commodity,
   account, and ledger model.

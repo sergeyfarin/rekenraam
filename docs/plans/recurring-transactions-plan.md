@@ -1,7 +1,8 @@
 # Recurring Transactions Plan (R9)
 
-Status: **slices 1–5 shipped; slice 5 closed 2026-08-31. Production generation
-and public run-now are active. Slice 6 acceptance review is next.**
+Status: **complete; all six slices accepted 2026-08-31. Production generation
+and public run-now are active. R10 planning is next.**
+Acceptance evidence: `docs/reviews/r9-acceptance-review-2026-08-31.md`.
 `docs/roadmap.md` owns that sequence. Written 2026-08-29,
 immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
 `internal/recur`, `backend/migrations/0003_recurring.sql`, and
@@ -339,8 +340,8 @@ was satisfied in slice 5 on 2026-08-31: startup and minute ticks now run from
 
 1. Read the owner's `user_preferences.time_zone`; `localToday` is today in it.
 2. For each enabled, unarchived template: `window = [generate_from,
-   localToday + lead_days]`, `due = recur.Occurrences(spec, window...)` minus
-   the dates that already have an occurrence row.
+   min(localToday + lead_days, generate_from + 3999 days)]`,
+   `due = recur.Occurrences(spec, window...)` minus dates with an occurrence row.
 3. For each due date, in one transaction: build the `TransactionSpec` from the
    template, create the transaction with `status="draft"`, `OriginType=
    "scheduled"`, and insert the `recurring_occurrences` row. One transaction, so
@@ -349,8 +350,8 @@ was satisfied in slice 5 on 2026-08-31: startup and minute ticks now run from
 4. On a validation failure — archived account, closed account, retired
    commodity, unbalanced template — write a `blocked` row with the message and
    move on. No retry, no log line per minute.
-5. Advance `generate_from` to `localToday + lead_days + 1` once every date in
-   the window has a row — `generated` or `blocked` both count, because both are
+5. Advance `generate_from` to the bounded window end plus one day once every
+   date in the window has a row — `generated` or `blocked` both count, because both are
    recorded. A date left unrecorded by a crash or a per-tick cap holds the
    watermark where it is, and the next tick picks it up.
 
@@ -359,8 +360,10 @@ are the correctness mechanism; the watermark only keeps a tick from
 re-enumerating a decade of history to discover it has nothing to do.
 
 Per-tick materialization is capped (`maxOccurrencesPerTick`, 50) so a long
-outage resolves over a few ticks instead of one long write transaction. Losing
-the race on the unique constraint is a normal outcome, not an error — same
+outage resolves over multiple ticks rather than unbounded work in one tick.
+Enumeration is also bounded to 4,000 calendar days, with at most one occurrence
+per day; an outage beyond the pure enumerator cap still makes progress (T-82).
+Losing the race on the unique constraint is a normal outcome, not an error — same
 handling as `db.ErrBackupOccurrenceExists`.
 
 **Template-edit races:** materialization and watermark advancement must verify
@@ -378,7 +381,9 @@ disable/archive, and independent-pool generation races.
 correct and is left alone: the due inbox shows each amount in its own commodity,
 never a converted total, so there is nothing on that surface a missing rate
 could make wrong. Coverage happens at post, as it does for every other
-transaction.
+transaction. The refresh planner also excludes draft dates. ADR 0010 was
+explicitly amended at acceptance to replace its earlier speculative draft-FX
+policy with this implemented rule (T-83).
 
 **Reconciliation.** A draft is not in the ledger, so generating one can never
 invalidate a checkpoint. *Posting* one runs the ordinary period-impact check —
@@ -653,11 +658,14 @@ either.
    reconciliation impacts stop posting and show a translated request for a
    fresh review (the named browser regression first caught a generic error).
    Full backend formatting/vet/race checks, frontend type checks and 355 unit
-   tests, and the production build with 18 browser tests pass. The broader
-   commitment-by-commitment acceptance review remains slice 6.
-6. **Acceptance review.** Every commitment above checked against the code, every
-   deferred item answered yes or no with a reason, and any planning claim the
-   implementation disproved corrected in place — the R2/R3 pattern.
+   tests, and the production build with 18 browser tests passed at slice 5 close.
+   Slice 6 below records the broader commitment-by-commitment review.
+6. **Acceptance review — done 2026-08-31.**
+   `docs/reviews/r9-acceptance-review-2026-08-31.md` maps commitments, tests,
+   decisions and exclusions. Closed T-82 (long-outage enumeration), T-83 (FX
+   draft demand and contradictory policy), and T-84 (template payee edits
+   resetting the form). Added real-producer report/CSV/QIF isolation evidence.
+   No automatic posting, forecasts or other deferred scope was added.
 
 ## Validation and tests
 
@@ -669,15 +677,19 @@ Beyond the enumeration tests in slice 1, these are required and named:
   winner, mirroring `import_fetch_worker_test.go`.
 - `TestCreatingATemplateWithAPastStartDateBackfillsNothing` — D2, the one that
   keeps a phase anchor from becoming eighty-eight drafts.
-- `TestDowntimeCatchUpGeneratesEveryMissedOccurrence` — the same watermark from
-  the other side.
-- `TestArchivedAccountBlocksTheOccurrenceWithoutRetrying` — a `blocked` row, one
-  log line, no second attempt.
+- `TestRecurringCatchUpCapHoldsWatermarkUntilWindowComplete` — 64 missed dates
+  across two ticks, with no loss or premature watermark advancement.
+- `TestDowntimeCatchUpBeyondEnumerationCapMakesProgress` — an outage beyond
+  4,000 dates makes bounded progress instead of failing forever.
+- `TestRecurringGenerationRevalidatesAccountsAtOccurrenceDate` and
+  `TestRecurringValidationFailureIsBlockedOnceAndDoesNotStopOtherTemplates` —
+  a blocked row with an audit event, no repeated attempt or per-minute log.
 - `TestBlockedOccurrenceRetriesOnlyWhenAskedTo`.
 - `TestGeneratedDraftIsExcludedFromLedgerReportsAndExport` — the invariant that
   makes D1 safe, asserted against the report read models and the export, not
   only against the transactions list.
-- `TestPostingAGeneratedDraftInsideACheckpointRequiresOverride`.
+- `TestPostDraftTransactionIntoReconciledPeriodRequiresOverride` and
+  `TestRecurringPostPreviewUsesStoredSameDayPositionsAndNamesCheckpoints`.
 - `TestBrowserApiCannotCreateADraft`.
 - `TestSkippingAFutureOccurrenceStopsItGenerating`.
 - `TestArchivingATemplateLeavesItsGeneratedDraftsAlone`.
@@ -688,7 +700,8 @@ Beyond the enumeration tests in slice 1, these are required and named:
 
 ## Out of scope, with reasons
 
-- **Auto-post** — D1. Revisited at acceptance.
+- **Auto-post** — D1. Retained outside v1 at acceptance; no usage evidence
+  justifies bypassing explicit review.
 - **Weekend and holiday shifting** — D5.
 - **Variable and estimated amounts** — D6; may return as an R10 concept.
 - **Loan amortization schedules** — the roadmap already puts loan helpers in R10
@@ -721,3 +734,8 @@ frozen decision.
 3. **Should `run-now` be user-visible or a test seam?** — recommend visible, for
    the same reason "back up now" is: a schedule you cannot trigger is a schedule
    you cannot trust.
+
+
+Acceptance retained all three owner defaults: **5 lead days**, a **draft-only nav
+badge** (blocked counts remain separate in the inbox), and visible **Generate due
+drafts**. These are reviewed defaults, not claims from user-usage research.

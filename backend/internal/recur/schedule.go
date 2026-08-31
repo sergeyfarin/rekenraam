@@ -30,9 +30,8 @@ const (
 )
 
 // MaxOccurrencesPerWindow bounds a single enumeration. A caller asking for a
-// window that would produce more than this has a bug — the generator's window
-// is days wide, and R10's is months — and unbounded growth in a slice built
-// from user-controlled input is not something to discover in production.
+// wider window must split it into bounded windows, as the generator does for
+// downtime catch-up. User-controlled input must not cause unbounded allocation.
 const MaxOccurrencesPerWindow = 4000
 
 var (

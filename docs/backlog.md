@@ -1347,6 +1347,51 @@ clean foreign keys. Existing discard rollback and posted-discard protection
 cases remain in the suite; the inbox pagination test also exercises an edited
 draft disappearing after discard.
 
+## R9 acceptance findings — closed 2026-08-31
+
+### T-82 Long downtime permanently exceeds the recurrence enumeration cap `[x]`
+
+**File:** `backend/internal/app/recurring_generation.go`, `GenerateDue`.
+Enumeration ran over the whole downtime window before applying the 50-write
+cap. More than 4,000 daily dates returned `ErrWindowTooWide` every tick without
+progress and prevented later templates in that sweep from running.
+
+**Fixed:** enumerate at most 4,000 inclusive calendar days, retaining the
+50-materialization cap, occurrence idempotency and revision-guarded watermark.
+Advance only past a fully handled bounded window. The pure enumerator's safety
+cap remains intact. `TestDowntimeCatchUpBeyondEnumerationCapMakesProgress`
+first failed with the cap error; it now proves two 50-draft ticks with exactly
+the oldest 100 dates and no premature watermark advancement. The existing
+64-date catch-up test proves completion advances the watermark.
+
+### T-83 FX refresh planning includes unposted producer drafts `[x]`
+
+**File:** `backend/internal/db/pricing.go`, `FXCoverageStartDates`.
+The outbox trigger excluded drafts, but manual/scheduled coverage planning
+included draft journal dates. ADR 0010 and the requirements still anticipated
+future draft downloads, conflicting with R9's per-currency review policy.
+
+**Fixed:** the planner uses posted transaction dates only; active-account demand
+is unchanged. Explicitly amended ADR 0010 and reconciled requirements and
+conventions. `TestGeneratedDraftDoesNotExtendFXCoverageUntilPosted` first
+failed because a real EUR draft added coverage. It now proves neither coverage
+nor queue growth until posting, then both EUR coverage and queued work. The
+fixture uses a multi-currency receivable without a default currency so account
+demand cannot hide the error.
+
+### T-84 Typing a template payee resets other unsaved edits `[x]`
+
+**File:** `frontend/src/lib/transactions/transaction-editor.svelte`, template
+initialization effect. Assigning `initialPayeeName` from reactive `payeeSearch`
+made every payee edit reinitialize the template form from its saved snapshot.
+
+**Fixed:** initialize both values directly from the supplied snapshot. The
+browser regression `editing a recurring template preserves payee, description
+and posting details` first exposed the old payee and description returning
+while typing. It now checks typing, selecting the existing payee, saving the
+changed description, and exact preservation of saved posting details. The
+pattern search found no other matching initialization assignment.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

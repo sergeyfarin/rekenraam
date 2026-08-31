@@ -6,7 +6,7 @@ Accepted
 
 ## Date
 
-2026-06-20
+2026-06-20; amended 2026-08-31 at R9 acceptance.
 
 ## Context
 
@@ -57,17 +57,17 @@ FX coverage is demand-driven:
 
 - A currency becomes active when an active account uses it. Creating, updating,
   or reopening an account in a currency enqueues FX coverage work immediately.
-- Creating or updating a durable transaction enqueues coverage from its earliest
+- Creating or updating a `posted` transaction enqueues coverage from its earliest
   journal-entry date for every currency involved. Manual entry saves directly as
-  `posted`. A future producer-created `draft` also enqueues coverage; starting the
-  download early improves its review workflow and does not make it affect ledger
-  balances or reports. No current workflow creates drafts.
+  `posted`. Producer-created drafts do not enqueue or extend required coverage;
+  explicit promotion to `posted` does. R9 review shows exact per-currency amounts
+  and needs no converted draft totals.
 - Import preview rows belong in dedicated import staging, not in the transaction
   ledger as drafts. Previewing an import does not enqueue FX work; committing
   selected rows creates transactions and does enqueue it.
 - For each active currency relative to the configured FX base, required coverage
   begins at the earliest of the active account's opening date and any durable
-  draft or posted journal-entry date using that currency, and extends through
+  posted journal-entry date using that currency, and extends through
   today in the book owner's time zone.
 - Refresh planning compares required coverage with stored non-voided observations
   and schedules only missing dates. Existing observations make repeated work
@@ -96,3 +96,15 @@ FX coverage is demand-driven:
 - The generic queue may serve later background workflows, but each new work kind
   still requires an explicit idempotency and retry policy. It is not permission to
   move arbitrary business logic out of application services.
+
+## Amendment — R9 acceptance, 2026-08-31
+
+The original decision anticipated downloading FX for future producer drafts.
+R9 now supplies that producer and reviews exact amounts separately per currency;
+it does not need FX preparation before posting. This amendment deliberately
+replaces the earlier draft-coverage policy with posted-only transaction demand,
+matching the posted-only outbox trigger. The refresh planner now applies the
+same rule (T-83), so a manual or scheduled refresh cannot indirectly introduce
+draft demand. Active-account demand is unchanged. Any future converted draft
+review must explicitly revisit this decision. See
+`docs/reviews/r9-acceptance-review-2026-08-31.md`.
