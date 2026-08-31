@@ -117,6 +117,10 @@ func (s *RecurringService) GenerateDue(ctx context.Context, input GenerateRecurr
 }
 
 func (s *RecurringService) materializeOccurrence(ctx context.Context, input GenerateRecurringInput, template RecurringTemplate, date string) (bool, error) {
+	return s.materializeOccurrenceAttempt(ctx, input, template, date, nil)
+}
+
+func (s *RecurringService) materializeOccurrenceAttempt(ctx context.Context, input GenerateRecurringInput, template RecurringTemplate, date string, expectedAuditID *int64) (bool, error) {
 	at := s.now().UTC().Format(time.RFC3339)
 	occurrence := db.CreateRecurringOccurrenceParams{BookID: BookID, TemplateID: template.ID, OccurrenceDate: date, MaterializedAt: at}
 	// Reuse the full template and transaction validators at the actual date,
@@ -149,11 +153,19 @@ func (s *RecurringService) materializeOccurrence(ctx context.Context, input Gene
 		occurrence.ErrorSummary = err.Error()
 		draft = nil
 	}
-	return draft == nil, s.repository.MaterializeRecurringOccurrence(ctx, template.Revision, occurrence, draft, db.AuditEventParams{
+	audit := db.AuditEventParams{
 		BookID: BookID, ActorUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
 		OccurredAt: at, OriginType: "scheduled", Operation: "recurring.occurrence.block", Reason: "recurring occurrence failed validation",
 		MetadataJSON: fmt.Sprintf(`{"template_id":%d,"occurrence_date":%q}`, template.ID, date),
-	})
+	}
+	if expectedAuditID != nil {
+		audit.OriginType, audit.Operation, audit.Reason = "browser_api", "recurring.occurrence.retry", "retry blocked recurring occurrence"
+		if draft != nil {
+			draft.Operation, draft.ChangeReason = audit.Operation, audit.Reason
+		}
+		return draft == nil, s.repository.RetryRecurringOccurrence(ctx, template.Revision, occurrence, draft, audit, *expectedAuditID)
+	}
+	return draft == nil, s.repository.MaterializeRecurringOccurrence(ctx, template.Revision, occurrence, draft, audit)
 }
 
 // StartScheduler is intentionally NOT wired in command.go. Activation waits

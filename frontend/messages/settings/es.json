@@ -1,4 +1,5 @@
 {
+  "api_error_recurring_occurrence_already_materialized": "Esta ocurrencia ya se ha procesado o modificado. Recarga la vista antes de revisarla de nuevo.",
   "api_error_recurring_template_unbalanced": "La plantilla de transacción periódica debe estar equilibrada para cada instrumento.",
   "api_error_recurring_schedule_invalid": "La programación periódica no es válida. Revise las fechas y los campos de repetición.",
   "api_error_recurring_template_archived": "Esta plantilla de transacción periódica está archivada y no se puede modificar.",

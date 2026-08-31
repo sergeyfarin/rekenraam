@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-31 (R12a T-75a/T-74 complete; R9 slices 1–3 complete.
+Last updated: 2026-08-31 (R12a T-75a/T-74 complete; R9 slices 1–4 complete.
 T-76 and T-75b remain required later work.)
 
 ## Where things stand
@@ -89,8 +89,8 @@ See `backlog.md` G-09.
 
 ## Current initiative — R9 recurring transactions
 
-Plan: `docs/plans/recurring-transactions-plan.md`. Slices 1–3 are complete;
-slice 4 is next. R9 is the app's first producer of
+Plan: `docs/plans/recurring-transactions-plan.md`. Slices 1–4 are complete;
+slice 5 is next. R9 is the app's first producer of
 persisted draft transactions, so it is also where the
 conventions' promises about `draft` finally get kept.
 
@@ -114,10 +114,13 @@ conventions' promises about `draft` finally get kept.
       Tests cover duplicate races across independent pools and schedule edits,
       rollback, owner-local dates, and draft-only reconciliation behavior (T-78).
       Production scheduling and public run-now remain off until slice 5.
-- [ ] 4. Due inbox read model and review actions (skip, blocked retry,
-      explicit promotion-impact preview; public run-now remains gated to slice 5).
+- [x] 4. **Done 2026-08-31.** Paginated due inbox, merged occurrence preview,
+      audited skip and blocked retry, skipped-date-aware next-due reads, and
+      explicit promotion-impact preview. Edited never-posted draft discard is
+      fixed (T-81); public run-now remains gated to slice 5.
 - [ ] 5. Frontend `/app/recurring` — templates and due inbox, all four screen
-      states, six locales, an `[acceptance]`-tagged browser case.
+      states, six locales, an `[acceptance]`-tagged browser case. Then activate
+      the scheduler and public run-now only when review/discard is reachable.
 - [ ] 6. Acceptance review, R2/R3 pattern.
 
 Three decisions in the plan are worth knowing without reading it: generated

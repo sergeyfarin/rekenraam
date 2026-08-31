@@ -1,0 +1,71 @@
+post:
+  summary: Retry one blocked recurring occurrence
+  description: >
+    Requires an enabled unarchived template. Revalidates the current template at the original occurrence date and atomically replaces the captured blocked attempt, preserving its identity and prior audit. Returns blocked=1 if validation still fails, generated=1 if a draft was created. No other date is generated; the watermark is unchanged. This is not public run-now.
+  parameters:
+    - in: path
+      name: template_id
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/RetryRecurringOccurrenceRequest'
+  responses:
+    "200":
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RecurringGenerationResponse'
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "404":
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "409":
+      description: State changed or action not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "422":
+      description: Exact quantity overflow
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "503":
+      description: Database temporarily busy
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'

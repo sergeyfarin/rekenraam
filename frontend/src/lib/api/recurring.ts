@@ -88,3 +88,71 @@ export async function archiveRecurringTemplate(templateID: number, csrfToken: st
     throw toNetworkError(error);
   }
 }
+
+export type RecurringDueResponse = components['schemas']['RecurringDueResponse'];
+export type RecurringOccurrencesResponse = components['schemas']['RecurringOccurrencesResponse'];
+export type RecurringGenerationResponse = components['schemas']['RecurringGenerationResponse'];
+export const recurringDueQueryKey = ['api', 'recurring', 'due'] as const;
+
+export function recurringDueInfiniteQueryOptions(limit = 50) {
+  return {
+    queryKey: [...recurringDueQueryKey, { limit }] as const,
+    initialPageParam: '',
+    queryFn: ({ pageParam }: { pageParam: string }) => getRecurringDue(pageParam || undefined, limit),
+    getNextPageParam: (lastPage: RecurringDueResponse) => lastPage.next_cursor || null,
+    staleTime: 5_000
+  };
+}
+
+export async function getRecurringDue(cursor?: string, limit = 50): Promise<RecurringDueResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/recurring/due', {
+      params: { query: { cursor, limit } }
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function getRecurringOccurrences(templateID: number, from: string, to: string): Promise<RecurringOccurrencesResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/recurring/templates/{template_id}/occurrences', {
+      params: { path: { template_id: templateID }, query: { from, to } }
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function skipRecurringOccurrence(templateID: number, occurrenceDate: string, reason: string, csrfToken: string): Promise<void> {
+  try {
+    const { error, response } = await apiClient.POST('/api/v1/recurring/templates/{template_id}/skip', {
+      params: { path: { template_id: templateID }, header: { 'X-CSRF-Token': csrfToken } },
+      body: { occurrence_date: occurrenceDate, reason }
+    });
+    if (!response.ok) throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function retryRecurringOccurrence(templateID: number, occurrenceDate: string, csrfToken: string): Promise<RecurringGenerationResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/recurring/templates/{template_id}/retry', {
+      params: { path: { template_id: templateID }, header: { 'X-CSRF-Token': csrfToken } },
+      body: { occurrence_date: occurrenceDate }
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}

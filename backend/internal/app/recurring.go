@@ -426,6 +426,12 @@ func recurringTemplateFromRecord(record db.RecurringTemplateRecord) (RecurringTe
 		if err != nil {
 			return RecurringTemplate{}, fmt.Errorf("read next recurring date: %w", err)
 		}
+		for next != "" && record.MaterializedDates[next] {
+			next, _, err = recur.Next(recurringSchedule(spec), next)
+			if err != nil {
+				return RecurringTemplate{}, fmt.Errorf("read next unmaterialized recurring date: %w", err)
+			}
+		}
 		result.NextDueOn = next
 	}
 	return result, nil
@@ -433,6 +439,8 @@ func recurringTemplateFromRecord(record db.RecurringTemplateRecord) (RecurringTe
 
 func mapRecurringError(err error) error {
 	switch {
+	case errors.Is(err, db.ErrRecurringOccurrenceExists):
+		return ErrRecurringOccurrenceMaterialized
 	case errors.Is(err, db.ErrRecurringTemplateNotFound):
 		return ErrRecurringTemplateNotFound
 	case errors.Is(err, db.ErrRecurringTemplateArchived):

@@ -38,17 +38,18 @@ func isRecurringOccurrenceConflict(err error) bool {
 // them, because the repository holds no business rules and the enumerator
 // holds no SQL.
 type RecurringTemplateRecord struct {
-	ID              int64
-	Revision        int64
-	BookID          int64
-	Name            string
-	Enabled         bool
-	ArchivedAt      sql.NullString
-	TransactionKind string
-	PayeeID         sql.NullInt64
-	PayeeName       sql.NullString
-	Description     string
-	NoteMarkdown    string
+	MaterializedDates map[string]bool
+	ID                int64
+	Revision          int64
+	BookID            int64
+	Name              string
+	Enabled           bool
+	ArchivedAt        sql.NullString
+	TransactionKind   string
+	PayeeID           sql.NullInt64
+	PayeeName         sql.NullString
+	Description       string
+	NoteMarkdown      string
 
 	Frequency      string
 	IntervalCount  int
@@ -495,6 +496,29 @@ func listRecurringTemplates(ctx context.Context, queryer queryer, params ListRec
 	if err := tagRows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate recurring template tags: %w", err)
 	}
+	dateRows, err := queryer.QueryContext(ctx, `SELECT o.template_id, o.occurrence_date FROM recurring_occurrences o
+ JOIN recurring_templates t ON t.id = o.template_id AND t.book_id = o.book_id
+ WHERE o.book_id = ? AND o.occurrence_date >= t.generate_from`, params.BookID)
+	if err != nil {
+		return nil, fmt.Errorf("read materialized recurring dates: %w", err)
+	}
+	defer dateRows.Close()
+	for dateRows.Next() {
+		var id int64
+		var date string
+		if err := dateRows.Scan(&id, &date); err != nil {
+			return nil, err
+		}
+		if record := byID[id]; record != nil {
+			if record.MaterializedDates == nil {
+				record.MaterializedDates = map[string]bool{}
+			}
+			record.MaterializedDates[date] = true
+		}
+	}
+	if err := dateRows.Err(); err != nil {
+		return nil, err
+	}
 	return records, nil
 }
 
@@ -540,17 +564,18 @@ func requireRecurringTemplate(ctx context.Context, tx *sql.Tx, bookID int64, tem
 // RecurringOccurrenceRecord is one date the generator has acted on. There is
 // no 'pending' status: a row exists because something happened to that date.
 type RecurringOccurrenceRecord struct {
-	ID             int64
-	BookID         int64
-	TemplateID     int64
-	OccurrenceDate string
-	Status         string
-	TransactionID  sql.NullInt64
-	ErrorSummary   string
-	SkipReason     string
-	MaterializedAt string
-	CreatedAt      string
-	UpdatedAt      string
+	LastAuditEventID sql.NullInt64
+	ID               int64
+	BookID           int64
+	TemplateID       int64
+	OccurrenceDate   string
+	Status           string
+	TransactionID    sql.NullInt64
+	ErrorSummary     string
+	SkipReason       string
+	MaterializedAt   string
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 type CreateRecurringOccurrenceParams struct {
@@ -595,13 +620,13 @@ func (r *RecurringRepository) RecurringOccurrenceByID(ctx context.Context, bookI
 	var record RecurringOccurrenceRecord
 	err := r.database.QueryRowContext(ctx, `
 		SELECT id, book_id, template_id, occurrence_date, status, transaction_id,
-		       error_summary, skip_reason, materialized_at, created_at, updated_at
+		       error_summary, skip_reason, materialized_at, created_at, updated_at, last_audit_event_id
 		FROM recurring_occurrences
 		WHERE book_id = ? AND id = ?
 	`, bookID, occurrenceID).Scan(
 		&record.ID, &record.BookID, &record.TemplateID, &record.OccurrenceDate,
 		&record.Status, &record.TransactionID, &record.ErrorSummary,
-		&record.SkipReason, &record.MaterializedAt, &record.CreatedAt, &record.UpdatedAt,
+		&record.SkipReason, &record.MaterializedAt, &record.CreatedAt, &record.UpdatedAt, &record.LastAuditEventID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RecurringOccurrenceRecord{}, ErrNotFound
@@ -650,7 +675,7 @@ func (r *RecurringRepository) ListRecurringOccurrences(ctx context.Context, book
 	}
 	rows, err := r.database.QueryContext(ctx, `
 		SELECT id, book_id, template_id, occurrence_date, status, transaction_id,
-		       error_summary, skip_reason, materialized_at, created_at, updated_at
+		       error_summary, skip_reason, materialized_at, created_at, updated_at, last_audit_event_id
 		FROM recurring_occurrences
 		WHERE book_id = ? AND template_id = ?
 		ORDER BY occurrence_date DESC, id DESC
@@ -670,7 +695,7 @@ func scanRecurringOccurrences(rows *sql.Rows) ([]RecurringOccurrenceRecord, erro
 		if err := rows.Scan(
 			&record.ID, &record.BookID, &record.TemplateID, &record.OccurrenceDate,
 			&record.Status, &record.TransactionID, &record.ErrorSummary,
-			&record.SkipReason, &record.MaterializedAt, &record.CreatedAt, &record.UpdatedAt,
+			&record.SkipReason, &record.MaterializedAt, &record.CreatedAt, &record.UpdatedAt, &record.LastAuditEventID,
 		); err != nil {
 			return nil, fmt.Errorf("scan recurring occurrence: %w", err)
 		}

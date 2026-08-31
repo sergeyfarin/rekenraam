@@ -67,6 +67,45 @@ func (s *TransactionService) ReconciliationImpactForUpdate(ctx context.Context, 
 	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
 }
 
+// ReconciliationImpactForPost validates the saved draft as posted and uses its
+// existing posting positions, exactly as promotion does. This is advisory;
+// posting always rechecks the guard and does not accept a preview as authority.
+func (s *TransactionService) ReconciliationImpactForPost(ctx context.Context, ownerID, transactionID int64) (ReconciliationImpact, error) {
+	if ownerID <= 0 || transactionID <= 0 {
+		return ReconciliationImpact{}, ValidationError{Message: "owner and transaction ids are required"}
+	}
+	current, err := s.repository.TransactionByID(ctx, BookID, transactionID)
+	if err != nil {
+		return ReconciliationImpact{}, mapTransactionDBError(err)
+	}
+	if current.DeletedAt.Valid {
+		return ReconciliationImpact{}, ErrTransactionDeleted
+	}
+	if current.Status == "voided" {
+		return ReconciliationImpact{}, ErrTransactionVoided
+	}
+	if current.Status == "posted" {
+		return ReconciliationImpact{}, nil
+	}
+	if err := s.rejectInvestmentLinkedMutation(ctx, transactionID); err != nil {
+		return ReconciliationImpact{}, err
+	}
+	_, err = s.cleanTransactionSpec(ctx, transactionInputFromTransaction(toTransaction(current)), cleanTransactionOptions{
+		ForcedStatus: "posted", ExistingLineKeys: lineKeySet(current), ExistingPostings: existingPostingStateSet(current),
+	})
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	refs, err := s.periodScopedRefsFromRecord(ctx, current)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	if err := s.enrichCheckpointRefs(ctx, refs); err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
+}
+
 // periodScopedRefsFromTransaction returns CheckpointInvalidationRefs for all
 // postings in the transaction that fall within the period of an active
 // reconciliation checkpoint (the period-scoped rule from docs/conventions.md).

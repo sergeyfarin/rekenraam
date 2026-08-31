@@ -1,0 +1,66 @@
+get:
+  summary: Preview recurring occurrences
+  description: >
+    Merges the schedule at or beyond generate_from with persisted identities, including dates preserved through schedule edits. Scheduled rows are computed, not persisted; disabled templates still show their configured schedule. Required inclusive range may span at most 367 dates.
+  parameters:
+    - in: path
+      name: template_id
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    - in: query
+      name: from
+      required: true
+      schema:
+        type: string
+        format: date
+    - in: query
+      name: to
+      required: true
+      schema:
+        type: string
+        format: date
+  responses:
+    "200":
+      description: Success
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RecurringOccurrencesResponse'
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "404":
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "409":
+      description: State changed or action not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "422":
+      description: Exact quantity overflow
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "503":
+      description: Database temporarily busy
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'

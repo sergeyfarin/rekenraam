@@ -283,7 +283,7 @@ RecurringTemplateResponse:
     next_due_on:
       type: [string, 'null']
       format: date
-      description: First scheduled date at or beyond the generation watermark; null when disabled, archived, or exhausted.
+      description: First unmaterialized scheduled date at or beyond the generation watermark (skipped/generated/blocked identities are excluded); null when disabled, archived, or exhausted.
     archived_at:
       type: [string, 'null']
       format: date-time

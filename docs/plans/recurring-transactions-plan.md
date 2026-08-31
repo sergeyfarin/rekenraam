@@ -1,6 +1,6 @@
 # Recurring Transactions Plan (R9)
 
-Status: **slices 1–3 shipped; slice 3 closed 2026-08-31. Slice 4 is next;
+Status: **slices 1–4 shipped; slice 4 closed 2026-08-31. Slice 5 is next;
 production generation stays off until slice 5 delivers review/discard.**
 `docs/roadmap.md` owns that sequence. Written 2026-08-29,
 immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
@@ -384,9 +384,10 @@ a backdated occurrence inside an active checkpoint returns
 reconciliation-override-required, and the inbox previews the named checkpoints
 before the user confirms. The existing checkpoint machinery is reusable, but
 slice 3 verified that the current update-preview route deliberately preserves
-draft status and therefore previews an edit, not promotion. Slice 4 must add an
-explicit posting preview using the draft's stored posting positions; it must
-not treat the empty draft-edit impact as permission to post.
+draft status and therefore previews an edit, not promotion. Slice 4 now supplies
+`GET /transactions/{id}/post/reconciliation-impact`, validating the saved draft
+as posted and using its stored posting positions. The empty draft-edit impact
+is never permission to post; posting rechecks the live checkpoint guard.
 
 ## The draft origin guard
 
@@ -423,12 +424,45 @@ New paths under `/api/v1/recurring/`, each with its own file in
 | `POST` | `/recurring/templates/{id}/archive` | archive; occurrences and their drafts survive |
 | `GET` | `/recurring/templates/{id}/occurrences` | `from`/`to`; enumerated future merged with materialized rows |
 | `POST` | `/recurring/templates/{id}/skip` | `{occurrence_date, reason}` — writes a `skipped` row, before or after the date |
+| `POST` | `/recurring/templates/{id}/retry` | explicitly retry one blocked occurrence with `{occurrence_date}` |
 | `POST` | `/recurring/templates/{id}/run-now` | materialize what is due now, the "back up now" analogue |
 | `GET` | `/recurring/due` | the review inbox read model |
 
-`GET /recurring/due` returns generated drafts that are still drafts, plus
-blocked occurrences, each with template name, occurrence date, and the amounts
-per commodity — one request, because the inbox is one screen.
+**Slice-4 review contract (shipped 2026-08-31):**
+
+- `GET /recurring/due` returns generated transactions still in draft plus blocked
+  occurrences, ordered by `(occurrence_date, id)`. Each item includes template
+  name/enabled/archive state, current description/payee, transaction ID, error
+  detail, and exact per-commodity debit and signed credit totals. Generated rows
+  use the edited draft, not the template; blocked rows use the current template.
+  Separate debit/credit totals make incomplete draft edits visible. No FX total.
+- One composed request per page, default 50 and maximum 200. Follow `next_cursor`
+  until null; refresh from page one to discover newly added earlier occurrences.
+  Posted/voided/deleted/skipped rows leave the inbox. Disabling or archiving a
+  template never hides its outstanding review items.
+- `GET /templates/{id}/occurrences` requires inclusive `from`/`to` dates, at most
+  367 dates. Computed `scheduled` dates start at the watermark and merge with
+  persisted identities, including old dates preserved through schedule edits.
+  Disabled/archived templates can still preview their configured schedule;
+  reads do not generate drafts or persist speculative rows.
+- Skip requires a non-empty reason. A new identity must be a current schedule
+  date at/after the watermark on an unarchived template. An existing blocked
+  identity can be skipped even after archive or schedule change. Generated
+  drafts use the existing transaction DELETE route; duplicate skips conflict.
+- Retry requires an enabled, unarchived template and an existing blocked
+  identity. It uses the current template at the original occurrence date even
+  if the schedule has since changed; it never generates other dates or advances
+  the watermark. Another validation failure returns `blocked=1`; success returns
+  `generated=1`. The original occurrence ID and prior audit events survive.
+  Captured template revision and blocked-attempt audit ID guard the atomic write
+  against concurrent edits, skips, and retries, including independent pools.
+- Posting/discard keep the existing transaction routes. The new read-only
+  `GET /transactions/{id}/post/reconciliation-impact` validates the saved draft
+  as posted and names the affected checkpoints using stored posting positions.
+  It never posts or invalidates anything; posting always rechecks current state.
+- The new occurrence-conflict error is translated in all six locales. The
+  typed client supplies cursor continuation; screens and public run-now remain
+  slice 5 work.
 
 **PATCH omission semantics.** This repo's recurring bug class (see
 `import_connections_test.go`, and T-36/T-45/T-47 for the money variant) is a
@@ -458,8 +492,8 @@ Implemented slice-2 contract:
 - List returns the complete template configuration set, with postings and tags;
   there is no hidden limit or per-row HTTP fetch. `next_due_on` is the first
   scheduled date at/after the watermark, including overdue dates, or null for
-  disabled/archived/exhausted templates. Slice 4 must exclude already-skipped
-  future identities when its skip action becomes public.
+  disabled/archived/exhausted templates. Slice 4 excludes every already-materialized
+  future identity, so skipped dates cannot appear as next due.
 - Save validates a balanced prospective entry at `max(local today, starts_on)`
   through the real transaction validator without writing a transaction. Actual
   generation must revalidate at each occurrence date. Investment postings are
@@ -552,11 +586,29 @@ either.
    check and all 349 unit tests, and the production single-binary build passed
    on 2026-08-31. Sixteen new named service/API tests cover the generation and
    discard boundaries; existing API draft-lifecycle cases now use the producer.
-4. **Due inbox read model and review actions.** `GET /recurring/due`, skip,
-   blocked retry, and an explicit promotion-impact preview using the existing
-   checkpoint machinery (the current update preview is draft-edit only). Include
-   materialized future identities in next-due reads so skipped dates do not
-   appear due. Wire public run-now at the activation gate, not ahead of review.
+4. **Due inbox read model and review actions — done 2026-08-31.**
+   `app/recurring_review.go`, `db/recurring_review.go`, `api/recurring_review.go`,
+   OpenAPI and the typed client deliver the review contract above. Next-due
+   reads exclude materialized identities; skip/retry preserve audited identity
+   atomically. Posting preview uses actual stored positions, including same-day
+   checkpoint boundaries, and agrees with the checkpoints invalidated on post.
+
+   Review testing found and fixed **T-81**: an edited never-posted draft could
+   not be discarded because an unordered bulk delete hit its predecessor FK.
+   Delete now walks newest revision first without weakening constraints, in the
+   existing occurrence-tombstone/audit transaction. The named API regression
+   first failed with HTTP 500, then passed after two draft edits and discard.
+
+   Public run-now and scheduler activation remain gated to slice 5. Named tests
+   cover blocked revalidation, stale attempts, independent-pool retry races,
+   rollback, archived cleanup, date validation, mixed-scale exact totals and
+   overflow, cursor continuation beyond 200 items, and draft edit/post/discard.
+
+   **Validation:** full backend formatting/vet/race suite, frontend type check
+   (zero errors/warnings) and all 352 unit tests, and the production single-binary
+   build passed. Seventeen new named backend tests and three client tests cover
+   this slice. Browser acceptance remains in slice 5; no recurring screen was
+   added or claimed here.
 5. **Frontend.** Both views, all states, six locales, the acceptance browser
    case. Then enable production scheduling/public run-now and prove every
    generated draft is reachable through review and discard.

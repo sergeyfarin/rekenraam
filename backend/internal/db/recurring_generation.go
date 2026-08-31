@@ -11,6 +11,14 @@ import (
 // writing either a draft and its identity, or a terminal validation failure.
 // There is no committed state in which only one half of generation exists.
 func (r *RecurringRepository) MaterializeRecurringOccurrence(ctx context.Context, revision int64, occurrence CreateRecurringOccurrenceParams, draft *CreateTransactionParams, audit AuditEventParams) error {
+	return r.materializeRecurringOccurrence(ctx, revision, occurrence, draft, audit, nil)
+}
+
+func (r *RecurringRepository) RetryRecurringOccurrence(ctx context.Context, revision int64, occurrence CreateRecurringOccurrenceParams, draft *CreateTransactionParams, audit AuditEventParams, expectedAuditID int64) error {
+	return r.materializeRecurringOccurrence(ctx, revision, occurrence, draft, audit, &expectedAuditID)
+}
+
+func (r *RecurringRepository) materializeRecurringOccurrence(ctx context.Context, revision int64, occurrence CreateRecurringOccurrenceParams, draft *CreateTransactionParams, audit AuditEventParams, expectedAuditID *int64) error {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin recurring generation: %w", err)
@@ -19,12 +27,8 @@ func (r *RecurringRepository) MaterializeRecurringOccurrence(ctx context.Context
 	if err := guardRecurringGeneration(ctx, tx, occurrence.BookID, occurrence.TemplateID, revision); err != nil {
 		return err
 	}
-	var exists bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM recurring_occurrences WHERE template_id = ? AND occurrence_date = ?)`, occurrence.TemplateID, occurrence.OccurrenceDate).Scan(&exists); err != nil {
-		return fmt.Errorf("check recurring identity: %w", err)
-	}
-	if exists {
-		return ErrRecurringOccurrenceExists
+	if err := guardRecurringOccurrence(ctx, tx, occurrence, expectedAuditID); err != nil {
+		return err
 	}
 	var auditID int64
 	if draft != nil {
@@ -44,13 +48,19 @@ func (r *RecurringRepository) MaterializeRecurringOccurrence(ctx context.Context
 			return err
 		}
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO recurring_occurrences
+	if expectedAuditID == nil {
+		_, err = tx.ExecContext(ctx, `INSERT INTO recurring_occurrences
 		(book_id, template_id, occurrence_date, status, transaction_id, error_summary,
 		 skip_reason, materialized_at, created_at, updated_at, last_audit_event_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		occurrence.BookID, occurrence.TemplateID, occurrence.OccurrenceDate, occurrence.Status,
-		nullableOptionalInt64(occurrence.TransactionID), occurrence.ErrorSummary, occurrence.SkipReason,
-		occurrence.MaterializedAt, occurrence.MaterializedAt, occurrence.MaterializedAt, auditID)
+			occurrence.BookID, occurrence.TemplateID, occurrence.OccurrenceDate, occurrence.Status,
+			nullableOptionalInt64(occurrence.TransactionID), occurrence.ErrorSummary, occurrence.SkipReason,
+			occurrence.MaterializedAt, occurrence.MaterializedAt, occurrence.MaterializedAt, auditID)
+	} else {
+		_, err = tx.ExecContext(ctx, `UPDATE recurring_occurrences SET status = ?, transaction_id = ?, error_summary = ?, skip_reason = '', materialized_at = ?, updated_at = ?, last_audit_event_id = ?
+ WHERE book_id = ? AND template_id = ? AND occurrence_date = ?`, occurrence.Status, nullableOptionalInt64(occurrence.TransactionID), occurrence.ErrorSummary, occurrence.MaterializedAt, occurrence.MaterializedAt, auditID, occurrence.BookID, occurrence.TemplateID, occurrence.OccurrenceDate)
+
+	}
 	if isRecurringOccurrenceConflict(err) {
 		return ErrRecurringOccurrenceExists
 	}

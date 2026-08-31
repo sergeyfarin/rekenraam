@@ -1,4 +1,5 @@
 {
+  "api_error_recurring_occurrence_already_materialized": "This occurrence was already handled or changed. Reload before reviewing it again.",
   "api_error_recurring_template_unbalanced": "The recurring template must balance for each instrument.",
   "api_error_recurring_schedule_invalid": "The recurring schedule is invalid. Check its dates and recurrence fields.",
   "api_error_recurring_template_archived": "This recurring template is archived and cannot be changed.",

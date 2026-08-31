@@ -1,4 +1,5 @@
 {
+  "api_error_recurring_occurrence_already_materialized": "Deze herhaling is al verwerkt of gewijzigd. Laad opnieuw voordat u deze opnieuw beoordeelt.",
   "api_error_recurring_template_unbalanced": "Het sjabloon voor periodieke transacties moet voor elk instrument in evenwicht zijn.",
   "api_error_recurring_schedule_invalid": "Het herhalingsschema is ongeldig. Controleer de datums en herhalingsvelden.",
   "api_error_recurring_template_archived": "Dit sjabloon voor periodieke transacties is gearchiveerd en kan niet worden gewijzigd.",

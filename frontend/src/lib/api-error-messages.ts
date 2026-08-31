@@ -17,6 +17,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   RECURRING_TEMPLATE_UNBALANCED: () => m.api_error_recurring_template_unbalanced(),
   RECURRING_SCHEDULE_INVALID: () => m.api_error_recurring_schedule_invalid(),
+  RECURRING_OCCURRENCE_ALREADY_MATERIALIZED: () => m.api_error_recurring_occurrence_already_materialized(),
   RECURRING_TEMPLATE_ARCHIVED: () => m.api_error_recurring_template_archived(),
   SETUP_REQUIRED: () => m.api_error_setup_required(),
   SETUP_ALREADY_COMPLETE: () => m.api_error_setup_already_complete(),

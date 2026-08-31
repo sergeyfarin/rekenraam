@@ -1,4 +1,5 @@
 {
+  "api_error_recurring_occurrence_already_materialized": "Dieser Termin wurde bereits verarbeitet oder geändert. Laden Sie die Ansicht neu, bevor Sie ihn erneut prüfen.",
   "api_error_recurring_template_unbalanced": "Die Vorlage für wiederkehrende Buchungen muss für jedes Instrument ausgeglichen sein.",
   "api_error_recurring_schedule_invalid": "Der Wiederholungsplan ist ungültig. Prüfen Sie die Datumsangaben und Wiederholungsfelder.",
   "api_error_recurring_template_archived": "Diese Vorlage für wiederkehrende Buchungen ist archiviert und kann nicht geändert werden.",

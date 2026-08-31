@@ -1,0 +1,120 @@
+RecurringAmount:
+  type: object
+  required: [commodity_id, commodity_code, debit_value, credit_value, quantity_scale]
+  properties:
+    commodity_id:
+      type: integer
+    commodity_code:
+      type: string
+    debit_value:
+      type: string
+      description: Exact non-negative sum of debit coefficients at quantity_scale.
+    credit_value:
+      type: string
+      description: Exact non-positive sum of credit coefficients at quantity_scale.
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
+RecurringDueItem:
+  type: object
+  required: [id, template_id, template_name, template_enabled, template_archived, occurrence_date, status, transaction_id, description, payee_name, error_summary, amounts]
+  properties:
+    id:
+      type: integer
+    template_id:
+      type: integer
+    template_name:
+      type: string
+    template_enabled:
+      type: boolean
+    template_archived:
+      type: boolean
+    occurrence_date:
+      type: string
+      format: date
+    status:
+      type: string
+      enum: [generated, blocked]
+    transaction_id:
+      type: [integer, 'null']
+    description:
+      type: string
+    payee_name:
+      type: string
+    error_summary:
+      type: string
+      description: Diagnostic detail for a blocked attempt; do not treat as a localized UI message.
+    amounts:
+      type: array
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/RecurringAmount'
+RecurringDueResponse:
+  type: object
+  required: [items, next_cursor]
+  properties:
+    items:
+      type: array
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/RecurringDueItem'
+    next_cursor:
+      type: [string, 'null']
+      description: Continue with this cursor until null. Refresh from the first page to discover newly added earlier dates.
+RecurringOccurrence:
+  type: object
+  required: [id, occurrence_date, status, transaction_id, error_summary, skip_reason]
+  properties:
+    id:
+      type: [integer, 'null']
+      description: Null for computed scheduled dates.
+    occurrence_date:
+      type: string
+      format: date
+    status:
+      type: string
+      enum: [scheduled, generated, skipped, blocked]
+    transaction_id:
+      type: [integer, 'null']
+    error_summary:
+      type: string
+    skip_reason:
+      type: string
+RecurringOccurrencesResponse:
+  type: object
+  required: [occurrences]
+  properties:
+    occurrences:
+      type: array
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/RecurringOccurrence'
+SkipRecurringOccurrenceRequest:
+  type: object
+  additionalProperties: false
+  required: [occurrence_date, reason]
+  properties:
+    occurrence_date:
+      type: string
+      format: date
+    reason:
+      type: string
+      minLength: 1
+RetryRecurringOccurrenceRequest:
+  type: object
+  additionalProperties: false
+  required: [occurrence_date]
+  properties:
+    occurrence_date:
+      type: string
+      format: date
+RecurringGenerationResponse:
+  type: object
+  required: [generated, blocked]
+  properties:
+    generated:
+      type: integer
+      minimum: 0
+      maximum: 1
+    blocked:
+      type: integer
+      minimum: 0
+      maximum: 1

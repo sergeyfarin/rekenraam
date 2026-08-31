@@ -3,6 +3,16 @@ info:
   title: Rekenraam API
   version: 0.0.0
 paths:
+  /api/v1/recurring/due:
+    $ref: "./paths/recurring-due.yaml"
+  /api/v1/recurring/templates/{template_id}/occurrences:
+    $ref: "./paths/recurring-template-occurrences.yaml"
+  /api/v1/recurring/templates/{template_id}/skip:
+    $ref: "./paths/recurring-template-skip.yaml"
+  /api/v1/recurring/templates/{template_id}/retry:
+    $ref: "./paths/recurring-template-retry.yaml"
+  /api/v1/transactions/{transaction_id}/post/reconciliation-impact:
+    $ref: "./paths/transaction-post-reconciliation-impact.yaml"
   /api/v1/recurring/templates:
     $ref: "./paths/recurring-templates.yaml"
   /api/v1/recurring/templates/{template_id}:
@@ -388,6 +398,22 @@ components:
         type: integer
         format: int64
   schemas:
+    RecurringAmount:
+      $ref: "./components/schemas/recurring-review.yaml#/RecurringAmount"
+    RecurringDueItem:
+      $ref: "./components/schemas/recurring-review.yaml#/RecurringDueItem"
+    RecurringDueResponse:
+      $ref: "./components/schemas/recurring-review.yaml#/RecurringDueResponse"
+    RecurringOccurrence:
+      $ref: "./components/schemas/recurring-review.yaml#/RecurringOccurrence"
+    RecurringOccurrencesResponse:
+      $ref: "./components/schemas/recurring-review.yaml#/RecurringOccurrencesResponse"
+    SkipRecurringOccurrenceRequest:
+      $ref: "./components/schemas/recurring-review.yaml#/SkipRecurringOccurrenceRequest"
+    RetryRecurringOccurrenceRequest:
+      $ref: "./components/schemas/recurring-review.yaml#/RetryRecurringOccurrenceRequest"
+    RecurringGenerationResponse:
+      $ref: "./components/schemas/recurring-review.yaml#/RecurringGenerationResponse"
     RecurringPosting:
       $ref: "./components/schemas/recurring.yaml#/RecurringPosting"
     RecurringTemplatePatch:

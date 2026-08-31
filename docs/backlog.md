@@ -1311,7 +1311,7 @@ This documentation audit records the gap; it does not change runtime behavior.
 **Files:** `frontend/messages/app/{en,es,fr,nl,de,ru}.json`,
 `frontend/messages/settings/{en,es,fr,nl,de,ru}.json`.
 
-Measured 2026-08-31 against the checked-in English catalogs: 379 app keys and
+Measured 2026-08-31 at `7b6cc6fd` against the English catalogs: 379 app keys and
 979 settings keys (1,358 total, excluding `$schema`). Each non-English locale
 has 343 current app keys and 950 current settings keys. The missing 36 app
 keys are `import_csv_*`; the missing 29 settings keys cover MFA/security plus
@@ -1327,6 +1327,24 @@ placeholder sets, and render the CSV-mapping and MFA/security workflows in the
 selected language. Add a catalog-parity validation gate so future English-only
 additions cannot silently reintroduce the gap. Do not count English fallback
 as a completed translation.
+
+## Recurring review prerequisite — closed 2026-08-31
+
+### T-81 Edited never-posted drafts could not be discarded `[x]`
+
+**File:** `backend/internal/db/transactions_write.go`, `DeleteDraftTransaction`.
+The bulk `DELETE FROM transaction_versions` could delete an earlier revision
+before its successor; `supersedes_version_id` uses `ON DELETE RESTRICT`, so a
+normal edit-then-discard workflow failed with HTTP 500 and rolled back.
+
+**Fixed:** after the existing never-posted guard, delete revisions newest first.
+Keep FK enforcement, the occurrence's skipped tombstone, and the discard audit
+in the same transaction. No migration and no weakening of posted-record safety.
+`TestDiscardEditedGeneratedDraftPreservesAuditAndSkippedIdentity` first failed
+with 500, then passed after two edits, asserting surviving audit/occurrence and
+clean foreign keys. Existing discard rollback and posted-discard protection
+cases remain in the suite; the inbox pagination test also exercises an edited
+draft disappearing after discard.
 
 ## Public-deployment security gates
 

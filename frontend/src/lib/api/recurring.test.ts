@@ -42,3 +42,40 @@ describe('recurring template client', () => {
     await expect(updateRecurringTemplate(7, { name: 'Example' }, 'test-csrf')).rejects.toMatchObject({ status: 409, code: 'RECURRING_TEMPLATE_ARCHIVED' });
   });
 });
+
+describe('recurring review client', () => {
+  it('continues the inbox cursor until the backend reports the last page', async () => {
+    const { recurringDueInfiniteQueryOptions } = await import('./recurring');
+    const get = vi.spyOn(apiClient, 'GET')
+      .mockResolvedValueOnce({ data: { items: [], next_cursor: 'next-page' }, response: new Response() })
+      .mockResolvedValueOnce({ data: { items: [], next_cursor: null }, response: new Response() });
+    const options = recurringDueInfiniteQueryOptions(20);
+    const first = await options.queryFn({ pageParam: options.initialPageParam });
+    const next = options.getNextPageParam(first);
+    expect(next).toBe('next-page');
+    const last = await options.queryFn({ pageParam: next! });
+    expect(options.getNextPageParam(last)).toBeNull();
+    expect(get).toHaveBeenLastCalledWith('/api/v1/recurring/due', { params: { query: { cursor: 'next-page', limit: 20 } } });
+  });
+
+  it('accepts an empty skip response and distinguishes a still-blocked retry', async () => {
+    const { skipRecurringOccurrence, retryRecurringOccurrence } = await import('./recurring');
+    const post = vi.spyOn(apiClient, 'POST')
+      .mockResolvedValueOnce({ response: new Response(null, { status: 204 }) })
+      .mockResolvedValueOnce({ data: { generated: 0, blocked: 1 }, response: new Response() });
+    await expect(skipRecurringOccurrence(7, '2026-09-01', 'Not this month', 'csrf')).resolves.toBeUndefined();
+    expect(post).toHaveBeenNthCalledWith(1, '/api/v1/recurring/templates/{template_id}/skip', {
+      params: { path: { template_id: 7 }, header: { 'X-CSRF-Token': 'csrf' } }, body: { occurrence_date: '2026-09-01', reason: 'Not this month' }
+    });
+    await expect(retryRecurringOccurrence(7, '2026-10-01', 'csrf')).resolves.toEqual({ generated: 0, blocked: 1 });
+  });
+
+  it('uses saved-draft posting preview without submitting an edited transaction', async () => {
+    const { getPostReconciliationImpact } = await import('./transactions');
+    const get = vi.spyOn(apiClient, 'GET').mockResolvedValue({ data: { affected_checkpoints: [] }, response: new Response() });
+    expect(await getPostReconciliationImpact(11)).toEqual({ affected_checkpoints: [] });
+    expect(get).toHaveBeenCalledWith('/api/v1/transactions/{transaction_id}/post/reconciliation-impact', {
+      params: { path: { transaction_id: 11 } }
+    });
+  });
+});

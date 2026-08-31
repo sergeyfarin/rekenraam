@@ -228,6 +228,8 @@ func mutateRecurringTemplate(logger *slog.Logger, auth *app.AuthService, service
 
 func writeRecurringServiceError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err error) {
 	switch {
+	case errors.Is(err, app.ErrRecurringOccurrenceMaterialized):
+		writeAPIError(w, http.StatusConflict, "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED", "occurrence already materialized or changed; reload before reviewing")
 	case errors.Is(err, app.ErrRecurringTemplateUnbalanced):
 		writeAPIError(w, http.StatusBadRequest, "RECURRING_TEMPLATE_UNBALANCED", "template must balance by commodity")
 	case errors.Is(err, app.ErrRecurringScheduleInvalid):

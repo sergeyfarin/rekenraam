@@ -564,8 +564,35 @@ func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, para
 		if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_search WHERE transaction_id = ?", params.TransactionID); err != nil {
 			return fmt.Errorf("delete transaction search rows: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_versions WHERE transaction_id = ?", params.TransactionID); err != nil {
-			return fmt.Errorf("delete transaction versions: %w", err)
+		// supersedes_version_id is ON DELETE RESTRICT. SQLite checks RESTRICT
+		// per row, so an unordered bulk delete can encounter an older version
+		// while its successor still exists. Delete the never-posted chain from
+		// newest to oldest; never weaken the FK or erase the audit history.
+		versionRows, err := tx.QueryContext(ctx, "SELECT id FROM transaction_versions WHERE transaction_id = ? ORDER BY version_seq DESC", params.TransactionID)
+		if err != nil {
+			return fmt.Errorf("list draft versions for deletion: %w", err)
+		}
+		var versionIDs []int64
+		for versionRows.Next() {
+			var id int64
+			if err := versionRows.Scan(&id); err != nil {
+				versionRows.Close()
+				return fmt.Errorf("scan draft version: %w", err)
+			}
+			versionIDs = append(versionIDs, id)
+		}
+		readErr := versionRows.Err()
+		closeErr := versionRows.Close()
+		if readErr != nil {
+			return fmt.Errorf("iterate draft versions: %w", readErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close draft versions: %w", closeErr)
+		}
+		for _, versionID := range versionIDs {
+			if _, err := tx.ExecContext(ctx, "DELETE FROM transaction_versions WHERE id = ? AND transaction_id = ?", versionID, params.TransactionID); err != nil {
+				return fmt.Errorf("delete draft version: %w", err)
+			}
 		}
 		if _, err := tx.ExecContext(ctx, "DELETE FROM posting_lines WHERE transaction_id = ?", params.TransactionID); err != nil {
 			return fmt.Errorf("delete posting lines: %w", err)

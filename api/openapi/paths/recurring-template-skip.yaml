@@ -1,0 +1,67 @@
+post:
+  summary: Skip a recurring occurrence
+  description: >
+    Writes an audited skipped identity for an unmaterialized date on the current schedule at or beyond generate_from, or transitions an existing blocked occurrence. A blocked occurrence can be skipped even after archive or schedule edit. Generated drafts must use the existing transaction DELETE route; generated and already-skipped identities return conflict.
+  parameters:
+    - in: path
+      name: template_id
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/SkipRecurringOccurrenceRequest'
+  responses:
+    "204":
+      description: Success
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "404":
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "409":
+      description: State changed or action not allowed
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "422":
+      description: Exact quantity overflow
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'
+    "503":
+      description: Database temporarily busy
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'

@@ -1,4 +1,5 @@
 {
+  "api_error_recurring_occurrence_already_materialized": "Cette occurrence a déjà été traitée ou modifiée. Rechargez la vue avant de la vérifier à nouveau.",
   "api_error_recurring_template_unbalanced": "Le modèle de transaction récurrente doit être équilibré pour chaque instrument.",
   "api_error_recurring_schedule_invalid": "La planification récurrente n’est pas valide. Vérifiez les dates et les paramètres de répétition.",
   "api_error_recurring_template_archived": "Ce modèle de transaction récurrente est archivé et ne peut pas être modifié.",

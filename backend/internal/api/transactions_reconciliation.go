@@ -89,3 +89,22 @@ func updateReconciliationImpact(logger *slog.Logger, authService *app.AuthServic
 		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
 	}
 }
+
+func postReconciliationImpact(logger *slog.Logger, auth *app.AuthService, service *app.TransactionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, auth)
+		if !ok {
+			return
+		}
+		id, ok := readTransactionID(w, r)
+		if !ok {
+			return
+		}
+		impact, err := service.ReconciliationImpactForPost(r.Context(), owner.ID, id)
+		if err != nil {
+			writeTransactionServiceError(w, r, logger, "posting reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
