@@ -1240,7 +1240,16 @@ tests cover every resolution tier and specific-lot allocations.
 
 ## Recurring producer activation gate
 
-### T-77 Generated recurring drafts cannot use the current hard-discard path `[ ]`
+### T-77 Generated recurring drafts cannot use the current hard-discard path `[x]`
+
+**Closed 2026-08-31.** The existing draft DELETE transaction now writes a
+`skipped` tombstone with discard reason and audit link, clears the live
+transaction FK, and removes the never-posted draft atomically. Migration
+`0006_recurring_occurrence_audit.sql` adds the audit link without rewriting old
+migrations. `TestDiscardingGeneratedDraftPreservesOccurrenceAndCannotRegenerate`
+drives real generation → HTTP DELETE → re-enumeration; the rollback case
+`TestDiscardGeneratedDraftRollsBackTombstoneAndAuditOnDeleteFailure` also proves
+posted drafts cannot be hard-deleted.
 
 **Schedule:** R9 slice 3, before linked draft generation is activated; public
 scheduler/run-now activation additionally waits for slice 5's review UI.
@@ -1265,6 +1274,18 @@ records must remain protected. A failure at any step must roll back all steps.
 **Acceptance:** `TestDiscardingGeneratedDraftPreservesOccurrenceAndCannotRegenerate`
 drives real generation → existing DELETE endpoint → next tick; no duplicate or
 orphan remains. Cover rollback, audit attribution, and refusal after posting.
+
+### T-78 Draft creation and edits incorrectly require reconciliation overrides `[x]`
+
+**Found and closed 2026-08-31 during R9 slice 3.**
+`backend/internal/app/transactions_reconciliation.go` applied the period-impact
+check to producer drafts, even though drafts are outside the ledger. Earlier
+promotion tests created the draft *before* the checkpoint, hiding the defect.
+The create-spec and draft-to-draft edit checks now return no invalidations;
+promotion retains its stored-position check. The API test
+`TestGeneratedDraftDoesNotAffectReconciledBalance` creates and edits a generated
+draft after a later checkpoint already exists, proves that neither operation
+changes the checkpoint, and requires an explicit override on posting.
 
 ## Public-deployment security gates
 

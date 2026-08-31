@@ -20,7 +20,7 @@ func TestRecurringTemplateStalePatchCannotOverwriteEditOrWatermark(t *testing.T)
 				_, err := repo.UpdateRecurringTemplate(ctx, params)
 				require.NoError(t, err)
 			case "watermark":
-				require.NoError(t, repo.SetRecurringTemplateGenerateFrom(ctx, 1, created.ID, "2026-10-01", params.UpdatedAt))
+				require.NoError(t, repo.AdvanceRecurringGeneration(ctx, 1, created.ID, created.Revision, "2026-10-01", params.UpdatedAt))
 			case "archive":
 				_, err := repo.ArchiveRecurringTemplate(ctx, ArchiveRecurringTemplateParams{BookID: 1, TemplateID: created.ID, ActorUserID: 1, ArchivedAt: params.UpdatedAt})
 				require.NoError(t, err)

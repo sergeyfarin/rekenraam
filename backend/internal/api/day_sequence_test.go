@@ -269,23 +269,13 @@ func TestCursorPaginationRespectsDaySequence(t *testing.T) {
 func TestDefaultListExcludesDraft(t *testing.T) {
 	t.Parallel()
 
-	handler, _ := newSetupTestHandler(t)
+	handler, database := newSetupTestHandler(t)
 	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
 	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Draft Filter Checking", "asset", "checking", commodityID, 2)
 	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Draft Filter Expense","category_type":"expense"}`)
 
 	// Create a draft transaction.
-	draft := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
-		"transaction_date":"2026-06-07",
-		"status":"draft",
-		"journal_entries":[{
-			"entry_date":"2026-06-07",
-			"postings":[
-				`+posting(checking.ID, -5000, 2, commodityID)+`,
-				`+posting(expense.ID, 5000, 2, commodityID)+`
-			]
-		}]
-	}`, http.StatusCreated)
+	draft := generateRecurringDraft(t, handler, database, sessionCookie, "2026-06-07", checking.ID, expense.ID, commodityID, 5000)
 	assert.Equal(t, "draft", draft.Status)
 
 	// Create a posted transaction.

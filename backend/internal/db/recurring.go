@@ -365,26 +365,6 @@ func (r *RecurringRepository) ArchiveRecurringTemplate(ctx context.Context, para
 	return r.RecurringTemplateByID(ctx, params.BookID, params.TemplateID)
 }
 
-// SetRecurringTemplateGenerateFrom advances the generation watermark. It is
-// the generator's only write to the template row, kept separate from the
-// user-facing update so a tick never rewrites a field the user owns.
-func (r *RecurringRepository) SetRecurringTemplateGenerateFrom(ctx context.Context, bookID int64, templateID int64, generateFrom string, updatedAt string) error {
-	result, err := r.database.ExecContext(ctx, `
-		UPDATE recurring_templates
-		SET generate_from = ?, updated_at = ?, revision = revision + 1
-		WHERE book_id = ? AND id = ? AND generate_from < ?
-	`, generateFrom, updatedAt, bookID, templateID, generateFrom)
-	if err != nil {
-		return fmt.Errorf("advance recurring template watermark: %w", err)
-	}
-	// No rows means the watermark is already at or past this date, which is
-	// what a re-run of the same tick looks like. Not an error.
-	if _, err := result.RowsAffected(); err != nil {
-		return fmt.Errorf("read recurring template watermark result: %w", err)
-	}
-	return nil
-}
-
 func (r *RecurringRepository) RecurringTemplateByID(ctx context.Context, bookID int64, templateID int64) (RecurringTemplateRecord, error) {
 	records, err := listRecurringTemplates(ctx, r.database, ListRecurringTemplatesParams{BookID: bookID, IncludeArchived: true}, templateID)
 	if err != nil {
@@ -586,9 +566,9 @@ type CreateRecurringOccurrenceParams struct {
 
 // CreateRecurringOccurrence records one occurrence. A conflict on
 // (template_id, occurrence_date) returns ErrRecurringOccurrenceExists so the
-// caller can adopt the existing row; the generator's combined
-// draft-plus-occurrence write lands in slice 3, where both halves share one
-// transaction and a crash between them is impossible.
+// caller can adopt the existing row. Generation uses
+// MaterializeRecurringOccurrence instead, so the draft and occurrence share
+// one guarded transaction and cannot be committed separately.
 func (r *RecurringRepository) CreateRecurringOccurrence(ctx context.Context, params CreateRecurringOccurrenceParams) (RecurringOccurrenceRecord, error) {
 	result, err := r.database.ExecContext(ctx, `
 		INSERT INTO recurring_occurrences (

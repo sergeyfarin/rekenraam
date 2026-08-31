@@ -372,19 +372,19 @@ func TestRecurringOccurrenceDatesReportsEveryMaterializedDate(t *testing.T) {
 // The watermark only ever moves forward. A tick that runs twice, or two
 // processes racing on the same template, must not rewind generation into
 // dates that were already handled.
-func TestSetRecurringTemplateGenerateFromNeverMovesBackwards(t *testing.T) {
+func TestAdvanceRecurringGenerationNeverMovesBackwards(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
 	repository := NewRecurringRepository(newRecurringTestDatabase(t))
 	created := createRentTemplate(t, repository)
 
-	require.NoError(t, repository.SetRecurringTemplateGenerateFrom(ctx, 1, created.ID, "2026-10-01", "2026-09-30T10:00:00Z"))
+	require.NoError(t, repository.AdvanceRecurringGeneration(ctx, 1, created.ID, created.Revision, "2026-10-01", "2026-09-30T10:00:00Z"))
 	advanced, err := repository.RecurringTemplateByID(ctx, 1, created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "2026-10-01", advanced.GenerateFrom)
 
-	require.NoError(t, repository.SetRecurringTemplateGenerateFrom(ctx, 1, created.ID, "2026-09-01", "2026-09-30T11:00:00Z"))
+	require.NoError(t, repository.AdvanceRecurringGeneration(ctx, 1, created.ID, advanced.Revision, "2026-09-01", "2026-09-30T11:00:00Z"))
 	unchanged, err := repository.RecurringTemplateByID(ctx, 1, created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "2026-10-01", unchanged.GenerateFrom, "an earlier watermark is ignored, not applied")

@@ -156,34 +156,14 @@ func TestTransactionValidationAndLifecycleGuards(t *testing.T) {
 		}]
 	}`, http.StatusConflict)
 
-	draft := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
-		"status":"draft",
-		"transaction_date":"2026-06-07",
-		"journal_entries":[{
-			"entry_date":"2026-06-07",
-			"postings":[
-				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
-				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
-			]
-		}]
-	}`, http.StatusCreated)
+	draft := generateRecurringDraft(t, handler, database, sessionCookie, "2026-06-07", checking.ID, expense.ID, commodityID, 10000)
 	posted := mutateTransaction(t, handler, sessionCookie, csrfToken, http.MethodPost, "/api/v1/transactions/"+strconvFormatInt(draft.ID)+"/post", `{
 		"change_reason":"completed draft"
 	}`, http.StatusOK)
 	assert.Equal(t, "posted", posted.Status)
 	mutateTransactionNoBody(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/transactions/"+strconvFormatInt(posted.ID), http.StatusConflict)
 
-	draft = createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
-		"status":"draft",
-		"transaction_date":"2026-06-07",
-		"journal_entries":[{
-			"entry_date":"2026-06-07",
-			"postings":[
-				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
-				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":10000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
-			]
-		}]
-	}`, http.StatusCreated)
+	draft = generateRecurringDraft(t, handler, database, sessionCookie, "2026-06-07", checking.ID, expense.ID, commodityID, 10000)
 	mutateTransactionNoBody(t, handler, sessionCookie, csrfToken, http.MethodDelete, "/api/v1/transactions/"+strconvFormatInt(draft.ID), http.StatusNoContent)
 	readTransactionForSession(t, handler, sessionCookie, draft.ID, http.StatusNotFound)
 
@@ -689,7 +669,7 @@ func TestUpdateTransactionCannotBypassBalanceValidationViaDraftStatus(t *testing
 func TestPostDraftTransactionIntoReconciledPeriodRequiresOverride(t *testing.T) {
 	t.Parallel()
 
-	handler, _ := newSetupTestHandler(t)
+	handler, database := newSetupTestHandler(t)
 	sessionCookie, csrfToken, commodityID := setupAccountAPITest(t, handler)
 	checking := createLedgerAccount(t, handler, sessionCookie, csrfToken, "Draft Promotion Checking", "asset", "checking", commodityID, 2)
 	expense := createCategoryForSession(t, handler, sessionCookie, csrfToken, `{"name":"Draft Promotion Expense","category_type":"expense"}`)
@@ -697,17 +677,7 @@ func TestPostDraftTransactionIntoReconciledPeriodRequiresOverride(t *testing.T) 
 	// Created first, so its checking posting claims the lowest
 	// account_day_sequence for this account/date — before any posted
 	// transaction exists to reconcile against.
-	draft := createTransactionForSession(t, handler, sessionCookie, csrfToken, `{
-		"status":"draft",
-		"transaction_date":"2026-06-07",
-		"journal_entries":[{
-			"entry_date":"2026-06-07",
-			"postings":[
-				{"account_id":`+strconvFormatInt(checking.ID)+`,"quantity_value":-5000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`},
-				{"account_id":`+strconvFormatInt(expense.ID)+`,"quantity_value":5000,"quantity_scale":2,"commodity_id":`+strconvFormatInt(commodityID)+`}
-			]
-		}]
-	}`, http.StatusCreated)
+	draft := generateRecurringDraft(t, handler, database, sessionCookie, "2026-06-07", checking.ID, expense.ID, commodityID, 5000)
 
 	// Created and reconciled second: its checking posting takes the next
 	// sequence position, and reconciling it sets the checkpoint's lock floor

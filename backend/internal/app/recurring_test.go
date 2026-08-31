@@ -156,7 +156,7 @@ func TestRecurringTemplateScheduleEditPreservesMaterializedOccurrences(t *testin
 		BookID: BookID, TemplateID: created.ID, OccurrenceDate: "2026-09-01", Status: "skipped", SkipReason: "Example", MaterializedAt: "2026-08-30T12:00:00Z",
 	})
 	require.NoError(t, err)
-	require.NoError(t, service.repository.SetRecurringTemplateGenerateFrom(ctx, BookID, created.ID, "2026-10-01", "2026-08-30T12:00:01Z"))
+	require.NoError(t, service.repository.AdvanceRecurringGeneration(ctx, BookID, created.ID, created.Revision, "2026-10-01", "2026-08-30T12:00:01Z"))
 	updated, err := service.UpdateTemplate(ctx, WriteRecurringTemplateInput{OwnerUserID: input.OwnerUserID, TemplateID: created.ID,
 		Patch: RecurringTemplatePatch{DayOfMonth: NullablePatch[int]{Set: true, Value: recurringTestPtr(15)}}})
 	require.NoError(t, err)

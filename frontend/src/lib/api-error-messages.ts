@@ -14,6 +14,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   RESOURCE_BUSY: () => m.api_error_resource_busy(),
   LEDGER_OVERFLOW: () => m.api_error_ledger_overflow(),
   INVESTMENT_WORKFLOW_REQUIRED: () => m.api_error_investment_workflow_required(),
+  TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   RECURRING_TEMPLATE_UNBALANCED: () => m.api_error_recurring_template_unbalanced(),
   RECURRING_SCHEDULE_INVALID: () => m.api_error_recurring_schedule_invalid(),
   RECURRING_TEMPLATE_ARCHIVED: () => m.api_error_recurring_template_archived(),

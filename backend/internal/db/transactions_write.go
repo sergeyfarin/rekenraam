@@ -509,7 +509,7 @@ func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, para
 		// Hard delete removes the transaction row itself, so this audit event is
 		// the only surviving record of the operation — audit_events has no FK to
 		// transactions, so it stands alone even after the delete below.
-		if _, err := insertAuditEvent(ctx, tx, AuditEventParams{
+		auditID, err := insertAuditEvent(ctx, tx, AuditEventParams{
 			BookID:        params.BookID,
 			ActorUserID:   params.ActorUserID,
 			AuthSessionID: params.AuthSessionID,
@@ -518,8 +518,20 @@ func (r *TransactionRepository) DeleteDraftTransaction(ctx context.Context, para
 			OriginType:    params.OriginType,
 			Operation:     params.Operation,
 			Reason:        params.ChangeReason,
-		}); err != nil {
+			MetadataJSON:  fmt.Sprintf(`{"transaction_id":%d}`, params.TransactionID),
+		})
+		if err != nil {
 			return err
+		}
+
+		// Preserve the producer's idempotency identity before unlinking the
+		// draft. The tombstone, audit, and hard delete roll back together.
+		if _, err := tx.ExecContext(ctx, `UPDATE recurring_occurrences
+			SET status = 'skipped', transaction_id = NULL, skip_reason = ?,
+			    updated_at = ?, last_audit_event_id = ?
+			WHERE book_id = ? AND transaction_id = ? AND status = 'generated'`,
+			"discarded generated draft: "+params.ChangeReason, params.OccurredAt, auditID, params.BookID, params.TransactionID); err != nil {
+			return fmt.Errorf("preserve discarded recurring occurrence: %w", err)
 		}
 
 		if _, err := tx.ExecContext(ctx, `

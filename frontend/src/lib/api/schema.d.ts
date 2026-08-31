@@ -6696,7 +6696,10 @@ export interface paths {
             };
         };
         put?: never;
-        /** Create a transaction */
+        /**
+         * Create a transaction
+         * @description Manual creation saves directly as posted. A draft status is rejected with TRANSACTION_DRAFT_NOT_USER_CREATABLE; persisted drafts belong to system producers and their review workflows.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -6868,7 +6871,10 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        /** Delete a never-posted draft transaction */
+        /**
+         * Delete a never-posted draft transaction
+         * @description Generated recurring drafts leave an audited skipped occurrence so that generation cannot recreate the discarded entry. Tombstone, audit, and draft deletion are atomic. Any transaction with posted or voided history remains protected from hard deletion.
+         */
         delete: {
             parameters: {
                 query?: never;
@@ -15731,7 +15737,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "INVESTMENT_WORKFLOW_REQUIRED" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "INVESTMENT_WORKFLOW_REQUIRED" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

@@ -76,6 +76,7 @@ patch:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 delete:
   summary: Delete a never-posted draft transaction
+  description: Generated recurring drafts leave an audited skipped occurrence so that generation cannot recreate the discarded entry. Tombstone, audit, and draft deletion are atomic. Any transaction with posted or voided history remains protected from hard deletion.
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/TransactionID"
     - in: header

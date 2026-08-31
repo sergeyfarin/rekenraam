@@ -139,6 +139,7 @@
   "api_error_internal_error": "Something went wrong on the server. Try again.",
   "api_error_ledger_overflow": "This balance is too large to represent safely. Reduce the posting scale or split the account.",
   "api_error_investment_workflow_required": "This investment cannot be changed through the ordinary transaction workflow yet.",
+  "api_error_transaction_draft_not_user_creatable": "Draft entries can only be created by an automatic workflow. Save manual entries directly to the ledger.",
   "api_error_network": "The server could not be reached. Check the connection and try again.",
   "api_error_not_found": "The requested item could not be found.",
   "api_error_provider_error": "The external provider rejected the request. Check the connection and try again.",

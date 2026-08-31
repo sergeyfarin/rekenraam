@@ -215,14 +215,14 @@ ADR 0012 governs the durable split.
 | Manual/scheduled refresh runs + history | 🟡 | API only. |
 | **Pricing/FX management UI** | ⬜ | R11. |
 
-## Recurring transactions (R9) — 🟡 slices 1–2 complete; no active generator or UI
+## Recurring transactions (R9) — 🟡 slices 1–3 complete; generation inactive pending UI
 
 | Capability | Status | Notes |
 |---|---|---|
 | Date enumeration and durable templates | ✅ | `internal/recur`, `db.RecurringRepository`; daily/weekly/monthly/yearly, clamp-and-reanchor, date/occurrence limits, materialized occurrence identities. Dates stop at year 9999. |
 | Template CRUD API and typed client | ✅ | `app/recurring.go`, `api/recurring.go`, `lib/api/recurring.ts`: create/list/read/PATCH/archive, complete postings/tags and next scheduled date. Three stable errors translated in six locales. |
 | Template validation and PATCH safety | ✅ | Existing transaction validation plus exact per-commodity balancing; investment postings excluded independently of kind. Omission preserves, explicit null clears optional fields, revision checks reject stale merges. Owner-local creation watermark prevents historical backfill. Saving a template has no ledger/FX/lot/reconciliation effects. |
-| Generation, draft origin guard and discard linkage | ⬜ | Slice 3; T-77 must make generated-draft discard occurrence-aware. Production scheduler/public run-now stay off until review/discard UI ships. |
+| Generation, draft origin guard and discard linkage | ✅ | Atomic draft + occurrence + audit, blocked validation failures, a 50-occurrence global tick cap, owner-local dates, revision-guarded generation/watermarks, independent-pool idempotency, and audited skipped tombstones on draft discard (T-77). Browser draft creation is rejected with a code translated in six locales. Draft-only creation/edits never invalidate reconciliation; promotion remains guarded (T-78). Production scheduler/public run-now stay off until review/discard UI ships. |
 | Due inbox and recurring screens | ⬜ | Slices 4–5. R9 is not yet an end-to-end user workflow. |
 
 ## Investments (Phase 6) — 🟦 User workflows shipped; R12a correction complete, provenance/correction follow-ups open

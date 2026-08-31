@@ -107,6 +107,15 @@ non-trivial diff (yours or reviewed):
     validation has to be extracted to a module first. That is a feature, not an
     obstacle — it is the same reason G-02 existed.
 
+15. **Producer drafts mistaken for posted ledger changes** — R9 generation
+    initially inherited a create/edit reconciliation guard that checked dates
+    without checking draft status (T-78). A test that creates the draft before
+    reconciling cannot catch this: create and edit a producer draft after a
+    checkpoint exists, prove no invalidation, then prove posting still requires
+    its override. Draft-edit preview is not a promotion preview. Also test
+    discard through the existing DELETE route: producer occurrence identity,
+    its audit, and deletion must commit or roll back together (T-77).
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

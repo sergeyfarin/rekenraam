@@ -1048,18 +1048,15 @@ edit/lifecycle operations. A backdated create that would enter an active
 checkpoint boundary returns reconciliation-override-required; the UI previews
 named checkpoints and may retry with `reconciliation_override=true`.
 
-Design intent is that `draft` creation belongs only to a future trusted
-internal producer (R9 recurring transactions, or import review), not the
-browser manual-entry route — the frontend never sends `status="draft"` and
-there is no user-facing "save as draft." **This is not yet enforced at the API
-layer**: `POST /api/v1/transactions` currently accepts an explicit
-`status="draft"` from any caller, because no real internal producer exists yet
-to distinguish from the browser route, and the backend test suite uses this
-path to exercise the draft→post and draft→discard lifecycle in the absence of
-one. Add an origin-based guard (reject `status="draft"` unless
-`OriginType != "browser_api"`) when R9 or import-review lands a real producer;
-until then this is a deliberately deferred, low-severity gap in a single-user
-self-hosted app, not an open item to fix in isolation.
+Draft creation belongs only to a trusted internal producer, not the browser
+manual-entry route. **Enforced since R9 slice 3 (2026-08-31):** browser-origin
+`POST /api/v1/transactions` rejects `status="draft"` with
+`TRANSACTION_DRAFT_NOT_USER_CREATABLE`. The API lifecycle tests create drafts
+through the real recurring producer. Creation and edits that remain draft do
+not affect reconciliation; posting still checks the stored posting positions.
+Discarding a generated never-posted draft preserves its occurrence as an audited
+skipped tombstone in the same transaction as deletion. Recurring scheduler and
+public run-now activation wait for R9's dedicated review/discard surface.
 
 `POST /api/v1/transactions/{transaction_id}/void` must accept a JSON request
 body with `change_reason` so the appended `status='voided'` transaction version

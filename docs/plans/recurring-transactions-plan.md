@@ -1,6 +1,6 @@
 # Recurring Transactions Plan (R9)
 
-Status: **slices 1–2 shipped; slice 2 closed 2026-08-30. Slice 3 is next;
+Status: **slices 1–3 shipped; slice 3 closed 2026-08-31. Slice 4 is next;
 production generation stays off until slice 5 delivers review/discard.**
 `docs/roadmap.md` owns that sequence. Written 2026-08-29,
 immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
@@ -257,8 +257,16 @@ error_summary    TEXT NOT NULL DEFAULT ''
 skip_reason      TEXT NOT NULL DEFAULT ''
 materialized_at  TEXT              -- UTC, per the conventions' run/attempt rule
 created_at, updated_at
+last_audit_event_id INTEGER NULL REFERENCES audit_events
 UNIQUE (template_id, occurrence_date)
 ```
+
+Discarding a never-posted generated draft atomically changes its occurrence to
+`skipped`, sets a discard reason, clears `transaction_id`, and links the discard
+audit through `last_audit_event_id`. Generation and blocked attempts also set
+this audit link. The original generation audit survives draft deletion; the
+discard audit includes the former transaction ID. No schema rewrite is needed:
+migration `0006_recurring_occurrence_audit.sql` adds the nullable audit link.
 
 The unique constraint is the whole idempotency story, the same way
 `backup_runs.occurrence_key` is: two schedulers, a restart mid-tick, or a clock
@@ -358,7 +366,10 @@ the template's captured revision, enabled/archive state, and schedule inside the
 same write transaction. The slice-2 revision column exists for this purpose as
 well as PATCH safety. A tick based on an old schedule must not advance a newly
 edited template's watermark past dates that have never been handled; re-read on
-conflict. Add the named race test in slice 3.
+conflict at the next tick. Both writes acquire the SQLite writer lock before
+taking a read snapshot; independent database pools therefore serialize without
+attempting to upgrade a stale WAL snapshot. Named tests cover stale schedule,
+disable/archive, and independent-pool generation races.
 
 **Drafts and FX coverage.** `fx_work_after_posting_version_insert` fires on
 `posted` versions only, so a generated draft triggers no coverage work. That is
@@ -371,31 +382,32 @@ transaction.
 invalidate a checkpoint. *Posting* one runs the ordinary period-impact check —
 a backdated occurrence inside an active checkpoint returns
 reconciliation-override-required, and the inbox previews the named checkpoints
-before the user confirms. No new machinery; the existing preview route answers
-it.
+before the user confirms. The existing checkpoint machinery is reusable, but
+slice 3 verified that the current update-preview route deliberately preserves
+draft status and therefore previews an edit, not promotion. Slice 4 must add an
+explicit posting preview using the draft's stored posting positions; it must
+not treat the empty draft-edit impact as permission to post.
 
 ## The draft origin guard
 
-`POST /api/v1/transactions` currently accepts `status="draft"` from any caller.
-With a real producer in place, it must reject `status="draft"` when
-`OriginType == "browser_api"`, returning the standard error envelope with a new
-`TRANSACTION_DRAFT_NOT_USER_CREATABLE` code in all six locales.
+**Shipped in slice 3.** `POST /api/v1/transactions` rejects `status="draft"`
+when the service input has `OriginType == "browser_api"`, returning HTTP 400
+with `TRANSACTION_DRAFT_NOT_USER_CREATABLE` in the standard error envelope.
+The message is translated in all six locales; the origin is set by the handler,
+never chosen by request JSON.
 
-Two consequences to handle rather than discover:
+Two consequences addressed in slice 3:
 
-- The backend suite uses the browser route to exercise the draft→post and
-  draft→discard lifecycle. Those tests move onto the recurring producer (which
-  is what they were always standing in for) or an explicitly internal origin;
-  they do not get an exemption in the handler.
+- The API draft→post and draft→discard lifecycle tests now use the recurring
+  producer; they do not get an exemption in the handler.
 - `POST /transactions/{id}/post` and `DELETE /transactions/{id}` remain the
   public promotion/discard routes. **Their implementation is not unchanged:**
   the occurrence FK is `ON DELETE RESTRICT` and a generated occurrence requires
-  a non-null transaction ID. Before slice 3 can produce linked drafts, close
-  backlog **T-77**: discard must atomically preserve an occurrence tombstone,
-  remove its live transaction link, and delete the never-posted draft with the
-  existing audit/lifecycle checks. It must not regenerate on the next tick, nor
-  leave a dangling generated row. Keep the same route rather than adding a
-  competing generic deletion path.
+  a non-null transaction ID. **T-77 is closed:** discard atomically preserves
+  an audited skipped occurrence, removes its live transaction link, and deletes
+  the never-posted draft with the existing audit/lifecycle checks. It cannot
+  regenerate on the next tick or leave a dangling generated row. The existing
+  route remains the single discard path.
 
 ## API surface
 
@@ -513,14 +525,36 @@ either.
    type check and all 349 unit tests, and the integrated production build passed
    on 2026-08-30. The new HTTP journeys are API integration tests; browser
    acceptance remains in slice 5 because this slice adds no recurring screen.
-3. **Generator, scheduler, and the origin guard.** Materialization in one
-   transaction, blocked-occurrence handling, the per-tick cap, `run-now`, and
-   the `status="draft"` rejection for `browser_api` with the existing draft
-   lifecycle tests moved onto the real producer. Close T-77 and prove concurrent
-   schedule edits cannot skip occurrences. Keep production scheduler startup and
-   public `run-now` gated until slice 5; exercise service entry points in tests.
-4. **Due inbox read model and review actions.** `GET /recurring/due`, skip, and
-   the reconciliation-impact preview wired to the existing route. Include
+3. **Generator, scheduler, and the origin guard — done 2026-08-31.**
+   `app/recurring_generation.go` and `db/recurring_generation.go` create each
+   draft, occurrence identity, and audit in one transaction. Validation failures
+   become blocked occurrences; infrastructure failures roll back and leave the
+   watermark for retry. The cap is 50 materializations across all templates per
+   tick, and the watermark advances only after the whole window is recorded.
+   Captured revisions guard generation and watermark writes against edits,
+   disable/archive, and concurrent generators, including independent pools.
+   T-77 is closed: the existing DELETE route preserves an audited skipped
+   tombstone before removing a never-posted draft. Posted records still refuse
+   hard discard. Browser draft creation now returns the translated origin error;
+   existing API draft-lifecycle cases use the real recurring producer.
+
+   Testing found another prerequisite, T-78: create/edit reconciliation checks
+   treated persisted drafts as ledger changes. They now exclude draft-only
+   changes, with promotion still requiring its ordinary checkpoint override.
+   The named API test creates and edits a backdated draft *after* reconciliation,
+   proves checkpoints remain unchanged, then exercises guarded promotion.
+
+   **Activation remains off:** scheduler startup is not wired in `command.go`,
+   and run-now exists only as a service input. Slice 5 enables both after the
+   review/discard UI exists. Blocked retry and its read model belong to slice 4.
+
+   **Validation:** the full backend race suite, formatting/vet, frontend type
+   check and all 349 unit tests, and the production single-binary build passed
+   on 2026-08-31. Sixteen new named service/API tests cover the generation and
+   discard boundaries; existing API draft-lifecycle cases now use the producer.
+4. **Due inbox read model and review actions.** `GET /recurring/due`, skip,
+   blocked retry, and an explicit promotion-impact preview using the existing
+   checkpoint machinery (the current update preview is draft-edit only). Include
    materialized future identities in next-due reads so skipped dates do not
    appear due. Wire public run-now at the activation gate, not ahead of review.
 5. **Frontend.** Both views, all states, six locales, the acceptance browser

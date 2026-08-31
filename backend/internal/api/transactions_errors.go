@@ -12,6 +12,8 @@ func writeTransactionServiceError(w http.ResponseWriter, r *http.Request, logger
 	var validationError app.ValidationError
 	var overflowError app.LedgerOverflowError
 	switch {
+	case errors.Is(err, app.ErrTransactionDraftNotUserCreatable):
+		writeAPIError(w, http.StatusBadRequest, "TRANSACTION_DRAFT_NOT_USER_CREATABLE", "draft transactions can only be created by a system producer")
 	case errors.As(err, &validationError):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", validationError.Error())
 	case errors.As(err, &overflowError):

@@ -11,6 +11,8 @@ import (
 	"rekenraam/backend/internal/db"
 )
 
+var ErrTransactionDraftNotUserCreatable = errors.New("draft transactions can only be created by a system producer")
+
 func (s *TransactionService) CreateTransaction(ctx context.Context, input CreateTransactionInput) (Transaction, error) {
 	if input.CorrectionOfTransactionID != nil {
 		if err := s.rejectInvestmentLinkedMutation(ctx, *input.CorrectionOfTransactionID); err != nil {
@@ -62,6 +64,9 @@ func (s *TransactionService) createTransactionRecordInTx(ctx context.Context, tx
 func (s *TransactionService) prepareCreateTransaction(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {
 	if input.OwnerUserID <= 0 {
 		return db.CreateTransactionParams{}, ValidationError{Message: "owner user is required"}
+	}
+	if strings.TrimSpace(input.Spec.Status) == "draft" && strings.TrimSpace(input.OriginType) == "browser_api" {
+		return db.CreateTransactionParams{}, ErrTransactionDraftNotUserCreatable
 	}
 
 	now := s.now().UTC()

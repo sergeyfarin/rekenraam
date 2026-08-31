@@ -95,6 +95,7 @@ get:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
 post:
   summary: Create a transaction
+  description: Manual creation saves directly as posted. A draft status is rejected with TRANSACTION_DRAFT_NOT_USER_CREATABLE; persisted drafts belong to system producers and their review workflows.
   parameters:
     - in: header
       name: X-CSRF-Token

@@ -78,6 +78,8 @@ func NewRecurringService(repository *db.RecurringRepository, transactions *Trans
 	return &RecurringService{repository: repository, transactions: transactions, settings: settings, now: time.Now}
 }
 
+func (s *RecurringService) SetNowForTest(now func() time.Time) { s.now = now }
+
 func (s *RecurringService) localToday(ctx context.Context, ownerID int64) (string, error) {
 	if ownerID <= 0 {
 		return "", ValidationError{Message: "owner user is required"}

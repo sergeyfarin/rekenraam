@@ -6,7 +6,7 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-08-30 (R12a T-75a/T-74 closed; R9 slices 1–2 complete;
+Last reviewed: 2026-08-31 (R12a T-75a/T-74 closed; R9 slices 1–3 complete;
 T-76 and T-75b remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
@@ -340,9 +340,10 @@ transactions are forecasting's data source, so R9 → R10 is a single coherent
 arc that exercises the producer-owned draft machinery once instead of twice,
 and it front-loads per-currency forecasting — the differentiator the parity
 lens below commits to protecting. Budgets are independent of both and slot in
-afterward with no rework. R9 slices 1–2 are complete; slice 3 (generator and
-origin guard) is next. Production generation stays gated until slice 5's
-dedicated review/discard surface exists; slice 3 must close T-77 first.
+afterward with no rework. R9 slices 1–3 are complete; slice 4 (due inbox read
+model and review actions) is next. Atomic draft generation, safe discard (T-77),
+and draft reconciliation handling (T-78) are tested. Production generation
+stays gated until slice 5's dedicated review/discard surface exists.
 
 1. **R9 Recurring transactions:** templates and due-entry generation into the
    reserved producer-owned draft workflow. Planned 2026-08-29 in

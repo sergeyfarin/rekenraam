@@ -110,6 +110,9 @@ func (s *TransactionService) periodScopedRefsFromRecord(ctx context.Context, rec
 // and the proposed next position (with MaxInt64 sequence, reflecting that a new
 // allocation will be above any existing statement_account_sequence) are added.
 func (s *TransactionService) reconciliationInvalidationRefs(ctx context.Context, current db.TransactionRecord, spec db.TransactionSpec) ([]db.CheckpointInvalidationRef, error) {
+	if current.Status == "draft" && spec.Status == "draft" {
+		return nil, nil
+	}
 	// Index current postings by line_key for O(1) lookup.
 	type currentPosting struct {
 		entryDate string
@@ -179,6 +182,11 @@ func reconciliationAffectingChange(currentDate string, current db.PostingRecord,
 // New postings always get sequence MAX+1, so math.MaxInt64 correctly represents
 // "not inside" for the same-date case (see reconciliationInvalidationRefs).
 func (s *TransactionService) reconciliationInvalidationRefsFromSpec(ctx context.Context, spec db.TransactionSpec) ([]db.CheckpointInvalidationRef, error) {
+	// Producer drafts are outside the ledger even when their dates fall in a
+	// reconciled period. Promotion has its own guard over the stored positions.
+	if spec.Status == "draft" {
+		return nil, nil
+	}
 	candidates := make([]db.PeriodScopedCheckpointRef, 0)
 	for _, entry := range spec.JournalEntries {
 		for _, posting := range entry.Postings {

@@ -139,6 +139,7 @@
   "api_error_internal_error": "Algo ha salido mal en el servidor. Vuelva a intentarlo.",
   "api_error_ledger_overflow": "Este saldo es demasiado grande para representarlo con seguridad. Reduzca la escala del apunte o divida la cuenta.",
   "api_error_investment_workflow_required": "Esta inversión aún no puede modificarse mediante el flujo de transacciones ordinario.",
+  "api_error_transaction_draft_not_user_creatable": "Solo un proceso automático puede crear borradores. Guarda los asientos manuales directamente en el libro mayor.",
   "api_error_network": "No se ha podido contactar con el servidor. Compruebe la conexión y vuelva a intentarlo.",
   "api_error_not_found": "No se ha encontrado el elemento solicitado.",
   "api_error_provider_error": "El proveedor externo ha rechazado la solicitud. Compruebe la conexión y vuelva a intentarlo.",
