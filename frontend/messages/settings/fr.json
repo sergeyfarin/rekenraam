@@ -483,6 +483,7 @@
   "install_gate_loading_copy": "Lecture de l'avancement de la configuration et de la session actuelle du navigateur.",
   "install_gate_loading_title": "Vérification de l'état de l'installation",
   "install_gate_login_copy": "La configuration du propriétaire est terminée. Connectez-vous pour accéder à l'application et poursuivre avec les lots suivants.",
+  "install_gate_login_secure_origin_error": "Votre mot de passe a été accepté, mais ce navigateur ne peut pas conserver le cookie de connexion sécurisé via une connexion HTTP non chiffrée. Ouvrez Rekenraam avec HTTPS ou via http://localhost, puis reconnectez-vous.",
   "install_gate_login_submit": "Se connecter",
   "install_gate_login_submit_pending": "Connexion...",
   "install_gate_login_title": "Connectez-vous pour continuer",

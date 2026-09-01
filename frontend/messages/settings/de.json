@@ -483,6 +483,7 @@
   "install_gate_loading_copy": "Einrichtungsfortschritt und aktuelle Browsersitzung werden gelesen.",
   "install_gate_loading_title": "Installationsstand wird geprüft",
   "install_gate_login_copy": "Die Einrichtung des Eigentümers ist abgeschlossen. Melden Sie sich an, um die App zu öffnen und mit den weiteren Bausteinen fortzufahren.",
+  "install_gate_login_secure_origin_error": "Ihr Passwort wurde akzeptiert, aber dieser Browser kann das sichere Anmelde-Cookie über unverschlüsseltes HTTP nicht speichern. Öffnen Sie Rekenraam über HTTPS oder http://localhost und melden Sie sich erneut an.",
   "install_gate_login_submit": "Anmelden",
   "install_gate_login_submit_pending": "Anmeldung läuft...",
   "install_gate_login_title": "Melden Sie sich an, um fortzufahren",

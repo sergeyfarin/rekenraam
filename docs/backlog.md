@@ -1392,6 +1392,21 @@ while typing. It now checks typing, selecting the existing payee, saving the
 changed description, and exact preservation of saved posting details. The
 pattern search found no other matching initialization assignment.
 
+### T-85 Successful login looked like a rejected password over plain-HTTP LAN access `[x]`
+
+**Files:** `frontend/src/lib/install-gate/install-gate.svelte`, secure-origin
+login handling. The backend accepted the password and issued a `Secure` session
+cookie, but browsers discarded that cookie on a plain-HTTP non-localhost origin.
+The install gate then returned to the unchanged sign-in form with no explanation.
+
+**Fixed:** after accepted credentials, verify the resulting session and show a
+translated explanation directing the user to HTTPS or `http://localhost` when
+the current origin cannot retain secure authentication cookies. Detect the same
+condition before showing MFA, whose challenge also uses a secure cookie. The
+`requiresSecureAuthenticationOrigin` unit tests cover LAN HTTP, HTTPS, localhost,
+subdomain localhost, IPv4 loopback, and IPv6 loopback origins. Cookie security is
+unchanged.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

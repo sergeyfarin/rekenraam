@@ -8,6 +8,7 @@
   import { healthQueryOptions } from '$lib/api/health';
   import { createBook, createOwner, setupStatusQueryOptions } from '$lib/api/setup';
   import { getAPIClientErrorMessage } from '$lib/api-error-messages';
+  import { TranslatedFormError } from '$lib/form-errors';
   import { m } from '$lib/paraglide/messages.js';
   import AuthenticatedPanel from './authenticated-panel.svelte';
   import CurrencySetupForm from './currency-setup-form.svelte';
@@ -19,6 +20,7 @@
   import WorkspacePreparingPanel from './workspace-preparing-panel.svelte';
   import { localeCurrencyCode, localizedCurrencyCatalog, quickCurrencyCodes } from './currency-options';
   import { installGateStateCopy } from './install-gate-copy';
+  import { requiresSecureAuthenticationOrigin } from './auth-origin';
   import {
     resolveInstallGateState,
     shouldCreateDefaultBook,
@@ -137,13 +139,20 @@
   });
 
   async function refreshInstallGate() {
-    const refreshes: Promise<unknown>[] = [setupQuery.refetch(), sessionQuery.refetch(), healthQuery.refetch()];
+    const sessionRefresh = sessionQuery.refetch();
+    const refreshes: Promise<unknown>[] = [setupQuery.refetch(), sessionRefresh, healthQuery.refetch()];
 
     if (sessionQuery.data?.authenticated === true) {
       refreshes.push(currencyCatalogQuery.refetch());
     }
 
     await Promise.all(refreshes);
+    return (await sessionRefresh).data;
+  }
+
+  function secureOriginError(): TranslatedFormError | undefined {
+    if (!browser || !requiresSecureAuthenticationOrigin(window.location)) return undefined;
+    return new TranslatedFormError(m.install_gate_login_secure_origin_error());
   }
 
   async function handleCreateOwner(event: SubmitEvent) {
@@ -177,12 +186,20 @@
       const result = await login({ username: loginUsername, password: loginPassword });
       loginPassword = '';
       if (result.mfa_required) {
+        const originError = secureOriginError();
+        if (originError) {
+          loginError = originError;
+          return;
+        }
         mfaRequired = true;
         mfaCode = '';
         mfaError = undefined;
         return;
       }
-      await refreshInstallGate();
+      const session = await refreshInstallGate();
+      if (session?.authenticated !== true) {
+        loginError = secureOriginError();
+      }
     } catch (error) {
       loginError = error;
     } finally {
@@ -198,8 +215,12 @@
     try {
       await completeLoginMFA(mfaCode);
       mfaCode = '';
+      const session = await refreshInstallGate();
+      if (session?.authenticated !== true) {
+        mfaError = secureOriginError();
+        return;
+      }
       mfaRequired = false;
-      await refreshInstallGate();
     } catch (error) {
       mfaError = error;
     } finally {

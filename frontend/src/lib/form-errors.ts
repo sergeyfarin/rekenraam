@@ -6,9 +6,16 @@ export type FormErrorState = {
   requestId?: string;
 };
 
+/** A message already translated at the UI boundary and safe to show verbatim. */
+export class TranslatedFormError extends Error {}
+
 export function getFormErrorState(error: unknown): FormErrorState | null {
   if (error == null) {
     return null;
+  }
+
+  if (error instanceof TranslatedFormError) {
+    return { message: error.message };
   }
 
   return {

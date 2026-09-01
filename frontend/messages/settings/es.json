@@ -483,6 +483,7 @@
   "install_gate_loading_copy": "Leyendo el progreso de la configuración y la sesión actual del navegador.",
   "install_gate_loading_title": "Comprobando el estado de la instalación",
   "install_gate_login_copy": "La configuración del propietario está completa. Inicie sesión para acceder a la aplicación y continuar con los siguientes módulos.",
+  "install_gate_login_secure_origin_error": "Se aceptó su contraseña, pero este navegador no puede conservar la cookie de inicio de sesión segura mediante HTTP sin cifrar. Abra Rekenraam mediante HTTPS o http://localhost y vuelva a iniciar sesión.",
   "install_gate_login_submit": "Iniciar sesión",
   "install_gate_login_submit_pending": "Iniciando sesión...",
   "install_gate_login_title": "Inicie sesión para continuar",

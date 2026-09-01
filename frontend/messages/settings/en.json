@@ -482,6 +482,7 @@
   "install_gate_loading_copy": "Reading setup progress and the current browser session.",
   "install_gate_loading_title": "Checking installation state",
   "install_gate_login_copy": "Owner setup is complete. Sign in to unlock the app shell and continue with later slices.",
+  "install_gate_login_secure_origin_error": "Your password was accepted, but this browser cannot keep the secure sign-in cookie over plain HTTP. Open Rekenraam using HTTPS or through http://localhost, then sign in again.",
   "install_gate_login_submit": "Sign in",
   "install_gate_login_submit_pending": "Signing in...",
   "install_gate_login_title": "Sign in to continue",

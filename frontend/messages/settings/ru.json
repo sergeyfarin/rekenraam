@@ -483,6 +483,7 @@
   "install_gate_loading_copy": "Читаем ход настройки и текущую сессию браузера.",
   "install_gate_loading_title": "Проверяем состояние установки",
   "install_gate_login_copy": "Настройка владельца завершена. Войдите, чтобы открыть приложение и продолжить с последующими частями.",
+  "install_gate_login_secure_origin_error": "Пароль принят, но браузер не может сохранить защищённый файл cookie для входа при использовании обычного HTTP. Откройте Rekenraam через HTTPS или http://localhost и войдите снова.",
   "install_gate_login_submit": "Войти",
   "install_gate_login_submit_pending": "Выполняем вход...",
   "install_gate_login_title": "Войдите, чтобы продолжить",

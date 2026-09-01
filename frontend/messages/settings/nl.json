@@ -483,6 +483,7 @@
   "install_gate_loading_copy": "De voortgang van de installatie en de huidige browsersessie worden gelezen.",
   "install_gate_loading_title": "Installatietoestand controleren",
   "install_gate_login_copy": "De installatie door de eigenaar is voltooid. Meld u aan om de app te openen en verder te gaan met latere onderdelen.",
+  "install_gate_login_secure_origin_error": "Uw wachtwoord is geaccepteerd, maar deze browser kan de beveiligde aanmeldcookie niet bewaren via gewone HTTP. Open Rekenraam via HTTPS of http://localhost en meld u opnieuw aan.",
   "install_gate_login_submit": "Aanmelden",
   "install_gate_login_submit_pending": "Aanmelden...",
   "install_gate_login_title": "Meld u aan om verder te gaan",
