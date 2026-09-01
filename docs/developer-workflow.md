@@ -30,6 +30,19 @@ pnpm dev:backend
 pnpm dev:frontend
 ```
 
+The frontend development server binds to `127.0.0.1:1888`. It does not expose a
+plain-HTTP LAN URL because secure authentication cookies only work over HTTPS or
+on a browser's trusted localhost origin. For a headless development machine,
+run this on the machine with the browser and keep the connection open:
+
+```sh
+ssh -N -L 1888:127.0.0.1:1888 user@development-host
+```
+
+Then open `http://localhost:1888`. Vite proxies `/api` to the backend on the
+development host, so the frontend port is the only required forward. Use an
+HTTPS reverse proxy for direct access from phones or other LAN clients.
+
 ### Backend Validation
 
 Checks formatting (`gofmt -l`), runs `go vet ./...`, then the full Go suite with

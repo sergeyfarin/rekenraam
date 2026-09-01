@@ -92,6 +92,21 @@ http://localhost:1888
 ```
 
 During development, SvelteKit serves the app on `1888` and proxies `/api` requests to the Go backend on `16888`.
+The development server listens only on localhost. It deliberately does not
+advertise or accept plain-HTTP LAN connections because browsers cannot retain
+Rekenraam's secure authentication cookies on those origins.
+
+When the development machine is headless, forward the frontend port from the
+machine where the browser runs:
+
+```sh
+ssh -N -L 1888:127.0.0.1:1888 user@development-host
+```
+
+Keep that connection open, then use `http://localhost:1888` in the local
+browser. The frontend forwards API requests to the backend, so no second port
+forward is needed. Use an HTTPS reverse proxy instead when testing from phones
+or other devices that cannot use the SSH tunnel.
 
 You can still run each side separately when needed:
 

@@ -17,9 +17,21 @@ export default defineConfig({
       strategy: ['localStorage', 'preferredLanguage', 'baseLocale']
     }),
     sveltekit(),
-    svelteAnnouncerCsp()
+    svelteAnnouncerCsp(),
+    {
+      name: 'rekenraam-localhost-development',
+      configureServer(server) {
+        server.httpServer?.once('listening', () => {
+          server.config.logger.info(
+            '  Remote HTTP access is disabled because secure sign-in cookies require HTTPS.\n' +
+              '  On a headless host, forward port 1888 over SSH and open http://localhost:1888.'
+          );
+        });
+      }
+    }
   ],
   server: {
+    host: '127.0.0.1',
     port: 1888,
     strictPort: true,
     proxy: {

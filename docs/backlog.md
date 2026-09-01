@@ -1407,6 +1407,18 @@ condition before showing MFA, whose challenge also uses a secure cookie. The
 subdomain localhost, IPv4 loopback, and IPv6 loopback origins. Cookie security is
 unchanged.
 
+### T-86 Development startup advertised an unusable LAN URL `[x]`
+
+**Files:** `frontend/package.json`, `frontend/vite.config.ts`, development
+workflow documentation. Vite listened on every interface and displayed network
+URLs even though plain-HTTP non-localhost origins cannot retain Rekenraam's
+secure authentication cookies.
+
+**Fixed:** bind the frontend development server to `127.0.0.1`, replace Vite's
+network-host suggestion with an explanation of the secure-cookie constraint,
+and document SSH port forwarding for headless development. The frontend proxy
+keeps the backend private and means only port 1888 needs forwarding.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04
