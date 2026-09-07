@@ -158,6 +158,7 @@ type ForecastResult struct {
 	Accounts            []ForecastAccount
 	AccountOptions      []ForecastAccount
 	Commodities         []ForecastCommodity
+	CurrencyOptions     []ForecastCommodity
 	Series              []ForecastSeries
 	Aggregates          []ForecastSeries
 	Events              []ForecastEvent

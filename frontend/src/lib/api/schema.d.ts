@@ -13859,6 +13859,12 @@ export interface components {
             draft: number;
             template: number;
         };
+        ForecastCommodity: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            standard_scale: number;
+        };
         ForecastAccount: {
             /** Format: int64 */
             id: number;
@@ -13960,6 +13966,7 @@ export interface components {
             /** @enum {string} */
             policy_version: "recurring_balance_v1";
             scope: components["schemas"]["ForecastScope"];
+            currency_options: components["schemas"]["ForecastCommodity"][];
             series: components["schemas"]["ForecastAccountSeries"][];
             totals: components["schemas"]["ForecastCurrencySeries"][];
             assumptions: components["schemas"]["ForecastAssumptions"];

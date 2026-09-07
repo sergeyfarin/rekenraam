@@ -6,7 +6,7 @@ Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-09-07 (R12a T-75a/T-74 complete; R9 acceptance complete;
-R10 core slices 1–4 complete; forecast screen slice 5 next. T-76 and T-75b
+R10 core slices 1–5 complete; event-detail/refresh slice 6 next. T-76 and T-75b
 remain required later work.)
 
 ## Where things stand
@@ -91,19 +91,19 @@ See `backlog.md` G-09.
 ## Current initiative — R10 projected balances
 
 Plan written 2026-08-31: `docs/plans/projected-balances-plan.md`. Its coherent
-snapshot, exact projection, authenticated API and constant-as-of FX slices are
-complete; no forecast screen is implemented.
+snapshot, exact projection, authenticated API, constant-as-of FX and responsive
+forecast screen slices are complete.
 The plan fixes source precedence, owner-local date/overdue semantics, exact
 arithmetic, constant-FX policy, snapshot reads, API/UI contracts, budgets,
 worked fixtures and named tests for an agent executing one slice at a time.
 
-**Next action: implement slice 5 only.** Use section 13's execution prompt.
+**Next action: implement slice 6 only.** Use section 13's execution prompt.
 
 - [x] 1. Coherent read-only snapshot inputs and repository tests.
 - [x] 2. Exact per-currency projection, occurrence precedence and worked fixtures.
 - [x] 3. Authenticated balances/event API, pagination and stale-basis handling.
 - [x] 4. Constant-as-of FX, complete coverage, provenance and rounding.
-- [ ] 5. Forecast screen, filters, exact tables/charts and six locales.
+- [x] 5. Forecast screen, filters, exact tables/charts and six locales.
 - [ ] 6. Event explanations, stale-detail recovery and refresh integration.
 - [ ] 7. Cross-system isolation, concurrency, bounds and browser acceptance.
 - [ ] 8. Dated core acceptance review; then learning extension M1.

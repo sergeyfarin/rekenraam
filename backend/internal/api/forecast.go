@@ -16,6 +16,12 @@ type forecastQuantityResponse struct {
 	QuantityScale int               `json:"quantity_scale"`
 }
 
+type forecastCommodityResponse struct {
+	ID            int64  `json:"id"`
+	Code          string `json:"code"`
+	StandardScale int    `json:"standard_scale"`
+}
+
 type forecastSourceCountsResponse struct {
 	Posted   int `json:"posted"`
 	Draft    int `json:"draft"`
@@ -104,6 +110,7 @@ type forecastBalancesResponse struct {
 	BasisToken            string                           `json:"basis_token"`
 	PolicyVersion         string                           `json:"policy_version"`
 	Scope                 forecastScopeResponse            `json:"scope"`
+	CurrencyOptions       []forecastCommodityResponse      `json:"currency_options"`
 	Series                []forecastAccountSeriesResponse  `json:"series"`
 	Totals                []forecastCurrencySeriesResponse `json:"totals"`
 	Assumptions           forecastAssumptionsResponse      `json:"assumptions"`
@@ -371,7 +378,10 @@ func toForecastBalancesResponse(result app.ForecastResult) forecastBalancesRespo
 	for _, commodity := range result.Commodities {
 		commodities[commodity.ID] = commodity.Code
 	}
-	response := forecastBalancesResponse{AsOfDate: result.AsOfDate, StartDate: result.FirstDate, EndDate: result.ThroughDate, TimeZone: result.TimeZone, ComputedAt: result.ComputedAt, HorizonDays: result.HorizonDays, BasisToken: result.BasisToken, PolicyVersion: result.PolicyVersion, Scope: forecastScopeResponse{Mode: result.ScopeMode, RequestedAccountIDs: append([]int64{}, result.RequestedAccountIDs...), ResolvedAccountIDs: append([]int64{}, result.AccountIDs...), IncludeDescendants: result.IncludeDescendants, Accounts: toForecastAccounts(result.Accounts), AccountOptions: toForecastAccounts(result.AccountOptions)}, Series: make([]forecastAccountSeriesResponse, 0, len(result.Series)), Totals: make([]forecastCurrencySeriesResponse, 0, len(result.Aggregates)), Assumptions: forecastAssumptionsResponse{Complete: result.Assumptions.Complete, CarriedForwardEventCount: result.Assumptions.CarriedForward, ExcludedEventCount: result.Assumptions.Excluded, SourceEventCounts: toForecastSourceCounts(result.SourceCounts)}, Diagnostics: make([]forecastDiagnosticResponse, 0, len(result.Assumptions.Diagnostics)), DiagnosticTotalCount: result.Assumptions.Total, DiagnosticHiddenCount: result.Assumptions.Hidden}
+	response := forecastBalancesResponse{AsOfDate: result.AsOfDate, StartDate: result.FirstDate, EndDate: result.ThroughDate, TimeZone: result.TimeZone, ComputedAt: result.ComputedAt, HorizonDays: result.HorizonDays, BasisToken: result.BasisToken, PolicyVersion: result.PolicyVersion, Scope: forecastScopeResponse{Mode: result.ScopeMode, RequestedAccountIDs: append([]int64{}, result.RequestedAccountIDs...), ResolvedAccountIDs: append([]int64{}, result.AccountIDs...), IncludeDescendants: result.IncludeDescendants, Accounts: toForecastAccounts(result.Accounts), AccountOptions: toForecastAccounts(result.AccountOptions)}, CurrencyOptions: make([]forecastCommodityResponse, 0, len(result.CurrencyOptions)), Series: make([]forecastAccountSeriesResponse, 0, len(result.Series)), Totals: make([]forecastCurrencySeriesResponse, 0, len(result.Aggregates)), Assumptions: forecastAssumptionsResponse{Complete: result.Assumptions.Complete, CarriedForwardEventCount: result.Assumptions.CarriedForward, ExcludedEventCount: result.Assumptions.Excluded, SourceEventCounts: toForecastSourceCounts(result.SourceCounts)}, Diagnostics: make([]forecastDiagnosticResponse, 0, len(result.Assumptions.Diagnostics)), DiagnosticTotalCount: result.Assumptions.Total, DiagnosticHiddenCount: result.Assumptions.Hidden}
+	for _, commodity := range result.CurrencyOptions {
+		response.CurrencyOptions = append(response.CurrencyOptions, forecastCommodityResponse{ID: commodity.ID, Code: commodity.Code, StandardScale: commodity.StandardScale})
+	}
 	for _, series := range result.Series {
 		row := forecastAccountSeriesResponse{AccountID: series.AccountID, CommodityID: series.CommodityID, CommodityCode: commodities[series.CommodityID], OpeningBalance: toForecastQuantity(series.Opening), Points: toForecastPoints(series.Points), MinimumBalance: toForecastQuantity(series.Minimum), MinimumDate: series.MinimumDate, FirstNegativeDate: optionalString(series.FirstNegativeDate)}
 		response.Series = append(response.Series, row)

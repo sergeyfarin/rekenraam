@@ -17,6 +17,7 @@
   import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
   import TrendingUp from '@lucide/svelte/icons/trending-up';
   import ChartNoAxesCombined from '@lucide/svelte/icons/chart-no-axes-combined';
+  import ChartSpline from '@lucide/svelte/icons/chart-spline';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import PageHeader from '$lib/components/page-header.svelte';
   import Panel from '$lib/components/panel.svelte';
@@ -94,6 +95,7 @@
   const isSettingsRoute = $derived($page.url.pathname.startsWith('/app/settings'));
   const isInvestmentsRoute = $derived($page.url.pathname.startsWith('/app/investments'));
   const isReportsRoute = $derived($page.url.pathname.startsWith('/app/reports'));
+  const isForecastRoute = $derived($page.url.pathname.startsWith('/app/forecast'));
 
   const headerTitle = $derived(
     isRecurringRoute ? m.recurring_title() : isAccountsRoute
@@ -110,6 +112,8 @@
                 ? m.settings_title()
                 : isInvestmentsRoute
                   ? m.investments_title()
+                  : isForecastRoute
+                    ? m.forecast_title()
                   : isReportsRoute
                     ? m.reports_title()
                   : m.app_shell_header_title()
@@ -129,6 +133,8 @@
                 ? m.settings_shell_copy()
                 : isInvestmentsRoute
                   ? m.investments_shell_copy()
+                  : isForecastRoute
+                    ? m.forecast_shell_copy()
                   : isReportsRoute
                     ? m.reports_shell_copy()
                   : m.app_shell_header_copy()
@@ -307,6 +313,18 @@
         >
           <TrendingUp size={16} aria-hidden="true" />
           {m.investments_nav()}
+        </a>
+        <a
+          href="/app/forecast"
+          aria-current={isForecastRoute ? 'page' : undefined}
+          class:bg-selected={isForecastRoute}
+          class:text-selected-foreground={isForecastRoute}
+          class:bg-transparent={!isForecastRoute}
+          class:text-foreground={!isForecastRoute}
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <ChartSpline size={16} aria-hidden="true" />
+          {m.forecast_nav()}
         </a>
         <a
           href="/app/reports"

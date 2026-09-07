@@ -412,6 +412,8 @@ components:
       $ref: "./components/schemas/forecast.yaml#/ForecastQuantity"
     ForecastSourceEventCounts:
       $ref: "./components/schemas/forecast.yaml#/ForecastSourceEventCounts"
+    ForecastCommodity:
+      $ref: "./components/schemas/forecast.yaml#/ForecastCommodity"
     ForecastAccount:
       $ref: "./components/schemas/forecast.yaml#/ForecastAccount"
     ForecastPoint:

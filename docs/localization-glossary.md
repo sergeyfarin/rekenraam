@@ -63,6 +63,12 @@ native accounting terms for the line, not inventions.
 | Reconcile | Conciliar | Rapprocher | Afstemmen | Abgleichen | Сверить |
 | Reconciliation | Conciliación | Rapprochement | Afstemming | Kontenabgleich | Сверка |
 | Statement | Extracto | Relevé | Afschrift | Kontoauszug | Выписка |
+| Forecast | Previsión | Prévision | Prognose | Prognose | Прогноз |
+| Projected balance | Saldo previsto | Solde prévisionnel | Verwacht saldo | Prognostizierter Saldo | Прогнозный остаток |
+| Recorded only | Solo contabilizado | Écritures comptabilisées | Alleen geboekt | Nur gebucht | Только проведённые |
+| With recurring | Con periódicas | Avec les récurrences | Met periodieke boekingen | Mit wiederkehrenden Buchungen | С регулярными транзакциями |
+| Constant exchange rate | Tipo de cambio constante | Taux de change constant | Vaste wisselkoers | Konstanter Wechselkurs | Постоянный обменный курс |
+| Carried forward | Trasladado | Reporté | Doorgeschoven | Vorgetragen | Перенесено |
 
 German keeps **Cashflow** untranslated because German finance writing does;
 *Geldfluss* exists but reads like a textbook rather than a product.

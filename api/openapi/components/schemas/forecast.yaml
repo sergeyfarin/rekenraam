@@ -15,6 +15,14 @@ ForecastSourceEventCounts:
     draft: { type: integer, minimum: 0 }
     template: { type: integer, minimum: 0 }
 
+ForecastCommodity:
+  type: object
+  required: [id, code, standard_scale]
+  properties:
+    id: { type: integer, format: int64 }
+    code: { type: string }
+    standard_scale: { type: integer, minimum: 0, maximum: 12 }
+
 ForecastAccount:
   type: object
   required: [id, parent_account_id, name, code, builtin_label_key, account_class, account_kind, status, allows_postings, default_commodity_id]
@@ -117,7 +125,7 @@ ForecastDiagnostic:
 
 ForecastBalancesResponse:
   type: object
-  required: [as_of_date, start_date, end_date, time_zone, computed_at, horizon_days, basis_token, policy_version, scope, series, totals, assumptions, diagnostics, diagnostic_total_count, diagnostic_hidden_count, valuation, converted]
+  required: [as_of_date, start_date, end_date, time_zone, computed_at, horizon_days, basis_token, policy_version, scope, currency_options, series, totals, assumptions, diagnostics, diagnostic_total_count, diagnostic_hidden_count, valuation, converted]
   properties:
     as_of_date: { type: string, format: date }
     start_date: { type: string, format: date }
@@ -128,6 +136,9 @@ ForecastBalancesResponse:
     basis_token: { type: string, pattern: "^[a-f0-9]{64}$" }
     policy_version: { type: string, enum: [recurring_balance_v1] }
     scope: { $ref: "../../openapi.yaml#/components/schemas/ForecastScope" }
+    currency_options:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastCommodity" }
     series:
       type: array
       items: { $ref: "../../openapi.yaml#/components/schemas/ForecastAccountSeries" }

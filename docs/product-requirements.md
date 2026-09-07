@@ -265,8 +265,9 @@ Goal: support forward-looking personal finance.
 - Projected balances are read-only projections from current posted facts and
   separately identified recurring assumptions; viewing them never creates
   transactions, occurrences, rate-download work or investment effects. The R10
-  implementation contract is `docs/plans/projected-balances-plan.md` (planned,
-  not shipped). It uses owner-local today, exact per-account/per-currency
+  implementation contract is `docs/plans/projected-balances-plan.md` (in
+  progress; its read-only screen and core projection now ship). It uses
+  owner-local today, exact per-account/per-currency
   balances, and acted-on occurrence identity to avoid counting both a template
   and its generated/posted transaction. Overdue unposted assumptions are visibly
   carried to tomorrow without changing saved dates.

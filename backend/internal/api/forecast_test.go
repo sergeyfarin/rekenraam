@@ -186,6 +186,7 @@ func TestForecastAPIDefaultAndEmptyScopes(t *testing.T) {
 	assert.Equal(t, "default_cash", body.Scope.Mode)
 	assert.Empty(t, body.Scope.ResolvedAccountIDs)
 	assert.NotNil(t, body.Scope.ResolvedAccountIDs)
+	assert.NotEmpty(t, body.CurrencyOptions)
 	assert.NotNil(t, body.Series)
 	assert.NotNil(t, body.Totals)
 

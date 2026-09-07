@@ -301,9 +301,16 @@ coverage returns structured gaps and no partial conversion; complete conversion
 rounds each source-currency opening and daily source component before deriving
 the combined curve, includes rate provenance, and leaves exact source series
 unchanged. Generated frontend types, a typed client, localized errors and Bruno
-examples are included, but no navigation or screen is added yet. Core slices
-5–8 and learning M1–M4 remain unstarted. Next is the forecast screen; no
-forecast UI or learned-spending model is shipped.
+examples are included. `/app/forecast` now provides a responsive, read-only
+forecast screen and navigation entry with strict URL-backed account, horizon,
+descendant and optional reporting-currency filters. It renders exact summary
+cards and authoritative daily tables alongside an accessible recorded-versus-
+projected chart, exposes assumptions, exclusions, diagnostics and FX provenance,
+and covers loading, invalid-filter, empty, no-movement, error and success states
+in all six locales. The composed balances response supplies account and currency
+options, so the page does not fan out into catalog requests. Core slices 6–8 and
+learning M1–M4 remain unstarted. Next is event-detail explanation and stale-basis
+refresh integration; no learned-spending model is shipped.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

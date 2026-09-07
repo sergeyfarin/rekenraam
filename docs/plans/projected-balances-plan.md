@@ -1,21 +1,21 @@
 # Projected Balances Plan (R10)
 
-Status: **in progress — core slices 1–4 complete**. Written 2026-08-31 against `b28c5d57`,
+Status: **in progress — core slices 1–5 complete**. Written 2026-08-31 against `b28c5d57`,
 after R9 acceptance. This is the execution specification for the next initiative
 in `docs/roadmap.md`: **R9 → R10 → R8**. Planning is complete when this document
-lands; the API-only forecast with optional conversion now ships, while its screen remains open.
+lands; the forecast API, optional conversion and read-only screen now ship.
 
 Implementation update (2026-09-07): the coherent snapshot reader, exact
-per-currency application projection, authenticated balances/event endpoints and
-optional complete-coverage constant-as-of FX conversion are complete. There is
-still no screen; core slice 5 is next.
+per-currency application projection, authenticated balances/event endpoints,
+optional complete-coverage constant-as-of FX conversion and responsive forecast
+screen are complete. Core slice 6 is next.
 
 Scope amendment (2026-08-31): after these eight **core** slices, execute M1–M4
 in [lightweight learned spending](forecast-learning-plan.md). The owner requested
 local CPU learning with daily/weekly fluctuations, monthly costs and annual
 seasonality (for example July–August travel). That companion specifies opt-in
-models, history/quality/resource gates and final R10 acceptance. Core slice 5
-remains next; no forecast screen or learning code is implemented yet.
+models, history/quality/resource gates and final R10 acceptance. Core slice 6
+remains next; event-detail UI and learning code are not implemented yet.
 
 Navigation: [decisions](#3-financial-and-date-decisions) ·
 [backend algorithm](#4-backend-read-model-and-algorithm) ·
@@ -630,6 +630,7 @@ ForecastBalancesResponse
   scope: {mode:"default_cash"|"selected_accounts", requested_account_ids:[],
           resolved_account_ids:[], include_descendants:boolean,
           accounts:[ForecastAccount], account_options:[ForecastAccount]}
+  currency_options: [ForecastCommodity] // all as-of reporting-currency choices
   series: [ForecastAccountSeries]       // sorted account_id, commodity_id
   totals: [ForecastCurrencySeries]      // same selected scope, by commodity_id
   assumptions: {complete:boolean, carried_forward_event_count:integer,
@@ -646,6 +647,10 @@ allows_postings, default_commodity_id (nullable). `account_options` lists valid
 as-of selectable non-system asset/liability roots and groups; excludes security
 holding posting accounts. It is backend-composed so the page does not fetch
 one account per series. Its rows count against the metadata budget.
+
+`ForecastCommodity`: id, code and standard_scale. `currency_options` lists all
+as-of currencies accepted as a reporting currency so the composed page does not
+issue a separate catalog request merely to populate its filter.
 
 `ForecastQuantity`: quantity_value (string), quantity_scale (integer).
 `ForecastAccountSeries`: account_id, commodity_id, commodity_code, opening_balance,
@@ -1234,7 +1239,7 @@ Suggested commit: `docs(forecast): accept R10 core forecast`.
 | 2. Exact projection | [x] Complete | This commit, 2026-09-07 | `ForecastService` resolves owner-local bounds and effective-dated account scope inside the coherent snapshot, then produces exact per-account/per-currency and same-currency aggregate curves. Posted, saved-draft and computed-template sources have deterministic precedence and ordering; overdue assumptions carry to tomorrow without mutation; invalid/broken inputs become bounded diagnostics. Named tests cover the P01–P18/B01–B04 behavior applicable before the API, including real template generation and draft promotion, exact mixed scales and values above 2^53, overflow, lifecycle rules, schedules, limits and cancellation. Next: slice 3 balances/events API. |
 | 3. Balances/events API | [x] Complete | This commit, 2026-09-07 | OpenAPI-first authenticated read routes expose exact per-currency balances and stable cursor-paged source events. Strict parsing rejects repeated/unknown scalars and unsupported FX parameters; event pages recompute the same projection, enforce the basis token and filter recipe, return non-null arrays, and map size/overflow/stale-basis failures to stable codes. A production/test service is wired to the shared read-only pool; generated frontend types, typed query helpers, localized errors and Bruno examples ship with A01–A07 and D01–D04 evidence. Next: slice 4 constant-as-of FX. |
 | 4. Constant FX | [x] Complete | This commit, 2026-09-07 | Both forecast recipes accept the paired `reporting_currency_id` and `fx_method=constant_as_of` options. Stored direct currency rates are selected inside the coherent snapshot with the as-of cutoff and deterministic tie rules; missing/stale coverage returns provenance gaps and a null combined series while exact source series remain unchanged. Same-currency identity, pre-netting coverage, 7-day staleness, future/void exclusion, per-currency component half-away-from-zero rounding, basis participation and no background-work side effects are covered by F01–F08/A08 tests. OpenAPI, generated client types and a Bruno recipe ship with the behavior. Next: slice 5 forecast screen. |
-| 5. Forecast screen | [ ] Not started | — | — |
+| 5. Forecast screen | [x] Complete | This commit, 2026-09-07 | `/app/forecast` is reachable from app navigation and uses one composed forecast request for exact series plus account/currency options. Strict canonical URL filters cover horizon, account scope, descendants and paired constant-FX conversion. Responsive cards, an accessible two-curve chart and authoritative daily tables expose exact values, movements, assumptions, diagnostics and FX provenance across loading, invalid, empty, no-movement, error and success states. All six locales ship; focused model/API tests, a production build and a real browser flow including 390px overflow coverage pass. Next: slice 6 event explanations and refresh recovery. |
 | 6. Details and refresh | [ ] Not started | — | — |
 | 7. Cross-system acceptance | [ ] Not started | — | — |
 | 8. Acceptance closure | [ ] Not started | — | — |

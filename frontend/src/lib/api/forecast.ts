@@ -40,7 +40,7 @@ export function forecastBalancesQueryOptions(query: ForecastQuery = {}) {
   return {
     queryKey: [...forecastQueryKey, normalized] as const,
     queryFn: () => getForecastBalances(query),
-    staleTime: 10_000
+    staleTime: 5_000
   };
 }
 
