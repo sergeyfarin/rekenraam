@@ -1,0 +1,17 @@
+meta {
+  name: Forecast Balances - Selected Accounts
+  type: http
+  seq: 31
+}
+
+get {
+  url: {{baseUrl}}/api/v1/forecasts/balances?horizon_days=30&account_id=1&include_descendants=false
+  body: none
+  auth: none
+}
+
+params:query {
+  horizon_days: 30
+  account_id: 1
+  include_descendants: false
+}

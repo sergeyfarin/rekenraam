@@ -956,5 +956,7 @@
   "account_system_role_retained_earnings": "Bénéfices non distribués",
   "account_system_role_unassigned_income": "Revenus non affectés",
   "account_system_role_unassigned_expense": "Dépenses non affectées",
-  "account_system_role_commodity_trading": "Compensation de devises et d’instruments"
+  "account_system_role_commodity_trading": "Compensation de devises et d’instruments",
+  "api_error_forecast_too_large": "Cette prévision est trop volumineuse pour être calculée. Sélectionnez moins de comptes ou une période plus courte.",
+  "api_error_forecast_basis_changed": "La prévision a changé. Actualisez-la avant de rouvrir les détails."
 }

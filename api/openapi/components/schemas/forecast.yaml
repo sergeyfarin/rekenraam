@@ -1,0 +1,187 @@
+ForecastQuantity:
+  type: object
+  required: [quantity_value, quantity_scale]
+  properties:
+    quantity_value:
+      type: string
+      pattern: "^-?(0|[1-9][0-9]{0,37})$"
+    quantity_scale: { type: integer, minimum: 0, maximum: 24 }
+
+ForecastSourceEventCounts:
+  type: object
+  required: [posted, draft, template]
+  properties:
+    posted: { type: integer, minimum: 0 }
+    draft: { type: integer, minimum: 0 }
+    template: { type: integer, minimum: 0 }
+
+ForecastAccount:
+  type: object
+  required: [id, parent_account_id, name, code, builtin_label_key, account_class, account_kind, status, allows_postings, default_commodity_id]
+  properties:
+    id: { type: integer, format: int64 }
+    parent_account_id: { type: [integer, 'null'], format: int64 }
+    name: { type: [string, 'null'] }
+    code: { type: [string, 'null'] }
+    builtin_label_key: { type: [string, 'null'] }
+    account_class: { type: string, enum: [asset, liability] }
+    account_kind: { type: string }
+    status: { type: string, enum: [active, closed, archived] }
+    allows_postings: { type: boolean }
+    default_commodity_id: { type: [integer, 'null'], format: int64 }
+
+ForecastPoint:
+  type: object
+  required: [date, posted_delta, draft_delta, template_delta, recorded_balance, projected_balance, source_event_counts, carried_forward_event_count]
+  properties:
+    date: { type: string, format: date }
+    posted_delta: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    draft_delta: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    template_delta: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    recorded_balance: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    projected_balance: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    source_event_counts: { $ref: "../../openapi.yaml#/components/schemas/ForecastSourceEventCounts" }
+    carried_forward_event_count: { type: integer, minimum: 0 }
+
+ForecastAccountSeries:
+  type: object
+  required: [account_id, commodity_id, commodity_code, opening_balance, points, minimum_balance, minimum_date, first_negative_date]
+  properties:
+    account_id: { type: integer, format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    commodity_code: { type: string }
+    opening_balance: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    points:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastPoint" }
+    minimum_balance: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    minimum_date: { type: string, format: date }
+    first_negative_date: { type: [string, 'null'], format: date }
+
+ForecastCurrencySeries:
+  type: object
+  required: [commodity_id, commodity_code, opening_balance, points, minimum_balance, minimum_date]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    commodity_code: { type: string }
+    opening_balance: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    points:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastPoint" }
+    minimum_balance: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    minimum_date: { type: string, format: date }
+
+ForecastScope:
+  type: object
+  required: [mode, requested_account_ids, resolved_account_ids, include_descendants, accounts, account_options]
+  properties:
+    mode: { type: string, enum: [default_cash, selected_accounts] }
+    requested_account_ids:
+      type: array
+      items: { type: integer, format: int64 }
+    resolved_account_ids:
+      type: array
+      items: { type: integer, format: int64 }
+    include_descendants: { type: boolean }
+    accounts:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastAccount" }
+    account_options:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastAccount" }
+
+ForecastAssumptions:
+  type: object
+  required: [complete, carried_forward_event_count, excluded_event_count, source_event_counts]
+  properties:
+    complete: { type: boolean }
+    carried_forward_event_count: { type: integer, minimum: 0 }
+    excluded_event_count: { type: integer, minimum: 0 }
+    source_event_counts: { $ref: "../../openapi.yaml#/components/schemas/ForecastSourceEventCounts" }
+
+ForecastDiagnostic:
+  type: object
+  required: [code, severity, template_id, occurrence_id, transaction_id, occurrence_date, source_date, projected_date, event_count]
+  properties:
+    code:
+      type: string
+      enum: [carried_forward, blocked_occurrence, invalid_draft, invalid_template_occurrence, broken_occurrence_link]
+    severity: { type: string, enum: [info, warning] }
+    template_id: { type: [integer, 'null'], format: int64 }
+    occurrence_id: { type: [integer, 'null'], format: int64 }
+    transaction_id: { type: [integer, 'null'], format: int64 }
+    occurrence_date: { type: [string, 'null'], format: date }
+    source_date: { type: [string, 'null'], format: date }
+    projected_date: { type: [string, 'null'], format: date }
+    event_count: { type: integer, minimum: 1 }
+
+ForecastBalancesResponse:
+  type: object
+  required: [as_of_date, start_date, end_date, time_zone, computed_at, horizon_days, basis_token, policy_version, scope, series, totals, assumptions, diagnostics, diagnostic_total_count, diagnostic_hidden_count]
+  properties:
+    as_of_date: { type: string, format: date }
+    start_date: { type: string, format: date }
+    end_date: { type: string, format: date }
+    time_zone: { type: string }
+    computed_at: { type: string, format: date-time }
+    horizon_days: { type: integer, minimum: 1, maximum: 366 }
+    basis_token: { type: string, pattern: "^[a-f0-9]{64}$" }
+    policy_version: { type: string, enum: [recurring_balance_v1] }
+    scope: { $ref: "../../openapi.yaml#/components/schemas/ForecastScope" }
+    series:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastAccountSeries" }
+    totals:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastCurrencySeries" }
+    assumptions: { $ref: "../../openapi.yaml#/components/schemas/ForecastAssumptions" }
+    diagnostics:
+      type: array
+      maxItems: 50
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastDiagnostic" }
+    diagnostic_total_count: { type: integer, minimum: 0 }
+    diagnostic_hidden_count: { type: integer, minimum: 0 }
+
+ForecastEventAmount:
+  type: object
+  required: [account_id, commodity_id, commodity_code, quantity_value, quantity_scale]
+  properties:
+    account_id: { type: integer, format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    commodity_code: { type: string }
+    quantity_value: { type: string, pattern: "^-?(0|[1-9][0-9]{0,37})$" }
+    quantity_scale: { type: integer, minimum: 0, maximum: 24 }
+
+ForecastEvent:
+  type: object
+  required: [key, source, source_date, projected_date, carried_forward, transaction_id, version_id, entry_id, template_id, occurrence_id, occurrence_date, description, payee_name, amounts]
+  properties:
+    key: { type: string }
+    source: { type: string, enum: [posted, draft, template] }
+    source_date: { type: string, format: date }
+    projected_date: { type: string, format: date }
+    carried_forward: { type: boolean }
+    transaction_id: { type: [integer, 'null'], format: int64 }
+    version_id: { type: [integer, 'null'], format: int64 }
+    entry_id: { type: [integer, 'null'], format: int64 }
+    template_id: { type: [integer, 'null'], format: int64 }
+    occurrence_id: { type: [integer, 'null'], format: int64 }
+    occurrence_date: { type: [string, 'null'], format: date }
+    description: { type: string }
+    payee_name: { type: [string, 'null'] }
+    amounts:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastEventAmount" }
+
+ForecastEventsResponse:
+  type: object
+  required: [basis_token, date, items, total_count, next_cursor]
+  properties:
+    basis_token: { type: string, pattern: "^[a-f0-9]{64}$" }
+    date: { type: string, format: date }
+    items:
+      type: array
+      maxItems: 200
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastEvent" }
+    total_count: { type: integer, minimum: 0 }
+    next_cursor: { type: [string, 'null'] }

@@ -23,7 +23,18 @@ const (
 	forecastMaxDiagnostics     = 50
 )
 
+const (
+	ForecastDefaultHorizonDays = forecastDefaultHorizonDays
+	ForecastMaxHorizonDays     = forecastMaxHorizonDays
+	ForecastMaxRootAccounts    = forecastMaxRootAccounts
+	ForecastDefaultEventLimit  = 50
+	ForecastMaxEventLimit      = 200
+	ForecastMaxCursorBytes     = 4096
+	ForecastPolicyVersion      = "recurring_balance_v1"
+)
+
 var ErrForecastTooLarge = errors.New("forecast exceeds a configured limit")
+var ErrForecastBasisChanged = errors.New("forecast basis changed")
 
 type ForecastInput struct {
 	OwnerUserID        int64
@@ -40,6 +51,8 @@ type ForecastQuantity struct {
 type ForecastAccount struct {
 	ID                 int64
 	Name               string
+	Code               string
+	BuiltinLabelKey    string
 	AccountClass       string
 	AccountKind        string
 	Status             string
@@ -65,6 +78,8 @@ type ForecastPoint struct {
 	Components       ForecastComponents
 	RecordedBalance  ForecastQuantity
 	ProjectedBalance ForecastQuantity
+	SourceCounts     ForecastSourceCounts
+	CarriedForward   int
 }
 
 type ForecastSeries struct {
@@ -78,15 +93,18 @@ type ForecastSeries struct {
 }
 
 type ForecastEventAmount struct {
-	AccountID   int64
-	CommodityID int64
-	Quantity    ForecastQuantity
+	AccountID     int64
+	CommodityID   int64
+	CommodityCode string
+	Quantity      ForecastQuantity
 }
 
 type ForecastEvent struct {
 	Key            string
 	Source         string
 	SourceID       int64
+	TransactionID  int64
+	VersionID      int64
 	EntryID        int64
 	TemplateID     int64
 	OccurrenceID   int64
@@ -94,16 +112,21 @@ type ForecastEvent struct {
 	SourceDate     string
 	ProjectedDate  string
 	CarriedForward bool
+	Description    string
 	PayeeName      string
 	Amounts        []ForecastEventAmount
 }
 
 type ForecastDiagnostic struct {
 	Code           string
+	Severity       string
 	TemplateID     int64
 	OccurrenceID   int64
+	TransactionID  int64
 	OccurrenceDate string
 	SourceDate     string
+	ProjectedDate  string
+	EventCount     int
 }
 
 type ForecastAssumptions struct {
@@ -118,19 +141,26 @@ type ForecastAssumptions struct {
 type ForecastSourceCounts struct{ Posted, Draft, Template int }
 
 type ForecastResult struct {
-	AsOfDate     string
-	FirstDate    string
-	ThroughDate  string
-	ComputedAt   string
-	BasisToken   string
-	AccountIDs   []int64
-	Accounts     []ForecastAccount
-	Commodities  []ForecastCommodity
-	Series       []ForecastSeries
-	Aggregates   []ForecastSeries
-	Events       []ForecastEvent
-	SourceCounts ForecastSourceCounts
-	Assumptions  ForecastAssumptions
+	AsOfDate            string
+	FirstDate           string
+	ThroughDate         string
+	TimeZone            string
+	ComputedAt          string
+	HorizonDays         int
+	BasisToken          string
+	PolicyVersion       string
+	ScopeMode           string
+	RequestedAccountIDs []int64
+	IncludeDescendants  bool
+	AccountIDs          []int64
+	Accounts            []ForecastAccount
+	AccountOptions      []ForecastAccount
+	Commodities         []ForecastCommodity
+	Series              []ForecastSeries
+	Aggregates          []ForecastSeries
+	Events              []ForecastEvent
+	SourceCounts        ForecastSourceCounts
+	Assumptions         ForecastAssumptions
 }
 
 type ForecastService struct {

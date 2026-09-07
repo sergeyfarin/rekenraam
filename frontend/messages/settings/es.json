@@ -956,5 +956,7 @@
   "account_system_role_retained_earnings": "Beneficios retenidos",
   "account_system_role_unassigned_income": "Ingresos sin asignar",
   "account_system_role_unassigned_expense": "Gastos sin asignar",
-  "account_system_role_commodity_trading": "Compensación de divisas e instrumentos"
+  "account_system_role_commodity_trading": "Compensación de divisas e instrumentos",
+  "api_error_forecast_too_large": "Esta previsión es demasiado grande para calcularla. Selecciona menos cuentas o un periodo más corto.",
+  "api_error_forecast_basis_changed": "La previsión ha cambiado. Actualízala antes de volver a abrir los detalles."
 }

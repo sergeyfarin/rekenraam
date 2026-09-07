@@ -4,6 +4,181 @@
  */
 
 export interface paths {
+    "/api/v1/forecasts/balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Project exact balances from posted and recurring sources
+         * @description Returns one coherent, read-only forecast. Values remain separated by currency and by posted, saved-draft, and computed-template source. The v1 limits are 100 requested roots, 200 resolved accounts, 20,000 examined future events, and 200,000 output points; an exceeded limit is reported as FORECAST_TOO_LARGE and never as a truncated success response.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    horizon_days?: number;
+                    /** @description Repeatable positive account ID. Omitted selects active cash accounts. */
+                    account_id?: number[];
+                    include_descendants?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Exact per-currency balance forecast */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ForecastBalancesResponse"];
+                    };
+                };
+                /** @description Invalid or ambiguous query */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forecast size or exact coefficient limit exceeded */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database temporarily busy */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/forecasts/balance-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Explain the source events for one forecast day
+         * @description Recomputes the same coherent forecast, verifies the supplied basis token, filters one projected day, and cursor-pages its stable event order. Event pages contain at most 200 items and never expose excluded diagnostics as financial events.
+         */
+        get: {
+            parameters: {
+                query: {
+                    horizon_days?: number;
+                    account_id?: number[];
+                    include_descendants?: boolean;
+                    date: string;
+                    basis_token: string;
+                    detail_account_id?: number;
+                    detail_commodity_id?: number;
+                    limit?: number;
+                    /** @description Opaque cursor from the preceding page; encoded length is limited to 4096 bytes. */
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description One stable page of source events */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ForecastEventsResponse"];
+                    };
+                };
+                /** @description Invalid query, filter, date, or cursor */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description The forecast basis changed; refresh balances before requesting details */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Forecast size or exact coefficient limit exceeded */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Database temporarily busy */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/recurring/preview": {
         parameters: {
             query?: never;
@@ -13669,6 +13844,165 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ForecastQuantity: {
+            quantity_value: string;
+            quantity_scale: number;
+        };
+        ForecastSourceEventCounts: {
+            posted: number;
+            draft: number;
+            template: number;
+        };
+        ForecastAccount: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            parent_account_id: number | null;
+            name: string | null;
+            code: string | null;
+            builtin_label_key: string | null;
+            /** @enum {string} */
+            account_class: "asset" | "liability";
+            account_kind: string;
+            /** @enum {string} */
+            status: "active" | "closed" | "archived";
+            allows_postings: boolean;
+            /** Format: int64 */
+            default_commodity_id: number | null;
+        };
+        ForecastPoint: {
+            /** Format: date */
+            date: string;
+            posted_delta: components["schemas"]["ForecastQuantity"];
+            draft_delta: components["schemas"]["ForecastQuantity"];
+            template_delta: components["schemas"]["ForecastQuantity"];
+            recorded_balance: components["schemas"]["ForecastQuantity"];
+            projected_balance: components["schemas"]["ForecastQuantity"];
+            source_event_counts: components["schemas"]["ForecastSourceEventCounts"];
+            carried_forward_event_count: number;
+        };
+        ForecastAccountSeries: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            commodity_code: string;
+            opening_balance: components["schemas"]["ForecastQuantity"];
+            points: components["schemas"]["ForecastPoint"][];
+            minimum_balance: components["schemas"]["ForecastQuantity"];
+            /** Format: date */
+            minimum_date: string;
+            /** Format: date */
+            first_negative_date: string | null;
+        };
+        ForecastCurrencySeries: {
+            /** Format: int64 */
+            commodity_id: number;
+            commodity_code: string;
+            opening_balance: components["schemas"]["ForecastQuantity"];
+            points: components["schemas"]["ForecastPoint"][];
+            minimum_balance: components["schemas"]["ForecastQuantity"];
+            /** Format: date */
+            minimum_date: string;
+        };
+        ForecastScope: {
+            /** @enum {string} */
+            mode: "default_cash" | "selected_accounts";
+            requested_account_ids: number[];
+            resolved_account_ids: number[];
+            include_descendants: boolean;
+            accounts: components["schemas"]["ForecastAccount"][];
+            account_options: components["schemas"]["ForecastAccount"][];
+        };
+        ForecastAssumptions: {
+            complete: boolean;
+            carried_forward_event_count: number;
+            excluded_event_count: number;
+            source_event_counts: components["schemas"]["ForecastSourceEventCounts"];
+        };
+        ForecastDiagnostic: {
+            /** @enum {string} */
+            code: "carried_forward" | "blocked_occurrence" | "invalid_draft" | "invalid_template_occurrence" | "broken_occurrence_link";
+            /** @enum {string} */
+            severity: "info" | "warning";
+            /** Format: int64 */
+            template_id: number | null;
+            /** Format: int64 */
+            occurrence_id: number | null;
+            /** Format: int64 */
+            transaction_id: number | null;
+            /** Format: date */
+            occurrence_date: string | null;
+            /** Format: date */
+            source_date: string | null;
+            /** Format: date */
+            projected_date: string | null;
+            event_count: number;
+        };
+        ForecastBalancesResponse: {
+            /** Format: date */
+            as_of_date: string;
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            time_zone: string;
+            /** Format: date-time */
+            computed_at: string;
+            horizon_days: number;
+            basis_token: string;
+            /** @enum {string} */
+            policy_version: "recurring_balance_v1";
+            scope: components["schemas"]["ForecastScope"];
+            series: components["schemas"]["ForecastAccountSeries"][];
+            totals: components["schemas"]["ForecastCurrencySeries"][];
+            assumptions: components["schemas"]["ForecastAssumptions"];
+            diagnostics: components["schemas"]["ForecastDiagnostic"][];
+            diagnostic_total_count: number;
+            diagnostic_hidden_count: number;
+        };
+        ForecastEventAmount: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            commodity_code: string;
+            quantity_value: string;
+            quantity_scale: number;
+        };
+        ForecastEvent: {
+            key: string;
+            /** @enum {string} */
+            source: "posted" | "draft" | "template";
+            /** Format: date */
+            source_date: string;
+            /** Format: date */
+            projected_date: string;
+            carried_forward: boolean;
+            /** Format: int64 */
+            transaction_id: number | null;
+            /** Format: int64 */
+            version_id: number | null;
+            /** Format: int64 */
+            entry_id: number | null;
+            /** Format: int64 */
+            template_id: number | null;
+            /** Format: int64 */
+            occurrence_id: number | null;
+            /** Format: date */
+            occurrence_date: string | null;
+            description: string;
+            payee_name: string | null;
+            amounts: components["schemas"]["ForecastEventAmount"][];
+        };
+        ForecastEventsResponse: {
+            basis_token: string;
+            /** Format: date */
+            date: string;
+            items: components["schemas"]["ForecastEvent"][];
+            total_count: number;
+            next_cursor: string | null;
+        };
         RecurringPreviewResponse: {
             dates: string[];
         };
@@ -16560,7 +16894,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "INVESTMENT_WORKFLOW_REQUIRED" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

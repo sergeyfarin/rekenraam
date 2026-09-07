@@ -1,21 +1,22 @@
 # Projected Balances Plan (R10)
 
-Status: **in progress — core slices 1–2 complete**. Written 2026-08-31 against `b28c5d57`,
+Status: **in progress — core slices 1–3 complete**. Written 2026-08-31 against `b28c5d57`,
 after R9 acceptance. This is the execution specification for the next initiative
 in `docs/roadmap.md`: **R9 → R10 → R8**. Planning is complete when this document
-lands; no R10 endpoint, screen, forecast or conversion is claimed to ship yet.
+lands; the API-only forecast now ships, while its screen and conversion remain open.
 
-Implementation update (2026-09-07): the coherent snapshot reader and exact
-per-currency application projection are complete. There is still no public
-endpoint or screen; core slice 3 is next.
+Implementation update (2026-09-07): the coherent snapshot reader, exact
+per-currency application projection, authenticated balances endpoint and
+cursor-paged event explanations are complete. There is still no screen or
+currency conversion; core slice 4 is next.
 
 Scope amendment (2026-08-31): after these eight **core** slices, execute M1–M4
 in [lightweight learned spending](forecast-learning-plan.md). The owner requested
 local CPU learning with daily/weekly fluctuations, monthly costs and annual
 seasonality (for example July–August travel). That companion specifies opt-in
-models, history/quality/resource gates and final R10 acceptance. Core slice 3
-remains next; no forecast endpoint, screen, conversion or learning code is
-implemented yet.
+models, history/quality/resource gates and final R10 acceptance. Core slice 4
+remains next; no forecast screen, conversion or learning code is implemented
+yet.
 
 Navigation: [decisions](#3-financial-and-date-decisions) ·
 [backend algorithm](#4-backend-read-model-and-algorithm) ·
@@ -1232,7 +1233,7 @@ Suggested commit: `docs(forecast): accept R10 core forecast`.
 |---|---|---|---|
 | 1. Read-only snapshot inputs | [x] Complete | This commit, 2026-08-31 | `ForecastRepository` reads all source rows through one `OpenReadOnly` transaction. Seven named repository tests cover current posted versions, the posted bulk query plan using `posting_versions_account_idx`, archived/edit-changed template drafts, full draft counterparts, concurrent write isolation, limit+1 failure and empty scope. Existing recurring occurrence/template and entry/version indexes cover the remaining joins; no new index was justified. Next: slice 2 exact projection. |
 | 2. Exact projection | [x] Complete | This commit, 2026-09-07 | `ForecastService` resolves owner-local bounds and effective-dated account scope inside the coherent snapshot, then produces exact per-account/per-currency and same-currency aggregate curves. Posted, saved-draft and computed-template sources have deterministic precedence and ordering; overdue assumptions carry to tomorrow without mutation; invalid/broken inputs become bounded diagnostics. Named tests cover the P01–P18/B01–B04 behavior applicable before the API, including real template generation and draft promotion, exact mixed scales and values above 2^53, overflow, lifecycle rules, schedules, limits and cancellation. Next: slice 3 balances/events API. |
-| 3. Balances/events API | [ ] Not started | — | — |
+| 3. Balances/events API | [x] Complete | This commit, 2026-09-07 | OpenAPI-first authenticated read routes expose exact per-currency balances and stable cursor-paged source events. Strict parsing rejects repeated/unknown scalars and unsupported FX parameters; event pages recompute the same projection, enforce the basis token and filter recipe, return non-null arrays, and map size/overflow/stale-basis failures to stable codes. A production/test service is wired to the shared read-only pool; generated frontend types, typed query helpers, localized errors and Bruno examples ship with A01–A07 and D01–D04 evidence. Next: slice 4 constant-as-of FX. |
 | 4. Constant FX | [ ] Not started | — | — |
 | 5. Forecast screen | [ ] Not started | — | — |
 | 6. Details and refresh | [ ] Not started | — | — |

@@ -34,12 +34,15 @@ type Services struct {
 	Export           *app.ExportService
 	Backup           *app.BackupService
 	SelfCheck        *app.SelfCheckService
+	Forecast         *app.ForecastService
 }
 
 func NewHandler(logger *slog.Logger, webHandler http.Handler, services Services, options HandlerOptions) http.Handler {
 	mux := http.NewServeMux()
 	RegisterRoutesWithAuth(mux, logger, services, options)
-	mux.HandleFunc("/api/", http.NotFound)
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "API route not found")
+	})
 	mux.Handle("/", webHandler)
 
 	return withRequestID(withSecurityHeaders(options, withRequestLogging(logger, withRecovery(logger, mux))))

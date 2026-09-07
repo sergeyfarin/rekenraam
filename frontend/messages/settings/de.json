@@ -956,5 +956,7 @@
   "account_system_role_retained_earnings": "Gewinnrücklagen",
   "account_system_role_unassigned_income": "Nicht zugeordnete Einnahmen",
   "account_system_role_unassigned_expense": "Nicht zugeordnete Ausgaben",
-  "account_system_role_commodity_trading": "Währungs- und Instrumentverrechnung"
+  "account_system_role_commodity_trading": "Währungs- und Instrumentverrechnung",
+  "api_error_forecast_too_large": "Diese Prognose ist zu groß für die Berechnung. Wählen Sie weniger Konten oder einen kürzeren Zeitraum.",
+  "api_error_forecast_basis_changed": "Die Prognose hat sich geändert. Aktualisieren Sie sie, bevor Sie die Details erneut öffnen."
 }

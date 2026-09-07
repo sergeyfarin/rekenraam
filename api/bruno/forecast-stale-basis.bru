@@ -1,0 +1,17 @@
+meta {
+  name: Forecast Balance Events - Stale Basis
+  type: http
+  seq: 34
+}
+
+get {
+  url: {{baseUrl}}/api/v1/forecasts/balance-events?horizon_days=90&date=2026-09-08&basis_token=0000000000000000000000000000000000000000000000000000000000000000
+  body: none
+  auth: none
+}
+
+params:query {
+  horizon_days: 90
+  date: 2026-09-08
+  basis_token: 0000000000000000000000000000000000000000000000000000000000000000
+}

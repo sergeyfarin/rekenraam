@@ -1,0 +1,15 @@
+meta {
+  name: Forecast Balances - Invalid Horizon
+  type: http
+  seq: 33
+}
+
+get {
+  url: {{baseUrl}}/api/v1/forecasts/balances?horizon_days=367
+  body: none
+  auth: none
+}
+
+params:query {
+  horizon_days: 367
+}

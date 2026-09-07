@@ -1,0 +1,15 @@
+meta {
+  name: Forecast Balances - Default Cash
+  type: http
+  seq: 30
+}
+
+get {
+  url: {{baseUrl}}/api/v1/forecasts/balances?horizon_days=90
+  body: none
+  auth: none
+}
+
+params:query {
+  horizon_days: 90
+}

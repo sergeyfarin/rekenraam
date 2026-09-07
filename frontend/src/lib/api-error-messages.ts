@@ -13,6 +13,8 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   RATE_LIMITED: () => m.api_error_rate_limited(),
   RESOURCE_BUSY: () => m.api_error_resource_busy(),
   LEDGER_OVERFLOW: () => m.api_error_ledger_overflow(),
+  FORECAST_TOO_LARGE: () => m.api_error_forecast_too_large(),
+  FORECAST_BASIS_CHANGED: () => m.api_error_forecast_basis_changed(),
   INVESTMENT_WORKFLOW_REQUIRED: () => m.api_error_investment_workflow_required(),
   TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   RECURRING_TEMPLATE_UNBALANCED: () => m.api_error_recurring_template_unbalanced(),

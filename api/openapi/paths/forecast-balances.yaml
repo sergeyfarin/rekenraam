@@ -1,0 +1,51 @@
+get:
+  summary: Project exact balances from posted and recurring sources
+  description: >
+    Returns one coherent, read-only forecast. Values remain separated by
+    currency and by posted, saved-draft, and computed-template source. The
+    v1 limits are 100 requested roots, 200 resolved accounts, 20,000 examined
+    future events, and 200,000 output points; an exceeded limit is reported as
+    FORECAST_TOO_LARGE and never as a truncated success response.
+  parameters:
+    - in: query
+      name: horizon_days
+      schema: { type: integer, minimum: 1, maximum: 366, default: 90 }
+    - in: query
+      name: account_id
+      description: Repeatable positive account ID. Omitted selects active cash accounts.
+      schema:
+        type: array
+        maxItems: 100
+        items: { type: integer, format: int64, minimum: 1 }
+      style: form
+      explode: true
+    - in: query
+      name: include_descendants
+      schema: { type: boolean, default: true }
+  responses:
+    "200":
+      description: Exact per-currency balance forecast
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ForecastBalancesResponse"
+    "400":
+      description: Invalid or ambiguous query
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" }
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" }
+    "422":
+      description: Forecast size or exact coefficient limit exceeded
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" }
+    "503":
+      description: Database temporarily busy
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" }

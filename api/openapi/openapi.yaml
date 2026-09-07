@@ -3,6 +3,10 @@ info:
   title: Rekenraam API
   version: 0.0.0
 paths:
+  /api/v1/forecasts/balances:
+    $ref: "./paths/forecast-balances.yaml"
+  /api/v1/forecasts/balance-events:
+    $ref: "./paths/forecast-balance-events.yaml"
   /api/v1/recurring/preview:
     $ref: "./paths/recurring-preview.yaml"
   /api/v1/recurring/summary:
@@ -404,6 +408,32 @@ components:
         type: integer
         format: int64
   schemas:
+    ForecastQuantity:
+      $ref: "./components/schemas/forecast.yaml#/ForecastQuantity"
+    ForecastSourceEventCounts:
+      $ref: "./components/schemas/forecast.yaml#/ForecastSourceEventCounts"
+    ForecastAccount:
+      $ref: "./components/schemas/forecast.yaml#/ForecastAccount"
+    ForecastPoint:
+      $ref: "./components/schemas/forecast.yaml#/ForecastPoint"
+    ForecastAccountSeries:
+      $ref: "./components/schemas/forecast.yaml#/ForecastAccountSeries"
+    ForecastCurrencySeries:
+      $ref: "./components/schemas/forecast.yaml#/ForecastCurrencySeries"
+    ForecastScope:
+      $ref: "./components/schemas/forecast.yaml#/ForecastScope"
+    ForecastAssumptions:
+      $ref: "./components/schemas/forecast.yaml#/ForecastAssumptions"
+    ForecastDiagnostic:
+      $ref: "./components/schemas/forecast.yaml#/ForecastDiagnostic"
+    ForecastBalancesResponse:
+      $ref: "./components/schemas/forecast.yaml#/ForecastBalancesResponse"
+    ForecastEventAmount:
+      $ref: "./components/schemas/forecast.yaml#/ForecastEventAmount"
+    ForecastEvent:
+      $ref: "./components/schemas/forecast.yaml#/ForecastEvent"
+    ForecastEventsResponse:
+      $ref: "./components/schemas/forecast.yaml#/ForecastEventsResponse"
     RecurringPreviewResponse:
       $ref: "./components/schemas/recurring-review.yaml#/RecurringPreviewResponse"
     RecurringSummaryResponse:

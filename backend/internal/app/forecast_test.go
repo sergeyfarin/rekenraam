@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -144,6 +145,58 @@ func TestForecastServiceUsesRealRecurringGenerationAndPromotion(t *testing.T) {
 	assert.NotEqual(t, draft.Series[0].Points[1].RecordedBalance, posted.Series[0].Points[1].RecordedBalance)
 }
 
+func TestForecastConcurrentMaterializationKeepsOneBasis(t *testing.T) {
+	f, recurring, input := recurringFixture(t)
+	ctx := context.Background()
+	_, err := recurring.CreateTemplate(ctx, input)
+	require.NoError(t, err)
+	var databaseFile string
+	require.NoError(t, f.database.QueryRow(`SELECT file FROM pragma_database_list WHERE name = 'main'`).Scan(&databaseFile))
+	readOnly, err := db.OpenReadOnly(ctx, "file:"+databaseFile)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, readOnly.Close()) })
+	forecast := NewForecastService(db.NewForecastRepository(readOnly))
+	forecast.SetNowForTest(func() time.Time { return time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC) })
+	recipe := ForecastInput{OwnerUserID: f.ownerUserID, HorizonDays: 5, AccountIDs: []int64{f.cashAccountID}}
+	before, err := forecast.Balances(ctx, recipe)
+	require.NoError(t, err)
+	require.Len(t, before.Events, 1)
+	assert.Equal(t, "template", before.Events[0].Source)
+
+	start := make(chan struct{})
+	results := make(chan ForecastResult, 12)
+	errors := make(chan error, 12)
+	var group sync.WaitGroup
+	for range 12 {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			<-start
+			result, readErr := forecast.Balances(ctx, recipe)
+			results <- result
+			errors <- readErr
+		}()
+	}
+	close(start)
+	_, err = recurring.GenerateDue(ctx, GenerateRecurringInput{OwnerUserID: f.ownerUserID})
+	require.NoError(t, err)
+	group.Wait()
+	close(results)
+	close(errors)
+	for readErr := range errors {
+		require.NoError(t, readErr)
+	}
+	for result := range results {
+		require.Len(t, result.Events, 1, "a coherent snapshot contains the computed event or its saved replacement exactly once")
+		assert.Contains(t, []string{"template", "draft"}, result.Events[0].Source)
+	}
+	after, err := forecast.Balances(ctx, recipe)
+	require.NoError(t, err)
+	require.Len(t, after.Events, 1)
+	assert.Equal(t, "draft", after.Events[0].Source)
+	assert.NotEqual(t, before.BasisToken, after.BasisToken)
+}
+
 func projectedQuantities(series ForecastSeries) []ForecastQuantity {
 	result := make([]ForecastQuantity, 0, len(series.Points))
 	for _, point := range series.Points {
@@ -185,7 +238,10 @@ func TestForecastCarriesOverdueAndTodayToTomorrow(t *testing.T) {
 	require.Len(t, r.Events, 2)
 	assert.Equal(t, "2026-09-01", r.Events[0].ProjectedDate)
 	assert.True(t, r.Events[0].CarriedForward)
-	assert.Equal(t, 2, r.Assumptions.Total)
+	assert.Equal(t, 1, r.Assumptions.Total)
+	assert.Equal(t, 2, r.Assumptions.CarriedForward)
+	require.Len(t, r.Assumptions.Diagnostics, 1)
+	assert.Equal(t, 2, r.Assumptions.Diagnostics[0].EventCount)
 }
 
 func TestForecastUsesWatermarkButNotLeadWindow(t *testing.T) {

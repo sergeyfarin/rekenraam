@@ -81,6 +81,7 @@ type ForecastAccountVersionRecord struct {
 	OpenedOn              string
 	ClosedOn              sql.NullString
 	Name                  sql.NullString
+	Code                  sql.NullString
 	AccountClass          string
 	AccountKind           string
 	ParentAccountID       sql.NullInt64
@@ -110,6 +111,9 @@ type ForecastPostingRecord struct {
 	TransactionVersionID int64
 	JournalEntryID       int64
 	EntryDate            string
+	Description          string
+	PayeeID              sql.NullInt64
+	PayeeName            sql.NullString
 	AccountID            int64
 	CommodityID          int64
 	QuantityValue        exact.Coefficient
@@ -123,6 +127,7 @@ type ForecastTemplateRecord struct {
 	Enabled         bool
 	ArchivedAt      sql.NullString
 	TransactionKind string
+	Description     string
 	PayeeID         sql.NullInt64
 	PayeeName       sql.NullString
 	Frequency       string
@@ -169,6 +174,7 @@ type ForecastDraftPostingRecord struct {
 	TransactionVersionID int64
 	TransactionDate      string
 	TransactionKind      string
+	Description          string
 	JournalEntryID       int64
 	EntryDate            string
 	PostingID            int64
@@ -255,7 +261,7 @@ func (r *ForecastRepository) LoadResolvedSnapshot(ctx context.Context, request F
 		if err != nil {
 			return err
 		}
-		result.PayeeNames, err = reader.payeeNames(ctx, request.BookID, result.Templates, result.DraftPostings)
+		result.PayeeNames, err = reader.payeeNames(ctx, request.BookID, result.PostedPostings, result.Templates, result.DraftPostings)
 		return err
 	})
 	if err != nil {
@@ -279,7 +285,7 @@ func (r *ForecastSnapshotReader) ownerTimeZone(ctx context.Context, ownerUserID 
 func (r *ForecastSnapshotReader) accountVersions(ctx context.Context, bookID int64, limit int) ([]ForecastAccountVersionRecord, error) {
 	rows, err := r.transaction.QueryContext(ctx, `
 		SELECT a.id, a.book_id, a.system_role, av.id, av.version_seq, av.effective_from,
-			av.status, av.opened_on, av.closed_on, av.name, av.account_class, av.account_kind,
+			av.status, av.opened_on, av.closed_on, av.name, av.code, av.account_class, av.account_kind,
 			av.parent_account_id, av.default_commodity_id, av.quantity_scale_override, av.allows_postings
 		FROM accounts a JOIN account_versions av ON av.account_id = a.id
 		WHERE a.book_id = ?
@@ -293,7 +299,7 @@ func (r *ForecastSnapshotReader) accountVersions(ctx context.Context, bookID int
 	for rows.Next() {
 		var record ForecastAccountVersionRecord
 		var allows int
-		if err := rows.Scan(&record.AccountID, &record.BookID, &record.SystemRole, &record.VersionID, &record.VersionSeq, &record.EffectiveFrom, &record.Status, &record.OpenedOn, &record.ClosedOn, &record.Name, &record.AccountClass, &record.AccountKind, &record.ParentAccountID, &record.DefaultCommodityID, &record.QuantityScaleOverride, &allows); err != nil {
+		if err := rows.Scan(&record.AccountID, &record.BookID, &record.SystemRole, &record.VersionID, &record.VersionSeq, &record.EffectiveFrom, &record.Status, &record.OpenedOn, &record.ClosedOn, &record.Name, &record.Code, &record.AccountClass, &record.AccountKind, &record.ParentAccountID, &record.DefaultCommodityID, &record.QuantityScaleOverride, &allows); err != nil {
 			return nil, fmt.Errorf("scan forecast account version: %w", err)
 		}
 		record.AllowsPostings = allows == 1
@@ -346,7 +352,7 @@ func (r *ForecastSnapshotReader) postedPostings(ctx context.Context, bookID int6
 	args = append([]any{bookID, throughDate}, args...)
 	args = append(args, plusOne(limit))
 	rows, err := r.transaction.QueryContext(ctx, `
-		SELECT pv.id, tv.transaction_id, tv.id, je.id, je.entry_date, pv.account_id,
+		SELECT pv.id, tv.transaction_id, tv.id, je.id, je.entry_date, tv.description, tv.payee_id, tv.payee_name, pv.account_id,
 			pv.commodity_id, pv.quantity_value, pv.quantity_scale
 		FROM current_transaction_versions tv
 		JOIN transactions t ON t.id = tv.transaction_id
@@ -362,7 +368,7 @@ func (r *ForecastSnapshotReader) postedPostings(ctx context.Context, bookID int6
 	var records []ForecastPostingRecord
 	for rows.Next() {
 		var record ForecastPostingRecord
-		if err := rows.Scan(&record.PostingID, &record.TransactionID, &record.TransactionVersionID, &record.JournalEntryID, &record.EntryDate, &record.AccountID, &record.CommodityID, &record.QuantityValue, &record.QuantityScale); err != nil {
+		if err := rows.Scan(&record.PostingID, &record.TransactionID, &record.TransactionVersionID, &record.JournalEntryID, &record.EntryDate, &record.Description, &record.PayeeID, &record.PayeeName, &record.AccountID, &record.CommodityID, &record.QuantityValue, &record.QuantityScale); err != nil {
 			return nil, fmt.Errorf("scan forecast posted posting: %w", err)
 		}
 		records = append(records, record)
@@ -438,7 +444,7 @@ func (r *ForecastSnapshotReader) templates(ctx context.Context, bookID int64, id
 	args = append([]any{bookID}, args...)
 	rows, err := r.transaction.QueryContext(ctx, `
 		SELECT rt.id, rt.book_id, rt.name, rt.enabled, rt.archived_at,
-			rt.transaction_kind, rt.payee_id, rt.payee_name, rt.frequency,
+			rt.transaction_kind, rt.description, rt.payee_id, rt.payee_name, rt.frequency,
 			rt.interval_count, rt.by_weekday, rt.day_of_month, rt.last_day_of_month,
 			rt.month_of_year, rt.starts_on, rt.ends_on, rt.max_occurrences, rt.generate_from
 		FROM recurring_templates rt WHERE rt.book_id = ? AND `+clause+` ORDER BY rt.id`, args...)
@@ -450,7 +456,7 @@ func (r *ForecastSnapshotReader) templates(ctx context.Context, bookID int64, id
 	for rows.Next() {
 		var record ForecastTemplateRecord
 		var enabled, last int
-		if err := rows.Scan(&record.ID, &record.BookID, &record.Name, &enabled, &record.ArchivedAt, &record.TransactionKind, &record.PayeeID, &record.PayeeName, &record.Frequency, &record.IntervalCount, &record.ByWeekday, &record.DayOfMonth, &last, &record.MonthOfYear, &record.StartsOn, &record.EndsOn, &record.MaxOccurrences, &record.GenerateFrom); err != nil {
+		if err := rows.Scan(&record.ID, &record.BookID, &record.Name, &enabled, &record.ArchivedAt, &record.TransactionKind, &record.Description, &record.PayeeID, &record.PayeeName, &record.Frequency, &record.IntervalCount, &record.ByWeekday, &record.DayOfMonth, &last, &record.MonthOfYear, &record.StartsOn, &record.EndsOn, &record.MaxOccurrences, &record.GenerateFrom); err != nil {
 			return nil, fmt.Errorf("scan forecast template: %w", err)
 		}
 		record.Enabled, record.LastDayOfMonth = enabled == 1, last == 1
@@ -538,7 +544,7 @@ func (r *ForecastSnapshotReader) draftPostings(ctx context.Context, bookID int64
 	args := append([]any{bookID, bookID}, idsArgs...)
 	args = append(args, plusOne(limit))
 	rows, err := r.transaction.QueryContext(ctx, `
-		SELECT ro.id, ro.template_id, ro.occurrence_date, tv.transaction_id, tv.id, tv.transaction_date, tv.transaction_kind,
+		SELECT ro.id, ro.template_id, ro.occurrence_date, tv.transaction_id, tv.id, tv.transaction_date, tv.transaction_kind, tv.description,
 			je.id, je.entry_date, pv.id, pv.account_id, pv.commodity_id, pv.quantity_value,
 			pv.quantity_scale, tv.payee_id, tv.payee_name
 		FROM recurring_occurrences ro
@@ -555,7 +561,7 @@ func (r *ForecastSnapshotReader) draftPostings(ctx context.Context, bookID int64
 	var records []ForecastDraftPostingRecord
 	for rows.Next() {
 		var record ForecastDraftPostingRecord
-		if err := rows.Scan(&record.OccurrenceID, &record.TemplateID, &record.OccurrenceDate, &record.TransactionID, &record.TransactionVersionID, &record.TransactionDate, &record.TransactionKind, &record.JournalEntryID, &record.EntryDate, &record.PostingID, &record.AccountID, &record.CommodityID, &record.QuantityValue, &record.QuantityScale, &record.PayeeID, &record.PayeeName); err != nil {
+		if err := rows.Scan(&record.OccurrenceID, &record.TemplateID, &record.OccurrenceDate, &record.TransactionID, &record.TransactionVersionID, &record.TransactionDate, &record.TransactionKind, &record.Description, &record.JournalEntryID, &record.EntryDate, &record.PostingID, &record.AccountID, &record.CommodityID, &record.QuantityValue, &record.QuantityScale, &record.PayeeID, &record.PayeeName); err != nil {
 			return nil, fmt.Errorf("scan forecast draft posting: %w", err)
 		}
 		records = append(records, record)
@@ -569,8 +575,13 @@ func (r *ForecastSnapshotReader) draftPostings(ctx context.Context, bookID int64
 	return records, nil
 }
 
-func (r *ForecastSnapshotReader) payeeNames(ctx context.Context, bookID int64, templates []ForecastTemplateRecord, drafts []ForecastDraftPostingRecord) (map[int64]string, error) {
+func (r *ForecastSnapshotReader) payeeNames(ctx context.Context, bookID int64, posted []ForecastPostingRecord, templates []ForecastTemplateRecord, drafts []ForecastDraftPostingRecord) (map[int64]string, error) {
 	set := map[int64]struct{}{}
+	for _, record := range posted {
+		if record.PayeeID.Valid {
+			set[record.PayeeID.Int64] = struct{}{}
+		}
+	}
 	for _, record := range templates {
 		if record.PayeeID.Valid {
 			set[record.PayeeID.Int64] = struct{}{}

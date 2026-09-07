@@ -1,0 +1,75 @@
+get:
+  summary: Explain the source events for one forecast day
+  description: >
+    Recomputes the same coherent forecast, verifies the supplied basis token,
+    filters one projected day, and cursor-pages its stable event order. Event
+    pages contain at most 200 items and never expose excluded diagnostics as
+    financial events.
+  parameters:
+    - in: query
+      name: horizon_days
+      schema: { type: integer, minimum: 1, maximum: 366, default: 90 }
+    - in: query
+      name: account_id
+      schema:
+        type: array
+        maxItems: 100
+        items: { type: integer, format: int64, minimum: 1 }
+      style: form
+      explode: true
+    - in: query
+      name: include_descendants
+      schema: { type: boolean, default: true }
+    - in: query
+      name: date
+      required: true
+      schema: { type: string, format: date }
+    - in: query
+      name: basis_token
+      required: true
+      schema: { type: string, pattern: "^[a-f0-9]{64}$" }
+    - in: query
+      name: detail_account_id
+      schema: { type: integer, format: int64, minimum: 1 }
+    - in: query
+      name: detail_commodity_id
+      schema: { type: integer, format: int64, minimum: 1 }
+    - in: query
+      name: limit
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    - in: query
+      name: cursor
+      description: Opaque cursor from the preceding page; encoded length is limited to 4096 bytes.
+      schema: { type: string, maxLength: 4096 }
+  responses:
+    "200":
+      description: One stable page of source events
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ForecastEventsResponse"
+    "400":
+      description: Invalid query, filter, date, or cursor
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" }
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" }
+    "409":
+      description: The forecast basis changed; refresh balances before requesting details
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" }
+    "422":
+      description: Forecast size or exact coefficient limit exceeded
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" }
+    "503":
+      description: Database temporarily busy
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" }

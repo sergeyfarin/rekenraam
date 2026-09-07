@@ -351,6 +351,10 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, nil, nil, nil)
 	exportService := app.NewExportService(db.NewExportRepository(readOnlyDatabase))
 	selfCheckService := app.NewSelfCheckService(db.NewSelfCheckRepository(database, readOnlyDatabase))
+	forecastService := app.NewForecastService(db.NewForecastRepository(readOnlyDatabase))
+	forecastService.SetNowForTest(func() time.Time {
+		return time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
+	})
 	backupService := app.NewBackupService(
 		db.NewBackupRepository(database),
 		db.NewBackgroundWorkRepository(database),
@@ -379,6 +383,7 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 		Export:      exportService,
 		Backup:      backupService,
 		SelfCheck:   selfCheckService,
+		Forecast:    forecastService,
 	}, options), database
 }
 

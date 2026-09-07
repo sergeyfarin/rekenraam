@@ -124,6 +124,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	}
 	defer readOnlyDatabase.Close()
 	exportService := app.NewExportService(db.NewExportRepository(readOnlyDatabase))
+	forecastService := app.NewForecastService(db.NewForecastRepository(readOnlyDatabase))
 	// The backup copies from the read-only pool too: a nightly copy of a large
 	// book must not hold the single write connection (ADR 0011, ADR 0004).
 	backupService := app.NewBackupService(
@@ -164,6 +165,7 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 		Export:           exportService,
 		Backup:           backupService,
 		SelfCheck:        selfCheckService,
+		Forecast:         forecastService,
 	}, api.HandlerOptions{
 		TrustProxyHeaders: cfg.TrustProxyHeaders,
 		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,

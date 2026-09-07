@@ -1,0 +1,19 @@
+meta {
+  name: Forecast Balance Events - Cursor Page
+  type: http
+  seq: 32
+}
+
+get {
+  url: {{baseUrl}}/api/v1/forecasts/balance-events?horizon_days=90&date=2026-09-08&basis_token={{forecastBasisToken}}&limit=50&cursor={{forecastCursor}}
+  body: none
+  auth: none
+}
+
+params:query {
+  horizon_days: 90
+  date: 2026-09-08
+  basis_token: {{forecastBasisToken}}
+  limit: 50
+  ~cursor: {{forecastCursor}}
+}

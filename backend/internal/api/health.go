@@ -111,6 +111,10 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("GET /api/v1/reports/net-worth", netWorthSeries(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/reports/spending", spendingReport(logger, services.Auth, services.Transaction))
 	mux.HandleFunc("GET /api/v1/reports/cashflow", cashflowReport(logger, services.Auth, services.Transaction))
+	if services.Forecast != nil {
+		mux.HandleFunc("GET /api/v1/forecasts/balances", forecastBalances(logger, services.Auth, services.Forecast))
+		mux.HandleFunc("GET /api/v1/forecasts/balance-events", forecastEvents(logger, services.Auth, services.Forecast))
+	}
 
 	if services.Export != nil {
 		mux.HandleFunc("GET /api/v1/exports/preview", exportPreview(logger, services.Auth, services.Export))

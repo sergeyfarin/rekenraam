@@ -984,5 +984,7 @@
   "account_system_role_retained_earnings": "Retained earnings",
   "account_system_role_unassigned_income": "Unassigned income",
   "account_system_role_unassigned_expense": "Unassigned expense",
-  "account_system_role_commodity_trading": "Currency and instrument clearing"
+  "account_system_role_commodity_trading": "Currency and instrument clearing",
+  "api_error_forecast_too_large": "This forecast is too large to calculate. Select fewer accounts or a shorter range.",
+  "api_error_forecast_basis_changed": "The forecast changed. Refresh it before reopening the details."
 }
