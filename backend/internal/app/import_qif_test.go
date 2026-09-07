@@ -163,6 +163,18 @@ PStore
 
 // --- EU locale handling (T-35 dates, T-36 decimal commas) ---
 
+func TestParseQIF_MSMoneyNonBreakingSpaceDate(t *testing.T) {
+	qif := "!Type:CCard\nD24\xa04'21\nT-42.49\nPКафе\nLПитание:Кондитерские изделия/Для всей семьи\n^\n"
+
+	result, err := parseQIF(bufio.NewScanner(strings.NewReader(qif)), "apple-card.qif")
+	require.NoError(t, err)
+	require.Len(t, result.Rows, 1)
+	assert.Equal(t, "2021-04-24", result.Rows[0].Date)
+	assert.Equal(t, "2021-04-24", result.Meta.DateFrom)
+	assert.Equal(t, "2021-04-24", result.Meta.DateTo)
+	assert.Empty(t, result.Warnings)
+}
+
 func TestParseQIF_EUDatesDetectedFromTheFile(t *testing.T) {
 	// A single row with a day above 12 settles the layout for the ambiguous
 	// rows around it: without this, 02/03/2026 silently became 3 February.
@@ -332,9 +344,20 @@ func TestParseQIFDate(t *testing.T) {
 		{"01/15/06", "2006-01-15"},
 		{"01/15/2006", "2006-01-15"},
 		{"1/5/06", "2006-01-05"},
+		{"04/24'21", "2021-04-24"},
+		{"24/04'21", "2021-04-24"},
 		{"2006-01-15", "2006-01-15"},
+		{"2021/04/24", "2021-04-24"},
 		{"15-Jan-06", "2006-01-15"},
 		{"15-Jan-2006", "2006-01-15"},
+		{"Jan 15 2006", "2006-01-15"},
+		// MS Money uses a non-breaking space between day and month in some
+		// locale-specific exports.
+		{"24 4'21", "2021-04-24"},
+		{"24\t4'21", "2021-04-24"},
+		{"24\u00a04'21", "2021-04-24"},
+		{"24\u202f4'21", "2021-04-24"},
+		{"24\xa04'21", "2021-04-24"},
 		// A day above 12 can only be day-first, whatever the file's origin.
 		{"15/01/2006", "2006-01-15"},
 		{"15.01.2006", "2006-01-15"},

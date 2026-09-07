@@ -1452,6 +1452,23 @@ precondition assertions prevent the test from quietly regressing to empty-state
 coverage. `TestForecastDoesNotTouchInvestmentSubledgerOrCheckpoints` is the
 named regression; the R10 core acceptance review records the boundary.
 
+## MS Money QIF compatibility — closed 2026-09-07
+
+### T-89 MS Money non-breaking-space dates were rejected `[x]`
+
+**File:** `backend/internal/app/import_locale.go`, `splitDateParts`. Some
+locale-specific MS Money QIF exports write dates such as `24 4'21`, using a
+non-breaking space between the day and month. Older exports may encode it as a
+single Windows-1252/Latin-1 `0xA0` byte rather than valid UTF-8. The shared date
+tokenizer recognized only ASCII space and tab, so otherwise valid rows remained
+staged with an unrecognized-date warning and could not commit.
+
+**Fixed:** treat Unicode whitespace and the legacy single-byte NBSP as date
+separators while preserving the existing slash, dash, dot and apostrophe forms.
+`TestParseQIF_MSMoneyNonBreakingSpaceDate` first failed on the exact
+`!Type:CCard` form and now proves the date normalizes to `2021-04-24`, updates
+batch date metadata, and emits no warning.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04
