@@ -279,13 +279,19 @@ templates, generation and dedicated review/discard screens are shipped.
 Production scheduling and R9 acceptance are complete. R10's detailed plan is
 written (`docs/plans/projected-balances-plan.md`), with an approved lightweight
 learning extension (`docs/plans/forecast-learning-plan.md`) for daily/weekly,
-monthly and annual seasonal spending. Slice 1 is complete internally:
+monthly and annual seasonal spending. Slices 1–2 are complete internally:
 `db.ForecastRepository` takes one `OpenReadOnly` snapshot and bulk-loads current
 posted selected-account legs, full account/commodity versions, relevant
 templates/occurrences, and every counterpart of linked current drafts. It has no
-route, application projection, ledger write or FX query. Core slices 2–8 and
-learning M1–M4 remain unstarted. Next is exact projection. No forecast endpoint,
-UI, constant-FX projection or learned-spending model is shipped.
+ledger write or FX query. `app.ForecastService` now resolves owner-local dates
+and effective-dated account scope inside that snapshot and computes exact
+per-account/per-currency plus same-currency aggregate daily curves. Posted,
+saved recurring draft and computed recurring sources remain separate and use
+durable occurrence identity to prevent double counting; overdue assumptions are
+carried to tomorrow without changing saved dates, and invalid assumptions are
+reported as bounded diagnostics. Core slices 3–8 and learning M1–M4 remain
+unstarted. Next is the balances/events API. No forecast endpoint, UI,
+constant-FX projection or learned-spending model is shipped.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

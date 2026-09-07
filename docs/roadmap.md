@@ -343,8 +343,9 @@ and it front-loads per-currency forecasting — the differentiator the parity
 lens below commits to protecting. Budgets are independent of both and slot in
 afterward with no rework. R9 is complete, including acceptance on 2026-08-31
 (`docs/reviews/r9-acceptance-review-2026-08-31.md`); R10 planning is complete
-and its internal input snapshot has landed. Exact projection slice 2 is next in
-`docs/plans/projected-balances-plan.md`. No forecast is implemented yet.
+and its internal snapshot and exact projection slices have landed. The
+balances/events API slice 3 is next in `docs/plans/projected-balances-plan.md`;
+no forecast endpoint or screen is implemented yet.
 The localized templates and due-inbox screens now expose
 create/edit, skip/blocked retry, explicit post/discard and bulk review with
 reconciliation checks. Startup/minute generation and public run-now are active;
@@ -371,9 +372,11 @@ unpaginated summary counts support the editor and navigation badge.
    daily/weekly fluctuations, monthly costs and annual calendar peaks, with
    confirmed history, no overlap with recurring bills, chronological evaluation
    and measured hardware budgets. All learning remains unimplemented. Final R10
-   acceptance follows M4; R8 remains next afterward. Slice 1's internal
-   read-only snapshot loader is complete; it has no endpoint or calculation.
-   **Next: slice 2 only, exact projection.** Loan helpers remain optional later
+   acceptance follows M4; R8 remains next afterward. Slices 1–2 are complete
+   internally: the coherent read-only snapshot loader feeds an exact
+   per-account/per-currency projection with recurring occurrence precedence,
+   bounds and diagnostics. It has no endpoint or screen.
+   **Next: slice 3 only, balances/events API.** Loan helpers remain optional later
    work.
 3. **R8 Budgets:** period budgets with actual-versus-budget reporting.
 

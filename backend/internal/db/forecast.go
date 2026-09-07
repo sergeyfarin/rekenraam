@@ -148,11 +148,13 @@ type ForecastTemplatePostingRecord struct {
 }
 
 type ForecastOccurrenceRecord struct {
-	ID             int64
-	TemplateID     int64
-	OccurrenceDate string
-	Status         string
-	TransactionID  sql.NullInt64
+	ID                 int64
+	TemplateID         int64
+	OccurrenceDate     string
+	Status             string
+	TransactionID      sql.NullInt64
+	TransactionStatus  sql.NullString
+	TransactionDeleted bool
 }
 
 // ForecastDraftPostingRecord carries every posting of every entry in a linked
@@ -166,6 +168,7 @@ type ForecastDraftPostingRecord struct {
 	TransactionID        int64
 	TransactionVersionID int64
 	TransactionDate      string
+	TransactionKind      string
 	JournalEntryID       int64
 	EntryDate            string
 	PostingID            int64
@@ -198,6 +201,21 @@ type ForecastSnapshotReader struct {
 }
 
 func (r *ForecastRepository) LoadSnapshot(ctx context.Context, request ForecastSnapshotRequest) (ForecastSnapshot, error) {
+	return r.LoadResolvedSnapshot(ctx, request, func(ForecastSnapshot) (ForecastSnapshotResolution, error) {
+		return ForecastSnapshotResolution{AccountIDs: request.AccountIDs, ThroughDate: request.ThroughDate}, nil
+	})
+}
+
+type ForecastSnapshotResolution struct {
+	AccountIDs  []int64
+	ThroughDate string
+}
+
+// LoadResolvedSnapshot lets the application resolve account scope from the
+// effective-dated reference rows before the account-dependent reads run. The
+// resolver is pure and executes while the same read transaction remains open,
+// so scope and financial inputs cannot straddle a concurrent write.
+func (r *ForecastRepository) LoadResolvedSnapshot(ctx context.Context, request ForecastSnapshotRequest, resolve func(ForecastSnapshot) (ForecastSnapshotResolution, error)) (ForecastSnapshot, error) {
 	limits := request.Limits
 	if limits == (ForecastSnapshotLimits{}) {
 		limits = DefaultForecastSnapshotLimits()
@@ -221,15 +239,19 @@ func (r *ForecastRepository) LoadSnapshot(ctx context.Context, request ForecastS
 		if err != nil {
 			return err
 		}
-		if len(request.AccountIDs) == 0 {
-			result.PayeeNames = map[int64]string{}
-			return nil
-		}
-		result.PostedPostings, err = reader.postedPostings(ctx, request.BookID, request.AccountIDs, request.ThroughDate, limits.PostedPostingRows)
+		resolution, err := resolve(result)
 		if err != nil {
 			return err
 		}
-		result.Templates, result.TemplatePostings, result.Occurrences, result.DraftPostings, err = reader.recurringInputs(ctx, request.BookID, request.AccountIDs, limits)
+		if len(resolution.AccountIDs) == 0 {
+			result.PayeeNames = map[int64]string{}
+			return nil
+		}
+		result.PostedPostings, err = reader.postedPostings(ctx, request.BookID, resolution.AccountIDs, resolution.ThroughDate, limits.PostedPostingRows)
+		if err != nil {
+			return err
+		}
+		result.Templates, result.TemplatePostings, result.Occurrences, result.DraftPostings, err = reader.recurringInputs(ctx, request.BookID, resolution.AccountIDs, limits)
 		if err != nil {
 			return err
 		}
@@ -477,7 +499,14 @@ func (r *ForecastSnapshotReader) occurrences(ctx context.Context, bookID int64, 
 	clause, args := idsClause("ro.template_id", ids)
 	args = append([]any{bookID}, args...)
 	args = append(args, plusOne(limit))
-	rows, err := r.transaction.QueryContext(ctx, `SELECT ro.id, ro.template_id, ro.occurrence_date, ro.status, ro.transaction_id FROM recurring_occurrences ro WHERE ro.book_id = ? AND `+clause+` ORDER BY ro.template_id, ro.occurrence_date, ro.id LIMIT ?`, args...)
+	rows, err := r.transaction.QueryContext(ctx, `
+		SELECT ro.id, ro.template_id, ro.occurrence_date, ro.status, ro.transaction_id,
+			tv.status, CASE WHEN t.deleted_at IS NOT NULL THEN 1 ELSE 0 END
+		FROM recurring_occurrences ro
+		LEFT JOIN transactions t ON t.id = ro.transaction_id AND t.book_id = ro.book_id
+		LEFT JOIN current_transaction_versions tv ON tv.transaction_id = t.id
+		WHERE ro.book_id = ? AND `+clause+`
+		ORDER BY ro.template_id, ro.occurrence_date, ro.id LIMIT ?`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read forecast occurrences: %w", err)
 	}
@@ -485,9 +514,11 @@ func (r *ForecastSnapshotReader) occurrences(ctx context.Context, bookID int64, 
 	var records []ForecastOccurrenceRecord
 	for rows.Next() {
 		var record ForecastOccurrenceRecord
-		if err := rows.Scan(&record.ID, &record.TemplateID, &record.OccurrenceDate, &record.Status, &record.TransactionID); err != nil {
+		var deleted int
+		if err := rows.Scan(&record.ID, &record.TemplateID, &record.OccurrenceDate, &record.Status, &record.TransactionID, &record.TransactionStatus, &deleted); err != nil {
 			return nil, fmt.Errorf("scan forecast occurrence: %w", err)
 		}
+		record.TransactionDeleted = deleted == 1
 		records = append(records, record)
 	}
 	if err := rows.Err(); err != nil {
@@ -507,7 +538,7 @@ func (r *ForecastSnapshotReader) draftPostings(ctx context.Context, bookID int64
 	args := append([]any{bookID, bookID}, idsArgs...)
 	args = append(args, plusOne(limit))
 	rows, err := r.transaction.QueryContext(ctx, `
-		SELECT ro.id, ro.template_id, ro.occurrence_date, tv.transaction_id, tv.id, tv.transaction_date,
+		SELECT ro.id, ro.template_id, ro.occurrence_date, tv.transaction_id, tv.id, tv.transaction_date, tv.transaction_kind,
 			je.id, je.entry_date, pv.id, pv.account_id, pv.commodity_id, pv.quantity_value,
 			pv.quantity_scale, tv.payee_id, tv.payee_name
 		FROM recurring_occurrences ro
@@ -524,7 +555,7 @@ func (r *ForecastSnapshotReader) draftPostings(ctx context.Context, bookID int64
 	var records []ForecastDraftPostingRecord
 	for rows.Next() {
 		var record ForecastDraftPostingRecord
-		if err := rows.Scan(&record.OccurrenceID, &record.TemplateID, &record.OccurrenceDate, &record.TransactionID, &record.TransactionVersionID, &record.TransactionDate, &record.JournalEntryID, &record.EntryDate, &record.PostingID, &record.AccountID, &record.CommodityID, &record.QuantityValue, &record.QuantityScale, &record.PayeeID, &record.PayeeName); err != nil {
+		if err := rows.Scan(&record.OccurrenceID, &record.TemplateID, &record.OccurrenceDate, &record.TransactionID, &record.TransactionVersionID, &record.TransactionDate, &record.TransactionKind, &record.JournalEntryID, &record.EntryDate, &record.PostingID, &record.AccountID, &record.CommodityID, &record.QuantityValue, &record.QuantityScale, &record.PayeeID, &record.PayeeName); err != nil {
 			return nil, fmt.Errorf("scan forecast draft posting: %w", err)
 		}
 		records = append(records, record)

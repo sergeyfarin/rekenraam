@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-08-31 (R12a T-75a/T-74 complete; R9 acceptance complete;
-R10 snapshot-input slice complete; exact projection slice 2 next. T-76 and T-75b
+Last updated: 2026-09-07 (R12a T-75a/T-74 complete; R9 acceptance complete;
+R10 snapshot-input and exact-projection slices complete; balances/events API slice 3 next. T-76 and T-75b
 remain required later work.)
 
 ## Where things stand
@@ -90,16 +90,17 @@ See `backlog.md` G-09.
 
 ## Current initiative — R10 projected balances
 
-Plan written 2026-08-31: `docs/plans/projected-balances-plan.md`. This is a
-planning milestone only; no forecast endpoint or screen is implemented.
+Plan written 2026-08-31: `docs/plans/projected-balances-plan.md`. Its coherent
+snapshot and exact projection slices are complete internally; no forecast
+endpoint or screen is implemented.
 The plan fixes source precedence, owner-local date/overdue semantics, exact
 arithmetic, constant-FX policy, snapshot reads, API/UI contracts, budgets,
 worked fixtures and named tests for an agent executing one slice at a time.
 
-**Next action: implement slice 2 only.** Use section 13's execution prompt.
+**Next action: implement slice 3 only.** Use section 13's execution prompt.
 
 - [x] 1. Coherent read-only snapshot inputs and repository tests.
-- [ ] 2. Exact per-currency projection, occurrence precedence and worked fixtures.
+- [x] 2. Exact per-currency projection, occurrence precedence and worked fixtures.
 - [ ] 3. Authenticated balances/event API, pagination and stale-basis handling.
 - [ ] 4. Constant-as-of FX, complete coverage, provenance and rounding.
 - [ ] 5. Forecast screen, filters, exact tables/charts and six locales.
