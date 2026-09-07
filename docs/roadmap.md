@@ -7,7 +7,7 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 short-horizon working queue is `docs/todo.md`.
 
 Last reviewed: 2026-09-07 (R12a T-75a/T-74 closed; R9 acceptance complete;
-R10 core slices 1–6 complete; cross-system acceptance slice next; T-76 and T-75b
+R10 core slices 1–7 complete; dated core acceptance review next; T-76 and T-75b
 remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
@@ -384,8 +384,10 @@ unpaginated summary counts support the editor and navigation badge.
    and tables, an accessible two-curve chart, diagnostics and FX provenance from
    one composed response. Cursor-paged day details explain exact contributing
    events and safely clear/refetch when their basis changes; producer mutation
-   paths invalidate the shared forecast cache without polling. **Next: slice 7
-   only, cross-system and adversarial acceptance.** Loan helpers remain optional
+   paths invalidate the shared forecast cache without polling. Cross-system
+   isolation, concurrent materialization, adversarial bounds/precision and the
+   browser acceptance matrix are covered in slice 7. **Next: slice 8 only, the
+   dated core acceptance review.** Loan helpers remain optional
    later work.
 3. **R8 Budgets:** period budgets with actual-versus-budget reporting.
 

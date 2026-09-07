@@ -315,8 +315,12 @@ description and exact selected-scope amounts, with links back to Transactions or
 Recurring. A basis conflict or refreshed changed basis closes and removes old
 event pages before refreshing balances. Transaction, recurring, import, account,
 price and investment cash mutations invalidate the shared forecast cache; mount
-and focus refresh remain fallbacks without polling. Core slices 7–8 and learning
-M1–M4 remain unstarted. Next is cross-system/adversarial acceptance; no learned-
+and focus refresh remain fallbacks without polling. Core slice 7 adds explicit
+cross-system evidence that forecast reads do not change reports, ledger CSV/QIF,
+recurring identity, audit/background work, reconciliation checkpoints or
+investment lots, alongside independent-pool materialization, adversarial
+bounds/precision and browser acceptance coverage. Core slice 8 and learning
+M1–M4 remain unstarted. Next is the dated core acceptance review; no learned-
 spending model is shipped.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,

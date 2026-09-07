@@ -4,7 +4,7 @@ import { daysFromTodayISO, todayISO } from './support/dates';
 import { createCashAccount, readyForLedger } from './support/ledger';
 import { expectNoAccessibilityViolations } from './support/a11y';
 
-test('forecast screen shows exact recorded and future balances from one selected scope', async ({ page }) => {
+test('[acceptance] forecasts recorded and recurring movements without posting', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
   const account = await createCashAccount(page, csrfToken, `Forecast checking ${suffix}`, currencyID);
@@ -53,7 +53,7 @@ test('forecast screen shows exact recorded and future balances from one selected
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test('forecast details round-trip through recurring draft generation and editing', async ({ page }) => {
+test('[acceptance] edited recurring draft replaces the template assumption', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const suffix = Date.now();
   const name = `Forecast recurring ${suffix}`;
@@ -107,7 +107,7 @@ test('forecast details round-trip through recurring draft generation and editing
   }
 });
 
-test('stale event cursor clears old details before refreshing balances', async ({ page }) => {
+test('forecast refreshes after stale event basis without mixing pages', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const account = await createCashAccount(page, csrfToken, `Forecast stale ${Date.now()}`, currencyID);
   const categories = await apiJSON<{ categories: Array<{ id: number; code?: string; allows_postings: boolean }> }>(page, 'GET', '/api/v1/categories');
@@ -159,7 +159,7 @@ test('stale event cursor clears old details before refreshing balances', async (
   await expect(page.getByRole('button', { name: 'Load more movements' })).toHaveCount(0);
 });
 
-test('forecast event details expose keyboard loading, empty and recoverable error states', async ({ page }) => {
+test('[acceptance] forecast is usable on mobile and by keyboard in both themes', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
   const account = await createCashAccount(page, csrfToken, `Forecast states ${Date.now()}`, currencyID);
   let releaseFirst!: () => void;
@@ -197,6 +197,102 @@ test('forecast event details expose keyboard loading, empty and recoverable erro
   await page.getByRole('button', { name: 'Switch to dark theme' }).click();
   await expectNoAccessibilityViolations(page, 'forecast event details');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('[acceptance] forecast filters survive reload and back navigation', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const account = await createCashAccount(page, csrfToken, `Forecast filters ${Date.now()}`, currencyID);
+
+  await page.goto('/app/forecast?horizon_days=invalid');
+  await expect(page.getByText('These forecast filters are invalid', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/forecast$/);
+
+  await page.getByRole('button', { name: '30 days' }).click();
+  await page.getByLabel(account.name, { exact: true }).check();
+  await page.getByLabel('Include eligible sub-accounts').uncheck();
+  await page.getByLabel('Combined currency').selectOption(String(currencyID));
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  const filteredURL = page.url();
+  await expect(page).toHaveURL(new RegExp(`account_id=${account.id}`));
+  await expect(page).toHaveURL(/horizon_days=30/);
+  await expect(page).toHaveURL(/include_descendants=false/);
+  await expect(page).toHaveURL(/fx_method=constant_as_of/);
+
+  await page.reload();
+  await expect(page.getByLabel(account.name, { exact: true })).toBeChecked();
+  await expect(page.getByLabel('Include eligible sub-accounts')).not.toBeChecked();
+  await page.goto('/app/transactions');
+  await page.goBack();
+  await expect(page).toHaveURL(filteredURL);
+  await expect(page.getByLabel('Combined currency')).toHaveValue(String(currencyID));
+});
+
+test('forecast exposes loading empty error and excluded-assumption states', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const account = await createCashAccount(page, csrfToken, `Forecast states ${Date.now()}`, currencyID);
+  let releaseFirst!: () => void;
+  const firstResponse = new Promise<void>((resolve) => { releaseFirst = resolve; });
+  let requests = 0;
+  await page.route('**/api/v1/forecasts/balances*', async (route) => {
+    requests++;
+    if (requests === 1) await firstResponse;
+    if (requests <= 3) {
+      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { code: 'RESOURCE_BUSY', message: 'busy' } }) });
+      return;
+    }
+    const response = await route.fetch();
+    const body = await response.json();
+    body.assumptions.complete = false;
+    body.assumptions.excluded_event_count = 1;
+    body.diagnostic_total_count = 1;
+    body.diagnostics = [{
+      code: 'blocked_occurrence', severity: 'warning', template_id: 1,
+      occurrence_id: 1, transaction_id: null, occurrence_date: todayISO(),
+      source_date: todayISO(), projected_date: daysFromTodayISO(1), event_count: 1
+    }];
+    await route.fulfill({ response, json: body });
+  });
+
+  await page.goto(`/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
+  await expect(page.getByText('Loading projected balances', { exact: true })).toBeVisible();
+  releaseFirst();
+  await expect(page.getByText('Projected balances could not load', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByText('No scheduled changes in this range', { exact: true })).toBeVisible();
+  await expect(page.getByText('Some assumptions excluded', { exact: true })).toBeVisible();
+  await expect(page.getByText(/Blocked recurring occurrence excluded/)).toBeVisible();
+});
+
+test('forecast keeps exact currencies when constant FX is unavailable', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const code = 'EUR';
+  const eur = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/currencies', csrfToken, {
+    code,
+    name: 'Forecast test euro'
+  }, [201]);
+  const account = await createCashAccount(page, csrfToken, `EUR forecast ${Date.now()}`, eur.id);
+  const categories = await apiJSON<{ categories: Array<{ id: number; code?: string; allows_postings: boolean }> }>(page, 'GET', '/api/v1/categories');
+  const expense = categories.categories.find((item) => item.code === 'expense_food_groceries' && item.allows_postings);
+  if (!expense) throw new Error('expected seeded expense category');
+  await postForecastTransaction(page, todayISO(), account.id, expense.id, eur.id, '1234', '-1234');
+
+  await page.goto(`/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false&reporting_currency_id=${currencyID}&fx_method=constant_as_of`);
+  await expect(page.getByText('A complete combined balance cannot be shown. Exact currency balances remain available.')).toBeVisible();
+  await expect(page.getByText('USD 12.34', { exact: true })).toHaveCount(0);
+  await expect(page.getByText(`${code} 12.34`, { exact: true }).first()).toBeVisible();
+});
+
+test('forecast renders all new messages in a non-English locale', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const account = await createCashAccount(page, csrfToken, `Forecast locale ${Date.now()}`, currencyID);
+  await page.goto('/app/settings/language');
+  await page.getByRole('button', { name: 'Русский' }).click();
+  await page.goto(`/app/forecast?horizon_days=30&account_id=${account.id}&include_descendants=false`);
+  await expect(page.getByRole('heading', { name: 'Прогнозные остатки' })).toBeVisible();
+  await expect(page.getByText('В этом периоде нет запланированных изменений', { exact: true })).toBeVisible();
+  await page.goto('/app/settings/language');
+  await page.getByRole('button', { name: 'English' }).click();
 });
 
 async function postForecastTransaction(
