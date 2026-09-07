@@ -362,7 +362,11 @@ func (b *forecastBuild) finish(input forecastNormalizedInput, computedAt string)
 	for _, pair := range pairs {
 		commoditySet[pair.CommodityID] = true
 	}
-	if (len(pairs)+len(commoditySet))*input.HorizonDays > forecastMaxOutputPoints {
+	outputSeries := len(pairs) + len(commoditySet)
+	if input.ReportingCurrencyID != nil {
+		outputSeries++
+	}
+	if outputSeries*input.HorizonDays > forecastMaxOutputPoints {
 		return ForecastResult{}, ErrForecastTooLarge
 	}
 	mode := "selected_accounts"

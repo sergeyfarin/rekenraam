@@ -117,7 +117,7 @@ ForecastDiagnostic:
 
 ForecastBalancesResponse:
   type: object
-  required: [as_of_date, start_date, end_date, time_zone, computed_at, horizon_days, basis_token, policy_version, scope, series, totals, assumptions, diagnostics, diagnostic_total_count, diagnostic_hidden_count]
+  required: [as_of_date, start_date, end_date, time_zone, computed_at, horizon_days, basis_token, policy_version, scope, series, totals, assumptions, diagnostics, diagnostic_total_count, diagnostic_hidden_count, valuation, converted]
   properties:
     as_of_date: { type: string, format: date }
     start_date: { type: string, format: date }
@@ -141,6 +141,58 @@ ForecastBalancesResponse:
       items: { $ref: "../../openapi.yaml#/components/schemas/ForecastDiagnostic" }
     diagnostic_total_count: { type: integer, minimum: 0 }
     diagnostic_hidden_count: { type: integer, minimum: 0 }
+    valuation:
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/ForecastValuation"
+        - type: 'null'
+    converted:
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/ForecastCurrencySeries"
+        - type: 'null'
+
+ForecastRateUse:
+  type: object
+  required: [observation_id, base_commodity_id, quote_commodity_id, valuation_date, recorded_at, price_value, price_scale, base_quantity_value, base_quantity_scale, is_derived, stale]
+  properties:
+    observation_id: { type: integer, format: int64 }
+    base_commodity_id: { type: integer, format: int64 }
+    quote_commodity_id: { type: integer, format: int64 }
+    valuation_date: { type: string, format: date }
+    recorded_at: { type: string, format: date-time }
+    price_value: { type: string, pattern: "^-?(0|[1-9][0-9]{0,37})$" }
+    price_scale: { type: integer, minimum: 0, maximum: 18 }
+    base_quantity_value: { type: string, pattern: "^[1-9][0-9]{0,37}$" }
+    base_quantity_scale: { type: integer, minimum: 0, maximum: 18 }
+    is_derived: { type: boolean }
+    stale: { type: boolean }
+
+ForecastRateGap:
+  type: object
+  required: [commodity_id, reason, nearest_observation_date]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    reason: { type: string, enum: [no_observation_in_window] }
+    nearest_observation_date: { type: [string, 'null'], format: date }
+
+ForecastValuation:
+  type: object
+  required: [method, rate_selection, as_of_date, reporting_currency_id, reporting_currency_code, reporting_currency_scale, max_staleness_days, rounding, complete, used_rates, gaps]
+  properties:
+    method: { type: string, enum: [constant_as_of] }
+    rate_selection: { type: string, enum: [observed_on_or_before] }
+    as_of_date: { type: string, format: date }
+    reporting_currency_id: { type: integer, format: int64 }
+    reporting_currency_code: { type: string }
+    reporting_currency_scale: { type: integer, minimum: 0, maximum: 12 }
+    max_staleness_days: { type: integer, enum: [7] }
+    rounding: { type: string, enum: [per_currency_component_half_away_from_zero] }
+    complete: { type: boolean }
+    used_rates:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastRateUse" }
+    gaps:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastRateGap" }
 
 ForecastEventAmount:
   type: object

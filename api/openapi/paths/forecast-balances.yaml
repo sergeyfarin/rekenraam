@@ -22,6 +22,14 @@ get:
     - in: query
       name: include_descendants
       schema: { type: boolean, default: true }
+    - in: query
+      name: reporting_currency_id
+      description: Optional currency for an additive combined series; requires fx_method.
+      schema: { type: integer, format: int64, minimum: 1 }
+    - in: query
+      name: fx_method
+      description: Required with reporting_currency_id. Rates are held constant from the as-of date.
+      schema: { type: string, enum: [constant_as_of] }
   responses:
     "200":
       description: Exact per-currency balance forecast

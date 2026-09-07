@@ -110,6 +110,42 @@ type forecastBalancesResponse struct {
 	Diagnostics           []forecastDiagnosticResponse     `json:"diagnostics"`
 	DiagnosticTotalCount  int                              `json:"diagnostic_total_count"`
 	DiagnosticHiddenCount int                              `json:"diagnostic_hidden_count"`
+	Valuation             *forecastValuationResponse       `json:"valuation"`
+	Converted             *forecastCurrencySeriesResponse  `json:"converted"`
+}
+
+type forecastRateUseResponse struct {
+	ObservationID     int64             `json:"observation_id"`
+	BaseCommodityID   int64             `json:"base_commodity_id"`
+	QuoteCommodityID  int64             `json:"quote_commodity_id"`
+	ValuationDate     string            `json:"valuation_date"`
+	RecordedAt        string            `json:"recorded_at"`
+	PriceValue        exact.Coefficient `json:"price_value"`
+	PriceScale        int               `json:"price_scale"`
+	BaseQuantityValue exact.Coefficient `json:"base_quantity_value"`
+	BaseQuantityScale int               `json:"base_quantity_scale"`
+	IsDerived         bool              `json:"is_derived"`
+	Stale             bool              `json:"stale"`
+}
+
+type forecastRateGapResponse struct {
+	CommodityID            int64   `json:"commodity_id"`
+	Reason                 string  `json:"reason"`
+	NearestObservationDate *string `json:"nearest_observation_date"`
+}
+
+type forecastValuationResponse struct {
+	Method                 string                    `json:"method"`
+	RateSelection          string                    `json:"rate_selection"`
+	AsOfDate               string                    `json:"as_of_date"`
+	ReportingCurrencyID    int64                     `json:"reporting_currency_id"`
+	ReportingCurrencyCode  string                    `json:"reporting_currency_code"`
+	ReportingCurrencyScale int                       `json:"reporting_currency_scale"`
+	MaxStalenessDays       int                       `json:"max_staleness_days"`
+	Rounding               string                    `json:"rounding"`
+	Complete               bool                      `json:"complete"`
+	UsedRates              []forecastRateUseResponse `json:"used_rates"`
+	Gaps                   []forecastRateGapResponse `json:"gaps"`
 }
 
 type forecastEventAmountResponse struct {
@@ -220,7 +256,7 @@ func forecastEvents(logger *slog.Logger, auth *app.AuthService, service *app.For
 }
 
 func parseForecastQuery(query url.Values, events bool) (app.ForecastInput, error) {
-	allowed := map[string]bool{"horizon_days": true, "account_id": true, "include_descendants": true}
+	allowed := map[string]bool{"horizon_days": true, "account_id": true, "include_descendants": true, "reporting_currency_id": true, "fx_method": true}
 	if events {
 		for _, key := range []string{"date", "basis_token", "detail_account_id", "detail_commodity_id", "limit", "cursor"} {
 			allowed[key] = true
@@ -253,7 +289,15 @@ func parseForecastQuery(query url.Values, events bool) (app.ForecastInput, error
 		}
 		accountIDs = append(accountIDs, id)
 	}
-	return app.ForecastInput{HorizonDays: horizon, AccountIDs: accountIDs, IncludeDescendants: includeDescendants}, nil
+	reportingID, err := optionalForecastID(query, "reporting_currency_id")
+	if err != nil {
+		return app.ForecastInput{}, err
+	}
+	fxMethod, err := optionalForecastScalar(query, "fx_method")
+	if err != nil {
+		return app.ForecastInput{}, err
+	}
+	return app.ForecastInput{HorizonDays: horizon, AccountIDs: accountIDs, IncludeDescendants: includeDescendants, ReportingCurrencyID: reportingID, FXMethod: fxMethod}, nil
 }
 
 func optionalForecastInt(query url.Values, key string, fallback int) (int, error) {
@@ -338,7 +382,25 @@ func toForecastBalancesResponse(result app.ForecastResult) forecastBalancesRespo
 	for _, diagnostic := range result.Assumptions.Diagnostics {
 		response.Diagnostics = append(response.Diagnostics, forecastDiagnosticResponse{Code: diagnostic.Code, Severity: diagnostic.Severity, TemplateID: optionalInt64(diagnostic.TemplateID), OccurrenceID: optionalInt64(diagnostic.OccurrenceID), TransactionID: optionalInt64(diagnostic.TransactionID), OccurrenceDate: optionalString(diagnostic.OccurrenceDate), SourceDate: optionalString(diagnostic.SourceDate), ProjectedDate: optionalString(diagnostic.ProjectedDate), EventCount: diagnostic.EventCount})
 	}
+	if result.Valuation != nil {
+		response.Valuation = toForecastValuationResponse(*result.Valuation)
+	}
+	if result.Converted != nil {
+		series := result.Converted
+		response.Converted = &forecastCurrencySeriesResponse{CommodityID: series.CommodityID, CommodityCode: result.Valuation.ReportingCurrencyCode, OpeningBalance: toForecastQuantity(series.Opening), Points: toForecastPoints(series.Points), MinimumBalance: toForecastQuantity(series.Minimum), MinimumDate: series.MinimumDate}
+	}
 	return response
+}
+
+func toForecastValuationResponse(input app.ForecastValuation) *forecastValuationResponse {
+	result := &forecastValuationResponse{Method: input.Method, RateSelection: input.RateSelection, AsOfDate: input.AsOfDate, ReportingCurrencyID: input.ReportingCurrencyID, ReportingCurrencyCode: input.ReportingCurrencyCode, ReportingCurrencyScale: input.ReportingCurrencyScale, MaxStalenessDays: input.MaxStalenessDays, Rounding: input.Rounding, Complete: input.Complete, UsedRates: make([]forecastRateUseResponse, 0, len(input.UsedRates)), Gaps: make([]forecastRateGapResponse, 0, len(input.Gaps))}
+	for _, rate := range input.UsedRates {
+		result.UsedRates = append(result.UsedRates, forecastRateUseResponse{ObservationID: rate.ObservationID, BaseCommodityID: rate.BaseCommodityID, QuoteCommodityID: rate.QuoteCommodityID, ValuationDate: rate.ValuationDate, RecordedAt: rate.RecordedAt, PriceValue: rate.PriceValue, PriceScale: rate.PriceScale, BaseQuantityValue: rate.BaseQuantityValue, BaseQuantityScale: rate.BaseQuantityScale, IsDerived: rate.IsDerived, Stale: rate.Stale})
+	}
+	for _, gap := range input.Gaps {
+		result.Gaps = append(result.Gaps, forecastRateGapResponse{CommodityID: gap.CommodityID, Reason: gap.Reason, NearestObservationDate: optionalString(gap.NearestObservationDate)})
+	}
+	return result
 }
 
 func toForecastAccounts(input []app.ForecastAccount) []forecastAccountResponse {

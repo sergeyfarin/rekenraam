@@ -37,10 +37,12 @@ var ErrForecastTooLarge = errors.New("forecast exceeds a configured limit")
 var ErrForecastBasisChanged = errors.New("forecast basis changed")
 
 type ForecastInput struct {
-	OwnerUserID        int64
-	HorizonDays        int
-	AccountIDs         []int64
-	IncludeDescendants bool
+	OwnerUserID         int64
+	HorizonDays         int
+	AccountIDs          []int64
+	IncludeDescendants  bool
+	ReportingCurrencyID *int64
+	FXMethod            string
 }
 
 type ForecastQuantity struct {
@@ -161,6 +163,42 @@ type ForecastResult struct {
 	Events              []ForecastEvent
 	SourceCounts        ForecastSourceCounts
 	Assumptions         ForecastAssumptions
+	Valuation           *ForecastValuation
+	Converted           *ForecastSeries
+}
+
+type ForecastRateUse struct {
+	ObservationID     int64
+	BaseCommodityID   int64
+	QuoteCommodityID  int64
+	ValuationDate     string
+	RecordedAt        string
+	PriceValue        exact.Coefficient
+	PriceScale        int
+	BaseQuantityValue exact.Coefficient
+	BaseQuantityScale int
+	IsDerived         bool
+	Stale             bool
+}
+
+type ForecastRateGap struct {
+	CommodityID            int64
+	Reason                 string
+	NearestObservationDate string
+}
+
+type ForecastValuation struct {
+	Method                 string
+	RateSelection          string
+	AsOfDate               string
+	ReportingCurrencyID    int64
+	ReportingCurrencyCode  string
+	ReportingCurrencyScale int
+	MaxStalenessDays       int
+	Rounding               string
+	Complete               bool
+	UsedRates              []ForecastRateUse
+	Gaps                   []ForecastRateGap
 }
 
 type ForecastService struct {
@@ -194,7 +232,10 @@ func (s *ForecastService) Balances(ctx context.Context, input ForecastInput) (Fo
 			return db.ForecastSnapshotResolution{}, err
 		}
 		scope, err = resolveForecastScope(base.AccountVersions, bounds.AsOf, normalized)
-		return db.ForecastSnapshotResolution{AccountIDs: scope.AccountIDs, ThroughDate: bounds.Through}, err
+		if err == nil {
+			err = validateForecastReportingCurrency(base.CommodityVersions, bounds.AsOf, normalized)
+		}
+		return db.ForecastSnapshotResolution{AccountIDs: scope.AccountIDs, ThroughDate: bounds.Through, AsOfDate: bounds.AsOf, ReportingCurrencyID: normalized.ReportingCurrencyID}, err
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrForecastInputTooLarge) {
@@ -205,6 +246,11 @@ func (s *ForecastService) Balances(ctx context.Context, input ForecastInput) (Fo
 	result, err := buildForecast(ctx, normalized, bounds, scope, snapshot, nowUTC.Format(time.RFC3339))
 	if err != nil {
 		return ForecastResult{}, err
+	}
+	if normalized.ReportingCurrencyID != nil {
+		if err := addForecastConversion(&result, normalized, snapshot); err != nil {
+			return ForecastResult{}, err
+		}
 	}
 	digestInput := struct {
 		Input    forecastNormalizedInput

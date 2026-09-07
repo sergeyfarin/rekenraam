@@ -9,11 +9,19 @@ describe('forecast API client', () => {
     const get = vi.spyOn(apiClient, 'GET').mockResolvedValue({ data: { series: [], totals: [] }, response: new Response() });
     await getForecastBalances({ horizonDays: 30, accountIDs: [9, 2, 9], includeDescendants: false });
     expect(get).toHaveBeenCalledWith('/api/v1/forecasts/balances', {
-      params: { query: { horizon_days: 30, account_id: [2, 9], include_descendants: false } }
+      params: { query: { horizon_days: 30, account_id: [2, 9], include_descendants: false, reporting_currency_id: undefined, fx_method: undefined } }
     });
     expect(forecastBalancesQueryOptions({ accountIDs: [9, 2, 9] }).queryKey).toEqual([
-      'api', 'forecasts', 'balances', { horizon_days: undefined, account_id: [2, 9], include_descendants: undefined }
+      'api', 'forecasts', 'balances', { horizon_days: undefined, account_id: [2, 9], include_descendants: undefined, reporting_currency_id: undefined, fx_method: undefined }
     ]);
+  });
+
+  it('serializes the explicit constant-as-of FX recipe', async () => {
+    const get = vi.spyOn(apiClient, 'GET').mockResolvedValue({ data: { series: [], totals: [], valuation: null, converted: null }, response: new Response() });
+    await getForecastBalances({ reportingCurrencyID: 7, fxMethod: 'constant_as_of' });
+    expect(get).toHaveBeenCalledWith('/api/v1/forecasts/balances', {
+      params: { query: { horizon_days: undefined, account_id: undefined, include_descendants: undefined, reporting_currency_id: 7, fx_method: 'constant_as_of' } }
+    });
   });
 
   it('continues event pages with the exact basis and detail recipe', async () => {
@@ -27,7 +35,7 @@ describe('forecast API client', () => {
     const last = await options.queryFn({ pageParam: cursor! });
     expect(options.getNextPageParam(last)).toBeNull();
     expect(get).toHaveBeenLastCalledWith('/api/v1/forecasts/balance-events', {
-      params: { query: { horizon_days: undefined, account_id: [3], include_descendants: undefined, date: '2026-09-08', basis_token: 'a'.repeat(64), detail_account_id: undefined, detail_commodity_id: 7, limit: 20, cursor: 'next' } }
+      params: { query: { horizon_days: undefined, account_id: [3], include_descendants: undefined, reporting_currency_id: undefined, fx_method: undefined, date: '2026-09-08', basis_token: 'a'.repeat(64), detail_account_id: undefined, detail_commodity_id: 7, limit: 20, cursor: 'next' } }
     });
   });
 

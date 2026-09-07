@@ -21,6 +21,12 @@ get:
       name: include_descendants
       schema: { type: boolean, default: true }
     - in: query
+      name: reporting_currency_id
+      schema: { type: integer, format: int64, minimum: 1 }
+    - in: query
+      name: fx_method
+      schema: { type: string, enum: [constant_as_of] }
+    - in: query
       name: date
       required: true
       schema: { type: string, format: date }

@@ -272,18 +272,19 @@ ADR 0012 governs the durable split.
 ## Not started (see roadmap)
 
 XLSX/OFX/QFX import adapters, per-split import mapping and batch rollback,
-budgets, the projected-balances screen and currency conversion, loan/liability
+budgets, the projected-balances screen, loan/liability
 helpers, report snapshots, and pricing-management UI. CSV import, profiles and
 minimal rules are shipped. Reporting-currency conversion is shipped. Recurring
 templates, generation and dedicated review/discard screens are shipped.
 Production scheduling and R9 acceptance are complete. R10's detailed plan is
 written (`docs/plans/projected-balances-plan.md`), with an approved lightweight
 learning extension (`docs/plans/forecast-learning-plan.md`) for daily/weekly,
-monthly and annual seasonal spending. Slices 1–3 are complete:
+monthly and annual seasonal spending. Slices 1–4 are complete:
 `db.ForecastRepository` takes one `OpenReadOnly` snapshot and bulk-loads current
 posted selected-account legs, full account/commodity versions, relevant
-templates/occurrences, and every counterpart of linked current drafts. It has no
-ledger write or FX query. `app.ForecastService` now resolves owner-local dates
+templates/occurrences, every counterpart of linked current drafts and optional
+stored FX observations. It has no ledger write or provider call.
+`app.ForecastService` now resolves owner-local dates
 and effective-dated account scope inside that snapshot and computes exact
 per-account/per-currency plus same-currency aggregate daily curves. Posted,
 saved recurring draft and computed recurring sources remain separate and use
@@ -293,10 +294,16 @@ reported as bounded diagnostics. Authenticated, strict-query
 `/api/v1/forecasts/balances` and `/api/v1/forecasts/balance-events` routes now
 expose those exact curves and stable cursor-paged explanations through the
 shared read-only pool; stale basis tokens return a dedicated conflict code.
-Generated frontend types, a typed client, localized errors and Bruno examples
-are included, but no navigation or screen is added yet. Core slices 4–8 and
-learning M1–M4 remain unstarted. Next is constant-as-of FX; no forecast UI,
-converted projection or learned-spending model is shipped.
+Both recipes optionally accept a named constant-as-of FX recipe: direct stored
+currency observations are selected inside the same snapshot, and future,
+voided or older-than-seven-day rates cannot become a headline total. Incomplete
+coverage returns structured gaps and no partial conversion; complete conversion
+rounds each source-currency opening and daily source component before deriving
+the combined curve, includes rate provenance, and leaves exact source series
+unchanged. Generated frontend types, a typed client, localized errors and Bruno
+examples are included, but no navigation or screen is added yet. Core slices
+5–8 and learning M1–M4 remain unstarted. Next is the forecast screen; no
+forecast UI or learned-spending model is shipped.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

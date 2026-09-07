@@ -1,0 +1,17 @@
+meta {
+  name: Forecast Balances - Constant FX
+  type: http
+  seq: 35
+}
+
+get {
+  url: {{baseUrl}}/api/v1/forecasts/balances?horizon_days=30&reporting_currency_id=1&fx_method=constant_as_of
+  body: none
+  auth: none
+}
+
+params:query {
+  horizon_days: 30
+  reporting_currency_id: 1
+  fx_method: constant_as_of
+}

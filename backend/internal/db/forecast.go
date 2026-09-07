@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"rekenraam/backend/internal/exact"
@@ -68,6 +69,7 @@ type ForecastSnapshot struct {
 	Occurrences       []ForecastOccurrenceRecord
 	DraftPostings     []ForecastDraftPostingRecord
 	PayeeNames        map[int64]string
+	Rates             []ForecastRateRecord
 }
 
 type ForecastAccountVersionRecord struct {
@@ -186,6 +188,19 @@ type ForecastDraftPostingRecord struct {
 	PayeeName            sql.NullString
 }
 
+type ForecastRateRecord struct {
+	ObservationID     int64
+	BaseCommodityID   int64
+	QuoteCommodityID  int64
+	ValuationDate     string
+	RecordedAt        string
+	PriceValue        int64
+	PriceScale        int
+	BaseQuantityValue int64
+	BaseQuantityScale int
+	IsDerived         bool
+}
+
 // WithSnapshot starts one deferred read transaction and keeps its *sql.Tx
 // private to db. Every reader method below uses that transaction, preventing a
 // forecast from mixing the old side of a concurrent generation with the new
@@ -213,8 +228,10 @@ func (r *ForecastRepository) LoadSnapshot(ctx context.Context, request ForecastS
 }
 
 type ForecastSnapshotResolution struct {
-	AccountIDs  []int64
-	ThroughDate string
+	AccountIDs          []int64
+	ThroughDate         string
+	AsOfDate            string
+	ReportingCurrencyID *int64
 }
 
 // LoadResolvedSnapshot lets the application resolve account scope from the
@@ -262,12 +279,92 @@ func (r *ForecastRepository) LoadResolvedSnapshot(ctx context.Context, request F
 			return err
 		}
 		result.PayeeNames, err = reader.payeeNames(ctx, request.BookID, result.PostedPostings, result.Templates, result.DraftPostings)
+		if err != nil {
+			return err
+		}
+		if resolution.ReportingCurrencyID != nil {
+			candidateIDs := forecastCandidateCommodityIDs(resolution.AccountIDs, result.PostedPostings, result.TemplatePostings, result.DraftPostings)
+			result.Rates, err = reader.ratesAtOrBefore(ctx, request.BookID, *resolution.ReportingCurrencyID, candidateIDs, resolution.AsOfDate)
+		}
 		return err
 	})
 	if err != nil {
 		return ForecastSnapshot{}, err
 	}
 	return result, nil
+}
+
+func (r *ForecastSnapshotReader) ratesAtOrBefore(ctx context.Context, bookID, quoteCommodityID int64, baseCommodityIDs []int64, asOfDate string) ([]ForecastRateRecord, error) {
+	filtered := make([]int64, 0, len(baseCommodityIDs))
+	for _, id := range baseCommodityIDs {
+		if id != quoteCommodityID {
+			filtered = append(filtered, id)
+		}
+	}
+	clause, args := idsClause("po.base_commodity_id", filtered)
+	if clause == "" {
+		return []ForecastRateRecord{}, nil
+	}
+	queryArgs := append([]any{bookID, quoteCommodityID, asOfDate}, args...)
+	rows, err := r.transaction.QueryContext(ctx, `
+		WITH ranked AS (
+			SELECT po.id, po.base_commodity_id, po.quote_commodity_id, po.valuation_date,
+				po.recorded_at, po.price_value, po.price_scale, po.base_quantity_value,
+				po.base_quantity_scale, po.is_derived,
+				ROW_NUMBER() OVER (PARTITION BY po.base_commodity_id
+					ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC) AS rank
+			FROM price_observations po
+			JOIN commodities base ON base.id = po.base_commodity_id AND base.book_id = po.book_id AND base.kind = 'currency'
+			JOIN commodities quote ON quote.id = po.quote_commodity_id AND quote.book_id = po.book_id AND quote.kind = 'currency'
+			WHERE po.book_id = ? AND po.quote_commodity_id = ? AND po.voided_at IS NULL
+				AND po.valuation_date <= ? AND `+clause+`
+		)
+		SELECT id, base_commodity_id, quote_commodity_id, valuation_date, recorded_at,
+			price_value, price_scale, base_quantity_value, base_quantity_scale, is_derived
+		FROM ranked WHERE rank = 1 ORDER BY base_commodity_id`, queryArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("read forecast rates: %w", err)
+	}
+	defer rows.Close()
+	result := make([]ForecastRateRecord, 0, len(filtered))
+	for rows.Next() {
+		var record ForecastRateRecord
+		if err := rows.Scan(&record.ObservationID, &record.BaseCommodityID, &record.QuoteCommodityID, &record.ValuationDate, &record.RecordedAt, &record.PriceValue, &record.PriceScale, &record.BaseQuantityValue, &record.BaseQuantityScale, &record.IsDerived); err != nil {
+			return nil, fmt.Errorf("scan forecast rate: %w", err)
+		}
+		result = append(result, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate forecast rates: %w", err)
+	}
+	return result, nil
+}
+
+func forecastCandidateCommodityIDs(accountIDs []int64, posted []ForecastPostingRecord, templates []ForecastTemplatePostingRecord, drafts []ForecastDraftPostingRecord) []int64 {
+	selected := map[int64]bool{}
+	for _, id := range accountIDs {
+		selected[id] = true
+	}
+	set := map[int64]bool{}
+	for _, row := range posted {
+		set[row.CommodityID] = true
+	}
+	for _, row := range templates {
+		if selected[row.AccountID] {
+			set[row.CommodityID] = true
+		}
+	}
+	for _, row := range drafts {
+		if selected[row.AccountID] {
+			set[row.CommodityID] = true
+		}
+	}
+	ids := make([]int64, 0, len(set))
+	for id := range set {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
 }
 
 func (r *ForecastSnapshotReader) ownerTimeZone(ctx context.Context, ownerUserID int64) (string, error) {

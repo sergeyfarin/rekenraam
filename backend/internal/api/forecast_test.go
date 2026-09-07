@@ -96,6 +96,69 @@ func TestForecastAPIRejectsAmbiguousQuery(t *testing.T) {
 	assert.True(t, valid.Scope.IncludeDescendants)
 }
 
+func TestForecastAPIValidatesPairedFXOptions(t *testing.T) {
+	fixture := newForecastAPIFixture(t)
+	base := "?horizon_days=1&reporting_currency_id=" + strconvFormatInt(fixture.currency) + "&fx_method=constant_as_of"
+	balances := forecastBalancesFor(t, fixture, base)
+	require.NotNil(t, balances.Valuation)
+	require.NotNil(t, balances.Converted)
+	assert.True(t, balances.Valuation.Complete)
+	assert.Empty(t, balances.Valuation.UsedRates, "identity conversion must not require an observation")
+
+	eventsPath := "/api/v1/forecasts/balance-events" + base + "&date=2026-09-08&basis_token=" + balances.BasisToken
+	forecastRequest(t, fixture.handler, fixture.session, eventsPath, http.StatusOK)
+	for _, suffix := range []string{
+		"?reporting_currency_id=" + strconvFormatInt(fixture.currency),
+		"?fx_method=constant_as_of",
+		"?reporting_currency_id=" + strconvFormatInt(fixture.currency) + "&fx_method=latest",
+		"?reporting_currency_id=999999&fx_method=constant_as_of",
+	} {
+		forecastRequest(t, fixture.handler, fixture.session, "/api/v1/forecasts/balances"+suffix, http.StatusBadRequest)
+	}
+}
+
+func TestForecastMissingFXOmitsWholeConvertedSeries(t *testing.T) {
+	fixture := newForecastAPIFixture(t)
+	eur, checking := createForeignForecastPosting(t, fixture)
+	query := "?horizon_days=2&account_id=" + strconvFormatInt(checking.ID) + "&include_descendants=false&reporting_currency_id=" + strconvFormatInt(fixture.currency) + "&fx_method=constant_as_of"
+	balances := forecastBalancesFor(t, fixture, query)
+	require.NotNil(t, balances.Valuation)
+	assert.False(t, balances.Valuation.Complete)
+	require.Len(t, balances.Valuation.Gaps, 1)
+	assert.Equal(t, eur.ID, balances.Valuation.Gaps[0].CommodityID)
+	assert.Nil(t, balances.Converted)
+	require.Len(t, balances.Totals, 1)
+	assert.Equal(t, eur.ID, balances.Totals[0].CommodityID, "the exact per-currency series remains available")
+}
+
+func TestForecastFXReadDoesNotQueueCoverage(t *testing.T) {
+	fixture := newForecastAPIFixture(t)
+	eur := createCurrencyForSession(t, fixture.handler, fixture.session, fixture.csrf, `{"code":"EUR","name":"Euro"}`)
+	checking := createLedgerAccount(t, fixture.handler, fixture.session, fixture.csrf, "EUR recurring checking", "asset", "checking", eur.ID, 2)
+	expense := createLedgerAccount(t, fixture.handler, fixture.session, fixture.csrf, "EUR recurring expense", "expense", "expense", eur.ID, 2)
+	generateRecurringDraft(t, fixture.handler, fixture.database, fixture.session, "2026-09-08", checking.ID, expense.ID, eur.ID, 100)
+	var before int
+	require.NoError(t, fixture.database.QueryRow(`SELECT COUNT(*) FROM background_work_items`).Scan(&before))
+	query := "?horizon_days=2&account_id=" + strconvFormatInt(checking.ID) + "&include_descendants=false&reporting_currency_id=" + strconvFormatInt(fixture.currency) + "&fx_method=constant_as_of"
+	balances := forecastBalancesFor(t, fixture, query)
+	forecastRequest(t, fixture.handler, fixture.session, "/api/v1/forecasts/balance-events"+query+"&date=2026-09-08&basis_token="+balances.BasisToken, http.StatusOK)
+	var after int
+	require.NoError(t, fixture.database.QueryRow(`SELECT COUNT(*) FROM background_work_items`).Scan(&after))
+	assert.Equal(t, before, after)
+}
+
+func createForeignForecastPosting(t *testing.T, fixture forecastAPIFixture) (currencyResponse, accountResponse) {
+	t.Helper()
+	eur := createCurrencyForSession(t, fixture.handler, fixture.session, fixture.csrf, `{"code":"EUR","name":"Euro"}`)
+	checking := createLedgerAccount(t, fixture.handler, fixture.session, fixture.csrf, "EUR forecast checking", "asset", "checking", eur.ID, 2)
+	expense := createLedgerAccount(t, fixture.handler, fixture.session, fixture.csrf, "EUR forecast expense", "expense", "expense", eur.ID, 2)
+	body := `{"transaction_date":"2026-09-08","description":"EUR forecast item","journal_entries":[{"entry_date":"2026-09-08","postings":[` +
+		`{"account_id":` + strconvFormatInt(checking.ID) + `,"commodity_id":` + strconvFormatInt(eur.ID) + `,"quantity_value":"100","quantity_scale":2},` +
+		`{"account_id":` + strconvFormatInt(expense.ID) + `,"commodity_id":` + strconvFormatInt(eur.ID) + `,"quantity_value":"-100","quantity_scale":2}]}]}`
+	createTransactionForSession(t, fixture.handler, fixture.session, fixture.csrf, body, http.StatusCreated)
+	return eur, checking
+}
+
 func TestForecastAPIReturnsExactWireQuantities(t *testing.T) {
 	fixture := newForecastAPIFixture(t)
 	fixture.createFuturePosting(t, "9007199254740993")

@@ -9,6 +9,8 @@ export interface ForecastQuery {
   horizonDays?: number;
   accountIDs?: number[];
   includeDescendants?: boolean;
+  reportingCurrencyID?: number;
+  fxMethod?: 'constant_as_of';
 }
 
 export interface ForecastEventQuery extends ForecastQuery {
@@ -27,7 +29,9 @@ export function normalizeForecastQuery(query: ForecastQuery = {}) {
   return {
     horizon_days: query.horizonDays,
     account_id: query.accountIDs ? [...new Set(query.accountIDs)].sort((a, b) => a - b) : undefined,
-    include_descendants: query.includeDescendants
+    include_descendants: query.includeDescendants,
+    reporting_currency_id: query.reportingCurrencyID,
+    fx_method: query.fxMethod
   };
 }
 

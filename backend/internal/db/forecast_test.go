@@ -168,3 +168,34 @@ func TestForecastSnapshotEmptyScopeNeverMeansAllAccounts(t *testing.T) {
 	assert.Empty(t, snapshot.Templates)
 	assert.Empty(t, snapshot.DraftPostings)
 }
+
+func TestForecastConstantFXStalenessAndTies(t *testing.T) {
+	database, repository := newForecastTestRepository(t)
+	_, err := database.Exec(`
+		INSERT INTO commodities (id, book_id, code, kind, is_builtin, created_at, created_by_user_id)
+		VALUES (2, 1, 'USD', 'currency', 1, '2026-01-01T00:00:00Z', 1);
+		INSERT INTO commodity_versions (commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason, status, symbol, display_symbol, name, standard_scale, max_quantity_scale)
+		VALUES (2, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', 'USD', '$', 'US Dollar', 2, 2);
+		INSERT INTO price_series (id, book_id, base_commodity_id, quote_commodity_id, quote_type, adjustment_basis, status, created_at, created_by_user_id)
+		VALUES (1, 1, 2, 1, 'manual', 'raw', 'active', '2026-08-01T00:00:00Z', 1);
+		INSERT INTO price_observations (id, book_id, series_id, base_commodity_id, quote_commodity_id, quote_type, adjustment_basis, price_value, price_scale, base_quantity_value, base_quantity_scale, valuation_date, is_manual, is_derived, derivation_json, metadata_json, recorded_at, created_by_user_id)
+		VALUES
+			(1, 1, 1, 2, 1, 'manual', 'raw', 80, 2, 1, 0, '2026-08-24', 1, 0, '{}', '{}', '2026-08-24T10:00:00Z', 1),
+			(2, 1, 1, 2, 1, 'manual', 'raw', 90, 2, 1, 0, '2026-08-31', 1, 0, '{}', '{}', '2026-08-31T10:00:00Z', 1),
+			(3, 1, 1, 2, 1, 'manual', 'raw', 91, 2, 1, 0, '2026-08-31', 1, 1, '{}', '{}', '2026-08-31T11:00:00Z', 1),
+			(4, 1, 1, 2, 1, 'manual', 'raw', 92, 2, 1, 0, '2026-08-31', 1, 0, '{}', '{}', '2026-08-31T11:00:00Z', 1),
+			(5, 1, 1, 2, 1, 'manual', 'raw', 200, 2, 1, 0, '2026-09-01', 1, 0, '{}', '{}', '2026-09-01T10:00:00Z', 1);
+		UPDATE price_observations SET voided_at = '2026-08-31T12:00:00Z', void_reason = 'withdrawn' WHERE id = 4;
+	`)
+	require.NoError(t, err)
+	insertForecastTransaction(t, database, 70, 70, "posted", "2026-08-31", []PostingSpec{{AccountID: 1, CommodityID: 2, QuantityValue: exact.MustParse("100"), QuantityScale: 2}, {AccountID: 2, CommodityID: 2, QuantityValue: exact.MustParse("-100"), QuantityScale: 2}})
+	quoteID := int64(1)
+	request := forecastSnapshotRequest(1)
+	snapshot, err := repository.LoadResolvedSnapshot(context.Background(), request, func(ForecastSnapshot) (ForecastSnapshotResolution, error) {
+		return ForecastSnapshotResolution{AccountIDs: []int64{1}, ThroughDate: "2026-12-31", AsOfDate: "2026-08-31", ReportingCurrencyID: &quoteID}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, snapshot.Rates, 1)
+	assert.Equal(t, int64(3), snapshot.Rates[0].ObservationID, "latest recorded active tie wins; voided and future rows cannot win")
+	assert.True(t, snapshot.Rates[0].IsDerived)
+}

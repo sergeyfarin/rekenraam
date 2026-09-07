@@ -434,6 +434,12 @@ components:
       $ref: "./components/schemas/forecast.yaml#/ForecastEvent"
     ForecastEventsResponse:
       $ref: "./components/schemas/forecast.yaml#/ForecastEventsResponse"
+    ForecastRateUse:
+      $ref: "./components/schemas/forecast.yaml#/ForecastRateUse"
+    ForecastRateGap:
+      $ref: "./components/schemas/forecast.yaml#/ForecastRateGap"
+    ForecastValuation:
+      $ref: "./components/schemas/forecast.yaml#/ForecastValuation"
     RecurringPreviewResponse:
       $ref: "./components/schemas/recurring-review.yaml#/RecurringPreviewResponse"
     RecurringSummaryResponse:

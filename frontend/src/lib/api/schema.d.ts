@@ -22,6 +22,10 @@ export interface paths {
                     /** @description Repeatable positive account ID. Omitted selects active cash accounts. */
                     account_id?: number[];
                     include_descendants?: boolean;
+                    /** @description Optional currency for an additive combined series; requires fx_method. */
+                    reporting_currency_id?: number;
+                    /** @description Required with reporting_currency_id. Rates are held constant from the as-of date. */
+                    fx_method?: "constant_as_of";
                 };
                 header?: never;
                 path?: never;
@@ -101,6 +105,8 @@ export interface paths {
                     horizon_days?: number;
                     account_id?: number[];
                     include_descendants?: boolean;
+                    reporting_currency_id?: number;
+                    fx_method?: "constant_as_of";
                     date: string;
                     basis_token: string;
                     detail_account_id?: number;
@@ -13960,6 +13966,8 @@ export interface components {
             diagnostics: components["schemas"]["ForecastDiagnostic"][];
             diagnostic_total_count: number;
             diagnostic_hidden_count: number;
+            valuation: components["schemas"]["ForecastValuation"] | null;
+            converted: components["schemas"]["ForecastCurrencySeries"] | null;
         };
         ForecastEventAmount: {
             /** Format: int64 */
@@ -14002,6 +14010,51 @@ export interface components {
             items: components["schemas"]["ForecastEvent"][];
             total_count: number;
             next_cursor: string | null;
+        };
+        ForecastRateUse: {
+            /** Format: int64 */
+            observation_id: number;
+            /** Format: int64 */
+            base_commodity_id: number;
+            /** Format: int64 */
+            quote_commodity_id: number;
+            /** Format: date */
+            valuation_date: string;
+            /** Format: date-time */
+            recorded_at: string;
+            price_value: string;
+            price_scale: number;
+            base_quantity_value: string;
+            base_quantity_scale: number;
+            is_derived: boolean;
+            stale: boolean;
+        };
+        ForecastRateGap: {
+            /** Format: int64 */
+            commodity_id: number;
+            /** @enum {string} */
+            reason: "no_observation_in_window";
+            /** Format: date */
+            nearest_observation_date: string | null;
+        };
+        ForecastValuation: {
+            /** @enum {string} */
+            method: "constant_as_of";
+            /** @enum {string} */
+            rate_selection: "observed_on_or_before";
+            /** Format: date */
+            as_of_date: string;
+            /** Format: int64 */
+            reporting_currency_id: number;
+            reporting_currency_code: string;
+            reporting_currency_scale: number;
+            /** @enum {integer} */
+            max_staleness_days: 7;
+            /** @enum {string} */
+            rounding: "per_currency_component_half_away_from_zero";
+            complete: boolean;
+            used_rates: components["schemas"]["ForecastRateUse"][];
+            gaps: components["schemas"]["ForecastRateGap"][];
         };
         RecurringPreviewResponse: {
             dates: string[];

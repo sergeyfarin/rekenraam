@@ -52,6 +52,15 @@ func forecastTestBuild(t *testing.T, snapshot db.ForecastSnapshot, ids ...int64)
 	return result
 }
 
+func forecastTestConverted(t *testing.T, snapshot db.ForecastSnapshot, reportingID int64, ids ...int64) ForecastResult {
+	t.Helper()
+	input := forecastNormalizedInput{HorizonDays: 5, ReportingCurrencyID: &reportingID, FXMethod: "constant_as_of"}
+	result, err := buildForecast(context.Background(), input, forecastBounds{AsOf: "2026-08-31", First: "2026-09-01", Through: "2026-09-05"}, forecastTestScope(snapshot, ids...), snapshot, "2026-08-31T12:00:00Z")
+	require.NoError(t, err)
+	require.NoError(t, addForecastConversion(&result, input, snapshot))
+	return result
+}
+
 func posting(id, tx, entry int64, date string, account, commodity int64, value string, scale int) db.ForecastPostingRecord {
 	return db.ForecastPostingRecord{PostingID: id, TransactionID: tx, TransactionVersionID: tx, JournalEntryID: entry, EntryDate: date, AccountID: account, CommodityID: commodity, QuantityValue: exact.MustParse(value), QuantityScale: scale}
 }
@@ -407,6 +416,26 @@ func TestForecastInputAndOutputBudgets(t *testing.T) {
 	s.CommodityVersions[2].Kind = "currency"
 	_, err = buildForecast(context.Background(), forecastNormalizedInput{HorizonDays: 366}, forecastBounds{AsOf: "2026-08-31", First: "2026-09-01", Through: "2027-09-01"}, scope, s, "now")
 	assert.ErrorIs(t, err, ErrForecastTooLarge)
+
+	t.Run("converted series counts toward output budget", func(t *testing.T) {
+		snapshot := forecastTestSnapshot()
+		snapshot.CommodityVersions[2].Kind = "currency"
+		conversionScope := forecastScope{Accounts: map[int64]db.ForecastAccountVersionRecord{}}
+		for id := int64(10); id < 191; id++ {
+			account := forecastAccountVersion(id, "A", "asset", "checking", 1)
+			conversionScope.AccountIDs = append(conversionScope.AccountIDs, id)
+			conversionScope.Accounts[id] = account
+			for commodity := int64(1); commodity <= 3; commodity++ {
+				snapshot.PostedPostings = append(snapshot.PostedPostings, posting(id*10+commodity, id, id, "2026-08-31", id, commodity, "1", 0))
+			}
+		}
+		bounds := forecastBounds{AsOf: "2026-08-31", First: "2026-09-01", Through: "2027-09-01"}
+		_, err := buildForecast(context.Background(), forecastNormalizedInput{HorizonDays: 366}, bounds, conversionScope, snapshot, "now")
+		require.NoError(t, err)
+		reportingID := int64(1)
+		_, err = buildForecast(context.Background(), forecastNormalizedInput{HorizonDays: 366, ReportingCurrencyID: &reportingID, FXMethod: "constant_as_of"}, bounds, conversionScope, snapshot, "now")
+		assert.ErrorIs(t, err, ErrForecastTooLarge)
+	})
 }
 
 func TestForecastHonorsContextCancellation(t *testing.T) {
@@ -414,4 +443,132 @@ func TestForecastHonorsContextCancellation(t *testing.T) {
 	cancel()
 	_, err := buildForecast(ctx, forecastNormalizedInput{HorizonDays: 5}, forecastBounds{AsOf: "2026-08-31", First: "2026-09-01", Through: "2026-09-05"}, forecastTestScope(forecastTestSnapshot(), 1), forecastTestSnapshot(), "now")
 	assert.True(t, errors.Is(err, context.Canceled))
+}
+
+func TestForecastConstantFXNeverUsesFutureObservations(t *testing.T) {
+	s := forecastTestSnapshot()
+	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "10000", 2)}
+	s.Rates = []db.ForecastRateRecord{
+		{ObservationID: 1, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-08-31", RecordedAt: "2026-08-31T10:00:00Z", PriceValue: 9, PriceScale: 1, BaseQuantityValue: 1},
+		{ObservationID: 2, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-09-01", RecordedAt: "2026-09-01T10:00:00Z", PriceValue: 2, BaseQuantityValue: 1},
+	}
+	r := forecastTestConverted(t, s, 1, 5)
+	require.NotNil(t, r.Converted)
+	assert.Equal(t, exact.Coefficient("9000"), r.Converted.Opening.Value)
+	require.Len(t, r.Valuation.UsedRates, 1)
+	assert.Equal(t, int64(1), r.Valuation.UsedRates[0].ObservationID)
+}
+
+func TestForecastConstantFXStalenessAndTies(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		date     string
+		complete bool
+		stale    bool
+	}{{"same day", "2026-08-31", true, false}, {"seven days", "2026-08-24", true, true}, {"eight days", "2026-08-23", false, false}} {
+		t.Run(test.name, func(t *testing.T) {
+			s := forecastTestSnapshot()
+			s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "100", 2)}
+			s.Rates = []db.ForecastRateRecord{{ObservationID: 3, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: test.date, RecordedAt: "2026-08-31T10:00:00Z", PriceValue: 1, BaseQuantityValue: 1}}
+			r := forecastTestConverted(t, s, 1, 5)
+			assert.Equal(t, test.complete, r.Valuation.Complete)
+			if test.complete {
+				assert.Equal(t, test.stale, r.Valuation.UsedRates[0].Stale)
+			} else {
+				require.Len(t, r.Valuation.Gaps, 1)
+				assert.Equal(t, test.date, r.Valuation.Gaps[0].NearestObservationDate)
+			}
+		})
+	}
+	s := forecastTestSnapshot()
+	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "100", 2)}
+	s.Rates = []db.ForecastRateRecord{
+		{ObservationID: 1, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-08-31", RecordedAt: "2026-08-31T10:00:00Z", PriceValue: 1, BaseQuantityValue: 1},
+		{ObservationID: 2, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-08-31", RecordedAt: "2026-08-31T11:00:00Z", PriceValue: 2, BaseQuantityValue: 1},
+		{ObservationID: 3, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-08-31", RecordedAt: "2026-08-31T11:00:00Z", PriceValue: 3, BaseQuantityValue: 1},
+	}
+	r := forecastTestConverted(t, s, 1, 5)
+	assert.Equal(t, int64(3), r.Valuation.UsedRates[0].ObservationID)
+	assert.Equal(t, exact.Coefficient("300"), r.Converted.Opening.Value)
+}
+
+func TestForecastMissingFXOmitsWholeConvertedSeries(t *testing.T) {
+	s := forecastTestSnapshot()
+	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "100", 2)}
+	r := forecastTestConverted(t, s, 1, 5)
+	assert.False(t, r.Valuation.Complete)
+	assert.Nil(t, r.Converted)
+	require.Len(t, r.Aggregates, 1)
+	assert.Equal(t, exact.Coefficient("100"), r.Aggregates[0].Opening.Value)
+	require.Len(t, r.Valuation.Gaps, 1)
+	assert.Empty(t, r.Valuation.Gaps[0].NearestObservationDate)
+
+	zeroOnly := forecastTestConverted(t, forecastTestSnapshot(), 1, 5)
+	assert.True(t, zeroOnly.Valuation.Complete, "a zero-only foreign-currency series needs no observation")
+	assert.Empty(t, zeroOnly.Valuation.Gaps)
+	assert.NotNil(t, zeroOnly.Converted)
+}
+
+func TestForecastFXCoverageBeforeAccountNetting(t *testing.T) {
+	s := forecastTestSnapshot()
+	s.AccountVersions = append(s.AccountVersions, forecastAccountVersion(6, "Other USD", "asset", "cash", 2))
+	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "100", 2), posting(2, 2, 2, "2026-08-31", 6, 2, "-100", 2)}
+	r := forecastTestConverted(t, s, 1, 5, 6)
+	require.Len(t, r.Aggregates, 1)
+	assert.Equal(t, exact.Coefficient("0"), r.Aggregates[0].Opening.Value)
+	assert.False(t, r.Valuation.Complete)
+	assert.Nil(t, r.Converted)
+}
+
+func TestForecastConstantFXRoundingReconciles(t *testing.T) {
+	s := forecastTestSnapshot()
+	s.CommodityVersions[0].StandardScale = 0
+	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-09-01", 5, 2, "-1", 0), posting(2, 2, 2, "2026-09-02", 5, 2, "-1", 0)}
+	s.Rates = []db.ForecastRateRecord{{ObservationID: 1, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-08-31", RecordedAt: "2026-08-31T10:00:00Z", PriceValue: 1, BaseQuantityValue: 2}}
+	r := forecastTestConverted(t, s, 1, 5)
+	require.NotNil(t, r.Converted)
+	assert.Equal(t, exact.Coefficient("-1"), r.Converted.Points[0].Components.Posted.Value, "negative half rounds away from zero")
+	assert.Equal(t, exact.Coefficient("-2"), r.Converted.Points[1].RecordedBalance.Value, "converted closing derives from rounded daily components")
+
+	componentSnapshot := forecastTestSnapshot()
+	componentSnapshot.Rates = []db.ForecastRateRecord{{ObservationID: 1, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-08-31", RecordedAt: "2026-08-31T10:00:00Z", PriceValue: 1, BaseQuantityValue: 2}}
+	point := ForecastPoint{Date: "2026-09-01", Components: ForecastComponents{Posted: ForecastQuantity{Value: exact.New(1), Scale: 2}, Draft: ForecastQuantity{Value: exact.New(-1), Scale: 2}, Template: zeroForecastQuantity(2)}}
+	series := ForecastSeries{AccountID: 5, CommodityID: 2, Opening: zeroForecastQuantity(2), Points: []ForecastPoint{point}, Minimum: zeroForecastQuantity(2), MinimumDate: "2026-08-31"}
+	componentResult := ForecastResult{AsOfDate: "2026-08-31", FirstDate: "2026-09-01", ThroughDate: "2026-09-01", HorizonDays: 1, Series: []ForecastSeries{series}, Aggregates: []ForecastSeries{series}}
+	reportingID := int64(1)
+	require.NoError(t, addForecastConversion(&componentResult, forecastNormalizedInput{ReportingCurrencyID: &reportingID, FXMethod: "constant_as_of"}, componentSnapshot))
+	require.NotNil(t, componentResult.Converted)
+	assert.Equal(t, exact.Coefficient("1"), componentResult.Converted.Points[0].Components.Posted.Value)
+	assert.Equal(t, exact.Coefficient("-1"), componentResult.Converted.Points[0].Components.Draft.Value)
+	assert.Equal(t, exact.Coefficient("0"), componentResult.Converted.Points[0].ProjectedBalance.Value, "separately rounded source components reconcile")
+}
+
+func TestForecastSameCurrencyConversionNeedsNoObservation(t *testing.T) {
+	s := forecastTestSnapshot()
+	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 1, 1, "9007199254740993", 2)}
+	r := forecastTestConverted(t, s, 1, 1)
+	assert.True(t, r.Valuation.Complete)
+	assert.Empty(t, r.Valuation.UsedRates)
+	require.NotNil(t, r.Converted)
+	assert.Equal(t, exact.Coefficient("9007199254740993"), r.Converted.Opening.Value)
+}
+
+func TestForecastFXDoesNotChangePerCurrencySeries(t *testing.T) {
+	s := forecastTestSnapshot()
+	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "100", 2)}
+	s.Rates = []db.ForecastRateRecord{{ObservationID: 1, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-08-31", RecordedAt: "2026-08-31T10:00:00Z", PriceValue: 9, PriceScale: 1, BaseQuantityValue: 1}}
+	exactResult := forecastTestBuild(t, s, 5)
+	converted := forecastTestConverted(t, s, 1, 5)
+	assert.Equal(t, exactResult.Series, converted.Series)
+	assert.Equal(t, exactResult.Aggregates, converted.Aggregates)
+
+	overflow := forecastTestSnapshot()
+	overflow.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "99999999999999999999999999999999999999", 2)}
+	overflow.Rates = []db.ForecastRateRecord{{ObservationID: 1, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-08-31", RecordedAt: "2026-08-31T10:00:00Z", PriceValue: 10, BaseQuantityValue: 1}}
+	reportingID := int64(1)
+	input := forecastNormalizedInput{HorizonDays: 5, ReportingCurrencyID: &reportingID, FXMethod: "constant_as_of"}
+	overflowResult, err := buildForecast(context.Background(), input, forecastBounds{AsOf: "2026-08-31", First: "2026-09-01", Through: "2026-09-05"}, forecastTestScope(overflow, 5), overflow, "now")
+	require.NoError(t, err)
+	var ledgerOverflow LedgerOverflowError
+	assert.ErrorAs(t, addForecastConversion(&overflowResult, input, overflow), &ledgerOverflow)
 }

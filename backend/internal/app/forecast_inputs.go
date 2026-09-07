@@ -11,9 +11,11 @@ import (
 )
 
 type forecastNormalizedInput struct {
-	HorizonDays        int
-	AccountIDs         []int64
-	IncludeDescendants bool
+	HorizonDays         int
+	AccountIDs          []int64
+	IncludeDescendants  bool
+	ReportingCurrencyID *int64
+	FXMethod            string
 }
 
 type forecastBounds struct {
@@ -50,7 +52,29 @@ func normalizeForecastInput(input ForecastInput) (forecastNormalizedInput, error
 		return forecastNormalizedInput{}, ValidationError{Message: "forecast accepts at most 100 root accounts"}
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	return forecastNormalizedInput{HorizonDays: horizon, AccountIDs: ids, IncludeDescendants: input.IncludeDescendants}, nil
+	if (input.ReportingCurrencyID == nil) != (input.FXMethod == "") {
+		return forecastNormalizedInput{}, ValidationError{Message: "reporting currency and fx method must be supplied together"}
+	}
+	if input.ReportingCurrencyID != nil {
+		if *input.ReportingCurrencyID <= 0 {
+			return forecastNormalizedInput{}, ValidationError{Message: "reporting currency is invalid"}
+		}
+		if input.FXMethod != "constant_as_of" {
+			return forecastNormalizedInput{}, ValidationError{Message: "forecast fx method is invalid"}
+		}
+	}
+	return forecastNormalizedInput{HorizonDays: horizon, AccountIDs: ids, IncludeDescendants: input.IncludeDescendants, ReportingCurrencyID: input.ReportingCurrencyID, FXMethod: input.FXMethod}, nil
+}
+
+func validateForecastReportingCurrency(versions []db.ForecastCommodityVersionRecord, asOf string, input forecastNormalizedInput) error {
+	if input.ReportingCurrencyID == nil {
+		return nil
+	}
+	commodity, ok := commodityRulesAt(versions, asOf)[*input.ReportingCurrencyID]
+	if !ok || commodity.Kind != "currency" {
+		return ValidationError{Message: "reporting currency must identify an existing currency"}
+	}
+	return nil
 }
 
 func forecastDateBounds(nowUTC time.Time, timeZone string, horizon int) (forecastBounds, error) {
