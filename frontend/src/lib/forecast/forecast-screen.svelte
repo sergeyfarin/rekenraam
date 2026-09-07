@@ -1,10 +1,17 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import { createQuery } from '@tanstack/svelte-query';
+  import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import ChevronDown from '@lucide/svelte/icons/chevron-down';
+  import ChevronUp from '@lucide/svelte/icons/chevron-up';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import { parseISO } from 'date-fns';
-  import { forecastBalancesQueryOptions, type ForecastBalancesResponse } from '$lib/api/forecast';
+  import {
+    forecastBalancesQueryOptions,
+    forecastEventsQueryKey,
+    type ForecastBalancesResponse,
+    type ForecastQuery
+  } from '$lib/api/forecast';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import Panel from '$lib/components/panel.svelte';
   import StatePanel from '$lib/components/state-panel.svelte';
@@ -13,6 +20,7 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { m } from '$lib/paraglide/messages.js';
   import ForecastChart from './forecast-chart.svelte';
+  import ForecastEvents from './forecast-events.svelte';
   import {
     forecastHasMovements,
     parseForecastFilters,
@@ -22,21 +30,28 @@
   } from './forecast-model';
 
   type Quantity = { quantity_value: string; quantity_scale: number };
-  type DisplaySeries = { key: string; label: string; series: ForecastSeries };
+  type DisplaySeries = {
+    key: string;
+    label: string;
+    series: ForecastSeries;
+    detailAccountID?: number;
+    detailCommodityID?: number;
+  };
 
   const locale = $derived(getLocale());
   const dateFormatter = $derived(new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' }));
   const dateTimeFormatter = $derived(new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }));
   const parsed = $derived(parseForecastFilters($page.url.searchParams));
   const active = $derived(parsed.filters);
+  const activeQuery = $derived<ForecastQuery>({
+    horizonDays: active.horizonDays,
+    accountIDs: active.accountIDs,
+    includeDescendants: active.includeDescendants,
+    reportingCurrencyID: active.reportingCurrencyID ?? undefined,
+    fxMethod: active.reportingCurrencyID === null ? undefined : 'constant_as_of'
+  });
   const query = createQuery(() => ({
-    ...forecastBalancesQueryOptions({
-      horizonDays: active.horizonDays,
-      accountIDs: active.accountIDs,
-      includeDescendants: active.includeDescendants,
-      reportingCurrencyID: active.reportingCurrencyID ?? undefined,
-      fxMethod: active.reportingCurrencyID === null ? undefined : 'constant_as_of'
-    }),
+    ...forecastBalancesQueryOptions(activeQuery),
     enabled: parsed.valid,
     refetchOnMount: 'always' as const,
     refetchOnWindowFocus: true
@@ -48,6 +63,11 @@
   let reportingCurrencyID = $state<number | null>(null);
   let syncedURL = $state('');
   let selectedSeriesKey = $state('');
+  let openDetailKey = $state('');
+  let observedBasis = $state('');
+  let detailNotice = $state('');
+  const queryClient = useQueryClient();
+  const data = $derived(query.data);
 
   $effect(() => {
     const signature = $page.url.search;
@@ -56,23 +76,36 @@
     accountIDs = [...active.accountIDs];
     includeDescendants = active.includeDescendants;
     reportingCurrencyID = active.reportingCurrencyID;
+    openDetailKey = '';
+    detailNotice = '';
     syncedURL = signature;
   });
 
+  $effect(() => {
+    const nextBasis = data?.basis_token;
+    if (!nextBasis || nextBasis === observedBasis) return;
+    if (observedBasis && openDetailKey) {
+      openDetailKey = '';
+      detailNotice = m.forecast_event_basis_changed();
+      queryClient.removeQueries({ queryKey: forecastEventsQueryKey });
+    }
+    observedBasis = nextBasis;
+  });
+
   const formValid = $derived(Number.isInteger(horizonDays) && horizonDays >= 1 && horizonDays <= 366);
-  const data = $derived(query.data);
   const hasMovements = $derived(data ? forecastHasMovements(data.totals) : false);
   const displaySeries = $derived.by<DisplaySeries[]>(() => {
     if (!data) return [];
     const rows: DisplaySeries[] = data.totals.map((series) => ({
       key: `total:${series.commodity_id}`,
       label: m.forecast_series_total({ commodity: series.commodity_code }),
-      series
+      series,
+      detailCommodityID: series.commodity_id
     }));
     if (data.converted) rows.unshift({ key: 'converted', label: m.forecast_series_converted({ commodity: data.converted.commodity_code }), series: data.converted });
     for (const series of data.series) {
       const account = data.scope.accounts.find((row) => row.id === series.account_id);
-      rows.push({ key: `account:${series.account_id}:${series.commodity_id}`, label: m.forecast_series_account({ account: accountName(account), commodity: series.commodity_code }), series });
+      rows.push({ key: `account:${series.account_id}:${series.commodity_id}`, label: m.forecast_series_account({ account: accountName(account), commodity: series.commodity_code }), series, detailAccountID: series.account_id, detailCommodityID: series.commodity_id });
     }
     return rows;
   });
@@ -99,6 +132,16 @@
     return formatAmount({ quantity_value: value, quantity_scale: scale }, selectedDisplay?.series.commodity_code ?? '');
   }
 
+  function formatEventAmount(value: string, scale: number, commodity: string): string {
+    return formatAmount({ quantity_value: value, quantity_scale: scale }, commodity);
+  }
+
+  function selectSeries(key: string) {
+    selectedSeriesKey = key;
+    openDetailKey = '';
+    detailNotice = '';
+  }
+
   function endPoint(series: ForecastSeries) {
     return series.points.at(-1);
   }
@@ -111,13 +154,35 @@
 
   function applyFilters() {
     if (!formValid) return;
+    openDetailKey = '';
+    queryClient.removeQueries({ queryKey: forecastEventsQueryKey });
     const filters: ForecastFilters = { horizonDays, accountIDs, includeDescendants, reportingCurrencyID };
     const params = writeForecastFilters(filters);
     void goto(`/app/forecast?${params.toString()}`, { keepFocus: true, noScroll: true });
   }
 
   function resetFilters() {
+    openDetailKey = '';
+    queryClient.removeQueries({ queryKey: forecastEventsQueryKey });
     void goto('/app/forecast', { keepFocus: true, noScroll: true });
+  }
+
+  function toggleDetails(date: string) {
+    if (!selectedDisplay || query.isFetching) return;
+    const key = `${selectedDisplay.key}:${date}`;
+    openDetailKey = openDetailKey === key ? '' : key;
+    detailNotice = '';
+  }
+
+  async function recoverChangedBasis() {
+    openDetailKey = '';
+    queryClient.removeQueries({ queryKey: forecastEventsQueryKey });
+    detailNotice = m.forecast_event_basis_changed();
+    await query.refetch();
+  }
+
+  function refreshForecast() {
+    void query.refetch();
   }
 
   function diagnosticLabel(code: ForecastBalancesResponse['diagnostics'][number]['code']): string {
@@ -151,7 +216,7 @@
   <StatePanel title={m.forecast_error_title()} copy={m.forecast_error_copy()}>
     <APIFormError error={query.error} id="forecast-error" />
     <div class="flex flex-wrap gap-2">
-      <button type="button" class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background" onclick={() => query.refetch()}>{m.forecast_retry()}</button>
+      <button type="button" class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background" onclick={refreshForecast}>{m.forecast_retry()}</button>
       <button type="button" class="rounded-(--radius-control) border border-border bg-control px-4 py-2 text-sm font-semibold text-foreground" onclick={resetFilters}>{m.forecast_reset()}</button>
     </div>
   </StatePanel>
@@ -206,7 +271,7 @@
         <div class="mt-5 flex flex-wrap items-center gap-2">
           <button type="submit" disabled={!formValid} class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background disabled:opacity-50">{m.forecast_apply()}</button>
           <button type="button" class="rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground" onclick={resetFilters}>{m.forecast_reset()}</button>
-          <button type="button" class="ml-auto inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground disabled:opacity-60" disabled={query.isFetching} onclick={() => query.refetch()}><RefreshCw size={16} aria-hidden="true" />{query.isFetching ? m.forecast_updating() : m.forecast_refresh()}</button>
+          <button type="button" class="ml-auto inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground disabled:opacity-60" disabled={query.isFetching} onclick={refreshForecast}><RefreshCw size={16} aria-hidden="true" />{query.isFetching ? m.forecast_updating() : m.forecast_refresh()}</button>
         </div>
       </form>
     </Panel>
@@ -215,6 +280,10 @@
       <StatusBadge tone={data.assumptions.complete ? 'positive' : 'warning'}>{data.assumptions.complete ? m.forecast_assumptions_complete() : m.forecast_assumptions_incomplete()}</StatusBadge>
       <span>{m.forecast_basis_metadata({ asOf: formatDate(data.as_of_date), computedAt: formatComputedAt(data.computed_at), zone: data.time_zone })}</span>
     </div>
+
+    {#if detailNotice}
+      <p role="status" class="rounded-(--radius-control) border border-warning/40 bg-warning-soft px-4 py-3 text-sm text-warning">{detailNotice}</p>
+    {/if}
 
     {#if data.scope.resolved_account_ids.length === 0}
       <StatePanel title={m.forecast_no_accounts_title()} copy={m.forecast_no_accounts_copy()}>
@@ -320,7 +389,7 @@
         <Panel>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><h2 class="text-lg font-semibold text-foreground">{m.forecast_daily_title()}</h2><p class="mt-1 text-sm text-muted">{m.forecast_daily_copy()}</p></div>
-            <label class="text-sm text-foreground"><span class="block text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.forecast_series()}</span><select value={selectedDisplay.key} onchange={(event) => (selectedSeriesKey = event.currentTarget.value)} class="mt-1.5 h-10 max-w-full rounded-(--radius-control) border border-border bg-control px-3 text-foreground">{#each displaySeries as row (row.key)}<option value={row.key}>{row.label}</option>{/each}</select></label>
+            <label class="text-sm text-foreground"><span class="block text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.forecast_series()}</span><select value={selectedDisplay.key} onchange={(event) => selectSeries(event.currentTarget.value)} class="mt-1.5 h-10 max-w-full rounded-(--radius-control) border border-border bg-control px-3 text-foreground">{#each displaySeries as row (row.key)}<option value={row.key}>{row.label}</option>{/each}</select></label>
           </div>
           <ForecastChart series={selectedDisplay.series} {formatDate} formatAmount={formatSelectedAmount} />
           <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard users must be able to scroll the bounded table region) -->
@@ -328,7 +397,51 @@
             <table class="w-full min-w-[60rem] border-collapse text-left text-sm">
               <caption class="sr-only">{m.forecast_table_caption({ series: selectedDisplay.label })}</caption>
               <thead><tr class="border-b border-border text-xs uppercase tracking-[0.08em] text-muted"><th class="px-3 py-2">{m.forecast_date()}</th><th class="px-3 py-2 text-right">{m.forecast_posted_delta()}</th><th class="px-3 py-2 text-right">{m.forecast_draft_delta()}</th><th class="px-3 py-2 text-right">{m.forecast_template_delta()}</th><th class="px-3 py-2 text-right">{m.forecast_recorded_only()}</th><th class="px-3 py-2 text-right">{m.forecast_with_recurring()}</th></tr></thead>
-              <tbody>{#each selectedDisplay.series.points as point (point.date)}<tr class="border-b border-border/70"><th scope="row" class="whitespace-nowrap px-3 py-2 font-medium">{formatDate(point.date)}</th><td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.posted_delta.quantity_value, point.posted_delta.quantity_scale)}</td><td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.draft_delta.quantity_value, point.draft_delta.quantity_scale)}</td><td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.template_delta.quantity_value, point.template_delta.quantity_scale)}</td><td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.recorded_balance.quantity_value, point.recorded_balance.quantity_scale)}</td><td class="px-3 py-2 text-right font-semibold tabular-nums">{formatSelectedAmount(point.projected_balance.quantity_value, point.projected_balance.quantity_scale)}</td></tr>{/each}</tbody>
+              <tbody>
+                {#each selectedDisplay.series.points as point (point.date)}
+                  {@const detailKey = `${selectedDisplay.key}:${point.date}`}
+                  {@const detailOpen = openDetailKey === detailKey}
+                  <tr class="border-b border-border/70">
+                    <th scope="row" class="whitespace-nowrap px-3 py-2 font-medium">
+                      <button
+                        type="button"
+                        class="inline-flex min-h-10 items-center gap-2 rounded-(--radius-control) px-2 text-left font-semibold text-accent hover:bg-control disabled:text-muted"
+                        aria-expanded={detailOpen}
+                        aria-controls={`forecast-detail-${point.date}`}
+                        disabled={query.isFetching}
+                        onclick={() => toggleDetails(point.date)}
+                      >
+                        {#if detailOpen}<ChevronUp size={16} aria-hidden="true" />{:else}<ChevronDown size={16} aria-hidden="true" />{/if}
+                        {formatDate(point.date)}
+                      </button>
+                    </th>
+                    <td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.posted_delta.quantity_value, point.posted_delta.quantity_scale)}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.draft_delta.quantity_value, point.draft_delta.quantity_scale)}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.template_delta.quantity_value, point.template_delta.quantity_scale)}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.recorded_balance.quantity_value, point.recorded_balance.quantity_scale)}</td>
+                    <td class="px-3 py-2 text-right font-semibold tabular-nums">{formatSelectedAmount(point.projected_balance.quantity_value, point.projected_balance.quantity_scale)}</td>
+                  </tr>
+                  {#if detailOpen}
+                    <tr id={`forecast-detail-${point.date}`} class="border-b border-border">
+                      <td colspan="6" class="p-3">
+                        <ForecastEvents
+                          date={point.date}
+                          basisToken={data.basis_token}
+                          filters={activeQuery}
+                          detailAccountID={selectedDisplay.detailAccountID}
+                          detailCommodityID={selectedDisplay.detailCommodityID}
+                          accounts={data.scope.accounts}
+                          disabled={query.isFetching}
+                          {formatDate}
+                          formatAmount={formatEventAmount}
+                          onBasisChanged={recoverChangedBasis}
+                          onClose={() => (openDetailKey = '')}
+                        />
+                      </td>
+                    </tr>
+                  {/if}
+                {/each}
+              </tbody>
             </table>
           </div>
         </Panel>

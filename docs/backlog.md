@@ -1419,6 +1419,24 @@ network-host suggestion with an explanation of the secure-cookie constraint,
 and document SSH port forwarding for headless development. The frontend proxy
 keeps the backend private and means only port 1888 needs forwarding.
 
+### T-87 Browser-derived “today” can disagree with the owner-local financial date `[ ]`
+
+**Files:** `frontend/src/lib/transactions/transaction-editor.svelte`,
+`frontend/src/lib/investments/buy-form.svelte`, `sell-form.svelte`,
+`dividend-form.svelte`, `frontend/src/lib/reports/reports-screen.svelte`, and
+`frontend/src/routes/app/settings/currencies/+page.svelte`. These screens seed
+transaction dates, report ranges or pricing-assignment effective dates from the
+browser clock; four use UTC `toISOString()`. Around midnight, or when the browser
+and configured owner time zones differ, a default can be one calendar day away
+from the owner-local date used by recurring and forecast services.
+
+**Required fix:** expose/reuse one server-owned owner-local current date through
+an existing composed page/session contract, then remove the private browser-date
+helpers from every affected financial screen. Preserve explicit user-selected
+dates. Add pure contract tests plus a browser case with a browser zone on the
+opposite side of midnight from the configured owner zone, proving transaction,
+investment, report and pricing defaults all use the same owner-local date.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

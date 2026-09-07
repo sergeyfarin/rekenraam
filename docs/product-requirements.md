@@ -270,7 +270,10 @@ Goal: support forward-looking personal finance.
   owner-local today, exact per-account/per-currency
   balances, and acted-on occurrence identity to avoid counting both a template
   and its generated/posted transaction. Overdue unposted assumptions are visibly
-  carried to tomorrow without changing saved dates.
+  carried to tomorrow without changing saved dates. Each projected day can be
+  explained by cursor-paged posted, saved-draft and template events. Detail
+  pages are bound to the displayed forecast basis; when records change, stale
+  details are cleared and balances are refreshed rather than mixing snapshots.
 - Forecast conversion, when requested, is additive and explicitly assumes
   constant stored FX rates available on the forecast's as-of date. Missing
   coverage omits the combined series, never the exact source-currency balances.

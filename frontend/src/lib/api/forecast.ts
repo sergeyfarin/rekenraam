@@ -22,8 +22,9 @@ export interface ForecastEventQuery extends ForecastQuery {
   cursor?: string;
 }
 
-export const forecastQueryKey = ['api', 'forecasts', 'balances'] as const;
-export const forecastEventsQueryKey = ['api', 'forecasts', 'balance-events'] as const;
+export const forecastQueryKey = ['api', 'forecasts'] as const;
+export const forecastBalancesQueryKey = [...forecastQueryKey, 'balances'] as const;
+export const forecastEventsQueryKey = [...forecastQueryKey, 'balance-events'] as const;
 
 export function normalizeForecastQuery(query: ForecastQuery = {}) {
   return {
@@ -38,7 +39,7 @@ export function normalizeForecastQuery(query: ForecastQuery = {}) {
 export function forecastBalancesQueryOptions(query: ForecastQuery = {}) {
   const normalized = normalizeForecastQuery(query);
   return {
-    queryKey: [...forecastQueryKey, normalized] as const,
+    queryKey: [...forecastBalancesQueryKey, normalized] as const,
     queryFn: () => getForecastBalances(query),
     staleTime: 5_000
   };
@@ -58,8 +59,14 @@ export function forecastEventsInfiniteQueryOptions(query: Omit<ForecastEventQuer
     initialPageParam: '',
     queryFn: ({ pageParam }: { pageParam: string }) => getForecastEvents({ ...query, cursor: pageParam || undefined }),
     getNextPageParam: (lastPage: ForecastEventsResponse) => lastPage.next_cursor || null,
+    retry: shouldRetryForecastEvents,
     staleTime: 10_000
   };
+}
+
+export function shouldRetryForecastEvents(failureCount: number, error: unknown): boolean {
+  if (error instanceof APIClientError && error.code === 'FORECAST_BASIS_CHANGED') return false;
+  return failureCount < 1;
 }
 
 export async function getForecastBalances(query: ForecastQuery = {}): Promise<ForecastBalancesResponse> {

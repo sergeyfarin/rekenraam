@@ -12,6 +12,7 @@
     type AccountRegisterEntryResponse
   } from '$lib/api/transactions';
   import { getTransaction, type TransactionResponse } from '$lib/api/transactions';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import AccountRegister from '$lib/transactions/account-register.svelte';
   import TransactionDetailPanel from '$lib/transactions/transaction-detail-panel.svelte';
   import TransactionEditor from '$lib/transactions/transaction-editor.svelte';
@@ -46,7 +47,8 @@
   async function invalidate() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: [...accountRegisterQueryKey, accountID] })
+      queryClient.invalidateQueries({ queryKey: [...accountRegisterQueryKey, accountID] }),
+      queryClient.invalidateQueries({ queryKey: forecastQueryKey })
     ]);
   }
 

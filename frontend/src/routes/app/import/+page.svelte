@@ -57,6 +57,7 @@
     type ImportConnection
   } from '$lib/api/connections';
   import { m } from '$lib/paraglide/messages.js';
+  import { forecastQueryKey } from '$lib/api/forecast';
 
   // ── Page state ─────────────────────────────────────────────────────
   type Step = 'upload' | 'fetching' | 'preview' | 'result';
@@ -488,6 +489,7 @@
         csrfToken
       );
       commitResult = result;
+      await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
       step = 'result';
     } catch (err) {
       commitError = err;

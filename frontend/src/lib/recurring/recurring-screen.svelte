@@ -9,6 +9,7 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { currenciesQueryOptions } from '$lib/api/currencies';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import { getTransaction, getPostReconciliationImpact, postTransaction, deleteDraftTransaction, transactionsQueryKey, type TransactionResponse, type ReconciliationImpactResponse } from '$lib/api/transactions';
   import { recurringTemplatesQueryOptions, recurringDueInfiniteQueryOptions, recurringSummaryQueryOptions, getRecurringOccurrences, archiveRecurringTemplate, updateRecurringTemplate, skipRecurringOccurrence, retryRecurringOccurrence, runRecurringNow, type RecurringTemplate, type RecurringDueResponse } from '$lib/api/recurring';
   import { formatQuantity } from '$lib/money/format';
@@ -61,7 +62,8 @@
       queryClient.invalidateQueries({ queryKey: ['api', 'recurring'] }),
       queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
       queryClient.invalidateQueries({ queryKey: ['api', 'accounts'] }),
-      queryClient.invalidateQueries({ queryKey: ['api', 'reports'] })
+      queryClient.invalidateQueries({ queryKey: ['api', 'reports'] }),
+      queryClient.invalidateQueries({ queryKey: forecastQueryKey })
     ]);
   }
   function open(next: Review) { impactChanged = false; dialogError = undefined; reason = ''; review = next; }

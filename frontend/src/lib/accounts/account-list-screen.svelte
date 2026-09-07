@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createQuery } from '@tanstack/svelte-query';
+  import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Building2 from '@lucide/svelte/icons/building-2';
   import Plus from '@lucide/svelte/icons/plus';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
@@ -9,6 +9,7 @@
   import StatePanel from '$lib/components/state-panel.svelte';
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { currentBookQueryOptions } from '$lib/api/books';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import {
     accountsQueryOptions,
     archiveAccount,
@@ -54,6 +55,7 @@
   const currencyCatalogQuery = createQuery(() => currencyCatalogQueryOptions());
   const currentBookQuery = createQuery(() => currentBookQueryOptions());
   const sessionQuery = createQuery(() => authSessionQueryOptions());
+  const queryClient = useQueryClient();
 
   let statusFilter = $state<StatusFilter>('all');
   let accountTypeFilter = $state<AccountTypeFilter>('all');
@@ -279,7 +281,8 @@
       currenciesQuery.refetch(),
       currencyCatalogQuery.refetch(),
       currentBookQuery.refetch(),
-      sessionQuery.refetch()
+      sessionQuery.refetch(),
+      queryClient.invalidateQueries({ queryKey: forecastQueryKey })
     ]);
   }
 

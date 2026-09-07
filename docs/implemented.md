@@ -308,9 +308,16 @@ cards and authoritative daily tables alongside an accessible recorded-versus-
 projected chart, exposes assumptions, exclusions, diagnostics and FX provenance,
 and covers loading, invalid-filter, empty, no-movement, error and success states
 in all six locales. The composed balances response supplies account and currency
-options, so the page does not fan out into catalog requests. Core slices 6–8 and
-learning M1–M4 remain unstarted. Next is event-detail explanation and stale-basis
-refresh integration; no learned-spending model is shipped.
+options, so the page does not fan out into catalog requests. Daily rows now
+expand through an isolated,
+cursor-paged detail component that shows source, original/assumed dates, payee,
+description and exact selected-scope amounts, with links back to Transactions or
+Recurring. A basis conflict or refreshed changed basis closes and removes old
+event pages before refreshing balances. Transaction, recurring, import, account,
+price and investment cash mutations invalidate the shared forecast cache; mount
+and focus refresh remain fallbacks without polling. Core slices 7–8 and learning
+M1–M4 remain unstarted. Next is cross-system/adversarial acceptance; no learned-
+spending model is shipped.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

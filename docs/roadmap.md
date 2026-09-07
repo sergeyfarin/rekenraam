@@ -7,7 +7,7 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 short-horizon working queue is `docs/todo.md`.
 
 Last reviewed: 2026-09-07 (R12a T-75a/T-74 closed; R9 acceptance complete;
-R10 core slices 1–5 complete; event-detail/refresh slice next; T-76 and T-75b
+R10 core slices 1–6 complete; cross-system acceptance slice next; T-76 and T-75b
 remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
@@ -344,9 +344,9 @@ and it front-loads per-currency forecasting — the differentiator the parity
 lens below commits to protecting. Budgets are independent of both and slot in
 afterward with no rework. R9 is complete, including acceptance on 2026-08-31
 (`docs/reviews/r9-acceptance-review-2026-08-31.md`); R10 planning is complete
-and its snapshot, exact projection, authenticated API, constant-as-of FX and
-forecast screen slices have landed. Event explanations and stale-basis refresh
-recovery in slice 6 are next in `docs/plans/projected-balances-plan.md`.
+and its snapshot, exact projection, authenticated API, constant-as-of FX,
+forecast screen and basis-safe event-detail slices have landed. Cross-system and
+adversarial acceptance in slice 7 is next in `docs/plans/projected-balances-plan.md`.
 The localized templates and due-inbox screens now expose
 create/edit, skip/blocked retry, explicit post/discard and bulk review with
 reconciliation checks. Startup/minute generation and public run-now are active;
@@ -373,7 +373,7 @@ unpaginated summary counts support the editor and navigation badge.
    daily/weekly fluctuations, monthly costs and annual calendar peaks, with
    confirmed history, no overlap with recurring bills, chronological evaluation
    and measured hardware budgets. All learning remains unimplemented. Final R10
-   acceptance follows M4; R8 remains next afterward. Slices 1–5 are complete:
+   acceptance follows M4; R8 remains next afterward. Slices 1–6 are complete:
    the coherent read-only snapshot loader feeds an exact
    per-account/per-currency projection with recurring occurrence precedence,
    bounds and diagnostics, exposed through authenticated balances and
@@ -382,8 +382,11 @@ unpaginated summary counts support the editor and navigation badge.
    component-level exact rounding without changing source-currency results. A
    responsive six-locale screen now exposes strict URL filters, exact summaries
    and tables, an accessible two-curve chart, diagnostics and FX provenance from
-   one composed response. **Next: slice 6 only, event explanations and stale-basis
-   refresh integration.** Loan helpers remain optional later work.
+   one composed response. Cursor-paged day details explain exact contributing
+   events and safely clear/refetch when their basis changes; producer mutation
+   paths invalidate the shared forecast cache without polling. **Next: slice 7
+   only, cross-system and adversarial acceptance.** Loan helpers remain optional
+   later work.
 3. **R8 Budgets:** period budgets with actual-versus-budget reporting.
 
 ### R16 — investment lifecycle completeness
