@@ -11,7 +11,7 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-func newForecastTestRepository(t *testing.T) (*sql.DB, *ForecastRepository) {
+func newForecastTestRepository(t testing.TB) (*sql.DB, *ForecastRepository) {
 	t.Helper()
 	writer := newRecurringTestDatabase(t)
 	var databaseFile string
@@ -29,7 +29,7 @@ func forecastSnapshotRequest(accountIDs ...int64) ForecastSnapshotRequest {
 // insertForecastTransaction writes a deliberately small but structurally real
 // current transaction version. The forecast repository must observe it through
 // the same current-version/journal/posting relationships as production code.
-func insertForecastTransaction(t *testing.T, database *sql.DB, transactionID, versionID int64, status string, entryDate string, postings []PostingSpec) {
+func insertForecastTransaction(t testing.TB, database *sql.DB, transactionID, versionID int64, status string, entryDate string, postings []PostingSpec) {
 	t.Helper()
 	ctx := context.Background()
 	_, err := database.ExecContext(ctx, `INSERT INTO transactions (id, book_id, created_at, created_by_user_id) VALUES (?, 1, '2026-08-31T00:00:00Z', 1)`, transactionID)
@@ -46,6 +46,65 @@ func insertForecastTransaction(t *testing.T, database *sql.DB, transactionID, ve
 		require.NoError(t, err)
 		_, err = database.ExecContext(ctx, `INSERT INTO posting_versions (id, book_id, transaction_version_id, journal_entry_id, posting_line_id, line_seq, account_id, quantity_value, quantity_scale, commodity_id, reconciliation_status) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, 'uncleared')`, postingID, versionID, entryID, lineID, index+1, posting.AccountID, posting.QuantityValue, posting.QuantityScale, posting.CommodityID)
 		require.NoError(t, err)
+	}
+}
+
+func TestForecastLearningUsesPostedHistoryOnly(t *testing.T) {
+	database, repository := newForecastTestRepository(t)
+	legs := []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-100"), QuantityScale: 2}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("100"), QuantityScale: 2}}
+	insertForecastTransaction(t, database, 80, 80, "posted", "2026-08-20", legs)
+	_, err := database.Exec(`
+		INSERT INTO transaction_versions (id, book_id, transaction_id, version_seq, supersedes_version_id, status, transaction_kind, transaction_date, recorded_at, changed_by_user_id, change_reason)
+		VALUES (800, 1, 80, 2, 80, 'posted', 'ordinary', '2026-08-20', '2026-08-31T00:00:00Z', 1, 'current learning fixture');
+		INSERT INTO journal_entries (id, book_id, transaction_version_id, entry_seq, entry_date, entry_kind)
+		VALUES (8000, 1, 800, 1, '2026-08-20', 'ordinary');
+		INSERT INTO posting_versions (id, book_id, transaction_version_id, journal_entry_id, posting_line_id, line_seq, account_id, quantity_value, quantity_scale, commodity_id, reconciliation_status)
+		VALUES
+			(80001, 1, 800, 8000, 801, 1, 1, '-200', 2, 1, 'uncleared'),
+			(80002, 1, 800, 8000, 802, 2, 2, '200', 2, 1, 'uncleared')`)
+	require.NoError(t, err)
+	insertForecastTransaction(t, database, 81, 81, "voided", "2026-08-21", legs)
+	insertForecastTransaction(t, database, 82, 82, "draft", "2026-08-22", legs)
+	insertForecastTransaction(t, database, 83, 83, "posted", "2026-08-23", legs)
+	_, err = database.Exec(`UPDATE transactions SET deleted_at = '2026-08-31T00:00:00Z' WHERE id = 83`)
+	require.NoError(t, err)
+	insertForecastTransaction(t, database, 84, 84, "posted", "2026-09-01", legs)
+
+	template := createRentTemplate(t, NewRecurringRepository(database))
+	_, err = database.Exec(`INSERT INTO recurring_occurrences (book_id, template_id, occurrence_date, status, transaction_id, materialized_at, created_at, updated_at) VALUES (1, ?, '2026-08-20', 'generated', 80, '2026-08-20T00:00:00Z', '2026-08-20T00:00:00Z', '2026-08-20T00:00:00Z')`, template.ID)
+	require.NoError(t, err)
+	var auditsBefore int
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM audit_events`).Scan(&auditsBefore))
+
+	snapshot, err := repository.LoadLearningSnapshot(context.Background(), ForecastLearningSnapshotRequest{BookID: 1, AccountIDs: []int64{1, 2}, HistoryStart: "2026-01-01", HistoryEnd: "2026-08-31"})
+	require.NoError(t, err)
+	require.Len(t, snapshot.Postings, 2, "only both siblings of the one current posted, non-deleted, in-range entry are read")
+	assert.Equal(t, []int64{1, 2}, []int64{snapshot.Postings[0].AccountID, snapshot.Postings[1].AccountID})
+	assert.Equal(t, int64(800), snapshot.Postings[0].TransactionVersionID, "superseded posted versions are excluded")
+	assert.Equal(t, "-200", snapshot.Postings[0].QuantityValue.String())
+	assert.True(t, snapshot.Postings[0].RecurringOccurrenceID.Valid, "real occurrence identity is retained for exact overlap exclusion")
+	var auditsAfter int
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM audit_events`).Scan(&auditsAfter))
+	assert.Equal(t, auditsBefore, auditsAfter, "learning snapshot reads have no audit or domain writes")
+}
+
+func TestForecastLearningSnapshotRejectsPostingPrefixes(t *testing.T) {
+	database, repository := newForecastTestRepository(t)
+	insertForecastTransaction(t, database, 90, 90, "posted", "2026-08-20", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-100")}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("100")}})
+	_, err := repository.LoadLearningSnapshot(context.Background(), ForecastLearningSnapshotRequest{BookID: 1, AccountIDs: []int64{1, 2}, HistoryStart: "2026-01-01", HistoryEnd: "2026-08-31", PostingLimit: 1})
+	require.ErrorIs(t, err, ErrForecastInputTooLarge)
+}
+
+func BenchmarkForecastLearningRead(b *testing.B) {
+	database, repository := newForecastTestRepository(b)
+	insertForecastTransaction(b, database, 100, 100, "posted", "2026-08-20", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-100")}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("100")}})
+	request := ForecastLearningSnapshotRequest{BookID: 1, AccountIDs: []int64{1, 2}, HistoryStart: "2021-09-01", HistoryEnd: "2026-08-31"}
+	b.ResetTimer()
+	for range b.N {
+		_, err := repository.LoadLearningSnapshot(context.Background(), request)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

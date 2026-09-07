@@ -272,7 +272,7 @@ ADR 0012 governs the durable split.
 ## Not started (see roadmap)
 
 XLSX/OFX/QFX import adapters, per-split import mapping and batch rollback,
-budgets, learned-spending forecasts, loan/liability
+budgets, public learned-spending forecasts, loan/liability
 helpers, report snapshots, and pricing-management UI. CSV import, profiles and
 minimal rules are shipped. Reporting-currency conversion is shipped. Recurring
 templates, generation and dedicated review/discard screens are shipped.
@@ -321,8 +321,15 @@ recurring identity, audit/background work, reconciliation checkpoints or
 investment lots, alongside independent-pool materialization, adversarial
 bounds/precision and browser acceptance coverage. The dated core review maps
 every required behavior and exclusion and closes T-88 by exercising existing
-lot/checkpoint state in the read-only regression. Learning M1–M4 remain
-unstarted. Next is M1; no learned-spending model is shipped.
+lot/checkpoint state in the read-only regression. Learning M1 is now complete as
+an internal-only backend foundation: a bounded read snapshot loads complete
+current posted journal entries and exact recurring identity, while pure
+application code classifies eligible one-funder purchases, applies confirmed
+weekly/monthly/annual history gates, calculates transparent exact baselines,
+subtracts known period spend and allocates residual integer units
+deterministically across calendar dates. It adds no endpoint, response field,
+UI, saved model, ledger write, or selected adaptive model. M2–M4 remain open;
+next is M2 chronological model selection and representative hardware evidence.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

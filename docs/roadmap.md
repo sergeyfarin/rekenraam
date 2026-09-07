@@ -7,7 +7,7 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 short-horizon working queue is `docs/todo.md`.
 
 Last reviewed: 2026-09-07 (R12a T-75a/T-74 closed; R9 acceptance complete;
-R10 core accepted; learning M1 next; T-76 and T-75b
+R10 core accepted; learning M1 complete and M2 next; T-76 and T-75b
 remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
@@ -347,7 +347,8 @@ afterward with no rework. R9 is complete, including acceptance on 2026-08-31
 and its snapshot, exact projection, authenticated API, constant-as-of FX,
 forecast screen, basis-safe event details and cross-system acceptance have
 landed. The eight-slice core is accepted in
-`docs/reviews/r10-core-acceptance-review-2026-09-07.md`; learning M1 is next.
+`docs/reviews/r10-core-acceptance-review-2026-09-07.md`; learning M1's internal
+training/baseline foundation is complete and M2 is next.
 The localized templates and due-inbox screens now expose
 create/edit, skip/blocked retry, explicit post/discard and bulk review with
 reconciliation checks. Startup/minute generation and public run-now are active;
@@ -373,7 +374,9 @@ unpaginated summary counts support the editor and navigation badge.
    in `docs/plans/forecast-learning-plan.md` add opt-in local CPU spending models:
    daily/weekly fluctuations, monthly costs and annual calendar peaks, with
    confirmed history, no overlap with recurring bills, chronological evaluation
-   and measured hardware budgets. All learning remains unimplemented. Final R10
+   and measured hardware budgets. M1's internal complete-history reader,
+   classification/cadence baselines and exact residual allocation are complete;
+   model selection and every public opt-in surface remain unimplemented. Final R10
    acceptance follows M4; R8 remains next afterward. All eight core slices are
    accepted:
    the coherent read-only snapshot loader feeds an exact
@@ -389,7 +392,9 @@ unpaginated summary counts support the editor and navigation badge.
    paths invalidate the shared forecast cache without polling. Cross-system
    isolation, concurrent materialization, adversarial bounds/precision and the
    browser acceptance matrix are covered, and the dated slice-8 review maps the
-   shipped core contract. **Next: learning M1 only.** Loan helpers remain optional
+   shipped core contract. Learning M1 now adds only the bounded internal training
+   basis and transparent baselines; it does not change the core response.
+   **Next: learning M2 only.** Loan helpers remain optional
    later work.
 3. **R8 Budgets:** period budgets with actual-versus-budget reporting.
 

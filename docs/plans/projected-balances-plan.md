@@ -1,6 +1,6 @@
 # Projected Balances Plan (R10)
 
-Status: **core accepted — slices 1–8 complete; learning M1–M4 next**. Written 2026-08-31 against `b28c5d57`,
+Status: **core accepted — slices 1–8 complete; learning M1 complete, M2–M4 next**. Written 2026-08-31 against `b28c5d57`,
 after R9 acceptance. This is the execution specification for the next initiative
 in `docs/roadmap.md`: **R9 → R10 → R8**. Planning is complete when this document
 lands; the forecast API, optional conversion and read-only screen now ship.
@@ -9,14 +9,16 @@ Implementation update (2026-09-07): all eight core slices are accepted in
 `docs/reviews/r10-core-acceptance-review-2026-09-07.md`. The coherent snapshot,
 exact projection, authenticated balances/events API, complete-coverage
 constant-as-of FX, responsive screen, basis-safe details and adversarial
-cross-system evidence ship. The next work is learning M1 only.
+cross-system evidence ship. Learning M1's internal foundation is complete; the
+next work is learning M2 only.
 
 Scope amendment (2026-08-31): after these eight **core** slices, execute M1–M4
 in [lightweight learned spending](forecast-learning-plan.md). The owner requested
 local CPU learning with daily/weekly fluctuations, monthly costs and annual
 seasonality (for example July–August travel). That companion specifies opt-in
 models, history/quality/resource gates and final R10 acceptance. Core acceptance
-is complete; learning code remains unimplemented.
+is complete; M1's internal training/baseline code is implemented without a
+public option, while M2–M4 remain open.
 
 Navigation: [decisions](#3-financial-and-date-decisions) ·
 [backend algorithm](#4-backend-read-model-and-algorithm) ·
@@ -1389,4 +1391,5 @@ Planning validation (2026-08-31): existing source paths and helper names were
 checked against `b28c5d57`; proposed new paths are explicitly identified. The
 worked fixture's daily/converted balances were checked with integer arithmetic;
 the matrix has 44 unique case IDs plus six named snapshot tests and eight
-browser journeys. Implementation and its runtime tests remain unstarted.
+browser journeys. At that planning checkpoint, implementation and runtime tests
+were unstarted; the execution tables above now record the delivered state.

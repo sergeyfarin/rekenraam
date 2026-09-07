@@ -1,6 +1,6 @@
 # R10 extension — lightweight learned spending
 
-Status: **planned, not implemented**, 2026-08-31. Added at the owner's request
+Status: **in progress — M1 complete; M2 next**, updated 2026-09-07. Added at the owner's request
 for basic ML/AI within modest hardware limits. Execute M1–M4 below **after the
 eight core slices** in `docs/plans/projected-balances-plan.md`, before R10's
 final closure/R8 planning. The core forecast remains independently usable and
@@ -492,6 +492,30 @@ allocation path before adding model selection.
 Gate: current core tests unchanged, coherent snapshot/no-write proof and all
 classification/allocation tests below. Commit the prototype as internal only.
 
+Completed 2026-09-07. The internal prototype adds a bounded, limit+1
+`ForecastRepository.LoadLearningSnapshot` that reads current posted history as
+complete journal entries with real recurring-occurrence identity, account and
+commodity versions, and recurring overlap inputs inside one deferred read
+transaction. No API parameter, public response field, UI, cache, persistent
+model, or write path was added. Pure application primitives now cover exact
+whole-entry purchase classification, conservative template/draft overlap,
+confirmed complete weekly/monthly windows, all four cadence eligibility rules,
+`mean_8`/`last_period` and fixed seasonal reference baselines, exact known-spend
+subtraction, weekday/month-day timing bins, short-month clamping, and floor plus
+largest-remainder allocation with deterministic date ties. The constructor
+bounds an old confirmation date before allocating period storage.
+
+Focused named tests prove current-version/posted-only history, void/delete/
+draft/future exclusion, full sibling reads, real recurring linkage, no-write
+behavior, resource-limit refusal without prefixes, classification exclusions,
+cold/sparse boundaries, overlap, exact residuals, and deterministic allocation.
+On the available AMD EPYC 3251 / Go 1.27.0 host, the synthetic prototype
+benchmarks measured approximately 0.35 ms and 97,784 B/op for a 366-date exact
+allocation and 1.35 ms and 10,413 B/op for a one-entry snapshot read. These are
+microbenchmarks, not the declared 100,000-row workload or peak-live-memory
+acceptance; M2 still owns representative workload, heap, single-slot/deadline,
+chronological selection, and quality measurements.
+
 ### M2 — Chronological model selection and hardware evaluation
 
 Add `backend/internal/app/forecast_learning_model.go`/tests and benchmarks.
@@ -565,7 +589,7 @@ frontend generation/build commands concurrently.
 
 | Extension slice | Status | Commit/evidence |
 |---|---|---|
-| M1 Training basis and baseline | [ ] Not started | — |
+| M1 Training basis and baseline | [x] Complete | 2026-09-07; internal repository/application prototype, named tests and `BenchmarkForecastLearningRead`/`BenchmarkForecastLearningAllocation` evidence above |
 | M2 Model selection and hardware measurements | [ ] Not started | — |
 | M3 API/UI integration | [ ] Not started | — |
 | M4 Final acceptance | [ ] Not started | — |
