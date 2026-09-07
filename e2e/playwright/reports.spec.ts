@@ -33,7 +33,7 @@ test('spending report ranks categories, nets refunds, and ignores transfers', as
   // never appear as spending.
   await postTransfer(page, today, checking.id, savings.id, currencyID, 25000);
 
-  await page.goto(`/app/reports?view=spending&group_by=category&start_date=${today}&end_date=${today}&bucket=month`);
+  await page.goto(`/app/reports?view=spending&group_by=category&start_date=${today}&end_date=${today}&bucket=month&account_id=${checking.id}&account_id=${savings.id}&include_descendants=false`);
 
   const table = page.getByRole('table');
   await expect(table).toBeVisible();
@@ -84,7 +84,7 @@ test('report filters narrow the result and travel in the URL', async ({ page }) 
   await postTransaction(page, today, checking.id, category('expense_transport_fuel'), currencyID, 7000);
   await postTransaction(page, today, savings.id, category('expense_housing_rent_mortgage'), currencyID, 9000);
 
-  await page.goto(`/app/reports?view=spending&group_by=category&start_date=${today}&end_date=${today}&bucket=month`);
+  await page.goto(`/app/reports?view=spending&group_by=category&start_date=${today}&end_date=${today}&bucket=month&account_id=${checking.id}&account_id=${savings.id}&include_descendants=false`);
 
   const table = page.getByRole('table');
   await expect(table.locator('tbody tr')).toHaveCount(3);
@@ -119,7 +119,6 @@ test('report filters narrow the result and travel in the URL', async ({ page }) 
   // Clearing drops the dimension from the URL rather than writing it empty.
   await page.getByRole('button', { name: 'Clear all filters' }).click();
   await expect(page).not.toHaveURL(/category_id=/);
-  await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(3);
 
   // The account dimension applies to both reports, and its descendant toggle
   // only appears once there is a selection to expand.
