@@ -43,14 +43,13 @@ have exactly one home.
 
 ## Current execution plan
 
-[R10 projected balances](plans/projected-balances-plan.md) is planned, not
-implemented. It includes financial/source rules, worked numerical fixtures,
-OpenAPI/UI contracts, eight ordered slices, a named test matrix and an agent
-handoff prompt. Its [lightweight learning extension](plans/forecast-learning-plan.md)
-adds four subsequent slices for opt-in local spending models across daily/weekly,
-monthly and annual patterns, with explicit quality and hardware gates. Both
-plans are unimplemented. Start with core slice 1 (read-only snapshots), not the
-screen.
+[R10 projected balances](plans/projected-balances-plan.md) has completed its
+eight-slice core milestone; see the
+[dated acceptance review](reviews/r10-core-acceptance-review-2026-09-07.md).
+Its [lightweight learning extension](plans/forecast-learning-plan.md) remains
+planned as four subsequent slices for opt-in local spending models across
+daily/weekly, monthly and annual patterns, with explicit quality and hardware
+gates. Start with learning M1; do not move to R8 until M4 closes R10.
 
 ## Folders
 

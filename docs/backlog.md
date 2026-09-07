@@ -1437,6 +1437,21 @@ dates. Add pure contract tests plus a browser case with a browser zone on the
 opposite side of midnight from the configured owner zone, proving transaction,
 investment, report and pricing defaults all use the same owner-local date.
 
+### T-88 Forecast isolation test only exercised empty durable state `[x]`
+
+**Files:** `backend/internal/api/forecast_test.go`. R10's X02 acceptance test
+compared investment-lot and reconciliation table counts before and after a
+forecast read, but its fixture had no lots, lot events or checkpoints. It could
+prove the read did not create the first record, not that existing durable state
+survived unchanged.
+
+**Fixed:** the test now performs a real investment buy, verifies the resulting
+lot and lot event, completes a real reconciliation checkpoint, then calls both
+forecast endpoints and compares all financial-domain counts. Explicit positive
+precondition assertions prevent the test from quietly regressing to empty-state
+coverage. `TestForecastDoesNotTouchInvestmentSubledgerOrCheckpoints` is the
+named regression; the R10 core acceptance review records the boundary.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

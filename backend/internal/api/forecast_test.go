@@ -321,12 +321,27 @@ func TestForecastReadsLeaveLedgerReportsAndExportsUnchanged(t *testing.T) {
 }
 
 func TestForecastDoesNotTouchInvestmentSubledgerOrCheckpoints(t *testing.T) {
-	fixture := newForecastAPIFixture(t)
-	fixture.createFuturePosting(t, "100")
-	before := forecastDomainCounts(t, fixture.database)
-	balances := forecastBalancesFor(t, fixture, "?horizon_days=2&account_id="+strconvFormatInt(fixture.checking.ID)+"&include_descendants=false")
-	forecastRequest(t, fixture.handler, fixture.session, "/api/v1/forecasts/balance-events?horizon_days=2&account_id="+strconvFormatInt(fixture.checking.ID)+"&include_descendants=false&date=2026-09-08&basis_token="+balances.BasisToken, http.StatusOK)
-	after := forecastDomainCounts(t, fixture.database)
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "FXISO")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	buyResponse := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyResponse.Body).Decode(&bought))
+	holdingPosting := postingByAccount(t, bought.Transaction, holding.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, instrument.CommodityID, holdingPosting, "2026-02-01")
+	require.NotEmpty(t, listCheckpointsForSession(t, handler, f.sessionCookie, holding.ID))
+
+	before := forecastDomainCounts(t, database)
+	assert.Positive(t, before["investment_lots"], "the no-write assertion must cover existing lot state")
+	assert.Positive(t, before["investment_lot_events"], "the no-write assertion must cover existing lot events")
+	assert.Positive(t, before["reconciliation_checkpoints"], "the no-write assertion must cover an existing checkpoint")
+	query := "?horizon_days=2&account_id=" + strconvFormatInt(f.cashAccount.ID) + "&include_descendants=false"
+	fixture := forecastAPIFixture{handler: handler, database: database, session: f.sessionCookie}
+	balances := forecastBalancesFor(t, fixture, query)
+	forecastRequest(t, handler, f.sessionCookie, "/api/v1/forecasts/balance-events"+query+"&date=2026-09-08&basis_token="+balances.BasisToken, http.StatusOK)
+	after := forecastDomainCounts(t, database)
 	assert.Equal(t, before, after)
 }
 

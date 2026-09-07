@@ -272,14 +272,14 @@ ADR 0012 governs the durable split.
 ## Not started (see roadmap)
 
 XLSX/OFX/QFX import adapters, per-split import mapping and batch rollback,
-budgets, the projected-balances screen, loan/liability
+budgets, learned-spending forecasts, loan/liability
 helpers, report snapshots, and pricing-management UI. CSV import, profiles and
 minimal rules are shipped. Reporting-currency conversion is shipped. Recurring
 templates, generation and dedicated review/discard screens are shipped.
 Production scheduling and R9 acceptance are complete. R10's detailed plan is
 written (`docs/plans/projected-balances-plan.md`), with an approved lightweight
 learning extension (`docs/plans/forecast-learning-plan.md`) for daily/weekly,
-monthly and annual seasonal spending. Slices 1–4 are complete:
+monthly and annual seasonal spending. All eight core slices are accepted:
 `db.ForecastRepository` takes one `OpenReadOnly` snapshot and bulk-loads current
 posted selected-account legs, full account/commodity versions, relevant
 templates/occurrences, every counterpart of linked current drafts and optional
@@ -319,9 +319,10 @@ and focus refresh remain fallbacks without polling. Core slice 7 adds explicit
 cross-system evidence that forecast reads do not change reports, ledger CSV/QIF,
 recurring identity, audit/background work, reconciliation checkpoints or
 investment lots, alongside independent-pool materialization, adversarial
-bounds/precision and browser acceptance coverage. Core slice 8 and learning
-M1–M4 remain unstarted. Next is the dated core acceptance review; no learned-
-spending model is shipped.
+bounds/precision and browser acceptance coverage. The dated core review maps
+every required behavior and exclusion and closes T-88 by exercising existing
+lot/checkpoint state in the read-only regression. Learning M1–M4 remain
+unstarted. Next is M1; no learned-spending model is shipped.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

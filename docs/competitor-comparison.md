@@ -51,7 +51,7 @@ spreadsheet."
 | Import rules engine | ✅ (literal contains, preview-time only) | partial | ✅ (strongest) | ✅ | ⬜ | ⬜ | partial | ✅ (code) |
 | Budgets | ⬜ (R8) | ✅ | ✅ | ✅ (core) | ⬜ | ⬜ | ✅ | 🟦 |
 | Recurring/scheduled txns | ✅ (templates, draft generation and review) | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
-| Cashflow forecasting | ⬜ (R10) | partial | partial | ⬜ | ⬜ | ⬜ | ⬜ | 🟦 |
+| Cashflow forecasting | ✅ (recorded + recurring, exact multi-currency) | partial | partial | ⬜ | ⬜ | ⬜ | ⬜ | 🟦 |
 | Investment lots & cost basis | ✅ (4 methods) | ✅ | ⬜ | ⬜ | ⬜ | basic FIFO/avg | partial | ✅ |
 | Dividends (incl. withholding, reinvest) | ✅ | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ |
 | Corporate actions (splits/mergers/delist) | ⬜ (T-34; splits/mergers have no manual entry either — only a worthless-holding write-off, backend-only, ships today) | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ (manual) |
@@ -74,7 +74,7 @@ spreadsheet."
 | Multi-currency | ✅ exact | clunky, US-centric | ⬜ | ⬜ | weak | limited | ✅ (best commercial) | ✅ |
 | Reconciliation | ✅ | ✅ | ⬜ | ⬜ | ⬜ | partial | partial | ⬜ |
 | Budgets | ⬜ (R8) | ✅ | ✅ | ✅ | ✅ | ✅ (core) | ✅ | ✅ |
-| Forecasting | ⬜ (R10) | ✅ | partial | ⬜ | partial | partial | ✅ (30-yr calendar) | ⬜ |
+| Forecasting | ✅ (core; learned spending planned) | ✅ | partial | ⬜ | partial | partial | ✅ (30-yr calendar) | ⬜ |
 | Investment lots & gains | ✅ | ✅ (Premier; only mainstream tool with full lot detail) | ⬜ | ⬜ | ⬜ (no lot detail) | ⬜ | partial | ⬜ |
 | Dividends | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | partial | ⬜ |
 | Corporate actions (splits/mergers) | ⬜ (T-34) | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | partial | ⬜ |
@@ -186,8 +186,8 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
    matching and retroactive application are not claimed. Recurring templates
    and generation followed in R9 slices 1–5. The localized review/discard UI
    now ships, so scheduled generation is active; entries remain drafts until
-   explicitly posted. R9 acceptance closed 2026-08-31; R10 is planned, not
-   implemented.
+   explicitly posted. R9 acceptance closed 2026-08-31; R10's deterministic
+   recorded-plus-recurring core was accepted 2026-09-07.
 3. **Returns analytics (TWR/MWR, allocation, benchmark)** — expected by
    Ghostfolio/Portfolio Performance users; Rekenraam has better underlying
    data (exact lots + FX). Roadmap R13.
@@ -195,7 +195,8 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
    equivalent; the niche-defining feature for R10. The execution plan is
    `docs/plans/projected-balances-plan.md`, followed by the local, opt-in spending
    models in `docs/plans/forecast-learning-plan.md` (daily/weekly, monthly and
-   annual seasonal patterns). Both core and learned forecasting remain unshipped.
+   annual seasonal patterns). The exact core forecast ships; learned forecasting
+   remains unimplemented.
 5. **BYO-key feed adapters** — Trading 212 ships. R15 is planned as IBKR
    Flex → GoCardless → the investment-event producer; no second provider is
    implemented. Quotes belong to R17. Other adapters remain research options,

@@ -6,7 +6,7 @@ Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-09-07 (R12a T-75a/T-74 complete; R9 acceptance complete;
-R10 core slices 1–6 complete; cross-system acceptance slice 7 next. T-76 and T-75b
+R10 core accepted; learning M1 next. T-76 and T-75b
 remain required later work.)
 
 ## Where things stand
@@ -92,12 +92,14 @@ See `backlog.md` G-09.
 
 Plan written 2026-08-31: `docs/plans/projected-balances-plan.md`. Its coherent
 snapshot, exact projection, authenticated API, constant-as-of FX, responsive
-forecast screen, basis-safe event details and cross-system acceptance are complete.
+forecast screen, basis-safe event details, cross-system acceptance and dated
+core acceptance review are complete.
 The plan fixes source precedence, owner-local date/overdue semantics, exact
 arithmetic, constant-FX policy, snapshot reads, API/UI contracts, budgets,
 worked fixtures and named tests for an agent executing one slice at a time.
 
-**Next action: implement slice 8 only.** Use section 13's execution prompt.
+**Next action: implement learning M1 only** from
+`docs/plans/forecast-learning-plan.md`.
 
 - [x] 1. Coherent read-only snapshot inputs and repository tests.
 - [x] 2. Exact per-currency projection, occurrence precedence and worked fixtures.
@@ -106,7 +108,7 @@ worked fixtures and named tests for an agent executing one slice at a time.
 - [x] 5. Forecast screen, filters, exact tables/charts and six locales.
 - [x] 6. Event explanations, stale-detail recovery and refresh integration.
 - [x] 7. Cross-system isolation, concurrency, bounds and browser acceptance.
-- [ ] 8. Dated core acceptance review; then learning extension M1.
+- [x] 8. Dated core acceptance review; then learning extension M1.
 - [ ] M1. Complete-history reads, cadence bins, baselines and exact residual allocation.
 - [ ] M2. Weekly/monthly smoothing, annual seasonal model, quality and hardware gates.
 - [ ] M3. Opt-in API/UI, pattern controls, variation/coverage and separate estimated curve.

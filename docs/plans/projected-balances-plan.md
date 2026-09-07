@@ -1,21 +1,22 @@
 # Projected Balances Plan (R10)
 
-Status: **in progress — core slices 1–6 complete**. Written 2026-08-31 against `b28c5d57`,
+Status: **core accepted — slices 1–8 complete; learning M1–M4 next**. Written 2026-08-31 against `b28c5d57`,
 after R9 acceptance. This is the execution specification for the next initiative
 in `docs/roadmap.md`: **R9 → R10 → R8**. Planning is complete when this document
 lands; the forecast API, optional conversion and read-only screen now ship.
 
-Implementation update (2026-09-07): the coherent snapshot reader, exact
-per-currency application projection, authenticated balances/event endpoints,
-optional complete-coverage constant-as-of FX conversion, responsive forecast
-screen and basis-safe event details are complete. Core slice 7 is next.
+Implementation update (2026-09-07): all eight core slices are accepted in
+`docs/reviews/r10-core-acceptance-review-2026-09-07.md`. The coherent snapshot,
+exact projection, authenticated balances/events API, complete-coverage
+constant-as-of FX, responsive screen, basis-safe details and adversarial
+cross-system evidence ship. The next work is learning M1 only.
 
 Scope amendment (2026-08-31): after these eight **core** slices, execute M1–M4
 in [lightweight learned spending](forecast-learning-plan.md). The owner requested
 local CPU learning with daily/weekly fluctuations, monthly costs and annual
 seasonality (for example July–August travel). That companion specifies opt-in
-models, history/quality/resource gates and final R10 acceptance. Core slice 7
-remains next; adversarial acceptance and learning code are not implemented yet.
+models, history/quality/resource gates and final R10 acceptance. Core acceptance
+is complete; learning code remains unimplemented.
 
 Navigation: [decisions](#3-financial-and-date-decisions) ·
 [backend algorithm](#4-backend-read-model-and-algorithm) ·
@@ -1242,7 +1243,7 @@ Suggested commit: `docs(forecast): accept R10 core forecast`.
 | 5. Forecast screen | [x] Complete | This commit, 2026-09-07 | `/app/forecast` is reachable from app navigation and uses one composed forecast request for exact series plus account/currency options. Strict canonical URL filters cover horizon, account scope, descendants and paired constant-FX conversion. Responsive cards, an accessible two-curve chart and authoritative daily tables expose exact values, movements, assumptions, diagnostics and FX provenance across loading, invalid, empty, no-movement, error and success states. All six locales ship; focused model/API tests, a production build and a real browser flow including 390px overflow coverage pass. Next: slice 6 event explanations and refresh recovery. |
 | 6. Details and refresh | [x] Complete | This commit, 2026-09-07 | Each daily row keyboard-expands one isolated cursor-paged event query under the exact balances basis and detail recipe. Details expose source badges, payee/description, original/assumed/occurrence dates, exact selected-scope account amounts, total count, workflow links, and pending/empty/error/load-more states. Known basis conflicts bypass retry, clear cached/open details, announce the change and refresh balances; ordinary refresh also clears details when the returned basis changes. A corrected root forecast query key now supports invalidation from transaction/register/trash, recurring, import, account, price and investment-cash mutations without polling. Real browser evidence covers R9 template generation/edit/return, refresh basis changes, stale cursor non-mixing, keyboard focus, error recovery, dark mode, accessibility and 390px containment. Next: slice 7 adversarial acceptance. |
 | 7. Cross-system acceptance | [x] Complete | This commit, 2026-09-07 | All P01–P18, B01–B04, A01–A08, D01–D04 and F01–F08 named regression cases run alongside new X01/X02 cross-system tests. Forecast balance and event GETs now have explicit evidence that real recurring drafts leave ledger/report/export output and transaction, occurrence, audit, background-work, checkpoint and investment-lot state unchanged. Independent-pool materialization, >200-event pagination, long catch-up/cap, precision/overflow and constant-FX adversarial cases pass. Browser acceptance names now map directly to the matrix, with deterministic deferred responses for observable loading/error recovery plus a new malformed/reset/reload/back-navigation filter journey. The full forecast/recurring/transaction/accessibility browser gate runs without dependency skips. Next: slice 8 core acceptance review only. |
-| 8. Acceptance closure | [ ] Not started | — | — |
+| 8. Acceptance closure | [x] Complete | This commit, 2026-09-07 | The dated core acceptance review maps required scope, D1–D8, API/UI/bounds/cross-system evidence, every exclusion and unchanged defaults. T-88 strengthens X02 with a real lot, lot event and active reconciliation checkpoint. Roadmap, feature ledger, working queue, competitor matrix and docs index now agree: the core forecast ships, learning remains open, and M1 is next rather than R8. |
 
 ## 11. Required test matrix
 
@@ -1335,21 +1336,21 @@ The eight core slices are accepted only when all are true. Full R10 completion
 also requires M1–M4 and their dated acceptance evidence in
 `docs/plans/forecast-learning-plan.md`:
 
-- [ ] All section 1 required scope items and D1–D8 have implementation evidence.
-- [ ] Every test-matrix case has run and passed, or an equivalent named test is
+- [x] All section 1 required scope items and D1–D8 have implementation evidence.
+- [x] Every test-matrix case has run and passed, or an equivalent named test is
       mapped with the exact missing/covered assertions; no vague substitutions.
-- [ ] No unresolved defect can double count, drop posted money, invent a rate,
+- [x] No unresolved defect can double count, drop posted money, invent a rate,
       mutate the ledger on read, or silently truncate a forecast.
-- [ ] Coherent-snapshot and no-side-effect tests use real recurring production
+- [x] Coherent-snapshot and no-side-effect tests use real recurring production
       paths, not manually inserted synthetic drafts alone.
-- [ ] API, generated types, client and actual parameter defaults agree.
-- [ ] Both curves, warnings, exact table and event pagination work on mobile,
+- [x] API, generated types, client and actual parameter defaults agree.
+- [x] Both curves, warnings, exact table and event pagination work on mobile,
       keyboard and both themes; new strings cover all six locales.
-- [ ] Rates/rounding/overdue assumptions are visible before totals can mislead.
-- [ ] Final backend/frontend/browser checks pass, with no skipped acceptance
+- [x] Rates/rounding/overdue assumptions are visible before totals can mislead.
+- [x] Final backend/frontend/browser checks pass, with no skipped acceptance
       cases counted as passes and no concurrent translation build artifacts.
-- [ ] Dated review, roadmap, feature ledger, working queue and backlog agree.
-- [ ] Scoped commits exist, working tree is clean except explicitly preserved
+- [x] Dated review, roadmap, feature ledger, working queue and backlog agree.
+- [x] Scoped commits exist, working tree is clean except explicitly preserved
       unrelated changes, and the next task is stated without starting it.
 
 ## 13. Copyable execution and handoff instructions
