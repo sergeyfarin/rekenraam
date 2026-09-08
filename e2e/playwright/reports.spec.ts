@@ -158,7 +158,8 @@ test('a spending row drills down to exactly its transactions', async ({ page }) 
 
   await page.goto(`/app/reports?view=spending&group_by=category&start_date=${today}&end_date=${today}&bucket=month`);
 
-  await page.getByRole('link', { name: 'Groceries' }).click();
+  // Both the visual summary and detail table expose the same drill-down.
+  await page.getByRole('link', { name: 'Groceries' }).first().click();
 
   // The link carries the report's own semantics, not just its dates.
   await expect(page).toHaveURL(/\/app\/transactions\?/);
