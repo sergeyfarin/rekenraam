@@ -6,8 +6,10 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/stretchr/testify v1.12.1
+	github.com/wlynxg/chardet v1.0.5
 	golang.org/x/crypto v0.55.0
 	golang.org/x/term v0.45.0
+	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.57.0
 )
 

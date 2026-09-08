@@ -8641,6 +8641,11 @@ export interface paths {
                          * @description Required for CSV; selects a saved column-mapping profile.
                          */
                         profile_id?: number;
+                        /**
+                         * @description QIF or CSV text encoding. Use auto for confidence-gated detection, or the same named encoding used during CSV analysis.
+                         * @default auto
+                         */
+                        text_encoding?: string;
                     };
                     "application/json": components["schemas"]["StartOnlineImportRequest"];
                 };
@@ -8720,6 +8725,89 @@ export interface paths {
                 };
                 /** @description REKENRAAM_SECRET_KEY is not configured (online branch only) */
                 503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Analyze a CSV file before configuring its column mapping */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "multipart/form-data": {
+                        /** Format: binary */
+                        file: string;
+                        /**
+                         * @description Text encoding to detect or apply before reading the header.
+                         * @default auto
+                         */
+                        text_encoding?: string;
+                        /**
+                         * @description Delimiter to detect or apply when reading the header.
+                         * @default auto
+                         * @enum {string}
+                         */
+                        delimiter?: "auto" | "comma" | "semicolon" | "tab";
+                    };
+                };
+            };
+            responses: {
+                /** @description Canonical decoded CSV headers and their decoding provenance */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AnalyzeCSVImportResponse"];
+                    };
+                };
+                /** @description Invalid file, uncertain or unsupported encoding, or invalid CSV header */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication is required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -15966,12 +16054,30 @@ export interface components {
             date_from?: string;
             /** Format: date */
             date_to?: string;
+            /** @description Canonical encoding used to decode the source text. */
+            text_encoding?: string;
+            /**
+             * @description How the text encoding was established.
+             * @enum {string}
+             */
+            encoding_source?: "utf8" | "bom" | "detected" | "selected";
+            /** @description Detector confidence percentage, or 100 for deterministic and explicitly selected encodings. */
+            encoding_confidence?: number;
         };
         StartImportResponse: {
             batch: components["schemas"]["ImportBatchResponse"];
             rows: components["schemas"]["ImportStagedRowResponse"][];
             warnings: components["schemas"]["ParseWarning"][];
             meta: components["schemas"]["ImportSourceMeta"];
+        };
+        AnalyzeCSVImportResponse: {
+            headers: string[];
+            /** @enum {string} */
+            delimiter: "comma" | "semicolon" | "tab";
+            text_encoding: string;
+            /** @enum {string} */
+            encoding_source: "utf8" | "bom" | "detected" | "selected";
+            encoding_confidence: number;
         };
         StartOnlineImportRequest: {
             /** @description Online source kind. Only "trading212" is currently supported. */

@@ -99,12 +99,13 @@ ADR 0012 governs the durable split.
 | Capability | Status | Notes |
 |---|---|---|
 | `SourceAdapter` interface + auto-detect registry | ✅ | `app/import_adapter.go`; confidence-ranked selection. |
-| QIF parser (full field set, splits, transfers, investment entries) | ✅ | `app/import_qif.go`; handles MS Money loose-QIF export format. |
+| QIF parser (full field set, splits, transfers, investment entries) | ✅ | `app/import_qif.go`; handles MS Money loose-QIF exports, normalizes Unicode/legacy text to UTF-8 with confidence-gated detection, and offers an explicit encoding override for ambiguous locales. |
+| CSV parser + saved mapping profiles | ✅ | `app/import_csv.go`; server-side preflight and final parsing share the same encoding, delimiter, quoting, and header normalization path. Unicode and confidence-gated legacy encodings use the same override UI as QIF. |
 | EU date and decimal-comma handling in file imports | ✅ | `app/import_locale.go` (T-35, T-36): profile `date_layout` / `decimal_separator` when set, otherwise whole-file date-order detection (a day above 12 settles it) and per-amount separator detection; all-ambiguous or contradicting files parse as `MM/DD` with a parse warning. |
 | Import pipeline: parse → normalize → dedupe → stage → commit | ✅ | `app/import_service.go`. |
 | SHA-256 fingerprint deduplication (within-batch + ledger-level) | ✅ | `import_commit_identities` table; `INSERT OR IGNORE` with conflict detection. |
 | Import schema | ✅ | Included in the pre-beta Goose baseline (`migrations/0001_initial_schema.sql`). |
-| 7 REST endpoints (`/api/v1/imports/*`) | ✅ | `api/imports.go`; auth-gated, CSRF-protected. |
+| Import REST endpoints (`/api/v1/imports/*`) | ✅ | `api/imports.go`; auth-gated and CSRF-protected, including non-persisting CSV header analysis. |
 | Transfer detection: QIF `[Account]` → `transfer_account_id` routing | ✅ | Parsed to `transfer_hint`; per-row account selector in preview UI. |
 | Partial-commit semantics (per-row DB tx, failures don't block others) | ✅ | |
 | Preview UI: upload → per-row account / currency / category / transfer-account assignment | ✅ | `routes/app/import/+page.svelte`. |

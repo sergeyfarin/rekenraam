@@ -244,6 +244,11 @@ Goal: make records trustworthy over time.
 Goal: reduce manual entry without sacrificing trust.
 
 - CSV import preview and commit.
+- QIF and CSV imports accept Unicode and legacy locale encodings. Automatic
+  legacy detection must be confidence-gated, the preview must disclose the
+  result, and the user must be able to select the source encoding when
+  detection is uncertain or incorrect. CSV header analysis and final parsing
+  must use the same server-side decoder so saved column mappings cannot drift.
 - Saved import rules may match a case-insensitive literal substring in the
   staged payee or description and set category, payee, or tags. Rules run in
   explicit priority order only when rows are first staged, and every applied

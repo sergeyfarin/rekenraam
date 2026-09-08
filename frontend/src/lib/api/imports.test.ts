@@ -1,7 +1,9 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
+  analyzeCSVImport,
   getFullImportBatch,
   parseBatchSourceMeta,
+  startImport,
   type GetImportBatchResponse,
   type ImportBatch
 } from './imports';
@@ -38,6 +40,45 @@ function importBatchResponse(rows: { id: number }[], nextCursor: string | null):
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('startImport', () => {
+  it('sends the selected legacy text encoding with the QIF upload', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ batch: {}, rows: [], warnings: [], meta: {} }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
+
+    await startImport(new File(['qif'], 'money.qif'), 'csrf', undefined, 'windows-1251');
+
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.body).toBeInstanceOf(FormData);
+    expect((init?.body as FormData).get('text_encoding')).toBe('windows-1251');
+  });
+});
+
+describe('analyzeCSVImport', () => {
+  it('sends the encoding and optional delimiter without creating an import batch', async () => {
+    const response = {
+      headers: ['Дата', 'Сумма'],
+      delimiter: 'semicolon',
+      text_encoding: 'windows-1251',
+      encoding_source: 'selected',
+      encoding_confidence: 100
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify(response), { status: 200, headers: { 'content-type': 'application/json' } })
+    );
+
+    await expect(analyzeCSVImport(new File(['csv'], 'money.csv'), 'csrf', 'windows-1251', 'semicolon')).resolves.toEqual(response);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/imports/analyze', expect.objectContaining({ method: 'POST' }));
+    const body = fetchMock.mock.calls[0]?.[1]?.body as FormData;
+    expect(body.get('text_encoding')).toBe('windows-1251');
+    expect(body.get('delimiter')).toBe('semicolon');
+  });
 });
 
 describe('parseBatchSourceMeta', () => {

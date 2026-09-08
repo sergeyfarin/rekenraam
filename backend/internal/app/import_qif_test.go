@@ -175,6 +175,21 @@ func TestParseQIF_MSMoneyNonBreakingSpaceDate(t *testing.T) {
 	assert.Empty(t, result.Warnings)
 }
 
+func TestQIFAdapterParse_Windows1251Cyrillic(t *testing.T) {
+	// MS Money's "ANSI" export uses the Windows locale code page. These byte
+	// sequences are Windows-1251 for Кафе and Питание.
+	qif := []byte("!Type:CCard\nD24\xa04'21\nT-42.49\nP\xca\xe0\xf4\xe5\nL\xcf\xe8\xf2\xe0\xed\xe8\xe5\n^\n")
+
+	result, err := (&QIFAdapter{}).Parse(context.Background(), RawInput{Filename: "card.qif", Bytes: qif}, nil)
+	require.NoError(t, err)
+	require.Len(t, result.Rows, 1)
+	assert.Equal(t, "2021-04-24", result.Rows[0].Date)
+	assert.Equal(t, "Кафе", result.Rows[0].PayeeHint)
+	assert.Equal(t, "Питание", result.Rows[0].CategoryHint)
+	assert.Equal(t, "Кафе", result.Rows[0].Raw["P"])
+	assert.Equal(t, "Питание", result.Rows[0].Raw["L"])
+}
+
 func TestParseQIF_EUDatesDetectedFromTheFile(t *testing.T) {
 	// A single row with a day above 12 settles the layout for the ambiguous
 	// rows around it: without this, 02/03/2026 silently became 3 February.

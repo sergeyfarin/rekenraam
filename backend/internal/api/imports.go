@@ -46,10 +46,13 @@ type parseWarningResponse struct {
 }
 
 type sourceMetaResponse struct {
-	AccountHints  []string `json:"account_hints"`
-	CurrencyHints []string `json:"currency_hints"`
-	DateFrom      string   `json:"date_from,omitempty"`
-	DateTo        string   `json:"date_to,omitempty"`
+	AccountHints       []string `json:"account_hints"`
+	CurrencyHints      []string `json:"currency_hints"`
+	DateFrom           string   `json:"date_from,omitempty"`
+	DateTo             string   `json:"date_to,omitempty"`
+	TextEncoding       string   `json:"text_encoding,omitempty"`
+	EncodingSource     string   `json:"encoding_source,omitempty"`
+	EncodingConfidence int      `json:"encoding_confidence,omitempty"`
 }
 
 type startImportResponse struct {
@@ -57,6 +60,14 @@ type startImportResponse struct {
 	Rows     []importStagedRowResponse `json:"rows"`
 	Warnings []parseWarningResponse    `json:"warnings"`
 	Meta     sourceMetaResponse        `json:"meta"`
+}
+
+type analyzeCSVImportResponse struct {
+	Headers            []string `json:"headers"`
+	Delimiter          string   `json:"delimiter"`
+	TextEncoding       string   `json:"text_encoding"`
+	EncodingSource     string   `json:"encoding_source"`
+	EncodingConfidence int      `json:"encoding_confidence"`
 }
 
 type startOnlineImportRequest struct {
@@ -218,22 +229,9 @@ func startImport(logger *slog.Logger, authService *app.AuthService, importServic
 			return
 		}
 
-		const maxUploadSize = 50 << 20 // 50 MB
-		if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "invalid multipart form")
-			return
-		}
-
-		file, header, err := r.FormFile("file")
+		rawInput, err := readImportUpload(r)
 		if err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "file field is required")
-			return
-		}
-		defer file.Close()
-
-		fileBytes, err := io.ReadAll(io.LimitReader(file, maxUploadSize))
-		if err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "failed to read file")
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
 			return
 		}
 
@@ -251,12 +249,8 @@ func startImport(logger *slog.Logger, authService *app.AuthService, importServic
 			OwnerUserID:   owner.ID,
 			AuthSessionID: authenticatedSessionID(r),
 			RequestID:     RequestIDFromContext(r.Context()),
-			Input: app.RawInput{
-				Filename:    header.Filename,
-				ContentType: header.Header.Get("Content-Type"),
-				Bytes:       fileBytes,
-			},
-			ProfileID: profileID,
+			Input:         rawInput,
+			ProfileID:     profileID,
 		})
 		if err != nil {
 			writeImportServiceError(w, r, logger, "start import", err)
@@ -265,6 +259,54 @@ func startImport(logger *slog.Logger, authService *app.AuthService, importServic
 
 		writeJSON(w, http.StatusCreated, toStartImportResponse(result))
 	}))
+}
+
+func analyzeCSVImport(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := authenticatedMutationOwner(w, r); !ok {
+			return
+		}
+		rawInput, err := readImportUpload(r)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+			return
+		}
+		result, err := importService.AnalyzeCSV(r.Context(), rawInput, r.FormValue("delimiter"))
+		if err != nil {
+			writeImportServiceError(w, r, logger, "analyze csv import", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, analyzeCSVImportResponse{
+			Headers:            result.Headers,
+			Delimiter:          result.Delimiter,
+			TextEncoding:       result.TextEncoding,
+			EncodingSource:     result.EncodingSource,
+			EncodingConfidence: result.EncodingConfidence,
+		})
+	}))
+}
+
+const maxImportUploadSize = 50 << 20 // 50 MB
+
+func readImportUpload(r *http.Request) (app.RawInput, error) {
+	if err := r.ParseMultipartForm(maxImportUploadSize); err != nil {
+		return app.RawInput{}, errors.New("invalid multipart form")
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		return app.RawInput{}, errors.New("file field is required")
+	}
+	defer file.Close()
+	fileBytes, err := io.ReadAll(io.LimitReader(file, maxImportUploadSize))
+	if err != nil {
+		return app.RawInput{}, errors.New("failed to read file")
+	}
+	return app.RawInput{
+		Filename:     header.Filename,
+		ContentType:  header.Header.Get("Content-Type"),
+		Bytes:        fileBytes,
+		TextEncoding: strings.TrimSpace(r.FormValue("text_encoding")),
+	}, nil
 }
 
 func listImportProfiles(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService) http.HandlerFunc {
@@ -833,10 +875,13 @@ func toStartImportResponse(result app.StartImportResult) startImportResponse {
 		Rows:     toImportStagedRowResponses(result.Rows),
 		Warnings: warnings,
 		Meta: sourceMetaResponse{
-			AccountHints:  accountHints,
-			CurrencyHints: currencyHints,
-			DateFrom:      result.Meta.DateFrom,
-			DateTo:        result.Meta.DateTo,
+			AccountHints:       accountHints,
+			CurrencyHints:      currencyHints,
+			DateFrom:           result.Meta.DateFrom,
+			DateTo:             result.Meta.DateTo,
+			TextEncoding:       result.Meta.TextEncoding,
+			EncodingSource:     result.Meta.EncodingSource,
+			EncodingConfidence: result.Meta.EncodingConfidence,
 		},
 	}
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/text/encoding/charmap"
 )
 
 func TestCSVAdapterTwoBankLayoutsUseProfileDataWithoutCodeChanges(t *testing.T) {
@@ -41,6 +42,70 @@ func TestCSVAdapterTwoBankLayoutsUseProfileDataWithoutCodeChanges(t *testing.T) 
 			assert.Empty(t, result.Warnings)
 		})
 	}
+}
+
+func TestCSVAdapterParse_LegacyEncodingUsesSameDecoderAsQIF(t *testing.T) {
+	contents, err := charmap.Windows1250.NewEncoder().Bytes([]byte("Data;Opis;Kwota\n28/08/2026;Zażółć;-12,34\n"))
+	require.NoError(t, err)
+	profile := &ImportProfile{ID: 8, AdapterKind: "csv", ConfigJSON: `{"delimiter":"semicolon","date_column":"Data","payee_column":"Opis","amount_column":"Kwota","date_layout":"DMY","decimal_separator":","}`}
+
+	result, err := (&CSVAdapter{}).Parse(context.Background(), RawInput{
+		Filename: "statement.csv", Bytes: contents, TextEncoding: "windows-1250",
+	}, profile)
+	require.NoError(t, err)
+	require.Len(t, result.Rows, 1)
+	assert.Equal(t, "Zażółć", result.Rows[0].PayeeHint)
+	assert.Equal(t, "windows-1250", result.Meta.TextEncoding)
+	assert.Equal(t, "selected", result.Meta.EncodingSource)
+}
+
+func TestAnalyzeCSVInput_DecodesHeadersAndDetectsDelimiter(t *testing.T) {
+	contents, err := charmap.Windows1251.NewEncoder().Bytes([]byte("Дата;Описание;Сумма\n24.04.2021;Кафе;-42,49\n"))
+	require.NoError(t, err)
+
+	result, err := AnalyzeCSVInput(RawInput{Filename: "statement.csv", Bytes: contents}, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Дата", "Описание", "Сумма"}, result.Headers)
+	assert.Equal(t, "semicolon", result.Delimiter)
+	assert.Equal(t, "windows-1251", result.TextEncoding)
+	assert.Equal(t, "detected", result.EncodingSource)
+	assert.GreaterOrEqual(t, result.EncodingConfidence, minimumAutomaticEncodingConfidence)
+}
+
+func TestAnalyzeCSVInput_UsesCSVQuotingRulesForCanonicalHeaders(t *testing.T) {
+	tests := []struct {
+		name      string
+		contents  string
+		delimiter string
+		headers   []string
+	}{
+		{
+			name:      "semicolon inside quoted header",
+			contents:  "Datum;Omschrijving;\"Bedrag; EUR\"\n28/08/2026;Koffie;-3,50\n",
+			delimiter: "semicolon",
+			headers:   []string{"Datum", "Omschrijving", "Bedrag; EUR"},
+		},
+		{
+			name:      "escaped quote in comma header",
+			contents:  "Date,\"Payee \"\"name\"\"\",Amount\n2026-08-28,Cafe,-3.50\n",
+			delimiter: "comma",
+			headers:   []string{"Date", `Payee "name"`, "Amount"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := AnalyzeCSVInput(RawInput{Filename: "statement.csv", Bytes: []byte(test.contents)}, "")
+			require.NoError(t, err)
+			assert.Equal(t, test.delimiter, result.Delimiter)
+			assert.Equal(t, test.headers, result.Headers)
+		})
+	}
+}
+
+func TestAnalyzeCSVInput_RejectsDuplicateHeaders(t *testing.T) {
+	_, err := AnalyzeCSVInput(RawInput{Filename: "statement.csv", Bytes: []byte("Date,Amount,Amount\n")}, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `header "Amount" appears more than once`)
 }
 
 func TestCSVAdapterRejectsProfileColumnMissingFromStatement(t *testing.T) {

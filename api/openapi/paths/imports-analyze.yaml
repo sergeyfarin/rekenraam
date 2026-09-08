@@ -1,0 +1,54 @@
+post:
+  summary: Analyze a CSV file before configuring its column mapping
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      multipart/form-data:
+        schema:
+          type: object
+          required:
+            - file
+          properties:
+            file:
+              type: string
+              format: binary
+            text_encoding:
+              type: string
+              default: auto
+              description: Text encoding to detect or apply before reading the header.
+            delimiter:
+              type: string
+              enum: [auto, comma, semicolon, tab]
+              default: auto
+              description: Delimiter to detect or apply when reading the header.
+  responses:
+    "200":
+      description: Canonical decoded CSV headers and their decoding provenance
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/AnalyzeCSVImportResponse"
+    "400":
+      description: Invalid file, uncertain or unsupported encoding, or invalid CSV header
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication is required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -1469,6 +1469,26 @@ separators while preserving the existing slash, dash, dot and apostrophe forms.
 `!Type:CCard` form and now proves the date normalizes to `2021-04-24`, updates
 batch date metadata, and emits no warning.
 
+### T-90 Legacy-encoded QIF and CSV text was not decoded `[x]`
+
+**Files:** `backend/internal/app/import_text_encoding.go`,
+`backend/internal/app/import_qif.go`, `backend/internal/app/import_csv.go`, and
+the file upload UI. Financial applications can write QIF or CSV using the
+machine's legacy system code page rather than UTF-8. Headers, payees, and
+categories in non-Western and other legacy encodings therefore reached JSON as
+invalid byte strings or could be decoded using the wrong locale.
+
+**Fixed:** normalize QIF and CSV text to UTF-8 before parsing. BOMs and valid UTF-8 are
+handled deterministically; otherwise the maintained `wlynxg/chardet` detector is
+accepted only at 50% confidence or above. An encoding selector lets users
+override ambiguous input across Windows, ISO-8859, Cyrillic DOS/Mac, Japanese,
+Chinese, and Korean families. The chosen encoding, decision source, and
+confidence are recorded in import metadata and shown in preview. CSV preflight
+now uploads the raw file for server-side decoded header/delimiter analysis; the
+final parser repeats that same path, replacing the browser's separate UTF-8-only
+header parser. Cross-script decoder tests plus API boundary tests protect
+auto-detection, manual override, and decoded profile-column matching.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

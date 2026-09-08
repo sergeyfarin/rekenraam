@@ -191,6 +191,8 @@ paths:
     $ref: "./paths/transaction-reconciliation-impact.yaml"
   /api/v1/imports:
     $ref: "./paths/imports.yaml"
+  /api/v1/imports/analyze:
+    $ref: "./paths/imports-analyze.yaml"
   /api/v1/import-profiles:
     $ref: "./paths/import-profiles.yaml"
   /api/v1/import-profiles/{profile_id}:
@@ -752,6 +754,8 @@ components:
       $ref: "./components/schemas/imports.yaml#/ImportSourceMeta"
     StartImportResponse:
       $ref: "./components/schemas/imports.yaml#/StartImportResponse"
+    AnalyzeCSVImportResponse:
+      $ref: "./components/schemas/imports.yaml#/AnalyzeCSVImportResponse"
     StartOnlineImportRequest:
       $ref: "./components/schemas/imports.yaml#/StartOnlineImportRequest"
     StartOnlineImportResponse:

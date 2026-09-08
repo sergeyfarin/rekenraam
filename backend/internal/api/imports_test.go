@@ -411,6 +411,78 @@ func TestStartImport_MissingFileFieldRejected(t *testing.T) {
 	startMultipartImportForSession(t, handler, sessionCookie, csrfToken, false, "", nil, http.StatusBadRequest)
 }
 
+func TestStartImport_QIFExplicitTextEncodingIsAppliedAndReported(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _, _, _ := bootstrapImportAPITest(t, handler)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	require.NoError(t, writer.WriteField("text_encoding", "windows-1251"))
+	part, err := writer.CreateFormFile("file", "money.qif")
+	require.NoError(t, err)
+	_, err = part.Write([]byte("!Type:CCard\nD24 4'21\nT-42.49\nP\xca\xe0\xf4\xe5\n^\n"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/imports", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, http.StatusCreated, res.Code, res.Body.String())
+
+	var started startImportResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&started))
+	require.Len(t, started.Rows, 1)
+	assert.Contains(t, started.Rows[0].NormalizedJSON, `"payee_hint":"Кафе"`)
+	assert.Equal(t, "windows-1251", started.Meta.TextEncoding)
+	assert.Equal(t, "selected", started.Meta.EncodingSource)
+	assert.Equal(t, 100, started.Meta.EncodingConfidence)
+}
+
+func TestAnalyzeCSVImport_ReturnsDecodedCanonicalHeaders(t *testing.T) {
+	t.Parallel()
+
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _, _, _ := bootstrapImportAPITest(t, handler)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	require.NoError(t, writer.WriteField("text_encoding", "windows-1251"))
+	part, err := writer.CreateFormFile("file", "statement.csv")
+	require.NoError(t, err)
+	_, err = part.Write([]byte("\xc4\xe0\xf2\xe0;\xce\xef\xe8\xf1\xe0\xed\xe8\xe5;\xd1\xf3\xec\xec\xe0\n24.04.2021;\xca\xe0\xf4\xe5;-42,49\n"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/imports/analyze", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	require.Equal(t, http.StatusOK, res.Code, res.Body.String())
+
+	var analyzed struct {
+		Headers            []string `json:"headers"`
+		Delimiter          string   `json:"delimiter"`
+		TextEncoding       string   `json:"text_encoding"`
+		EncodingSource     string   `json:"encoding_source"`
+		EncodingConfidence int      `json:"encoding_confidence"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&analyzed))
+	assert.Equal(t, []string{"Дата", "Описание", "Сумма"}, analyzed.Headers)
+	assert.Equal(t, "semicolon", analyzed.Delimiter)
+	assert.Equal(t, "windows-1251", analyzed.TextEncoding)
+	assert.Equal(t, "selected", analyzed.EncodingSource)
+	assert.Equal(t, 100, analyzed.EncodingConfidence)
+}
+
 func TestCSVProfileCreateListAndUploadAcceptance(t *testing.T) {
 	t.Parallel()
 	handler, _ := newSetupTestHandler(t)
@@ -522,6 +594,7 @@ func TestImportBatchEndpoints_RequireAuthentication(t *testing.T) {
 		path   string
 	}{
 		{"list", http.MethodGet, "/api/v1/imports"},
+		{"analyze", http.MethodPost, "/api/v1/imports/analyze"},
 		{"get", http.MethodGet, "/api/v1/imports/1"},
 		{"patch", http.MethodPatch, "/api/v1/imports/1"},
 		{"preview-commit", http.MethodPost, "/api/v1/imports/1/preview-commit"},
@@ -554,6 +627,7 @@ func TestImportBatchMutations_RequireCSRFToken(t *testing.T) {
 		{"patch", http.MethodPatch, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10), resolutionPatchBody(t, checking.ID, commodityID, groceries.ID, started.Rows[0].ID)},
 		{"commit", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/commit", "{}"},
 		{"discard", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/discard", ""},
+		{"analyze", http.MethodPost, "/api/v1/imports/analyze", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
