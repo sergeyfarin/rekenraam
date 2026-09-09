@@ -46,10 +46,17 @@ have exactly one home.
 [R10 projected balances](plans/projected-balances-plan.md) has completed its
 eight-slice core milestone; see the
 [dated acceptance review](reviews/r10-core-acceptance-review-2026-09-07.md).
-Its [lightweight learning extension](plans/forecast-learning-plan.md) remains
-planned as four subsequent slices for opt-in local spending models across
-daily/weekly, monthly and annual patterns, with explicit quality and hardware
-gates. Start with learning M1; do not move to R8 until M4 closes R10.
+Its [lightweight learning extension](plans/forecast-learning-plan.md) has
+completed M1's internal training foundation. M2 is next, followed by M3 and M4
+for opt-in local spending models across daily/weekly, monthly and annual
+patterns, with explicit quality and hardware gates. Do not move to R8 until
+M4 closes R10.
+
+Latest strategic review:
+[2026-09-09 product direction, AI and privacy](reviews/product-direction-ai-privacy-2026-09-09.md).
+It challenges the positioning and evaluates optional AI/MCP, data ownership,
+release readiness and adoption experiments. Its recommendations are proposals,
+not changes to the accepted roadmap or ADRs.
 
 ## Folders
 
