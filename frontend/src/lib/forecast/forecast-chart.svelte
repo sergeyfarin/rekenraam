@@ -1,18 +1,23 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages.js';
-  import { forecastChartPoints, type ForecastSeries } from './forecast-model';
+  import { forecastChartPoints, type ForecastLearnedSeries, type ForecastSeries } from './forecast-model';
 
   let {
     series,
+    estimated,
     formatDate,
     formatAmount
   }: {
     series: ForecastSeries;
+    estimated?: ForecastLearnedSeries;
     formatDate: (date: string) => string;
     formatAmount: (value: string, scale: number) => string;
   } = $props();
 
-  const points = $derived(forecastChartPoints(series));
+  const points = $derived(forecastChartPoints(series, estimated));
+  const estimatedPoints = $derived(points.filter((point) => point.estimatedY !== undefined));
+  const estimatedPath = $derived(estimatedPoints.map((point) => `${x(point.x)},${y(point.estimatedY ?? 0)}`).join(' '));
+  const estimatedLast = $derived(estimated?.points.at(-1));
   const width = $derived(Math.max(720, points.length * 12));
   const plotHeight = 180;
   const left = 16;
@@ -32,6 +37,9 @@
   <div class="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted" aria-hidden="true">
     <span class="inline-flex items-center gap-2"><span class="h-0.5 w-7 bg-accent"></span>{m.forecast_recorded_only()}</span>
     <span class="inline-flex items-center gap-2"><span class="w-7 border-t-2 border-dashed border-warning"></span>{m.forecast_with_recurring()}</span>
+    {#if estimatedPoints.length > 0}
+      <span class="inline-flex items-center gap-2"><span class="w-7 border-t-2 border-dotted border-muted"></span>{m.forecast_with_estimates()}</span>
+    {/if}
   </div>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard users must be able to scroll the bounded chart region) -->
   <div class="mt-3 overflow-x-auto rounded-(--radius-control) border border-border bg-surface-strong/45" role="region" tabindex="0" aria-label={m.forecast_chart_scroll_label()}>
@@ -40,6 +48,9 @@
       {#if points.length > 0}
         <polyline points={recordedPath} fill="none" stroke="var(--color-accent)" stroke-width="2.5" stroke-linejoin="round" />
         <polyline points={projectedPath} fill="none" stroke="var(--color-warning)" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round" />
+      {/if}
+      {#if estimatedPoints.length > 1}
+        <polyline points={estimatedPath} fill="none" stroke="var(--color-muted)" stroke-width="2" stroke-dasharray="2 4" stroke-linejoin="round" />
       {/if}
       {#if first}
         <text x={left} y={top + plotHeight + 19} class="fill-muted text-[11px]">{formatDate(first.date)}</text>
@@ -55,6 +66,11 @@
         recorded: formatAmount(last.recorded_balance.quantity_value, last.recorded_balance.quantity_scale),
         projected: formatAmount(last.projected_balance.quantity_value, last.projected_balance.quantity_scale)
       })}
+    </p>
+  {/if}
+  {#if estimatedLast}
+    <p class="mt-1 text-xs leading-5 text-muted">
+      {m.forecast_with_estimates()}: {formatAmount(estimatedLast.projected_balance.quantity_value, estimatedLast.projected_balance.quantity_scale)}
     </p>
   {/if}
 </figure>

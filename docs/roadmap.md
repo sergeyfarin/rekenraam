@@ -7,7 +7,7 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 short-horizon working queue is `docs/todo.md`.
 
 Last reviewed: 2026-09-09 (R12a T-75a/T-74 closed; R9 acceptance complete;
-R10 core accepted; learning M1 and M2 complete and M3 next; T-76 and T-75b
+R10 core accepted; learning M1–M3 complete and M4 next; T-76 and T-75b
 remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
@@ -378,7 +378,9 @@ unpaginated summary counts support the editor and navigation badge.
    classification/cadence baselines and exact residual allocation are complete,
    and M2 adds internal chronological model selection, both quality gates,
    observed-variation metadata and a measured single-slot resource policy.
-   Every public opt-in surface remains unimplemented. Final R10
+   M3 ships the opt-in surface: the extended forecast recipe, a nullable
+   learned_spending response, estimated day-detail events and a separate,
+   clearly labelled estimated-spending view in all six locales. Final R10
    acceptance follows M4; R8 remains next afterward. All eight core slices are
    accepted:
    the coherent read-only snapshot loader feeds an exact

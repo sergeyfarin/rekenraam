@@ -329,8 +329,35 @@ application code classifies eligible one-funder purchases, applies confirmed
 weekly/monthly/annual history gates, calculates transparent exact baselines,
 subtracts known period spend and allocates residual integer units
 deterministically across calendar dates. It adds no endpoint, response field,
-UI, saved model, ledger write, or selected adaptive model. M2–M4 remain open;
-next is M2 chronological model selection and representative hardware evidence.
+UI, saved model, ledger write, or selected adaptive model. M2 adds internal
+chronological selection for all four cadences: exact rational simple
+exponential smoothing against `mean_8`/`last_period` on a frozen tuning fold,
+the fixed annual references over twelve expanding origins and one frozen
+twelve-month path, both 10% quality gates, honest baseline fallback,
+observed-variation metadata without any band, and a single-slot fitter whose
+refusals return no partial group prefix. M3 makes the whole feature opt-in and
+visible. `/api/v1/forecasts/balances` accepts `spending_model`,
+`history_complete_from`, repeated `expense_category_id` and repeated
+`expense_pattern=<category-id>:<pattern>`; with the model off every one of them
+is an orphan the endpoint rejects, and the response is byte-identical to the
+pre-M3 core forecast. The learning history read now joins the core snapshot's
+own transaction, so a model can never be trained on one view of the ledger and
+applied to another, and it does not run at all while the option is off. A
+nullable `learned_spending` object carries status (`ready`/`partial`/
+`unavailable`), the `adaptive_spending_v1` policy version, requested/eligible/
+excluded group counts, translated exclusion reasons, selectable category
+options, per-group training and test windows, selected method with its fallback
+reason, exact retrospective errors, observed variation, calendar profile and
+separate estimated daily deltas and with-estimate curves. Core points are never
+touched. Estimated events join the day-detail list as a fourth
+`estimated_spending` source ranked after every fact, with null saved-record IDs and a
+stable `estimate:<account>:<category>:<currency>:<date>` key. `/app/forecast`
+gains a third labelled curve and table column, an opt-in panel with the
+confirmed-history date, per-category cadence controls, model and fallback
+names, tested horizon, historical-variation wording that is explicitly not a
+confidence range, calendar profile and translated exclusions, in all six
+locales. M4 remains open; next is the dated learning acceptance review and R10
+closure.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

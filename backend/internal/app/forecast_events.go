@@ -183,7 +183,17 @@ func decodeForecastEventCursor(value string) (forecastEventCursor, error) {
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return forecastEventCursor{}, ValidationError{Message: "forecast cursor is invalid"}
 	}
-	if cursor.Version != 1 || !validForecastBasisToken(cursor.BasisToken) || cursor.Date == "" || cursor.Key == "" || cursor.SourceID <= 0 || cursor.EntryID < 0 || (cursor.Source != "posted" && cursor.Source != "draft" && cursor.Source != "template") {
+	estimated := cursor.Source == "estimated_spending"
+	if cursor.Version != 1 || !validForecastBasisToken(cursor.BasisToken) || cursor.Date == "" || cursor.Key == "" || cursor.EntryID < 0 ||
+		(cursor.Source != "posted" && cursor.Source != "draft" && cursor.Source != "template" && !estimated) {
+		return forecastEventCursor{}, ValidationError{Message: "forecast cursor is invalid"}
+	}
+	// Estimated events carry no saved record, so their source id is zero by
+	// design; every other source must still reference a real row.
+	if estimated != (cursor.SourceID == 0) {
+		return forecastEventCursor{}, ValidationError{Message: "forecast cursor is invalid"}
+	}
+	if !estimated && cursor.SourceID < 0 {
 		return forecastEventCursor{}, ValidationError{Message: "forecast cursor is invalid"}
 	}
 	if cursor.DetailAccountID != nil && *cursor.DetailAccountID <= 0 || cursor.DetailCommodityID != nil && *cursor.DetailCommodityID <= 0 {

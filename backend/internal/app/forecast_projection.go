@@ -684,7 +684,9 @@ func isCashKind(kind string) bool {
 	return kind == "cash" || kind == "checking" || kind == "savings" || kind == "brokerage_cash"
 }
 func sortForecastEvents(events []ForecastEvent) {
-	order := map[string]int{"posted": 0, "draft": 1, "template": 2}
+	// Estimates rank after every recorded or scheduled source, so a tie on
+	// date never puts a model's guess above a fact.
+	order := map[string]int{"posted": 0, "draft": 1, "template": 2, "estimated_spending": 3}
 	for index := range events {
 		sort.Slice(events[index].Amounts, func(i, j int) bool {
 			if events[index].Amounts[i].AccountID != events[index].Amounts[j].AccountID {
@@ -707,7 +709,12 @@ func sortForecastEvents(events []ForecastEvent) {
 		if a.EntryID != b.EntryID {
 			return a.EntryID < b.EntryID
 		}
-		return a.OccurrenceDate < b.OccurrenceDate
+		if a.OccurrenceDate != b.OccurrenceDate {
+			return a.OccurrenceDate < b.OccurrenceDate
+		}
+		// The key is the last resort so cursor pagination stays stable for
+		// sources that share every earlier sort field.
+		return a.Key < b.Key
 	})
 }
 

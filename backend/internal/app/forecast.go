@@ -43,6 +43,17 @@ type ForecastInput struct {
 	IncludeDescendants  bool
 	ReportingCurrencyID *int64
 	FXMethod            string
+	SpendingModel       string
+	HistoryCompleteFrom string
+	ExpenseCategoryIDs  []int64
+	ExpensePatterns     []ForecastExpensePattern
+}
+
+// ForecastExpensePattern is one requested cadence override for an expense
+// category, applied across that category's selected funding accounts.
+type ForecastExpensePattern struct {
+	CategoryID int64
+	Pattern    ForecastLearningPattern
 }
 
 type ForecastQuantity struct {
@@ -166,6 +177,9 @@ type ForecastResult struct {
 	Assumptions         ForecastAssumptions
 	Valuation           *ForecastValuation
 	Converted           *ForecastSeries
+	// LearnedSpending is nil unless the owner opted in. Core fields above are
+	// identical whether or not it is present.
+	LearnedSpending *ForecastLearnedSpending
 }
 
 type ForecastRateUse struct {
@@ -205,10 +219,13 @@ type ForecastValuation struct {
 type ForecastService struct {
 	repository *db.ForecastRepository
 	now        func() time.Time
+	// fitter serialises learned-spending fitting to one operation per process,
+	// so it is shared by every request this service handles.
+	fitter *ForecastLearningFitter
 }
 
 func NewForecastService(repository *db.ForecastRepository) *ForecastService {
-	return &ForecastService{repository: repository, now: time.Now}
+	return &ForecastService{repository: repository, now: time.Now, fitter: NewForecastLearningFitter()}
 }
 
 func (s *ForecastService) SetNowForTest(now func() time.Time) { s.now = now }
@@ -236,7 +253,20 @@ func (s *ForecastService) Balances(ctx context.Context, input ForecastInput) (Fo
 		if err == nil {
 			err = validateForecastReportingCurrency(base.CommodityVersions, bounds.AsOf, normalized)
 		}
-		return db.ForecastSnapshotResolution{AccountIDs: scope.AccountIDs, ThroughDate: bounds.Through, AsOfDate: bounds.AsOf, ReportingCurrencyID: normalized.ReportingCurrencyID}, err
+		if err == nil {
+			err = validateForecastLearningCategories(base.AccountVersions, bounds.AsOf, normalized)
+		}
+		resolution := db.ForecastSnapshotResolution{AccountIDs: scope.AccountIDs, ThroughDate: bounds.Through, AsOfDate: bounds.AsOf, ReportingCurrencyID: normalized.ReportingCurrencyID}
+		// The history read joins this same transaction, so a model can never
+		// be trained on one view of the ledger and applied to another.
+		if err == nil && normalized.learningEnabled() {
+			var historyStart string
+			historyStart, err = forecastLearningWindow(normalized, bounds.AsOf)
+			if err == nil {
+				resolution.LearningHistory = &db.ForecastLearningHistoryRequest{StartDate: historyStart, EndDate: bounds.Through}
+			}
+		}
+		return resolution, err
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrForecastInputTooLarge) {
@@ -253,12 +283,27 @@ func (s *ForecastService) Balances(ctx context.Context, input ForecastInput) (Fo
 			return ForecastResult{}, err
 		}
 	}
+	if normalized.learningEnabled() {
+		overlay, err := buildForecastLearnedSpending(ctx, s.fitter, normalized, bounds, scope, snapshot, &result)
+		if err != nil {
+			return ForecastResult{}, err
+		}
+		result.LearnedSpending = overlay
+		// Estimated events join the same detail list so a day can be explained
+		// in one place; they never merge into the core deltas above.
+		result.Events = append(result.Events, overlay.Events...)
+		sortForecastEvents(result.Events)
+	}
+	// The basis token covers the model options, the training history and the
+	// selection outcome, so a stale detail request is rejected exactly as the
+	// core contract requires.
 	digestInput := struct {
 		Input    forecastNormalizedInput
 		Bounds   forecastBounds
 		Scope    []int64
 		Snapshot db.ForecastSnapshot
-	}{normalized, bounds, scope.AccountIDs, snapshot}
+		Learned  *ForecastLearnedSpending
+	}{normalized, bounds, scope.AccountIDs, snapshot, result.LearnedSpending}
 	encoded, err := json.Marshal(digestInput)
 	if err != nil {
 		return ForecastResult{}, fmt.Errorf("encode forecast basis: %w", err)
