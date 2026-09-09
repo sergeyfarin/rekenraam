@@ -6,8 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-09-07 (R12a T-75a/T-74 closed; R9 acceptance complete;
-R10 core accepted; learning M1 complete and M2 next; T-76 and T-75b
+Last reviewed: 2026-09-09 (R12a T-75a/T-74 closed; R9 acceptance complete;
+R10 core accepted; learning M1 and M2 complete and M3 next; T-76 and T-75b
 remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
@@ -375,8 +375,10 @@ unpaginated summary counts support the editor and navigation badge.
    daily/weekly fluctuations, monthly costs and annual calendar peaks, with
    confirmed history, no overlap with recurring bills, chronological evaluation
    and measured hardware budgets. M1's internal complete-history reader,
-   classification/cadence baselines and exact residual allocation are complete;
-   model selection and every public opt-in surface remain unimplemented. Final R10
+   classification/cadence baselines and exact residual allocation are complete,
+   and M2 adds internal chronological model selection, both quality gates,
+   observed-variation metadata and a measured single-slot resource policy.
+   Every public opt-in surface remains unimplemented. Final R10
    acceptance follows M4; R8 remains next afterward. All eight core slices are
    accepted:
    the coherent read-only snapshot loader feeds an exact
