@@ -1,6 +1,6 @@
 # R10 extension — lightweight learned spending
 
-Status: **in progress — M1 and M2 complete; M3 next**, updated 2026-09-09. Added at the owner's request
+Status: **in progress — M1, M2 and M3 complete; M4 next**, updated 2026-09-09. Added at the owner's request
 for basic ML/AI within modest hardware limits. Execute M1–M4 below **after the
 eight core slices** in `docs/plans/projected-balances-plan.md`, before R10's
 final closure/R8 planning. The core forecast remains independently usable and
@@ -599,6 +599,64 @@ periods, annual cold start, mixed cadences, stale token, exact totals, missing
 learned FX, mobile/keyboard and resource unavailable states. Switching off
 returns the same core data as before M1.
 
+Completed 2026-09-09. The forecast recipe now accepts `spending_model`,
+`history_complete_from`, repeated `expense_category_id` and repeated
+`expense_pattern=<category-id>:<pattern>` split at the final colon. With the
+model off every one of them is an orphan the endpoint rejects, and
+`TestForecastLearningAPIOffMatchesPreModelResponse` asserts the off response is
+identical to the implicit one field for field. `expense_pattern` for a category
+outside an explicit selection is rejected rather than silently ignored, since a
+setting that appears to apply but does not is worse than an error.
+
+The learning history read moved into `LoadResolvedSnapshot` through a new
+`ForecastSnapshotResolution.LearningHistory`, so history and known future
+spending share one deferred read transaction; the read is not issued at all
+while the option is off. `forecast_learning_overlay.go` classifies the shared
+snapshot, filters to in-scope funding accounts and selected categories, applies
+the conservative recurring-overlap rule, fits through the M2 single-slot
+fitter, subtracts exact known period spend, allocates residual integer units
+over the remaining dates of each period, and truncates at the horizon without
+inflating the days inside it. A period whose known spending is ambiguous
+suppresses that group rather than filling the gap.
+
+The nullable `learned_spending` response object carries status, policy version,
+group counts, translated exclusion reasons, category options, per-group
+training/tuning/test windows, selected method and fallback, exact errors,
+observed variation, calendar profile, and separate estimated deltas plus
+with-estimate account and currency curves. Core series, totals, assumptions and
+scope are asserted identical with the option on and off. Estimated events join
+the day-detail list as a fourth `estimated_spending` source ranked after every
+factual source, with null saved-record IDs, a stable
+`estimate:<account>:<category>:<currency>:<date>` key, and cursor validation
+that accepts their zero source id only for that source. The basis token covers
+the model options and the selection outcome, so stale-basis rejection is
+unchanged.
+
+`/app/forecast` gains a third labelled curve, a third table column and an
+opt-in panel: confirmed-history date, per-category cadence selects, model and
+fallback names, training window, tested horizon with an explicit note that
+longer projections were not tested, historical variation worded as not a
+confidence range, calendar profile with per-month observation counts, and
+translated warnings and exclusions. Forty-five new keys were added to all six
+locales; no backend code is ever shown raw. URL parsing mirrors the backend
+contract, so a link carrying an orphan model parameter is invalid rather than
+quietly ignored.
+
+Evidence: `forecast_learning_overlay_test.go` (option validation table, bounded
+history window per cadence, eligible estimation, mixed-eligibility partial
+status, recurring-overlap exclusion, known-future-spend subtraction, refusal
+without group prefixes, category options), `internal/api/forecast_learning_test.go` (orphan and malformed query rejection, off-equals-core, unavailable
+overlay, category/pattern acceptance, core series identical), frontend
+`forecast-model.test.ts` (URL round-trip, invalid recipes, off writes no model
+parameters, third curve plotting), and `e2e/playwright/forecast-learning.spec.ts` (opt-in, explanation, accessibility, mobile, keyboard, off restores the core
+view and the ledger is byte-identical; insufficient history and the 36-month
+seasonal requirement explained; a malformed URL rejected). The e2e run needed
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE`
+pointed at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` on this image; all 56 specs pass. One real accessibility defect was
+found and fixed during the run: warning text used `text-warning`, which fails
+contrast at body size, so warnings now use the repo's existing soft-callout
+pattern with `text-warning-foreground`.
+
 ### M4 — Final learning acceptance and R10 closure
 
 Write a dated review covering classification/overlap,
@@ -643,7 +701,7 @@ frontend generation/build commands concurrently.
 |---|---|---|
 | M1 Training basis and baseline | [x] Complete | 2026-09-07; internal repository/application prototype, named tests and `BenchmarkForecastLearningRead`/`BenchmarkForecastLearningAllocation` evidence above |
 | M2 Model selection and hardware measurements | [x] Complete | 2026-09-09; internal `forecast_learning_model.go`, named selection/gate/resource tests and `BenchmarkForecastLearningLevelSelection`/`BenchmarkForecastLearningSeasonalSelection`/`BenchmarkForecastLearningFit` evidence above |
-| M3 API/UI integration | [ ] Not started | — |
+| M3 API/UI integration | [x] Complete | 2026-09-09; OpenAPI recipe and `learned_spending` schema, shared-snapshot history read, `forecast_learning_overlay.go`, six-locale opt-in UI, and the backend/frontend/e2e evidence above |
 | M4 Final acceptance | [ ] Not started | — |
 
 ## 8. Research basis and choices still outside this extension

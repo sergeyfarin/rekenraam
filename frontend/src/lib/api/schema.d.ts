@@ -26,6 +26,14 @@ export interface paths {
                     reporting_currency_id?: number;
                     /** @description Required with reporting_currency_id. Rates are held constant from the as-of date. */
                     fx_method?: "constant_as_of";
+                    /** @description Opt-in learned spending. `off` returns exactly the core forecast and rejects every other model parameter as an orphan. */
+                    spending_model?: "off" | "adaptive_v1";
+                    /** @description Required with adaptive_v1. The date from which the owner confirms the selected accounts are completely recorded. An opening balance or oldest transaction does not establish coverage. */
+                    history_complete_from?: string;
+                    /** @description Repeatable postable expense account. Omitted selects every eligible category inside the existing account scope. */
+                    expense_category_id?: number[];
+                    /** @description Repeatable `<category-id>:<pattern>` cadence override, split at the final colon. An absent override defaults to weekly. A category outside an explicit expense_category_id selection is rejected rather than ignored. The override applies across that category's funding accounts. */
+                    expense_pattern?: string[];
                 };
                 header?: never;
                 path?: never;
@@ -14039,6 +14047,135 @@ export interface components {
             projected_date: string | null;
             event_count: number;
         };
+        ForecastLearningOption: {
+            /** Format: int64 */
+            account_id: number;
+            name: string | null;
+            code: string | null;
+            builtin_label_key: string | null;
+            /** Format: int64 */
+            parent_account_id: number | null;
+        };
+        /** @description One group that cannot be estimated, with a stable reason the frontend translates. Exclusions are visible rather than silently dropped. */
+        ForecastLearningExclusion: {
+            /** Format: int64 */
+            funding_account_id: number;
+            /** Format: int64 */
+            category_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** @enum {string} */
+            pattern: "daily" | "weekly" | "monthly" | "annual_seasonal";
+            /** @enum {string} */
+            reason: "insufficient_history" | "insufficient_seasonal_history" | "sparse_history" | "recurring_overlap" | "ambiguous_known_spending" | "resource_limit" | "busy" | "calendar_limit" | "computation_timeout";
+            source_type: string | null;
+            /** Format: int64 */
+            source_id: number | null;
+        };
+        /** @description One retrospective error metric. `exact` is false when the decimal is a rounded rendering of the underlying rational rather than its whole value. */
+        ForecastLearningError: {
+            /** @enum {string} */
+            metric: "one_period_mae" | "frozen_total_abs_error" | "frozen_path_mae" | "frozen_max_abs_error";
+            value: string;
+            scale: number;
+            exact: boolean;
+        };
+        ForecastLearningCandidate: {
+            /** @enum {string} */
+            method: "mean_8" | "last_period" | "ses_025" | "ses_050" | "same_month_2y" | "seasonal_last_year" | "flat_mean_12";
+            errors: components["schemas"]["ForecastLearningError"][];
+        };
+        /** @description Observed spending for one calendar month number. These are historical ranges and counts, never a confidence band or plausible future range. */
+        ForecastLearningMonthProfile: {
+            month: number;
+            observations: number;
+            positive_observations: number;
+            minimum_observed: components["schemas"]["ForecastQuantity"];
+            maximum_observed: components["schemas"]["ForecastQuantity"];
+            estimate: components["schemas"]["ForecastQuantity"];
+        };
+        /** @description One funding account / expense category / currency model, with the window it was fitted on and the chronological evaluation that selected it. */
+        ForecastLearningGroup: {
+            /** Format: int64 */
+            funding_account_id: number;
+            /** Format: int64 */
+            category_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** @enum {string} */
+            pattern: "daily" | "weekly" | "monthly" | "annual_seasonal";
+            /** @enum {string} */
+            period_unit: "week" | "month";
+            /** Format: date */
+            training_start_date: string;
+            /** Format: date */
+            training_end_date: string;
+            complete_periods: number;
+            positive_periods: number;
+            /** @enum {string} */
+            selected_method: "mean_8" | "last_period" | "ses_025" | "ses_050" | "same_month_2y" | "seasonal_last_year" | "flat_mean_12";
+            selected_is_learned: boolean;
+            fallback_reason: ("no_validated_improvement" | "perfect_baseline") | null;
+            tuned_ses_method: string | null;
+            tuned_baseline_method: string | null;
+            /** Format: date */
+            tuning_start_date: string | null;
+            /** Format: date */
+            tuning_end_date: string | null;
+            /** Format: date */
+            test_start_date: string | null;
+            /** Format: date */
+            test_end_date: string | null;
+            /** @description The horizon actually validated. Output beyond it continues the same assumptions and must be labelled as such, not presented as tested. */
+            tested_horizon_periods: number;
+            candidates: components["schemas"]["ForecastLearningCandidate"][];
+            minimum_observed: components["schemas"]["ForecastQuantity"];
+            maximum_observed: components["schemas"]["ForecastQuantity"];
+            month_profile: components["schemas"]["ForecastLearningMonthProfile"][];
+            /** @enum {string} */
+            timing_assumption: "observed_calendar_profile" | "uniform";
+            warnings: ("uniform_timing_fallback" | "seasonality_not_better_than_flat" | "sparse_annual_observations")[];
+            estimated_total: components["schemas"]["ForecastQuantity"];
+        };
+        ForecastLearnedPoint: {
+            /** Format: date */
+            date: string;
+            /** @description Estimated outflow for the day. Never positive. */
+            estimated_delta: components["schemas"]["ForecastQuantity"];
+            /** @description The core projected balance plus estimates to date. */
+            projected_balance: components["schemas"]["ForecastQuantity"];
+        };
+        ForecastLearnedSeries: {
+            /** Format: int64 */
+            account_id: number | null;
+            /** Format: int64 */
+            commodity_id: number;
+            commodity_code: string;
+            points: components["schemas"]["ForecastLearnedPoint"][];
+            minimum_balance: components["schemas"]["ForecastQuantity"];
+            minimum_date: string;
+            /** Format: date */
+            first_negative_date: string | null;
+        };
+        /** @description The opt-in learned-spending overlay. `ready` means every in-scope group can be estimated; it is not a claim of future accuracy. `partial` means some groups are excluded with visible reasons. `unavailable` returns no learned curve at all rather than a reassuring zero-spending forecast. Estimates are kept separate from the core curves and never merge into them. */
+        ForecastLearnedSpending: {
+            /** @enum {string} */
+            status: "ready" | "partial" | "unavailable";
+            /** @enum {string} */
+            policy_version: "adaptive_spending_v1";
+            reason: ("insufficient_history" | "insufficient_seasonal_history" | "sparse_history" | "recurring_overlap" | "ambiguous_known_spending" | "resource_limit" | "busy" | "calendar_limit" | "computation_timeout") | null;
+            /** Format: date */
+            history_complete_from: string;
+            requested_group_count: number;
+            eligible_group_count: number;
+            excluded_group_count: number;
+            category_options: components["schemas"]["ForecastLearningOption"][];
+            exclusions: components["schemas"]["ForecastLearningExclusion"][];
+            groups: components["schemas"]["ForecastLearningGroup"][];
+            series: components["schemas"]["ForecastLearnedSeries"][];
+            totals: components["schemas"]["ForecastLearnedSeries"][];
+            converted: components["schemas"]["ForecastLearnedSeries"] | null;
+        };
         ForecastBalancesResponse: {
             /** Format: date */
             as_of_date: string;
@@ -14063,6 +14200,7 @@ export interface components {
             diagnostic_hidden_count: number;
             valuation: components["schemas"]["ForecastValuation"] | null;
             converted: components["schemas"]["ForecastCurrencySeries"] | null;
+            learned_spending: components["schemas"]["ForecastLearnedSpending"] | null;
         };
         ForecastEventAmount: {
             /** Format: int64 */
@@ -14076,7 +14214,7 @@ export interface components {
         ForecastEvent: {
             key: string;
             /** @enum {string} */
-            source: "posted" | "draft" | "template";
+            source: "posted" | "draft" | "template" | "estimated_spending";
             /** Format: date */
             source_date: string;
             /** Format: date */

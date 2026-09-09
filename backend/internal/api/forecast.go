@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"rekenraam/backend/internal/app"
 	"rekenraam/backend/internal/exact"
@@ -119,6 +120,113 @@ type forecastBalancesResponse struct {
 	DiagnosticHiddenCount int                              `json:"diagnostic_hidden_count"`
 	Valuation             *forecastValuationResponse       `json:"valuation"`
 	Converted             *forecastCurrencySeriesResponse  `json:"converted"`
+	LearnedSpending       *forecastLearnedSpendingResponse `json:"learned_spending"`
+}
+
+type forecastLearningOptionResponse struct {
+	AccountID       int64   `json:"account_id"`
+	Name            *string `json:"name"`
+	Code            *string `json:"code"`
+	BuiltinLabelKey *string `json:"builtin_label_key"`
+	ParentAccountID *int64  `json:"parent_account_id"`
+}
+
+type forecastLearningExclusionResponse struct {
+	FundingAccountID  int64   `json:"funding_account_id"`
+	CategoryAccountID int64   `json:"category_account_id"`
+	CommodityID       int64   `json:"commodity_id"`
+	Pattern           string  `json:"pattern"`
+	Reason            string  `json:"reason"`
+	SourceType        *string `json:"source_type"`
+	SourceID          *int64  `json:"source_id"`
+}
+
+type forecastLearningErrorResponse struct {
+	Metric string            `json:"metric"`
+	Value  exact.Coefficient `json:"value"`
+	Scale  int               `json:"scale"`
+	Exact  bool              `json:"exact"`
+}
+
+type forecastLearningCandidateResponse struct {
+	Method string                          `json:"method"`
+	Errors []forecastLearningErrorResponse `json:"errors"`
+}
+
+type forecastLearningMonthProfileResponse struct {
+	Month                int                      `json:"month"`
+	Observations         int                      `json:"observations"`
+	PositiveObservations int                      `json:"positive_observations"`
+	MinimumObserved      forecastQuantityResponse `json:"minimum_observed"`
+	MaximumObserved      forecastQuantityResponse `json:"maximum_observed"`
+	Estimate             forecastQuantityResponse `json:"estimate"`
+}
+
+type forecastLearningGroupResponse struct {
+	FundingAccountID  int64  `json:"funding_account_id"`
+	CategoryAccountID int64  `json:"category_account_id"`
+	CommodityID       int64  `json:"commodity_id"`
+	Pattern           string `json:"pattern"`
+	PeriodUnit        string `json:"period_unit"`
+
+	TrainingStartDate string `json:"training_start_date"`
+	TrainingEndDate   string `json:"training_end_date"`
+	CompletePeriods   int    `json:"complete_periods"`
+	PositivePeriods   int    `json:"positive_periods"`
+
+	SelectedMethod       string                              `json:"selected_method"`
+	SelectedIsLearned    bool                                `json:"selected_is_learned"`
+	FallbackReason       *string                             `json:"fallback_reason"`
+	TunedSESMethod       *string                             `json:"tuned_ses_method"`
+	TunedBaselineMethod  *string                             `json:"tuned_baseline_method"`
+	TuningStartDate      *string                             `json:"tuning_start_date"`
+	TuningEndDate        *string                             `json:"tuning_end_date"`
+	TestStartDate        *string                             `json:"test_start_date"`
+	TestEndDate          *string                             `json:"test_end_date"`
+	TestedHorizonPeriods int                                 `json:"tested_horizon_periods"`
+	Candidates           []forecastLearningCandidateResponse `json:"candidates"`
+
+	MinimumObserved forecastQuantityResponse               `json:"minimum_observed"`
+	MaximumObserved forecastQuantityResponse               `json:"maximum_observed"`
+	MonthProfile    []forecastLearningMonthProfileResponse `json:"month_profile"`
+
+	TimingAssumption string                   `json:"timing_assumption"`
+	Warnings         []string                 `json:"warnings"`
+	EstimatedTotal   forecastQuantityResponse `json:"estimated_total"`
+}
+
+type forecastLearnedPointResponse struct {
+	Date             string                   `json:"date"`
+	EstimatedDelta   forecastQuantityResponse `json:"estimated_delta"`
+	ProjectedBalance forecastQuantityResponse `json:"projected_balance"`
+}
+
+type forecastLearnedSeriesResponse struct {
+	AccountID         *int64                         `json:"account_id"`
+	CommodityID       int64                          `json:"commodity_id"`
+	CommodityCode     string                         `json:"commodity_code"`
+	Points            []forecastLearnedPointResponse `json:"points"`
+	MinimumBalance    forecastQuantityResponse       `json:"minimum_balance"`
+	MinimumDate       string                         `json:"minimum_date"`
+	FirstNegativeDate *string                        `json:"first_negative_date"`
+}
+
+type forecastLearnedSpendingResponse struct {
+	Status              string  `json:"status"`
+	PolicyVersion       string  `json:"policy_version"`
+	Reason              *string `json:"reason"`
+	HistoryCompleteFrom string  `json:"history_complete_from"`
+
+	RequestedGroupCount int `json:"requested_group_count"`
+	EligibleGroupCount  int `json:"eligible_group_count"`
+	ExcludedGroupCount  int `json:"excluded_group_count"`
+
+	CategoryOptions []forecastLearningOptionResponse    `json:"category_options"`
+	Exclusions      []forecastLearningExclusionResponse `json:"exclusions"`
+	Groups          []forecastLearningGroupResponse     `json:"groups"`
+	Series          []forecastLearnedSeriesResponse     `json:"series"`
+	Totals          []forecastLearnedSeriesResponse     `json:"totals"`
+	Converted       *forecastLearnedSeriesResponse      `json:"converted"`
 }
 
 type forecastRateUseResponse struct {
@@ -263,7 +371,8 @@ func forecastEvents(logger *slog.Logger, auth *app.AuthService, service *app.For
 }
 
 func parseForecastQuery(query url.Values, events bool) (app.ForecastInput, error) {
-	allowed := map[string]bool{"horizon_days": true, "account_id": true, "include_descendants": true, "reporting_currency_id": true, "fx_method": true}
+	allowed := map[string]bool{"horizon_days": true, "account_id": true, "include_descendants": true, "reporting_currency_id": true, "fx_method": true,
+		"spending_model": true, "history_complete_from": true, "expense_category_id": true, "expense_pattern": true}
 	if events {
 		for _, key := range []string{"date", "basis_token", "detail_account_id", "detail_commodity_id", "limit", "cursor"} {
 			allowed[key] = true
@@ -304,7 +413,49 @@ func parseForecastQuery(query url.Values, events bool) (app.ForecastInput, error
 	if err != nil {
 		return app.ForecastInput{}, err
 	}
-	return app.ForecastInput{HorizonDays: horizon, AccountIDs: accountIDs, IncludeDescendants: includeDescendants, ReportingCurrencyID: reportingID, FXMethod: fxMethod}, nil
+	input := app.ForecastInput{HorizonDays: horizon, AccountIDs: accountIDs, IncludeDescendants: includeDescendants, ReportingCurrencyID: reportingID, FXMethod: fxMethod}
+	if err := parseForecastSpendingModel(query, &input); err != nil {
+		return app.ForecastInput{}, err
+	}
+	return input, nil
+}
+
+// parseForecastSpendingModel reads the opt-in learned-spending parameters. The
+// service rejects orphans and unknown values; this layer only shapes them.
+func parseForecastSpendingModel(query url.Values, input *app.ForecastInput) error {
+	model, err := optionalForecastScalar(query, "spending_model")
+	if err != nil {
+		return err
+	}
+	input.SpendingModel = model
+	historyFrom, err := optionalForecastScalar(query, "history_complete_from")
+	if err != nil {
+		return err
+	}
+	input.HistoryCompleteFrom = historyFrom
+	for _, raw := range query["expense_category_id"] {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id <= 0 {
+			return app.ValidationError{Message: "expense_category_id must be a positive integer"}
+		}
+		input.ExpenseCategoryIDs = append(input.ExpenseCategoryIDs, id)
+	}
+	for _, raw := range query["expense_pattern"] {
+		// Split at the final colon so a future prefixed identifier cannot be
+		// silently truncated by an earlier separator.
+		index := strings.LastIndex(raw, ":")
+		if index <= 0 || index == len(raw)-1 {
+			return app.ValidationError{Message: "expense_pattern must be <category-id>:<pattern>"}
+		}
+		id, err := strconv.ParseInt(raw[:index], 10, 64)
+		if err != nil || id <= 0 {
+			return app.ValidationError{Message: "expense_pattern category id must be a positive integer"}
+		}
+		input.ExpensePatterns = append(input.ExpensePatterns, app.ForecastExpensePattern{
+			CategoryID: id, Pattern: app.ForecastLearningPattern(raw[index+1:]),
+		})
+	}
+	return nil
 }
 
 func optionalForecastInt(query url.Values, key string, fallback int) (int, error) {
@@ -392,6 +543,9 @@ func toForecastBalancesResponse(result app.ForecastResult) forecastBalancesRespo
 	for _, diagnostic := range result.Assumptions.Diagnostics {
 		response.Diagnostics = append(response.Diagnostics, forecastDiagnosticResponse{Code: diagnostic.Code, Severity: diagnostic.Severity, TemplateID: optionalInt64(diagnostic.TemplateID), OccurrenceID: optionalInt64(diagnostic.OccurrenceID), TransactionID: optionalInt64(diagnostic.TransactionID), OccurrenceDate: optionalString(diagnostic.OccurrenceDate), SourceDate: optionalString(diagnostic.SourceDate), ProjectedDate: optionalString(diagnostic.ProjectedDate), EventCount: diagnostic.EventCount})
 	}
+	if result.LearnedSpending != nil {
+		response.LearnedSpending = toForecastLearnedSpendingResponse(*result.LearnedSpending, commodities)
+	}
 	if result.Valuation != nil {
 		response.Valuation = toForecastValuationResponse(*result.Valuation)
 	}
@@ -470,4 +624,93 @@ func optionalString(value string) *string {
 		return nil
 	}
 	return &value
+}
+
+func toForecastLearnedSpendingResponse(input app.ForecastLearnedSpending, codes map[int64]string) *forecastLearnedSpendingResponse {
+	result := &forecastLearnedSpendingResponse{
+		Status: input.Status, PolicyVersion: input.PolicyVersion, Reason: optionalString(input.Reason),
+		HistoryCompleteFrom: input.HistoryCompleteFrom,
+		RequestedGroupCount: input.RequestedGroupCount, EligibleGroupCount: input.EligibleGroupCount,
+		ExcludedGroupCount: input.ExcludedGroupCount,
+		CategoryOptions:    make([]forecastLearningOptionResponse, 0, len(input.CategoryOptions)),
+		Exclusions:         make([]forecastLearningExclusionResponse, 0, len(input.Exclusions)),
+		Groups:             make([]forecastLearningGroupResponse, 0, len(input.Groups)),
+		Series:             make([]forecastLearnedSeriesResponse, 0, len(input.Series)),
+		Totals:             make([]forecastLearnedSeriesResponse, 0, len(input.Totals)),
+	}
+	for _, option := range input.CategoryOptions {
+		result.CategoryOptions = append(result.CategoryOptions, forecastLearningOptionResponse{
+			AccountID: option.AccountID, Name: optionalString(option.Name), Code: optionalString(option.Code),
+			BuiltinLabelKey: optionalString(option.BuiltinLabelKey), ParentAccountID: option.ParentAccountID,
+		})
+	}
+	for _, exclusion := range input.Exclusions {
+		result.Exclusions = append(result.Exclusions, forecastLearningExclusionResponse{
+			FundingAccountID: exclusion.FundingAccountID, CategoryAccountID: exclusion.CategoryAccountID,
+			CommodityID: exclusion.CommodityID, Pattern: exclusion.Pattern, Reason: exclusion.Reason,
+			SourceType: optionalString(exclusion.SourceType), SourceID: optionalInt64(exclusion.SourceID),
+		})
+	}
+	for _, group := range input.Groups {
+		row := forecastLearningGroupResponse{
+			FundingAccountID: group.FundingAccountID, CategoryAccountID: group.CategoryAccountID,
+			CommodityID: group.CommodityID, Pattern: group.Pattern, PeriodUnit: group.PeriodUnit,
+			TrainingStartDate: group.TrainingStart, TrainingEndDate: group.TrainingEnd,
+			CompletePeriods: group.CompletePeriods, PositivePeriods: group.PositivePeriods,
+			SelectedMethod: group.SelectedMethod, SelectedIsLearned: group.SelectedIsLearned,
+			FallbackReason: optionalString(group.FallbackReason),
+			TunedSESMethod: optionalString(group.TunedSES), TunedBaselineMethod: optionalString(group.TunedBaseline),
+			TuningStartDate: optionalString(group.TuningRangeStart), TuningEndDate: optionalString(group.TuningRangeEnd),
+			TestStartDate: optionalString(group.TestRangeStart), TestEndDate: optionalString(group.TestRangeEnd),
+			TestedHorizonPeriods: group.TestedHorizonPeriods,
+			Candidates:           make([]forecastLearningCandidateResponse, 0, len(group.Candidates)),
+			MinimumObserved:      toForecastQuantity(group.MinimumObserved),
+			MaximumObserved:      toForecastQuantity(group.MaximumObserved),
+			MonthProfile:         make([]forecastLearningMonthProfileResponse, 0, len(group.MonthProfile)),
+			TimingAssumption:     group.TimingAssumption,
+			Warnings:             append([]string{}, group.Warnings...),
+			EstimatedTotal:       toForecastQuantity(group.EstimatedTotal),
+		}
+		for _, candidate := range group.Candidates {
+			entry := forecastLearningCandidateResponse{Method: candidate.Method, Errors: make([]forecastLearningErrorResponse, 0, len(candidate.Errors))}
+			for _, metric := range candidate.Errors {
+				entry.Errors = append(entry.Errors, forecastLearningErrorResponse{Metric: metric.Metric, Value: metric.Value, Scale: metric.Scale, Exact: metric.Exact})
+			}
+			row.Candidates = append(row.Candidates, entry)
+		}
+		for _, month := range group.MonthProfile {
+			row.MonthProfile = append(row.MonthProfile, forecastLearningMonthProfileResponse{
+				Month: month.Month, Observations: month.Observations, PositiveObservations: month.PositiveObservations,
+				MinimumObserved: toForecastQuantity(month.Minimum), MaximumObserved: toForecastQuantity(month.Maximum),
+				Estimate: toForecastQuantity(month.Estimate),
+			})
+		}
+		result.Groups = append(result.Groups, row)
+	}
+	for _, series := range input.Series {
+		result.Series = append(result.Series, toForecastLearnedSeries(series, codes))
+	}
+	for _, series := range input.Totals {
+		result.Totals = append(result.Totals, toForecastLearnedSeries(series, codes))
+	}
+	if input.Converted != nil {
+		converted := toForecastLearnedSeries(*input.Converted, codes)
+		result.Converted = &converted
+	}
+	return result
+}
+
+func toForecastLearnedSeries(series app.ForecastLearnedSeries, codes map[int64]string) forecastLearnedSeriesResponse {
+	result := forecastLearnedSeriesResponse{
+		AccountID: optionalInt64(series.AccountID), CommodityID: series.CommodityID, CommodityCode: codes[series.CommodityID],
+		Points: make([]forecastLearnedPointResponse, 0, len(series.Points)), MinimumBalance: toForecastQuantity(series.Minimum),
+		MinimumDate: series.MinimumDate, FirstNegativeDate: optionalString(series.FirstNegativeDate),
+	}
+	for _, point := range series.Points {
+		result.Points = append(result.Points, forecastLearnedPointResponse{
+			Date: point.Date, EstimatedDelta: toForecastQuantity(point.EstimatedDelta),
+			ProjectedBalance: toForecastQuantity(point.ProjectedBalance),
+		})
+	}
+	return result
 }

@@ -430,6 +430,24 @@ components:
       $ref: "./components/schemas/forecast.yaml#/ForecastAssumptions"
     ForecastDiagnostic:
       $ref: "./components/schemas/forecast.yaml#/ForecastDiagnostic"
+    ForecastLearningOption:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningOption"
+    ForecastLearningExclusion:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningExclusion"
+    ForecastLearningError:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningError"
+    ForecastLearningCandidate:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningCandidate"
+    ForecastLearningMonthProfile:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningMonthProfile"
+    ForecastLearningGroup:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningGroup"
+    ForecastLearnedPoint:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearnedPoint"
+    ForecastLearnedSeries:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearnedSeries"
+    ForecastLearnedSpending:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearnedSpending"
     ForecastBalancesResponse:
       $ref: "./components/schemas/forecast.yaml#/ForecastBalancesResponse"
     ForecastEventAmount:
