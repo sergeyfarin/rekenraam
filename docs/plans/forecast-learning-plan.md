@@ -1,6 +1,6 @@
 # R10 extension — lightweight learned spending
 
-Status: **in progress — M1, M2 and M3 complete; M4 next**, updated 2026-09-09. Added at the owner's request
+Status: **accepted — M1–M4 complete**, updated 2026-09-09. Added at the owner's request
 for basic ML/AI within modest hardware limits. Execute M1–M4 below **after the
 eight core slices** in `docs/plans/projected-balances-plan.md`, before R10's
 final closure/R8 planning. The core forecast remains independently usable and
@@ -667,6 +667,16 @@ queue and move next work to R8 planning. If a hardware/quality gate cannot be
 met, record a specific blocker; do not silently ship the learned curve or
 substitute fabricated model quality claims.
 
+Completed 2026-09-09. The dated review at
+`docs/reviews/r10-learning-acceptance-review-2026-09-09.md` accepts the opt-in
+extension over its classification/overlap, four cadence contracts,
+chronological quality gates, exact/resource bounds, API/UI disclosures and
+synthetic benchmark evidence. Acceptance found and closed T-91 before signing
+off: learned aggregate deltas now reconcile to estimated events, model-only
+currencies participate in rate selection, learned constant-FX coverage stays
+separate from the core valuation, and the frontend selects that separately
+converted curve. R10 is complete; R8 budget planning is next.
+
 Required new tests (table-driven subcases encouraged):
 
 | Test | Must prove |
@@ -702,7 +712,7 @@ frontend generation/build commands concurrently.
 | M1 Training basis and baseline | [x] Complete | 2026-09-07; internal repository/application prototype, named tests and `BenchmarkForecastLearningRead`/`BenchmarkForecastLearningAllocation` evidence above |
 | M2 Model selection and hardware measurements | [x] Complete | 2026-09-09; internal `forecast_learning_model.go`, named selection/gate/resource tests and `BenchmarkForecastLearningLevelSelection`/`BenchmarkForecastLearningSeasonalSelection`/`BenchmarkForecastLearningFit` evidence above |
 | M3 API/UI integration | [x] Complete | 2026-09-09; OpenAPI recipe and `learned_spending` schema, shared-snapshot history read, `forecast_learning_overlay.go`, six-locale opt-in UI, and the backend/frontend/e2e evidence above |
-| M4 Final acceptance | [ ] Not started | — |
+| M4 Final acceptance | [x] Complete | 2026-09-09; dated learning acceptance review, T-91 correction, full validation and move to R8 planning |
 
 ## 8. Research basis and choices still outside this extension
 

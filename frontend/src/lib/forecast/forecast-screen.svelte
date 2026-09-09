@@ -133,7 +133,7 @@
   const selectedDisplay = $derived(displaySeries.find((row) => row.key === selectedSeriesKey) ?? displaySeries[0]);
   const selectedLearnedSeries = $derived(
     selectedDisplay
-      ? forecastLearnedSeriesFor(learned, selectedDisplay.detailAccountID, selectedDisplay.series.commodity_id)
+      ? forecastLearnedSeriesFor(learned, selectedDisplay.detailAccountID, selectedDisplay.series.commodity_id, selectedDisplay.key === 'converted')
       : undefined
   );
 

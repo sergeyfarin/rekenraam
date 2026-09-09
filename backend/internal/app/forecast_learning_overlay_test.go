@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -267,6 +268,61 @@ func TestForecastLearningOverlayEstimatesEligibleGroups(t *testing.T) {
 	}
 	require.Len(t, overlay.Totals, 1)
 	assert.Equal(t, int64(1), overlay.Totals[0].CommodityID)
+	assert.True(t, slices.ContainsFunc(overlay.Totals[0].Points, func(point ForecastLearnedPoint) bool {
+		return point.EstimatedDelta.Value.Sign() < 0
+	}), "aggregate learned deltas must reconcile to their estimated events")
+}
+
+func TestForecastLearningSeparateFXCoverage(t *testing.T) {
+	snapshot := overlaySnapshot(t, overlayHistory(t, 20, "7000"))
+	core := overlayCore(t, "100000")
+	quoteID := int64(1)
+	input := overlayInput(overlayHistoryStart(t, 20), nil)
+	input.ReportingCurrencyID = &quoteID
+	input.FXMethod = "constant_as_of"
+	core.Valuation = &ForecastValuation{Complete: true, ReportingCurrencyID: quoteID, ReportingCurrencyScale: 2}
+	converted := core.Series[0]
+	core.Converted = &converted
+
+	overlay := overlayBuild(t, input, snapshot, core)
+	require.NotNil(t, overlay.Converted, "same-currency learned spending needs no observation")
+	assert.True(t, slices.ContainsFunc(overlay.Converted.Points, func(point ForecastLearnedPoint) bool {
+		return point.EstimatedDelta.Value.Sign() < 0
+	}))
+
+	// Relabel the learned group and its otherwise-flat core series as USD. The
+	// core conversion remains complete because it has no USD movement, while
+	// the learned conversion needs its own rate coverage.
+	for index := range snapshot.LearningPostings {
+		snapshot.LearningPostings[index].CommodityID = 2
+	}
+	for index := range snapshot.CommodityVersions {
+		if snapshot.CommodityVersions[index].CommodityID == 2 {
+			snapshot.CommodityVersions[index].Kind = "currency"
+			snapshot.CommodityVersions[index].Code = "USD"
+			snapshot.CommodityVersions[index].StandardScale = 2
+		}
+	}
+	core.Series[0].CommodityID = 2
+	missing := overlayBuild(t, input, snapshot, core)
+	assert.Nil(t, missing.Converted, "model-only missing FX hides only the learned combined curve")
+	assert.True(t, core.Valuation.Complete, "learned coverage must not relabel the core conversion")
+
+	snapshot.Rates = []db.ForecastRateRecord{{ObservationID: 1, BaseCommodityID: 2, QuoteCommodityID: 1,
+		ValuationDate: overlayAsOf, RecordedAt: overlayAsOf + "T12:00:00Z", PriceValue: 2, BaseQuantityValue: 1}}
+	covered := overlayBuild(t, input, snapshot, core)
+	require.NotNil(t, covered.Converted)
+	for index, point := range covered.Totals[0].Points {
+		if point.EstimatedDelta.Value.Sign() == 0 {
+			continue
+		}
+		expected := exact.ScaledIntFromCoefficient(point.EstimatedDelta.Value, point.EstimatedDelta.Scale)
+		expected.AddScaled(expected)
+		convertedDelta := covered.Converted.Points[index].EstimatedDelta
+		assert.Zero(t, expected.Cmp(exact.ScaledIntFromCoefficient(convertedDelta.Value, convertedDelta.Scale)),
+			"the 2:1 rate converts the learned delta exactly")
+		break
+	}
 }
 
 func TestForecastLearningOverlayReportsExcludedGroups(t *testing.T) {

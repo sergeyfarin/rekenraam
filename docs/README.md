@@ -43,14 +43,13 @@ have exactly one home.
 
 ## Current execution plan
 
-[R10 projected balances](plans/projected-balances-plan.md) has completed its
-eight-slice core milestone; see the
-[dated acceptance review](reviews/r10-core-acceptance-review-2026-09-07.md).
-Its [lightweight learning extension](plans/forecast-learning-plan.md) has
-completed M1's internal training foundation. M2 is next, followed by M3 and M4
-for opt-in local spending models across daily/weekly, monthly and annual
-patterns, with explicit quality and hardware gates. Do not move to R8 until
-M4 closes R10.
+[R10 projected balances](plans/projected-balances-plan.md) is complete: see the
+[core acceptance review](reviews/r10-core-acceptance-review-2026-09-07.md) and
+[learned-spending acceptance review](reviews/r10-learning-acceptance-review-2026-09-09.md).
+The [lightweight learning extension](plans/forecast-learning-plan.md) ships
+opt-in local models across daily/weekly, monthly and annual patterns with
+explicit quality and hardware gates. R8 budget planning is now the current
+execution target; its plan is the next artifact to write.
 
 Latest strategic review:
 [2026-09-09 product direction, AI and privacy](reviews/product-direction-ai-privacy-2026-09-09.md).

@@ -20,8 +20,8 @@ T-64 consolidated the schema then present into
 recurring, and investment-integrity changes use additive migrations under
 `backend/migrations/`; the baseline alone no longer describes the whole schema.
 
-Last documentation reconciliation: 2026-08-31 (see
-`docs/reviews/documentation-code-review-2026-08-31.md`). The investment boundary review
+Last documentation reconciliation: 2026-09-09 (see
+`docs/reviews/r10-learning-acceptance-review-2026-09-09.md`). The investment boundary review
 reclassified average cost, investment transaction lifecycle coupling, disposal
 provenance, and gains reproducibility honestly below. R12a closed 2026-08-30;
 ADR 0012 governs the durable split.
@@ -273,7 +273,7 @@ ADR 0012 governs the durable split.
 ## Not started (see roadmap)
 
 XLSX/OFX/QFX import adapters, per-split import mapping and batch rollback,
-budgets, public learned-spending forecasts, loan/liability
+budgets, loan/liability
 helpers, report snapshots, and pricing-management UI. CSV import, profiles and
 minimal rules are shipped. Reporting-currency conversion is shipped. Recurring
 templates, generation and dedicated review/discard screens are shipped.
@@ -356,8 +356,10 @@ gains a third labelled curve and table column, an opt-in panel with the
 confirmed-history date, per-category cadence controls, model and fallback
 names, tested horizon, historical-variation wording that is explicitly not a
 confidence range, calendar profile and translated exclusions, in all six
-locales. M4 remains open; next is the dated learning acceptance review and R10
-closure.
+locales. Learned native totals and their separately covered constant-FX curve
+carry reconciling estimated deltas; a model-only missing rate never changes the
+core conversion's coverage claim. The dated M4 review accepts the extension and
+closes R10; R8 budget planning is next.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

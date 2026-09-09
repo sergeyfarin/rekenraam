@@ -1489,6 +1489,27 @@ final parser repeats that same path, replacing the browser's separate UTF-8-only
 header parser. Cross-script decoder tests plus API boundary tests protect
 auto-detection, manual override, and decoded profile-column matching.
 
+## R10 learned-spending acceptance — closed 2026-09-09
+
+### T-91 Learned aggregate and converted curves were incomplete `[x]`
+
+**Files:** `backend/internal/app/forecast_learning_overlay.go`,
+`backend/internal/db/forecast.go`, and
+`frontend/src/lib/forecast/forecast-model.ts`. M3 exposed a nullable converted
+learned curve but never populated it, omitted model-only currencies from the
+rate read, and emitted zero `estimated_delta` values on native aggregate rows.
+Account-level learned curves remained correct, but selecting a converted core
+row could not show its estimated counterpart and aggregate deltas did not
+reconcile to estimated events.
+
+**Fixed:** sum aggregate estimated deltas, independently check learned currency
+coverage without changing the core valuation status, load rate candidates from
+learning history, and explicitly select the learned converted curve in the
+frontend. `TestForecastLearningSeparateFXCoverage`,
+`TestForecastLearningRateCandidatesIncludeModelOnlyCurrency`, the aggregate
+event-reconciliation assertion and the converted frontend-model case prevent
+recurrence. The dated R10 learning acceptance review records the boundary.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

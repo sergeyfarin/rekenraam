@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-09-09 (R12a T-75a/T-74 complete; R9 acceptance complete;
-R10 core accepted; learning M1–M3 complete and M4 next. T-76 and T-75b
+Last updated: 2026-09-09 (R12a T-75a/T-74 complete; R9 and R10 acceptance complete;
+R8 budget planning next. T-76 and T-75b
 remain required later work.)
 
 ## Where things stand
@@ -88,7 +88,17 @@ localization item below).
 rate in `settings/currencies/+page.svelte` should truncate or round half-up.
 See `backlog.md` G-09.
 
-## Current initiative — R10 projected balances
+## Current initiative — R8 budget planning
+
+Write the R8 execution plan from the locked budget decisions in
+`docs/product-requirements.md` and `docs/roadmap.md` before changing application
+code. Define exact period boundaries, category/account mapping, rollover rules,
+actual-versus-budget treatment, multi-currency presentation, API/read-model
+shape, mobile/accessibility states and acceptance fixtures. R10 is the planning
+input, not a budget store: forecasts and learned estimates must not silently
+become budget actuals or targets.
+
+## Completed — R10 projected balances
 
 Plan written 2026-08-31: `docs/plans/projected-balances-plan.md`. Its coherent
 snapshot, exact projection, authenticated API, constant-as-of FX, responsive
@@ -98,8 +108,8 @@ The plan fixes source precedence, owner-local date/overdue semantics, exact
 arithmetic, constant-FX policy, snapshot reads, API/UI contracts, budgets,
 worked fixtures and named tests for an agent executing one slice at a time.
 
-**Next action: implement learning M2 only** from
-`docs/plans/forecast-learning-plan.md`.
+Final learning acceptance:
+`docs/reviews/r10-learning-acceptance-review-2026-09-09.md`.
 
 - [x] 1. Coherent read-only snapshot inputs and repository tests.
 - [x] 2. Exact per-currency projection, occurrence precedence and worked fixtures.
@@ -110,9 +120,9 @@ worked fixtures and named tests for an agent executing one slice at a time.
 - [x] 7. Cross-system isolation, concurrency, bounds and browser acceptance.
 - [x] 8. Dated core acceptance review; then learning extension M1.
 - [x] M1. Complete-history reads, cadence bins, baselines and exact residual allocation.
-- [ ] M2. Weekly/monthly smoothing, annual seasonal model, quality and hardware gates.
-- [ ] M3. Opt-in API/UI, pattern controls, variation/coverage and separate estimated curve.
-- [ ] M4. Learning acceptance and final R10 closure; then R8 planning.
+- [x] M2. Weekly/monthly smoothing, annual seasonal model, quality and hardware gates.
+- [x] M3. Opt-in API/UI, pattern controls, variation/coverage and separate estimated curve.
+- [x] M4. Learning acceptance and final R10 closure; R8 planning is now current.
 
 M1–M4 contract: `docs/plans/forecast-learning-plan.md`. It covers daily/weekly,
 monthly and annual patterns, including summer leave spending, without flattening
