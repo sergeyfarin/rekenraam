@@ -5,8 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-09-07 (R12a T-75a/T-74 complete; R9 acceptance complete;
-R10 core accepted; learning M1 complete and M2 next. T-76 and T-75b
+Last updated: 2026-09-09 (R12a T-75a/T-74 complete; R9 acceptance complete;
+R10 core accepted; learning M1 and M2 complete and M3 next. T-76 and T-75b
 remain required later work.)
 
 ## Where things stand

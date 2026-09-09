@@ -1,6 +1,6 @@
 # R10 extension — lightweight learned spending
 
-Status: **in progress — M1 complete; M2 next**, updated 2026-09-07. Added at the owner's request
+Status: **in progress — M1 and M2 complete; M3 next**, updated 2026-09-09. Added at the owner's request
 for basic ML/AI within modest hardware limits. Execute M1–M4 below **after the
 eight core slices** in `docs/plans/projected-balances-plan.md`, before R10's
 final closure/R8 planning. The core forecast remains independently usable and
@@ -533,6 +533,58 @@ dataset where baseline wins is a successful test, not a reason to weaken the
 gate. Do not claim real-user quality from synthetic fixtures; real-owner
 evaluation needs explicitly supplied/authorized data.
 
+Completed 2026-09-09. `backend/internal/app/forecast_learning_model.go` adds
+chronological selection for all four cadences, still internal: no API
+parameter, response field, UI, cache or persistent model. Level patterns fit
+`mean_8`, `last_period`, `ses_025` and `ses_050` with `math/big.Rat` alphas over
+a four-period tuning fold, freeze the tie winners (`ses_025`, `mean_8`) before
+the holdout, then measure four expanding one-period origins plus one frozen
+four-period total. Annual seasonality evaluates the three fixed references over
+twelve expanding origins and one frozen twelve-month path, recording monthly
+MAE, frozen-path MAE, annual-total error and worst frozen month. Both gates are
+exact rational comparisons: the learned candidate needs `10*learned <=
+9*baseline` and may not be worse on any frozen metric, and a zero-error baseline
+is never displaced. The selected method is refit over the whole bounded window
+only after selection is frozen. `ForecastLearningVariation` reports observed
+min/max with complete- and positive-observation counts per month number; it
+carries no band, percentile or jitter, and the sparse-annual warning keys on a
+peak resting on a single positive observation, since the 36-month minimum
+already guarantees three observations of every month number.
+`ForecastLearningFitter` holds one fitting slot per process and refuses a
+second concurrent request as `busy`; over-limit group counts, cancellation and
+an expired deadline each return a distinct reason and an empty result, never a
+prefix of the eligible groups.
+
+Named tests cover chronology (`TestForecastLearningNoFutureLeakage` uses a late
+regime shift and asserts the exact expanding-origin MAEs and the 3600.00 frozen
+total that only an honest prefix fit can produce), both gate boundary tables
+including the exact-10% edge and every frozen-metric rejection, separate
+July/August peaks through refit, the weak-seasonality and sparse-annual
+disclosures, rational smoothing (`(3/4)^2` exactly), coefficients past 2^53,
+mixed posted scales, cadence exclusivity and every resource refusal. Three
+mutants — leaking the target period into the fit prefix, weakening the margin to
+any improvement, and returning a one-group prefix on refusal — are each caught.
+A fixture where the baseline wins is asserted as a passing outcome, not tuned
+away.
+
+Measured on the available host, which is **not** the declared 1-thread/1 GiB
+benchmark environment: Intel Xeon @ 2.10 GHz (4 cores, 16 GiB), Go 1.27.0,
+`-cpu 1`. The full mixed-pattern ceiling (100 groups: 25 each daily, weekly,
+monthly and annual seasonal, at 52-week and 60-month maximum history) fits in
+**64.2 ms/op**, 29.5 MB and 1,038,951 allocs per operation; one weekly selection
+is 712 µs and one seasonal selection 244 µs. Incremental peak live heap over
+that fit, from `runtime.MemStats` around a single call, is **≈2.7 MiB**
+(`HeapInuse` 1.41 → 4.11 MiB) against the ≤64 MiB target; the 29.5 MB figure is
+cumulative allocation, not peak live memory. The bounded 52/60-period window is
+what keeps exact rational smoothing cheap: an alpha of 1/4 grows denominators as
+`4^n`, so the window bound is a correctness-preserving cost control, not only a
+read budget. Against the ≤2 s incremental-latency target this leaves ample
+headroom, but that target and the ≤64 MiB heap target remain **unverified on the
+declared 1-thread/1 GiB machine**, and these are synthetic fixtures: no
+real-owner quality claim is made or implied. End-to-end incremental latency
+including the extra reads is M3's to measure, once the learning read shares the
+core request path.
+
 ### M3 — Opt-in API and separate learned-spending UI
 
 Extend forecast OpenAPI/client/DTOs and the existing screen, add the options,
@@ -590,7 +642,7 @@ frontend generation/build commands concurrently.
 | Extension slice | Status | Commit/evidence |
 |---|---|---|
 | M1 Training basis and baseline | [x] Complete | 2026-09-07; internal repository/application prototype, named tests and `BenchmarkForecastLearningRead`/`BenchmarkForecastLearningAllocation` evidence above |
-| M2 Model selection and hardware measurements | [ ] Not started | — |
+| M2 Model selection and hardware measurements | [x] Complete | 2026-09-09; internal `forecast_learning_model.go`, named selection/gate/resource tests and `BenchmarkForecastLearningLevelSelection`/`BenchmarkForecastLearningSeasonalSelection`/`BenchmarkForecastLearningFit` evidence above |
 | M3 API/UI integration | [ ] Not started | — |
 | M4 Final acceptance | [ ] Not started | — |
 
