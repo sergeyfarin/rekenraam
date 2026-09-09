@@ -1,0 +1,75 @@
+BudgetAmount:
+  type: object
+  required: [commodity_id, quantity_value, quantity_scale]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    quantity_value: { type: string, pattern: "^-?[0-9]+$" }
+    quantity_scale: { type: integer, minimum: 0, maximum: 12 }
+BudgetCategoryAmount:
+  type: object
+  required: [commodity_id, target, actual, remaining]
+  properties:
+    commodity_id: { type: integer, format: int64 }
+    target: { $ref: "../../openapi.yaml#/components/schemas/BudgetAmount" }
+    actual: { $ref: "../../openapi.yaml#/components/schemas/BudgetAmount" }
+    remaining: { $ref: "../../openapi.yaml#/components/schemas/BudgetAmount" }
+BudgetCategory:
+  type: object
+  required: [id, category_type, allows_postings, amounts]
+  properties:
+    id: { type: integer, format: int64 }
+    code: { type: string }
+    name: { type: string }
+    category_type: { type: string, enum: [income, expense] }
+    allows_postings: { type: boolean }
+    amounts: { type: array, items: { $ref: "../../openapi.yaml#/components/schemas/BudgetCategoryAmount" } }
+BudgetTypeTotal:
+  type: object
+  required: [category_type, amount]
+  properties:
+    category_type: { type: string, enum: [income, expense] }
+    amount: { $ref: "../../openapi.yaml#/components/schemas/BudgetCategoryAmount" }
+BudgetAccount:
+  type: object
+  required: [id, account_class, account_kind, treatment]
+  properties:
+    id: { type: integer, format: int64 }
+    code: { type: string }
+    name: { type: string }
+    account_class: { type: string, enum: [asset, liability] }
+    account_kind: { type: string }
+    treatment: { type: string, enum: [on_budget, off_budget, excluded] }
+BudgetCommodity:
+  type: object
+  required: [id, code, symbol, scale]
+  properties:
+    id: { type: integer, format: int64 }
+    code: { type: string }
+    symbol: { type: string }
+    scale: { type: integer, minimum: 0, maximum: 12 }
+BudgetMonthResponse:
+  type: object
+  required: [period_start, period_end, rollover_policy, categories, totals, accounts, commodities]
+  properties:
+    period_start: { type: string, format: date }
+    period_end: { type: string, format: date }
+    rollover_policy: { type: string, enum: [none] }
+    categories: { type: array, items: { $ref: "../../openapi.yaml#/components/schemas/BudgetCategory" } }
+    totals: { type: array, items: { $ref: "../../openapi.yaml#/components/schemas/BudgetTypeTotal" } }
+    accounts: { type: array, items: { $ref: "../../openapi.yaml#/components/schemas/BudgetAccount" } }
+    commodities: { type: array, items: { $ref: "../../openapi.yaml#/components/schemas/BudgetCommodity" } }
+SetBudgetTargetRequest:
+  type: object
+  required: [period_start, quantity_value, quantity_scale, change_reason]
+  properties:
+    period_start: { type: string, format: date }
+    quantity_value: { type: string, pattern: "^[0-9]+$", maxLength: 38 }
+    quantity_scale: { type: integer, minimum: 0, maximum: 12 }
+    change_reason: { type: string, minLength: 1, maxLength: 500 }
+SetBudgetTreatmentRequest:
+  type: object
+  required: [effective_from, treatment, change_reason]
+  properties:
+    effective_from: { type: string, format: date }
+    treatment: { type: string, enum: [on_budget, off_budget, excluded] }
+    change_reason: { type: string, minLength: 1, maxLength: 500 }

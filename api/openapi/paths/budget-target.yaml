@@ -1,0 +1,23 @@
+parameters:
+  - in: path
+    name: category_id
+    required: true
+    schema: { type: integer, format: int64, minimum: 1 }
+  - in: path
+    name: commodity_id
+    required: true
+    schema: { type: integer, format: int64, minimum: 1 }
+put:
+  summary: Set or remove an exact monthly category target
+  description: A zero coefficient removes the target. The ledger is never changed.
+  requestBody:
+    required: true
+    content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/SetBudgetTargetRequest" } } }
+  responses:
+    "200":
+      description: Updated monthly budget.
+      content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/BudgetMonthResponse" } } }
+    "400": { description: Invalid target, content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } } }
+    "401": { description: Authentication required, content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } } }
+    "403": { description: CSRF validation failed, content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } } }
+    "404": { description: Category or currency not found, content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } } }

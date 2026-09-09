@@ -6,9 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-09-09 (R12a T-75a/T-74 closed; R9 and R10 acceptance complete;
-R8 budget planning next; T-76 and T-75b
-remain scheduled separately).
+Last reviewed: 2026-09-09 (R8 budgets shipped after R9 and R10; T-76 and
+T-75b remain scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -36,7 +35,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R6 | Import depth (XLSX/OFX, matching, rollback) | ⏸ | `docs/plans/import-plan.md` |
 | R7 | Trading 212 online connections + lots | ✅ | `docs/plans/trading212-import-plan.md` |
 | R7a | Daily-entry convenience | ⏸ | this file |
-| R8 | Budgets | ▶ | this file |
+| R8 | Budgets | ✅ | `docs/plans/budgets-plan.md` |
 | R9 | Recurring transactions | ✅ | `docs/plans/recurring-transactions-plan.md` |
 | R10 | Projected balances / forecasting | ✅ | `docs/plans/projected-balances-plan.md` |
 | R11 | Pricing/FX management UI | ⏸ | this file |
@@ -335,7 +334,7 @@ method/tier/policy provenance before v0.1/schema freeze and before R16/R18. T-75
 is the investment-native correction lifecycle in R16; the generic fence remains
 in force until it ships.
 
-### Current — planning loop
+### Done — planning loop
 
 Order decided 2026-08-05 (review §3d): **R9 → R10 → R8**. Recurring
 transactions are forecasting's data source, so R9 → R10 is a single coherent
@@ -397,9 +396,18 @@ unpaginated summary counts support the editor and navigation badge.
    shipped core contract. Learning remains a separate opt-in overlay and does
    not change the core response.
    Learning M1–M4 are accepted; loan helpers remain optional later work.
-3. **R8 Budgets — current planning target:** period budgets with
-   actual-versus-budget reporting. Write its execution plan before application
-   code and preserve the product-requirement decisions listed below.
+3. **R8 Budgets — complete 2026-09-09:** exact per-currency monthly category
+   targets, posted actuals, and effective-dated account budget treatment. The
+   execution contract is `docs/plans/budgets-plan.md`; it deliberately excludes
+   rollover/envelopes and keeps forecasts and learned estimates out of budget
+   facts.
+
+   The composed authenticated month read model, audited target upserts/removal,
+   effective-dated `on_budget`/`off_budget`/`excluded` account axis, exact
+   posted-only actuals, per-currency income/expense summaries, and responsive
+   six-locale `/app/budgets` workflow ship together. Leap-month, lifecycle,
+   sign, exact remaining, treatment-as-of and non-netted income/expense cases
+   are covered by named backend acceptance tests.
 
 ### R16 — investment lifecycle completeness
 

@@ -359,7 +359,29 @@ confidence range, calendar profile and translated exclusions, in all six
 locales. Learned native totals and their separately covered constant-FX curve
 carry reconciling estimated deltas; a model-only missing rate never changes the
 core conversion's coverage claim. The dated M4 review accepts the extension and
-closes R10; R8 budget planning is next.
+closes R10.
+
+## Budgets (R8)
+
+R8 ships an exact monthly planned-versus-actual workflow at `/app/budgets`.
+Targets are audited book-wide facts keyed by calendar month, posting category,
+and currency. Actuals include only posted, current, non-deleted category
+postings whose journal entry touches an account treated as `on_budget` on that
+entry date; drafts, voids, recurring assumptions, forecasts and learned
+estimates never enter the calculation. Income credits are presented as positive
+magnitudes, expenses preserve their debit-positive sign, refunds may make a net
+actual negative, and all target/actual/remaining arithmetic uses exact
+coefficient strings in Go.
+
+Account budget treatment is a dedicated effective-dated version history with
+`on_budget`, `off_budget`, and `excluded`, separate from account kind. The
+authenticated composed `GET /api/v1/budgets/month` read model returns category
+rows, separately typed income/expense currency totals, currency options and the
+account-treatment editor in one request. Target and treatment `PUT` operations
+write their audit event atomically. Unlike currencies are never summed or
+converted, and R8 deliberately has no rollover or envelope allocator. The
+responsive screen has loading, empty, error and success states and copy in all
+six locales. `docs/plans/budgets-plan.md` is the shipped contract.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

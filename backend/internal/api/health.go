@@ -115,6 +115,11 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 		mux.HandleFunc("GET /api/v1/forecasts/balances", forecastBalances(logger, services.Auth, services.Forecast))
 		mux.HandleFunc("GET /api/v1/forecasts/balance-events", forecastEvents(logger, services.Auth, services.Forecast))
 	}
+	if services.Budget != nil {
+		mux.HandleFunc("GET /api/v1/budgets/month", budgetMonth(logger, services.Auth, services.Budget))
+		mux.HandleFunc("PUT /api/v1/budgets/targets/{category_id}/{commodity_id}", setBudgetTarget(logger, services.Auth, services.Budget, options))
+		mux.HandleFunc("PUT /api/v1/budgets/accounts/{account_id}", setBudgetTreatment(logger, services.Auth, services.Budget, options))
+	}
 
 	if services.Export != nil {
 		mux.HandleFunc("GET /api/v1/exports/preview", exportPreview(logger, services.Auth, services.Export))

@@ -5,9 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-09-09 (R12a T-75a/T-74 complete; R9 and R10 acceptance complete;
-R8 budget planning next. T-76 and T-75b
-remain required later work.)
+Last updated: 2026-09-09 (R8 budgets complete; T-76 and T-75b remain required
+later work.)
 
 ## Where things stand
 
@@ -88,15 +87,12 @@ localization item below).
 rate in `settings/currencies/+page.svelte` should truncate or round half-up.
 See `backlog.md` G-09.
 
-## Current initiative — R8 budget planning
+## Completed — R8 budgets
 
-Write the R8 execution plan from the locked budget decisions in
-`docs/product-requirements.md` and `docs/roadmap.md` before changing application
-code. Define exact period boundaries, category/account mapping, rollover rules,
-actual-versus-budget treatment, multi-currency presentation, API/read-model
-shape, mobile/accessibility states and acceptance fixtures. R10 is the planning
-input, not a budget store: forecasts and learned estimates must not silently
-become budget actuals or targets.
+The four slices in `docs/plans/budgets-plan.md` ship together: exact monthly
+persistence/aggregation, authenticated composed API, responsive localized
+screen, and cross-system acceptance. R10 remains planning input, not a budget
+store: forecasts and learned estimates never become budget actuals or targets.
 
 ## Completed — R10 projected balances
 

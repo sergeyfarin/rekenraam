@@ -3,6 +3,12 @@ info:
   title: Rekenraam API
   version: 0.0.0
 paths:
+  /api/v1/budgets/month:
+    $ref: "./paths/budget-month.yaml"
+  /api/v1/budgets/targets/{category_id}/{commodity_id}:
+    $ref: "./paths/budget-target.yaml"
+  /api/v1/budgets/accounts/{account_id}:
+    $ref: "./paths/budget-account.yaml"
   /api/v1/forecasts/balances:
     $ref: "./paths/forecast-balances.yaml"
   /api/v1/forecasts/balance-events:
@@ -410,6 +416,24 @@ components:
         type: integer
         format: int64
   schemas:
+    BudgetAmount:
+      $ref: "./components/schemas/budgets.yaml#/BudgetAmount"
+    BudgetCategoryAmount:
+      $ref: "./components/schemas/budgets.yaml#/BudgetCategoryAmount"
+    BudgetCategory:
+      $ref: "./components/schemas/budgets.yaml#/BudgetCategory"
+    BudgetTypeTotal:
+      $ref: "./components/schemas/budgets.yaml#/BudgetTypeTotal"
+    BudgetAccount:
+      $ref: "./components/schemas/budgets.yaml#/BudgetAccount"
+    BudgetCommodity:
+      $ref: "./components/schemas/budgets.yaml#/BudgetCommodity"
+    BudgetMonthResponse:
+      $ref: "./components/schemas/budgets.yaml#/BudgetMonthResponse"
+    SetBudgetTargetRequest:
+      $ref: "./components/schemas/budgets.yaml#/SetBudgetTargetRequest"
+    SetBudgetTreatmentRequest:
+      $ref: "./components/schemas/budgets.yaml#/SetBudgetTreatmentRequest"
     ForecastQuantity:
       $ref: "./components/schemas/forecast.yaml#/ForecastQuantity"
     ForecastSourceEventCounts:
