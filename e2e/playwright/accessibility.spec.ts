@@ -107,6 +107,15 @@ test('[acceptance] the reconcile screen is accessible', async ({ page }) => {
   await expectNoAccessibilityViolations(page, 'reconcile');
 });
 
+test('[acceptance] the budget screen is accessible and usable on mobile', async ({ page }) => {
+  await readyForLedger(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/app/budgets');
+  await expect(page.getByRole('heading', { name: 'Budgets' }).first()).toBeVisible();
+  await expectNoAccessibilityViolations(page, 'budgets');
+  await expectKeyboardReachable(page, 'budgets', ['input:', 'select:', 'button:']);
+});
+
 test('[acceptance] every report view is accessible', async ({ page }) => {
   await readyForLedger(page);
   const today = todayISO();

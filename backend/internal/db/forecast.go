@@ -310,7 +310,7 @@ func (r *ForecastRepository) LoadResolvedSnapshot(ctx context.Context, request F
 			}
 		}
 		if resolution.ReportingCurrencyID != nil {
-			candidateIDs := forecastCandidateCommodityIDs(resolution.AccountIDs, result.PostedPostings, result.TemplatePostings, result.DraftPostings)
+			candidateIDs := forecastCandidateCommodityIDs(resolution.AccountIDs, result.PostedPostings, result.TemplatePostings, result.DraftPostings, result.LearningPostings)
 			result.Rates, err = reader.ratesAtOrBefore(ctx, request.BookID, *resolution.ReportingCurrencyID, candidateIDs, resolution.AsOfDate)
 		}
 		return err
@@ -367,7 +367,7 @@ func (r *ForecastSnapshotReader) ratesAtOrBefore(ctx context.Context, bookID, qu
 	return result, nil
 }
 
-func forecastCandidateCommodityIDs(accountIDs []int64, posted []ForecastPostingRecord, templates []ForecastTemplatePostingRecord, drafts []ForecastDraftPostingRecord) []int64 {
+func forecastCandidateCommodityIDs(accountIDs []int64, posted []ForecastPostingRecord, templates []ForecastTemplatePostingRecord, drafts []ForecastDraftPostingRecord, learning []ForecastLearningPostingRecord) []int64 {
 	selected := map[int64]bool{}
 	for _, id := range accountIDs {
 		selected[id] = true
@@ -382,6 +382,11 @@ func forecastCandidateCommodityIDs(accountIDs []int64, posted []ForecastPostingR
 		}
 	}
 	for _, row := range drafts {
+		if selected[row.AccountID] {
+			set[row.CommodityID] = true
+		}
+	}
+	for _, row := range learning {
 		if selected[row.AccountID] {
 			set[row.CommodityID] = true
 		}

@@ -35,6 +35,7 @@ type Services struct {
 	Backup           *app.BackupService
 	SelfCheck        *app.SelfCheckService
 	Forecast         *app.ForecastService
+	Budget           *app.BudgetService
 }
 
 func NewHandler(logger *slog.Logger, webHandler http.Handler, services Services, options HandlerOptions) http.Handler {

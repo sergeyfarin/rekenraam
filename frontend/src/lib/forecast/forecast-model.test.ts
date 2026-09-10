@@ -3,9 +3,11 @@ import {
   defaultForecastFilters,
   forecastChartPoints,
   forecastHasMovements,
+  forecastLearnedSeriesFor,
   parseForecastFilters,
   writeForecastFilters,
   type ForecastLearnedSeries,
+  type ForecastLearnedSpending,
   type ForecastSeries
 } from './forecast-model';
 
@@ -136,5 +138,19 @@ describe('learned spending filters', () => {
     const core = forecastChartPoints(series);
     expect(core.every((point) => point.estimatedY === undefined)).toBe(true);
     expect(core.map((point) => point.projectedY)).toEqual(withEstimates.map((point) => point.projectedY));
+  });
+
+  it('uses the separately converted learned curve for the converted core row', () => {
+    const native = { commodity_id: 1, points: [] } as unknown as ForecastLearnedSeries;
+    const converted = { commodity_id: 1, points: [{ date: '2026-01-01' }] } as unknown as ForecastLearnedSeries;
+    const learned = {
+      status: 'ready',
+      totals: [native],
+      series: [],
+      converted
+    } as unknown as ForecastLearnedSpending;
+
+    expect(forecastLearnedSeriesFor(learned, undefined, 1)).toBe(native);
+    expect(forecastLearnedSeriesFor(learned, undefined, 1, true)).toBe(converted);
   });
 });

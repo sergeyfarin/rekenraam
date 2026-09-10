@@ -4,6 +4,237 @@
  */
 
 export interface paths {
+    "/api/v1/budgets/month": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one exact monthly budget */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description First calendar day of the owner-local month. Omitted selects the current owner-local month. */
+                    period_start?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Page-composed monthly budget, kept separate per currency. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BudgetMonthResponse"];
+                    };
+                };
+                /** @description Invalid month. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Exact result exceeded supported precision. */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/budgets/targets/{category_id}/{commodity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                category_id: number;
+                commodity_id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set or remove an exact monthly category target
+         * @description A zero coefficient removes the target. The ledger is never changed.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    category_id: number;
+                    commodity_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetBudgetTargetRequest"];
+                };
+            };
+            responses: {
+                /** @description Updated monthly budget. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BudgetMonthResponse"];
+                    };
+                };
+                /** @description Invalid target */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Category or currency not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/budgets/accounts/{account_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Append an effective-dated account budget treatment */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    account_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetBudgetTreatmentRequest"];
+                };
+            };
+            responses: {
+                /** @description Budget month containing the effective date. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BudgetMonthResponse"];
+                    };
+                };
+                /** @description Invalid treatment */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Account not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/forecasts/balances": {
         parameters: {
             query?: never;
@@ -5406,7 +5637,7 @@ export interface paths {
          *
          *     This is the only scoped export. Filters select whole **journal entries**, never individual postings, so the archive balances per entry under every filter; every posting of a selected entry is included, in accounts, commodities, and dates the filter never named. `date_basis=transaction` selects transactions by their date and then takes every entry of them, including entries dated outside the range. The manifest reports what the filter resolved to, how many transactions the archive holds only part of, and how many postings it carries only as counterparts.
          *
-         *     Contents: `README.txt`, `ledger.csv`, `accounts.csv`, `categories.csv`, `payees.csv`, `commodities.csv`, `tags.csv`, `lots.csv`, `prices.csv`, `trial-balance.csv`, `manifest.json`. See `docs/adrs/0011-ledger-export-contract.md`.
+         *     Contents: `README.txt`, `ledger.csv`, `accounts.csv`, `categories.csv`, `payees.csv`, `commodities.csv`, `tags.csv`, `lots.csv`, `disposal-decisions.csv`, `disposal-allocations.csv`, `prices.csv`, `trial-balance.csv`, `manifest.json`. See `docs/adrs/0011-ledger-export-contract.md`.
          */
         get: {
             parameters: {
@@ -13946,6 +14177,78 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        BudgetAmount: {
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+        };
+        BudgetCategoryAmount: {
+            /** Format: int64 */
+            commodity_id: number;
+            target: components["schemas"]["BudgetAmount"];
+            actual: components["schemas"]["BudgetAmount"];
+            remaining: components["schemas"]["BudgetAmount"];
+        };
+        BudgetCategory: {
+            /** Format: int64 */
+            id: number;
+            code?: string;
+            name?: string;
+            /** @enum {string} */
+            category_type: "income" | "expense";
+            allows_postings: boolean;
+            amounts: components["schemas"]["BudgetCategoryAmount"][];
+        };
+        BudgetTypeTotal: {
+            /** @enum {string} */
+            category_type: "income" | "expense";
+            amount: components["schemas"]["BudgetCategoryAmount"];
+        };
+        BudgetAccount: {
+            /** Format: int64 */
+            id: number;
+            code?: string;
+            name?: string;
+            /** @enum {string} */
+            account_class: "asset" | "liability";
+            account_kind: string;
+            /** @enum {string} */
+            treatment: "on_budget" | "off_budget" | "excluded";
+        };
+        BudgetCommodity: {
+            /** Format: int64 */
+            id: number;
+            code: string;
+            symbol: string;
+            scale: number;
+        };
+        BudgetMonthResponse: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /** @enum {string} */
+            rollover_policy: "none";
+            categories: components["schemas"]["BudgetCategory"][];
+            totals: components["schemas"]["BudgetTypeTotal"][];
+            accounts: components["schemas"]["BudgetAccount"][];
+            commodities: components["schemas"]["BudgetCommodity"][];
+        };
+        SetBudgetTargetRequest: {
+            /** Format: date */
+            period_start: string;
+            quantity_value: string;
+            quantity_scale: number;
+            change_reason: string;
+        };
+        SetBudgetTreatmentRequest: {
+            /** Format: date */
+            effective_from: string;
+            /** @enum {string} */
+            treatment: "on_budget" | "off_budget" | "excluded";
+            change_reason: string;
+        };
         ForecastQuantity: {
             quantity_value: string;
             quantity_scale: number;
@@ -16875,9 +17178,41 @@ export interface components {
              */
             lot_id?: number;
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
+            disposal_decision?: components["schemas"]["DisposalDecisionResponse"];
+        };
+        DisposalDecisionResponse: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            transaction_id?: number;
+            /** Format: int64 */
+            transaction_version_id?: number;
+            cost_basis_method: components["schemas"]["CostBasisMethod"];
+            /** @enum {string} */
+            resolution_tier: "transaction" | "account" | "global" | "fallback";
+            /** Format: int64 */
+            account_version_id?: number;
+            /** Format: int64 */
+            profile_id?: number;
+            /** Format: int64 */
+            profile_version_id?: number;
+            /** Format: date */
+            source_effective_from?: string;
+            /** Format: date-time */
+            source_recorded_at?: string;
+            quantity_value: string;
+            quantity_scale: number;
+            disposed_basis_value: string;
+            disposed_basis_scale: number;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            /** Format: int64 */
+            audit_event_id?: number;
+            allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
         };
         SellPreviewResponse: {
             cost_basis_method: components["schemas"]["CostBasisMethod"];
+            disposal_decision: components["schemas"]["DisposalDecisionResponse"];
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
             /**
              * Format: int64

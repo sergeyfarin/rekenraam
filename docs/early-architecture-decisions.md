@@ -241,10 +241,12 @@ When a feature changes ledger posting, balancing, reconciliation, import matchin
   import-source metadata. The lifecycle is detailed in
   `docs/plans/transaction-ledger-core-plan.md`.
 - Before reconciliation: statement model, lock semantics, undo/correction behavior, and balance tolerance rules.
-- Before budgets: period semantics, category/account mapping, rollover rules,
-  whether budgets are book-wide or account-scoped, and the detailed UI for
-  account budget treatment. Budget treatment is a separate account-facing axis,
-  not an account kind.
+- Before budgets: **resolved by R8 on 2026-09-09**. Budgets are book-wide,
+  owner-local calendar months; targets map to posting-enabled category
+  accounts per currency; posted actuals require an `on_budget` counterpart
+  resolved on the entry date; v1 has no rollover. Budget treatment is an
+  effective-dated account-facing axis, not an account kind. See
+  `plans/budgets-plan.md`.
 - Before reports: cashflow basis, date range inclusivity, multi-currency totals, and whether report runs need snapshots. **Resolved during R2 (2026-08-19); see `plans/reports-plan.md`.** Cashflow basis: the selected liquid-cash scope, with counterparts classified per journal entry — entries balance per commodity, so no allocation rule is needed. Date ranges are inclusive at both ends throughout `/reports/*`. Multi-currency totals stay separate per commodity; a reporting-currency selector with a named valuation method is approved but sequenced after R3, and will add a conversion beside the exact per-commodity totals rather than replacing them. Report snapshots remain an open follow-up for the R2 acceptance review.
 - Before file import: supported formats, duplicate detection, source retention, preview/commit workflow, and rollback behavior.
 - Before backups: backup location, restore UX, encryption expectations, Docker volume guidance, and smoke validation.

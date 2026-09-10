@@ -95,6 +95,14 @@ func TestForecastLearningSnapshotRejectsPostingPrefixes(t *testing.T) {
 	require.ErrorIs(t, err, ErrForecastInputTooLarge)
 }
 
+func TestForecastLearningRateCandidatesIncludeModelOnlyCurrency(t *testing.T) {
+	ids := forecastCandidateCommodityIDs([]int64{1}, nil, nil, nil, []ForecastLearningPostingRecord{
+		{AccountID: 1, CommodityID: 2},
+		{AccountID: 9, CommodityID: 3},
+	})
+	assert.Equal(t, []int64{2}, ids, "learning history can require FX even when the core curve has no movement in that currency")
+}
+
 func BenchmarkForecastLearningRead(b *testing.B) {
 	database, repository := newForecastTestRepository(b)
 	insertForecastTransaction(b, database, 100, 100, "posted", "2026-08-20", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-100")}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("100")}})

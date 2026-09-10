@@ -183,9 +183,11 @@ export function writeForecastFilters(filters: ForecastFilters): URLSearchParams 
 export function forecastLearnedSeriesFor(
   learned: ForecastLearnedSpending | null | undefined,
   accountID: number | undefined,
-  commodityID: number
+  commodityID: number,
+  converted = false
 ): ForecastLearnedSeries | undefined {
   if (!learned || learned.status === 'unavailable') return undefined;
+  if (converted) return learned.converted ?? undefined;
   const rows = accountID === undefined ? learned.totals : learned.series;
   return rows.find((row) => row.commodity_id === commodityID && (accountID === undefined || row.account_id === accountID));
 }

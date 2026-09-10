@@ -314,6 +314,9 @@ func buildForecastLearnedSpending(ctx context.Context, fitter *ForecastLearningF
 	if err := b.combine(overlay); err != nil {
 		return nil, err
 	}
+	if err := b.addConversion(overlay); err != nil {
+		return nil, err
+	}
 	sortForecastEvents(overlay.Events)
 	return overlay, nil
 }
@@ -624,6 +627,7 @@ func (b *forecastLearningBuild) combine(overlay *ForecastLearnedSpending) error 
 	}
 	series := make([]ForecastLearnedSeries, 0, len(b.core.Series))
 	totals := map[int64]map[string]*exact.ScaledInt{}
+	totalDeltas := map[int64]map[string]*exact.ScaledInt{}
 	for _, core := range b.core.Series {
 		pair := forecastPair{AccountID: core.AccountID, CommodityID: core.CommodityID}
 		row, err := b.learnedSeries(core, deltas[pair])
@@ -632,12 +636,17 @@ func (b *forecastLearningBuild) combine(overlay *ForecastLearnedSpending) error 
 		}
 		if totals[core.CommodityID] == nil {
 			totals[core.CommodityID] = map[string]*exact.ScaledInt{}
+			totalDeltas[core.CommodityID] = map[string]*exact.ScaledInt{}
 		}
 		for _, point := range row.Points {
 			if totals[core.CommodityID][point.Date] == nil {
 				totals[core.CommodityID][point.Date] = exact.NewScaledInt()
 			}
 			totals[core.CommodityID][point.Date].AddCoefficient(point.ProjectedBalance.Value, point.ProjectedBalance.Scale)
+			if totalDeltas[core.CommodityID][point.Date] == nil {
+				totalDeltas[core.CommodityID][point.Date] = exact.NewScaledInt()
+			}
+			totalDeltas[core.CommodityID][point.Date].AddCoefficient(point.EstimatedDelta.Value, point.EstimatedDelta.Scale)
 		}
 		series = append(series, row)
 	}
@@ -649,7 +658,7 @@ func (b *forecastLearningBuild) combine(overlay *ForecastLearnedSpending) error 
 	}
 	sort.Slice(commodityIDs, func(i, j int) bool { return commodityIDs[i] < commodityIDs[j] })
 	for _, id := range commodityIDs {
-		aggregate, err := b.aggregateSeries(id, totals[id])
+		aggregate, err := b.aggregateSeries(id, totals[id], totalDeltas[id])
 		if err != nil {
 			return err
 		}
@@ -695,7 +704,7 @@ func (b *forecastLearningBuild) learnedSeries(core ForecastSeries, deltas map[st
 	return result, nil
 }
 
-func (b *forecastLearningBuild) aggregateSeries(commodityID int64, balances map[string]*exact.ScaledInt) (ForecastLearnedSeries, error) {
+func (b *forecastLearningBuild) aggregateSeries(commodityID int64, balances, deltas map[string]*exact.ScaledInt) (ForecastLearnedSeries, error) {
 	result := ForecastLearnedSeries{CommodityID: commodityID, Points: make([]ForecastLearnedPoint, 0, len(balances))}
 	dates := make([]string, 0, len(balances))
 	for date := range balances {
@@ -709,9 +718,12 @@ func (b *forecastLearningBuild) aggregateSeries(commodityID int64, balances map[
 		if err := checkForecastValue(balance, commodityID); err != nil {
 			return ForecastLearnedSeries{}, err
 		}
+		if err := checkForecastValue(deltas[date], commodityID); err != nil {
+			return ForecastLearnedSeries{}, err
+		}
 		result.Points = append(result.Points, ForecastLearnedPoint{
 			Date:             date,
-			EstimatedDelta:   forecastLearningQuantity(exact.NewScaledInt(), scale),
+			EstimatedDelta:   forecastLearningQuantity(deltas[date], scale),
 			ProjectedBalance: forecastLearningQuantity(balance, scale),
 		})
 		if minimum == nil || balance.Cmp(minimum) < 0 {
@@ -720,6 +732,97 @@ func (b *forecastLearningBuild) aggregateSeries(commodityID int64, balances map[
 		}
 	}
 	return result, nil
+}
+
+// addConversion restates the learned overlay on top of the already converted
+// core curve. Its coverage is deliberately independent: a currency used only
+// by a learned group may make this curve unavailable without changing the core
+// valuation's complete status.
+func (b *forecastLearningBuild) addConversion(overlay *ForecastLearnedSpending) error {
+	if b.input.ReportingCurrencyID == nil || b.core.Valuation == nil || !b.core.Valuation.Complete || b.core.Converted == nil {
+		return nil
+	}
+	quoteID := *b.input.ReportingCurrencyID
+	quoteScale := b.core.Valuation.ReportingCurrencyScale
+	rates := map[int64]db.ForecastRateRecord{}
+	for _, rate := range b.snapshot.Rates {
+		current, exists := rates[rate.BaseCommodityID]
+		if rate.ValuationDate > b.bounds.AsOf || exists && !laterForecastRate(rate, current) {
+			continue
+		}
+		rates[rate.BaseCommodityID] = rate
+	}
+	needed := map[int64]bool{}
+	for _, event := range overlay.Events {
+		for _, amount := range event.Amounts {
+			if amount.Quantity.Value.Sign() != 0 {
+				needed[amount.CommodityID] = true
+			}
+		}
+	}
+	for commodityID := range needed {
+		if commodityID == quoteID {
+			continue
+		}
+		rate, ok := rates[commodityID]
+		if !ok {
+			return nil
+		}
+		age, err := forecastDateAge(b.bounds.AsOf, rate.ValuationDate)
+		if err != nil {
+			return err
+		}
+		if age > forecastMaxRateStalenessDays {
+			return nil
+		}
+	}
+
+	deltas := map[string]*exact.ScaledInt{}
+	for _, event := range overlay.Events {
+		for _, amount := range event.Amounts {
+			converted, err := convertForecastQuantity(amount.Quantity, amount.CommodityID, quoteID, quoteScale, rates)
+			if err != nil {
+				return err
+			}
+			if deltas[event.ProjectedDate] == nil {
+				deltas[event.ProjectedDate] = exact.NewScaledInt()
+			}
+			deltas[event.ProjectedDate].AddCoefficient(converted.Value, converted.Scale)
+		}
+	}
+	result := ForecastLearnedSeries{CommodityID: quoteID, Points: make([]ForecastLearnedPoint, 0, len(b.core.Converted.Points))}
+	running := exact.NewScaledInt()
+	var minimum *exact.ScaledInt
+	for _, point := range b.core.Converted.Points {
+		delta := exact.NewScaledInt()
+		if value := deltas[point.Date]; value != nil {
+			delta.AddScaled(value)
+			running.AddScaled(value)
+		}
+		balance := exact.ScaledIntFromCoefficient(point.ProjectedBalance.Value, point.ProjectedBalance.Scale)
+		balance.AddScaled(running)
+		if err := checkForecastValue(delta, quoteID); err != nil {
+			return err
+		}
+		if err := checkForecastValue(balance, quoteID); err != nil {
+			return err
+		}
+		result.Points = append(result.Points, ForecastLearnedPoint{
+			Date: point.Date, EstimatedDelta: forecastLearningQuantity(delta, quoteScale),
+			ProjectedBalance: forecastLearningQuantity(balance, quoteScale),
+		})
+		if minimum == nil || balance.Cmp(minimum) < 0 {
+			minimum = exact.NewScaledInt()
+			minimum.AddScaled(balance)
+			result.Minimum = forecastLearningQuantity(balance, quoteScale)
+			result.MinimumDate = point.Date
+		}
+		if result.FirstNegativeDate == "" && balance.Sign() < 0 {
+			result.FirstNegativeDate = point.Date
+		}
+	}
+	overlay.Converted = &result
+	return nil
 }
 
 func forecastLearningQuantity(value *exact.ScaledInt, scale int) ForecastQuantity {

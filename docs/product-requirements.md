@@ -266,6 +266,14 @@ Goal: support forward-looking personal finance.
 - Budgets.
 - Account budget treatment as a separate account-facing planning axis, not an
   account kind.
+- R8 budgets are book-wide owner-local calendar months with exact,
+  per-currency category targets and posted actuals. Actuals require an
+  `on_budget` asset/liability counterpart on the entry date; account treatment
+  is independently effective-dated as `on_budget`, `off_budget`, or `excluded`.
+  Income and expense totals remain distinct, unlike currencies are never
+  summed or converted, and v1 has no rollover/envelope allocator. Forecasts,
+  recurring assumptions, and learned estimates never become budget targets or
+  actuals. The detailed shipped contract is `docs/plans/budgets-plan.md`.
 - Scheduled transactions.
 - Projected balances are read-only projections from current posted facts and
   separately identified recurring assumptions; viewing them never creates
