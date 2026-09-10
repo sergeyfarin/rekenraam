@@ -7,6 +7,7 @@
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { categoriesQueryOptions } from '$lib/api/categories';
   import { transactionsQueryKey, type TransactionResponse } from '$lib/api/transactions';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import CategoryTransactions from '$lib/transactions/category-transactions.svelte';
   import TransactionDetailPanel from '$lib/transactions/transaction-detail-panel.svelte';
   import TransactionEditor from '$lib/transactions/transaction-editor.svelte';
@@ -38,7 +39,10 @@
   const queryClient = useQueryClient();
 
   async function invalidate() {
-    await queryClient.invalidateQueries({ queryKey: transactionsQueryKey });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: forecastQueryKey })
+    ]);
   }
 
   function handleRowClick(tx: TransactionResponse) {

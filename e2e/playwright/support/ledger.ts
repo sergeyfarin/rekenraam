@@ -61,14 +61,18 @@ export async function createCashAccount(
   page: Page,
   csrfToken: string,
   name: string,
-  currencyID: number
+  currencyID: number,
+  openedOn?: string
 ): Promise<{ id: number; name: string }> {
   return apiJSON(page, 'POST', '/api/v1/accounts', csrfToken, {
     name,
     account_class: 'asset',
     account_kind: 'checking',
     default_commodity_id: currencyID,
-    allows_postings: true
+    allows_postings: true,
+    // Specs that need back-dated history open the account early enough to
+    // accept it; omitting this keeps the existing default.
+    ...(openedOn ? { opened_on: openedOn } : {})
   });
 }
 

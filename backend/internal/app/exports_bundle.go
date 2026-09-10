@@ -182,6 +182,8 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		{"commodities.csv", func(w io.Writer) (int64, error) { return s.writeCommoditiesCSV(ctx, w, snapshot) }},
 		{"tags.csv", func(w io.Writer) (int64, error) { return s.writeTagsCSV(ctx, w, snapshot) }},
 		{"lots.csv", func(w io.Writer) (int64, error) { return s.writeLotsCSV(ctx, w, snapshot, paths) }},
+		{"disposal-decisions.csv", func(w io.Writer) (int64, error) { return s.writeDisposalDecisionsCSV(ctx, w, snapshot) }},
+		{"disposal-allocations.csv", func(w io.Writer) (int64, error) { return s.writeDisposalAllocationsCSV(ctx, w, snapshot) }},
 		{"prices.csv", func(w io.Writer) (int64, error) { return s.writePricesCSV(ctx, w, snapshot) }},
 		{"trial-balance.csv", func(w io.Writer) (int64, error) {
 			return writeTrialBalanceCSV(w, trialBalance, selection, paths)
@@ -473,6 +475,61 @@ func (s *ExportService) writeLotsCSV(ctx context.Context, out io.Writer, snapsho
 	return finishBundleCSV(writer, rows)
 }
 
+func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Writer, snapshot *sql.Tx) (int64, error) {
+	decisions, err := s.repository.ExportDisposalDecisions(ctx, snapshot, BookID)
+	if err != nil {
+		return 0, err
+	}
+	writer, err := newBundleCSV(out, []string{
+		"decision_id", "transaction_id", "transaction_version_id", "account_id", "commodity_id",
+		"cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method",
+		"resolution_tier", "account_version_id", "profile_id", "profile_version_id",
+		"source_effective_from", "source_recorded_at", "created_at", "audit_event_id",
+	})
+	if err != nil {
+		return 0, err
+	}
+	for index, decision := range decisions {
+		if err := writer.Write([]string{
+			strconv.FormatInt(decision.DecisionID, 10), strconv.FormatInt(decision.TransactionID, 10),
+			strconv.FormatInt(decision.TransactionVersionID, 10), strconv.FormatInt(decision.AccountID, 10),
+			strconv.FormatInt(decision.CommodityID, 10), strconv.FormatInt(decision.CostCommodityID, 10),
+			decision.EventDate, exact.Decimal(decision.QuantityValue, decision.QuantityScale),
+			exact.Decimal(decision.DisposedBasisValue, decision.DisposedBasisScale), decision.CostBasisMethod,
+			decision.ResolutionTier, nullableID(decision.AccountVersionID), nullableID(decision.ProfileID),
+			nullableID(decision.ProfileVersionID), decision.SourceEffectiveFrom.String,
+			decision.SourceRecordedAt.String, decision.CreatedAt, strconv.FormatInt(decision.CreatedAuditEventID, 10),
+		}); err != nil {
+			return int64(index), fmt.Errorf("write disposal decision row: %w", err)
+		}
+	}
+	return finishBundleCSV(writer, int64(len(decisions)))
+}
+
+func (s *ExportService) writeDisposalAllocationsCSV(ctx context.Context, out io.Writer, snapshot *sql.Tx) (int64, error) {
+	allocations, err := s.repository.ExportDisposalAllocations(ctx, snapshot, BookID)
+	if err != nil {
+		return 0, err
+	}
+	writer, err := newBundleCSV(out, []string{
+		"decision_id", "allocation_seq", "lot_event_id", "lot_id", "quantity", "cost_basis",
+	})
+	if err != nil {
+		return 0, err
+	}
+	for index, allocation := range allocations {
+		if err := writer.Write([]string{
+			strconv.FormatInt(allocation.DecisionID, 10), strconv.FormatInt(allocation.AllocationSeq, 10),
+			strconv.FormatInt(allocation.LotEventID, 10), strconv.FormatInt(allocation.LotID, 10),
+			exact.Decimal(allocation.QuantityValue, allocation.QuantityScale),
+			exact.Decimal(exact.New(allocation.CostBasisValue), allocation.CostBasisScale),
+		}); err != nil {
+			return int64(index), fmt.Errorf("write disposal allocation row: %w", err)
+		}
+	}
+	return finishBundleCSV(writer, int64(len(allocations)))
+}
+
 func (s *ExportService) writePricesCSV(ctx context.Context, out io.Writer, snapshot *sql.Tx) (int64, error) {
 	prices, err := s.repository.ExportPrices(ctx, snapshot, BookID)
 	if err != nil {
@@ -699,6 +756,8 @@ value in this archive was ever a floating-point number.`,
   commodities.csv    currencies, securities, and crypto, with their scales
   tags.csv           tag names behind the tag columns in ledger.csv
   lots.csv           investment lots as they currently stand
+  disposal-decisions.csv  immutable resolved cost-basis elections
+  disposal-allocations.csv  exact lot allocations for those elections
   prices.csv         non-voided price observations
   trial-balance.csv  balances that let you check ledger.csv against the book
   manifest.json      what this export is, what it contains, and its checksums`,
@@ -749,8 +808,9 @@ versions. This is an export of the ledger, not a copy of the installation. The
 audit-complete record is the SQLite backup.
 Attachments are not included; they are not implemented yet, and manifest.json
 says so rather than leaving you to assume either way.
-lots.csv is a statement of current lot state, not a replayable event log: cost
-basis cannot be reconstructed from postings alone, which is why it is here.`,
+lots.csv is a statement of current lot state, not a replayable event log.
+disposal-decisions.csv and disposal-allocations.csv preserve why historical lots
+were consumed even after account or global cost-basis defaults change.`,
 	}
 
 	if filter.From != "" || filter.To != "" || len(filter.AccountIDs) > 0 || len(filter.CommodityIDs) > 0 {

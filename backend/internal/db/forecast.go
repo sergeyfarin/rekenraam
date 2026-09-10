@@ -70,6 +70,10 @@ type ForecastSnapshot struct {
 	DraftPostings     []ForecastDraftPostingRecord
 	PayeeNames        map[int64]string
 	Rates             []ForecastRateRecord
+	// LearningPostings is read only when the caller asks for learned spending.
+	// It shares this snapshot's transaction so a model can never be trained on
+	// one view of history and joined to another view of the future.
+	LearningPostings []ForecastLearningPostingRecord
 }
 
 type ForecastAccountVersionRecord struct {
@@ -232,6 +236,18 @@ type ForecastSnapshotResolution struct {
 	ThroughDate         string
 	AsOfDate            string
 	ReportingCurrencyID *int64
+	// LearningHistory requests complete-entry spending history in this same
+	// transaction. Nil leaves the learned-spending reads entirely unrun, so
+	// turning the option off costs no historical query.
+	LearningHistory *ForecastLearningHistoryRequest
+}
+
+// ForecastLearningHistoryRequest bounds the extra learning read. PostingLimit
+// applies across the whole read, not once per cadence.
+type ForecastLearningHistoryRequest struct {
+	StartDate    string
+	EndDate      string
+	PostingLimit int
 }
 
 // LoadResolvedSnapshot lets the application resolve account scope from the
@@ -282,8 +298,19 @@ func (r *ForecastRepository) LoadResolvedSnapshot(ctx context.Context, request F
 		if err != nil {
 			return err
 		}
+		if resolution.LearningHistory != nil {
+			limit := resolution.LearningHistory.PostingLimit
+			if limit == 0 {
+				limit = ForecastLearningPostingLimit
+			}
+			result.LearningPostings, err = reader.learningPostings(ctx, request.BookID,
+				resolution.LearningHistory.StartDate, resolution.LearningHistory.EndDate, limit)
+			if err != nil {
+				return err
+			}
+		}
 		if resolution.ReportingCurrencyID != nil {
-			candidateIDs := forecastCandidateCommodityIDs(resolution.AccountIDs, result.PostedPostings, result.TemplatePostings, result.DraftPostings)
+			candidateIDs := forecastCandidateCommodityIDs(resolution.AccountIDs, result.PostedPostings, result.TemplatePostings, result.DraftPostings, result.LearningPostings)
 			result.Rates, err = reader.ratesAtOrBefore(ctx, request.BookID, *resolution.ReportingCurrencyID, candidateIDs, resolution.AsOfDate)
 		}
 		return err
@@ -340,7 +367,7 @@ func (r *ForecastSnapshotReader) ratesAtOrBefore(ctx context.Context, bookID, qu
 	return result, nil
 }
 
-func forecastCandidateCommodityIDs(accountIDs []int64, posted []ForecastPostingRecord, templates []ForecastTemplatePostingRecord, drafts []ForecastDraftPostingRecord) []int64 {
+func forecastCandidateCommodityIDs(accountIDs []int64, posted []ForecastPostingRecord, templates []ForecastTemplatePostingRecord, drafts []ForecastDraftPostingRecord, learning []ForecastLearningPostingRecord) []int64 {
 	selected := map[int64]bool{}
 	for _, id := range accountIDs {
 		selected[id] = true
@@ -355,6 +382,11 @@ func forecastCandidateCommodityIDs(accountIDs []int64, posted []ForecastPostingR
 		}
 	}
 	for _, row := range drafts {
+		if selected[row.AccountID] {
+			set[row.CommodityID] = true
+		}
+	}
+	for _, row := range learning {
 		if selected[row.AccountID] {
 			set[row.CommodityID] = true
 		}

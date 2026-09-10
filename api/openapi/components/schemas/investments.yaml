@@ -538,11 +538,76 @@ InvestmentTradeResponse:
       type: array
       items:
         $ref: "#/InvestmentLotDisposalResponse"
+    disposal_decision:
+      $ref: "#/DisposalDecisionResponse"
+
+DisposalDecisionResponse:
+  type: object
+  required:
+    - cost_basis_method
+    - resolution_tier
+    - quantity_value
+    - quantity_scale
+    - disposed_basis_value
+    - disposed_basis_scale
+    - cost_commodity_id
+    - allocations
+  properties:
+    id:
+      type: integer
+      format: int64
+    transaction_id:
+      type: integer
+      format: int64
+    transaction_version_id:
+      type: integer
+      format: int64
+    cost_basis_method:
+      $ref: "#/CostBasisMethod"
+    resolution_tier:
+      type: string
+      enum: [transaction, account, global, fallback]
+    account_version_id:
+      type: integer
+      format: int64
+    profile_id:
+      type: integer
+      format: int64
+    profile_version_id:
+      type: integer
+      format: int64
+    source_effective_from:
+      type: string
+      format: date
+    source_recorded_at:
+      type: string
+      format: date-time
+    quantity_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+    quantity_scale:
+      type: integer
+    disposed_basis_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+    disposed_basis_scale:
+      type: integer
+    cost_commodity_id:
+      type: integer
+      format: int64
+    audit_event_id:
+      type: integer
+      format: int64
+    allocations:
+      type: array
+      items:
+        $ref: "#/InvestmentLotDisposalResponse"
 
 SellPreviewResponse:
   type: object
   required:
     - cost_basis_method
+    - disposal_decision
     - allocations
     - realized_gain
     - realized_gain_scale
@@ -551,6 +616,8 @@ SellPreviewResponse:
   properties:
     cost_basis_method:
       $ref: "#/CostBasisMethod"
+    disposal_decision:
+      $ref: "#/DisposalDecisionResponse"
     allocations:
       type: array
       items:

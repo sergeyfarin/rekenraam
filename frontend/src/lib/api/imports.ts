@@ -9,6 +9,7 @@ export type ImportStagedRow = components['schemas']['ImportStagedRowResponse'];
 export type ParseWarning = components['schemas']['ParseWarning'];
 export type SourceMeta = components['schemas']['ImportSourceMeta'];
 export type StartImportResponse = components['schemas']['StartImportResponse'];
+export type AnalyzeCSVImportResponse = components['schemas']['AnalyzeCSVImportResponse'];
 export type StartOnlineImportResponse = components['schemas']['StartOnlineImportResponse'];
 export type GetImportBatchResponse = components['schemas']['GetImportBatchResponse'];
 export type ListImportBatchesResponse = components['schemas']['ListImportBatchesResponse'];
@@ -60,12 +61,36 @@ async function apiFetch<T>(url: string, init: RequestInit = {}): Promise<T> {
 
 // --- Public API functions ---
 
-export async function startImport(file: File, csrfToken: string, profileId?: number): Promise<StartImportResponse> {
+export async function startImport(
+  file: File,
+  csrfToken: string,
+  profileId?: number,
+  textEncoding = 'auto'
+): Promise<StartImportResponse> {
   const form = new FormData();
   form.append('file', file, file.name);
   if (profileId) form.append('profile_id', String(profileId));
+  form.append('text_encoding', textEncoding);
 
   return apiFetch<StartImportResponse>('/api/v1/imports', {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken },
+    body: form
+  });
+}
+
+export async function analyzeCSVImport(
+  file: File,
+  csrfToken: string,
+  textEncoding = 'auto',
+  delimiter?: 'comma' | 'semicolon' | 'tab'
+): Promise<AnalyzeCSVImportResponse> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  form.append('text_encoding', textEncoding);
+  if (delimiter) form.append('delimiter', delimiter);
+
+  return apiFetch<AnalyzeCSVImportResponse>('/api/v1/imports/analyze', {
     method: 'POST',
     headers: { 'X-CSRF-Token': csrfToken },
     body: form

@@ -14,6 +14,7 @@
     type AccountRegisterEntryResponse
   } from '$lib/api/transactions';
   import { formatQuantity } from '$lib/money/format';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import { formatSignedAmount, statusTone } from './transaction-labels';
   import type { AccountClass } from './transaction-labels';
   import TransactionTable from './transaction-table.svelte';
@@ -88,6 +89,7 @@
       await movePosting(accountID, entry.posting.posting_line_id, direction, csrfToken);
       // Invalidate the register query so the updated order is fetched fresh.
       await queryClient.invalidateQueries({ queryKey: [...accountRegisterQueryKey, accountID] });
+      await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
     } catch (e) {
       moveError = e;
     } finally {

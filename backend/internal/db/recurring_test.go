@@ -16,7 +16,7 @@ import (
 // CHECK (id = 1). The same-book triggers are therefore exercised through the
 // arm a cross-book row would hit anyway — the target is not in this book —
 // with ids that exist nowhere.
-func newRecurringTestDatabase(t *testing.T) *sql.DB {
+func newRecurringTestDatabase(t testing.TB) *sql.DB {
 	t.Helper()
 
 	ctx := context.Background()

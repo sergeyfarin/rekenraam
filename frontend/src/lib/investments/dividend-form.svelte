@@ -6,6 +6,7 @@
   import { formatLedgerAmount } from '$lib/money/amount';
   import { parseDividendAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import {
     investmentPositionsQueryKey,
     investmentLotsQueryKey,
@@ -318,6 +319,7 @@
   async function refreshAfterSave() {
     await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
     await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
+    await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
     onSaved();
   }
 

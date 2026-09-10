@@ -355,6 +355,10 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 	forecastService.SetNowForTest(func() time.Time {
 		return time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
 	})
+	budgetService := app.NewBudgetService(db.NewBudgetRepository(database), settingsService)
+	budgetService.SetNowForTest(func() time.Time {
+		return time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
+	})
 	backupService := app.NewBackupService(
 		db.NewBackupRepository(database),
 		db.NewBackgroundWorkRepository(database),
@@ -384,6 +388,7 @@ func newSetupTestHandlerWithOptions(t *testing.T, options HandlerOptions) (http.
 		Backup:      backupService,
 		SelfCheck:   selfCheckService,
 		Forecast:    forecastService,
+		Budget:      budgetService,
 	}, options), database
 }
 

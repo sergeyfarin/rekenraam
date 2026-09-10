@@ -7,8 +7,16 @@ this file when the landscape shifts. Point-in-time deep dives:
 `docs/reviews/competitive-analysis-2026-07.md`. Last full revision: 2026-07-07;
 Rekenraam's code/status column reconciled 2026-08-31 (R3, R5, reporting currency,
 R12a, and completed R9). External product features, prices, and positioning
-claims remain the July research snapshot, **not newly verified market facts**;
-verify them separately before using them for purchasing or launch claims.
+claims remain the July research snapshot, **not newly verified market facts**,
+except for the explicitly cited Actual corrections below (2026-09-09).
+Verify the other cells separately before using them for purchasing or launch
+claims.
+
+The [2026-09-09 direction review](reviews/product-direction-ai-privacy-2026-09-09.md)
+challenges the broad uniqueness claims and adds current AI/MCP and privacy
+competition. Feature combinations, migration waves and willingness-to-pay claims
+below remain hypotheses unless supported by specific evidence; the review does
+not change accepted product scope.
 
 ## Positioning
 
@@ -43,25 +51,32 @@ spreadsheet."
 | Capability | Rekenraam | GnuCash | Firefly III | Actual | Ghostfolio | Portfolio Perf. | Money Mgr Ex | Beancount/hledger |
 |---|---|---|---|---|---|---|---|---|
 | Double-entry ledger | ✅ | ✅ | ✅ | ⬜ (envelope) | ⬜ | partial | partial | ✅ |
-| Multi-currency accounts | ✅ | ✅ | ✅ | limited | display only | ✅ | ✅ | ✅ |
-| Reconciliation workflow | ✅ | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ✅ | 🟦 (assert) |
+| Multi-currency accounts | ✅ | ✅ | ✅ | no native support; workaround | display only | ✅ | ✅ | ✅ |
+| Reconciliation workflow | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | 🟦 (assert) |
 | Core reports UI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Fava) |
 | CSV import + profiles | ✅ (R5) | ✅ | ✅ (importer) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| QIF/OFX import | ✅ QIF | ✅ | partial | ⬜ | ⬜ | partial | ✅ | via tools |
+| QIF/OFX import | ✅ QIF | ✅ | partial | ✅ | ⬜ | partial | ✅ | via tools |
 | Import rules engine | ✅ (literal contains, preview-time only) | partial | ✅ (strongest) | ✅ | ⬜ | ⬜ | partial | ✅ (code) |
 | Budgets | ⬜ (R8) | ✅ | ✅ | ✅ (core) | ⬜ | ⬜ | ✅ | 🟦 |
 | Recurring/scheduled txns | ✅ (templates, draft generation and review) | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
-| Cashflow forecasting | ⬜ (R10) | partial | partial | ⬜ | ⬜ | ⬜ | ⬜ | 🟦 |
+| Cashflow forecasting | ✅ (recorded + recurring, exact multi-currency) | partial | partial | ⬜ | ⬜ | ⬜ | ⬜ | 🟦 |
 | Investment lots & cost basis | ✅ (4 methods) | ✅ | ⬜ | ⬜ | ⬜ | basic FIFO/avg | partial | ✅ |
 | Dividends (incl. withholding, reinvest) | ✅ | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ |
 | Corporate actions (splits/mergers/delist) | ⬜ (T-34; splits/mergers have no manual entry either — only a worthless-holding write-off, backend-only, ships today) | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ (manual) |
 | Realized/unrealized gains | 🟦 (operational view; reproducible basis reports R18) | ✅ | ⬜ | ⬜ | ⬜ | ✅ | partial | ✅ |
 | Returns analytics (TWR/MWR) | ⬜ (R13) | ⬜ | ⬜ | ⬜ | ✅ | ✅ (strongest) | ⬜ | via tools |
 | Price/FX history + refresh | 🟦 (R11; backend incl. voiding, no UI) | ✅ | ✅ | ⬜ | ✅ | ✅ | partial | ✅ |
-| Broker/bank online feeds | ✅ T212 (BYO-key) | partial | via importer | via SimpleFIN | partial | partial | ⬜ | via tools |
+| Broker/bank online feeds | ✅ T212 (BYO-key) | partial | via importer | SimpleFIN / GoCardless / Pluggy | partial | partial | ⬜ | via tools |
 | Self-hosted web UI | ✅ | ⬜ desktop | ✅ | ✅ | ✅ | ⬜ desktop | 🟦 | ✅ (Fava) |
 | Single-binary deploy | ✅ | n/a | ⬜ (2–3 containers) | ✅ | ⬜ (3 containers) | n/a | n/a | ✅ |
 | Typed public API | ✅ OpenAPI | ⬜ | ✅ | partial | ✅ | ⬜ | ⬜ | ⬜ |
+
+**Actual corrections verified 2026-09-09:** its official documentation includes
+[reconciliation](https://actualbudget.org/docs/accounts/reconciliation/),
+[QIF/OFX and other file imports plus bank-sync adapters](https://actualbudget.org/docs/transactions/importing/),
+and an [experimental multi-currency workaround, with no native support](https://actualbudget.org/docs/budgeting/multi-currency/).
+Presence does not establish equivalence with Rekenraam's accounting semantics.
+Only these Actual cells were refreshed; this is not a full matrix re-audit.
 
 ## Feature matrix — commercial
 
@@ -74,7 +89,7 @@ spreadsheet."
 | Multi-currency | ✅ exact | clunky, US-centric | ⬜ | ⬜ | weak | limited | ✅ (best commercial) | ✅ |
 | Reconciliation | ✅ | ✅ | ⬜ | ⬜ | ⬜ | partial | partial | ⬜ |
 | Budgets | ⬜ (R8) | ✅ | ✅ | ✅ | ✅ | ✅ (core) | ✅ | ✅ |
-| Forecasting | ⬜ (R10) | ✅ | partial | ⬜ | partial | partial | ✅ (30-yr calendar) | ⬜ |
+| Forecasting | ✅ (core; learned spending planned) | ✅ | partial | ⬜ | partial | partial | ✅ (30-yr calendar) | ⬜ |
 | Investment lots & gains | ✅ | ✅ (Premier; only mainstream tool with full lot detail) | ⬜ | ⬜ | ⬜ (no lot detail) | ⬜ | partial | ⬜ |
 | Dividends | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | partial | ⬜ |
 | Corporate actions (splits/mergers) | ⬜ (T-34) | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | partial | ⬜ |
@@ -186,8 +201,8 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
    matching and retroactive application are not claimed. Recurring templates
    and generation followed in R9 slices 1–5. The localized review/discard UI
    now ships, so scheduled generation is active; entries remain drafts until
-   explicitly posted. R9 acceptance closed 2026-08-31; R10 is planned, not
-   implemented.
+   explicitly posted. R9 acceptance closed 2026-08-31; R10's deterministic
+   recorded-plus-recurring core was accepted 2026-09-07.
 3. **Returns analytics (TWR/MWR, allocation, benchmark)** — expected by
    Ghostfolio/Portfolio Performance users; Rekenraam has better underlying
    data (exact lots + FX). Roadmap R13.
@@ -195,13 +210,15 @@ multi-currency), **Copilot** (iOS-first Mint successor, US).
    equivalent; the niche-defining feature for R10. The execution plan is
    `docs/plans/projected-balances-plan.md`, followed by the local, opt-in spending
    models in `docs/plans/forecast-learning-plan.md` (daily/weekly, monthly and
-   annual seasonal patterns). Both core and learned forecasting remain unshipped.
+   annual seasonal patterns). The exact core forecast ships; learned forecasting
+   remains unimplemented.
 5. **BYO-key feed adapters** — Trading 212 ships. R15 is planned as IBKR
    Flex → GoCardless → the investment-event producer; no second provider is
    implemented. Quotes belong to R17. Other adapters remain research options,
    not promised coverage.
-6. **Jurisdiction-aware capital-gains reporting** — no competitor, commercial
-   or OSS, ships it; the long-term moat. ADR 0012 fixes the journal/subledger/
+6. **Jurisdiction-aware capital-gains reporting** — a proposed long-term
+   differentiator, not an established market gap or moat. Global uniqueness
+   and customer demand have not been demonstrated. ADR 0012 fixes the journal/subledger/
    reporting boundary, R12a repairs the inputs, and R18 plans named read-side
    projections after R16/R17. Realized versus unrealized answer different
    questions, jurisdictions differ in treatment, and unrealized figures move

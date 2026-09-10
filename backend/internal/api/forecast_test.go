@@ -186,6 +186,7 @@ func TestForecastAPIDefaultAndEmptyScopes(t *testing.T) {
 	assert.Equal(t, "default_cash", body.Scope.Mode)
 	assert.Empty(t, body.Scope.ResolvedAccountIDs)
 	assert.NotNil(t, body.Scope.ResolvedAccountIDs)
+	assert.NotEmpty(t, body.CurrencyOptions)
 	assert.NotNil(t, body.Series)
 	assert.NotNil(t, body.Totals)
 
@@ -284,4 +285,79 @@ func TestForecastCursorRejectsChangedRecipeAndMalformedPayload(t *testing.T) {
 	forecastRequest(t, fixture.handler, fixture.session, base+"&detail_account_id="+strconvFormatInt(fixture.checking.ID)+"&cursor="+url.QueryEscape(*first.NextCursor), http.StatusBadRequest)
 	forecastRequest(t, fixture.handler, fixture.session, strings.Replace(base, "horizon_days=2", "horizon_days=1", 1)+"&cursor="+url.QueryEscape(*first.NextCursor), http.StatusConflict)
 	forecastRequest(t, fixture.handler, nil, base, http.StatusUnauthorized)
+}
+
+func TestForecastReadsLeaveLedgerReportsAndExportsUnchanged(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	f := newExportFixture(t, handler)
+	createTransactionForSession(t, handler, f.sessionCookie, f.csrfToken, balancedBody("2026-06-16",
+		posting(f.checking.ID, -1000, 2, f.usdID), posting(f.groceries.ID, 1000, 2, f.usdID)), http.StatusCreated)
+	generateRecurringDraft(t, handler, database, f.sessionCookie, "2026-09-08", f.checking.ID, f.groceries.ID, f.usdID, 10000)
+
+	reportPaths := []string{
+		"/api/v1/reports/net-worth?start_date=2026-06-01&end_date=2026-09-30&bucket=month",
+		"/api/v1/reports/spending?start_date=2026-06-01&end_date=2026-09-30&group_by=category",
+		"/api/v1/reports/cashflow?start_date=2026-06-01&end_date=2026-09-30&bucket=month",
+	}
+	reportsBefore := make([]string, len(reportPaths))
+	for i, path := range reportPaths {
+		reportsBefore[i] = recurringAPIRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodGet, path, "", http.StatusOK).Body.String()
+	}
+	csvBefore := downloadLedgerCSV(t, handler, f.sessionCookie, "/api/v1/exports/ledger.csv").body
+	qifQuery := "?account_id=" + strconvFormatInt(f.checking.ID) + "&qif_date_layout=mdy"
+	qifBefore := downloadQIF(t, handler, f.sessionCookie, qifQuery, http.StatusOK).body
+	stateBefore := forecastDomainCounts(t, database)
+
+	query := "?horizon_days=30&account_id=" + strconvFormatInt(f.checking.ID) + "&include_descendants=false"
+	balances := forecastBalancesFor(t, forecastAPIFixture{handler: handler, database: database, session: f.sessionCookie}, query)
+	forecastRequest(t, handler, f.sessionCookie, "/api/v1/forecasts/balance-events"+query+"&date=2026-09-08&basis_token="+balances.BasisToken, http.StatusOK)
+
+	assert.Equal(t, stateBefore, forecastDomainCounts(t, database), "forecast GETs must not mutate any financial-domain state")
+	for i, path := range reportPaths {
+		assert.JSONEq(t, reportsBefore[i], recurringAPIRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodGet, path, "", http.StatusOK).Body.String(), path)
+	}
+	assert.Equal(t, csvBefore, downloadLedgerCSV(t, handler, f.sessionCookie, "/api/v1/exports/ledger.csv").body)
+	assert.Equal(t, qifBefore, downloadQIF(t, handler, f.sessionCookie, qifQuery, http.StatusOK).body)
+}
+
+func TestForecastDoesNotTouchInvestmentSubledgerOrCheckpoints(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "FXISO")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	buyResponse := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyResponse.Body).Decode(&bought))
+	holdingPosting := postingByAccount(t, bought.Transaction, holding.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, holding.ID, instrument.CommodityID, holdingPosting, "2026-02-01")
+	require.NotEmpty(t, listCheckpointsForSession(t, handler, f.sessionCookie, holding.ID))
+
+	before := forecastDomainCounts(t, database)
+	assert.Positive(t, before["investment_lots"], "the no-write assertion must cover existing lot state")
+	assert.Positive(t, before["investment_lot_events"], "the no-write assertion must cover existing lot events")
+	assert.Positive(t, before["reconciliation_checkpoints"], "the no-write assertion must cover an existing checkpoint")
+	query := "?horizon_days=2&account_id=" + strconvFormatInt(f.cashAccount.ID) + "&include_descendants=false"
+	fixture := forecastAPIFixture{handler: handler, database: database, session: f.sessionCookie}
+	balances := forecastBalancesFor(t, fixture, query)
+	forecastRequest(t, handler, f.sessionCookie, "/api/v1/forecasts/balance-events"+query+"&date=2026-09-08&basis_token="+balances.BasisToken, http.StatusOK)
+	after := forecastDomainCounts(t, database)
+	assert.Equal(t, before, after)
+}
+
+func forecastDomainCounts(t *testing.T, database *sql.DB) map[string]int {
+	t.Helper()
+	tables := []string{
+		"transactions", "transaction_versions", "journal_entries", "posting_lines", "posting_versions",
+		"recurring_templates", "recurring_occurrences", "audit_events", "background_work_items",
+		"reconciliation_checkpoints", "reconciliation_checkpoint_postings",
+		"investment_lots", "investment_lot_events",
+	}
+	counts := make(map[string]int, len(tables))
+	for _, table := range tables {
+		var count int
+		require.NoError(t, database.QueryRow("SELECT COUNT(*) FROM "+table).Scan(&count), table)
+		counts[table] = count
+	}
+	return counts
 }

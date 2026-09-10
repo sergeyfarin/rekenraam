@@ -55,6 +55,7 @@ var systemAccountSpecs = []db.SystemAccountSpec{
 
 type Account struct {
 	ID                    int64
+	VersionID             int64
 	BookID                int64
 	IsSystem              bool
 	SystemRole            string
@@ -997,6 +998,7 @@ func intPtr(value sql.NullInt64) *int {
 func toAccount(record db.AccountRecord) Account {
 	return Account{
 		ID:                    record.ID,
+		VersionID:             record.VersionID,
 		BookID:                record.BookID,
 		IsSystem:              record.IsSystem,
 		SystemRole:            nullableString(record.SystemRole),

@@ -181,6 +181,7 @@ type investmentWriteOffRequest struct {
 
 type sellPreviewResponse struct {
 	CostBasisMethod   string                          `json:"cost_basis_method"`
+	DisposalDecision  disposalDecisionResponse        `json:"disposal_decision"`
 	Allocations       []investmentLotDisposalResponse `json:"allocations"`
 	RealizedGain      int64                           `json:"realized_gain"`
 	RealizedGainScale int                             `json:"realized_gain_scale"`
@@ -195,9 +196,30 @@ type investmentLotAllocationRequest struct {
 }
 
 type investmentTradeResponse struct {
-	Transaction transactionResponse             `json:"transaction"`
-	LotID       *int64                          `json:"lot_id,omitempty"`
-	Allocations []investmentLotDisposalResponse `json:"allocations"`
+	Transaction      transactionResponse             `json:"transaction"`
+	LotID            *int64                          `json:"lot_id,omitempty"`
+	Allocations      []investmentLotDisposalResponse `json:"allocations"`
+	DisposalDecision *disposalDecisionResponse       `json:"disposal_decision,omitempty"`
+}
+
+type disposalDecisionResponse struct {
+	ID                   *int64                          `json:"id,omitempty"`
+	TransactionID        *int64                          `json:"transaction_id,omitempty"`
+	TransactionVersionID *int64                          `json:"transaction_version_id,omitempty"`
+	CostBasisMethod      string                          `json:"cost_basis_method"`
+	ResolutionTier       string                          `json:"resolution_tier"`
+	AccountVersionID     *int64                          `json:"account_version_id,omitempty"`
+	ProfileID            *int64                          `json:"profile_id,omitempty"`
+	ProfileVersionID     *int64                          `json:"profile_version_id,omitempty"`
+	SourceEffectiveFrom  string                          `json:"source_effective_from,omitempty"`
+	SourceRecordedAt     string                          `json:"source_recorded_at,omitempty"`
+	QuantityValue        exact.Coefficient               `json:"quantity_value"`
+	QuantityScale        int                             `json:"quantity_scale"`
+	DisposedBasisValue   exact.Coefficient               `json:"disposed_basis_value"`
+	DisposedBasisScale   int                             `json:"disposed_basis_scale"`
+	CostCommodityID      int64                           `json:"cost_commodity_id"`
+	AuditEventID         *int64                          `json:"audit_event_id,omitempty"`
+	Allocations          []investmentLotDisposalResponse `json:"allocations"`
 }
 
 type investmentLotDisposalResponse struct {
@@ -612,6 +634,7 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 		}
 		writeJSON(w, http.StatusOK, sellPreviewResponse{
 			CostBasisMethod:   preview.CostBasisMethod,
+			DisposalDecision:  toDisposalDecisionResponse(preview.DisposalDecision),
 			Allocations:       toInvestmentLotDisposalResponses(preview.Allocations),
 			RealizedGain:      preview.RealizedGain,
 			RealizedGainScale: preview.RealizedGainScale,
@@ -683,6 +706,7 @@ func writeOffPreviewInvestment(logger *slog.Logger, authService *app.AuthService
 		}
 		writeJSON(w, http.StatusOK, sellPreviewResponse{
 			CostBasisMethod:   preview.CostBasisMethod,
+			DisposalDecision:  toDisposalDecisionResponse(preview.DisposalDecision),
 			Allocations:       toInvestmentLotDisposalResponses(preview.Allocations),
 			RealizedGain:      preview.RealizedGain,
 			RealizedGainScale: preview.RealizedGainScale,
@@ -1125,7 +1149,25 @@ func toDividendDefaultResponses(defaults []app.DividendDefault) []dividendDefaul
 }
 
 func toInvestmentTradeResponse(result app.InvestmentTradeResult) investmentTradeResponse {
-	return investmentTradeResponse{Transaction: toTransactionResponse(result.Transaction), LotID: result.LotID, Allocations: toInvestmentLotDisposalResponses(result.Allocations)}
+	response := investmentTradeResponse{Transaction: toTransactionResponse(result.Transaction), LotID: result.LotID, Allocations: toInvestmentLotDisposalResponses(result.Allocations)}
+	if result.DisposalDecision != nil {
+		decision := toDisposalDecisionResponse(*result.DisposalDecision)
+		response.DisposalDecision = &decision
+	}
+	return response
+}
+
+func toDisposalDecisionResponse(decision app.DisposalDecision) disposalDecisionResponse {
+	return disposalDecisionResponse{
+		ID: decision.ID, TransactionID: decision.TransactionID, TransactionVersionID: decision.TransactionVersionID,
+		CostBasisMethod: decision.CostBasisMethod, ResolutionTier: decision.ResolutionTier,
+		AccountVersionID: decision.AccountVersionID, ProfileID: decision.ProfileID, ProfileVersionID: decision.ProfileVersionID,
+		SourceEffectiveFrom: decision.SourceEffectiveFrom, SourceRecordedAt: decision.SourceRecordedAt,
+		QuantityValue: decision.QuantityValue, QuantityScale: decision.QuantityScale,
+		DisposedBasisValue: decision.DisposedBasisValue, DisposedBasisScale: decision.DisposedBasisScale,
+		CostCommodityID: decision.CostCommodityID, AuditEventID: decision.AuditEventID,
+		Allocations: toInvestmentLotDisposalResponses(decision.Allocations),
+	}
 }
 
 func toInvestmentLotDisposalResponses(disposals []app.InvestmentLotDisposal) []investmentLotDisposalResponse {

@@ -23,6 +23,7 @@
   import TransactionTable from '$lib/transactions/transaction-table.svelte';
   import type { Column } from '$lib/transactions/transaction-table-types';
   import { APIClientError } from '$lib/api/client';
+  import { forecastQueryKey } from '$lib/api/forecast';
 
   const queryClient = useQueryClient();
   const sessionQuery = createQuery(() => authSessionQueryOptions());
@@ -65,6 +66,7 @@
       // Invalidate both the trash list and the main transactions list.
       await queryClient.invalidateQueries({ queryKey: deletedTransactionsQueryKey });
       await queryClient.invalidateQueries({ queryKey: transactionsQueryKey });
+      await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
     } catch (error) {
       restoreError = error;
     } finally {

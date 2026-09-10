@@ -115,6 +115,8 @@ type CostBasisProfileRecord struct {
 	CreatedByUserID int64
 	UpdatedAt       string
 	UpdatedByUserID int64
+	VersionID       int64
+	VersionSeq      int64
 }
 
 type CostBasisProfileSpec struct {
@@ -239,11 +241,41 @@ type LotAllocation struct {
 }
 
 type LotDisposalRecord struct {
-	LotID          int64
-	QuantityValue  exact.Coefficient
-	QuantityScale  int
-	CostBasisValue int64
-	CostBasisScale int
+	EventID         int64
+	LotID           int64
+	QuantityValue   exact.Coefficient
+	QuantityScale   int
+	CostBasisValue  int64
+	CostBasisScale  int
+	CostCommodityID int64
+}
+
+type DisposalDecisionSource struct {
+	ResolutionTier      string
+	AccountVersionID    int64
+	ProfileID           int64
+	ProfileVersionID    int64
+	SourceEffectiveFrom string
+	SourceRecordedAt    string
+}
+
+type DisposalDecisionRecord struct {
+	ID                   int64
+	TransactionID        int64
+	TransactionVersionID int64
+	AccountID            int64
+	CommodityID          int64
+	CostCommodityID      int64
+	EventDate            string
+	QuantityValue        exact.Coefficient
+	QuantityScale        int
+	DisposedBasisValue   exact.Coefficient
+	DisposedBasisScale   int
+	CostBasisMethod      string
+	DisposalDecisionSource
+	CreatedAt    string
+	AuditEventID int64
+	Allocations  []LotDisposalRecord
 }
 
 type DisposeLotsParams struct {
@@ -257,6 +289,7 @@ type DisposeLotsParams struct {
 	QuantityScale   int
 	Allocations     []LotAllocation
 	CostBasisMethod string
+	DecisionSource  DisposalDecisionSource
 	CreatedAt       string
 	ActorUserID     int64
 	AuthSessionID   int64
@@ -672,10 +705,14 @@ func (r *InvestmentRepository) EnsureDefaultCostBasisProfile(ctx context.Context
 
 func (r *InvestmentRepository) ListCostBasisProfiles(ctx context.Context, bookID int64) ([]CostBasisProfileRecord, error) {
 	rows, err := r.database.QueryContext(ctx, `
-		SELECT id, book_id, name, method, is_default, status, description, metadata_json, created_at, created_by_user_id, updated_at, updated_by_user_id
-		FROM cost_basis_profiles
-		WHERE book_id = ?
-		ORDER BY is_default DESC, name COLLATE NOCASE, id
+		SELECT profile.id, profile.book_id, profile.name, profile.method, profile.is_default,
+			profile.status, profile.description, profile.metadata_json, profile.created_at,
+			profile.created_by_user_id, profile.updated_at, profile.updated_by_user_id,
+			version.id, version.version_seq
+		FROM cost_basis_profiles profile
+		JOIN cost_basis_profile_versions version ON version.id = profile.current_version_id
+		WHERE profile.book_id = ?
+		ORDER BY profile.is_default DESC, profile.name COLLATE NOCASE, profile.id
 	`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("list cost basis profiles: %w", err)
@@ -686,9 +723,13 @@ func (r *InvestmentRepository) ListCostBasisProfiles(ctx context.Context, bookID
 
 func (r *InvestmentRepository) DefaultCostBasisProfile(ctx context.Context, bookID int64) (CostBasisProfileRecord, error) {
 	return scanCostBasisProfileRow(r.database.QueryRowContext(ctx, `
-		SELECT id, book_id, name, method, is_default, status, description, metadata_json, created_at, created_by_user_id, updated_at, updated_by_user_id
-		FROM cost_basis_profiles
-		WHERE book_id = ? AND is_default = 1 AND status = 'active'
+		SELECT profile.id, profile.book_id, profile.name, profile.method, profile.is_default,
+			profile.status, profile.description, profile.metadata_json, profile.created_at,
+			profile.created_by_user_id, profile.updated_at, profile.updated_by_user_id,
+			version.id, version.version_seq
+		FROM cost_basis_profiles profile
+		JOIN cost_basis_profile_versions version ON version.id = profile.current_version_id
+		WHERE profile.book_id = ? AND profile.is_default = 1 AND profile.status = 'active'
 	`, bookID))
 }
 
@@ -718,10 +759,30 @@ func (r *InvestmentRepository) SaveCostBasisProfile(ctx context.Context, params 
 	}
 	if params.Spec.IsDefault {
 		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO cost_basis_profile_versions (
+				book_id, profile_id, version_seq, name, method, is_default, status,
+				description, metadata_json, recorded_at, changed_by_user_id, change_reason, audit_event_id
+			)
+			SELECT profile.book_id, profile.id, current.version_seq + 1, profile.name,
+				profile.method, 0, profile.status, profile.description, profile.metadata_json,
+				?, ?, ?, ?
+			FROM cost_basis_profiles profile
+			JOIN cost_basis_profile_versions current ON current.id = profile.current_version_id
+			WHERE profile.book_id = ? AND profile.is_default = 1 AND profile.id <> ?
+		`, params.RecordedAt, params.ActorUserID, params.ChangeReason, auditEventID,
+			params.BookID, params.ProfileID); err != nil {
+			return CostBasisProfileRecord{}, fmt.Errorf("version cleared default cost basis profiles: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `
 			UPDATE cost_basis_profiles
-			SET is_default = 0, updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
-			WHERE book_id = ? AND is_default = 1
-		`, params.RecordedAt, params.ActorUserID, auditEventID, params.BookID); err != nil {
+			SET is_default = 0, updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?,
+				current_version_id = (
+					SELECT version.id FROM cost_basis_profile_versions version
+					WHERE version.profile_id = cost_basis_profiles.id
+					ORDER BY version.version_seq DESC LIMIT 1
+				)
+			WHERE book_id = ? AND is_default = 1 AND id <> ?
+		`, params.RecordedAt, params.ActorUserID, auditEventID, params.BookID, params.ProfileID); err != nil {
 			return CostBasisProfileRecord{}, fmt.Errorf("clear default cost basis profiles: %w", err)
 		}
 	}
@@ -760,6 +821,34 @@ func (r *InvestmentRepository) SaveCostBasisProfile(ctx context.Context, params 
 		if err != nil {
 			return CostBasisProfileRecord{}, fmt.Errorf("read cost basis profile id: %w", err)
 		}
+	}
+	var versionSeq int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(version_seq), 0) + 1
+		FROM cost_basis_profile_versions
+		WHERE profile_id = ?
+	`, profileID).Scan(&versionSeq); err != nil {
+		return CostBasisProfileRecord{}, fmt.Errorf("next cost basis profile version: %w", err)
+	}
+	versionResult, err := tx.ExecContext(ctx, `
+		INSERT INTO cost_basis_profile_versions (
+			book_id, profile_id, version_seq, name, method, is_default, status,
+			description, metadata_json, recorded_at, changed_by_user_id, change_reason, audit_event_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, profileID, versionSeq, params.Spec.Name, params.Spec.Method,
+		boolInt(params.Spec.IsDefault), params.Spec.Status, params.Spec.Description,
+		params.Spec.MetadataJSON, params.RecordedAt, params.ActorUserID, params.ChangeReason, auditEventID)
+	if err != nil {
+		return CostBasisProfileRecord{}, fmt.Errorf("insert cost basis profile version: %w", err)
+	}
+	versionID, err := versionResult.LastInsertId()
+	if err != nil {
+		return CostBasisProfileRecord{}, fmt.Errorf("read cost basis profile version id: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE cost_basis_profiles SET current_version_id = ? WHERE book_id = ? AND id = ?
+	`, versionID, params.BookID, profileID); err != nil {
+		return CostBasisProfileRecord{}, fmt.Errorf("select current cost basis profile version: %w", err)
 	}
 	record, err := costBasisProfileByIDTx(ctx, tx, params.BookID, profileID)
 	if err != nil {
@@ -1408,7 +1497,7 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		if err != nil {
 			return nil, err
 		}
-		if _, err := tx.ExecContext(ctx, `
+		result, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_lot_events (
 				book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 				cost_basis_value, cost_basis_scale, cost_basis_method, metadata_json,
@@ -1416,11 +1505,17 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 			) VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, 'average_cost', ?, ?, ?, ?)
 		`, params.BookID, lot.id, nullablePositiveInt64(params.TransactionID), params.EventDate,
 			takeCoeff.Negated(), lot.quantityScale, -reportedValue, lot.costBasisScale,
-			params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
+			params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
+		if err != nil {
 			return nil, fmt.Errorf("insert average-cost disposal lot event: %w", err)
 		}
-		disposals = append(disposals, LotDisposalRecord{LotID: lot.id, QuantityValue: takeCoeff,
-			QuantityScale: lot.quantityScale, CostBasisValue: reportedValue, CostBasisScale: lot.costBasisScale})
+		eventID, err := result.LastInsertId()
+		if err != nil {
+			return nil, fmt.Errorf("read average-cost disposal lot event id: %w", err)
+		}
+		disposals = append(disposals, LotDisposalRecord{EventID: eventID, LotID: lot.id, QuantityValue: takeCoeff,
+			QuantityScale: lot.quantityScale, CostBasisValue: reportedValue, CostBasisScale: lot.costBasisScale,
+			CostCommodityID: params.CostCommodityID})
 		disposedBasisRemaining.Sub(disposedBasisRemaining, reported)
 	}
 
@@ -1518,6 +1613,11 @@ func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, tran
 }
 
 func (r *InvestmentRepository) CreateTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams) (TransactionRecord, []LotDisposalRecord, error) {
+	transaction, disposals, _, err := r.createTransactionAndDisposeLots(ctx, transactionParams, disposalParams, nil)
+	return transaction, disposals, err
+}
+
+func (r *InvestmentRepository) CreateTransactionAndDisposeLotsWithDecision(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams) (TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
 	return r.createTransactionAndDisposeLots(ctx, transactionParams, disposalParams, nil)
 }
 
@@ -1525,13 +1625,18 @@ func (r *InvestmentRepository) CreateTransactionAndDisposeLots(ctx context.Conte
 // CreateTransactionAndLotWithPostWrite. The callback runs after lot disposal
 // but before the enclosing transaction commits.
 func (r *InvestmentRepository) CreateTransactionAndDisposeLotsWithPostWrite(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, []LotDisposalRecord, error) {
+	transaction, disposals, _, err := r.createTransactionAndDisposeLots(ctx, transactionParams, disposalParams, postWrite)
+	return transaction, disposals, err
+}
+
+func (r *InvestmentRepository) CreateTransactionAndDisposeLotsWithDecisionAndPostWrite(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
 	return r.createTransactionAndDisposeLots(ctx, transactionParams, disposalParams, postWrite)
 }
 
-func (r *InvestmentRepository) createTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, []LotDisposalRecord, error) {
+func (r *InvestmentRepository) createTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
-		return TransactionRecord{}, nil, fmt.Errorf("begin create investment transaction and dispose lots: %w", err)
+		return TransactionRecord{}, nil, DisposalDecisionRecord{}, fmt.Errorf("begin create investment transaction and dispose lots: %w", err)
 	}
 	committed := false
 	defer func() {
@@ -1542,28 +1647,97 @@ func (r *InvestmentRepository) createTransactionAndDisposeLots(ctx context.Conte
 
 	transaction, auditEventID, err := createTransactionWithAuditTx(ctx, tx, transactionParams)
 	if err != nil {
-		return TransactionRecord{}, nil, err
+		return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
 	}
 	disposalParams.TransactionID = transaction.ID
 	disposals, err := disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID)
 	if err != nil {
-		return TransactionRecord{}, nil, err
+		return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
+	}
+	decision, err := createDisposalDecisionTx(ctx, tx, transaction, disposalParams, disposals, auditEventID)
+	if err != nil {
+		return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
 	}
 	invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, transactionParams, auditEventID)
 	if err != nil {
-		return TransactionRecord{}, nil, err
+		return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
 	}
 	transaction.InvalidatedCheckpointIDs = invalidatedIDs
 	if postWrite != nil {
 		if err := postWrite(tx, transaction.ID); err != nil {
-			return TransactionRecord{}, nil, err
+			return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, nil, fmt.Errorf("commit create investment transaction and dispose lots: %w", err)
+		return TransactionRecord{}, nil, DisposalDecisionRecord{}, fmt.Errorf("commit create investment transaction and dispose lots: %w", err)
 	}
 	committed = true
-	return transaction, disposals, nil
+	return transaction, disposals, decision, nil
+}
+
+func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction TransactionRecord, params DisposeLotsParams, disposals []LotDisposalRecord, auditEventID int64) (DisposalDecisionRecord, error) {
+	if len(disposals) == 0 {
+		return DisposalDecisionRecord{}, fmt.Errorf("create disposal decision: no allocations")
+	}
+	costCommodityID := params.CostCommodityID
+	if costCommodityID == 0 {
+		if err := tx.QueryRowContext(ctx, `SELECT cost_commodity_id FROM investment_lots WHERE book_id = ? AND id = ?`, params.BookID, disposals[0].LotID).Scan(&costCommodityID); err != nil {
+			return DisposalDecisionRecord{}, fmt.Errorf("read disposal decision cost commodity: %w", err)
+		}
+	}
+	disposedBasis := exact.NewScaledInt()
+	for _, allocation := range disposals {
+		disposedBasis.AddInt64(allocation.CostBasisValue, allocation.CostBasisScale)
+	}
+	disposedBasisValue, err := disposedBasis.Coefficient()
+	if err != nil {
+		return DisposalDecisionRecord{}, fmt.Errorf("compute disposal decision basis: %w", err)
+	}
+	source := params.DecisionSource
+	if source.ResolutionTier == "" {
+		source.ResolutionTier = "fallback"
+	}
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO investment_disposal_decisions (
+			book_id, transaction_id, transaction_version_id, account_id, commodity_id,
+			cost_commodity_id, event_date, quantity_value, quantity_scale,
+			disposed_basis_value, disposed_basis_scale, cost_basis_method, resolution_tier,
+			account_version_id, profile_id, profile_version_id, source_effective_from,
+			source_recorded_at, created_at, created_by_user_id, created_audit_event_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, transaction.ID, transaction.VersionID, params.AccountID, params.CommodityID,
+		costCommodityID, params.EventDate, params.QuantityValue, params.QuantityScale,
+		disposedBasisValue, disposedBasis.Scale(), params.CostBasisMethod, source.ResolutionTier,
+		nullablePositiveInt64(source.AccountVersionID), nullablePositiveInt64(source.ProfileID),
+		nullablePositiveInt64(source.ProfileVersionID), nullableStringValue(sql.NullString{String: source.SourceEffectiveFrom, Valid: source.SourceEffectiveFrom != ""}),
+		nullableStringValue(sql.NullString{String: source.SourceRecordedAt, Valid: source.SourceRecordedAt != ""}), params.CreatedAt, params.ActorUserID, auditEventID)
+	if err != nil {
+		return DisposalDecisionRecord{}, fmt.Errorf("insert disposal decision: %w", err)
+	}
+	decisionID, err := result.LastInsertId()
+	if err != nil {
+		return DisposalDecisionRecord{}, fmt.Errorf("read disposal decision id: %w", err)
+	}
+	for index, allocation := range disposals {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO investment_disposal_allocations (
+				book_id, decision_id, lot_event_id, lot_id, allocation_seq,
+				quantity_value, quantity_scale, cost_basis_value, cost_basis_scale
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, params.BookID, decisionID, allocation.EventID, allocation.LotID, index+1,
+			allocation.QuantityValue, allocation.QuantityScale, allocation.CostBasisValue,
+			allocation.CostBasisScale); err != nil {
+			return DisposalDecisionRecord{}, fmt.Errorf("insert disposal decision allocation: %w", err)
+		}
+	}
+	return DisposalDecisionRecord{
+		ID: decisionID, TransactionID: transaction.ID, TransactionVersionID: transaction.VersionID,
+		AccountID: params.AccountID, CommodityID: params.CommodityID, CostCommodityID: costCommodityID,
+		EventDate: params.EventDate, QuantityValue: params.QuantityValue, QuantityScale: params.QuantityScale,
+		DisposedBasisValue: disposedBasisValue, DisposedBasisScale: disposedBasis.Scale(),
+		CostBasisMethod: params.CostBasisMethod, DisposalDecisionSource: source,
+		CreatedAt: params.CreatedAt, AuditEventID: auditEventID, Allocations: disposals,
+	}, nil
 }
 
 func (r *InvestmentRepository) ListLots(ctx context.Context, bookID int64, accountID int64, commodityID int64) ([]InvestmentLotRecord, error) {
@@ -2220,7 +2394,7 @@ func scanInvestmentInstrumentRecords(rows *sql.Rows) ([]InvestmentInstrumentReco
 func scanCostBasisProfileRow(row rowScanner) (CostBasisProfileRecord, error) {
 	var record CostBasisProfileRecord
 	var isDefault int
-	if err := row.Scan(&record.ID, &record.BookID, &record.Name, &record.Method, &isDefault, &record.Status, &record.Description, &record.MetadataJSON, &record.CreatedAt, &record.CreatedByUserID, &record.UpdatedAt, &record.UpdatedByUserID); err != nil {
+	if err := row.Scan(&record.ID, &record.BookID, &record.Name, &record.Method, &isDefault, &record.Status, &record.Description, &record.MetadataJSON, &record.CreatedAt, &record.CreatedByUserID, &record.UpdatedAt, &record.UpdatedByUserID, &record.VersionID, &record.VersionSeq); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return CostBasisProfileRecord{}, ErrNotFound
 		}
@@ -2247,9 +2421,13 @@ func scanCostBasisProfiles(rows *sql.Rows) ([]CostBasisProfileRecord, error) {
 
 func costBasisProfileByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, profileID int64) (CostBasisProfileRecord, error) {
 	return scanCostBasisProfileRow(tx.QueryRowContext(ctx, `
-		SELECT id, book_id, name, method, is_default, status, description, metadata_json, created_at, created_by_user_id, updated_at, updated_by_user_id
-		FROM cost_basis_profiles
-		WHERE book_id = ? AND id = ?
+		SELECT profile.id, profile.book_id, profile.name, profile.method, profile.is_default,
+			profile.status, profile.description, profile.metadata_json, profile.created_at,
+			profile.created_by_user_id, profile.updated_at, profile.updated_by_user_id,
+			version.id, version.version_seq
+		FROM cost_basis_profiles profile
+		JOIN cost_basis_profile_versions version ON version.id = profile.current_version_id
+		WHERE profile.book_id = ? AND profile.id = ?
 	`, bookID, profileID))
 }
 
@@ -2364,7 +2542,7 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 	`, nextRemainingQuantity, nextRemainingCost, status, params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("update disposed investment lot: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `
+	result, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_lot_events (
 			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 			cost_basis_value, cost_basis_scale, cost_basis_method, metadata_json,
@@ -2373,15 +2551,22 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, params.BookID, lotID, nullablePositiveInt64(params.TransactionID), params.EventDate,
 		quantityValue.Negated(), quantityScale, -costBasisValue, lot.RemainingCostBasisScale,
-		params.CostBasisMethod, params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID); err != nil {
+		params.CostBasisMethod, params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
+	if err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("insert disposal lot event: %w", err)
 	}
+	eventID, err := result.LastInsertId()
+	if err != nil {
+		return LotDisposalRecord{}, fmt.Errorf("read disposal lot event id: %w", err)
+	}
 	return LotDisposalRecord{
-		LotID:          lotID,
-		QuantityValue:  quantityValue,
-		QuantityScale:  quantityScale,
-		CostBasisValue: costBasisValue,
-		CostBasisScale: lot.RemainingCostBasisScale,
+		EventID:         eventID,
+		LotID:           lotID,
+		QuantityValue:   quantityValue,
+		QuantityScale:   quantityScale,
+		CostBasisValue:  costBasisValue,
+		CostBasisScale:  lot.RemainingCostBasisScale,
+		CostCommodityID: lot.CostCommodityID,
 	}, nil
 }
 

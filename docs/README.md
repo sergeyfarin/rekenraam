@@ -43,14 +43,19 @@ have exactly one home.
 
 ## Current execution plan
 
-[R10 projected balances](plans/projected-balances-plan.md) is planned, not
-implemented. It includes financial/source rules, worked numerical fixtures,
-OpenAPI/UI contracts, eight ordered slices, a named test matrix and an agent
-handoff prompt. Its [lightweight learning extension](plans/forecast-learning-plan.md)
-adds four subsequent slices for opt-in local spending models across daily/weekly,
-monthly and annual patterns, with explicit quality and hardware gates. Both
-plans are unimplemented. Start with core slice 1 (read-only snapshots), not the
-screen.
+[R10 projected balances](plans/projected-balances-plan.md) is complete: see the
+[core acceptance review](reviews/r10-core-acceptance-review-2026-09-07.md) and
+[learned-spending acceptance review](reviews/r10-learning-acceptance-review-2026-09-09.md).
+The [lightweight learning extension](plans/forecast-learning-plan.md) ships
+opt-in local models across daily/weekly, monthly and annual patterns with
+explicit quality and hardware gates. R8 budget planning is now the current
+execution target; its plan is the next artifact to write.
+
+Latest strategic review:
+[2026-09-09 product direction, AI and privacy](reviews/product-direction-ai-privacy-2026-09-09.md).
+It challenges the positioning and evaluates optional AI/MCP, data ownership,
+release readiness and adoption experiments. Its recommendations are proposals,
+not changes to the accepted roadmap or ADRs.
 
 ## Folders
 

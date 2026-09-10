@@ -155,7 +155,8 @@ func TestExportBundleChecksumsVerify(t *testing.T) {
 
 	for _, name := range []string{
 		"README.txt", "ledger.csv", "accounts.csv", "categories.csv", "payees.csv",
-		"commodities.csv", "tags.csv", "lots.csv", "prices.csv", "trial-balance.csv", "manifest.json",
+		"commodities.csv", "tags.csv", "lots.csv", "disposal-decisions.csv",
+		"disposal-allocations.csv", "prices.csv", "trial-balance.csv", "manifest.json",
 	} {
 		assert.Containsf(t, bundle.files, name, "the archive must carry %s", name)
 	}
@@ -626,8 +627,11 @@ func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
 
 	instrument := createInstrumentForSession(t, handler, f, "VWRL")
 	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
-	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+	buyResponse := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
 		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(buyResponse.Body).Decode(&bought))
+	require.NotNil(t, bought.LotID)
 
 	bundle := downloadBundle(t, handler, f.sessionCookie, "")
 	lots := bundle.table(t, "lots.csv")
@@ -660,6 +664,9 @@ func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
 			TransactionDate: "2026-03-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
 			CashAccountID: f.cashAccount.ID, QuantityValue: exact.New(4), QuantityScale: 0,
 			CashAmountValue: 60000, CashAmountScale: 2, CashCommodityID: f.commodityID,
+			CostBasisMethod: "specific_lot", LotAllocations: []investmentLotAllocationRequest{{
+				LotID: *bought.LotID, QuantityValue: exact.New(4), QuantityScale: 0,
+			}},
 		}, http.StatusCreated)
 
 	afterSale := downloadBundle(t, handler, f.sessionCookie, "").table(t, "lots.csv")
@@ -668,6 +675,23 @@ func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
 	assert.Equal(t, "6", afterSale.column(afterSale.rows[0], "remaining_quantity"))
 	assert.Equal(t, "1000.00", afterSale.column(afterSale.rows[0], "cost_basis"))
 	assert.Equal(t, "600.00", afterSale.column(afterSale.rows[0], "remaining_cost_basis"))
+
+	bundleAfterSale := downloadBundle(t, handler, f.sessionCookie, "")
+	decisions := bundleAfterSale.table(t, "disposal-decisions.csv")
+	require.Len(t, decisions.rows, 1)
+	assert.Equal(t, "specific_lot", decisions.column(decisions.rows[0], "cost_basis_method"))
+	assert.Equal(t, "transaction", decisions.column(decisions.rows[0], "resolution_tier"))
+	assert.Equal(t, "4", decisions.column(decisions.rows[0], "quantity"))
+	assert.Equal(t, "400.00", decisions.column(decisions.rows[0], "disposed_basis"))
+	assert.NotEmpty(t, decisions.column(decisions.rows[0], "transaction_version_id"))
+	assert.NotEmpty(t, decisions.column(decisions.rows[0], "audit_event_id"))
+
+	allocations := bundleAfterSale.table(t, "disposal-allocations.csv")
+	require.Len(t, allocations.rows, 1)
+	assert.Equal(t, decisions.column(decisions.rows[0], "decision_id"), allocations.column(allocations.rows[0], "decision_id"))
+	assert.Equal(t, "4", allocations.column(allocations.rows[0], "quantity"))
+	assert.Equal(t, "400.00", allocations.column(allocations.rows[0], "cost_basis"))
+	assert.NotEmpty(t, allocations.column(allocations.rows[0], "lot_event_id"))
 }
 
 func TestBundlePricesFileCarriesObservationsAtTheirOwnScale(t *testing.T) {

@@ -373,7 +373,7 @@ func (b *forecastBuild) finish(input forecastNormalizedInput, computedAt string)
 	if len(input.AccountIDs) == 0 {
 		mode = "default_cash"
 	}
-	result := ForecastResult{AsOfDate: b.bounds.AsOf, FirstDate: b.bounds.First, ThroughDate: b.bounds.Through, TimeZone: b.snapshot.TimeZone, ComputedAt: computedAt, HorizonDays: input.HorizonDays, PolicyVersion: ForecastPolicyVersion, ScopeMode: mode, RequestedAccountIDs: append([]int64{}, input.AccountIDs...), IncludeDescendants: input.IncludeDescendants, AccountIDs: append([]int64{}, b.scope.AccountIDs...), Accounts: []ForecastAccount{}, AccountOptions: []ForecastAccount{}, Commodities: []ForecastCommodity{}, Series: []ForecastSeries{}, Aggregates: []ForecastSeries{}, Events: append([]ForecastEvent{}, b.events...)}
+	result := ForecastResult{AsOfDate: b.bounds.AsOf, FirstDate: b.bounds.First, ThroughDate: b.bounds.Through, TimeZone: b.snapshot.TimeZone, ComputedAt: computedAt, HorizonDays: input.HorizonDays, PolicyVersion: ForecastPolicyVersion, ScopeMode: mode, RequestedAccountIDs: append([]int64{}, input.AccountIDs...), IncludeDescendants: input.IncludeDescendants, AccountIDs: append([]int64{}, b.scope.AccountIDs...), Accounts: []ForecastAccount{}, AccountOptions: []ForecastAccount{}, Commodities: []ForecastCommodity{}, CurrencyOptions: []ForecastCommodity{}, Series: []ForecastSeries{}, Aggregates: []ForecastSeries{}, Events: append([]ForecastEvent{}, b.events...)}
 	for _, id := range b.scope.AccountIDs {
 		a := b.scope.Accounts[id]
 		result.Accounts = append(result.Accounts, forecastAccount(a))
@@ -391,6 +391,17 @@ func (b *forecastBuild) finish(input forecastNormalizedInput, computedAt string)
 		result.AccountOptions = append(result.AccountOptions, forecastAccount(options[id]))
 	}
 	commodityRules := commodityRulesAt(b.snapshot.CommodityVersions, b.bounds.AsOf)
+	allCurrencyIDs := make([]int64, 0, len(commodityRules))
+	for id, commodity := range commodityRules {
+		if commodity.Kind == "currency" {
+			allCurrencyIDs = append(allCurrencyIDs, id)
+		}
+	}
+	sort.Slice(allCurrencyIDs, func(i, j int) bool { return allCurrencyIDs[i] < allCurrencyIDs[j] })
+	for _, id := range allCurrencyIDs {
+		commodity := commodityRules[id]
+		result.CurrencyOptions = append(result.CurrencyOptions, ForecastCommodity{ID: id, Code: commodity.Code, StandardScale: commodity.StandardScale})
+	}
 	for eventIndex := range result.Events {
 		for amountIndex := range result.Events[eventIndex].Amounts {
 			result.Events[eventIndex].Amounts[amountIndex].CommodityCode = commodityRules[result.Events[eventIndex].Amounts[amountIndex].CommodityID].Code
@@ -673,7 +684,9 @@ func isCashKind(kind string) bool {
 	return kind == "cash" || kind == "checking" || kind == "savings" || kind == "brokerage_cash"
 }
 func sortForecastEvents(events []ForecastEvent) {
-	order := map[string]int{"posted": 0, "draft": 1, "template": 2}
+	// Estimates rank after every recorded or scheduled source, so a tie on
+	// date never puts a model's guess above a fact.
+	order := map[string]int{"posted": 0, "draft": 1, "template": 2, "estimated_spending": 3}
 	for index := range events {
 		sort.Slice(events[index].Amounts, func(i, j int) bool {
 			if events[index].Amounts[i].AccountID != events[index].Amounts[j].AccountID {
@@ -696,7 +709,12 @@ func sortForecastEvents(events []ForecastEvent) {
 		if a.EntryID != b.EntryID {
 			return a.EntryID < b.EntryID
 		}
-		return a.OccurrenceDate < b.OccurrenceDate
+		if a.OccurrenceDate != b.OccurrenceDate {
+			return a.OccurrenceDate < b.OccurrenceDate
+		}
+		// The key is the last resort so cursor pagination stays stable for
+		// sources that share every earlier sort field.
+		return a.Key < b.Key
 	})
 }
 

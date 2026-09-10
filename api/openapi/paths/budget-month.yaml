@@ -1,0 +1,20 @@
+get:
+  summary: Read one exact monthly budget
+  parameters:
+    - in: query
+      name: period_start
+      schema: { type: string, format: date }
+      description: First calendar day of the owner-local month. Omitted selects the current owner-local month.
+  responses:
+    "200":
+      description: Page-composed monthly budget, kept separate per currency.
+      content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/BudgetMonthResponse" } } }
+    "400":
+      description: Invalid month.
+      content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } }
+    "401":
+      description: Authentication required.
+      content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } }
+    "422":
+      description: Exact result exceeded supported precision.
+      content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } }

@@ -154,6 +154,15 @@ func (s *ImportService) StartImport(ctx context.Context, input StartImportInput)
 	}, nil
 }
 
+// AnalyzeCSV decodes and inspects a CSV before a mapping profile exists.
+// It does not persist a batch or any financial data.
+func (s *ImportService) AnalyzeCSV(_ context.Context, input RawInput, delimiter string) (CSVAnalysis, error) {
+	if (&CSVAdapter{}).Detect(input) == ConfidenceNone {
+		return CSVAnalysis{}, ValidationError{Message: "csv analysis requires a CSV file"}
+	}
+	return AnalyzeCSVInput(input, delimiter)
+}
+
 func (s *ImportService) ListImportProfiles(ctx context.Context) ([]ImportProfile, error) {
 	records, err := s.repository.ListImportProfiles(ctx, BookID)
 	if err != nil {

@@ -1,8 +1,9 @@
 <script lang="ts">
   import { joinCommodityAmount } from '$lib/money/format';
   import { untrack } from 'svelte';
-  import { createInfiniteQuery } from '@tanstack/svelte-query';
+  import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
   import { m } from '$lib/paraglide/messages.js';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import Panel from '$lib/components/panel.svelte';
   import StatusBadge from '$lib/components/status-badge.svelte';
@@ -77,6 +78,7 @@
   let moveError = $state<unknown>(undefined);
 
   const locale = $derived(getLocale());
+  const queryClient = useQueryClient();
 
   const query = createInfiniteQuery(() =>
     transactionsInfiniteQueryOptions(activeFilters)
@@ -112,6 +114,7 @@
     try {
       await moveTransaction(tx.id, direction, csrfToken);
       await query.refetch();
+      await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
     } catch (e) {
       moveError = e;
     } finally {
