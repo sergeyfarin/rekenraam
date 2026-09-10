@@ -18,7 +18,8 @@ get:
 
 
     Contents: `README.txt`, `ledger.csv`, `accounts.csv`, `categories.csv`,
-    `payees.csv`, `commodities.csv`, `tags.csv`, `lots.csv`, `prices.csv`,
+    `payees.csv`, `commodities.csv`, `tags.csv`, `lots.csv`,
+    `disposal-decisions.csv`, `disposal-allocations.csv`, `prices.csv`,
     `trial-balance.csv`, `manifest.json`. See
     `docs/adrs/0011-ledger-export-contract.md`.
   parameters:

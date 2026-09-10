@@ -5,7 +5,7 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-09-09 (R8 budgets complete; T-76 and T-75b remain required
+Last updated: 2026-09-10 (R8 budgets and T-76 complete; T-75b remains required
 later work.)
 
 ## Where things stand
@@ -182,9 +182,6 @@ define when draft lot effects activate on promotion and reverse on discard.
 
 ## Required investment follow-up — before v0.1/R16/R18
 
-- [ ] **T-76:** persist and export resolved disposal method, resolution tier,
-      policy/profile version, allocations, and audit provenance before schema and
-      export contracts freeze.
 - [ ] **T-75b (R16):** add investment-native correction/reversal, atomic with
       journal changes and reconciliation invalidation; keep generic mutation fenced.
 

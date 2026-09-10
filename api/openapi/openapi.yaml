@@ -910,6 +910,8 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentLotDisposalResponse"
     InvestmentTradeResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentTradeResponse"
+    DisposalDecisionResponse:
+      $ref: "./components/schemas/investments.yaml#/DisposalDecisionResponse"
     SellPreviewResponse:
       $ref: "./components/schemas/investments.yaml#/SellPreviewResponse"
     DividendRequest:

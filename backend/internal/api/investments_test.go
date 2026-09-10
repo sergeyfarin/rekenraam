@@ -136,11 +136,21 @@ func TestInvestmentLifecycle_InstrumentBuyPreviewSellDividendReflectEverywhere(t
 	var preview sellPreviewResponse
 	require.NoError(t, json.NewDecoder(previewRes.Body).Decode(&preview))
 	assert.Equal(t, int64(20000), preview.RealizedGain)
+	assert.Equal(t, "fallback", preview.DisposalDecision.ResolutionTier)
+	assert.Equal(t, "fifo", preview.DisposalDecision.CostBasisMethod)
+	assert.Nil(t, preview.DisposalDecision.ID)
 
 	sellRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", previewBody, http.StatusCreated)
 	var sold investmentTradeResponse
 	require.NoError(t, json.NewDecoder(sellRes.Body).Decode(&sold))
 	require.Len(t, sold.Allocations, 1)
+	require.NotNil(t, sold.DisposalDecision)
+	require.NotNil(t, sold.DisposalDecision.ID)
+	require.NotNil(t, sold.DisposalDecision.TransactionVersionID)
+	require.NotNil(t, sold.DisposalDecision.AuditEventID)
+	assert.Equal(t, preview.DisposalDecision.CostBasisMethod, sold.DisposalDecision.CostBasisMethod)
+	assert.Equal(t, preview.DisposalDecision.ResolutionTier, sold.DisposalDecision.ResolutionTier)
+	assert.Equal(t, preview.DisposalDecision.Allocations, sold.DisposalDecision.Allocations)
 	assert.Equal(t, preview.Allocations[0].CostBasisValue, sold.Allocations[0].CostBasisValue, "preview and commit must agree")
 
 	dividendRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/dividend", dividendRequest{

@@ -135,6 +135,40 @@ type ExportLotRecord struct {
 	SourceTransactionID     sql.NullInt64
 }
 
+type ExportDisposalDecisionRecord struct {
+	DecisionID           int64
+	TransactionID        int64
+	TransactionVersionID int64
+	AccountID            int64
+	CommodityID          int64
+	CostCommodityID      int64
+	EventDate            string
+	QuantityValue        exact.Coefficient
+	QuantityScale        int
+	DisposedBasisValue   exact.Coefficient
+	DisposedBasisScale   int
+	CostBasisMethod      string
+	ResolutionTier       string
+	AccountVersionID     sql.NullInt64
+	ProfileID            sql.NullInt64
+	ProfileVersionID     sql.NullInt64
+	SourceEffectiveFrom  sql.NullString
+	SourceRecordedAt     sql.NullString
+	CreatedAt            string
+	CreatedAuditEventID  int64
+}
+
+type ExportDisposalAllocationRecord struct {
+	DecisionID     int64
+	AllocationSeq  int64
+	LotEventID     int64
+	LotID          int64
+	QuantityValue  exact.Coefficient
+	QuantityScale  int
+	CostBasisValue int64
+	CostBasisScale int
+}
+
 type ExportPriceRecord struct {
 	BaseCommodityID   int64
 	QuoteCommodityID  int64
@@ -783,6 +817,69 @@ func (r *ExportRepository) ExportLots(ctx context.Context, transaction *sql.Tx, 
 	}
 
 	return lots, nil
+}
+
+func (r *ExportRepository) ExportDisposalDecisions(ctx context.Context, transaction *sql.Tx, bookID int64) ([]ExportDisposalDecisionRecord, error) {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT id, transaction_id, transaction_version_id, account_id, commodity_id,
+			cost_commodity_id, event_date, quantity_value, quantity_scale,
+			disposed_basis_value, disposed_basis_scale, cost_basis_method, resolution_tier,
+			account_version_id, profile_id, profile_version_id, source_effective_from,
+			source_recorded_at, created_at, created_audit_event_id
+		FROM investment_disposal_decisions
+		WHERE book_id = ?
+		ORDER BY event_date, id
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read export disposal decisions: %w", err)
+	}
+	defer rows.Close()
+	var records []ExportDisposalDecisionRecord
+	for rows.Next() {
+		var record ExportDisposalDecisionRecord
+		if err := rows.Scan(&record.DecisionID, &record.TransactionID, &record.TransactionVersionID,
+			&record.AccountID, &record.CommodityID, &record.CostCommodityID, &record.EventDate,
+			&record.QuantityValue, &record.QuantityScale, &record.DisposedBasisValue,
+			&record.DisposedBasisScale, &record.CostBasisMethod, &record.ResolutionTier,
+			&record.AccountVersionID, &record.ProfileID, &record.ProfileVersionID,
+			&record.SourceEffectiveFrom, &record.SourceRecordedAt, &record.CreatedAt,
+			&record.CreatedAuditEventID); err != nil {
+			return nil, fmt.Errorf("scan export disposal decision: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate export disposal decisions: %w", err)
+	}
+	return records, nil
+}
+
+func (r *ExportRepository) ExportDisposalAllocations(ctx context.Context, transaction *sql.Tx, bookID int64) ([]ExportDisposalAllocationRecord, error) {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT decision_id, allocation_seq, lot_event_id, lot_id, quantity_value,
+			quantity_scale, cost_basis_value, cost_basis_scale
+		FROM investment_disposal_allocations
+		WHERE book_id = ?
+		ORDER BY decision_id, allocation_seq
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read export disposal allocations: %w", err)
+	}
+	defer rows.Close()
+	var records []ExportDisposalAllocationRecord
+	for rows.Next() {
+		var record ExportDisposalAllocationRecord
+		if err := rows.Scan(&record.DecisionID, &record.AllocationSeq, &record.LotEventID,
+			&record.LotID, &record.QuantityValue, &record.QuantityScale,
+			&record.CostBasisValue, &record.CostBasisScale); err != nil {
+			return nil, fmt.Errorf("scan export disposal allocation: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate export disposal allocations: %w", err)
+	}
+	return records, nil
 }
 
 // ExportPrices returns non-voided price observations. A voided observation is a

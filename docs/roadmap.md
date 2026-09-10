@@ -6,8 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-09-09 (R8 budgets shipped after R9 and R10; T-76 and
-T-75b remain scheduled separately).
+Last reviewed: 2026-09-10 (R8 budgets and T-76 disposal provenance shipped;
+T-75b remains scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -329,10 +329,11 @@ local development database existed to reset or assess. Average cost is restored
 to ✅; the generic
 lifecycle fence is shipped while native correction remains deliberately open.
 
-**Required follow-up, not an R9 blocker:** T-76 snapshots and exports disposal
-method/tier/policy provenance before v0.1/schema freeze and before R16/R18. T-75b
-is the investment-native correction lifecycle in R16; the generic fence remains
-in force until it ships.
+**Required follow-up completed 2026-09-10:** T-76 now snapshots and exports
+disposal method, resolution tier, versioned policy source, exact basis totals,
+allocations, transaction version, and audit linkage. T-75b is the remaining
+investment-native correction lifecycle in R16; the generic fence remains in
+force until it ships.
 
 ### Done — planning loop
 

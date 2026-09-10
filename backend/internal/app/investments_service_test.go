@@ -661,6 +661,12 @@ func TestPreviewSellAndSellProduceIdenticalAllocationsAcrossCostBasisMethods(t *
 
 			sold, err := f.investmentService.Sell(ctx, sellInput)
 			require.NoError(t, err)
+			require.NotNil(t, sold.DisposalDecision)
+			assert.Equal(t, preview.DisposalDecision.CostBasisMethod, sold.DisposalDecision.CostBasisMethod)
+			assert.Equal(t, preview.DisposalDecision.ResolutionTier, sold.DisposalDecision.ResolutionTier)
+			assert.Equal(t, preview.DisposalDecision.DisposedBasisValue, sold.DisposalDecision.DisposedBasisValue)
+			assert.Equal(t, preview.DisposalDecision.DisposedBasisScale, sold.DisposalDecision.DisposedBasisScale)
+			require.NotNil(t, sold.DisposalDecision.AuditEventID)
 
 			require.Len(t, sold.Allocations, len(preview.Allocations))
 			var previewTotalBasis, soldTotalBasis int64
@@ -674,6 +680,131 @@ func TestPreviewSellAndSellProduceIdenticalAllocationsAcrossCostBasisMethods(t *
 			assert.Equal(t, previewTotalBasis, soldTotalBasis, "preview and commit must agree on total disposed basis (drives realized gain)")
 		})
 	}
+}
+
+func TestDisposalDecisionPreservesEveryResolutionTier(t *testing.T) {
+	tests := []struct {
+		name   string
+		tier   string
+		method string
+		setup  func(*testing.T, *investmentsTestFixture, *InvestmentTradeInput)
+	}{
+		{name: "fallback", tier: "fallback", method: "fifo"},
+		{name: "transaction", tier: "transaction", method: "lifo", setup: func(_ *testing.T, _ *investmentsTestFixture, input *InvestmentTradeInput) {
+			input.CostBasisMethod = "lifo"
+		}},
+		{name: "account", tier: "account", method: "lifo", setup: func(t *testing.T, f *investmentsTestFixture, _ *InvestmentTradeInput) {
+			setHoldingCostBasisMethod(t, f, "lifo")
+		}},
+		{name: "global", tier: "global", method: "lifo", setup: func(t *testing.T, f *investmentsTestFixture, _ *InvestmentTradeInput) {
+			_, err := f.investmentService.SaveCostBasisProfile(context.Background(), CostBasisProfileInput{
+				OwnerUserID: f.ownerUserID, Name: "Global LIFO", Method: "lifo", IsDefault: true, Status: "active",
+			})
+			require.NoError(t, err)
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			f := newInvestmentsTestFixture(t)
+			ctx := context.Background()
+			_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+				OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID,
+				HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+				QuantityValue: exact.New(10), QuantityScale: 0, CashAmountValue: 100000,
+				CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+			})
+			require.NoError(t, err)
+			input := InvestmentTradeInput{
+				OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
+				HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+				QuantityValue: exact.New(4), QuantityScale: 0, CashAmountValue: 50000,
+				CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+			}
+			if test.setup != nil {
+				test.setup(t, f, &input)
+			}
+			preview, err := f.investmentService.PreviewSell(ctx, input)
+			require.NoError(t, err)
+			sold, err := f.investmentService.Sell(ctx, input)
+			require.NoError(t, err)
+			require.NotNil(t, sold.DisposalDecision)
+			assert.Equal(t, test.method, preview.DisposalDecision.CostBasisMethod)
+			assert.Equal(t, test.tier, preview.DisposalDecision.ResolutionTier)
+			assert.Equal(t, preview.DisposalDecision.CostBasisMethod, sold.DisposalDecision.CostBasisMethod)
+			assert.Equal(t, preview.DisposalDecision.ResolutionTier, sold.DisposalDecision.ResolutionTier)
+			assert.Equal(t, preview.DisposalDecision.AccountVersionID, sold.DisposalDecision.AccountVersionID)
+			assert.Equal(t, preview.DisposalDecision.ProfileVersionID, sold.DisposalDecision.ProfileVersionID)
+			assert.Equal(t, preview.DisposalDecision.Allocations, sold.DisposalDecision.Allocations)
+		})
+	}
+}
+
+func setHoldingCostBasisMethod(t *testing.T, f *investmentsTestFixture, method string) Account {
+	t.Helper()
+	ctx := context.Background()
+	_, err := f.database.ExecContext(ctx, `
+		INSERT INTO account_versions (
+			account_id, version_seq, effective_from, recorded_at, changed_by_user_id,
+			change_reason, status, opened_on, closed_on, code, name, account_class,
+			account_kind, parent_account_id, institution_id, country_code,
+			default_commodity_id, quantity_scale_override, allows_postings, number_last4,
+			external_ref_hint, comment_markdown, metadata_json, change_audit_event_id,
+			cost_basis_method
+		)
+		SELECT account_id, version_seq + 1, effective_from, '2026-09-10T00:00:00Z', ?,
+			'change test disposal policy', status, opened_on, closed_on, code, name,
+			account_class, account_kind, parent_account_id, institution_id, country_code,
+			default_commodity_id, quantity_scale_override, allows_postings, number_last4,
+			external_ref_hint, comment_markdown, metadata_json, NULL, ?
+		FROM current_account_versions WHERE account_id = ?
+	`, f.ownerUserID, method, f.holdingAccountID)
+	require.NoError(t, err)
+	updated, err := f.accountService.Account(ctx, f.holdingAccountID)
+	require.NoError(t, err)
+	return updated
+}
+
+func TestHistoricalDisposalDecisionSurvivesAccountAndGlobalDefaultChanges(t *testing.T) {
+	t.Run("account", func(t *testing.T) {
+		f := newInvestmentsTestFixture(t)
+		ctx := context.Background()
+		setHoldingCostBasisMethod(t, f, "lifo")
+		_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{OwnerUserID: 1, TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID, QuantityValue: exact.New(10), CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID})
+		require.NoError(t, err)
+		sold, err := f.investmentService.Sell(ctx, InvestmentTradeInput{OwnerUserID: 1, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID, QuantityValue: exact.New(2), CashAmountValue: 30000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID})
+		require.NoError(t, err)
+		originalVersion := *sold.DisposalDecision.AccountVersionID
+		setHoldingCostBasisMethod(t, f, "fifo")
+		var method, tier string
+		var accountVersion int64
+		require.NoError(t, f.database.QueryRow(`SELECT cost_basis_method, resolution_tier, account_version_id FROM investment_disposal_decisions WHERE transaction_id = ?`, sold.Transaction.ID).Scan(&method, &tier, &accountVersion))
+		assert.Equal(t, "lifo", method)
+		assert.Equal(t, "account", tier)
+		assert.Equal(t, originalVersion, accountVersion)
+	})
+
+	t.Run("global", func(t *testing.T) {
+		f := newInvestmentsTestFixture(t)
+		ctx := context.Background()
+		profile, err := f.investmentService.SaveCostBasisProfile(ctx, CostBasisProfileInput{OwnerUserID: 1, Name: "Book policy", Method: "lifo", IsDefault: true, Status: "active"})
+		require.NoError(t, err)
+		_, err = f.investmentService.Buy(ctx, InvestmentTradeInput{OwnerUserID: 1, TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID, QuantityValue: exact.New(10), CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID})
+		require.NoError(t, err)
+		sold, err := f.investmentService.Sell(ctx, InvestmentTradeInput{OwnerUserID: 1, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID, QuantityValue: exact.New(2), CashAmountValue: 30000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID})
+		require.NoError(t, err)
+		originalVersion := *sold.DisposalDecision.ProfileVersionID
+		_, err = f.investmentService.SaveCostBasisProfile(ctx, CostBasisProfileInput{OwnerUserID: 1, ProfileID: profile.ID, Name: profile.Name, Method: "fifo", IsDefault: true, Status: "active"})
+		require.NoError(t, err)
+		var method, tier string
+		var profileVersion int64
+		require.NoError(t, f.database.QueryRow(`SELECT cost_basis_method, resolution_tier, profile_version_id FROM investment_disposal_decisions WHERE transaction_id = ?`, sold.Transaction.ID).Scan(&method, &tier, &profileVersion))
+		assert.Equal(t, "lifo", method)
+		assert.Equal(t, "global", tier)
+		assert.Equal(t, originalVersion, profileVersion)
+		var versions int
+		require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM cost_basis_profile_versions WHERE profile_id = ?`, profile.ID).Scan(&versions))
+		assert.Equal(t, 2, versions)
+	})
 }
 
 func TestSell_MethodActuallyChangesDisposedBasis(t *testing.T) {

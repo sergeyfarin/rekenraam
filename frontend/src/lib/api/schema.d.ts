@@ -5637,7 +5637,7 @@ export interface paths {
          *
          *     This is the only scoped export. Filters select whole **journal entries**, never individual postings, so the archive balances per entry under every filter; every posting of a selected entry is included, in accounts, commodities, and dates the filter never named. `date_basis=transaction` selects transactions by their date and then takes every entry of them, including entries dated outside the range. The manifest reports what the filter resolved to, how many transactions the archive holds only part of, and how many postings it carries only as counterparts.
          *
-         *     Contents: `README.txt`, `ledger.csv`, `accounts.csv`, `categories.csv`, `payees.csv`, `commodities.csv`, `tags.csv`, `lots.csv`, `prices.csv`, `trial-balance.csv`, `manifest.json`. See `docs/adrs/0011-ledger-export-contract.md`.
+         *     Contents: `README.txt`, `ledger.csv`, `accounts.csv`, `categories.csv`, `payees.csv`, `commodities.csv`, `tags.csv`, `lots.csv`, `disposal-decisions.csv`, `disposal-allocations.csv`, `prices.csv`, `trial-balance.csv`, `manifest.json`. See `docs/adrs/0011-ledger-export-contract.md`.
          */
         get: {
             parameters: {
@@ -17178,9 +17178,41 @@ export interface components {
              */
             lot_id?: number;
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
+            disposal_decision?: components["schemas"]["DisposalDecisionResponse"];
+        };
+        DisposalDecisionResponse: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            transaction_id?: number;
+            /** Format: int64 */
+            transaction_version_id?: number;
+            cost_basis_method: components["schemas"]["CostBasisMethod"];
+            /** @enum {string} */
+            resolution_tier: "transaction" | "account" | "global" | "fallback";
+            /** Format: int64 */
+            account_version_id?: number;
+            /** Format: int64 */
+            profile_id?: number;
+            /** Format: int64 */
+            profile_version_id?: number;
+            /** Format: date */
+            source_effective_from?: string;
+            /** Format: date-time */
+            source_recorded_at?: string;
+            quantity_value: string;
+            quantity_scale: number;
+            disposed_basis_value: string;
+            disposed_basis_scale: number;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            /** Format: int64 */
+            audit_event_id?: number;
+            allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
         };
         SellPreviewResponse: {
             cost_basis_method: components["schemas"]["CostBasisMethod"];
+            disposal_decision: components["schemas"]["DisposalDecisionResponse"];
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
             /**
              * Format: int64
