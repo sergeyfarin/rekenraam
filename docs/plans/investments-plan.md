@@ -34,7 +34,7 @@ Current-status notes reconciled 2026-08-31; original delivery was 2026-07-03.
 > average-cost pool conservation (T-74) is fixed, and unsafe generic investment
 > lifecycle mutations are fenced off (T-75a). Investment-native correction and
 > reversal remain R16 work (T-75b); durable disposal-policy provenance (T-76)
-> remains required before v0.1/schema freeze and R16/R18, but does not block R9.
+> shipped 2026-09-10 before v0.1/schema freeze and R16/R18.
 > ADR 0012 and R18 govern future reproducible reporting. See
 > `docs/plans/investment-integrity-plan.md` for the acceptance evidence.
 
@@ -845,11 +845,10 @@ store, durable fetch, dedupe) was unchanged, as planned.
    investment-native correction lifecycle that changes journal and subledger in
    the same database transaction. The self-check must compare the union of
    journal and lot position keys, including positions whose lots are all closed.
-7. **Disposal provenance (T-76, open 2026-08-29):** the resolved method is used
-   during commit but is not a dedicated field on the disposal/event or committed
-   response. Persist the method, resolution tier, policy/profile version, and
-   explicit allocations before more history accumulates. Arbitrary metadata JSON
-   is not the canonical contract.
+7. **Disposal provenance (T-76, closed 2026-09-10):** typed decisions now persist
+   the resolved method, tier, source version/effective state, exact totals,
+   allocations, transaction version, and audit linkage. The committed API and
+   structured export carry the same contract; metadata JSON is not authoritative.
 8. **Current gains are operational, not report-grade (I-03 / R18):** realized
    rows expose only the committed operational basis; unrealized rows always use
    the latest price and have no `as_of`, knowledge cutoff, staleness, source/FX

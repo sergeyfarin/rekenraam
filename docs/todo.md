@@ -5,9 +5,8 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-09-07 (R12a T-75a/T-74 complete; R9 acceptance complete;
-R10 core accepted; learning M1 complete and M2 next. T-76 and T-75b
-remain required later work.)
+Last updated: 2026-09-10 (R8 budgets and T-76 complete; T-75b remains required
+later work.)
 
 ## Where things stand
 
@@ -88,7 +87,14 @@ localization item below).
 rate in `settings/currencies/+page.svelte` should truncate or round half-up.
 See `backlog.md` G-09.
 
-## Current initiative — R10 projected balances
+## Completed — R8 budgets
+
+The four slices in `docs/plans/budgets-plan.md` ship together: exact monthly
+persistence/aggregation, authenticated composed API, responsive localized
+screen, and cross-system acceptance. R10 remains planning input, not a budget
+store: forecasts and learned estimates never become budget actuals or targets.
+
+## Completed — R10 projected balances
 
 Plan written 2026-08-31: `docs/plans/projected-balances-plan.md`. Its coherent
 snapshot, exact projection, authenticated API, constant-as-of FX, responsive
@@ -98,8 +104,8 @@ The plan fixes source precedence, owner-local date/overdue semantics, exact
 arithmetic, constant-FX policy, snapshot reads, API/UI contracts, budgets,
 worked fixtures and named tests for an agent executing one slice at a time.
 
-**Next action: implement learning M2 only** from
-`docs/plans/forecast-learning-plan.md`.
+Final learning acceptance:
+`docs/reviews/r10-learning-acceptance-review-2026-09-09.md`.
 
 - [x] 1. Coherent read-only snapshot inputs and repository tests.
 - [x] 2. Exact per-currency projection, occurrence precedence and worked fixtures.
@@ -110,9 +116,9 @@ worked fixtures and named tests for an agent executing one slice at a time.
 - [x] 7. Cross-system isolation, concurrency, bounds and browser acceptance.
 - [x] 8. Dated core acceptance review; then learning extension M1.
 - [x] M1. Complete-history reads, cadence bins, baselines and exact residual allocation.
-- [ ] M2. Weekly/monthly smoothing, annual seasonal model, quality and hardware gates.
-- [ ] M3. Opt-in API/UI, pattern controls, variation/coverage and separate estimated curve.
-- [ ] M4. Learning acceptance and final R10 closure; then R8 planning.
+- [x] M2. Weekly/monthly smoothing, annual seasonal model, quality and hardware gates.
+- [x] M3. Opt-in API/UI, pattern controls, variation/coverage and separate estimated curve.
+- [x] M4. Learning acceptance and final R10 closure; R8 planning is now current.
 
 M1–M4 contract: `docs/plans/forecast-learning-plan.md`. It covers daily/weekly,
 monthly and annual patterns, including summer leave spending, without flattening
@@ -176,9 +182,6 @@ define when draft lot effects activate on promotion and reverse on discard.
 
 ## Required investment follow-up — before v0.1/R16/R18
 
-- [ ] **T-76:** persist and export resolved disposal method, resolution tier,
-      policy/profile version, allocations, and audit provenance before schema and
-      export contracts freeze.
 - [ ] **T-75b (R16):** add investment-native correction/reversal, atomic with
       journal changes and reconciliation invalidation; keep generic mutation fenced.
 

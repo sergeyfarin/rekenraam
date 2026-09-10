@@ -21,12 +21,16 @@
   import { m } from '$lib/paraglide/messages.js';
   import ForecastChart from './forecast-chart.svelte';
   import ForecastEvents from './forecast-events.svelte';
+  import ForecastLearning from './forecast-learning.svelte';
   import {
     forecastHasMovements,
+    forecastLearnedSeriesFor,
     parseForecastFilters,
     writeForecastFilters,
     type ForecastFilters,
-    type ForecastSeries
+    type ForecastLearningPattern,
+    type ForecastSeries,
+    type ForecastSpendingModel
   } from './forecast-model';
 
   type Quantity = { quantity_value: string; quantity_scale: number };
@@ -48,7 +52,11 @@
     accountIDs: active.accountIDs,
     includeDescendants: active.includeDescendants,
     reportingCurrencyID: active.reportingCurrencyID ?? undefined,
-    fxMethod: active.reportingCurrencyID === null ? undefined : 'constant_as_of'
+    fxMethod: active.reportingCurrencyID === null ? undefined : 'constant_as_of',
+    spendingModel: active.spendingModel,
+    historyCompleteFrom: active.historyCompleteFrom ?? undefined,
+    expenseCategoryIDs: active.expenseCategoryIDs,
+    expensePatterns: active.expensePatterns
   });
   const query = createQuery(() => ({
     ...forecastBalancesQueryOptions(activeQuery),
@@ -61,6 +69,10 @@
   let accountIDs = $state<number[]>([]);
   let includeDescendants = $state(true);
   let reportingCurrencyID = $state<number | null>(null);
+  let spendingModel = $state<ForecastSpendingModel>('off');
+  let historyCompleteFrom = $state('');
+  let expenseCategoryIDs = $state<number[]>([]);
+  let expensePatterns = $state<Record<number, ForecastLearningPattern>>({});
   let syncedURL = $state('');
   let selectedSeriesKey = $state('');
   let openDetailKey = $state('');
@@ -76,6 +88,10 @@
     accountIDs = [...active.accountIDs];
     includeDescendants = active.includeDescendants;
     reportingCurrencyID = active.reportingCurrencyID;
+    spendingModel = active.spendingModel;
+    historyCompleteFrom = active.historyCompleteFrom ?? '';
+    expenseCategoryIDs = [...active.expenseCategoryIDs];
+    expensePatterns = { ...active.expensePatterns };
     openDetailKey = '';
     detailNotice = '';
     syncedURL = signature;
@@ -92,7 +108,12 @@
     observedBasis = nextBasis;
   });
 
-  const formValid = $derived(Number.isInteger(horizonDays) && horizonDays >= 1 && horizonDays <= 366);
+  const historyValid = $derived(
+    spendingModel === 'off' || (/^\d{4}-\d{2}-\d{2}$/.test(historyCompleteFrom) && !Number.isNaN(Date.parse(historyCompleteFrom)))
+  );
+  const formValid = $derived(Number.isInteger(horizonDays) && horizonDays >= 1 && horizonDays <= 366 && historyValid);
+  const learned = $derived(data?.learned_spending ?? null);
+  const learningOptions = $derived(learned?.category_options ?? []);
   const hasMovements = $derived(data ? forecastHasMovements(data.totals) : false);
   const displaySeries = $derived.by<DisplaySeries[]>(() => {
     if (!data) return [];
@@ -110,6 +131,11 @@
     return rows;
   });
   const selectedDisplay = $derived(displaySeries.find((row) => row.key === selectedSeriesKey) ?? displaySeries[0]);
+  const selectedLearnedSeries = $derived(
+    selectedDisplay
+      ? forecastLearnedSeriesFor(learned, selectedDisplay.detailAccountID, selectedDisplay.series.commodity_id, selectedDisplay.key === 'converted')
+      : undefined
+  );
 
   function accountName(account: ForecastBalancesResponse['scope']['account_options'][number] | undefined): string {
     if (!account) return m.forecast_unknown_account();
@@ -156,7 +182,10 @@
     if (!formValid) return;
     openDetailKey = '';
     queryClient.removeQueries({ queryKey: forecastEventsQueryKey });
-    const filters: ForecastFilters = { horizonDays, accountIDs, includeDescendants, reportingCurrencyID };
+    const filters: ForecastFilters = {
+      horizonDays, accountIDs, includeDescendants, reportingCurrencyID,
+      spendingModel, historyCompleteFrom: historyCompleteFrom || null, expenseCategoryIDs, expensePatterns
+    };
     const params = writeForecastFilters(filters);
     void goto(`/app/forecast?${params.toString()}`, { keepFocus: true, noScroll: true });
   }
@@ -183,6 +212,31 @@
 
   function refreshForecast() {
     void query.refetch();
+  }
+
+  function setSpendingModel(value: boolean) {
+    spendingModel = value ? 'adaptive_v1' : 'off';
+    if (!value) {
+      // Turning estimates off drops every model option, so the request goes
+      // back to being exactly the core forecast.
+      historyCompleteFrom = '';
+      expenseCategoryIDs = [];
+      expensePatterns = {};
+    }
+  }
+
+  function setExpenseCategory(id: number, selected: boolean) {
+    const next = new Set(expenseCategoryIDs);
+    if (selected) next.add(id); else next.delete(id);
+    expenseCategoryIDs = [...next].sort((a, b) => a - b);
+    if (!selected) {
+      const { [id]: _removed, ...rest } = expensePatterns;
+      expensePatterns = rest;
+    }
+  }
+
+  function setExpensePattern(id: number, pattern: ForecastLearningPattern) {
+    expensePatterns = { ...expensePatterns, [id]: pattern };
   }
 
   function diagnosticLabel(code: ForecastBalancesResponse['diagnostics'][number]['code']): string {
@@ -391,12 +445,12 @@
             <div><h2 class="text-lg font-semibold text-foreground">{m.forecast_daily_title()}</h2><p class="mt-1 text-sm text-muted">{m.forecast_daily_copy()}</p></div>
             <label class="text-sm text-foreground"><span class="block text-xs font-semibold uppercase tracking-[0.12em] text-muted">{m.forecast_series()}</span><select value={selectedDisplay.key} onchange={(event) => selectSeries(event.currentTarget.value)} class="mt-1.5 h-10 max-w-full rounded-(--radius-control) border border-border bg-control px-3 text-foreground">{#each displaySeries as row (row.key)}<option value={row.key}>{row.label}</option>{/each}</select></label>
           </div>
-          <ForecastChart series={selectedDisplay.series} {formatDate} formatAmount={formatSelectedAmount} />
+          <ForecastChart series={selectedDisplay.series} estimated={selectedLearnedSeries} {formatDate} formatAmount={formatSelectedAmount} />
           <!-- svelte-ignore a11y_no_noninteractive_tabindex (keyboard users must be able to scroll the bounded table region) -->
           <div class="mt-5 overflow-x-auto" role="region" tabindex="0" aria-label={m.forecast_table_scroll_label()}>
             <table class="w-full min-w-[60rem] border-collapse text-left text-sm">
               <caption class="sr-only">{m.forecast_table_caption({ series: selectedDisplay.label })}</caption>
-              <thead><tr class="border-b border-border text-xs uppercase tracking-[0.08em] text-muted"><th class="px-3 py-2">{m.forecast_date()}</th><th class="px-3 py-2 text-right">{m.forecast_posted_delta()}</th><th class="px-3 py-2 text-right">{m.forecast_draft_delta()}</th><th class="px-3 py-2 text-right">{m.forecast_template_delta()}</th><th class="px-3 py-2 text-right">{m.forecast_recorded_only()}</th><th class="px-3 py-2 text-right">{m.forecast_with_recurring()}</th></tr></thead>
+              <thead><tr class="border-b border-border text-xs uppercase tracking-[0.08em] text-muted"><th class="px-3 py-2">{m.forecast_date()}</th><th class="px-3 py-2 text-right">{m.forecast_posted_delta()}</th><th class="px-3 py-2 text-right">{m.forecast_draft_delta()}</th><th class="px-3 py-2 text-right">{m.forecast_template_delta()}</th><th class="px-3 py-2 text-right">{m.forecast_recorded_only()}</th><th class="px-3 py-2 text-right">{m.forecast_with_recurring()}</th>{#if selectedLearnedSeries}<th class="px-3 py-2 text-right">{m.forecast_with_estimates()}</th>{/if}</tr></thead>
               <tbody>
                 {#each selectedDisplay.series.points as point (point.date)}
                   {@const detailKey = `${selectedDisplay.key}:${point.date}`}
@@ -420,6 +474,12 @@
                     <td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.template_delta.quantity_value, point.template_delta.quantity_scale)}</td>
                     <td class="px-3 py-2 text-right tabular-nums">{formatSelectedAmount(point.recorded_balance.quantity_value, point.recorded_balance.quantity_scale)}</td>
                     <td class="px-3 py-2 text-right font-semibold tabular-nums">{formatSelectedAmount(point.projected_balance.quantity_value, point.projected_balance.quantity_scale)}</td>
+                    {#if selectedLearnedSeries}
+                      {@const estimate = selectedLearnedSeries.points.find((row) => row.date === point.date)}
+                      <td class="px-3 py-2 text-right tabular-nums text-muted">
+                        {estimate ? formatSelectedAmount(estimate.projected_balance.quantity_value, estimate.projected_balance.quantity_scale) : '—'}
+                      </td>
+                    {/if}
                   </tr>
                   {#if detailOpen}
                     <tr id={`forecast-detail-${point.date}`} class="border-b border-border">
@@ -444,6 +504,21 @@
               </tbody>
             </table>
           </div>
+          <ForecastLearning
+            {learned}
+            enabled={spendingModel === 'adaptive_v1'}
+            {historyCompleteFrom}
+            historyError={!historyValid}
+            {expenseCategoryIDs}
+            {expensePatterns}
+            options={learningOptions}
+            formatAmount={formatSelectedAmount}
+            {formatDate}
+            onToggle={setSpendingModel}
+            onHistoryChange={(value) => (historyCompleteFrom = value)}
+            onCategoryToggle={setExpenseCategory}
+            onPatternChange={setExpensePattern}
+          />
         </Panel>
       {/if}
     {/if}

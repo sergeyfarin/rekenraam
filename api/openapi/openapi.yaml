@@ -3,6 +3,12 @@ info:
   title: Rekenraam API
   version: 0.0.0
 paths:
+  /api/v1/budgets/month:
+    $ref: "./paths/budget-month.yaml"
+  /api/v1/budgets/targets/{category_id}/{commodity_id}:
+    $ref: "./paths/budget-target.yaml"
+  /api/v1/budgets/accounts/{account_id}:
+    $ref: "./paths/budget-account.yaml"
   /api/v1/forecasts/balances:
     $ref: "./paths/forecast-balances.yaml"
   /api/v1/forecasts/balance-events:
@@ -191,6 +197,8 @@ paths:
     $ref: "./paths/transaction-reconciliation-impact.yaml"
   /api/v1/imports:
     $ref: "./paths/imports.yaml"
+  /api/v1/imports/analyze:
+    $ref: "./paths/imports-analyze.yaml"
   /api/v1/import-profiles:
     $ref: "./paths/import-profiles.yaml"
   /api/v1/import-profiles/{profile_id}:
@@ -408,6 +416,24 @@ components:
         type: integer
         format: int64
   schemas:
+    BudgetAmount:
+      $ref: "./components/schemas/budgets.yaml#/BudgetAmount"
+    BudgetCategoryAmount:
+      $ref: "./components/schemas/budgets.yaml#/BudgetCategoryAmount"
+    BudgetCategory:
+      $ref: "./components/schemas/budgets.yaml#/BudgetCategory"
+    BudgetTypeTotal:
+      $ref: "./components/schemas/budgets.yaml#/BudgetTypeTotal"
+    BudgetAccount:
+      $ref: "./components/schemas/budgets.yaml#/BudgetAccount"
+    BudgetCommodity:
+      $ref: "./components/schemas/budgets.yaml#/BudgetCommodity"
+    BudgetMonthResponse:
+      $ref: "./components/schemas/budgets.yaml#/BudgetMonthResponse"
+    SetBudgetTargetRequest:
+      $ref: "./components/schemas/budgets.yaml#/SetBudgetTargetRequest"
+    SetBudgetTreatmentRequest:
+      $ref: "./components/schemas/budgets.yaml#/SetBudgetTreatmentRequest"
     ForecastQuantity:
       $ref: "./components/schemas/forecast.yaml#/ForecastQuantity"
     ForecastSourceEventCounts:
@@ -428,6 +454,24 @@ components:
       $ref: "./components/schemas/forecast.yaml#/ForecastAssumptions"
     ForecastDiagnostic:
       $ref: "./components/schemas/forecast.yaml#/ForecastDiagnostic"
+    ForecastLearningOption:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningOption"
+    ForecastLearningExclusion:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningExclusion"
+    ForecastLearningError:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningError"
+    ForecastLearningCandidate:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningCandidate"
+    ForecastLearningMonthProfile:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningMonthProfile"
+    ForecastLearningGroup:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearningGroup"
+    ForecastLearnedPoint:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearnedPoint"
+    ForecastLearnedSeries:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearnedSeries"
+    ForecastLearnedSpending:
+      $ref: "./components/schemas/forecast.yaml#/ForecastLearnedSpending"
     ForecastBalancesResponse:
       $ref: "./components/schemas/forecast.yaml#/ForecastBalancesResponse"
     ForecastEventAmount:
@@ -752,6 +796,8 @@ components:
       $ref: "./components/schemas/imports.yaml#/ImportSourceMeta"
     StartImportResponse:
       $ref: "./components/schemas/imports.yaml#/StartImportResponse"
+    AnalyzeCSVImportResponse:
+      $ref: "./components/schemas/imports.yaml#/AnalyzeCSVImportResponse"
     StartOnlineImportRequest:
       $ref: "./components/schemas/imports.yaml#/StartOnlineImportRequest"
     StartOnlineImportResponse:
@@ -864,6 +910,8 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentLotDisposalResponse"
     InvestmentTradeResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentTradeResponse"
+    DisposalDecisionResponse:
+      $ref: "./components/schemas/investments.yaml#/DisposalDecisionResponse"
     SellPreviewResponse:
       $ref: "./components/schemas/investments.yaml#/SellPreviewResponse"
     DividendRequest:

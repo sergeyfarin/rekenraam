@@ -15,6 +15,17 @@ import (
 // Bank-specific layouts belong in profile data, never in this adapter.
 type CSVAdapter struct{}
 
+// CSVAnalysis is the canonical header view used to configure a CSV import.
+// Parsing the final import repeats the same decoding path with the same raw
+// file and requested encoding, so mapped column names cannot drift.
+type CSVAnalysis struct {
+	Headers            []string
+	Delimiter          string
+	TextEncoding       string
+	EncodingSource     string
+	EncodingConfidence int
+}
+
 func (a *CSVAdapter) Kind() string { return "csv" }
 
 func (a *CSVAdapter) Detect(input RawInput) Confidence {
@@ -111,7 +122,11 @@ func (a *CSVAdapter) Parse(_ context.Context, input RawInput, profile *ImportPro
 		return ParseResult{}, err
 	}
 	delimiter, _ := csvDelimiter(config.Delimiter)
-	reader := csv.NewReader(bytes.NewReader(bytes.TrimPrefix(input.Bytes, []byte("\xef\xbb\xbf"))))
+	decoded, err := decodeImportText(input.Bytes, input.TextEncoding)
+	if err != nil {
+		return ParseResult{}, err
+	}
+	reader := csv.NewReader(bytes.NewReader(decoded.Bytes))
 	reader.Comma = delimiter
 	reader.FieldsPerRecord = -1
 	records, err := reader.ReadAll()
@@ -122,15 +137,12 @@ func (a *CSVAdapter) Parse(_ context.Context, input RawInput, profile *ImportPro
 		return ParseResult{}, ValidationError{Message: "csv file must contain a header and at least one data row"}
 	}
 
-	headers := make(map[string]int, len(records[0]))
-	for i, header := range records[0] {
-		header = strings.TrimSpace(header)
-		if header == "" {
-			return ParseResult{}, ValidationError{Message: "csv header names must not be empty"}
-		}
-		if _, exists := headers[header]; exists {
-			return ParseResult{}, ValidationError{Message: fmt.Sprintf("csv header %q appears more than once", header)}
-		}
+	normalizedHeaders, err := normalizeCSVHeaders(records[0])
+	if err != nil {
+		return ParseResult{}, err
+	}
+	headers := make(map[string]int, len(normalizedHeaders))
+	for i, header := range normalizedHeaders {
 		headers[header] = i
 	}
 	for _, column := range requiredCSVColumns(config) {
@@ -152,7 +164,11 @@ func (a *CSVAdapter) Parse(_ context.Context, input RawInput, profile *ImportPro
 		decimalSeparator = []rune(config.DecimalSeparator)[0]
 	}
 
-	result := ParseResult{}
+	result := ParseResult{Meta: SourceMeta{
+		TextEncoding:       decoded.Encoding,
+		EncodingSource:     decoded.Source,
+		EncodingConfidence: decoded.Confidence,
+	}}
 	occurrences := map[string]int{}
 	for recordIndex, record := range records[1:] {
 		if csvRecordEmpty(record) {
@@ -210,6 +226,101 @@ func (a *CSVAdapter) Parse(_ context.Context, input RawInput, profile *ImportPro
 		}
 	}
 	return result, nil
+}
+
+// AnalyzeCSVInput decodes a CSV and returns the exact normalized headers that
+// saved mappings and the final parser use. An empty delimiter selects the
+// candidate that produces the most header fields outside CSV quoting rules.
+func AnalyzeCSVInput(input RawInput, requestedDelimiter string) (CSVAnalysis, error) {
+	decoded, err := decodeImportText(input.Bytes, input.TextEncoding)
+	if err != nil {
+		return CSVAnalysis{}, err
+	}
+
+	delimiterName := strings.ToLower(strings.TrimSpace(requestedDelimiter))
+	var delimiter rune
+	if delimiterName == "" || delimiterName == "auto" {
+		delimiterName, delimiter, err = detectCSVDelimiter(decoded.Bytes)
+	} else {
+		delimiter, err = csvDelimiter(delimiterName)
+		delimiterName = canonicalCSVDelimiterName(delimiter)
+	}
+	if err != nil {
+		return CSVAnalysis{}, err
+	}
+
+	reader := csv.NewReader(bytes.NewReader(decoded.Bytes))
+	reader.Comma = delimiter
+	reader.FieldsPerRecord = -1
+	headers, err := reader.Read()
+	if err != nil {
+		return CSVAnalysis{}, ValidationError{Message: fmt.Sprintf("csv header could not be read: %v", err)}
+	}
+	headers, err = normalizeCSVHeaders(headers)
+	if err != nil {
+		return CSVAnalysis{}, err
+	}
+	if len(headers) < 2 {
+		return CSVAnalysis{}, ValidationError{Message: "csv header must contain at least two columns"}
+	}
+
+	return CSVAnalysis{
+		Headers:            headers,
+		Delimiter:          delimiterName,
+		TextEncoding:       decoded.Encoding,
+		EncodingSource:     decoded.Source,
+		EncodingConfidence: decoded.Confidence,
+	}, nil
+}
+
+func detectCSVDelimiter(contents []byte) (string, rune, error) {
+	bestName := ""
+	var bestDelimiter rune
+	bestFields := 0
+	for _, candidate := range []string{"comma", "semicolon", "tab"} {
+		delimiter, _ := csvDelimiter(candidate)
+		reader := csv.NewReader(bytes.NewReader(contents))
+		reader.Comma = delimiter
+		reader.FieldsPerRecord = -1
+		record, err := reader.Read()
+		if err == nil && len(record) > bestFields {
+			bestName = candidate
+			bestDelimiter = delimiter
+			bestFields = len(record)
+		}
+	}
+	if bestFields == 0 {
+		return "", 0, ValidationError{Message: "csv header could not be read"}
+	}
+	return bestName, bestDelimiter, nil
+}
+
+func canonicalCSVDelimiterName(delimiter rune) string {
+	switch delimiter {
+	case ';':
+		return "semicolon"
+	case '\t':
+		return "tab"
+	default:
+		return "comma"
+	}
+}
+
+func normalizeCSVHeaders(values []string) ([]string, error) {
+	headers := make([]string, len(values))
+	seen := make(map[string]bool, len(values))
+	for index, value := range values {
+		header := strings.TrimSpace(value)
+		if header == "" {
+			return nil, ValidationError{Message: "csv header names must not be empty"}
+		}
+		if seen[header] {
+			return nil, ValidationError{Message: fmt.Sprintf("csv header %q appears more than once", header)}
+		}
+		headers[index] = header
+		seen[header] = true
+	}
+	return headers, nil
 }
 
 func requiredCSVColumns(config csvProfileConfig) []string {

@@ -244,6 +244,11 @@ Goal: make records trustworthy over time.
 Goal: reduce manual entry without sacrificing trust.
 
 - CSV import preview and commit.
+- QIF and CSV imports accept Unicode and legacy locale encodings. Automatic
+  legacy detection must be confidence-gated, the preview must disclose the
+  result, and the user must be able to select the source encoding when
+  detection is uncertain or incorrect. CSV header analysis and final parsing
+  must use the same server-side decoder so saved column mappings cannot drift.
 - Saved import rules may match a case-insensitive literal substring in the
   staged payee or description and set category, payee, or tags. Rules run in
   explicit priority order only when rows are first staged, and every applied
@@ -261,6 +266,14 @@ Goal: support forward-looking personal finance.
 - Budgets.
 - Account budget treatment as a separate account-facing planning axis, not an
   account kind.
+- R8 budgets are book-wide owner-local calendar months with exact,
+  per-currency category targets and posted actuals. Actuals require an
+  `on_budget` asset/liability counterpart on the entry date; account treatment
+  is independently effective-dated as `on_budget`, `off_budget`, or `excluded`.
+  Income and expense totals remain distinct, unlike currencies are never
+  summed or converted, and v1 has no rollover/envelope allocator. Forecasts,
+  recurring assumptions, and learned estimates never become budget targets or
+  actuals. The detailed shipped contract is `docs/plans/budgets-plan.md`.
 - Scheduled transactions.
 - Projected balances are read-only projections from current posted facts and
   separately identified recurring assumptions; viewing them never creates

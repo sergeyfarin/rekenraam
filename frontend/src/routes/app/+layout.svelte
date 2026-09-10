@@ -18,6 +18,7 @@
   import TrendingUp from '@lucide/svelte/icons/trending-up';
   import ChartNoAxesCombined from '@lucide/svelte/icons/chart-no-axes-combined';
   import ChartSpline from '@lucide/svelte/icons/chart-spline';
+  import ChartPie from '@lucide/svelte/icons/chart-pie';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import PageHeader from '$lib/components/page-header.svelte';
   import Panel from '$lib/components/panel.svelte';
@@ -96,9 +97,10 @@
   const isInvestmentsRoute = $derived($page.url.pathname.startsWith('/app/investments'));
   const isReportsRoute = $derived($page.url.pathname.startsWith('/app/reports'));
   const isForecastRoute = $derived($page.url.pathname.startsWith('/app/forecast'));
+  const isBudgetsRoute = $derived($page.url.pathname.startsWith('/app/budgets'));
 
   const headerTitle = $derived(
-    isRecurringRoute ? m.recurring_title() : isAccountsRoute
+    isBudgetsRoute ? m.budgets_title() : isRecurringRoute ? m.recurring_title() : isAccountsRoute
       ? m.accounts_title()
       : isCategoriesRoute
         ? m.categories_title()
@@ -119,7 +121,7 @@
                   : m.app_shell_header_title()
   );
   const headerCopy = $derived(
-    isRecurringRoute ? m.recurring_shell_copy() : isAccountsRoute
+    isBudgetsRoute ? m.budgets_copy() : isRecurringRoute ? m.recurring_shell_copy() : isAccountsRoute
       ? m.accounts_shell_copy()
       : isCategoriesRoute
         ? m.categories_shell_copy()
@@ -289,6 +291,16 @@
           {#if recurringSummary.data?.draft_count}
             <span class="rounded-full bg-foreground px-2 text-xs text-background" aria-label={m.recurring_badge({count:new Intl.NumberFormat(getLocale()).format(recurringSummary.data.draft_count)})}>{new Intl.NumberFormat(getLocale()).format(recurringSummary.data.draft_count)}</span>
           {/if}
+        </a>
+        <a
+          href="/app/budgets"
+          aria-current={isBudgetsRoute ? 'page' : undefined}
+          class:bg-selected={isBudgetsRoute}
+          class:text-selected-foreground={isBudgetsRoute}
+          class="flex min-w-fit items-center gap-2 rounded-(--radius-control) px-3 py-2 text-sm font-semibold transition hover:bg-control-hover"
+        >
+          <ChartPie size={16} aria-hidden="true" />
+          {m.budgets_title()}
         </a>
         <a
           href="/app/reconcile"

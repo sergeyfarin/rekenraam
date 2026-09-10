@@ -36,8 +36,18 @@ func (a *QIFAdapter) Parse(ctx context.Context, input RawInput, profile *ImportP
 	if err != nil {
 		return ParseResult{}, err
 	}
-	scanner := bufio.NewScanner(bytes.NewReader(input.Bytes))
-	return parseQIFWithOptions(scanner, input.Filename, opts)
+	decoded, err := decodeImportText(input.Bytes, input.TextEncoding)
+	if err != nil {
+		return ParseResult{}, err
+	}
+	result, err := parseQIFWithOptions(bufio.NewScanner(bytes.NewReader(decoded.Bytes)), input.Filename, opts)
+	if err != nil {
+		return ParseResult{}, err
+	}
+	result.Meta.TextEncoding = decoded.Encoding
+	result.Meta.EncodingSource = decoded.Source
+	result.Meta.EncodingConfidence = decoded.Confidence
+	return result, nil
 }
 
 // qifOptions carries the locale decisions a QIF file cannot make for itself.

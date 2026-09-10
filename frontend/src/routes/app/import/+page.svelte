@@ -19,6 +19,7 @@
   import { categoriesQueryOptions } from '$lib/api/categories';
   import { tagsQueryOptions } from '$lib/api/tags';
   import {
+    analyzeCSVImport,
     startImport,
     startOnlineImport,
     getImportBatch,
@@ -34,19 +35,20 @@
     updateImportProfile,
     deleteImportProfile,
     importProfilesQueryKey,
+    type AnalyzeCSVImportResponse,
     type StartImportResponse,
     type ImportStagedRow,
     type CommitImportBatchResponse,
     type ImportResolution
   } from '$lib/api/imports';
   import {
-    parseCSVHeader,
     parseCSVProfileConfig,
     rankCSVProfiles,
     uniqueCSVProfileSuggestion,
     type CSVDelimiter,
     type CSVProfileConfig
   } from '$lib/imports/csv-profile';
+  import { textEncodingOptions } from '$lib/imports/text-encodings';
   import {
     listImportConnections,
     createImportConnection,
@@ -66,10 +68,14 @@
 
   // Upload step
   let selectedFile = $state<File | null>(null);
+  let textEncoding = $state('auto');
   let uploading = $state(false);
   let uploadError = $state<unknown>(undefined);
   let csvHeaders = $state<string[]>([]);
-  let csvHeaderError = $state(false);
+  let csvAnalysis = $state<AnalyzeCSVImportResponse | null>(null);
+  let csvAnalysisError = $state<unknown>(undefined);
+  let analyzingCSV = $state(false);
+  let csvAnalysisRequest = 0;
   let selectedProfileId = $state('');
   let profileName = $state('');
   let csvDelimiter = $state<CSVDelimiter>('comma');
@@ -137,6 +143,8 @@
   const profilesQuery = createQuery(() => ({ queryKey: importProfilesQueryKey, queryFn: listImportProfiles, retry: false }));
   const csvProfiles = $derived(profilesQuery.data?.profiles.filter((profile) => profile.adapter_kind === 'csv') ?? []);
   const selectedIsCSV = $derived(selectedFile?.name.toLowerCase().endsWith('.csv') ?? false);
+  const selectedIsQIF = $derived(selectedFile?.name.toLowerCase().endsWith('.qif') ?? false);
+  const selectedIsTextImport = $derived(selectedIsCSV || selectedIsQIF);
   const rankedCSVProfiles = $derived(selectedFile ? rankCSVProfiles(csvProfiles, selectedFile.name, csvDelimiter, csvHeaders) : []);
   const suggestedCSVProfile = $derived(uniqueCSVProfileSuggestion(rankedCSVProfiles));
   const orderedCSVProfiles = $derived([
@@ -162,8 +170,11 @@
   async function handleFileChange(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     selectedFile = input.files?.[0] ?? null;
+    textEncoding = 'auto';
     uploadError = undefined;
-    csvHeaderError = false;
+    csvAnalysis = null;
+    csvAnalysisError = undefined;
+    csvAnalysisRequest += 1;
     selectedProfileId = '';
     editingProfileId = null;
     profileSelectionTouched = false;
@@ -173,32 +184,49 @@
       csvHeaders = [];
       return;
     }
-    try {
-      const parsed = parseCSVHeader(await selectedFile.text());
-      csvHeaders = parsed.headers;
-      csvDelimiter = parsed.delimiter;
-      csvDateColumn = parsed.headers[0] ?? '';
-      csvPayeeColumn = parsed.headers[1] ?? '';
-      csvAmountColumn = parsed.headers.at(-1) ?? '';
-    } catch {
-      csvHeaders = [];
-      csvHeaderError = true;
-    }
+    await analyzeSelectedCSV();
   }
 
   async function handleCSVDelimiterChange(e: Event) {
     csvDelimiter = (e.currentTarget as HTMLSelectElement).value as CSVDelimiter;
-    if (!selectedFile) return;
+    selectedProfileId = '';
+    editingProfileId = null;
+    profileSelectionTouched = false;
+    await analyzeSelectedCSV(csvDelimiter);
+  }
+
+  async function handleTextEncodingChange(e: Event) {
+    textEncoding = (e.currentTarget as HTMLSelectElement).value;
+    uploadError = undefined;
+    if (!selectedIsCSV) return;
+    selectedProfileId = '';
+    editingProfileId = null;
+    profileSelectionTouched = false;
+    await analyzeSelectedCSV();
+  }
+
+  async function analyzeSelectedCSV(delimiter?: CSVDelimiter) {
+    const file = selectedFile;
+    if (!file || !file.name.toLowerCase().endsWith('.csv')) return;
+    const request = ++csvAnalysisRequest;
+    analyzingCSV = true;
+    csvAnalysisError = undefined;
+    csvAnalysis = null;
+    csvHeaders = [];
     try {
-      const parsed = parseCSVHeader(await selectedFile.text(), csvDelimiter);
-      csvHeaders = parsed.headers;
-      csvHeaderError = false;
-      csvDateColumn = parsed.headers.includes(csvDateColumn) ? csvDateColumn : (parsed.headers[0] ?? '');
-      csvPayeeColumn = parsed.headers.includes(csvPayeeColumn) ? csvPayeeColumn : (parsed.headers[1] ?? '');
-      csvAmountColumn = parsed.headers.includes(csvAmountColumn) ? csvAmountColumn : (parsed.headers.at(-1) ?? '');
-    } catch {
-      csvHeaders = [];
-      csvHeaderError = true;
+      const result = await analyzeCSVImport(file, csrfToken, textEncoding, delimiter);
+      if (request !== csvAnalysisRequest || selectedFile !== file) return;
+      csvAnalysis = result;
+      csvHeaders = result.headers;
+      csvDelimiter = result.delimiter;
+      csvDateColumn = result.headers.includes(csvDateColumn) ? csvDateColumn : (result.headers[0] ?? '');
+      csvPayeeColumn = result.headers.includes(csvPayeeColumn) ? csvPayeeColumn : (result.headers[1] ?? '');
+      csvAmountColumn = result.headers.includes(csvAmountColumn) ? csvAmountColumn : (result.headers.at(-1) ?? '');
+    } catch (err) {
+      if (request !== csvAnalysisRequest || selectedFile !== file) return;
+      csvAnalysisError = err;
+    } finally {
+      if (request === csvAnalysisRequest) analyzingCSV = false;
     }
   }
 
@@ -302,7 +330,7 @@
         selectedProfileId = String(profile.id);
         await queryClient.invalidateQueries({ queryKey: importProfilesQueryKey });
       }
-      const result = await startImport(selectedFile, csrfToken, profileId);
+      const result = await startImport(selectedFile, csrfToken, profileId, selectedIsTextImport ? textEncoding : 'auto');
       previewData = result;
       batchId = result.batch.id;
       rowResolutions = new Map(result.rows.map((row) => [row.id, parseResolution(row)]));
@@ -679,12 +707,33 @@
           </span>
         </div>
 
+        {#if selectedIsTextImport}
+          <label class="flex max-w-md flex-col gap-1.5 text-xs font-medium text-muted">
+            {m.import_upload_encoding_label()}
+            <select class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" value={textEncoding} onchange={handleTextEncodingChange}>
+              {#each textEncodingOptions as option}
+                <option value={option.value}>{option.value === 'auto' ? m.import_upload_encoding_auto() : option.label}</option>
+              {/each}
+            </select>
+            <span class="font-normal leading-5">{m.import_upload_encoding_help()}</span>
+            {#if selectedIsCSV && csvAnalysis?.text_encoding}
+              <span class="font-normal leading-5">
+                {csvAnalysis.encoding_source === 'detected'
+                  ? m.import_preview_encoding_detected({ encoding: csvAnalysis.text_encoding, confidence: csvAnalysis.encoding_confidence })
+                  : m.import_preview_encoding_used({ encoding: csvAnalysis.text_encoding })}
+              </span>
+            {/if}
+          </label>
+        {/if}
+
         {#if selectedIsCSV}
           <fieldset class="space-y-4 rounded-(--radius-control) border border-border p-4">
             <legend class="px-1 text-sm font-semibold text-foreground">{m.import_csv_mapping_title()}</legend>
             <p class="text-sm text-muted">{m.import_csv_mapping_copy()}</p>
-            {#if csvHeaderError}
-              <p class="text-sm text-warning">{m.import_csv_header_error()}</p>
+            {#if analyzingCSV}
+              <p class="flex items-center gap-2 text-sm text-muted"><Loader size={14} class="animate-spin" aria-hidden="true" />{m.import_csv_analysis_loading()}</p>
+            {:else if csvAnalysisError}
+              <p class="text-sm text-warning" role="alert">{m.import_csv_analysis_error()}</p>
             {:else if profilesQuery.isLoading}
               <p class="text-sm text-muted">{m.import_csv_profiles_loading()}</p>
             {:else if profilesQuery.isError}
@@ -817,7 +866,7 @@
           type="button"
           class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           onclick={handleUpload}
-          disabled={!selectedFile || uploading || editingProfileId !== null || (selectedIsCSV && (csvHeaderError || (!selectedProfileId && !newCSVProfileValid)))}
+          disabled={!selectedFile || uploading || analyzingCSV || editingProfileId !== null || (selectedIsCSV && (!!csvAnalysisError || csvHeaders.length === 0 || (!selectedProfileId && !newCSVProfileValid)))}
         >
           {uploading ? m.import_upload_submitting() : m.import_upload_submit()}
         </button>
@@ -1124,6 +1173,14 @@
     {#if previewData.meta.date_from || previewData.meta.date_to}
       <p class="text-sm text-muted">
         {m.import_preview_date_range({ from: previewData.meta.date_from ?? '?', to: previewData.meta.date_to ?? '?' })}
+      </p>
+    {/if}
+
+    {#if previewData.meta.text_encoding}
+      <p class="text-sm text-muted">
+        {previewData.meta.encoding_source === 'detected'
+          ? m.import_preview_encoding_detected({ encoding: previewData.meta.text_encoding, confidence: previewData.meta.encoding_confidence ?? 0 })
+          : m.import_preview_encoding_used({ encoding: previewData.meta.text_encoding })}
       </p>
     {/if}
 

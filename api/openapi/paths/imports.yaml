@@ -53,6 +53,10 @@ post:
               type: integer
               format: int64
               description: Required for CSV; selects a saved column-mapping profile.
+            text_encoding:
+              type: string
+              default: auto
+              description: QIF or CSV text encoding. Use auto for confidence-gated detection, or the same named encoding used during CSV analysis.
       application/json:
         schema:
           $ref: "../openapi.yaml#/components/schemas/StartOnlineImportRequest"

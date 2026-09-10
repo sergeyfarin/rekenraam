@@ -210,6 +210,44 @@ ImportSourceMeta:
     date_to:
       type: string
       format: date
+    text_encoding:
+      type: string
+      description: Canonical encoding used to decode the source text.
+    encoding_source:
+      type: string
+      enum: [utf8, bom, detected, selected]
+      description: How the text encoding was established.
+    encoding_confidence:
+      type: integer
+      minimum: 0
+      maximum: 100
+      description: Detector confidence percentage, or 100 for deterministic and explicitly selected encodings.
+AnalyzeCSVImportResponse:
+  type: object
+  required:
+    - headers
+    - delimiter
+    - text_encoding
+    - encoding_source
+    - encoding_confidence
+  properties:
+    headers:
+      type: array
+      minItems: 2
+      items:
+        type: string
+    delimiter:
+      type: string
+      enum: [comma, semicolon, tab]
+    text_encoding:
+      type: string
+    encoding_source:
+      type: string
+      enum: [utf8, bom, detected, selected]
+    encoding_confidence:
+      type: integer
+      minimum: 0
+      maximum: 100
 StartOnlineImportRequest:
   type: object
   required:
