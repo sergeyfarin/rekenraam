@@ -3,7 +3,6 @@ packages:
   - e2e
 
 minimumReleaseAgeExclude:
-  - js-yaml@4.3.1
   - '@inlang/sdk@3.0.1'
   - '@lix-js/sdk-darwin-arm64@0.12.2'
   - '@lix-js/sdk-linux-arm64@0.12.2'
@@ -14,7 +13,8 @@ minimumReleaseAgeExclude:
   - vite@8.3.0
 
 overrides:
-  # Security pins — each holds a transitive dep above a vulnerable range.
-  # Verify with `pnpm audit` before removing: dropping either regresses.
-  cookie: 2.0.1 # GHSA-pxg6-pf52-xh8x; without this, 0.6.0 resolves
-  # js-yaml: 4.3.1 # GHSA-5p4m-2wfm-xmqj + GHSA-52cp-r559-cp3m; without this, 4.2.0 resolves
+  # Security pin — holds a transitive dep above a vulnerable range.
+  # Verify with `pnpm audit` before removing: dropping it regresses.
+  # cookie 2.x renames parse/serialize to parseCookie/stringifySetCookie, which
+  # the SvelteKit runtime still imports under the old names — hold at 1.x.
+  cookie: 1.1.1 # GHSA-pxg6-pf52-xh8x; without this, 0.6.0 resolves

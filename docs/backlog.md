@@ -85,11 +85,11 @@ declares `peerDependencies.typescript: ^5.x` and emits `schema.d.ts` through
 the TypeScript JS compiler API (`ts.factory`). TS 7 no longer exposes it, so
 `pnpm run openapi:generate` fails immediately with
 `TypeError: Cannot read properties of undefined (reading 'createKeywordTypeNode')`,
-taking `dev`, `check`, and `build` down with it. The frontend is pinned to
-TypeScript 6.0.3 until `openapi-typescript` ships TS 7 support; re-check on
-each `openapi-typescript` release. The stale `typescript@7.0.2` and
-`@typescript/typescript-*@7.0.2` entries were left in
-`pnpm-workspace.yaml`'s `minimumReleaseAgeExclude` so the retry is a one-line
+taking `dev`, `check`, and `build` down with it. The frontend is held on
+TypeScript 5.9.3 — inside `openapi-typescript`'s declared peer range — until
+it ships TS 7 support; re-check on each `openapi-typescript` release. The
+`typescript@7.0.2` release-age excludes have since been dropped from
+`pnpm-workspace.yaml`, so the retry needs them added back alongside the
 version bump.
 
 ### G-02 Frontend money logic is effectively untested `[x]`
