@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { APIClientError, apiClient } from './client';
-import { forecastBalancesQueryOptions, forecastEventsInfiniteQueryOptions, getForecastBalances } from './forecast';
+import { forecastBalancesQueryOptions, forecastEventsInfiniteQueryOptions, forecastQueryKey, getForecastBalances, shouldRetryForecastEvents } from './forecast';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -14,6 +14,7 @@ describe('forecast API client', () => {
     expect(forecastBalancesQueryOptions({ accountIDs: [9, 2, 9] }).queryKey).toEqual([
       'api', 'forecasts', 'balances', { horizon_days: undefined, account_id: [2, 9], include_descendants: undefined, reporting_currency_id: undefined, fx_method: undefined }
     ]);
+    expect(forecastQueryKey).toEqual(['api', 'forecasts']);
   });
 
   it('serializes the explicit constant-as-of FX recipe', async () => {
@@ -42,5 +43,11 @@ describe('forecast API client', () => {
   it('preserves forecast-specific stable errors', async () => {
     vi.spyOn(apiClient, 'GET').mockResolvedValue({ error: { error: { code: 'FORECAST_TOO_LARGE', message: 'large' } }, response: new Response(null, { status: 422 }) });
     await expect(getForecastBalances()).rejects.toMatchObject({ status: 422, code: 'FORECAST_TOO_LARGE' } satisfies Partial<APIClientError>);
+  });
+
+  it('does not retry a stale event basis but retries one transient event failure', () => {
+    expect(shouldRetryForecastEvents(0, new APIClientError({ status: 409, code: 'FORECAST_BASIS_CHANGED' }))).toBe(false);
+    expect(shouldRetryForecastEvents(0, new APIClientError({ status: 503, code: 'RESOURCE_BUSY' }))).toBe(true);
+    expect(shouldRetryForecastEvents(1, new APIClientError({ status: 503, code: 'RESOURCE_BUSY' }))).toBe(false);
   });
 });

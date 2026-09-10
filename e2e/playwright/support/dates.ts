@@ -17,6 +17,13 @@ export function todayISO(date: Date = new Date()): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** A local calendar date a fixed number of days from today. */
+export function daysFromTodayISO(days: number, date: Date = new Date()): string {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return todayISO(result);
+}
+
 /** Today as `MM/DD/YYYY`, the format QIF `D` records use. */
 export function todayQIF(date: Date = new Date()): string {
   return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}/${date.getFullYear()}`;

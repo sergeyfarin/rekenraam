@@ -5,6 +5,7 @@
   import { parseTradeAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
   import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import {
     investmentPositionsQueryKey,
     investmentLotsQueryKey,
@@ -209,6 +210,7 @@
 
     await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
     await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
+    await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
     onSaved();
   }
 </script>

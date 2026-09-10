@@ -244,6 +244,11 @@ Goal: make records trustworthy over time.
 Goal: reduce manual entry without sacrificing trust.
 
 - CSV import preview and commit.
+- QIF and CSV imports accept Unicode and legacy locale encodings. Automatic
+  legacy detection must be confidence-gated, the preview must disclose the
+  result, and the user must be able to select the source encoding when
+  detection is uncertain or incorrect. CSV header analysis and final parsing
+  must use the same server-side decoder so saved column mappings cannot drift.
 - Saved import rules may match a case-insensitive literal substring in the
   staged payee or description and set category, payee, or tags. Rules run in
   explicit priority order only when rows are first staged, and every applied
@@ -261,15 +266,27 @@ Goal: support forward-looking personal finance.
 - Budgets.
 - Account budget treatment as a separate account-facing planning axis, not an
   account kind.
+- R8 budgets are book-wide owner-local calendar months with exact,
+  per-currency category targets and posted actuals. Actuals require an
+  `on_budget` asset/liability counterpart on the entry date; account treatment
+  is independently effective-dated as `on_budget`, `off_budget`, or `excluded`.
+  Income and expense totals remain distinct, unlike currencies are never
+  summed or converted, and v1 has no rollover/envelope allocator. Forecasts,
+  recurring assumptions, and learned estimates never become budget targets or
+  actuals. The detailed shipped contract is `docs/plans/budgets-plan.md`.
 - Scheduled transactions.
 - Projected balances are read-only projections from current posted facts and
   separately identified recurring assumptions; viewing them never creates
   transactions, occurrences, rate-download work or investment effects. The R10
-  implementation contract is `docs/plans/projected-balances-plan.md` (planned,
-  not shipped). It uses owner-local today, exact per-account/per-currency
+  implementation contract is `docs/plans/projected-balances-plan.md` (in
+  progress; its read-only screen and core projection now ship). It uses
+  owner-local today, exact per-account/per-currency
   balances, and acted-on occurrence identity to avoid counting both a template
   and its generated/posted transaction. Overdue unposted assumptions are visibly
-  carried to tomorrow without changing saved dates.
+  carried to tomorrow without changing saved dates. Each projected day can be
+  explained by cursor-paged posted, saved-draft and template events. Detail
+  pages are bound to the displayed forecast basis; when records change, stale
+  details are cleared and balances are refreshed rather than mixing snapshots.
 - Forecast conversion, when requested, is additive and explicitly assumes
   constant stored FX rates available on the forecast's as-of date. Missing
   coverage omits the combined series, never the exact source-currency balances.

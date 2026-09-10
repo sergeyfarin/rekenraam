@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createQuery } from '@tanstack/svelte-query';
+  import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
   import Plus from '@lucide/svelte/icons/plus';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
@@ -13,6 +13,7 @@
     type CurrencyResponse
   } from '$lib/api/currencies';
   import { APIClientError } from '$lib/api/client';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import {
     createPricingSourceAssignment,
     retryPricingBackgroundWork,
@@ -40,6 +41,7 @@
   const pageQuery = createQuery(() => currencySettingsPageQueryOptions());
   const sessionQuery = createQuery(() => authSessionQueryOptions());
   const catalogQuery = createQuery(() => currencyCatalogQueryOptions());
+  const queryClient = useQueryClient();
 
   let rateDirection = $state<RateDirection>('currency_default');
   let policyBaseCommodityID = $state('');
@@ -184,7 +186,10 @@
   }
 
   async function refreshAfterMutation() {
-    await pageQuery.refetch();
+    await Promise.all([
+      pageQuery.refetch(),
+      queryClient.invalidateQueries({ queryKey: forecastQueryKey })
+    ]);
   }
 
   async function handleAddCurrency(entry: LocalizedCurrencyCatalogEntry) {

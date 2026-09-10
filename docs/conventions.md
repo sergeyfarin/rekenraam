@@ -45,6 +45,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Account budget treatment is a separate planning/reporting axis from
   `account_kind`, because the same kind of account can be on-budget,
   off-budget, or excluded from budget views.
+- Budget treatment is stored as its own effective-dated version history.
+  Budget actuals resolve it on each journal entry date; changing treatment now
+  must never reinterpret an earlier entry under today's setting.
 - System accounts are identified by `system_role` and hidden from ordinary
   account lists by default.
 - Hidden income and expense fallback accounts use `account_class=income` and
@@ -446,6 +449,11 @@ with it.
 ## Scope Conventions
 
 - User-facing export support must include core ledger CSV and QIF in the first export milestone.
+- Text-file imports must normalize content to UTF-8 before parsing. Unicode BOMs
+  and valid UTF-8 are deterministic; legacy encoding detection must use a
+  confidence floor and expose an explicit user override rather than silently
+  accepting an uncertain locale. Persist the encoding decision in import source
+  metadata so a preview remains explainable.
 - Attachments are out of scope until explicitly brought in by a later requirement or ADR.
 - Mobile support must cover full core workflows responsively, including transaction entry.
 - User and permission naming may stay explicitly single-user until shared workflows become active scope.

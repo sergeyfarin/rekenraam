@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // This file holds the locale-sensitive parsing shared by the file-import
@@ -79,10 +81,16 @@ var monthAbbreviations = map[string]int{
 }
 
 // splitDateParts splits a date on any separator QIF exporters use:
-// "01/15/06", "15-01-2006", "15.01.2006", "1/ 5'06" (Quicken).
+// "01/15/06", "15-01-2006", "15.01.2006", "1/ 5'06" (Quicken),
+// and "24\u00a04'21" (MS Money, with a non-breaking space). Older MS Money
+// exports may encode that space as a single Windows-1252/Latin-1 0xA0 byte
+// instead of valid UTF-8.
 func splitDateParts(raw string) ([]string, bool) {
+	if !utf8.ValidString(raw) {
+		raw = strings.ReplaceAll(raw, "\xA0", " ")
+	}
 	fields := strings.FieldsFunc(raw, func(r rune) bool {
-		return r == '/' || r == '-' || r == '.' || r == '\'' || r == ' ' || r == '\t'
+		return r == '/' || r == '-' || r == '.' || r == '\'' || unicode.IsSpace(r)
 	})
 	if len(fields) != 3 {
 		return nil, false

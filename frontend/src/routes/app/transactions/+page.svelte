@@ -8,6 +8,7 @@
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { transactionsQueryKey, type TransactionResponse } from '$lib/api/transactions';
+  import { forecastQueryKey } from '$lib/api/forecast';
   import TransactionList from '$lib/transactions/transaction-list.svelte';
   import {
     parseTransactionFilters,
@@ -54,7 +55,10 @@
 
   // Invalidate the transactions query so the list refetches after mutations.
   async function invalidateTransactions() {
-    await queryClient.invalidateQueries({ queryKey: transactionsQueryKey });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: forecastQueryKey })
+    ]);
   }
 
   // ── Row click: open detail panel ──────────────────────────────────

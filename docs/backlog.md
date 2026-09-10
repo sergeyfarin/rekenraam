@@ -1082,8 +1082,8 @@ app's.
 These three findings were opened by the 2026-08-29 ledger/subledger boundary
 review. T-75a and T-74 are the narrow R12a gate ahead of the remaining R9
 slices because they can already create or preserve incorrect financial state.
-T-76 is required before the v0.1 schema/export contract freezes and before R16
-or R18, but it does not block R9's ordinary/transfer-only recurring templates.
+T-76 closed 2026-09-10 before the v0.1 schema/export contract freeze. It no
+longer blocks R16 or R18.
 T-75b is investment lifecycle feature work in R16, not a prerequisite for safely
 continuing unrelated work while the generic fence remains. ADR 0012 governs the
 correction; R18 owns the later multi-basis reporting engine.
@@ -1126,7 +1126,7 @@ basis projection may be redistributed. Because the current runtime maintains one
 operational projection, it must also persist a minimal position-level method lock:
 reject switching into or out of `average_cost` while a position remains open
 after any disposal under a different method. A closed position starts a new
-method epoch. Full per-disposal policy provenance remains T-76.
+method epoch. Full per-disposal policy provenance shipped in T-76 on 2026-09-10.
 
 **Acceptance gate:** named tests cover two differently priced lots, a partial
 average-cost sale followed by a second sale and a final close; after each step,
@@ -1206,10 +1206,21 @@ all-lots-closed. **R16 acceptance:** investment-native correction tests prove
 journal, lots, gains, audit event, and reconciliation invalidation commit or roll
 back together.
 
-### T-76 A disposal does not preserve its resolved policy provenance `[ ]`
+### T-76 A disposal does not preserve its resolved policy provenance `[x]`
 
-**Schedule:** required before v0.1/schema freeze and before R16/R18; not an R9
-blocker.
+**Closed 2026-09-10.** Migration `0008_disposal_provenance.sql` adds immutable
+global profile versions plus typed disposal decisions and allocations linked to
+the transaction, transaction version, lot events, and audit event. The shared
+resolver now returns method and tier/source version to both preview and commit;
+the committed API response carries the complete decision. The bundle adds
+`disposal-decisions.csv` and `disposal-allocations.csv` with exact quantities and
+basis. `TestDisposalDecisionPreservesEveryResolutionTier`,
+`TestHistoricalDisposalDecisionSurvivesAccountAndGlobalDefaultChanges`,
+`TestPreviewSellAndSellProduceIdenticalAllocationsAcrossCostBasisMethods`, and
+`TestBundleLotsFileCarriesCostBasisAtItsOwnScale` prove the acceptance gate,
+including a specific-lot export round trip.
+
+**Schedule:** completed before v0.1/schema freeze and before R16/R18.
 
 **Files:** `backend/internal/app/investments.go`
 (`resolveCostBasisMethod`, `sell`); `backend/internal/db/investments.go`
@@ -1217,26 +1228,9 @@ blocker.
 (`cost_basis_profiles`, `investment_lot_events`); investment OpenAPI and export
 contracts.
 
-The service resolves transaction override → account default → global default →
-FIFO and uses the result, but only the preview returns the method. The committed
-lot event stores quantities and basis in generic metadata, with no canonical
-resolved method, resolution tier, or policy/profile version. Global profiles are
-updated in place. After a default changes, the book cannot reliably explain why
-a historical allocation occurred, and an alternative projection cannot distinguish
-an actual specific-identification election from an implementation choice.
-
-Add a durable disposal/election contract that snapshots the resolved method,
-resolution tier (`transaction`, `account`, `global`, `fallback`), policy/profile
-identity and version/effective state, explicit allocations, and audit linkage.
-Provider-reported basis remains sourced evidence rather than silently becoming
-the book policy. Prefer typed columns/relations for canonical fields; arbitrary
-metadata JSON is not the contract. Include the information in the committed API
-response and durable structured export before the schema contract freezes.
-
-**Acceptance gate:** change account and global defaults after a sale and prove the
-historical disposal still explains the original method/source; round-trip it
-through the export; preview and commit return the same resolved decision; named
-tests cover every resolution tier and specific-lot allocations.
+The durable decision contract uses typed columns and relations rather than
+metadata JSON as authority. Provider-reported basis remains separately
+attributed source evidence and does not select book policy.
 
 ## Recurring producer activation gate
 
@@ -1418,6 +1412,97 @@ secure authentication cookies.
 network-host suggestion with an explanation of the secure-cookie constraint,
 and document SSH port forwarding for headless development. The frontend proxy
 keeps the backend private and means only port 1888 needs forwarding.
+
+### T-87 Browser-derived “today” can disagree with the owner-local financial date `[ ]`
+
+**Files:** `frontend/src/lib/transactions/transaction-editor.svelte`,
+`frontend/src/lib/investments/buy-form.svelte`, `sell-form.svelte`,
+`dividend-form.svelte`, `frontend/src/lib/reports/reports-screen.svelte`, and
+`frontend/src/routes/app/settings/currencies/+page.svelte`. These screens seed
+transaction dates, report ranges or pricing-assignment effective dates from the
+browser clock; four use UTC `toISOString()`. Around midnight, or when the browser
+and configured owner time zones differ, a default can be one calendar day away
+from the owner-local date used by recurring and forecast services.
+
+**Required fix:** expose/reuse one server-owned owner-local current date through
+an existing composed page/session contract, then remove the private browser-date
+helpers from every affected financial screen. Preserve explicit user-selected
+dates. Add pure contract tests plus a browser case with a browser zone on the
+opposite side of midnight from the configured owner zone, proving transaction,
+investment, report and pricing defaults all use the same owner-local date.
+
+### T-88 Forecast isolation test only exercised empty durable state `[x]`
+
+**Files:** `backend/internal/api/forecast_test.go`. R10's X02 acceptance test
+compared investment-lot and reconciliation table counts before and after a
+forecast read, but its fixture had no lots, lot events or checkpoints. It could
+prove the read did not create the first record, not that existing durable state
+survived unchanged.
+
+**Fixed:** the test now performs a real investment buy, verifies the resulting
+lot and lot event, completes a real reconciliation checkpoint, then calls both
+forecast endpoints and compares all financial-domain counts. Explicit positive
+precondition assertions prevent the test from quietly regressing to empty-state
+coverage. `TestForecastDoesNotTouchInvestmentSubledgerOrCheckpoints` is the
+named regression; the R10 core acceptance review records the boundary.
+
+## MS Money QIF compatibility — closed 2026-09-07
+
+### T-89 MS Money non-breaking-space dates were rejected `[x]`
+
+**File:** `backend/internal/app/import_locale.go`, `splitDateParts`. Some
+locale-specific MS Money QIF exports write dates such as `24 4'21`, using a
+non-breaking space between the day and month. Older exports may encode it as a
+single Windows-1252/Latin-1 `0xA0` byte rather than valid UTF-8. The shared date
+tokenizer recognized only ASCII space and tab, so otherwise valid rows remained
+staged with an unrecognized-date warning and could not commit.
+
+**Fixed:** treat Unicode whitespace and the legacy single-byte NBSP as date
+separators while preserving the existing slash, dash, dot and apostrophe forms.
+`TestParseQIF_MSMoneyNonBreakingSpaceDate` first failed on the exact
+`!Type:CCard` form and now proves the date normalizes to `2021-04-24`, updates
+batch date metadata, and emits no warning.
+
+### T-90 Legacy-encoded QIF and CSV text was not decoded `[x]`
+
+**Files:** `backend/internal/app/import_text_encoding.go`,
+`backend/internal/app/import_qif.go`, `backend/internal/app/import_csv.go`, and
+the file upload UI. Financial applications can write QIF or CSV using the
+machine's legacy system code page rather than UTF-8. Headers, payees, and
+categories in non-Western and other legacy encodings therefore reached JSON as
+invalid byte strings or could be decoded using the wrong locale.
+
+**Fixed:** normalize QIF and CSV text to UTF-8 before parsing. BOMs and valid UTF-8 are
+handled deterministically; otherwise the maintained `wlynxg/chardet` detector is
+accepted only at 50% confidence or above. An encoding selector lets users
+override ambiguous input across Windows, ISO-8859, Cyrillic DOS/Mac, Japanese,
+Chinese, and Korean families. The chosen encoding, decision source, and
+confidence are recorded in import metadata and shown in preview. CSV preflight
+now uploads the raw file for server-side decoded header/delimiter analysis; the
+final parser repeats that same path, replacing the browser's separate UTF-8-only
+header parser. Cross-script decoder tests plus API boundary tests protect
+auto-detection, manual override, and decoded profile-column matching.
+
+## R10 learned-spending acceptance — closed 2026-09-09
+
+### T-91 Learned aggregate and converted curves were incomplete `[x]`
+
+**Files:** `backend/internal/app/forecast_learning_overlay.go`,
+`backend/internal/db/forecast.go`, and
+`frontend/src/lib/forecast/forecast-model.ts`. M3 exposed a nullable converted
+learned curve but never populated it, omitted model-only currencies from the
+rate read, and emitted zero `estimated_delta` values on native aggregate rows.
+Account-level learned curves remained correct, but selecting a converted core
+row could not show its estimated counterpart and aggregate deltas did not
+reconcile to estimated events.
+
+**Fixed:** sum aggregate estimated deltas, independently check learned currency
+coverage without changing the core valuation status, load rate candidates from
+learning history, and explicitly select the learned converted curve in the
+frontend. `TestForecastLearningSeparateFXCoverage`,
+`TestForecastLearningRateCandidatesIncludeModelOnlyCurrency`, the aggregate
+event-reconciliation assertion and the converted frontend-model case prevent
+recurrence. The dated R10 learning acceptance review records the boundary.
 
 ## Public-deployment security gates
 

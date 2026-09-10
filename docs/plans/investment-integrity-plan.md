@@ -1,6 +1,7 @@
 # R12a Investment Integrity Correction Plan
 
-Status: R12a complete 2026-08-30. T-76 and T-75b remain scheduled follow-ups.
+Status: R12a complete 2026-08-30. T-76 complete 2026-09-10; T-75b remains a
+scheduled follow-up.
 
 This plan records the immediate correctness gate and its scheduled investment
 follow-ups. It does not add multi-basis tax reporting. ADR 0012 governs the
@@ -13,8 +14,9 @@ record.
 R12a makes unsafe generic investment mutation impossible and makes average-cost
 basis conserve exactly through a sequence of sales. The self-check detects a
 disagreement in either direction. Those correctness statements are the gate for
-R9 to resume. Durable disposal provenance (T-76) follows before v0.1/schema
-freeze and before R16/R18; investment-native correction (T-75b) belongs to R16.
+R9 to resume. Durable disposal provenance (T-76) shipped 2026-09-10 before the
+v0.1/schema freeze and R16/R18; investment-native correction (T-75b) belongs to
+R16.
 
 ## Non-goals
 
@@ -89,7 +91,7 @@ disagreement and basis/event corruption.
   Once an open position has a partial disposal under `average_cost`, reject a
   switch out; reject switching into `average_cost` after a partial disposal under
   another method. Closing the position ends the epoch. FIFO/LIFO/specific-lot may
-  still select their preserved original lots. T-76 later records the full typed
+  still select their preserved original lots. T-76 now records the full typed
   decision on every disposal.
 - Rebuild unrealized gain and future disposal inputs from the same conserved
   remainder. Do not maintain a second “reported basis” that disagrees with the
@@ -113,7 +115,7 @@ R9 slices 2–6 resume only after this review closes. Do not wait for T-76 or
 T-75b to resume R9: recurring v1 templates contain only ordinary and transfer
 transactions, so they cannot create investment lots.
 
-## Scheduled follow-up — Durable disposal decision and policy provenance (T-76)
+## Completed follow-up — Durable disposal decision and policy provenance (T-76)
 
 - Introduce a typed disposal-decision/election record linked to transaction,
   transaction version, lot events, and audit event.
@@ -133,8 +135,8 @@ transactions, so they cannot create investment lots.
 explainable; every resolution tier and specific-lot allocation round-trips through
 API and export; fresh-schema and self-check tests cover the new relations.
 
-This follow-up is required before v0.1/schema freeze and before R16 or R18, but
-is not part of the R12a/R9 gate.
+This follow-up shipped 2026-09-10 before v0.1/schema freeze and before R16 or
+R18; it was not part of the R12a/R9 gate.
 
 ## R16 follow-up — Investment-native correction lifecycle (T-75b)
 

@@ -1,6 +1,6 @@
 # R10 extension — lightweight learned spending
 
-Status: **planned, not implemented**, 2026-08-31. Added at the owner's request
+Status: **accepted — M1–M4 complete**, updated 2026-09-09. Added at the owner's request
 for basic ML/AI within modest hardware limits. Execute M1–M4 below **after the
 eight core slices** in `docs/plans/projected-balances-plan.md`, before R10's
 final closure/R8 planning. The core forecast remains independently usable and
@@ -492,6 +492,30 @@ allocation path before adding model selection.
 Gate: current core tests unchanged, coherent snapshot/no-write proof and all
 classification/allocation tests below. Commit the prototype as internal only.
 
+Completed 2026-09-07. The internal prototype adds a bounded, limit+1
+`ForecastRepository.LoadLearningSnapshot` that reads current posted history as
+complete journal entries with real recurring-occurrence identity, account and
+commodity versions, and recurring overlap inputs inside one deferred read
+transaction. No API parameter, public response field, UI, cache, persistent
+model, or write path was added. Pure application primitives now cover exact
+whole-entry purchase classification, conservative template/draft overlap,
+confirmed complete weekly/monthly windows, all four cadence eligibility rules,
+`mean_8`/`last_period` and fixed seasonal reference baselines, exact known-spend
+subtraction, weekday/month-day timing bins, short-month clamping, and floor plus
+largest-remainder allocation with deterministic date ties. The constructor
+bounds an old confirmation date before allocating period storage.
+
+Focused named tests prove current-version/posted-only history, void/delete/
+draft/future exclusion, full sibling reads, real recurring linkage, no-write
+behavior, resource-limit refusal without prefixes, classification exclusions,
+cold/sparse boundaries, overlap, exact residuals, and deterministic allocation.
+On the available AMD EPYC 3251 / Go 1.27.0 host, the synthetic prototype
+benchmarks measured approximately 0.35 ms and 97,784 B/op for a 366-date exact
+allocation and 1.35 ms and 10,413 B/op for a one-entry snapshot read. These are
+microbenchmarks, not the declared 100,000-row workload or peak-live-memory
+acceptance; M2 still owns representative workload, heap, single-slot/deadline,
+chronological selection, and quality measurements.
+
 ### M2 — Chronological model selection and hardware evaluation
 
 Add `backend/internal/app/forecast_learning_model.go`/tests and benchmarks.
@@ -509,6 +533,58 @@ dataset where baseline wins is a successful test, not a reason to weaken the
 gate. Do not claim real-user quality from synthetic fixtures; real-owner
 evaluation needs explicitly supplied/authorized data.
 
+Completed 2026-09-09. `backend/internal/app/forecast_learning_model.go` adds
+chronological selection for all four cadences, still internal: no API
+parameter, response field, UI, cache or persistent model. Level patterns fit
+`mean_8`, `last_period`, `ses_025` and `ses_050` with `math/big.Rat` alphas over
+a four-period tuning fold, freeze the tie winners (`ses_025`, `mean_8`) before
+the holdout, then measure four expanding one-period origins plus one frozen
+four-period total. Annual seasonality evaluates the three fixed references over
+twelve expanding origins and one frozen twelve-month path, recording monthly
+MAE, frozen-path MAE, annual-total error and worst frozen month. Both gates are
+exact rational comparisons: the learned candidate needs `10*learned <=
+9*baseline` and may not be worse on any frozen metric, and a zero-error baseline
+is never displaced. The selected method is refit over the whole bounded window
+only after selection is frozen. `ForecastLearningVariation` reports observed
+min/max with complete- and positive-observation counts per month number; it
+carries no band, percentile or jitter, and the sparse-annual warning keys on a
+peak resting on a single positive observation, since the 36-month minimum
+already guarantees three observations of every month number.
+`ForecastLearningFitter` holds one fitting slot per process and refuses a
+second concurrent request as `busy`; over-limit group counts, cancellation and
+an expired deadline each return a distinct reason and an empty result, never a
+prefix of the eligible groups.
+
+Named tests cover chronology (`TestForecastLearningNoFutureLeakage` uses a late
+regime shift and asserts the exact expanding-origin MAEs and the 3600.00 frozen
+total that only an honest prefix fit can produce), both gate boundary tables
+including the exact-10% edge and every frozen-metric rejection, separate
+July/August peaks through refit, the weak-seasonality and sparse-annual
+disclosures, rational smoothing (`(3/4)^2` exactly), coefficients past 2^53,
+mixed posted scales, cadence exclusivity and every resource refusal. Three
+mutants — leaking the target period into the fit prefix, weakening the margin to
+any improvement, and returning a one-group prefix on refusal — are each caught.
+A fixture where the baseline wins is asserted as a passing outcome, not tuned
+away.
+
+Measured on the available host, which is **not** the declared 1-thread/1 GiB
+benchmark environment: Intel Xeon @ 2.10 GHz (4 cores, 16 GiB), Go 1.27.0,
+`-cpu 1`. The full mixed-pattern ceiling (100 groups: 25 each daily, weekly,
+monthly and annual seasonal, at 52-week and 60-month maximum history) fits in
+**64.2 ms/op**, 29.5 MB and 1,038,951 allocs per operation; one weekly selection
+is 712 µs and one seasonal selection 244 µs. Incremental peak live heap over
+that fit, from `runtime.MemStats` around a single call, is **≈2.7 MiB**
+(`HeapInuse` 1.41 → 4.11 MiB) against the ≤64 MiB target; the 29.5 MB figure is
+cumulative allocation, not peak live memory. The bounded 52/60-period window is
+what keeps exact rational smoothing cheap: an alpha of 1/4 grows denominators as
+`4^n`, so the window bound is a correctness-preserving cost control, not only a
+read budget. Against the ≤2 s incremental-latency target this leaves ample
+headroom, but that target and the ≤64 MiB heap target remain **unverified on the
+declared 1-thread/1 GiB machine**, and these are synthetic fixtures: no
+real-owner quality claim is made or implied. End-to-end incremental latency
+including the extra reads is M3's to measure, once the learning read shares the
+core request path.
+
 ### M3 — Opt-in API and separate learned-spending UI
 
 Extend forecast OpenAPI/client/DTOs and the existing screen, add the options,
@@ -523,6 +599,64 @@ periods, annual cold start, mixed cadences, stale token, exact totals, missing
 learned FX, mobile/keyboard and resource unavailable states. Switching off
 returns the same core data as before M1.
 
+Completed 2026-09-09. The forecast recipe now accepts `spending_model`,
+`history_complete_from`, repeated `expense_category_id` and repeated
+`expense_pattern=<category-id>:<pattern>` split at the final colon. With the
+model off every one of them is an orphan the endpoint rejects, and
+`TestForecastLearningAPIOffMatchesPreModelResponse` asserts the off response is
+identical to the implicit one field for field. `expense_pattern` for a category
+outside an explicit selection is rejected rather than silently ignored, since a
+setting that appears to apply but does not is worse than an error.
+
+The learning history read moved into `LoadResolvedSnapshot` through a new
+`ForecastSnapshotResolution.LearningHistory`, so history and known future
+spending share one deferred read transaction; the read is not issued at all
+while the option is off. `forecast_learning_overlay.go` classifies the shared
+snapshot, filters to in-scope funding accounts and selected categories, applies
+the conservative recurring-overlap rule, fits through the M2 single-slot
+fitter, subtracts exact known period spend, allocates residual integer units
+over the remaining dates of each period, and truncates at the horizon without
+inflating the days inside it. A period whose known spending is ambiguous
+suppresses that group rather than filling the gap.
+
+The nullable `learned_spending` response object carries status, policy version,
+group counts, translated exclusion reasons, category options, per-group
+training/tuning/test windows, selected method and fallback, exact errors,
+observed variation, calendar profile, and separate estimated deltas plus
+with-estimate account and currency curves. Core series, totals, assumptions and
+scope are asserted identical with the option on and off. Estimated events join
+the day-detail list as a fourth `estimated_spending` source ranked after every
+factual source, with null saved-record IDs, a stable
+`estimate:<account>:<category>:<currency>:<date>` key, and cursor validation
+that accepts their zero source id only for that source. The basis token covers
+the model options and the selection outcome, so stale-basis rejection is
+unchanged.
+
+`/app/forecast` gains a third labelled curve, a third table column and an
+opt-in panel: confirmed-history date, per-category cadence selects, model and
+fallback names, training window, tested horizon with an explicit note that
+longer projections were not tested, historical variation worded as not a
+confidence range, calendar profile with per-month observation counts, and
+translated warnings and exclusions. Forty-five new keys were added to all six
+locales; no backend code is ever shown raw. URL parsing mirrors the backend
+contract, so a link carrying an orphan model parameter is invalid rather than
+quietly ignored.
+
+Evidence: `forecast_learning_overlay_test.go` (option validation table, bounded
+history window per cadence, eligible estimation, mixed-eligibility partial
+status, recurring-overlap exclusion, known-future-spend subtraction, refusal
+without group prefixes, category options), `internal/api/forecast_learning_test.go` (orphan and malformed query rejection, off-equals-core, unavailable
+overlay, category/pattern acceptance, core series identical), frontend
+`forecast-model.test.ts` (URL round-trip, invalid recipes, off writes no model
+parameters, third curve plotting), and `e2e/playwright/forecast-learning.spec.ts` (opt-in, explanation, accessibility, mobile, keyboard, off restores the core
+view and the ledger is byte-identical; insufficient history and the 36-month
+seasonal requirement explained; a malformed URL rejected). The e2e run needed
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE`
+pointed at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` on this image; all 56 specs pass. One real accessibility defect was
+found and fixed during the run: warning text used `text-warning`, which fails
+contrast at body size, so warnings now use the repo's existing soft-callout
+pattern with `text-warning-foreground`.
+
 ### M4 — Final learning acceptance and R10 closure
 
 Write a dated review covering classification/overlap,
@@ -532,6 +666,16 @@ R10 including this extension closes here. Update roadmap/feature ledger/working
 queue and move next work to R8 planning. If a hardware/quality gate cannot be
 met, record a specific blocker; do not silently ship the learned curve or
 substitute fabricated model quality claims.
+
+Completed 2026-09-09. The dated review at
+`docs/reviews/r10-learning-acceptance-review-2026-09-09.md` accepts the opt-in
+extension over its classification/overlap, four cadence contracts,
+chronological quality gates, exact/resource bounds, API/UI disclosures and
+synthetic benchmark evidence. Acceptance found and closed T-91 before signing
+off: learned aggregate deltas now reconcile to estimated events, model-only
+currencies participate in rate selection, learned constant-FX coverage stays
+separate from the core valuation, and the frontend selects that separately
+converted curve. R10 is complete; R8 budget planning is next.
 
 Required new tests (table-driven subcases encouraged):
 
@@ -565,10 +709,10 @@ frontend generation/build commands concurrently.
 
 | Extension slice | Status | Commit/evidence |
 |---|---|---|
-| M1 Training basis and baseline | [ ] Not started | — |
-| M2 Model selection and hardware measurements | [ ] Not started | — |
-| M3 API/UI integration | [ ] Not started | — |
-| M4 Final acceptance | [ ] Not started | — |
+| M1 Training basis and baseline | [x] Complete | 2026-09-07; internal repository/application prototype, named tests and `BenchmarkForecastLearningRead`/`BenchmarkForecastLearningAllocation` evidence above |
+| M2 Model selection and hardware measurements | [x] Complete | 2026-09-09; internal `forecast_learning_model.go`, named selection/gate/resource tests and `BenchmarkForecastLearningLevelSelection`/`BenchmarkForecastLearningSeasonalSelection`/`BenchmarkForecastLearningFit` evidence above |
+| M3 API/UI integration | [x] Complete | 2026-09-09; OpenAPI recipe and `learned_spending` schema, shared-snapshot history read, `forecast_learning_overlay.go`, six-locale opt-in UI, and the backend/frontend/e2e evidence above |
+| M4 Final acceptance | [x] Complete | 2026-09-09; dated learning acceptance review, T-91 correction, full validation and move to R8 planning |
 
 ## 8. Research basis and choices still outside this extension
 

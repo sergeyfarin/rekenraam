@@ -44,12 +44,15 @@ type ParseWarning struct {
 	Message  string
 }
 
-// SourceMeta carries hints extracted from the file about account/currency/date range.
+// SourceMeta carries hints and decoding provenance extracted from the source.
 type SourceMeta struct {
-	AccountHints  []string
-	CurrencyHints []string
-	DateFrom      string
-	DateTo        string
+	AccountHints       []string
+	CurrencyHints      []string
+	DateFrom           string
+	DateTo             string
+	TextEncoding       string `json:"text_encoding,omitempty"`
+	EncodingSource     string `json:"encoding_source,omitempty"`
+	EncodingConfidence int    `json:"encoding_confidence,omitempty"`
 }
 
 // StagedSplit is a sub-posting within a staged row.
@@ -84,10 +87,11 @@ type ParseResult struct {
 
 // RawInput carries the raw bytes (and optional metadata) for a source adapter.
 type RawInput struct {
-	Filename    string
-	ContentType string
-	Bytes       []byte
-	Rows        [][]string
+	Filename     string
+	ContentType  string
+	Bytes        []byte
+	Rows         [][]string
+	TextEncoding string
 }
 
 // Confidence is how confident a SourceAdapter is that it can handle an input.
