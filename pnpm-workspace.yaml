@@ -10,6 +10,8 @@ minimumReleaseAgeExclude:
   - '@lix-js/sdk-linux-x64@0.12.2'
   - '@lix-js/sdk-win32-x64@0.12.2'
   - '@lix-js/sdk@0.12.2'
+  - '@lucide/svelte@1.44.0'
+  - vite@8.3.0
 
 overrides:
   # Security pins — each holds a transitive dep above a vulnerable range.
