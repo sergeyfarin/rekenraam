@@ -30,6 +30,45 @@ get:
       name: fx_method
       description: Required with reporting_currency_id. Rates are held constant from the as-of date.
       schema: { type: string, enum: [constant_as_of] }
+    - in: query
+      name: spending_model
+      description: >
+        Opt-in learned spending. `off` returns exactly the core forecast and
+        rejects every other model parameter as an orphan.
+      schema: { type: string, enum: [off, adaptive_v1], default: off }
+    - in: query
+      name: history_complete_from
+      description: >
+        Required with adaptive_v1. The date from which the owner confirms the
+        selected accounts are completely recorded. An opening balance or oldest
+        transaction does not establish coverage.
+      schema: { type: string, format: date }
+    - in: query
+      name: expense_category_id
+      description: >
+        Repeatable postable expense account. Omitted selects every eligible
+        category inside the existing account scope.
+      schema:
+        type: array
+        maxItems: 20
+        items: { type: integer, format: int64, minimum: 1 }
+      style: form
+      explode: true
+    - in: query
+      name: expense_pattern
+      description: >
+        Repeatable `<category-id>:<pattern>` cadence override, split at the
+        final colon. An absent override defaults to weekly. A category outside
+        an explicit expense_category_id selection is rejected rather than
+        ignored. The override applies across that category's funding accounts.
+      schema:
+        type: array
+        maxItems: 20
+        items:
+          type: string
+          pattern: "^[0-9]+:(daily|weekly|monthly|annual_seasonal)$"
+      style: form
+      explode: true
   responses:
     "200":
       description: Exact per-currency balance forecast

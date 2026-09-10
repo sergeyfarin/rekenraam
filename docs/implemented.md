@@ -20,8 +20,8 @@ T-64 consolidated the schema then present into
 recurring, and investment-integrity changes use additive migrations under
 `backend/migrations/`; the baseline alone no longer describes the whole schema.
 
-Last documentation reconciliation: 2026-08-31 (see
-`docs/reviews/documentation-code-review-2026-08-31.md`). The investment boundary review
+Last documentation reconciliation: 2026-09-09 (see
+`docs/reviews/r10-learning-acceptance-review-2026-09-09.md`). The investment boundary review
 reclassified average cost, investment transaction lifecycle coupling, disposal
 provenance, and gains reproducibility honestly below. R12a closed 2026-08-30;
 ADR 0012 governs the durable split.
@@ -244,7 +244,7 @@ ADR 0012 governs the durable split.
 | Security identity / provider matching | 🟦 | Trade autocomplete exists; full security master pending. |
 | Buy / sell / dividend entry UI | ✅ | Buy form; sell form with server-computed preview + specific-lot picker; dividend + reinvested-dividend forms. Modal over positions page. Money parsing/validation in all three runs through `lib/investments/form-amounts.ts` (35 named tests), not private per-form helpers (G-02). |
 | **Investment transaction ↔ lot lifecycle** | 🟡 | T-75a is complete: investment entry is posted-only; generic update/correct/post/void/unvoid/soft-delete/restore/draft-delete is fenced for investment-domain or lot-linked transactions with `INVESTMENT_WORKFLOW_REQUIRED`; unsafe UI actions are hidden. Self-check compares the union of journal and lot positions plus event quantity/basis. Investment-native correction/reversal remains T-75b in R16. |
-| **Disposal-policy provenance** | 🟦 | Preview returns the resolved method and commit preserves allocations/basis, but the committed disposal does not snapshot method, resolution tier, or policy/profile version. Later default changes therefore obscure why historical lots were consumed (T-76). |
+| **Disposal-policy provenance** | ✅ | T-76 (2026-09-10): preview and commit share one decision contract. Every committed disposal snapshots method, resolution tier, account/profile version source, exact quantity and disposed basis, typed lot-event allocations, transaction version, and audit event. Global profiles have append-only versions, and `disposal-decisions.csv` plus `disposal-allocations.csv` round-trip the history independently of later default changes. |
 | **Gains view** | 🟦 | `GET /api/v1/investments/gains` ships an operational view: realized gain from committed disposal events over a disposal-date range, plus current unrealized gain from the latest price. It is not yet multi-basis, jurisdiction-aware, as-of/knowledge-time reproducible, staleness/source/FX-policy aware, or a tax report. ADR 0012 and R18 own that later projection contract. |
 | **Zero-proceeds write-off** | 🟡 | `POST /api/v1/investments/write-off` (+ `/preview`), T-38, R16 slice 1 — a **dedicated** `InvestmentWriteOffInput` type, separate from the shared buy/sell trade type, with no cash account/commodity/amount fields at all and a **required `reason`** distinct from the ordinary `change_reason` — a zero on a sale reads as a typo, so the destructive path is not reachable by clearing one field. `PreviewWriteOff` mirrors sell's preview endpoint. Posts only the two commodity legs (holding credit + `commodity_trading` debit); the whole remaining basis lands in realized gains as a loss. The loss is **not** posted to an expense account: ADR 0012 says a report never posts silently, while R18 may separately scope an explicit linked accounting workflow. Records no trade-implied price (a zero price is rejected by `price_observations` and would corrupt price history). Backend only: the typed client functions (`previewWriteOff`, `recordWriteOff`) exist in `frontend/src/lib/api/investments.ts`, but no form or screen calls them yet, so a write-off is still unreachable from the UI. |
 | **Backdated investment trades into a reconciled period** | ✅ | Every investment write goes through the transaction reconciliation guard, and `reconciliation_override` is accepted on the buy, sell, dividend, reinvested-dividend, **and write-off** routes (T-53; write-off's own `WriteOffReconciliationImpact` was added during this work since its dedicated request type did not inherit the shared trade type's override field). Six preview routes — `POST /investments/{buy,sell,dividend,reinvested-dividend}/reconciliation-impact` and `POST /investments/write-off/{preview,reconciliation-impact}` — plan the *same* postings the write would, via shared `investmentTransactionPlan` builders, and report which checkpoints would be invalidated without persisting anything. The buy, sell, and dividend forms preview first and raise the transaction editor's own named warning, over the same messages, so invalidating a reconciliation reads identically from either screen. `e2e/playwright/investments-reconciliation.spec.ts` covers it end to end, including that cancelling leaves the checkpoint active. |
@@ -273,7 +273,7 @@ ADR 0012 governs the durable split.
 ## Not started (see roadmap)
 
 XLSX/OFX/QFX import adapters, per-split import mapping and batch rollback,
-budgets, public learned-spending forecasts, loan/liability
+budgets, loan/liability
 helpers, report snapshots, and pricing-management UI. CSV import, profiles and
 minimal rules are shipped. Reporting-currency conversion is shipped. Recurring
 templates, generation and dedicated review/discard screens are shipped.
@@ -329,8 +329,59 @@ application code classifies eligible one-funder purchases, applies confirmed
 weekly/monthly/annual history gates, calculates transparent exact baselines,
 subtracts known period spend and allocates residual integer units
 deterministically across calendar dates. It adds no endpoint, response field,
-UI, saved model, ledger write, or selected adaptive model. M2–M4 remain open;
-next is M2 chronological model selection and representative hardware evidence.
+UI, saved model, ledger write, or selected adaptive model. M2 adds internal
+chronological selection for all four cadences: exact rational simple
+exponential smoothing against `mean_8`/`last_period` on a frozen tuning fold,
+the fixed annual references over twelve expanding origins and one frozen
+twelve-month path, both 10% quality gates, honest baseline fallback,
+observed-variation metadata without any band, and a single-slot fitter whose
+refusals return no partial group prefix. M3 makes the whole feature opt-in and
+visible. `/api/v1/forecasts/balances` accepts `spending_model`,
+`history_complete_from`, repeated `expense_category_id` and repeated
+`expense_pattern=<category-id>:<pattern>`; with the model off every one of them
+is an orphan the endpoint rejects, and the response is byte-identical to the
+pre-M3 core forecast. The learning history read now joins the core snapshot's
+own transaction, so a model can never be trained on one view of the ledger and
+applied to another, and it does not run at all while the option is off. A
+nullable `learned_spending` object carries status (`ready`/`partial`/
+`unavailable`), the `adaptive_spending_v1` policy version, requested/eligible/
+excluded group counts, translated exclusion reasons, selectable category
+options, per-group training and test windows, selected method with its fallback
+reason, exact retrospective errors, observed variation, calendar profile and
+separate estimated daily deltas and with-estimate curves. Core points are never
+touched. Estimated events join the day-detail list as a fourth
+`estimated_spending` source ranked after every fact, with null saved-record IDs and a
+stable `estimate:<account>:<category>:<currency>:<date>` key. `/app/forecast`
+gains a third labelled curve and table column, an opt-in panel with the
+confirmed-history date, per-category cadence controls, model and fallback
+names, tested horizon, historical-variation wording that is explicitly not a
+confidence range, calendar profile and translated exclusions, in all six
+locales. Learned native totals and their separately covered constant-FX curve
+carry reconciling estimated deltas; a model-only missing rate never changes the
+core conversion's coverage claim. The dated M4 review accepts the extension and
+closes R10.
+
+## Budgets (R8)
+
+R8 ships an exact monthly planned-versus-actual workflow at `/app/budgets`.
+Targets are audited book-wide facts keyed by calendar month, posting category,
+and currency. Actuals include only posted, current, non-deleted category
+postings whose journal entry touches an account treated as `on_budget` on that
+entry date; drafts, voids, recurring assumptions, forecasts and learned
+estimates never enter the calculation. Income credits are presented as positive
+magnitudes, expenses preserve their debit-positive sign, refunds may make a net
+actual negative, and all target/actual/remaining arithmetic uses exact
+coefficient strings in Go.
+
+Account budget treatment is a dedicated effective-dated version history with
+`on_budget`, `off_budget`, and `excluded`, separate from account kind. The
+authenticated composed `GET /api/v1/budgets/month` read model returns category
+rows, separately typed income/expense currency totals, currency options and the
+account-treatment editor in one request. Target and treatment `PUT` operations
+write their audit event atomically. Unlike currencies are never summed or
+converted, and R8 deliberately has no rollover or envelope allocator. The
+responsive screen has loading, empty, error and success states and copy in all
+six locales. `docs/plans/budgets-plan.md` is the shipped contract.
 
 Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment

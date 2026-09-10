@@ -167,6 +167,8 @@ type CostBasisProfile struct {
 	MetadataJSON string
 	CreatedAt    string
 	UpdatedAt    string
+	VersionID    int64
+	VersionSeq   int64
 }
 
 type CostBasisProfileInput struct {
@@ -351,6 +353,7 @@ func validateWriteOffInput(input InvestmentWriteOffInput) (string, error) {
 
 type SellPreviewResult struct {
 	CostBasisMethod   string
+	DisposalDecision  DisposalDecision
 	Allocations       []InvestmentLotDisposal
 	RealizedGain      int64
 	RealizedGainScale int
@@ -365,9 +368,30 @@ type InvestmentLotAllocationInput struct {
 }
 
 type InvestmentTradeResult struct {
-	Transaction Transaction
-	LotID       *int64
-	Allocations []InvestmentLotDisposal
+	Transaction      Transaction
+	LotID            *int64
+	Allocations      []InvestmentLotDisposal
+	DisposalDecision *DisposalDecision
+}
+
+type DisposalDecision struct {
+	ID                   *int64
+	TransactionID        *int64
+	TransactionVersionID *int64
+	CostBasisMethod      string
+	ResolutionTier       string
+	AccountVersionID     *int64
+	ProfileID            *int64
+	ProfileVersionID     *int64
+	SourceEffectiveFrom  string
+	SourceRecordedAt     string
+	QuantityValue        exact.Coefficient
+	QuantityScale        int
+	DisposedBasisValue   exact.Coefficient
+	DisposedBasisScale   int
+	CostCommodityID      int64
+	AuditEventID         *int64
+	Allocations          []InvestmentLotDisposal
 }
 
 type InvestmentLotDisposal struct {
@@ -376,6 +400,50 @@ type InvestmentLotDisposal struct {
 	QuantityScale  int
 	CostBasisValue int64
 	CostBasisScale int
+}
+
+func previewDisposalDecision(input InvestmentTradeInput, method string, source db.DisposalDecisionSource, disposals []db.LotDisposalRecord) (DisposalDecision, error) {
+	basis := exact.NewScaledInt()
+	for _, disposal := range disposals {
+		basis.AddInt64(disposal.CostBasisValue, disposal.CostBasisScale)
+	}
+	basisValue, err := basis.Coefficient()
+	if err != nil {
+		return DisposalDecision{}, err
+	}
+	costCommodityID := input.CashCommodityID
+	if costCommodityID == 0 && len(disposals) > 0 {
+		costCommodityID = disposals[0].CostCommodityID
+	}
+	return DisposalDecision{
+		CostBasisMethod: method, ResolutionTier: source.ResolutionTier,
+		AccountVersionID: optionalPositiveID(source.AccountVersionID), ProfileID: optionalPositiveID(source.ProfileID),
+		ProfileVersionID: optionalPositiveID(source.ProfileVersionID), SourceEffectiveFrom: source.SourceEffectiveFrom,
+		SourceRecordedAt: source.SourceRecordedAt, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale,
+		DisposedBasisValue: basisValue, DisposedBasisScale: basis.Scale(), CostCommodityID: costCommodityID,
+		Allocations: toInvestmentLotDisposals(disposals),
+	}, nil
+}
+
+func toDisposalDecision(record db.DisposalDecisionRecord) DisposalDecision {
+	return DisposalDecision{
+		ID: optionalPositiveID(record.ID), TransactionID: optionalPositiveID(record.TransactionID),
+		TransactionVersionID: optionalPositiveID(record.TransactionVersionID), CostBasisMethod: record.CostBasisMethod,
+		ResolutionTier: record.ResolutionTier, AccountVersionID: optionalPositiveID(record.AccountVersionID),
+		ProfileID: optionalPositiveID(record.ProfileID), ProfileVersionID: optionalPositiveID(record.ProfileVersionID),
+		SourceEffectiveFrom: record.SourceEffectiveFrom, SourceRecordedAt: record.SourceRecordedAt,
+		QuantityValue: record.QuantityValue, QuantityScale: record.QuantityScale,
+		DisposedBasisValue: record.DisposedBasisValue, DisposedBasisScale: record.DisposedBasisScale,
+		CostCommodityID: record.CostCommodityID, AuditEventID: optionalPositiveID(record.AuditEventID),
+		Allocations: toInvestmentLotDisposals(record.Allocations),
+	}
+}
+
+func optionalPositiveID(value int64) *int64 {
+	if value <= 0 {
+		return nil
+	}
+	return &value
 }
 
 type DividendInput struct {
@@ -1021,22 +1089,28 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
 }
 
-func (s *InvestmentService) resolveCostBasisMethod(ctx context.Context, holdingAccountID int64, txnOverride string) (string, error) {
+func (s *InvestmentService) resolveCostBasisMethod(ctx context.Context, holdingAccountID int64, txnOverride string) (string, db.DisposalDecisionSource, error) {
 	if txnOverride != "" {
-		return txnOverride, nil
+		return txnOverride, db.DisposalDecisionSource{ResolutionTier: "transaction"}, nil
 	}
 	account, err := s.accountService.Account(ctx, holdingAccountID)
 	if err == nil && account.CostBasisMethod != "" {
-		return account.CostBasisMethod, nil
+		return account.CostBasisMethod, db.DisposalDecisionSource{
+			ResolutionTier: "account", AccountVersionID: account.VersionID,
+			SourceEffectiveFrom: account.EffectiveFrom, SourceRecordedAt: account.UpdatedAt,
+		}, nil
 	}
 	profile, err := s.repository.DefaultCostBasisProfile(ctx, BookID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return "fifo", nil
+			return "fifo", db.DisposalDecisionSource{ResolutionTier: "fallback"}, nil
 		}
-		return "", fmt.Errorf("resolve cost basis method: %w", err)
+		return "", db.DisposalDecisionSource{}, fmt.Errorf("resolve cost basis method: %w", err)
 	}
-	return profile.Method, nil
+	return profile.Method, db.DisposalDecisionSource{
+		ResolutionTier: "global", ProfileID: profile.ID, ProfileVersionID: profile.VersionID,
+		SourceRecordedAt: profile.UpdatedAt,
+	}, nil
 }
 
 func (s *InvestmentService) computeSellDisposals(ctx context.Context, input InvestmentTradeInput, method string) ([]db.LotDisposalRecord, error) {
@@ -1061,7 +1135,7 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 	if err := validateTradeInput(input); err != nil {
 		return SellPreviewResult{}, err
 	}
-	method, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
+	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
 	if err != nil {
 		return SellPreviewResult{}, err
 	}
@@ -1092,8 +1166,13 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 	if err != nil {
 		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
 	}
+	decision, err := previewDisposalDecision(input, method, source, disposals)
+	if err != nil {
+		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
+	}
 	return SellPreviewResult{
 		CostBasisMethod:   method,
+		DisposalDecision:  decision,
 		Allocations:       toInvestmentLotDisposals(disposals),
 		RealizedGain:      gainValue,
 		RealizedGainScale: gain.Scale(),
@@ -1158,7 +1237,7 @@ func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input Investmen
 	if _, err := validateWriteOffInput(input); err != nil {
 		return SellPreviewResult{}, err
 	}
-	method, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
+	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
 	if err != nil {
 		return SellPreviewResult{}, err
 	}
@@ -1184,8 +1263,13 @@ func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input Investmen
 	if err != nil {
 		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CommodityID}
 	}
+	decision, err := previewDisposalDecision(input.asTradeInput(), method, source, disposals)
+	if err != nil {
+		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CommodityID}
+	}
 	return SellPreviewResult{
 		CostBasisMethod:   method,
+		DisposalDecision:  decision,
 		Allocations:       toInvestmentLotDisposals(disposals),
 		RealizedGain:      gainValue,
 		RealizedGainScale: gain.Scale(),
@@ -1290,7 +1374,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
-	method, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
+	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -1308,6 +1392,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		QuantityScale:   input.QuantityScale,
 		Allocations:     allocations,
 		CostBasisMethod: method,
+		DecisionSource:  source,
 		CreatedAt:       s.now().UTC().Format(time.RFC3339),
 		ActorUserID:     input.OwnerUserID,
 		AuthSessionID:   input.AuthSessionID,
@@ -1319,10 +1404,11 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 	}
 	var transactionRecord db.TransactionRecord
 	var disposals []db.LotDisposalRecord
+	var decision db.DisposalDecisionRecord
 	if postWrite == nil {
-		transactionRecord, disposals, err = s.repository.CreateTransactionAndDisposeLots(ctx, transactionParams, disposalParams)
+		transactionRecord, disposals, decision, err = s.repository.CreateTransactionAndDisposeLotsWithDecision(ctx, transactionParams, disposalParams)
 	} else {
-		transactionRecord, disposals, err = s.repository.CreateTransactionAndDisposeLotsWithPostWrite(ctx, transactionParams, disposalParams, postWrite)
+		transactionRecord, disposals, decision, err = s.repository.CreateTransactionAndDisposeLotsWithDecisionAndPostWrite(ctx, transactionParams, disposalParams, postWrite)
 	}
 	if err != nil {
 		if errors.Is(err, db.ErrInsufficientLots) {
@@ -1349,7 +1435,8 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 			PriceScale:       8,
 		})
 	}
-	return InvestmentTradeResult{Transaction: transaction, Allocations: toInvestmentLotDisposals(disposals)}, nil
+	committedDecision := toDisposalDecision(decision)
+	return InvestmentTradeResult{Transaction: transaction, Allocations: toInvestmentLotDisposals(disposals), DisposalDecision: &committedDecision}, nil
 }
 
 func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (Transaction, error) {
@@ -2225,7 +2312,7 @@ func toInvestmentInstruments(records []db.InvestmentInstrumentRecord) []Investme
 }
 
 func toCostBasisProfile(record db.CostBasisProfileRecord) CostBasisProfile {
-	return CostBasisProfile{ID: record.ID, BookID: record.BookID, Name: record.Name, Method: record.Method, IsDefault: record.IsDefault, Status: record.Status, Description: record.Description, MetadataJSON: record.MetadataJSON, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}
+	return CostBasisProfile{ID: record.ID, BookID: record.BookID, Name: record.Name, Method: record.Method, IsDefault: record.IsDefault, Status: record.Status, Description: record.Description, MetadataJSON: record.MetadataJSON, CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt, VersionID: record.VersionID, VersionSeq: record.VersionSeq}
 }
 
 func toCostBasisProfiles(records []db.CostBasisProfileRecord) []CostBasisProfile {

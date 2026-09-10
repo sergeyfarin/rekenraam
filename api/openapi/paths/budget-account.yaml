@@ -1,0 +1,18 @@
+parameters:
+  - in: path
+    name: account_id
+    required: true
+    schema: { type: integer, format: int64, minimum: 1 }
+put:
+  summary: Append an effective-dated account budget treatment
+  requestBody:
+    required: true
+    content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/SetBudgetTreatmentRequest" } } }
+  responses:
+    "200":
+      description: Budget month containing the effective date.
+      content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/BudgetMonthResponse" } } }
+    "400": { description: Invalid treatment, content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } } }
+    "401": { description: Authentication required, content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } } }
+    "403": { description: CSRF validation failed, content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } } }
+    "404": { description: Account not found, content: { application/json: { schema: { $ref: "../openapi.yaml#/components/schemas/ErrorResponse" } } } }

@@ -16,6 +16,33 @@ type forecastNormalizedInput struct {
 	IncludeDescendants  bool
 	ReportingCurrencyID *int64
 	FXMethod            string
+	SpendingModel       string
+	HistoryCompleteFrom string
+	ExpenseCategoryIDs  []int64
+	ExpensePatterns     []forecastCategoryPattern
+}
+
+// forecastCategoryPattern is one category-wide cadence override. This version
+// deliberately has no per-funding-account variant: an override applies to the
+// category across every selected funding account.
+type forecastCategoryPattern struct {
+	CategoryID int64
+	Pattern    ForecastLearningPattern
+}
+
+func (i forecastNormalizedInput) learningEnabled() bool {
+	return i.SpendingModel == ForecastSpendingModelAdaptiveV1
+}
+
+// patternFor resolves the cadence for a category. An absent override defaults
+// to weekly, as the API contract states.
+func (i forecastNormalizedInput) patternFor(categoryID int64) ForecastLearningPattern {
+	for _, override := range i.ExpensePatterns {
+		if override.CategoryID == categoryID {
+			return override.Pattern
+		}
+	}
+	return ForecastLearningWeekly
 }
 
 type forecastBounds struct {
@@ -63,7 +90,100 @@ func normalizeForecastInput(input ForecastInput) (forecastNormalizedInput, error
 			return forecastNormalizedInput{}, ValidationError{Message: "forecast fx method is invalid"}
 		}
 	}
-	return forecastNormalizedInput{HorizonDays: horizon, AccountIDs: ids, IncludeDescendants: input.IncludeDescendants, ReportingCurrencyID: input.ReportingCurrencyID, FXMethod: input.FXMethod}, nil
+	normalized := forecastNormalizedInput{HorizonDays: horizon, AccountIDs: ids, IncludeDescendants: input.IncludeDescendants, ReportingCurrencyID: input.ReportingCurrencyID, FXMethod: input.FXMethod}
+	if err := normalizeForecastLearningInput(input, &normalized); err != nil {
+		return forecastNormalizedInput{}, err
+	}
+	return normalized, nil
+}
+
+// normalizeForecastLearningInput validates the opt-in model parameters. With
+// the model off, every model-specific parameter is an orphan and rejected, so
+// the off request keeps exactly its pre-M3 meaning.
+func normalizeForecastLearningInput(input ForecastInput, normalized *forecastNormalizedInput) error {
+	model := input.SpendingModel
+	if model == "" {
+		model = ForecastSpendingModelOff
+	}
+	if model != ForecastSpendingModelOff && model != ForecastSpendingModelAdaptiveV1 {
+		return ValidationError{Message: "spending model must be off or adaptive_v1"}
+	}
+	if model == ForecastSpendingModelOff {
+		if input.HistoryCompleteFrom != "" || len(input.ExpenseCategoryIDs) > 0 || len(input.ExpensePatterns) > 0 {
+			return ValidationError{Message: "spending model parameters require spending_model=adaptive_v1"}
+		}
+		normalized.SpendingModel = ForecastSpendingModelOff
+		return nil
+	}
+	if input.HistoryCompleteFrom == "" {
+		return ValidationError{Message: "history_complete_from is required with spending_model=adaptive_v1"}
+	}
+	confirmed, err := time.Parse(time.DateOnly, input.HistoryCompleteFrom)
+	if err != nil {
+		return ValidationError{Message: "history_complete_from must be an ISO 8601 date"}
+	}
+	categories := make([]int64, 0, len(input.ExpenseCategoryIDs))
+	seen := map[int64]bool{}
+	for _, id := range input.ExpenseCategoryIDs {
+		if id <= 0 {
+			return ValidationError{Message: "expense category id is invalid"}
+		}
+		if !seen[id] {
+			seen[id] = true
+			categories = append(categories, id)
+		}
+	}
+	if len(categories) > ForecastLearningMaxCategories {
+		return ValidationError{Message: "forecast accepts at most 20 expense categories"}
+	}
+	sort.Slice(categories, func(i, j int) bool { return categories[i] < categories[j] })
+	if len(input.ExpensePatterns) > ForecastLearningMaxCategories {
+		return ValidationError{Message: "forecast accepts at most 20 expense pattern overrides"}
+	}
+	overrides := make([]forecastCategoryPattern, 0, len(input.ExpensePatterns))
+	overridden := map[int64]bool{}
+	for _, override := range input.ExpensePatterns {
+		if override.CategoryID <= 0 {
+			return ValidationError{Message: "expense pattern category id is invalid"}
+		}
+		if overridden[override.CategoryID] {
+			return ValidationError{Message: "expense pattern overrides must be unique per category"}
+		}
+		switch override.Pattern {
+		case ForecastLearningDaily, ForecastLearningWeekly, ForecastLearningMonthly, ForecastLearningAnnualSeasonal:
+		default:
+			return ValidationError{Message: "expense pattern must be daily, weekly, monthly or annual_seasonal"}
+		}
+		// An override outside an explicit category selection would silently do
+		// nothing, which reads as a working setting that is not applied.
+		if len(categories) > 0 && !seen[override.CategoryID] {
+			return ValidationError{Message: "expense pattern category is outside the selected expense categories"}
+		}
+		overridden[override.CategoryID] = true
+		overrides = append(overrides, forecastCategoryPattern{CategoryID: override.CategoryID, Pattern: override.Pattern})
+	}
+	sort.Slice(overrides, func(i, j int) bool { return overrides[i].CategoryID < overrides[j].CategoryID })
+	normalized.SpendingModel = ForecastSpendingModelAdaptiveV1
+	normalized.HistoryCompleteFrom = confirmed.Format(time.DateOnly)
+	normalized.ExpenseCategoryIDs = categories
+	normalized.ExpensePatterns = overrides
+	return nil
+}
+
+// validateForecastLearningCategories rejects IDs that are not expense accounts
+// in this snapshot, resolved from the same as-of date as every other identity.
+func validateForecastLearningCategories(versions []db.ForecastAccountVersionRecord, asOf string, input forecastNormalizedInput) error {
+	if !input.learningEnabled() || len(input.ExpenseCategoryIDs) == 0 {
+		return nil
+	}
+	current := accountRulesAt(versions, asOf)
+	for _, id := range input.ExpenseCategoryIDs {
+		account, ok := current[id]
+		if !ok || account.SystemRole.Valid || account.AccountClass != "expense" || !account.AllowsPostings {
+			return ValidationError{Message: "expense category must identify a postable expense account"}
+		}
+	}
+	return nil
 }
 
 func validateForecastReportingCurrency(versions []db.ForecastCommodityVersionRecord, asOf string, input forecastNormalizedInput) error {

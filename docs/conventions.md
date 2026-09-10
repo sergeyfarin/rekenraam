@@ -45,6 +45,9 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Account budget treatment is a separate planning/reporting axis from
   `account_kind`, because the same kind of account can be on-budget,
   off-budget, or excluded from budget views.
+- Budget treatment is stored as its own effective-dated version history.
+  Budget actuals resolve it on each journal entry date; changing treatment now
+  must never reinterpret an earlier entry under today's setting.
 - System accounts are identified by `system_role` and hidden from ordinary
   account lists by default.
 - Hidden income and expense fallback accounts use `account_class=income` and

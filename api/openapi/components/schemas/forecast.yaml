@@ -125,7 +125,7 @@ ForecastDiagnostic:
 
 ForecastBalancesResponse:
   type: object
-  required: [as_of_date, start_date, end_date, time_zone, computed_at, horizon_days, basis_token, policy_version, scope, currency_options, series, totals, assumptions, diagnostics, diagnostic_total_count, diagnostic_hidden_count, valuation, converted]
+  required: [as_of_date, start_date, end_date, time_zone, computed_at, horizon_days, basis_token, policy_version, scope, currency_options, series, totals, assumptions, diagnostics, diagnostic_total_count, diagnostic_hidden_count, valuation, converted, learned_spending]
   properties:
     as_of_date: { type: string, format: date }
     start_date: { type: string, format: date }
@@ -159,6 +159,10 @@ ForecastBalancesResponse:
     converted:
       oneOf:
         - $ref: "../../openapi.yaml#/components/schemas/ForecastCurrencySeries"
+        - type: 'null'
+    learned_spending:
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/ForecastLearnedSpending"
         - type: 'null'
 
 ForecastRateUse:
@@ -220,7 +224,7 @@ ForecastEvent:
   required: [key, source, source_date, projected_date, carried_forward, transaction_id, version_id, entry_id, template_id, occurrence_id, occurrence_date, description, payee_name, amounts]
   properties:
     key: { type: string }
-    source: { type: string, enum: [posted, draft, template] }
+    source: { type: string, enum: [posted, draft, template, estimated_spending] }
     source_date: { type: string, format: date }
     projected_date: { type: string, format: date }
     carried_forward: { type: boolean }
@@ -248,3 +252,202 @@ ForecastEventsResponse:
       items: { $ref: "../../openapi.yaml#/components/schemas/ForecastEvent" }
     total_count: { type: integer, minimum: 0 }
     next_cursor: { type: [string, 'null'] }
+
+ForecastLearningOption:
+  type: object
+  required: [account_id, name, code, builtin_label_key, parent_account_id]
+  properties:
+    account_id: { type: integer, format: int64 }
+    name: { type: [string, 'null'] }
+    code: { type: [string, 'null'] }
+    builtin_label_key: { type: [string, 'null'] }
+    parent_account_id: { type: [integer, 'null'], format: int64 }
+
+ForecastLearningExclusion:
+  type: object
+  description: >
+    One group that cannot be estimated, with a stable reason the frontend
+    translates. Exclusions are visible rather than silently dropped.
+  required: [funding_account_id, category_account_id, commodity_id, pattern, reason, source_type, source_id]
+  properties:
+    funding_account_id: { type: integer, format: int64 }
+    category_account_id: { type: integer, format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    pattern: { type: string, enum: [daily, weekly, monthly, annual_seasonal] }
+    reason:
+      type: string
+      enum: [insufficient_history, insufficient_seasonal_history, sparse_history, recurring_overlap,
+             ambiguous_known_spending, resource_limit, busy, calendar_limit, computation_timeout]
+    source_type: { type: [string, 'null'] }
+    source_id: { type: [integer, 'null'], format: int64 }
+
+ForecastLearningError:
+  type: object
+  description: >
+    One retrospective error metric. `exact` is false when the decimal is a
+    rounded rendering of the underlying rational rather than its whole value.
+  required: [metric, value, scale, exact]
+  properties:
+    metric:
+      type: string
+      enum: [one_period_mae, frozen_total_abs_error, frozen_path_mae, frozen_max_abs_error]
+    value: { type: string, pattern: "^-?[0-9]+$" }
+    scale: { type: integer, minimum: 0 }
+    exact: { type: boolean }
+
+ForecastLearningCandidate:
+  type: object
+  required: [method, errors]
+  properties:
+    method:
+      type: string
+      enum: [mean_8, last_period, ses_025, ses_050, same_month_2y, seasonal_last_year, flat_mean_12]
+    errors:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastLearningError" }
+
+ForecastLearningMonthProfile:
+  type: object
+  description: >
+    Observed spending for one calendar month number. These are historical
+    ranges and counts, never a confidence band or plausible future range.
+  required: [month, observations, positive_observations, minimum_observed, maximum_observed, estimate]
+  properties:
+    month: { type: integer, minimum: 1, maximum: 12 }
+    observations: { type: integer, minimum: 0 }
+    positive_observations: { type: integer, minimum: 0 }
+    minimum_observed: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    maximum_observed: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    estimate: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+
+ForecastLearningGroup:
+  type: object
+  description: >
+    One funding account / expense category / currency model, with the window it
+    was fitted on and the chronological evaluation that selected it.
+  required: [funding_account_id, category_account_id, commodity_id, pattern, period_unit,
+             training_start_date, training_end_date, complete_periods, positive_periods,
+             selected_method, selected_is_learned, fallback_reason, tuned_ses_method,
+             tuned_baseline_method, tuning_start_date, tuning_end_date, test_start_date,
+             test_end_date, tested_horizon_periods, candidates, minimum_observed,
+             maximum_observed, month_profile, timing_assumption, warnings, estimated_total]
+  properties:
+    funding_account_id: { type: integer, format: int64 }
+    category_account_id: { type: integer, format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    pattern: { type: string, enum: [daily, weekly, monthly, annual_seasonal] }
+    period_unit: { type: string, enum: [week, month] }
+    training_start_date: { type: string, format: date }
+    training_end_date: { type: string, format: date }
+    complete_periods: { type: integer, minimum: 0 }
+    positive_periods: { type: integer, minimum: 0 }
+    selected_method:
+      type: string
+      enum: [mean_8, last_period, ses_025, ses_050, same_month_2y, seasonal_last_year, flat_mean_12]
+    selected_is_learned: { type: boolean }
+    fallback_reason:
+      oneOf:
+        - type: string
+          enum: [no_validated_improvement, perfect_baseline]
+        - type: 'null'
+    tuned_ses_method: { type: [string, 'null'] }
+    tuned_baseline_method: { type: [string, 'null'] }
+    tuning_start_date: { type: [string, 'null'], format: date }
+    tuning_end_date: { type: [string, 'null'], format: date }
+    test_start_date: { type: [string, 'null'], format: date }
+    test_end_date: { type: [string, 'null'], format: date }
+    tested_horizon_periods:
+      type: integer
+      minimum: 0
+      description: >
+        The horizon actually validated. Output beyond it continues the same
+        assumptions and must be labelled as such, not presented as tested.
+    candidates:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastLearningCandidate" }
+    minimum_observed: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    maximum_observed: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    month_profile:
+      type: array
+      maxItems: 12
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastLearningMonthProfile" }
+    timing_assumption: { type: string, enum: [observed_calendar_profile, uniform] }
+    warnings:
+      type: array
+      items:
+        type: string
+        enum: [uniform_timing_fallback, seasonality_not_better_than_flat, sparse_annual_observations]
+    estimated_total: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+
+ForecastLearnedPoint:
+  type: object
+  required: [date, estimated_delta, projected_balance]
+  properties:
+    date: { type: string, format: date }
+    estimated_delta:
+      allOf:
+        - $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity"
+      description: Estimated outflow for the day. Never positive.
+    projected_balance:
+      allOf:
+        - $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity"
+      description: The core projected balance plus estimates to date.
+
+ForecastLearnedSeries:
+  type: object
+  required: [account_id, commodity_id, commodity_code, points, minimum_balance, minimum_date, first_negative_date]
+  properties:
+    account_id: { type: [integer, 'null'], format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    commodity_code: { type: string }
+    points:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastLearnedPoint" }
+    minimum_balance: { $ref: "../../openapi.yaml#/components/schemas/ForecastQuantity" }
+    minimum_date: { type: string }
+    first_negative_date: { type: [string, 'null'], format: date }
+
+ForecastLearnedSpending:
+  type: object
+  description: >
+    The opt-in learned-spending overlay. `ready` means every in-scope group can
+    be estimated; it is not a claim of future accuracy. `partial` means some
+    groups are excluded with visible reasons. `unavailable` returns no learned
+    curve at all rather than a reassuring zero-spending forecast. Estimates are
+    kept separate from the core curves and never merge into them.
+  required: [status, policy_version, reason, history_complete_from, requested_group_count,
+             eligible_group_count, excluded_group_count, category_options, exclusions,
+             groups, series, totals, converted]
+  properties:
+    status: { type: string, enum: [ready, partial, unavailable] }
+    policy_version: { type: string, enum: [adaptive_spending_v1] }
+    reason:
+      oneOf:
+        - type: string
+          enum: [insufficient_history, insufficient_seasonal_history, sparse_history, recurring_overlap,
+                 ambiguous_known_spending, resource_limit, busy, calendar_limit, computation_timeout]
+        - type: 'null'
+    history_complete_from: { type: string, format: date }
+    requested_group_count: { type: integer, minimum: 0 }
+    eligible_group_count: { type: integer, minimum: 0 }
+    excluded_group_count: { type: integer, minimum: 0 }
+    category_options:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastLearningOption" }
+    exclusions:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastLearningExclusion" }
+    groups:
+      type: array
+      maxItems: 100
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastLearningGroup" }
+    series:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastLearnedSeries" }
+    totals:
+      type: array
+      items: { $ref: "../../openapi.yaml#/components/schemas/ForecastLearnedSeries" }
+    converted:
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/ForecastLearnedSeries"
+        - type: 'null'

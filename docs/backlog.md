@@ -1082,8 +1082,8 @@ app's.
 These three findings were opened by the 2026-08-29 ledger/subledger boundary
 review. T-75a and T-74 are the narrow R12a gate ahead of the remaining R9
 slices because they can already create or preserve incorrect financial state.
-T-76 is required before the v0.1 schema/export contract freezes and before R16
-or R18, but it does not block R9's ordinary/transfer-only recurring templates.
+T-76 closed 2026-09-10 before the v0.1 schema/export contract freeze. It no
+longer blocks R16 or R18.
 T-75b is investment lifecycle feature work in R16, not a prerequisite for safely
 continuing unrelated work while the generic fence remains. ADR 0012 governs the
 correction; R18 owns the later multi-basis reporting engine.
@@ -1126,7 +1126,7 @@ basis projection may be redistributed. Because the current runtime maintains one
 operational projection, it must also persist a minimal position-level method lock:
 reject switching into or out of `average_cost` while a position remains open
 after any disposal under a different method. A closed position starts a new
-method epoch. Full per-disposal policy provenance remains T-76.
+method epoch. Full per-disposal policy provenance shipped in T-76 on 2026-09-10.
 
 **Acceptance gate:** named tests cover two differently priced lots, a partial
 average-cost sale followed by a second sale and a final close; after each step,
@@ -1206,10 +1206,21 @@ all-lots-closed. **R16 acceptance:** investment-native correction tests prove
 journal, lots, gains, audit event, and reconciliation invalidation commit or roll
 back together.
 
-### T-76 A disposal does not preserve its resolved policy provenance `[ ]`
+### T-76 A disposal does not preserve its resolved policy provenance `[x]`
 
-**Schedule:** required before v0.1/schema freeze and before R16/R18; not an R9
-blocker.
+**Closed 2026-09-10.** Migration `0008_disposal_provenance.sql` adds immutable
+global profile versions plus typed disposal decisions and allocations linked to
+the transaction, transaction version, lot events, and audit event. The shared
+resolver now returns method and tier/source version to both preview and commit;
+the committed API response carries the complete decision. The bundle adds
+`disposal-decisions.csv` and `disposal-allocations.csv` with exact quantities and
+basis. `TestDisposalDecisionPreservesEveryResolutionTier`,
+`TestHistoricalDisposalDecisionSurvivesAccountAndGlobalDefaultChanges`,
+`TestPreviewSellAndSellProduceIdenticalAllocationsAcrossCostBasisMethods`, and
+`TestBundleLotsFileCarriesCostBasisAtItsOwnScale` prove the acceptance gate,
+including a specific-lot export round trip.
+
+**Schedule:** completed before v0.1/schema freeze and before R16/R18.
 
 **Files:** `backend/internal/app/investments.go`
 (`resolveCostBasisMethod`, `sell`); `backend/internal/db/investments.go`
@@ -1217,26 +1228,9 @@ blocker.
 (`cost_basis_profiles`, `investment_lot_events`); investment OpenAPI and export
 contracts.
 
-The service resolves transaction override → account default → global default →
-FIFO and uses the result, but only the preview returns the method. The committed
-lot event stores quantities and basis in generic metadata, with no canonical
-resolved method, resolution tier, or policy/profile version. Global profiles are
-updated in place. After a default changes, the book cannot reliably explain why
-a historical allocation occurred, and an alternative projection cannot distinguish
-an actual specific-identification election from an implementation choice.
-
-Add a durable disposal/election contract that snapshots the resolved method,
-resolution tier (`transaction`, `account`, `global`, `fallback`), policy/profile
-identity and version/effective state, explicit allocations, and audit linkage.
-Provider-reported basis remains sourced evidence rather than silently becoming
-the book policy. Prefer typed columns/relations for canonical fields; arbitrary
-metadata JSON is not the contract. Include the information in the committed API
-response and durable structured export before the schema contract freezes.
-
-**Acceptance gate:** change account and global defaults after a sale and prove the
-historical disposal still explains the original method/source; round-trip it
-through the export; preview and commit return the same resolved decision; named
-tests cover every resolution tier and specific-lot allocations.
+The durable decision contract uses typed columns and relations rather than
+metadata JSON as authority. Provider-reported basis remains separately
+attributed source evidence and does not select book policy.
 
 ## Recurring producer activation gate
 
@@ -1488,6 +1482,27 @@ now uploads the raw file for server-side decoded header/delimiter analysis; the
 final parser repeats that same path, replacing the browser's separate UTF-8-only
 header parser. Cross-script decoder tests plus API boundary tests protect
 auto-detection, manual override, and decoded profile-column matching.
+
+## R10 learned-spending acceptance — closed 2026-09-09
+
+### T-91 Learned aggregate and converted curves were incomplete `[x]`
+
+**Files:** `backend/internal/app/forecast_learning_overlay.go`,
+`backend/internal/db/forecast.go`, and
+`frontend/src/lib/forecast/forecast-model.ts`. M3 exposed a nullable converted
+learned curve but never populated it, omitted model-only currencies from the
+rate read, and emitted zero `estimated_delta` values on native aggregate rows.
+Account-level learned curves remained correct, but selecting a converted core
+row could not show its estimated counterpart and aggregate deltas did not
+reconcile to estimated events.
+
+**Fixed:** sum aggregate estimated deltas, independently check learned currency
+coverage without changing the core valuation status, load rate candidates from
+learning history, and explicitly select the learned converted curve in the
+frontend. `TestForecastLearningSeparateFXCoverage`,
+`TestForecastLearningRateCandidatesIncludeModelOnlyCurrency`, the aggregate
+event-reconciliation assertion and the converted frontend-model case prevent
+recurrence. The dated R10 learning acceptance review records the boundary.
 
 ## Public-deployment security gates
 

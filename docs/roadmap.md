@@ -6,9 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-09-07 (R12a T-75a/T-74 closed; R9 acceptance complete;
-R10 core accepted; learning M1 complete and M2 next; T-76 and T-75b
-remain scheduled separately).
+Last reviewed: 2026-09-10 (R8 budgets and T-76 disposal provenance shipped;
+T-75b remains scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -36,9 +35,9 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R6 | Import depth (XLSX/OFX, matching, rollback) | ⏸ | `docs/plans/import-plan.md` |
 | R7 | Trading 212 online connections + lots | ✅ | `docs/plans/trading212-import-plan.md` |
 | R7a | Daily-entry convenience | ⏸ | this file |
-| R8 | Budgets | ⏭ | this file |
+| R8 | Budgets | ✅ | `docs/plans/budgets-plan.md` |
 | R9 | Recurring transactions | ✅ | `docs/plans/recurring-transactions-plan.md` |
-| R10 | Projected balances / forecasting | ▶ | `docs/plans/projected-balances-plan.md` |
+| R10 | Projected balances / forecasting | ✅ | `docs/plans/projected-balances-plan.md` |
 | R11 | Pricing/FX management UI | ⏸ | this file |
 | R12 | Investments UI + gains reporting | ✅ | `docs/plans/investments-plan.md` |
 | R12a | Investment journal/subledger integrity correction | ✅ | `docs/plans/investment-integrity-plan.md`, ADR 0012 |
@@ -238,9 +237,9 @@ it only ran first because "auth" sorted before every other filename. A Playwrigh
 project dependency now states that requirement.
 
 **Subsequent delivery:** the reporting-currency selector shipped 2026-08-26.
-R10 is current: its coherent snapshot, exact projection, authenticated
-balances/events API and optional constant-as-of FX conversion are complete;
-the forecast screen is next below.
+R10's coherent snapshot, exact projection, authenticated balances/events API,
+optional constant-as-of FX, forecast screen and opt-in learned-spending
+extension are accepted; R8 budget planning is current below.
 
 <details>
 <summary>R3a as planned</summary>
@@ -330,12 +329,13 @@ local development database existed to reset or assess. Average cost is restored
 to ✅; the generic
 lifecycle fence is shipped while native correction remains deliberately open.
 
-**Required follow-up, not an R9 blocker:** T-76 snapshots and exports disposal
-method/tier/policy provenance before v0.1/schema freeze and before R16/R18. T-75b
-is the investment-native correction lifecycle in R16; the generic fence remains
-in force until it ships.
+**Required follow-up completed 2026-09-10:** T-76 now snapshots and exports
+disposal method, resolution tier, versioned policy source, exact basis totals,
+allocations, transaction version, and audit linkage. T-75b is the remaining
+investment-native correction lifecycle in R16; the generic fence remains in
+force until it ships.
 
-### Current — planning loop
+### Done — planning loop
 
 Order decided 2026-08-05 (review §3d): **R9 → R10 → R8**. Recurring
 transactions are forecasting's data source, so R9 → R10 is a single coherent
@@ -347,8 +347,8 @@ afterward with no rework. R9 is complete, including acceptance on 2026-08-31
 and its snapshot, exact projection, authenticated API, constant-as-of FX,
 forecast screen, basis-safe event details and cross-system acceptance have
 landed. The eight-slice core is accepted in
-`docs/reviews/r10-core-acceptance-review-2026-09-07.md`; learning M1's internal
-training/baseline foundation is complete and M2 is next.
+`docs/reviews/r10-core-acceptance-review-2026-09-07.md`; the learned-spending
+extension is accepted in `docs/reviews/r10-learning-acceptance-review-2026-09-09.md`.
 The localized templates and due-inbox screens now expose
 create/edit, skip/blocked retry, explicit post/discard and bulk review with
 reconciliation checks. Startup/minute generation and public run-now are active;
@@ -362,7 +362,7 @@ unpaginated summary counts support the editor and navigation badge.
    `internal/recur` enumerator that R10 reuses for projections, drafts-only
    generation with a dedicated review inbox, and the `status="draft"` origin
    guard the ledger-core plan deferred until a real producer existed.
-2. **R10 Projected balances — current, planned 2026-08-31:**
+2. **R10 Projected balances — complete, planned 2026-08-31 and accepted 2026-09-09:**
    `docs/plans/projected-balances-plan.md` is the detailed eight-slice core
    execution contract. Read-only owner-local daily balances combine posted facts
    with
@@ -375,10 +375,12 @@ unpaginated summary counts support the editor and navigation badge.
    daily/weekly fluctuations, monthly costs and annual calendar peaks, with
    confirmed history, no overlap with recurring bills, chronological evaluation
    and measured hardware budgets. M1's internal complete-history reader,
-   classification/cadence baselines and exact residual allocation are complete;
-   model selection and every public opt-in surface remain unimplemented. Final R10
-   acceptance follows M4; R8 remains next afterward. All eight core slices are
-   accepted:
+   classification/cadence baselines and exact residual allocation, M2's
+   chronological selection and resource gates, and M3's opt-in surface are all
+   complete. The extended recipe returns a nullable
+   learned_spending response, estimated day-detail events and a separate,
+   clearly labelled estimated-spending view in all six locales. M4's dated
+   review accepts the extension. All eight core slices are accepted:
    the coherent read-only snapshot loader feeds an exact
    per-account/per-currency projection with recurring occurrence precedence,
    bounds and diagnostics, exposed through authenticated balances and
@@ -392,11 +394,21 @@ unpaginated summary counts support the editor and navigation badge.
    paths invalidate the shared forecast cache without polling. Cross-system
    isolation, concurrent materialization, adversarial bounds/precision and the
    browser acceptance matrix are covered, and the dated slice-8 review maps the
-   shipped core contract. Learning M1 now adds only the bounded internal training
-   basis and transparent baselines; it does not change the core response.
-   **Next: learning M2 only.** Loan helpers remain optional
-   later work.
-3. **R8 Budgets:** period budgets with actual-versus-budget reporting.
+   shipped core contract. Learning remains a separate opt-in overlay and does
+   not change the core response.
+   Learning M1–M4 are accepted; loan helpers remain optional later work.
+3. **R8 Budgets — complete 2026-09-09:** exact per-currency monthly category
+   targets, posted actuals, and effective-dated account budget treatment. The
+   execution contract is `docs/plans/budgets-plan.md`; it deliberately excludes
+   rollover/envelopes and keeps forecasts and learned estimates out of budget
+   facts.
+
+   The composed authenticated month read model, audited target upserts/removal,
+   effective-dated `on_budget`/`off_budget`/`excluded` account axis, exact
+   posted-only actuals, per-currency income/expense summaries, and responsive
+   six-locale `/app/budgets` workflow ship together. Leap-month, lifecycle,
+   sign, exact remaining, treatment-as-of and non-netted income/expense cases
+   are covered by named backend acceptance tests.
 
 ### R16 — investment lifecycle completeness
 
