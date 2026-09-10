@@ -49,7 +49,7 @@ jobs:
       # that action ships its own Go, which would defeat the toolchain pin above
       # the same way CodeQL's bundled extractor did.
       - name: Install gosec
-        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.28.0
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
 
       # -no-fail keeps the step green; the SARIF upload is the actual output.
       - name: Run gosec
