@@ -46,6 +46,31 @@ func TestMiddlewareAddsRequestIDAndLogsRequest(t *testing.T) {
 	assert.Contains(t, res.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'")
 }
 
+func TestMiddlewareAlwaysReplacesCallerRequestIDWithFreshServerUUID(t *testing.T) {
+	t.Parallel()
+
+	handler := withRequestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, w.Header().Get(requestIDHeader), RequestIDFromContext(r.Context()))
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	serverIDs := make([]string, 0, 2)
+	for range 2 {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+		req.Header.Set(requestIDHeader, "caller-reused-id")
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		require.Equal(t, http.StatusNoContent, res.Code)
+		serverIDs = append(serverIDs, res.Header().Get(requestIDHeader))
+	}
+
+	assert.NotEqual(t, "caller-reused-id", serverIDs[0])
+	assert.NotEqual(t, serverIDs[0], serverIDs[1])
+	for _, requestID := range serverIDs {
+		assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, requestID)
+	}
+}
+
 func TestRecoveryMiddlewareReturnsAPIErrorEnvelope(t *testing.T) {
 	t.Parallel()
 

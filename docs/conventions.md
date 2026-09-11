@@ -229,50 +229,35 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 ## Project Lifecycle And Migration Immutability
 
-Rekenraam is **pre-release**. There is no supported upgrade path from any
-existing database, and there are no legacy databases to protect. This section is
-the governing rule; `.claude/skills/backend-slice/SKILL.md` and
-`docs/developer-workflow.md` restate it operationally and must be kept in step
-with it.
+The `v0.1.0` schema baseline is frozen. `0001_initial_schema.sql` is immutable
+from the release-candidate freeze commit onward, including before the tag is
+created. Its SHA-256 is enforced by `backend/migrations/freeze_test.go` so a
+rewrite, rename, or deletion fails the backend suite.
 
-- **Development databases are disposable.** No local database may hold data that
-  is not reproducible from a script, a fixture, or an import file. If you need
-  data you would be sorry to lose, it belongs in a seed script committed to the
-  repo, not only in `backend/var/*.sqlite`.
-- **Until the freeze, migrations may be rewritten.** Existing migration files
-  may be edited, consolidated, split, renumbered, or deleted when that produces
-  a cleaner schema. Correctness of the resulting schema outranks
-  upgrade-compatibility with any database that already exists.
-- **A rewrite must be declared.** Any change that makes an already-committed
-  migration produce a different schema requires:
-  1. `BREAKING DEV DATABASE` as the first line of the commit message body, so
-     the change is greppable in `git log` and visible in review;
-  2. a note in the commit body saying what developers must do (normally: delete
-     the local database and let startup re-migrate);
-  3. a green CI run, which validates a fresh installation because every CI job
-     migrates from empty.
-- **The freeze milestone is the first tagged release, `v0.1.0`.** From the
-  commit that tag points at, every migration file in `backend/migrations` is
-  immutable: schema changes only ever land as new sequential files, and a
-  documented upgrade path from the previous release becomes mandatory. Nothing
-  is tagged today, so the rewrite freedom above is currently in force.
+- **Released migrations are append-only.** Never edit, consolidate, split,
+  renumber, or delete a frozen migration. Every schema change uses the next
+  sequential file, even while preparing the release that will contain it.
+- **Every release supports forward upgrade from every earlier release.** The
+  migration suite constructs a database at the frozen v0.1 baseline, preserves
+  sentinel data while migrating it to `HEAD`, and compares the result with a
+  fresh `HEAD` schema. Add a released migration's checksum to the freeze test
+  when its release is cut.
+- **Upgrade, do not roll back schema.** Startup applies pending migrations before
+  serving. Take and verify a backup before replacing a binary. If the upgrade
+  fails, restore that backup and the previous binary; do not rely on Goose down
+  migrations against production data. Operator steps live in `docs/upgrades.md`.
 - **Migration numbers are renumbered before merge, not after.** Work lands
   directly on `main` (see *Branches And PRs* in `docs/developer-workflow.md`),
   so a collision now mostly means unpushed local work: pull first, and if your
   `00NN_` is taken, renumber **your own** file to the next free number before
   pushing. The same holds for the occasional branch — the one merged second
   renumbers itself. Never merge two files sharing a number, and never renumber a
-  migration already on `main` (that is a rewrite, and needs the declaration
-  above).
+  frozen migration already on `main` (the checksum gate rejects it).
 - **Migration numbers do not encode product releases.** They are a single
   monotonic database ordering sequence. After `v0.1.0`, each schema change takes
   the next integer regardless of which release eventually contains it; release
   notes record the highest migration included in a release. This avoids
   renumbering an immutable migration when work moves between releases.
-- **After the freeze**, this section is replaced by a real upgrade policy: every
-  release must migrate any database from any previously released version, and
-  the migration suite grows a historical-upgrade mode alongside the
-  fresh-install mode CI already runs.
 
 ## API Conventions
 

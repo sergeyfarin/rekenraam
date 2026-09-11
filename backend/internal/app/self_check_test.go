@@ -396,6 +396,22 @@ func TestLatestSelfCheckReturnsTheStoredRun(t *testing.T) {
 	}
 }
 
+func TestInterruptedSelfCheckIsRecordedAsErrored(t *testing.T) {
+	harness := newSelfCheckHarness(t)
+	require.NoError(t, harness.readOnly.Close())
+
+	_, err := harness.service.RunSelfCheck(context.Background(), "manual")
+	require.Error(t, err)
+
+	latest, hasRun, latestErr := harness.service.LatestSelfCheck(context.Background())
+	require.NoError(t, latestErr)
+	require.True(t, hasRun)
+	assert.Equal(t, SelfCheckErrored, latest.Status)
+	assert.NotEmpty(t, latest.FinishedAt)
+	assert.Contains(t, latest.ErrorSummary, "closed")
+	assert.Empty(t, latest.Results)
+}
+
 // ledgerSnapshot is every row the check reads, so a comparison catches any
 // write it might have made.
 func ledgerSnapshot(t *testing.T, database *sql.DB) map[string]string {

@@ -263,6 +263,10 @@ internet.
 
 ## Backup And Restore
 
+For upgrading between releases, follow [docs/upgrades.md](docs/upgrades.md):
+stop the app, take and verify a backup, retain the previous binary, then let the
+new binary apply its embedded forward migrations before serving.
+
 SQLite data lives wherever `DATABASE_URL` points. For the single-binary example above, that is:
 
 ```text

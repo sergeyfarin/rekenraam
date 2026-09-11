@@ -34,6 +34,8 @@ have exactly one home.
   commit conventions.
 - [deployment-security.md](deployment-security.md) — operator-facing
   deployment guidance.
+- [upgrades.md](upgrades.md) — released migration policy and the operator
+  upgrade/rollback checklist.
 - [early-architecture-decisions.md](early-architecture-decisions.md) — active
   architecture decisions predating the ADR series.
 - [localization-glossary.md](localization-glossary.md) — the terminology every

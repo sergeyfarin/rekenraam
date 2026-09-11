@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/assert"
@@ -224,6 +225,62 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_session_postings"))
 	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoints"))
 	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoint_postings"))
+}
+
+// The v0.1 database starts at migration 1. This test deliberately constructs
+// that released state with only the frozen baseline, adds durable user data,
+// upgrades it to HEAD, and compares its schema with a fresh HEAD install. When
+// 0002 lands this becomes a real multi-step upgrade without changing the test.
+func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
+	ctx := context.Background()
+	upgraded := openTestDatabase(t)
+
+	baseline, err := migrations.FS.ReadFile("0001_initial_schema.sql")
+	require.NoError(t, err)
+	baselineFS := fstest.MapFS{
+		"0001_initial_schema.sql": {Data: baseline},
+	}
+	provider, err := goose.NewProvider(goose.DialectSQLite3, upgraded, baselineFS)
+	require.NoError(t, err)
+	_, err = provider.Up(ctx)
+	require.NoError(t, err)
+
+	_, err = upgraded.ExecContext(ctx, `
+		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
+		VALUES (41, 'upgrade-probe', 'not-a-real-password-hash', 1,
+			'2026-09-11T00:00:00Z', '2026-09-11T00:00:00Z')
+	`)
+	require.NoError(t, err)
+	require.NoError(t, Migrate(ctx, upgraded))
+
+	var username string
+	require.NoError(t, upgraded.QueryRowContext(ctx, "SELECT username FROM users WHERE id = 41").Scan(&username))
+	assert.Equal(t, "upgrade-probe", username, "upgrade must preserve released user data")
+
+	fresh := openTestDatabase(t)
+	require.NoError(t, Migrate(ctx, fresh))
+	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, upgraded))
+}
+
+func schemaFingerprint(t *testing.T, database *sql.DB) []string {
+	t.Helper()
+	rows, err := database.QueryContext(context.Background(), `
+		SELECT type || ':' || name || ':' || coalesce(sql, '')
+		FROM sqlite_schema
+		WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE 'goose_%'
+		ORDER BY type, name
+	`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var fingerprint []string
+	for rows.Next() {
+		var object string
+		require.NoError(t, rows.Scan(&object))
+		fingerprint = append(fingerprint, object)
+	}
+	require.NoError(t, rows.Err())
+	return fingerprint
 }
 
 func TestInitialMigrationDownRemovesTheConsolidatedSchema(t *testing.T) {

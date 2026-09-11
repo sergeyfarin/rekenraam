@@ -2538,8 +2538,9 @@ CREATE TABLE IF NOT EXISTS self_check_runs (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   trigger TEXT NOT NULL CHECK (trigger IN ('manual', 'scheduled')),
-  status TEXT NOT NULL CHECK (status IN ('running', 'passed', 'failed')),
+  status TEXT NOT NULL CHECK (status IN ('running', 'passed', 'failed', 'errored')),
   failed_check_count INTEGER NOT NULL DEFAULT 0 CHECK (failed_check_count >= 0),
+  error_summary TEXT NOT NULL DEFAULT '',
   started_at TEXT NOT NULL,
   finished_at TEXT,
   created_at TEXT NOT NULL

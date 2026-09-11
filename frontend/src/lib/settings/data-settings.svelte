@@ -150,6 +150,8 @@
         return m.settings_data_status_passed();
       case 'failed':
         return m.settings_data_status_failed();
+      case 'errored':
+        return m.settings_data_status_errored();
       case 'not_applicable':
         return m.settings_data_status_not_applicable();
       case 'pending':
@@ -165,7 +167,7 @@
 
   function statusTone(status: string): 'positive' | 'danger' | 'neutral' {
     if (status === 'passed' || status === 'completed') return 'positive';
-    if (status === 'failed') return 'danger';
+    if (status === 'failed' || status === 'errored') return 'danger';
     return 'neutral';
   }
 
@@ -256,11 +258,15 @@
   async function check() {
     selfCheckPending = true;
     selfCheckError = undefined;
+    selfCheckJustRun = undefined;
     try {
       selfCheckJustRun = await runSelfCheck(csrfToken);
       await queryClient.invalidateQueries({ queryKey: selfCheckQueryKey });
     } catch (error) {
       selfCheckError = error;
+      // A failed request can still have durably recorded an `errored` run.
+      // Refetch so the new attempt replaces any older verdict on screen.
+      await queryClient.invalidateQueries({ queryKey: selfCheckQueryKey });
     } finally {
       selfCheckPending = false;
     }
@@ -564,32 +570,36 @@
           <p class="mt-4 text-sm text-foreground" data-testid="selfcheck-summary">
             {latestSelfCheck.status === 'passed'
               ? m.settings_data_selfcheck_passed()
-              : m.settings_data_selfcheck_failed({ count: latestSelfCheck.failed_check_count })}
+              : latestSelfCheck.status === 'errored'
+                ? m.settings_data_selfcheck_errored({ reason: latestSelfCheck.error_summary })
+                : m.settings_data_selfcheck_failed({ count: latestSelfCheck.failed_check_count })}
           </p>
-          <table class="mt-3 w-full text-left text-sm">
-            <thead class="text-xs uppercase tracking-[0.08em] text-muted">
-              <tr>
-                <th scope="col" class="py-2 pr-3 font-medium">{m.settings_data_selfcheck_title()}</th>
-                <th scope="col" class="py-2 pr-3 font-medium">{m.settings_data_status_passed()}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each latestSelfCheck.results as result (result.check_id)}
-                <tr class="border-t border-border align-top" data-testid="selfcheck-result">
-                  <td class="py-2 pr-3">
-                    <span class="block font-medium text-foreground">{result.summary}</span>
-                    <span class="mt-0.5 block text-xs leading-5 text-muted">{result.explanation}</span>
-                    {#if result.status === 'failed'}
-                      <span class="mt-1 block text-xs leading-5 text-danger">{result.next_step}</span>
-                    {/if}
-                  </td>
-                  <td class="py-2 pr-3">
-                    <StatusBadge tone={statusTone(result.status)}>{statusLabel(result.status)}</StatusBadge>
-                  </td>
+          {#if latestSelfCheck.results.length > 0}
+            <table class="mt-3 w-full text-left text-sm">
+              <thead class="text-xs uppercase tracking-[0.08em] text-muted">
+                <tr>
+                  <th scope="col" class="py-2 pr-3 font-medium">{m.settings_data_selfcheck_title()}</th>
+                  <th scope="col" class="py-2 pr-3 font-medium">{m.settings_data_status_passed()}</th>
                 </tr>
-              {/each}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {#each latestSelfCheck.results as result (result.check_id)}
+                  <tr class="border-t border-border align-top" data-testid="selfcheck-result">
+                    <td class="py-2 pr-3">
+                      <span class="block font-medium text-foreground">{result.summary}</span>
+                      <span class="mt-0.5 block text-xs leading-5 text-muted">{result.explanation}</span>
+                      {#if result.status === 'failed'}
+                        <span class="mt-1 block text-xs leading-5 text-danger">{result.next_step}</span>
+                      {/if}
+                    </td>
+                    <td class="py-2 pr-3">
+                      <StatusBadge tone={statusTone(result.status)}>{statusLabel(result.status)}</StatusBadge>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          {/if}
         {/if}
       </div>
     </div>

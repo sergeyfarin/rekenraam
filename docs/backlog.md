@@ -592,19 +592,16 @@ makes "what depends on this?" answerable directly, and lets an integrity check
 find orphans. **Do this before derived pricing grows past triangulated FX** —
 the current graph is two or three levels deep, so nothing is urgent today.
 
-### T-55 No historical-upgrade migration test `[blocked]`
+### T-55 No historical-upgrade migration test `[x]`
 
-**Depends on:** the `v0.1.0` migration freeze (see *Project Lifecycle And
-Migration Immutability* in `docs/conventions.md`). Meaningless before it —
-migrations are still rewritable, so there is no "previous version" to upgrade
-from.
-
-CI validates the fresh-install path on every run, because every job migrates
-from an empty database. That is the only mode that currently makes sense. Once
-migrations freeze, add a second mode: check out each released tag's schema,
-migrate it forward to `HEAD`, and assert the result matches a fresh install.
-The fresh-install assertion (schema snapshot comparison) is the reusable half
-and could be built earlier if it earns its keep.
+**Closed 2026-09-11 with the v0.1 migration freeze.**
+`TestReleasedMigrationsAreImmutable` pins the released baseline checksum.
+`TestMigrateUpgradesV01DatabaseToFreshHeadSchema` constructs migration 1 in
+isolation, inserts sentinel user data, migrates to `HEAD`, proves the data
+survives, and compares the resulting schema to a fresh install. It is a no-op
+upgrade while v0.1 is the only release and becomes multi-step as soon as 0002
+lands. The operator path and rollback-by-restored-backup rule are documented in
+`docs/upgrades.md`.
 
 ### T-56 No post-merge audit checklist `[ ]`
 
@@ -999,7 +996,7 @@ at the default timeout. The temporary 25-minute override is therefore removed:
 the normal 10-minute per-package budget is useful regression pressure again.
 
 
-### T-71 An interrupted self-check stays `running` for ever `[ ]`
+### T-71 An interrupted self-check stays `running` for ever `[x]`
 
 **Files:** `backend/internal/app/self_check.go` (`RunSelfCheck`),
 `backend/migrations/0001_initial_schema.sql` (`self_check_runs.status`).
@@ -1018,14 +1015,22 @@ broken when the truth is that the check could not run, which is the
 wrong-reason-message class this project has now hit five times (T-63, T-68 and
 the three the reviews record).
 
-So the fix needs its own state, `errored`, threaded through the status CHECK
+The fix therefore needs its own state, `errored`, threaded through the status CHECK
 constraint, the API enum, `statusTone`/`statusLabel` on the Data screen, and six
-locale catalogs. Migrations are still rewritable before `v0.1.0`
-(migration-immutability policy), so the constraint can be edited in place with
-the BREAKING DEV DATABASE marker rather than added as a second migration.
+locale catalogs. This final baseline change landed immediately before the
+release-candidate checksum freeze.
 
 Include an error summary on the run while there: "could not run" is only
 actionable with the reason beside it.
+
+**Closed 2026-09-11 before the v0.1 freeze.** A fourth terminal state,
+`errored`, now distinguishes infrastructure failure from a failed ledger check.
+Every post-create error path durably finishes the run with its diagnostic
+summary, including after request cancellation, and latest-run reads include it.
+The API contract and Data screen show the distinct state in all six catalogs.
+`TestInterruptedSelfCheckIsRecordedAsErrored` closes the read pool after setup,
+then proves the failed attempt replaces the older verdict instead of remaining
+invisible.
 
 ### T-72 Two-process concurrency is reasoned about, never exercised `[ ]`
 
@@ -1279,7 +1284,7 @@ changes the checkpoint, and requires an explicit override on posting.
 
 ## Documentation/code audit follow-ups (2026-08-31)
 
-### T-79 Caller-supplied request IDs replace the required server UUID `[ ]`
+### T-79 Caller-supplied request IDs replace the required server UUID `[x]`
 
 **Files:** `backend/internal/api/middleware.go` (`withRequestID`),
 `backend/internal/api/middleware_test.go`.
@@ -1295,6 +1300,12 @@ Acceptance: requests with absent, arbitrary, and repeated caller IDs each get a
 fresh server UUID consistently in the response, logs, and audit context. If the
 caller ID is retained, it must have a distinct field and bounded validation.
 This documentation audit records the gap; it does not change runtime behavior.
+
+**Closed 2026-09-11.** `withRequestID` now generates a new server UUID for
+every attempt and never adopts the inbound header. The response, context, logs,
+and audit attribution therefore share a server-controlled identifier.
+`TestMiddlewareAlwaysReplacesCallerRequestIDWithFreshServerUUID` proves two
+requests carrying the same caller value receive two distinct valid UUIDs.
 
 ### T-80 Shipped non-English catalogs lack 65 current message keys each `[ ]`
 

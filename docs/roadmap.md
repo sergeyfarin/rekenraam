@@ -551,6 +551,10 @@ The current parity lens is:
 These are a parallel release-readiness track, not a reason to delay local
 daily-driver work.
 
+The v0.1 migration freeze and open reliability dispositions are recorded in
+`docs/reviews/v0.1-release-triage-2026-09-11.md`. That review governs the tag
+gate; the public-announcement work below remains a separate, later gate.
+
 ### Before making the repository public
 
 1. Scan the complete Git history for secrets and remove scanner bait or real

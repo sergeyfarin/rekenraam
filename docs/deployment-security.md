@@ -4,6 +4,10 @@ This guide is the minimum security posture for a LAN or externally reachable
 Rekenraam deployment. The app is a single HTTP process; it does not terminate
 TLS itself. Put it behind a reverse proxy for HTTPS.
 
+Run exactly one Rekenraam process or container against a SQLite database file.
+Multiple replicas sharing one database volume are not a supported v0.1
+deployment; the cross-process queue/locking behavior remains tracked as T-72.
+
 ## Public-deployment gate: turn MFA on
 
 **Shipped 2026-08-07 (S-06).** Multi-factor authentication is TOTP (RFC 6238,

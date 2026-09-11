@@ -389,9 +389,29 @@ type SelfCheckRunRecord struct {
 	Trigger          string
 	Status           string
 	FailedCheckCount int64
+	ErrorSummary     string
 	StartedAt        string
 	FinishedAt       sql.NullString
 	CreatedAt        string
+}
+
+func (r *SelfCheckRepository) MarkSelfCheckRunErrored(ctx context.Context, runID int64, finishedAt string, summary string) error {
+	result, err := r.database.ExecContext(ctx, `
+		UPDATE self_check_runs
+		SET status = 'errored', error_summary = ?, finished_at = ?
+		WHERE id = ? AND status = 'running'
+	`, summary, finishedAt, runID)
+	if err != nil {
+		return fmt.Errorf("mark self-check run errored: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read errored self-check rows affected: %w", err)
+	}
+	if updated != 1 {
+		return fmt.Errorf("mark self-check run errored: updated %d rows", updated)
+	}
+	return nil
 }
 
 type SelfCheckResultRecord struct {
@@ -454,9 +474,9 @@ func (r *SelfCheckRepository) SaveSelfCheckResults(ctx context.Context, runID in
 func (r *SelfCheckRepository) SelfCheckRunByID(ctx context.Context, id int64) (SelfCheckRunRecord, error) {
 	var run SelfCheckRunRecord
 	err := r.database.QueryRowContext(ctx, `
-		SELECT id, book_id, trigger, status, failed_check_count, started_at, finished_at, created_at
+		SELECT id, book_id, trigger, status, failed_check_count, error_summary, started_at, finished_at, created_at
 		FROM self_check_runs WHERE id = ?
-	`, id).Scan(&run.ID, &run.BookID, &run.Trigger, &run.Status, &run.FailedCheckCount,
+	`, id).Scan(&run.ID, &run.BookID, &run.Trigger, &run.Status, &run.FailedCheckCount, &run.ErrorSummary,
 		&run.StartedAt, &run.FinishedAt, &run.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SelfCheckRunRecord{}, ErrNotFound
@@ -472,12 +492,12 @@ func (r *SelfCheckRepository) SelfCheckRunByID(ctx context.Context, id int64) (S
 func (r *SelfCheckRepository) LatestSelfCheckRun(ctx context.Context, bookID int64) (SelfCheckRunRecord, []SelfCheckResultRecord, error) {
 	var run SelfCheckRunRecord
 	err := r.database.QueryRowContext(ctx, `
-		SELECT id, book_id, trigger, status, failed_check_count, started_at, finished_at, created_at
+		SELECT id, book_id, trigger, status, failed_check_count, error_summary, started_at, finished_at, created_at
 		FROM self_check_runs
-		WHERE book_id = ? AND status IN ('passed', 'failed')
+		WHERE book_id = ? AND status IN ('passed', 'failed', 'errored')
 		ORDER BY started_at DESC, id DESC
 		LIMIT 1
-	`, bookID).Scan(&run.ID, &run.BookID, &run.Trigger, &run.Status, &run.FailedCheckCount,
+	`, bookID).Scan(&run.ID, &run.BookID, &run.Trigger, &run.Status, &run.FailedCheckCount, &run.ErrorSummary,
 		&run.StartedAt, &run.FinishedAt, &run.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SelfCheckRunRecord{}, nil, ErrNotFound

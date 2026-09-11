@@ -63,10 +63,9 @@ func RequestIDFromContext(ctx context.Context) string {
 
 func withRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := r.Header.Get(requestIDHeader)
-		if requestID == "" {
-			requestID = uuid.NewString()
-		}
+		// A request ID identifies this server's handling attempt, including in
+		// audit rows. It must never be caller-controlled or reused on retries.
+		requestID := uuid.NewString()
 		w.Header().Set(requestIDHeader, requestID)
 
 		ctx := context.WithValue(r.Context(), requestIDKey{}, requestID)

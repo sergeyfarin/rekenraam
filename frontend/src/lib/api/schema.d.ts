@@ -15605,10 +15605,15 @@ export interface components {
              * @enum {string}
              */
             trigger: "manual" | "scheduled";
-            /** @enum {string} */
-            status: "passed" | "failed";
+            /**
+             * @description errored means the check could not complete; it is not a ledger-failure verdict.
+             * @enum {string}
+             */
+            status: "passed" | "failed" | "errored";
             /** Format: int64 */
             failed_check_count: number;
+            /** @description Diagnostic reason when status is errored; otherwise empty. */
+            error_summary: string;
             /** Format: date-time */
             started_at: string;
             /** Format: date-time */

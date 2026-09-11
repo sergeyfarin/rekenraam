@@ -17,8 +17,9 @@ Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ n
 
 The final pre-`v0.1.0` consolidation folded the complete schema through the
 2026-09-10 disposal-provenance work into
-`backend/migrations/0001_initial_schema.sql`. From the release tag onward that
-baseline is immutable and later changes use sequential forward migrations.
+`backend/migrations/0001_initial_schema.sql`. The release-candidate freeze now
+makes that baseline checksum-enforced and immutable; later changes use
+sequential forward migrations and are tested from the v0.1 schema to `HEAD`.
 
 Last documentation reconciliation: 2026-09-09 (see
 `docs/reviews/r10-learning-acceptance-review-2026-09-09.md`). The investment boundary review
@@ -30,7 +31,7 @@ ADR 0012 governs the durable split.
 
 | Capability | Status | Notes |
 |---|---|---|
-| SQLite migrations + schema version | ✅ | Complete pre-`v0.1.0` schema in `backend/migrations/0001_initial_schema.sql`; auto-run before serving. Migration numbers remain sequential and independent of release numbers. |
+| SQLite migrations + schema version | ✅ | Frozen v0.1 schema in `backend/migrations/0001_initial_schema.sql`; checksum-enforced, auto-run before serving, and covered by a v0.1-to-HEAD schema/data-preservation test. Migration numbers remain sequential and independent of release numbers. |
 | Connection PRAGMAs (WAL, FK, busy timeout) | ✅ | `db/sqlite.go`; single-connection contract documented. |
 | Browser first-run setup (owner → book → currencies → system accounts → categories) | ✅ | Persisted `setup_steps`, derived install state. |
 | Auth: Argon2id, sessions, CSRF, origin checks | ✅ | `app/auth.go`, `api/auth.go`; rehash-on-login, dual-scope throttling. |
@@ -38,7 +39,7 @@ ADR 0012 governs the durable split.
 | Two-factor authentication (TOTP + recovery codes) | ✅ | `app/auth_mfa.go`, `api/auth_mfa.go`, `internal/totp/` (dependency-free RFC 6238), S-06 — backend **and** UI (`settings/security`, plus the code step in the install gate). Once active, a verified password yields a five-minute single-use challenge cookie instead of a session; `POST /api/v1/auth/login/mfa` completes it with an authenticator code or one of ten single-use recovery codes. The shared secret is sealed with `REKENRAAM_SECRET_KEY` (absent ⇒ enrolment refused, never plaintext); recovery codes are SHA-256 hashed and stay usable even if the key is lost. Replay guard on the accepted time step; wrong codes spend the same 5-in-15 throttle budget as wrong passwords; enrol/disable/regenerate each re-confirm the password. A pending enrolment never gates a login. |
 | Authentication-event visibility | 🟡 | `authentication_events` + `GET /api/v1/auth/events`, S-07 — backend only, no UI. Records login success/failure/blocked and logout with the proxy-aware client IP, attempted username, failure reason and request id; mirrored to structured `slog` (failures at WARN) so a log shipper works without querying SQLite. Never stores password material or session tokens. `failed_last_24h` is the brute-force signal. Pruned to a 90-day retention window by the existing daily session-cleanup pass. |
 | Operator owner-recovery (backup-first, override) | ✅ | `recover-owner` command. |
-| `/api/v1` envelope, error codes, request IDs | 🟦 | Error envelope and response IDs ship. The middleware generates a UUID only when `X-Request-ID` is absent; caller-supplied IDs replace it, contrary to the server-generated-ID requirement. Tracked as T-79. |
+| `/api/v1` envelope, error codes, request IDs | ✅ | Error envelope and server-generated per-attempt UUIDs ship. Caller-supplied `X-Request-ID` values never replace audit/log identity (T-79). |
 | i18n boundary (Paraglide/Inlang) | ✅ | All UI copy and built-in labels keyed. |
 | Light/dark semantic theme tokens | ✅ | `settings/appearance`. |
 | OpenAPI-first contract + generated TS client | ✅ | `api/openapi/`, `frontend/src/lib/api/schema.d.ts`. |

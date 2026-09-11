@@ -72,14 +72,11 @@ strings to the client.
   (goose format: `-- +goose Up` / `-- +goose Down`). Embedded via
   `migrations/embed.go`; they run automatically at startup and in every test
   through `db.Open`.
-- **Adding a new file is always the default.** Rewriting an already-committed
-  migration is allowed only while the project is pre-release, and is governed by
-  *Project Lifecycle And Migration Immutability* in `docs/conventions.md`: local
-  databases are disposable, no legacy database is supported, and a rewrite needs
-  `BREAKING DEV DATABASE` at the start of the commit body plus a reset
-  instruction. That freedom ends at the first tagged release (`v0.1.0`), after
-  which migration files are immutable. Read the convention before rewriting one
-  — do not infer the rule from surrounding files.
+- Released migration files are immutable and checksum-enforced. Always add the
+  next sequential migration; never rewrite, rename, renumber, or delete an
+  existing one. Read *Project Lifecycle And Migration Immutability* in
+  `docs/conventions.md` and update the historical-upgrade coverage for schema
+  work.
 - Migration numbers collide across branches. The branch merged second renumbers
   its own file; renumbering one already on `main` is a rewrite.
 - IDs are `INTEGER PRIMARY KEY` auto-increment. No UUID keys without an ADR.

@@ -22,6 +22,7 @@ type selfCheckRunResponse struct {
 	Trigger          string                    `json:"trigger"`
 	Status           string                    `json:"status"`
 	FailedCheckCount int64                     `json:"failed_check_count"`
+	ErrorSummary     string                    `json:"error_summary"`
 	StartedAt        string                    `json:"started_at"`
 	FinishedAt       string                    `json:"finished_at,omitempty"`
 	Results          []selfCheckResultResponse `json:"results"`
@@ -59,6 +60,7 @@ func toSelfCheckRunResponse(run app.SelfCheckRun) selfCheckRunResponse {
 		Trigger:          run.Trigger,
 		Status:           run.Status,
 		FailedCheckCount: run.FailedCheckCount,
+		ErrorSummary:     run.ErrorSummary,
 		StartedAt:        run.StartedAt,
 		FinishedAt:       run.FinishedAt,
 		Results:          results,

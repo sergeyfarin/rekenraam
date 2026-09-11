@@ -181,7 +181,7 @@ R9 v1 templates are deliberately limited to `ordinary` and `transfer`; they
 cannot generate investments. Any future recurring-investment producer must first
 define when draft lot effects activate on promotion and reverse on discard.
 
-## Required investment follow-up — before v0.1/R16/R18
+## Required investment follow-up — R16, before R18
 
 - [ ] **T-75b (R16):** add investment-native correction/reversal, atomic with
       journal changes and reconciliation invalidation; keep generic mutation fenced.

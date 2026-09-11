@@ -42,6 +42,7 @@ const (
 const (
 	SelfCheckPassed        = "passed"
 	SelfCheckFailed        = "failed"
+	SelfCheckErrored       = "errored"
 	SelfCheckNotApplicable = "not_applicable"
 )
 
@@ -66,6 +67,7 @@ type SelfCheckRun struct {
 	Trigger          string
 	Status           string
 	FailedCheckCount int64
+	ErrorSummary     string
 	StartedAt        string
 	FinishedAt       string
 	Results          []SelfCheckResult
@@ -144,7 +146,7 @@ func (s *SelfCheckService) RunSelfCheck(ctx context.Context, trigger string) (Se
 
 	results, err := s.executeChecks(ctx)
 	if err != nil {
-		return SelfCheckRun{}, err
+		return SelfCheckRun{}, s.recordRunError(ctx, runRecord.ID, err)
 	}
 
 	var failed int64
@@ -155,7 +157,7 @@ func (s *SelfCheckService) RunSelfCheck(ctx context.Context, trigger string) (Se
 		}
 		sample, marshalErr := json.Marshal(emptyIfNilIDs(result.Sample))
 		if marshalErr != nil {
-			return SelfCheckRun{}, fmt.Errorf("encode self-check sample: %w", marshalErr)
+			return SelfCheckRun{}, s.recordRunError(ctx, runRecord.ID, fmt.Errorf("encode self-check sample: %w", marshalErr))
 		}
 		stored = append(stored, db.SelfCheckResultRecord{
 			RunID:        runRecord.ID,
@@ -173,7 +175,7 @@ func (s *SelfCheckService) RunSelfCheck(ctx context.Context, trigger string) (Se
 	}
 	finishedAt := s.now().UTC().Format(time.RFC3339)
 	if err := s.repository.SaveSelfCheckResults(ctx, runRecord.ID, status, failed, finishedAt, stored); err != nil {
-		return SelfCheckRun{}, err
+		return SelfCheckRun{}, s.recordRunError(ctx, runRecord.ID, err)
 	}
 
 	return SelfCheckRun{
@@ -185,6 +187,19 @@ func (s *SelfCheckService) RunSelfCheck(ctx context.Context, trigger string) (Se
 		FinishedAt:       finishedAt,
 		Results:          results,
 	}, nil
+}
+
+func (s *SelfCheckService) recordRunError(ctx context.Context, runID int64, runErr error) error {
+	finishedAt := s.now().UTC().Format(time.RFC3339)
+	// The request may have been cancelled, but the durable run must still stop
+	// saying "running". WithoutCancel preserves values while allowing this
+	// small bookkeeping write to finish.
+	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := s.repository.MarkSelfCheckRunErrored(recordCtx, runID, finishedAt, runErr.Error()); err != nil {
+		return errors.Join(runErr, err)
+	}
+	return runErr
 }
 
 // LatestSelfCheck returns the last finished run, or a zero run when the book has
@@ -204,6 +219,7 @@ func (s *SelfCheckService) LatestSelfCheck(ctx context.Context) (SelfCheckRun, b
 		Trigger:          runRecord.Trigger,
 		Status:           runRecord.Status,
 		FailedCheckCount: runRecord.FailedCheckCount,
+		ErrorSummary:     runRecord.ErrorSummary,
 		StartedAt:        runRecord.StartedAt,
 		FinishedAt:       runRecord.FinishedAt.String,
 	}

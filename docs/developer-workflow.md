@@ -61,6 +61,12 @@ correctly formatted for the toolchain actually compiling them.
 ./scripts/test-backend.sh
 ```
 
+The backend suite enforces released-migration checksums and exercises the
+upgrade from the frozen v0.1 schema to `HEAD`, including schema equivalence and
+sentinel-data preservation. A checksum failure means the old migration must be
+restored and the change moved into the next numbered migration. See
+`docs/upgrades.md` for the operator path.
+
 `COVERAGE=1 ./scripts/test-backend.sh` runs the same suite without `-race`,
 writes `backend/coverage.out`, and prints the merged total. CI runs this in a
 non-gating `backend-coverage` job and fails it below a soft floor

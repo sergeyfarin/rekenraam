@@ -56,6 +56,7 @@ SelfCheckRun:
     - trigger
     - status
     - failed_check_count
+    - error_summary
     - started_at
     - results
   properties:
@@ -68,10 +69,14 @@ SelfCheckRun:
       description: scheduled runs are chained onto a successful nightly backup.
     status:
       type: string
-      enum: [passed, failed]
+      description: errored means the check could not complete; it is not a ledger-failure verdict.
+      enum: [passed, failed, errored]
     failed_check_count:
       type: integer
       format: int64
+    error_summary:
+      type: string
+      description: Diagnostic reason when status is errored; otherwise empty.
     started_at:
       type: string
       format: date-time
