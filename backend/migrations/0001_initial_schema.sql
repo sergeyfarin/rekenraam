@@ -1033,12 +1033,35 @@ CREATE TABLE IF NOT EXISTS cost_basis_profiles (
   updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
   updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  current_version_id INTEGER REFERENCES cost_basis_profile_versions(id) ON DELETE RESTRICT,
   UNIQUE (book_id, name COLLATE NOCASE)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS cost_basis_profiles_default_idx
   ON cost_basis_profiles (book_id)
   WHERE is_default = 1 AND status = 'active';
+
+CREATE TABLE IF NOT EXISTS cost_basis_profile_versions (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  profile_id INTEGER NOT NULL REFERENCES cost_basis_profiles(id) ON DELETE RESTRICT,
+  version_seq INTEGER NOT NULL CHECK (version_seq > 0),
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
+  method TEXT NOT NULL CHECK (method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')),
+  is_default INTEGER NOT NULL CHECK (is_default IN (0, 1)),
+  status TEXT NOT NULL CHECK (status IN ('active', 'archived')),
+  description TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  recorded_at TEXT NOT NULL,
+  changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  change_reason TEXT NOT NULL,
+  audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (profile_id, version_seq)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS cost_basis_profiles_current_version_idx
+  ON cost_basis_profiles (current_version_id)
+  WHERE current_version_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS dividend_defaults (
   id INTEGER PRIMARY KEY,
@@ -1110,11 +1133,81 @@ CREATE TABLE IF NOT EXISTS investment_lot_events (
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  cost_basis_method TEXT CHECK (
+    cost_basis_method IS NULL OR cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')
+  )
 );
 
 CREATE INDEX IF NOT EXISTS investment_lot_events_lot_idx
   ON investment_lot_events (lot_id, event_date, id);
+
+CREATE INDEX IF NOT EXISTS investment_lot_events_transaction_idx
+  ON investment_lot_events (book_id, transaction_id)
+  WHERE transaction_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS investment_position_basis_state (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  method_family TEXT NOT NULL CHECK (method_family IN ('individual_lot', 'average_cost')),
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (book_id, account_id, commodity_id, cost_commodity_id)
+);
+
+CREATE TABLE IF NOT EXISTS investment_disposal_decisions (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
+  transaction_version_id INTEGER NOT NULL REFERENCES transaction_versions(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38),
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
+  disposed_basis_value TEXT NOT NULL CHECK (length(disposed_basis_value) BETWEEN 1 AND 38),
+  disposed_basis_scale INTEGER NOT NULL CHECK (disposed_basis_scale BETWEEN 0 AND 12),
+  cost_basis_method TEXT NOT NULL CHECK (cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')),
+  resolution_tier TEXT NOT NULL CHECK (resolution_tier IN ('transaction', 'account', 'global', 'fallback')),
+  account_version_id INTEGER REFERENCES account_versions(id) ON DELETE RESTRICT,
+  profile_id INTEGER REFERENCES cost_basis_profiles(id) ON DELETE RESTRICT,
+  profile_version_id INTEGER REFERENCES cost_basis_profile_versions(id) ON DELETE RESTRICT,
+  source_effective_from TEXT CHECK (source_effective_from IS NULL OR source_effective_from GLOB '????-??-??'),
+  source_recorded_at TEXT,
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (transaction_id),
+  UNIQUE (transaction_version_id),
+  CHECK (
+    (resolution_tier = 'account' AND account_version_id IS NOT NULL AND profile_id IS NULL AND profile_version_id IS NULL)
+    OR (resolution_tier = 'global' AND account_version_id IS NULL AND profile_id IS NOT NULL AND profile_version_id IS NOT NULL)
+    OR (resolution_tier IN ('transaction', 'fallback') AND account_version_id IS NULL AND profile_id IS NULL AND profile_version_id IS NULL)
+  )
+);
+
+CREATE TABLE IF NOT EXISTS investment_disposal_allocations (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  decision_id INTEGER NOT NULL REFERENCES investment_disposal_decisions(id) ON DELETE RESTRICT,
+  lot_event_id INTEGER NOT NULL REFERENCES investment_lot_events(id) ON DELETE RESTRICT,
+  lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  allocation_seq INTEGER NOT NULL CHECK (allocation_seq > 0),
+  quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38),
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
+  cost_basis_value INTEGER NOT NULL,
+  cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  UNIQUE (decision_id, allocation_seq),
+  UNIQUE (lot_event_id)
+);
+
+CREATE INDEX IF NOT EXISTS investment_disposal_decisions_event_idx
+  ON investment_disposal_decisions (book_id, event_date, id);
 
 CREATE TABLE IF NOT EXISTS investment_provider_events (
   id INTEGER PRIMARY KEY,
@@ -1876,8 +1969,8 @@ BEGIN
 END;
 -- +goose StatementEnd
 
--- Beta baseline extensions. This repository intentionally has no pre-beta
--- databases to upgrade, so the former 0002–0011 migrations are folded into
+-- Earlier pre-release baseline extensions. This repository has no released
+-- databases to upgrade, so the former 0002–0011 migrations remain folded into
 -- this fresh-install schema in their original execution order. Keeping the
 -- statements (rather than hand-reconstructing their final DDL) preserves the
 -- exact defaults, indexes, and trigger replacement semantics that the prior
@@ -1923,7 +2016,7 @@ END;
 -- +goose StatementEnd
 
 -- Same-day sequence columns retain their former DEFAULT 0, including for a
--- fresh database, to match the schema produced by the pre-beta chain.
+-- fresh database, to match the schema produced by the prior pre-release chain.
 -- +goose StatementBegin
 DROP TRIGGER IF EXISTS transaction_versions_no_update;
 -- +goose StatementEnd
@@ -2474,7 +2567,311 @@ CREATE TABLE IF NOT EXISTS self_check_results (
 CREATE INDEX IF NOT EXISTS self_check_results_check_idx
   ON self_check_results (check_id, status);
 
+-- Import rules apply deterministic categorization, payee, and tag choices to
+-- staged rows without weakening the import review boundary.
+CREATE TABLE IF NOT EXISTS import_rules (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
+  priority INTEGER NOT NULL DEFAULT 100 CHECK (priority BETWEEN 0 AND 1000000),
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  match_field TEXT NOT NULL CHECK (match_field IN ('payee', 'description')),
+  contains_text TEXT NOT NULL CHECK (length(trim(contains_text)) > 0 AND contains_text = trim(contains_text)),
+  category_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
+  payee_id INTEGER REFERENCES payees(id) ON DELETE RESTRICT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS import_rules_book_order_idx
+  ON import_rules (book_id, priority ASC, id ASC);
+
+-- +goose StatementBegin
+CREATE TRIGGER import_rules_targets_same_book_insert
+BEFORE INSERT ON import_rules
+BEGIN
+  SELECT CASE WHEN NEW.category_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM accounts WHERE id = NEW.category_id AND book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'import rule category must belong to the same book') END;
+  SELECT CASE WHEN NEW.payee_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM payees WHERE id = NEW.payee_id AND book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'import rule payee must belong to the same book') END;
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER import_rules_targets_same_book_update
+BEFORE UPDATE OF book_id, category_id, payee_id ON import_rules
+BEGIN
+  SELECT CASE WHEN NEW.category_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM accounts WHERE id = NEW.category_id AND book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'import rule category must belong to the same book') END;
+  SELECT CASE WHEN NEW.payee_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM payees WHERE id = NEW.payee_id AND book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'import rule payee must belong to the same book') END;
+END;
+-- +goose StatementEnd
+
+CREATE TABLE IF NOT EXISTS import_rule_tags (
+  rule_id INTEGER NOT NULL REFERENCES import_rules(id) ON DELETE CASCADE,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE RESTRICT,
+  PRIMARY KEY (rule_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS import_rule_tags_book_tag_idx
+  ON import_rule_tags (book_id, tag_id, rule_id);
+
+-- +goose StatementBegin
+CREATE TRIGGER import_rule_tags_same_book
+BEFORE INSERT ON import_rule_tags
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+    FROM import_rules rule
+    JOIN tags tag ON tag.id = NEW.tag_id
+    WHERE rule.id = NEW.rule_id
+      AND rule.book_id = NEW.book_id
+      AND tag.book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'import rule tag must belong to the same book') END;
+END;
+-- +goose StatementEnd
+
+CREATE TABLE IF NOT EXISTS budget_targets (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  category_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  period_start TEXT NOT NULL CHECK (period_start GLOB '????-??-01'),
+  quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 39),
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 12),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (book_id, category_account_id, commodity_id, period_start)
+);
+
+CREATE INDEX IF NOT EXISTS budget_targets_book_period_idx
+  ON budget_targets (book_id, period_start, category_account_id, commodity_id);
+
+CREATE TABLE IF NOT EXISTS account_budget_treatment_versions (
+  id INTEGER PRIMARY KEY,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  version_seq INTEGER NOT NULL CHECK (version_seq > 0),
+  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  treatment TEXT NOT NULL CHECK (treatment IN ('on_budget', 'off_budget', 'excluded')),
+  recorded_at TEXT NOT NULL,
+  changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  change_reason TEXT NOT NULL,
+  change_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (account_id, version_seq)
+);
+
+CREATE INDEX IF NOT EXISTS account_budget_treatment_asof_idx
+  ON account_budget_treatment_versions (account_id, effective_from DESC, version_seq DESC);
+
+-- Recurring templates describe future transaction shapes. They never carry
+-- journal or reconciliation state, and generation materializes system drafts.
+CREATE TABLE IF NOT EXISTS recurring_templates (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  name TEXT NOT NULL CHECK (length(trim(name)) > 0 AND name = trim(name)),
+  enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  archived_at TEXT,
+  transaction_kind TEXT NOT NULL CHECK (transaction_kind IN ('ordinary', 'transfer')),
+  payee_id INTEGER REFERENCES payees(id) ON DELETE RESTRICT,
+  payee_name TEXT,
+  description TEXT NOT NULL DEFAULT '',
+  note_markdown TEXT NOT NULL DEFAULT '',
+  frequency TEXT NOT NULL CHECK (frequency IN ('daily', 'weekly', 'monthly', 'yearly')),
+  interval_count INTEGER NOT NULL DEFAULT 1 CHECK (interval_count >= 1),
+  by_weekday INTEGER CHECK (by_weekday IS NULL OR by_weekday BETWEEN 0 AND 6),
+  day_of_month INTEGER CHECK (day_of_month IS NULL OR day_of_month BETWEEN 1 AND 31),
+  last_day_of_month INTEGER NOT NULL DEFAULT 0 CHECK (last_day_of_month IN (0, 1)),
+  month_of_year INTEGER CHECK (month_of_year IS NULL OR month_of_year BETWEEN 1 AND 12),
+  starts_on TEXT NOT NULL CHECK (starts_on GLOB '????-??-??'),
+  ends_on TEXT CHECK (ends_on IS NULL OR (ends_on GLOB '????-??-??' AND ends_on >= starts_on)),
+  max_occurrences INTEGER CHECK (max_occurrences IS NULL OR max_occurrences >= 1),
+  lead_days INTEGER NOT NULL DEFAULT 5 CHECK (lead_days BETWEEN 0 AND 90),
+  generate_from TEXT NOT NULL CHECK (generate_from GLOB '????-??-??'),
+  created_at TEXT NOT NULL,
+  created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+  CHECK (frequency <> 'weekly' OR by_weekday IS NOT NULL),
+  CHECK (
+    frequency IN ('daily', 'weekly')
+    OR (day_of_month IS NOT NULL AND last_day_of_month = 0)
+    OR (day_of_month IS NULL AND last_day_of_month = 1)
+  ),
+  CHECK (frequency <> 'yearly' OR month_of_year IS NOT NULL),
+  CHECK (frequency <> 'daily' OR (by_weekday IS NULL AND day_of_month IS NULL AND month_of_year IS NULL AND last_day_of_month = 0)),
+  CHECK (frequency <> 'weekly' OR (day_of_month IS NULL AND month_of_year IS NULL AND last_day_of_month = 0)),
+  CHECK (frequency <> 'monthly' OR month_of_year IS NULL),
+  CHECK (payee_id IS NULL OR payee_name IS NULL)
+);
+
+CREATE INDEX IF NOT EXISTS recurring_templates_book_idx
+  ON recurring_templates (book_id, name ASC, id ASC);
+
+CREATE INDEX IF NOT EXISTS recurring_templates_due_idx
+  ON recurring_templates (book_id, generate_from ASC, id ASC)
+  WHERE enabled = 1 AND archived_at IS NULL;
+
+-- +goose StatementBegin
+CREATE TRIGGER recurring_templates_payee_same_book_insert
+BEFORE INSERT ON recurring_templates
+BEGIN
+  SELECT CASE WHEN NEW.payee_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM payees WHERE id = NEW.payee_id AND book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'recurring template payee must belong to the same book') END;
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER recurring_templates_payee_same_book_update
+BEFORE UPDATE OF book_id, payee_id ON recurring_templates
+BEGIN
+  SELECT CASE WHEN NEW.payee_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM payees WHERE id = NEW.payee_id AND book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'recurring template payee must belong to the same book') END;
+END;
+-- +goose StatementEnd
+
+CREATE TABLE IF NOT EXISTS recurring_template_postings (
+  id INTEGER PRIMARY KEY,
+  template_id INTEGER NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  line_seq INTEGER NOT NULL CHECK (line_seq > 0),
+  line_key TEXT NOT NULL CHECK (length(trim(line_key)) > 0 AND line_key = trim(line_key)),
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
+  quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  memo TEXT NOT NULL DEFAULT '',
+  UNIQUE (template_id, line_seq),
+  UNIQUE (template_id, line_key)
+);
+
+CREATE INDEX IF NOT EXISTS recurring_template_postings_account_idx
+  ON recurring_template_postings (account_id, template_id);
+
+-- +goose StatementBegin
+CREATE TRIGGER recurring_template_postings_same_book
+BEFORE INSERT ON recurring_template_postings
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+    FROM recurring_templates template
+    JOIN accounts account ON account.id = NEW.account_id
+    JOIN commodities commodity ON commodity.id = NEW.commodity_id
+    WHERE template.id = NEW.template_id
+      AND template.book_id = NEW.book_id
+      AND account.book_id = NEW.book_id
+      AND commodity.book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'recurring template posting account and commodity must belong to the same book') END;
+END;
+-- +goose StatementEnd
+
+CREATE TABLE IF NOT EXISTS recurring_template_tags (
+  template_id INTEGER NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE RESTRICT,
+  PRIMARY KEY (template_id, tag_id)
+);
+
+CREATE INDEX IF NOT EXISTS recurring_template_tags_book_tag_idx
+  ON recurring_template_tags (book_id, tag_id, template_id);
+
+-- +goose StatementBegin
+CREATE TRIGGER recurring_template_tags_same_book
+BEFORE INSERT ON recurring_template_tags
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1
+    FROM recurring_templates template
+    JOIN tags tag ON tag.id = NEW.tag_id
+    WHERE template.id = NEW.template_id
+      AND template.book_id = NEW.book_id
+      AND tag.book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'recurring template tag must belong to the same book') END;
+END;
+-- +goose StatementEnd
+
+CREATE TABLE IF NOT EXISTS recurring_occurrences (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  template_id INTEGER NOT NULL REFERENCES recurring_templates(id) ON DELETE RESTRICT,
+  occurrence_date TEXT NOT NULL CHECK (occurrence_date GLOB '????-??-??'),
+  status TEXT NOT NULL CHECK (status IN ('generated', 'skipped', 'blocked')),
+  transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
+  error_summary TEXT NOT NULL DEFAULT '',
+  skip_reason TEXT NOT NULL DEFAULT '',
+  materialized_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (template_id, occurrence_date),
+  CHECK (status <> 'generated' OR transaction_id IS NOT NULL),
+  CHECK (status <> 'blocked' OR length(trim(error_summary)) > 0),
+  CHECK (status = 'generated' OR transaction_id IS NULL)
+);
+
+CREATE INDEX IF NOT EXISTS recurring_occurrences_book_date_idx
+  ON recurring_occurrences (book_id, occurrence_date DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS recurring_occurrences_status_idx
+  ON recurring_occurrences (book_id, status, occurrence_date ASC, id ASC);
+
+-- +goose StatementBegin
+CREATE TRIGGER recurring_occurrences_same_book
+BEFORE INSERT ON recurring_occurrences
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM recurring_templates
+    WHERE id = NEW.template_id AND book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'recurring occurrence template must belong to the same book') END;
+  SELECT CASE WHEN NEW.transaction_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM transactions
+    WHERE id = NEW.transaction_id AND book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'recurring occurrence transaction must belong to the same book') END;
+END;
+-- +goose StatementEnd
+
 -- +goose Down
+DROP TRIGGER IF EXISTS recurring_occurrences_same_book;
+DROP INDEX IF EXISTS recurring_occurrences_status_idx;
+DROP INDEX IF EXISTS recurring_occurrences_book_date_idx;
+DROP TABLE IF EXISTS recurring_occurrences;
+DROP TRIGGER IF EXISTS recurring_template_tags_same_book;
+DROP INDEX IF EXISTS recurring_template_tags_book_tag_idx;
+DROP TABLE IF EXISTS recurring_template_tags;
+DROP TRIGGER IF EXISTS recurring_template_postings_same_book;
+DROP INDEX IF EXISTS recurring_template_postings_account_idx;
+DROP TABLE IF EXISTS recurring_template_postings;
+DROP TRIGGER IF EXISTS recurring_templates_payee_same_book_update;
+DROP TRIGGER IF EXISTS recurring_templates_payee_same_book_insert;
+DROP INDEX IF EXISTS recurring_templates_due_idx;
+DROP INDEX IF EXISTS recurring_templates_book_idx;
+DROP TABLE IF EXISTS recurring_templates;
+DROP INDEX IF EXISTS account_budget_treatment_asof_idx;
+DROP TABLE IF EXISTS account_budget_treatment_versions;
+DROP INDEX IF EXISTS budget_targets_book_period_idx;
+DROP TABLE IF EXISTS budget_targets;
+DROP TRIGGER IF EXISTS import_rule_tags_same_book;
+DROP INDEX IF EXISTS import_rule_tags_book_tag_idx;
+DROP TABLE IF EXISTS import_rule_tags;
+DROP TRIGGER IF EXISTS import_rules_targets_same_book_update;
+DROP TRIGGER IF EXISTS import_rules_targets_same_book_insert;
+DROP INDEX IF EXISTS import_rules_book_order_idx;
+DROP TABLE IF EXISTS import_rules;
+DROP INDEX IF EXISTS investment_disposal_decisions_event_idx;
+DROP TABLE IF EXISTS investment_disposal_allocations;
+DROP TABLE IF EXISTS investment_disposal_decisions;
+DROP TABLE IF EXISTS investment_position_basis_state;
+DROP INDEX IF EXISTS investment_lot_events_transaction_idx;
 DROP INDEX IF EXISTS self_check_results_check_idx;
 DROP TABLE IF EXISTS self_check_results;
 DROP INDEX IF EXISTS self_check_runs_book_started_idx;
@@ -2579,6 +2976,9 @@ DROP INDEX IF EXISTS investment_lots_position_idx;
 DROP TABLE IF EXISTS investment_lots;
 DROP INDEX IF EXISTS dividend_defaults_lookup_idx;
 DROP TABLE IF EXISTS dividend_defaults;
+DROP INDEX IF EXISTS cost_basis_profiles_current_version_idx;
+UPDATE cost_basis_profiles SET current_version_id = NULL;
+DROP TABLE IF EXISTS cost_basis_profile_versions;
 DROP INDEX IF EXISTS cost_basis_profiles_default_idx;
 DROP TABLE IF EXISTS cost_basis_profiles;
 DROP TABLE IF EXISTS pricing_refresh_state;

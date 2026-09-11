@@ -221,6 +221,12 @@ rewrite) — migrations run at startup, so deleting the file is the whole reset:
 rm -f backend/var/rekenraam.sqlite backend/var/rekenraam.sqlite-shm backend/var/rekenraam.sqlite-wal
 ```
 
+The final pre-`v0.1.0` consolidation changed the highest schema version from 8
+to 1. Databases and backups made before that consolidation are incompatible in
+both directions: export anything worth keeping before updating, then recreate
+the development database from the consolidated baseline. Do not use restore to
+cross that boundary.
+
 Then start the app and redo owner setup. The e2e database resets itself on every
 run and needs nothing.
 
@@ -232,6 +238,8 @@ run and needs nothing.
 - Two branches that both added `00NN_` collide. The one merged second renumbers
   **its own** file to the next free number while resolving the merge. Renumbering
   a migration already on `main` counts as a rewrite.
+- Migration numbers are monotonic database sequence numbers, not release
+  numbers. Release notes record the highest migration included in each release.
 - CI validates the fresh-install path on every run, because every job migrates
   from an empty database. There is no historical-upgrade test yet; it arrives
   with the `v0.1.0` freeze.

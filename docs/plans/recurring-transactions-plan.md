@@ -6,7 +6,8 @@ Next: slice 1 of `docs/plans/projected-balances-plan.md` (read-only snapshots).
 Acceptance evidence: `docs/reviews/r9-acceptance-review-2026-08-31.md`.
 `docs/roadmap.md` owns that sequence. Written 2026-08-29,
 immediately after R5's ordinary-bank CSV import closed. Slice 1 delivered
-`internal/recur`, `backend/migrations/0003_recurring.sql`, and
+`internal/recur`, the recurring schema now in
+`backend/migrations/0001_initial_schema.sql`, and
 `db.RecurringRepository` behind 26 named tests. This is the implementation reference for the
 roadmap slice "R9 — recurring transactions", the first leg of the planning loop
 `R9 → R10 → R8` decided 2026-08-05 (roadmap review §3d). The roadmap keeps its
@@ -267,8 +268,8 @@ Discarding a never-posted generated draft atomically changes its occurrence to
 `skipped`, sets a discard reason, clears `transaction_id`, and links the discard
 audit through `last_audit_event_id`. Generation and blocked attempts also set
 this audit link. The original generation audit survives draft deletion; the
-discard audit includes the former transaction ID. No schema rewrite is needed:
-migration `0006_recurring_occurrence_audit.sql` adds the nullable audit link.
+discard audit includes the former transaction ID. The nullable audit link is
+part of the consolidated baseline.
 
 The unique constraint is the whole idempotency story, the same way
 `backup_runs.occurrence_key` is: two schedulers, a restart mid-tick, or a clock
@@ -556,8 +557,8 @@ either.
 ## Slices
 
 1. **`internal/recur` + schema + repository — done 2026-08-29.** The pure
-   enumerator (14 named tests), the four tables in one migration
-   (`0003_recurring.sql`), and `db.RecurringRepository` (12 named tests,
+   enumerator (14 named tests), the four tables now in the consolidated
+   `0001_initial_schema.sql`, and `db.RecurringRepository` (12 named tests,
    including same-book trigger coverage). No API, no scheduler. It shipped
    alone because everything else depends on the date arithmetic being right,
    and the date arithmetic is testable with no ledger at all — which is how
@@ -576,8 +577,8 @@ either.
      way `TestMigrationsEnforceTransactionAndVersionIntegrity` already does.
 2. **Template CRUD — done 2026-08-30.** `app/recurring.go`, five authenticated
    template routes, OpenAPI, typed frontend client, three error codes in six
-   locales, and exact per-commodity balance validation on save. Migration
-   `0005_recurring_template_revision.sql` protects stale merges. Service/API
+   locales, and exact per-commodity balance validation on save. The template
+   revision guard is now part of the consolidated baseline. Service/API
    tests cover omission/null/false/zero, payee resolution, owner-local date,
    immutable occurrence identity on schedule edit, no ledger side effects, and
    a real draft transaction consumer. Repository tests cover edit/archive/tick

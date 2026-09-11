@@ -15,10 +15,10 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-T-64 consolidated the schema then present into
-`backend/migrations/0001_initial_schema.sql` on 2026-08-24. Subsequent import-rule,
-recurring, and investment-integrity changes use additive migrations under
-`backend/migrations/`; the baseline alone no longer describes the whole schema.
+The final pre-`v0.1.0` consolidation folded the complete schema through the
+2026-09-10 disposal-provenance work into
+`backend/migrations/0001_initial_schema.sql`. From the release tag onward that
+baseline is immutable and later changes use sequential forward migrations.
 
 Last documentation reconciliation: 2026-09-09 (see
 `docs/reviews/r10-learning-acceptance-review-2026-09-09.md`). The investment boundary review
@@ -30,7 +30,7 @@ ADR 0012 governs the durable split.
 
 | Capability | Status | Notes |
 |---|---|---|
-| SQLite migrations + schema version | ✅ | `backend/migrations/`, auto-run before serving. |
+| SQLite migrations + schema version | ✅ | Complete pre-`v0.1.0` schema in `backend/migrations/0001_initial_schema.sql`; auto-run before serving. Migration numbers remain sequential and independent of release numbers. |
 | Connection PRAGMAs (WAL, FK, busy timeout) | ✅ | `db/sqlite.go`; single-connection contract documented. |
 | Browser first-run setup (owner → book → currencies → system accounts → categories) | ✅ | Persisted `setup_steps`, derived install state. |
 | Auth: Argon2id, sessions, CSRF, origin checks | ✅ | `app/auth.go`, `api/auth.go`; rehash-on-login, dual-scope throttling. |

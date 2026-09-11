@@ -264,6 +264,11 @@ with it.
   renumbers itself. Never merge two files sharing a number, and never renumber a
   migration already on `main` (that is a rewrite, and needs the declaration
   above).
+- **Migration numbers do not encode product releases.** They are a single
+  monotonic database ordering sequence. After `v0.1.0`, each schema change takes
+  the next integer regardless of which release eventually contains it; release
+  notes record the highest migration included in a release. This avoids
+  renumbering an immutable migration when work moves between releases.
 - **After the freeze**, this section is replaced by a real upgrade policy: every
   release must migrate any database from any previously released version, and
   the migration suite grows a historical-upgrade mode alongside the

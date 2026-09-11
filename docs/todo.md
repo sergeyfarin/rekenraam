@@ -135,7 +135,8 @@ persisted draft transactions, so it is also where the
 conventions' promises about `draft` finally get kept.
 
 - [x] 1. **Done 2026-08-29.** `internal/recur` (pure date enumerator, ISO
-      strings, no clock or DB), the four tables in `0003_recurring.sql`, and
+      strings, no clock or DB), the four recurring tables now in the
+      consolidated `0001_initial_schema.sql`, and
       `db.RecurringRepository`. 14 enumeration tests and 12 repository tests.
       Writing them found one real defect before it shipped: the first revision
       special-cased index 0 when the anchor's month had already passed its

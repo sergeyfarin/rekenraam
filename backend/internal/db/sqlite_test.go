@@ -226,6 +226,24 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoint_postings"))
 }
 
+func TestInitialMigrationDownRemovesTheConsolidatedSchema(t *testing.T) {
+	database := openTestDatabase(t)
+	provider, err := goose.NewProvider(goose.DialectSQLite3, database, migrations.FS)
+	require.NoError(t, err)
+
+	_, err = provider.Up(context.Background())
+	require.NoError(t, err)
+	_, err = provider.Down(context.Background())
+	require.NoError(t, err)
+
+	var objectCount int
+	require.NoError(t, database.QueryRowContext(context.Background(), `
+		SELECT COUNT(*) FROM sqlite_schema
+		WHERE name NOT LIKE 'sqlite_%' AND name NOT LIKE 'goose_%'
+	`).Scan(&objectCount))
+	assert.Zero(t, objectCount)
+}
+
 func TestCurrentVersionViewsUseConsistentSelectionRules(t *testing.T) {
 	database := openTestDatabase(t)
 
@@ -284,15 +302,12 @@ func TestCommodityPrecisionCeilingAllowsCryptoOnlyThroughTwentyFour(t *testing.T
 	assert.Equal(t, "TEXT", columnType)
 }
 
-func TestLosslessQuantityMigrationPreservesExistingLedgerRows(t *testing.T) {
+func TestBaselineStoresLosslessLedgerQuantitiesAsText(t *testing.T) {
 	database := openTestDatabase(t)
-	provider, err := goose.NewProvider(goose.DialectSQLite3, database, migrations.FS)
-	require.NoError(t, err)
-	_, err = provider.UpTo(context.Background(), 6)
-	require.NoError(t, err)
+	require.NoError(t, Migrate(context.Background(), database))
 	insertMinimalFinancialFixture(t, database)
 
-	_, err = database.ExecContext(context.Background(), `
+	_, err := database.ExecContext(context.Background(), `
 		INSERT INTO commodity_versions (
 			commodity_id, version_seq, effective_from, recorded_at, changed_by_user_id,
 			change_reason, status, symbol, display_symbol, name, standard_scale, max_quantity_scale
@@ -322,9 +337,6 @@ func TestLosslessQuantityMigrationPreservesExistingLedgerRows(t *testing.T) {
 			reconciliation_status
 		) VALUES (1, 1, 1, 1, 1, 1, 1, 12345, 2, 1, 'uncleared');
 	`)
-	require.NoError(t, err)
-
-	_, err = provider.Up(context.Background())
 	require.NoError(t, err)
 
 	var value string
@@ -890,6 +902,10 @@ func TestReadOnlySnapshotDoesNotSeeLaterWrites(t *testing.T) {
 func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	t.Parallel()
 
+	version, err := EmbeddedMigrationVersion()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), version, "the v0.1.0 baseline must remain a single migration")
+
 	ctx := context.Background()
 	database, err := Open(ctx, "file:"+filepath.Join(t.TempDir(), "schema.sqlite"))
 	require.NoError(t, err)
@@ -912,42 +928,72 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 
-	// A sample across every era of the schema: the original ledger, the
-	// security work, and each feature folded in when the migrations were
-	// collapsed. If a fold dropped something, one of these is missing.
+	objectCounts := map[string]int{}
+	for _, kind := range objects {
+		objectCounts[kind]++
+	}
+	assert.Equal(t, map[string]int{
+		"index":   98,
+		"table":   83,
+		"trigger": 53,
+		"view":    6,
+	}, objectCounts, "the consolidated baseline must retain every schema object")
+
+	// A sample across every area of the schema. The exact object counts above
+	// catch omissions; these names make a failure identify the missing feature.
 	for name, kind := range map[string]string{
-		"transactions":                           "table",
-		"posting_versions":                       "table",
-		"current_transaction_versions":           "view",
-		"investment_lots":                        "table",
-		"price_observations":                     "table",
-		"background_work_items":                  "table",
-		"authentication_events":                  "table",
-		"login_trusted_devices":                  "table",
-		"user_mfa_totp":                          "table",
-		"user_mfa_recovery_codes":                "table",
-		"login_mfa_challenges":                   "table",
-		"backup_policies":                        "table",
-		"backup_runs":                            "table",
-		"self_check_runs":                        "table",
-		"self_check_results":                     "table",
-		"recurring_templates":                    "table",
-		"recurring_template_postings":            "table",
-		"recurring_occurrences":                  "table",
-		"recurring_occurrences_status_idx":       "index",
-		"recurring_template_postings_same_book":  "trigger",
-		"price_observations_voided_idx":          "index",
-		"posting_versions_no_update":             "trigger",
-		"posting_versions_account_version_valid": "trigger",
+		"account_budget_treatment_versions":       "table",
+		"transactions":                            "table",
+		"posting_versions":                        "table",
+		"current_transaction_versions":            "view",
+		"budget_targets":                          "table",
+		"cost_basis_profile_versions":             "table",
+		"cost_basis_profiles_current_version_idx": "index",
+		"import_rules":                            "table",
+		"import_rule_tags":                        "table",
+		"import_rule_tags_same_book":              "trigger",
+		"investment_disposal_allocations":         "table",
+		"investment_disposal_decisions":           "table",
+		"investment_disposal_decisions_event_idx": "index",
+		"investment_lots":                         "table",
+		"investment_lot_events_transaction_idx":   "index",
+		"investment_position_basis_state":         "table",
+		"price_observations":                      "table",
+		"background_work_items":                   "table",
+		"authentication_events":                   "table",
+		"login_trusted_devices":                   "table",
+		"user_mfa_totp":                           "table",
+		"user_mfa_recovery_codes":                 "table",
+		"login_mfa_challenges":                    "table",
+		"backup_policies":                         "table",
+		"backup_runs":                             "table",
+		"self_check_runs":                         "table",
+		"self_check_results":                      "table",
+		"recurring_templates":                     "table",
+		"recurring_template_postings":             "table",
+		"recurring_occurrences":                   "table",
+		"recurring_occurrences_status_idx":        "index",
+		"recurring_template_postings_same_book":   "trigger",
+		"price_observations_voided_idx":           "index",
+		"posting_versions_no_update":              "trigger",
+		"posting_versions_account_version_valid":  "trigger",
 	} {
 		assert.Equalf(t, kind, objects[name], "%s %s is missing from the schema", kind, name)
 	}
 
-	// The column that arrived as an ALTER before the collapse must still be a
-	// column, not a casualty of folding it inline.
-	var voidedAuditColumn int
-	require.NoError(t, database.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM pragma_table_info('price_observations') WHERE name = 'voided_audit_event_id'
-	`).Scan(&voidedAuditColumn))
-	assert.Equal(t, 1, voidedAuditColumn)
+	// Columns formerly added by ALTER TABLE are part of the baseline definitions
+	// now. Keep this list explicit so a later cleanup cannot silently lose one.
+	for table, column := range map[string]string{
+		"cost_basis_profiles":   "current_version_id",
+		"investment_lot_events": "cost_basis_method",
+		"price_observations":    "voided_audit_event_id",
+		"recurring_occurrences": "last_audit_event_id",
+		"recurring_templates":   "revision",
+	} {
+		var columnCount int
+		require.NoError(t, database.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?
+		`, table, column).Scan(&columnCount))
+		assert.Equalf(t, 1, columnCount, "%s.%s is missing from the schema", table, column)
+	}
 }

@@ -778,12 +778,12 @@ version, the export starts relying on a fallback instead of a guarantee, and
 `docs/plans/data-portability-plan.md` slice 6 gains a real failure to report
 rather than a counter that should always read zero.
 
-### T-64 Five migration files describe one schema nobody has yet `[x]`
+### T-64 Pre-release migrations obscure the final baseline `[x]`
 
-**Files:** `backend/migrations/0001_initial_schema.sql` (was `0001` … `0007`).
+**Files:** `backend/migrations/0001_initial_schema.sql` (was `0001` … `0008`).
 
-Six small deltas sat on top of a 2,400-line initial schema, so reading "what is
-the schema" meant reading seven files and applying the deltas by eye. There are
+Seven small deltas sat on top of a 2,400-line initial schema, so reading "what is
+the schema" meant reading eight files and applying the deltas by eye. There are
 no legacy databases and no tagged release, and *Project Lifecycle And Migration
 Immutability* (`docs/conventions.md`) permits rewriting migrations until
 `v0.1.0` — after that they are immutable and this stops being possible.
@@ -793,30 +793,20 @@ cost is that every development database must be recreated, so the commit body
 needs the `BREAKING DEV DATABASE` marker and a reset instruction, per the same
 convention.
 
-**Sequencing:** do it after R3's own schema work lands — that is, after its
-**last** migration, and before the `v0.1.0` tag. Slice 4 shipped migration 0006
-(`backup_policies`, `backup_runs`) on 2026-08-24, but slice 6's self-check
-persists its own run record and will add another, so the trigger is slice 6.
-An earlier note here named slice 4; that was the wrong reading of its own
-reason, which is that collapsing between two schema slices means collapsing
-twice.
+The first consolidation landed on 2026-08-24 after R3. The final pre-release
+consolidation landed on 2026-09-11 after the import-rule, recurring, budget, and
+investment-provenance schema work: eight files became one, and columns formerly
+added with `ALTER TABLE` moved into their final table definitions.
 
-**Done 2026-08-24**, after slice 6 added the last of R3's schema (0007). Seven
-files became one: 0002's `ALTER TABLE` became an inline column with its
-reasoning intact, and 0003-0007's tables were folded in with their comments
-rather than dumped from a live database — a `.schema` dump would have produced
-the same tables and thrown away every explanation in them.
+Verified by building empty databases from the old chain and the consolidated
+file and comparing all 240 named objects, table columns, foreign keys, index
+definitions, trigger/view SQL, and seeded rows. Both contain 83 tables, 98
+indexes, 53 triggers, and six views. `TestMigrationsProduceTheExpectedSchema`
+pins those totals, representative feature objects, every formerly altered
+column, and the single-migration version permanently.
 
-Verified by building the schema from the old chain and from the collapsed file
-and diffing all 207 objects, normalized for comments and punctuation spacing:
-identical. `TestMigrationsProduceTheExpectedSchema` keeps a lighter version of
-that check permanently, since nothing else now cross-references the schema.
-
-T-55 becomes post-`v0.1.0` by construction: there is no longer a multi-step
-upgrade path for a historical-upgrade test to exercise. Note the interaction with T-55: collapsing
-removes the only multi-step upgrade path a historical-upgrade migration test
-could exercise, which makes T-55 a post-`v0.1.0` concern rather than a
-pre-release one.
+T-55 becomes post-`v0.1.0` by construction: collapsing removes the only
+multi-step upgrade path a historical-upgrade migration test could exercise.
 
 ### T-65 A restore test asserts its premise, not its name `[x]`
 
@@ -1090,8 +1080,8 @@ correction; R18 owns the later multi-basis reporting engine.
 
 ### T-74 Average cost does not conserve the basis pool `[x]`
 
-Closed 2026-08-30. Migration `0004_investment_integrity.sql` adds typed disposal
-method state and the active position method-family projection. Average-cost
+Closed 2026-08-30. The consolidated baseline includes typed disposal method
+state and the active position method-family projection. Average-cost
 disposal now redistributes the exact conserved remainder across surviving
 projection rows without changing original `cost_basis_value`, scopes pools by
 cost commodity, and clears the method epoch only when the position closes.
@@ -1208,8 +1198,8 @@ back together.
 
 ### T-76 A disposal does not preserve its resolved policy provenance `[x]`
 
-**Closed 2026-09-10.** Migration `0008_disposal_provenance.sql` adds immutable
-global profile versions plus typed disposal decisions and allocations linked to
+**Closed 2026-09-10.** The consolidated baseline includes immutable global
+profile versions plus typed disposal decisions and allocations linked to
 the transaction, transaction version, lot events, and audit event. The shared
 resolver now returns method and tier/source version to both preview and commit;
 the committed API response carries the complete decision. The bundle adds
@@ -1238,9 +1228,9 @@ attributed source evidence and does not select book policy.
 
 **Closed 2026-08-31.** The existing draft DELETE transaction now writes a
 `skipped` tombstone with discard reason and audit link, clears the live
-transaction FK, and removes the never-posted draft atomically. Migration
-`0006_recurring_occurrence_audit.sql` adds the audit link without rewriting old
-migrations. `TestDiscardingGeneratedDraftPreservesOccurrenceAndCannotRegenerate`
+transaction FK, and removes the never-posted draft atomically. The audit link
+is now part of the consolidated baseline.
+`TestDiscardingGeneratedDraftPreservesOccurrenceAndCannotRegenerate`
 drives real generation → HTTP DELETE → re-enumeration; the rollback case
 `TestDiscardGeneratedDraftRollsBackTombstoneAndAuditOnDeleteFailure` also proves
 posted drafts cannot be hard-deleted.
@@ -1249,7 +1239,7 @@ posted drafts cannot be hard-deleted.
 scheduler/run-now activation additionally waited for slice 5's review UI,
 which shipped on 2026-08-31. Both entry points are now active.
 
-**Files:** `backend/migrations/0003_recurring.sql` (`recurring_occurrences`);
+**Files:** `backend/migrations/0001_initial_schema.sql` (`recurring_occurrences`);
 `backend/internal/db/transactions_write.go` (`DeleteDraftTransaction`);
 `backend/internal/app/transactions_write.go` (`DeleteDraftTransaction`).
 
