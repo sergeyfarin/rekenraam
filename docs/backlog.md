@@ -625,7 +625,7 @@ workflow files analysing the same thing; backlog/todo IDs used twice; and tests
 deleted or renamed by the merge. Cheap to write, and each item on that list has
 already cost something once.
 
-### T-59 gosec runs unfiltered and non-blocking `[~]`
+### T-59 gosec runs unfiltered and non-blocking `[x]`
 
 **Files:** `.github/workflows/gosec.yml`.
 
@@ -671,12 +671,17 @@ False positives, with the reason each is safe:
   which SQLite does not accept a bound parameter for; the path is escaped by
   `sqliteStringLiteral`.
 
-What remains open is only the workflow's shape, not the findings: the 40 false
-positives are still uploaded on every run, so the Security tab is no longer a
-clean slate. Close by either suppressing them with justified `#nosec` comments
-or a rule exclusion and promoting gosec to a blocking gate, or — likelier —
-deleting the workflow once CodeQL's Go analysis is restored, since CodeQL
-covers the same ground without the noise.
+**Closed 2026-09-10** by the "likelier" path below. CodeQL's Go analysis was
+restored the same day (its extractor gained 1.27 support in CodeQL bundle
+2.26.4, and the repo moved to CodeQL default setup — see
+`docs/developer-workflow.md`), so gosec had done its job. `.github/workflows/gosec.yml`
+was deleted, and gosec's 53 stale code-scanning analyses plus 71 orphaned
+"open" Security-tab alerts (the false positives above, which no longer had a
+run to re-evaluate them closed) were removed through
+`DELETE /repos/{owner}/{repo}/code-scanning/analyses/{id}?confirm_delete=true`,
+newest-first. CodeQL's default suite covers the real ground — SQL injection,
+SSRF, path traversal — without the noise; `govulncheck.yml` still covers
+dependency CVEs. The G301 fix and its test remain in the tree.
 
 ### T-60 Report test fixtures are rebuilt per suite `[ ]`
 

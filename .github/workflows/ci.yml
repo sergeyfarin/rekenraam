@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push to the same branch/PR cancels an in-flight run for it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -18,6 +23,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - name: Run backend tests
         run: ./scripts/test-backend.sh
 
@@ -29,6 +35,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - name: Run backend tests with coverage
         # pipefail: without it, tee's exit status would hide a failing suite.
         run: |
@@ -51,6 +58,8 @@ jobs:
         with:
           node-version: "24"
       - uses: pnpm/action-setup@v6.0.10
+        with:
+          cache: true
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run frontend check
@@ -64,10 +73,13 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
       - uses: pnpm/action-setup@v6.0.10
+        with:
+          cache: true
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Chromium
@@ -96,10 +108,13 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
       - uses: pnpm/action-setup@v6.0.10
+        with:
+          cache: true
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build single binary

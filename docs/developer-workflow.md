@@ -333,42 +333,34 @@ Workflow conventions:
 - Go vulnerability scanning runs in `.github/workflows/govulncheck.yml` with
   `govulncheck ./...` from `backend/` on a weekly schedule, manually via
   `workflow_dispatch`, and on backend-affecting pull requests.
-- CodeQL code scanning runs in `.github/workflows/codeql.yml`. It is an
-  *advanced* setup — a committed workflow rather than GitHub's default setup —
-  because default setup gives no control over the Go toolchain: it builds with
-  whatever the runner preinstalls under `GOTOOLCHAIN=local`, so a `go.mod`
-  above that version fails extraction and takes every other language in the run
-  down with it. This workflow instead runs `actions/setup-go` with
-  `go-version-file: backend/go.mod`. Reverting to default setup reintroduces
-  that failure mode. Advanced setup was enabled in repository settings on
-  2026-08-23; the two are mutually exclusive, so while default setup is on, an
-  advanced workflow's results are rejected on upload with "CodeQL analyses from
-  advanced configurations cannot be processed when the default setup is
-  enabled". Keep exactly one CodeQL workflow file — enabling advanced setup
-  through the GitHub UI offers to add its own `codeql.yml` and will create a
-  second file (`codeql2.yml`) if that name is taken, which then runs duplicate
-  analyses and uploads conflicting SARIF for the same categories.
-- **CodeQL's `go` matrix entry is paused** (2026-08-23). The Go extractor
-  bundled with CodeQL is itself built with Go 1.26 and cannot parse a 1.27
-  module — every backend package fails with "package requires newer Go version
-  go1.27 (application built with go1.26)", yielding a partial database and a
-  red job. Go supports no `build-mode: none` fallback, and 2.26.3 was already
-  the newest bundle. `govulncheck.yml` covers known dependency CVEs meanwhile.
-  The upstream fix is already merged — github/codeql#22042 "Go: Update to 1.27"
-  (2026-08-20), tracked by github/codeql#22394, where a CodeQL maintainer put it
-  in "the next release". It missed the 2.26.3 bundle (2026-08-12), so it lands
-  in 2.26.4; bundles ship roughly fortnightly, putting this around early
-  September 2026. To restore: check `gh api
-  repos/github/codeql-cli-binaries/releases --jq '.[0].tag_name'` for >= 2.26.4,
-  then uncomment the two `go` matrix lines and confirm the job goes green.
-- `gosec` runs in `.github/workflows/gosec.yml` on backend-affecting pushes and
-  pull requests, weekly, and via `workflow_dispatch`. It is **non-blocking** by
-  design (`-no-fail`): results are uploaded to the Security tab, never gated on.
-  It exists only to cover first-party Go bugs while CodeQL's `go` analysis is
-  paused — govulncheck finds known CVEs in dependencies, not SQL injection or
-  SSRF in our own code. A first run reports 41 findings whose high-severity
-  entries are false positives; see backlog T-59 before acting on any of them.
-  Delete this workflow when CodeQL's Go analysis is restored.
+- CodeQL code scanning runs as GitHub's **default setup**, configured in
+  repository settings (Security → Code scanning), covering `actions`, Go, and
+  the JS/TS languages. There is no committed CodeQL workflow.
+
+  From 2026-08-23 to 2026-09-10 this was an *advanced* setup — a committed
+  `.github/workflows/codeql.yml` running `actions/setup-go` with
+  `go-version-file: backend/go.mod` — because default setup builds Go with
+  whatever the runner preinstalls under `GOTOOLCHAIN=local`, and CodeQL's own
+  bundled Go extractor could not parse a 1.27 module besides. Both halves are
+  now fixed: the extractor gained 1.27 support (github/codeql#22042, CodeQL
+  bundle 2.26.4, early September 2026) and the hosted runners preinstall Go
+  1.27, so default setup extracts the module cleanly. The `codeql.yml` workflow
+  was removed 2026-09-10.
+
+  Default and advanced setup are mutually exclusive. While default setup is
+  enabled, re-adding a `codeql.yml` gets its SARIF rejected on upload with
+  "CodeQL analyses from advanced configurations cannot be processed when the
+  default setup is enabled". If the Go-toolchain problem ever recurs, restore
+  advanced setup by disabling default setup in repository settings *first*,
+  then committing a single workflow file that pins the toolchain with
+  `go-version-file: backend/go.mod`.
+- `gosec` scanning was removed 2026-09-10 (backlog T-59). It existed only as
+  interim first-party Go coverage while CodeQL's Go analysis was paused; with
+  CodeQL's Go queries restored under default setup, `govulncheck.yml` covers
+  known dependency CVEs and CodeQL covers first-party taint bugs (SQL
+  injection, SSRF, path traversal). Its 53 stale analyses and 71 orphaned
+  Security-tab alerts — almost all false positives, see T-59 — were deleted
+  through the code-scanning analyses API at the same time.
 - Dependabot version updates are configured in `.github/dependabot.yml` for
   GitHub Actions, the backend Go module, root/frontend pnpm packages, and the
   Docker runtime image.
