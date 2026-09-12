@@ -144,6 +144,74 @@ func TestCanonicalDecimal_Detected(t *testing.T) {
 	}
 }
 
+// Per value, "1.234" is genuinely undecidable and reads as a decimal point.
+// Across a whole file it usually is decidable, and reading a German export's
+// "1.234" as 1.234 instead of 1234 is the same silent corruption T-36 was
+// about — the announcement's target audience, on the announcement's demo path.
+func TestDetectDecimalSeparatorAcrossValues(t *testing.T) {
+	tests := []struct {
+		name     string
+		values   []string
+		want     rune
+		decisive bool
+		conflict bool
+	}{
+		{
+			name:     "one decimal comma settles the file",
+			values:   []string{"1.234", "56,78", "9.000"},
+			want:     ',',
+			decisive: true,
+		},
+		{
+			name:     "one decimal point settles the file",
+			values:   []string{"1,234", "56.78", "9,000"},
+			want:     '.',
+			decisive: true,
+		},
+		{
+			name:     "both separators in one value settle it",
+			values:   []string{"1.234,56", "9.000"},
+			want:     ',',
+			decisive: true,
+		},
+		{
+			name:     "repeated commas are grouping, so the decimal is a point",
+			values:   []string{"1,234,567", "890"},
+			want:     '.',
+			decisive: true,
+		},
+		{
+			name:   "nothing decisive leaves it to the per-value reading",
+			values: []string{"1.234", "9.000"},
+			want:   0,
+		},
+		{
+			// Picking a winner here would depend on map iteration order, so the
+			// same file could parse two ways on two runs. Undecided is the only
+			// honest and repeatable answer.
+			name:     "an even disagreement stays undecided rather than coin-flipping",
+			values:   []string{"1.234,56", "7,890.12"},
+			want:     0,
+			conflict: true,
+		},
+		{
+			name:     "a clear majority wins and is still flagged",
+			values:   []string{"1,50", "2,75", "3,90", "7,890.12"},
+			want:     ',',
+			decisive: true,
+			conflict: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := detectDecimalSeparatorAcrossValues(test.values)
+			assert.Equal(t, string(test.want), string(got.Separator))
+			assert.Equal(t, test.decisive, got.Decisive)
+			assert.Equal(t, test.conflict, got.Conflict)
+		})
+	}
+}
+
 func TestCanonicalDecimal_ExplicitSeparatorOverridesDetection(t *testing.T) {
 	// "1,234" is read as a thousands group by default; a profile that declares
 	// a decimal comma must win.

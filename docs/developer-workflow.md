@@ -130,6 +130,33 @@ Runs SvelteKit checks and the Vitest unit suite.
 pnpm build
 ```
 
+Builds the frontend, copies it into `backend/internal/web/dist/`, runs the
+embed test, and compiles `dist/rekenraam`.
+
+#### Reproducibility
+
+The binary is built with `-trimpath` and `CGO_ENABLED=0`, which is what makes
+the same source produce the same bytes on a different machine. Verify with:
+
+```sh
+pnpm build && sha256sum dist/rekenraam
+```
+
+Two builds of the same commit, on the same Go version, must print the same
+hash. What each flag buys:
+
+- **`-trimpath`** keeps the builder's absolute paths out of the artifact.
+  Without it the binary carries ~1200 references to whatever home directory
+  built it — that layout ships to anyone who downloads a release, and no two
+  machines can agree on the bytes.
+- **`CGO_ENABLED=0`** produces a static binary. The SQLite driver is pure Go
+  (`modernc.org/sqlite`, ADR 0004), so nothing needs libc; leaving cgo on links
+  the host's glibc and ties the release to that version.
+
+The **Go toolchain version is part of the input**: a different minor version
+produces different bytes from identical source. Record it beside the hash when
+publishing a release, and see the Go toolchain notes before bumping it.
+
 ### E2E
 
 ```sh

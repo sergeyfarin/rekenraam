@@ -1558,6 +1558,55 @@ already covered in isolation by `cmd/rekenraam/restore_test.go`; nothing
 covered the sequence, which is why a doc this wrong survived a release freeze.
 The maintainer release checklist now carries that walk-through.
 
+### T-91 The decimal separator was decided per value, never per file `[x]`
+
+**Files:** `backend/internal/app/import_locale.go`
+(`detectDecimalSeparatorAcrossValues`), `import_csv.go`, `import_qif.go`.
+
+Found by the announcement-gate re-check the roadmap asked for once the R5 CSV
+adapter landed. Both adapters resolved the *date* layout across the whole file
+(`detectDateOrder`) but handed each amount to `canonicalDecimal` on its own,
+which falls back to a per-value guess when the profile sets no separator. Per
+value "1.234" is genuinely undecidable, and the guess was a decimal point — so
+a German export whose round amounts carry no cents read 1234 as 1.234. A
+silent 1000x error, T-36's class, on the migration path the announcement leads
+with. The file's own shape usually settles it: one "56,78" anywhere proves
+every period in that file is grouping.
+
+**Fixed 2026-09-12.** `detectDecimalSeparatorAcrossValues` mirrors
+`detectDateOrder` — it votes only on amounts that admit a single reading, and
+both adapters run it when the profile leaves the separator unset. An even
+disagreement deliberately stays *undecided* rather than picking a winner by
+map iteration order, because that would let one file parse two different ways
+on two runs; each amount then falls back to its own evidence and the user gets
+a warning naming the profile setting that removes the doubt.
+
+`TestDetectDecimalSeparatorAcrossValues` covers the decision table including
+the tie, and `TestCSVAdapterUsesTheWholeFileToSettleAnAmbiguousDecimalSeparator`
+plus `TestCSVAdapterKeepsUSGroupingWhenTheFileSettlesOnADecimalPoint` prove
+both conventions end to end through the adapter.
+
+### T-92 Release binaries were unreproducible and dynamically linked `[x]`
+
+**Files:** `scripts/build-single-binary.sh`, `docs/developer-workflow.md`.
+
+Found while reviewing announcement gate 4 (signed binaries with reproducibility
+notes). `go build` ran with no flags, so `dist/rekenraam` carried 1236
+references to the builder's home directory — published to anyone downloading a
+release, and enough on its own to make two machines disagree on the bytes.
+`CGO_ENABLED` defaulted to 1, linking the host glibc even though the SQLite
+driver is pure Go, which tied each release to its builder's libc version.
+
+**Fixed 2026-09-12.** The build now uses `-trimpath` and `CGO_ENABLED=0`:
+statically linked, zero builder paths, and two consecutive builds of the same
+commit produce an identical SHA-256. Verified by rebuilding and by running the
+backup→restore rehearsal against the new static binary. The Go toolchain
+version remains part of the input and must be published beside the hash;
+`docs/developer-workflow.md` § Reproducibility records how to verify.
+
+Signing itself is still open — it needs a key or OIDC identity the owner
+controls, so it cannot be done from here.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

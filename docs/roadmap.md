@@ -564,13 +564,19 @@ gate; the public-announcement work below remains a separate, later gate.
 
 ### Before public announcement or marketplace listings
 
-1. Complete R2, R3, and R5 so a newcomer can migrate, inspect, and export data.
-2. **EU import correctness: T-35 and T-36 fixed and regression-tested**
+1. ✅ Complete R2, R3, and R5 so a newcomer can migrate, inspect, and export
+   data. All three shipped.
+2. ✅ **EU import correctness: T-35 and T-36 fixed and regression-tested**
    (added 2026-08-05, review §3a) — done 2026-08-06 for the QIF path
-   (`app/import_locale.go`); re-check when the CSV adapter lands in R5.
+   (`app/import_locale.go`). **CSV re-check done 2026-09-12** now that R5 has
+   landed, and it found one more (T-91): both adapters resolved the *date*
+   layout across the whole file but the *decimal separator* one value at a
+   time, so a German export's "1.234" read as 1.234 rather than 1234 — a
+   silent 1000x error on the exact migration path the announcement leads with.
+   Now detected file-wide for both adapters, the way dates already were.
    The announcement's centerpiece is the
    migration story, the QIF parser targets MS Money exports, and the persona
-   is European — so the demo the launch rests on currently corrupts dates and
+   is European — so the demo the launch rests on must not corrupt dates and
    amounts for exactly the target audience. A correctness-branded finance app
    does not get a second first impression.
 3. **Personal-access tokens shipped** (added 2026-08-05, review §3f). The
@@ -579,7 +585,14 @@ gate; the public-announcement work below remains a separate, later gate.
    call it. Announcement is the moment of maximum developer attention.
    Required shape: hashed at rest, scoped, expiring by default, revocable,
    and emitting authentication events.
-4. Produce signed release binaries with reproducibility notes.
+4. ◐ Produce signed release binaries with reproducibility notes.
+   **Reproducibility done 2026-09-12** (T-92): the build is `-trimpath` +
+   `CGO_ENABLED=0`, so it is static, carries none of the builder's paths, and
+   two builds of a commit hash identically — see `docs/developer-workflow.md`
+   § Reproducibility. **Signing is still open** and needs an owner decision:
+   a signing identity (Sigstore keyless via GitHub OIDC, or a held key) and a
+   release workflow, neither of which exists yet — there is no release job in
+   `.github/workflows/`, only `ci.yml` and `govulncheck.yml`.
 5. Prepare adoption assets: seeded demo, README screenshots, and a short
    migration walkthrough — courting the plain-text-accounting audience
    explicitly by leading with the correctness architecture (append-only

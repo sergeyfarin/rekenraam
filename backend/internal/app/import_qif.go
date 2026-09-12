@@ -321,6 +321,22 @@ func normalizeQIFRecords(result *ParseResult, records []qifParsedRecord, filenam
 		}
 	}
 
+	decimalSeparator := opts.decimalSeparator
+	if decimalSeparator == 0 {
+		amounts := make([]string, 0, len(records))
+		for _, r := range records {
+			amounts = append(amounts, r.record.amount)
+			for _, split := range r.record.splits {
+				amounts = append(amounts, split.amount)
+			}
+		}
+		detection := detectDecimalSeparatorAcrossValues(amounts)
+		decimalSeparator = detection.Separator
+		if detection.Conflict {
+			result.Warnings = append(result.Warnings, ParseWarning{Message: decimalSeparatorConflictWarning(detection)})
+		}
+	}
+
 	for i, parsed := range records {
 		rec := parsed.record
 
@@ -337,7 +353,7 @@ func normalizeQIFRecords(result *ParseResult, records []qifParsedRecord, filenam
 		}
 
 		if rec.amount != "" {
-			canonical, err := canonicalDecimal(rec.amount, opts.decimalSeparator)
+			canonical, err := canonicalDecimal(rec.amount, decimalSeparator)
 			if err != nil {
 				result.Warnings = append(result.Warnings, ParseWarning{
 					RowIndex: i,
@@ -352,7 +368,7 @@ func normalizeQIFRecords(result *ParseResult, records []qifParsedRecord, filenam
 			if split.amount == "" {
 				continue
 			}
-			canonical, err := canonicalDecimal(split.amount, opts.decimalSeparator)
+			canonical, err := canonicalDecimal(split.amount, decimalSeparator)
 			if err != nil {
 				result.Warnings = append(result.Warnings, ParseWarning{
 					RowIndex: i,

@@ -159,16 +159,28 @@ func (a *CSVAdapter) Parse(_ context.Context, input RawInput, profile *ImportPro
 		}
 		order = detectDateOrder(dates).Order
 	}
-	var decimalSeparator rune
-	if config.DecimalSeparator != "" {
-		decimalSeparator = []rune(config.DecimalSeparator)[0]
-	}
-
 	result := ParseResult{Meta: SourceMeta{
 		TextEncoding:       decoded.Encoding,
 		EncodingSource:     decoded.Source,
 		EncodingConfidence: decoded.Confidence,
 	}}
+
+	var decimalSeparator rune
+	if config.DecimalSeparator != "" {
+		decimalSeparator = []rune(config.DecimalSeparator)[0]
+	} else {
+		amounts := make([]string, 0, len(records)-1)
+		for _, record := range records[1:] {
+			if raw, err := csvAmount(record, headers, config); err == nil {
+				amounts = append(amounts, raw)
+			}
+		}
+		detection := detectDecimalSeparatorAcrossValues(amounts)
+		decimalSeparator = detection.Separator
+		if detection.Conflict {
+			result.Warnings = append(result.Warnings, ParseWarning{Message: decimalSeparatorConflictWarning(detection)})
+		}
+	}
 	occurrences := map[string]int{}
 	for recordIndex, record := range records[1:] {
 		if csvRecordEmpty(record) {

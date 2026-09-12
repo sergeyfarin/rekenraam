@@ -406,6 +406,114 @@ func stripGrouping(intPart string) (string, error) {
 	return strings.Join(groups, ""), nil
 }
 
+// decimalSeparatorDetection is what a whole file's amounts say about which
+// character separates the fractional part.
+type decimalSeparatorDetection struct {
+	// Separator is 0 when no amount in the file settled it, which leaves each
+	// value to the per-value reading in canonicalDecimal.
+	Separator rune
+	// Decisive is true when at least one amount proved the convention.
+	Decisive bool
+	// Conflict is true when different amounts imply different conventions,
+	// which means the file is malformed or mixes exports.
+	Conflict bool
+}
+
+// detectDecimalSeparatorAcrossValues resolves a file's decimal separator from
+// all of its amounts, the way detectDateOrder resolves its date layout.
+//
+// Per value, "1.234" is undecidable: 1.234 and 1234 are both real readings, and
+// canonicalDecimal has to guess (it takes the period as a decimal point). Per
+// file it is usually decided, because one unambiguous amount anywhere — a
+// "56,78", a "1.234,56" — fixes the convention for every other row. Without
+// this, a German export whose round amounts have no cents reads "1.234" as
+// 1.234: a silent 1000x error, T-36's class of bug, on the migration path the
+// EU persona arrives through.
+func detectDecimalSeparatorAcrossValues(values []string) decimalSeparatorDetection {
+	votes := map[rune]int{}
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if separator, decisive := decisiveDecimalSeparator(value); decisive {
+			votes[separator]++
+		}
+	}
+	if len(votes) == 0 {
+		return decimalSeparatorDetection{}
+	}
+
+	// A tie is genuinely undecidable, and picking a winner by map iteration
+	// order would let the same file parse two different ways on two runs. Leave
+	// it to the per-value reading, which at least treats each amount on its own
+	// evidence, and let the caller warn.
+	if votes[','] == votes['.'] {
+		return decimalSeparatorDetection{Conflict: true}
+	}
+
+	best := ','
+	if votes['.'] > votes[','] {
+		best = '.'
+	}
+	return decimalSeparatorDetection{Separator: rune(best), Decisive: true, Conflict: len(votes) > 1}
+}
+
+// decimalSeparatorConflictWarning is what the adapters tell a user whose file
+// contradicts itself. Which sentence is true depends on whether a majority
+// still settled it, and telling someone their amounts "were parsed as ”"
+// would be worse than saying nothing.
+func decimalSeparatorConflictWarning(detection decimalSeparatorDetection) string {
+	if !detection.Decisive {
+		return "amounts in this file disagree on their decimal separator, evenly enough that the file cannot settle it; each amount was read on its own — set a decimal separator on an import profile to be sure"
+	}
+	return fmt.Sprintf("amounts in this file disagree on their decimal separator; the file was read as %q — set a decimal separator on an import profile if that is wrong", string(detection.Separator))
+}
+
+// decisiveDecimalSeparator reports what one amount proves about the file's
+// convention, if anything. It is deliberately stricter than
+// detectDecimalSeparator: that function must return a reading for every value,
+// while this one only speaks when the value admits a single interpretation.
+func decisiveDecimalSeparator(value string) (rune, bool) {
+	value = strings.Map(func(r rune) rune {
+		switch r {
+		case ' ', '\t', ' ', ' ', '\'', '’', '-', '+', '(', ')':
+			return -1
+		}
+		return r
+	}, value)
+
+	commas := strings.Count(value, ",")
+	periods := strings.Count(value, ".")
+
+	switch {
+	case commas > 0 && periods > 0:
+		// Whichever comes last is the decimal separator; the other is grouping.
+		if strings.LastIndexByte(value, ',') > strings.LastIndexByte(value, '.') {
+			return ',', true
+		}
+		return '.', true
+	case commas > 1:
+		return '.', true // "1,234,567" — commas group, so the decimal is a point
+	case periods > 1:
+		return ',', true // "1.234.567" — periods group, so the decimal is a comma
+	case commas == 1:
+		// Three trailing digits is the shape of a thousands group, so it proves
+		// nothing; anything else can only be a decimal comma.
+		if len(value)-strings.IndexByte(value, ',')-1 == 3 {
+			return 0, false
+		}
+		return ',', true
+	case periods == 1:
+		if len(value)-strings.IndexByte(value, '.')-1 == 3 {
+			return 0, false
+		}
+		return '.', true
+	default:
+		return 0, false
+	}
+}
+
 // detectDecimalSeparator picks the decimal separator of a single unsigned
 // number, returning 0 when the value has no fractional part.
 func detectDecimalSeparator(value string) rune {

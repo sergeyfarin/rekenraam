@@ -44,6 +44,43 @@ func TestCSVAdapterTwoBankLayoutsUseProfileDataWithoutCodeChanges(t *testing.T) 
 	}
 }
 
+// A German export with no decimal_separator on the profile. Read one row at a
+// time, "1.234" is indistinguishable from 1.234 — but this file settles it:
+// "56,78" can only be a decimal comma, which makes every period grouping.
+// Getting this wrong turns 1234,00 into 1.234, a silent 1000x error on exactly
+// the migration path the announcement leads with.
+func TestCSVAdapterUsesTheWholeFileToSettleAnAmbiguousDecimalSeparator(t *testing.T) {
+	config := `{"delimiter":"semicolon","date_column":"Datum","payee_column":"Beschreibung","amount_column":"Betrag","date_layout":"DMY"}`
+	contents := "Datum;Beschreibung;Betrag\n28/08/2026;Miete;-1.234\n29/08/2026;Kaffee;-56,78\n30/08/2026;Gehalt;2.500\n"
+
+	result, err := (&CSVAdapter{}).Parse(context.Background(),
+		RawInput{Filename: "statement.csv", Bytes: []byte(contents)},
+		&ImportProfile{ID: 9, AdapterKind: "csv", ConfigJSON: config})
+	require.NoError(t, err)
+	require.Len(t, result.Rows, 3)
+
+	assert.Equal(t, "-1234", result.Rows[0].Amount, "a period in a decimal-comma file is grouping, not a decimal point")
+	assert.Equal(t, "-56.78", result.Rows[1].Amount)
+	assert.Equal(t, "2500", result.Rows[2].Amount)
+	assert.Empty(t, result.Warnings)
+}
+
+// The same shape in reverse: a US file where a lone "1,234" must stay 1234.
+func TestCSVAdapterKeepsUSGroupingWhenTheFileSettlesOnADecimalPoint(t *testing.T) {
+	config := `{"delimiter":"comma","date_column":"Date","payee_column":"Description","amount_column":"Amount","date_layout":"MDY"}`
+	contents := "Date,Description,Amount\n08/28/2026,Rent,\"-1,234\"\n08/29/2026,Coffee,-56.78\n"
+
+	result, err := (&CSVAdapter{}).Parse(context.Background(),
+		RawInput{Filename: "statement.csv", Bytes: []byte(contents)},
+		&ImportProfile{ID: 10, AdapterKind: "csv", ConfigJSON: config})
+	require.NoError(t, err)
+	require.Len(t, result.Rows, 2)
+
+	assert.Equal(t, "-1234", result.Rows[0].Amount)
+	assert.Equal(t, "-56.78", result.Rows[1].Amount)
+	assert.Empty(t, result.Warnings)
+}
+
 func TestCSVAdapterParse_LegacyEncodingUsesSameDecoderAsQIF(t *testing.T) {
 	contents, err := charmap.Windows1250.NewEncoder().Bytes([]byte("Data;Opis;Kwota\n28/08/2026;Zażółć;-12,34\n"))
 	require.NoError(t, err)
