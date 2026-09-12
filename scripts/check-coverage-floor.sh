@@ -1,5 +1,9 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+# pipefail so a failing stage of a pipeline inside this script fails the script;
+# `set -e` alone only sees the last stage. It cannot help a caller that pipes
+# this script — `... | tail` reports tail's status — that trap is the caller's
+# to close. Needs bash: dash has no pipefail.
+set -euo pipefail
 
 # Reads the output of `COVERAGE=1 scripts/test-backend.sh` (or a file holding
 # it), echoes the merged total into the GitHub job summary, and fails if the
@@ -11,7 +15,10 @@ FLOOR="${COVERAGE_FLOOR:-73.0}"
 
 INPUT="${1:-/dev/stdin}"
 
-TOTAL="$(grep -o 'total:.*[0-9.]\+%' "$INPUT" | grep -o '[0-9.]\+%' | tr -d '%' | tail -1)"
+# `|| true` because under pipefail a grep that matches nothing would abort here,
+# replacing the explanation below with a bare non-zero exit. An absent total is
+# a case this script reports on, not a case it crashes on.
+TOTAL="$(grep -o 'total:.*[0-9.]\+%' "$INPUT" | grep -o '[0-9.]\+%' | tr -d '%' | tail -1 || true)"
 
 if [ -z "$TOTAL" ]; then
   echo "could not find a merged coverage total in $INPUT" >&2

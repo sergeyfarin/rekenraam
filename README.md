@@ -209,6 +209,8 @@ Run only the fast journeys — everything except the serial release preflight. T
 ./scripts/test-e2e-smoke.sh
 ```
 
+Read the exit code from an unpiped run. `./scripts/test-e2e-smoke.sh | tail -25` reports `tail`'s status, which is always 0, so a failing suite looks green — that is how a pipeline works, and nothing inside the script can change it. Set `set -o pipefail` in the calling shell if you need to pipe the output and still check the result.
+
 For integrated app testing, run the single binary or Docker app on `16888`, then:
 
 ```sh

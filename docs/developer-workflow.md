@@ -177,6 +177,7 @@ Run the release preflight when preparing a release:
 pnpm test:release-preflight
 ```
 
+- **Do not read the exit code of a piped run.** `./scripts/test-e2e-smoke.sh | tail -25` reports `tail`'s status, which is always 0, so a failing suite looks green — that is shell pipeline semantics, and nothing inside the script can change it. Run it unpiped, or set `set -o pipefail` in the calling shell first, which is what the CI step that tees backend coverage does.
 - `./scripts/test-e2e.sh` now builds the integrated app, starts a fresh local instance on `127.0.0.1:16889`, and uses a dedicated SQLite file at `backend/var/e2e.sqlite` unless `E2E_BASE_URL` is set.
 - The Playwright suite runs with one worker because the default harness shares one app instance and SQLite database.
 - Set `E2E_PORT` when the self-managed e2e port needs to move.
