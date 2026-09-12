@@ -127,6 +127,58 @@ test('[acceptance] every report view is accessible', async ({ page }) => {
   }
 });
 
+// A control may render below the contrast floor only while it is inactive,
+// which is the exemption the rules grant. Fading one *while enabling it* takes
+// the exemption away a frame or two before the fade finishes, and an axe run
+// that lands in that gap fails — which is how this arrived: the report views
+// case above failed intermittently under load on the spending view, where the
+// reporting-currency select is the only select on the page, caught already
+// operable at 60% opacity (4.37:1 against the panel, against a 4.5:1 floor).
+//
+// This select is the one control in the app that both animates its disabled
+// fade and clears that state on its own, with no click behind it — which is
+// what lets a page-load accessibility check land in the gap. Sampling every
+// frame makes the check deterministic; waiting for the query to settle would
+// only move the race somewhere a test cannot see it.
+test('the reporting-currency select is never operable before its fade finishes', async ({ page }) => {
+  await readyForLedger(page);
+  const today = todayISO();
+
+  // Hold the currencies response long enough that the select is observably
+  // disabled first, so the sampler is already running when the state flips.
+  await page.route('**/api/v1/currencies*', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+
+  await page.goto(`/app/reports?view=spending&start_date=${today}&end_date=${today}&bucket=month`);
+  await expect(page.getByRole('heading').first()).toBeVisible();
+
+  const faded = await page.evaluate(async () => {
+    const select = document.querySelector('select') as HTMLSelectElement | null;
+    if (!select) return 'no select on the spending report';
+    if (!select.disabled) return 'the select was never disabled, so this proves nothing';
+    const start = performance.now();
+    return await new Promise<string | null>((resolve) => {
+      const frame = () => {
+        const opacity = Number(getComputedStyle(select).opacity);
+        const elapsed = performance.now() - start;
+        if (!select.disabled && opacity < 1) return resolve(`enabled at opacity ${opacity}`);
+        // Half a second past the flip is well clear of a 150ms transition.
+        if (!select.disabled && elapsed > 500) return resolve(null);
+        if (elapsed > 10_000) return resolve('the select never became enabled');
+        requestAnimationFrame(frame);
+      };
+      frame();
+    });
+  });
+
+  expect(
+    faded,
+    `the reporting-currency select was operable before its fade finished: ${faded}`
+  ).toBeNull();
+});
+
 test('[acceptance] the import screen is accessible', async ({ page }) => {
   await ensureBrowserSession(page);
 

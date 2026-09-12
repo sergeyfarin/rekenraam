@@ -1607,6 +1607,42 @@ version remains part of the input and must be published beside the hash;
 Signing itself is still open — it needs a key or OIDC identity the owner
 controls, so it cannot be done from here.
 
+### T-93 An animated disabled fade made a control fail contrast while operable `[x]`
+
+**Files:** `frontend/src/lib/reports/reporting-currency-select.svelte:58`,
+`e2e/playwright/accessibility.spec.ts`.
+
+Found while validating an unrelated import-parsing change: `[acceptance] every
+report view is accessible` failed intermittently under the full smoke suite —
+a serious `color-contrast` violation on `select`, spending view only, passing
+whenever the case was run alone.
+
+The fade itself was never the problem. axe-core skips disabled elements for
+`color-contrast` (`colorContrastMatches` returns false for them), which matches
+the rules exempting an inactive control, so the loading state was always
+exempt. The bug was the *transition*: the class list paired `disabled:opacity-60`
+with a bare `transition`, which covers opacity, so clearing `disabled` took the
+exemption away one to three frames before the 150ms ramp off 0.6 finished. A
+frame-by-frame trace showed the select enabled at exactly `opacity: 0.6`, then
+0.613, then 0.669 — and an enabled select at 0.6 measures 4.37:1 against the
+panel, under the 4.5:1 floor. Reproduced live by holding `/api/v1/currencies`
+so the response landed inside the axe run: 1 hit in 81 attempts, which is the
+observed flake rate.
+
+**Fixed 2026-09-12.** `transition` → `transition-colors`, which excludes
+opacity, so the fade is now a step function and no frame is ever both operable
+and faded. Proven by `the reporting-currency select is never operable before
+its fade finishes`, which delays the currencies response and samples every
+frame across the flip: it fails 3/3 against the old class list and passes 3/3
+against the new one. Synchronising the test instead was rejected — it would
+have moved the race rather than closed it, and would have stopped the a11y
+check from ever seeing the loading state.
+
+A sweep of all 59 controls that pair a fade with an animated `transition` found
+no second instance that can race a page-load check: every other one clears its
+disabled state after a click, not on a query settling. The settings time-zone
+select is query-driven but carries no transition and no fade.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

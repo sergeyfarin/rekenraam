@@ -39,6 +39,15 @@
   <span class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
     {m.reports_reporting_currency()}
   </span>
+  <!--
+    `transition-colors`, not `transition`: the fade must not be animated.
+    `transition` covers opacity, so enabling the control started a 150ms
+    0.6 -> 1 ramp *after* the `disabled` attribute was already gone — leaving
+    a frame or two where the select is operable and still rendered at 60%,
+    which is 4.37:1 against the panel and under the 4.5:1 floor. Contrast
+    rules exempt an inactive control, so the faded disabled state is fine;
+    an enabled one caught mid-ramp is not, and axe fails it intermittently.
+  -->
   <select
     value={selected === null ? '' : String(selected)}
     disabled={currenciesQuery.isPending}
@@ -46,7 +55,7 @@
       const raw = event.currentTarget.value;
       onChange(raw === '' ? null : Number(raw));
     }}
-    class="mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition hover:bg-control-hover focus:border-accent disabled:opacity-60"
+    class="mt-1.5 h-10 w-full rounded-(--radius-control) border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition-colors hover:bg-control-hover focus:border-accent disabled:opacity-60"
   >
     <option value="">
       {currenciesQuery.isPending

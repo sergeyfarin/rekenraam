@@ -116,6 +116,18 @@ non-trivial diff (yours or reviewed):
     discard through the existing DELETE route: producer occurrence identity,
     its audit, and deletion must commit or roll back together (T-77).
 
+16. **Animating a control's disabled fade** — `disabled:opacity-60` is safe on
+    its own: the contrast rules exempt an inactive control, and axe skips
+    disabled elements for `color-contrast` outright. Pairing it with a bare
+    `transition` is not, because `transition` covers opacity: clearing
+    `disabled` removes the exemption one to three frames before the 150ms ramp
+    off 0.6 finishes, and an axe run that lands in that gap measures an
+    operable control at 4.37:1 (T-93, an intermittent failure of `[acceptance]
+    every report view is accessible`). Use `transition-colors` on any control
+    whose disabled state clears *on its own* — a query settling rather than a
+    click — so opacity stays a step function. Synchronising the test instead
+    only moves the race, and costs the check its view of the loading state.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 
