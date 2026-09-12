@@ -202,6 +202,20 @@ func (s *SelfCheckService) recordRunError(ctx context.Context, runID int64, runE
 	return runErr
 }
 
+// RecoverInterruptedRuns closes out any run left `running` by a process that
+// did not survive to finish it. T-71 made every in-process error path durably
+// finish the run it started, but that code only runs if the process is still
+// alive to run it — a crash, kill, or power loss between CreateSelfCheckRun
+// and any later write leaves the row `running` forever, exactly as invisible
+// to LatestSelfCheck as before T-71. Call this once at startup, before
+// anything can start a new run: a run cannot outlive the process that started
+// it, so every `running` row a fresh process finds is stale by definition.
+func (s *SelfCheckService) RecoverInterruptedRuns(ctx context.Context) (int64, error) {
+	finishedAt := s.now().UTC().Format(time.RFC3339)
+	return s.repository.RecoverInterruptedSelfCheckRuns(ctx, BookID, finishedAt,
+		"self-check did not finish: the process running it stopped before it could record a result")
+}
+
 // LatestSelfCheck returns the last finished run, or a zero run when the book has
 // never been checked. "Never checked" is a legitimate answer and is not an
 // error: it is what a screen says before the first nightly backup chains one.

@@ -1023,14 +1023,32 @@ release-candidate checksum freeze.
 Include an error summary on the run while there: "could not run" is only
 actionable with the reason beside it.
 
-**Closed 2026-09-11 before the v0.1 freeze.** A fourth terminal state,
-`errored`, now distinguishes infrastructure failure from a failed ledger check.
-Every post-create error path durably finishes the run with its diagnostic
-summary, including after request cancellation, and latest-run reads include it.
-The API contract and Data screen show the distinct state in all six catalogs.
-`TestInterruptedSelfCheckIsRecordedAsErrored` closes the read pool after setup,
-then proves the failed attempt replaces the older verdict instead of remaining
-invisible.
+**Closed 2026-09-11 before the v0.1 freeze** — too broad a claim. A fourth
+terminal state, `errored`, now distinguishes infrastructure failure from a
+failed ledger check. Every post-create error path durably finishes the run
+with its diagnostic summary, including after request cancellation, and
+latest-run reads include it. The API contract and Data screen show the
+distinct state in all six catalogs. `TestInterruptedSelfCheckIsRecordedAsErrored`
+closes the read pool after setup, then proves the failed attempt replaces the
+older verdict instead of remaining invisible.
+
+What that missed: all of the above only runs if the process is still alive to
+run it. A process crash — kill, panic outside recoverable code, power loss —
+between `CreateSelfCheckRun` and any later write leaves the row `running`
+forever, exactly as invisible to `LatestSelfCheckRun` as before this ticket
+existed. There was no code path left to return control to.
+
+**Actually closed 2026-09-12.** `SelfCheckService.RecoverInterruptedRuns`
+closes out every `running` row for the book at process startup — a run cannot
+outlive the process that started it, so any row still `running` when a new
+process starts belongs to one that did not survive to finish it.
+`cmd/rekenraam/command.go`'s `runServe` calls it once, right after building
+`selfCheckService` and before anything can start a new run.
+`TestStartupRecoversSelfCheckRunInterruptedByCrash` inserts a `running` row
+directly (simulating the crash, since there is no process left to reproduce
+it through), proves recovery closes it out with a diagnostic summary and a
+`finished_at`, and proves a second recovery pass is a no-op that leaves an
+already-closed run untouched.
 
 ### T-72 Two-process concurrency is reasoned about, never exercised `[ ]`
 

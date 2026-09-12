@@ -414,6 +414,28 @@ func (r *SelfCheckRepository) MarkSelfCheckRunErrored(ctx context.Context, runID
 	return nil
 }
 
+// RecoverInterruptedSelfCheckRuns closes out every run this book still shows
+// as "running". A run's own process is the only thing ever meant to move it
+// out of that state, so any row still in it when a new process starts belongs
+// to one that did not survive to finish — a kill, a crash, a power loss
+// between CreateSelfCheckRun and any later write, none of which the T-71
+// in-process error handling can reach because that code never regains control.
+func (r *SelfCheckRepository) RecoverInterruptedSelfCheckRuns(ctx context.Context, bookID int64, finishedAt string, summary string) (int64, error) {
+	result, err := r.database.ExecContext(ctx, `
+		UPDATE self_check_runs
+		SET status = 'errored', error_summary = ?, finished_at = ?
+		WHERE book_id = ? AND status = 'running'
+	`, summary, finishedAt, bookID)
+	if err != nil {
+		return 0, fmt.Errorf("recover interrupted self-check runs: %w", err)
+	}
+	recovered, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("read recovered self-check rows affected: %w", err)
+	}
+	return recovered, nil
+}
+
 type SelfCheckResultRecord struct {
 	RunID        int64
 	CheckID      string

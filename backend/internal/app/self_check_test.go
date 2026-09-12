@@ -412,6 +412,47 @@ func TestInterruptedSelfCheckIsRecordedAsErrored(t *testing.T) {
 	assert.Empty(t, latest.Results)
 }
 
+// A process crash — not a returned error — leaves a `running` row with no
+// process left to run T-71's error handling. Startup recovery is the only
+// thing that can still close it out, so it must find it, mark it `errored`
+// with a diagnostic, and leave a healthy run alone.
+func TestStartupRecoversSelfCheckRunInterruptedByCrash(t *testing.T) {
+	harness := newSelfCheckHarness(t)
+	ctx := context.Background()
+
+	// Simulate the crash directly: a `running` row with no process behind it
+	// any more, which is exactly what CreateSelfCheckRun leaves if the process
+	// dies before returning control to RunSelfCheck.
+	execRaw(t, harness.writer, `
+		INSERT INTO self_check_runs (book_id, trigger, status, started_at, created_at)
+		VALUES (1, 'scheduled', 'running', '2026-08-24T03:00:00Z', '2026-08-24T03:00:00Z');
+	`)
+
+	recovered, err := harness.service.RecoverInterruptedRuns(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), recovered)
+
+	latest, hasRun, err := harness.service.LatestSelfCheck(ctx)
+	require.NoError(t, err)
+	require.True(t, hasRun)
+	assert.Equal(t, SelfCheckErrored, latest.Status)
+	assert.NotEmpty(t, latest.FinishedAt)
+	assert.Contains(t, latest.ErrorSummary, "did not finish")
+	assert.Empty(t, latest.Results, "a crash leaves no results, only the fact that it never finished")
+
+	// A second startup after the first already cleaned up must find nothing:
+	// recovery must not touch runs that finished normally, and must not
+	// re-report a run it already closed out.
+	recoveredAgain, err := harness.service.RecoverInterruptedRuns(ctx)
+	require.NoError(t, err)
+	assert.Zero(t, recoveredAgain)
+
+	stillLatest, hasRun, err := harness.service.LatestSelfCheck(ctx)
+	require.NoError(t, err)
+	require.True(t, hasRun)
+	assert.Equal(t, latest, stillLatest, "a no-op recovery pass must not disturb the run it already recorded")
+}
+
 // ledgerSnapshot is every row the check reads, so a comparison catches any
 // write it might have made.
 func ledgerSnapshot(t *testing.T, database *sql.DB) map[string]string {

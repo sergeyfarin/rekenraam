@@ -141,6 +141,15 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 	importService.StartBackgroundWorker(ctx, logger)
 	importService.StartScheduler(ctx, logger)
 	selfCheckService := app.NewSelfCheckService(db.NewSelfCheckRepository(database, readOnlyDatabase))
+	// A self-check run cannot outlive the process that started it, so any
+	// `running` row still here at startup belongs to a process that crashed
+	// before it could finish — the case T-71's in-process error handling
+	// cannot reach. Recover it now, before anything can start a new run.
+	if recovered, err := selfCheckService.RecoverInterruptedRuns(ctx); err != nil {
+		logger.Error("recover interrupted self-check runs", slog.Any("err", err))
+	} else if recovered > 0 {
+		logger.Warn("recovered self-check run interrupted by a previous crash", slog.Int64("count", recovered))
+	}
 	backupService.SetSelfCheck(selfCheckService)
 	backupService.StartBackgroundWorker(ctx, logger)
 	backupService.StartScheduler(ctx, logger)
