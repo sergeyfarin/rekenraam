@@ -1528,6 +1528,36 @@ frontend. `TestForecastLearningSeparateFXCoverage`,
 event-reconciliation assertion and the converted frontend-model case prevent
 recurrence. The dated R10 learning acceptance review records the boundary.
 
+## Release documentation — 2026-09-12
+
+### T-90 The documented upgrade sequence could not be followed `[x]`
+
+**Files:** `docs/upgrades.md` (*Before upgrading*), `README.md`
+(*Backup And Restore*).
+
+Step 1 said to stop the app; step 3 said to create the backup "with the
+existing version's Data screen or backup command". Neither half of step 3
+survives step 1: the Data screen needs the app running, and there is no backup
+subcommand — the CLI is `serve`, `recover-owner`, `verify-backup`, `restore`.
+An operator following it literally would stop the app and then have no way to
+take the backup the rest of the procedure depends on. `README.md` repeated the
+same order in one line.
+
+**Fixed 2026-09-12.** *Before upgrading* now splits explicitly into the steps
+that need the old version running (take the backup, verify it) and those that
+need it stopped (everything after), says the Back up now button only *queues*
+the copy the worker picks up within a minute, and points at the `VACUUM INTO`
+operator backup for when the Data screen cannot be reached.
+
+Proven by rehearsing the corrected sequence end to end against the release
+build (`pnpm build`, then `dist/rekenraam`) on a throwaway database: backup
+from the running app, `verify-backup` while still running, `restore` refused
+while running, then stop → restore → restart, with the pre-backup account back,
+the post-backup one gone, and the self-check `passed`. The commands were
+already covered in isolation by `cmd/rekenraam/restore_test.go`; nothing
+covered the sequence, which is why a doc this wrong survived a release freeze.
+The maintainer release checklist now carries that walk-through.
+
 ## Public-deployment security gates
 
 **All closed as of 2026-08-07, parked 2026-08-19 (owner decision).** S-04

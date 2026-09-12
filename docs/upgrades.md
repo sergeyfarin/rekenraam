@@ -6,13 +6,39 @@ failure stops startup; the app never serves against a partially upgraded schema.
 
 ## Before upgrading
 
-1. Stop the running Rekenraam process or container.
-2. Keep the existing binary or image tag available for rollback.
-3. Create a verified backup with the existing version's Data screen or backup
-   command, and copy `REKENRAAM_SECRET_KEY` with it when encrypted connection or
-   MFA secrets are in use.
-4. Record the release currently running and read the target release notes. Each
+The first two steps need the old version **running**; the rest need it
+**stopped**. Taking the backup is not something a stopped app can do — the copy
+is made by the running process through SQLite's online backup API, and there is
+no `backup` subcommand to reach for instead.
+
+1. **With the current version still running**, create a backup: Settings → Data
+   → **Back up now**, then wait for it to show up under **Last backup**. The
+   button only queues the copy — the screen says so — and the backup worker
+   picks it up within a minute, so stopping the app before it lands means no
+   backup was taken. A recent nightly backup is just as good; the point is a
+   known-good copy from *before* the upgrade.
+2. **Still running**, verify that backup, with the same `REKENRAAM_SECRET_KEY`
+   the app runs with so its sealed-data line checks the key a restore would
+   really use:
+
+   ```sh
+   ./rekenraam verify-backup --from <backup path>
+   ```
+
+   Copy that key somewhere outside the backup directory when encrypted
+   connection or MFA secrets are in use. It is deliberately not in the backup,
+   and without it a restored database keeps its ledger but loses multi-factor
+   enrolment and connection credentials.
+3. Stop the running Rekenraam process or container. Everything below, and the
+   rollback path, needs it stopped: `restore` refuses while the server holds
+   its lock.
+4. Keep the existing binary or image tag available for rollback.
+5. Record the release currently running and read the target release notes. Each
    release note must state the highest included migration.
+
+If the Data screen cannot be reached, take the operator backup documented under
+*Backup And Restore* in `README.md` (`VACUUM INTO` against a stopped app)
+instead. Do not copy a live WAL-mode database file.
 
 ## Upgrade
 
@@ -42,3 +68,9 @@ than the binary understands.
 - Add every newly released migration and its SHA-256 to
   `backend/migrations/freeze_test.go` in the release commit.
 - State the highest migration included in the release notes.
+- Walk *Before upgrading* against the release build (`pnpm build`, then
+  `dist/rekenraam`) on a throwaway database: back up from the running app,
+  verify it, stop, restore, restart, and self-check. `restore_test.go` covers
+  the commands in isolation; this is the only thing that exercises the sequence
+  an operator is told to follow, and it is how the sequence above was found to
+  be impossible as written.
