@@ -283,6 +283,13 @@ type PostingAccountRule struct {
 	QuantityScaleOverride sql.NullInt64
 	AllowsPostings        bool
 	IsSystem              bool
+	AccountKind           string
+	// BaseKind is the account kind's family from the account_kinds table
+	// (e.g. both security_holding and fund_holding have base_kind
+	// "security_holding"). Rules that apply to a family of kinds key off this
+	// rather than enumerating codes, so a kind added to the table later is
+	// covered without a second edit somewhere else.
+	BaseKind string
 }
 
 type PostingCommodityRule struct {

@@ -12,10 +12,24 @@ import (
 // ReconciliationImpactForCreate returns the reconciliation impact of creating a
 // new transaction without actually persisting anything.
 func (s *TransactionService) ReconciliationImpactForCreate(ctx context.Context, input CreateReconciliationImpactInput) (ReconciliationImpact, error) {
+	return s.reconciliationImpactForCreate(ctx, input, cleanTransactionOptions{})
+}
+
+// investmentReconciliationImpactForCreate is the preview counterpart of
+// prepareInvestmentTransactionForWrite. The preview validates the same spec the
+// write will, so it needs the same T-96 exemption — otherwise every investment
+// impact preview is refused for a posting the commit would have accepted, and
+// preview and commit stop agreeing.
+func (s *TransactionService) investmentReconciliationImpactForCreate(ctx context.Context, input CreateReconciliationImpactInput) (ReconciliationImpact, error) {
+	return s.reconciliationImpactForCreate(ctx, input, cleanTransactionOptions{AllowSubledgerManagedPostings: true})
+}
+
+func (s *TransactionService) reconciliationImpactForCreate(ctx context.Context, input CreateReconciliationImpactInput, options cleanTransactionOptions) (ReconciliationImpact, error) {
 	if input.OwnerUserID <= 0 {
 		return ReconciliationImpact{}, ValidationError{Message: "owner user is required"}
 	}
-	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{DefaultStatus: "posted"})
+	options.DefaultStatus = "posted"
+	spec, err := s.cleanTransactionSpec(ctx, input.Spec, options)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}

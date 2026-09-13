@@ -1035,7 +1035,7 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		return InvestmentTradeResult{}, err
 	}
 	metadataJSON := plan.MetadataJSON
-	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, plan.Create)
+	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -1370,7 +1370,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		return InvestmentTradeResult{}, err
 	}
 	metadataJSON := plan.MetadataJSON
-	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, plan.Create)
+	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -1541,7 +1541,7 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 	if postWrite == nil {
 		return s.transactionService.CreateTransaction(ctx, createInput)
 	}
-	params, err := s.transactionService.prepareCreateTransactionForWrite(ctx, createInput)
+	params, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, createInput)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -1624,7 +1624,7 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 		return InvestmentTradeResult{}, err
 	}
 	date := plan.Date
-	transactionParams, err := s.transactionService.prepareCreateTransactionForWrite(ctx, plan.Create)
+	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -2677,7 +2677,7 @@ func (s *InvestmentService) ReinvestedDividendReconciliationImpact(ctx context.C
 }
 
 func (s *InvestmentService) reconciliationImpactForPlan(ctx context.Context, plan investmentTransactionPlan) (ReconciliationImpact, error) {
-	return s.transactionService.ReconciliationImpactForCreate(ctx, CreateReconciliationImpactInput{
+	return s.transactionService.investmentReconciliationImpactForCreate(ctx, CreateReconciliationImpactInput{
 		OwnerUserID: plan.Create.OwnerUserID,
 		Spec:        plan.Create.Spec,
 	})

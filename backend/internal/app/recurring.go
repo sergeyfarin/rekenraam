@@ -315,7 +315,11 @@ func (s *RecurringService) cleanTemplate(ctx context.Context, spec db.RecurringT
 		return spec, fmt.Errorf("read recurring posting commodities: %w", err)
 	}
 	for _, account := range accounts {
-		if account.AccountKind == "security_holding" {
+		// Same family predicate the posting guard uses (T-96), not the bare
+		// "security_holding" kind code this used to compare against: that
+		// spelling missed fund_holding, which is the same kind of account
+		// under a different code.
+		if account.BaseKind == subledgerManagedBaseKind {
 			return spec, ValidationError{Message: "recurring investment postings are not supported"}
 		}
 	}

@@ -244,7 +244,7 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 
 	entries := make([]db.JournalEntrySpec, 0, len(input.JournalEntries))
 	for entryIndex, entryInput := range input.JournalEntries {
-		entry, err := s.cleanJournalEntry(ctx, entryInput, transactionDate, status, options.ExistingLineKeys, options.ExistingPostings)
+		entry, err := s.cleanJournalEntry(ctx, entryInput, transactionDate, status, options)
 		if err != nil {
 			return db.TransactionSpec{}, err
 		}
@@ -278,7 +278,7 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 	}, nil
 }
 
-func (s *TransactionService) cleanJournalEntry(ctx context.Context, input JournalEntryInput, transactionDate string, status string, existingLineKeys map[string]bool, existingPostings map[string]existingPostingState) (db.JournalEntrySpec, error) {
+func (s *TransactionService) cleanJournalEntry(ctx context.Context, input JournalEntryInput, transactionDate string, status string, options cleanTransactionOptions) (db.JournalEntrySpec, error) {
 	entryDate := strings.TrimSpace(input.EntryDate)
 	if entryDate == "" {
 		entryDate = transactionDate
@@ -305,7 +305,7 @@ func (s *TransactionService) cleanJournalEntry(ctx context.Context, input Journa
 
 	postings := make([]db.PostingSpec, 0, len(input.Postings))
 	for _, postingInput := range input.Postings {
-		posting, err := s.cleanPosting(ctx, postingInput, entryDate, status, existingLineKeys, existingPostings)
+		posting, err := s.cleanPosting(ctx, postingInput, entryDate, status, options)
 		if err != nil {
 			return db.JournalEntrySpec{}, err
 		}
@@ -321,7 +321,28 @@ func (s *TransactionService) cleanJournalEntry(ctx context.Context, input Journa
 	}, nil
 }
 
-func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInput, entryDate string, status string, existingLineKeys map[string]bool, existingPostings map[string]existingPostingState) (db.PostingSpec, error) {
+// isSubledgerManagedAccount reports whether an account's holdings are owned by
+// the investment subledger, so that only an investment command may write to it.
+// Keyed on the account kind's base_kind family — security_holding covers both
+// the security_holding and fund_holding kinds — so a new holding kind added to
+// the account_kinds table is guarded without a second edit here.
+//
+// Deliberately excludes crypto_wallet (base_kind "digital_asset"). The
+// investment commands do not offer crypto accounts, so guarding them would
+// remove the only way to record a crypto balance without providing a
+// replacement. That gap is recorded in docs/backlog.md (T-96).
+// subledgerManagedBaseKind is the account_kinds.base_kind family whose holdings
+// the investment subledger owns — today the security_holding and fund_holding
+// kinds both sit under it. Rules about these accounts compare against this one
+// constant rather than spelling out kind codes, so they cannot drift apart or
+// miss a kind added to the table later.
+const subledgerManagedBaseKind = "security_holding"
+
+func isSubledgerManagedAccount(rule db.PostingAccountRule) bool {
+	return rule.BaseKind == subledgerManagedBaseKind
+}
+
+func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInput, entryDate string, status string, options cleanTransactionOptions) (db.PostingSpec, error) {
 	if input.AccountID <= 0 {
 		return db.PostingSpec{}, ValidationError{Message: "posting account is required"}
 	}
@@ -351,6 +372,18 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	}
 	if accountRule.Status != "active" || !accountRule.AllowsPostings {
 		return db.PostingSpec{}, ValidationError{Message: "posting account is not active for postings"}
+	}
+	// T-96. A holding account's quantity is not just a number in the register:
+	// it is the journal half of a position whose other half is the investment
+	// subledger's lots. A generic balanced entry can satisfy every rule above
+	// and still leave shares that no lot accounts for, which makes cost basis
+	// and realized gains uncomputable for that position — and no current-state
+	// diagnostic can repair it, because there is no record of what was
+	// acquired or when. So an ordinary write may not touch these accounts at
+	// all; the investment commands, which write journal and lots in one
+	// database transaction, are the only way in.
+	if !options.AllowSubledgerManagedPostings && isSubledgerManagedAccount(accountRule) {
+		return db.PostingSpec{}, ValidationError{Message: "posting account is managed by the investment subledger: use a buy, sell, dividend or write-off instead of an ordinary posting"}
 	}
 	if entryDate < accountRule.OpenedOn {
 		return db.PostingSpec{}, ValidationError{Message: "posting date is before account opened date"}
@@ -388,14 +421,14 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 	}
 
 	lineKey := strings.TrimSpace(input.LineKey)
-	if lineKey != "" && existingLineKeys != nil && !existingLineKeys[lineKey] {
+	if lineKey != "" && options.ExistingLineKeys != nil && !options.ExistingLineKeys[lineKey] {
 		return db.PostingSpec{}, ValidationError{Message: "posting line key is invalid"}
 	}
 	if lineKey == "" {
 		lineKey = s.newLineKey()
 	}
 
-	existingState, hasExistingState := existingPostings[lineKey]
+	existingState, hasExistingState := options.ExistingPostings[lineKey]
 	reconciliationStatus := "uncleared"
 	if hasExistingState {
 		reconciliationStatus = existingState.ReconciliationStatus

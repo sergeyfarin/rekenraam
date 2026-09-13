@@ -33,7 +33,22 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, input Create
 }
 
 func (s *TransactionService) prepareCreateTransactionForWrite(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {
-	params, err := s.prepareCreateTransaction(ctx, input)
+	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{})
+}
+
+// prepareInvestmentTransactionForWrite is the investment subledger's entry into
+// the shared transaction write path, and the only way a posting to a
+// subledger-managed holding account gets past cleanPosting's T-96 guard. It is
+// unexported and takes no caller-supplied flag, so the exemption cannot be
+// requested from the API layer or set by populating a request field — a caller
+// either is the investment service or it is not. Every use of it must write the
+// matching lot facts in the same database transaction as the journal.
+func (s *TransactionService) prepareInvestmentTransactionForWrite(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {
+	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{AllowSubledgerManagedPostings: true})
+}
+
+func (s *TransactionService) prepareCreateTransactionForWriteWithOptions(ctx context.Context, input CreateTransactionInput, options cleanTransactionOptions) (db.CreateTransactionParams, error) {
+	params, err := s.prepareCreateTransaction(ctx, input, options)
 	if err != nil {
 		return db.CreateTransactionParams{}, err
 	}
@@ -61,7 +76,7 @@ func (s *TransactionService) createTransactionRecordInTx(ctx context.Context, tx
 	return record, nil
 }
 
-func (s *TransactionService) prepareCreateTransaction(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {
+func (s *TransactionService) prepareCreateTransaction(ctx context.Context, input CreateTransactionInput, options cleanTransactionOptions) (db.CreateTransactionParams, error) {
 	if input.OwnerUserID <= 0 {
 		return db.CreateTransactionParams{}, ValidationError{Message: "owner user is required"}
 	}
@@ -70,7 +85,8 @@ func (s *TransactionService) prepareCreateTransaction(ctx context.Context, input
 	}
 
 	now := s.now().UTC()
-	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{DefaultStatus: "posted"})
+	options.DefaultStatus = "posted"
+	spec, err := s.cleanTransactionSpec(ctx, input.Spec, options)
 	if err != nil {
 		return db.CreateTransactionParams{}, err
 	}

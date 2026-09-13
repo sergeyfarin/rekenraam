@@ -98,6 +98,13 @@ imports in the tests.
 
 ### T-96 / P1 — ordinary entries can create journal-only investments
 
+**Fixed 2026-09-13.** `cleanPosting` now refuses generic postings to
+subledger-managed holding accounts, with the investment commands reaching them
+through their own unexported prepare/preview entry points; see
+`docs/backlog.md` (T-96) for what shipped, the named tests, and the
+`crypto_wallet` exclusion the fix deliberately leaves open. The finding as
+written below stands as the record of the defect.
+
 Locations: `backend/internal/app/transactions_validate.go:337` and
 `frontend/src/lib/transactions/transaction-editor.svelte:176`.
 
@@ -213,7 +220,7 @@ Prioritize invariant/state-transition coverage over a larger global percentage.
 ## Gates before household onboarding
 
 1. Fix T-94–T-96 and pass permanent regression cases plus backend race checks.
-   **T-95 done 2026-09-13**; T-94 and T-96 remain.
+   **T-95 and T-96 done 2026-09-13**; T-94 remains.
 2. Resolve T-97 before claiming fractional-investment support or onboarding a
    household whose broker trades fractions.
 3. ~~Restore coverage tooling and run the browser release preflight

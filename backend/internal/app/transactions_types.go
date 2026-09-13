@@ -309,6 +309,13 @@ type cleanTransactionOptions struct {
 	ForcedStatus     string
 	ExistingLineKeys map[string]bool
 	ExistingPostings map[string]existingPostingState
+	// AllowSubledgerManagedPostings lifts the guard that keeps generic
+	// transaction writes out of accounts the investment subledger owns (T-96).
+	// Only InvestmentService sets it, through
+	// prepareInvestmentTransactionForWrite. It lives on this unexported options
+	// struct rather than on CreateTransactionInput so that the exemption cannot
+	// be reached from the API layer by populating a request field.
+	AllowSubledgerManagedPostings bool
 }
 
 type existingPostingState struct {

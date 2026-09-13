@@ -8,6 +8,7 @@
   import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import APIFormError from '$lib/components/api-form-error.svelte';
+  import { isSubledgerManagedAccountKind } from '$lib/accounts/subledger-accounts';
   import { m } from '$lib/paraglide/messages.js';
   import { accountsQueryOptions } from '$lib/api/accounts';
   import { categoriesQueryOptions } from '$lib/api/categories';
@@ -173,7 +174,7 @@
       (a: AccountResponse) =>
         (a.account_class === 'asset' || a.account_class === 'liability') &&
         a.status === 'active' && !a.is_system &&
-        a.allows_postings && (mode !== 'template' || a.account_kind !== 'security_holding')
+        a.allows_postings && !isSubledgerManagedAccountKind(a.account_kind)
     )
   );
 
@@ -635,7 +636,7 @@
   // All accounts for split leg account selector.
   const allPostingAccounts = $derived(
     (accountsQuery.data?.accounts ?? []).filter(
-      (a: AccountResponse) => a.status === 'active' && a.allows_postings && (mode !== 'template' || a.account_kind !== 'security_holding')
+      (a: AccountResponse) => a.status === 'active' && a.allows_postings && !isSubledgerManagedAccountKind(a.account_kind)
     )
   );
 

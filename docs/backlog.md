@@ -84,15 +84,44 @@ sale's basis, and a corrective replay policy remains undefined. Temporal
 eligibility stops the corruption; it does not make historical back-entry a
 supported workflow.
 
-### T-96 Generic postings bypass the investment subledger `[ ]`
+### T-96 Generic postings bypass the investment subledger `[x]`
 
-**P1 / v0.1 blocker.** `backend/internal/app/transactions_validate.go:337`
-accepts ordinary postings to security holdings without lots; the normal editor
-includes those accounts (`frontend/src/lib/transactions/transaction-editor.svelte:176`).
-The existing linked-transaction lifecycle fence does not protect new unlinked
-transactions. Reject or route holding quantity changes through atomic investment
-workflows, including create/edit/opening/import paths. Reproduced in the
-2026-09-13 release review (T-96).
+**Was P1 / v0.1 blocker. Fixed 2026-09-13.** `cleanPosting` now refuses any
+posting to an account the investment subledger manages, and because every
+generic write path — create, update, correction, opening balance, transfer,
+generic import, reconciliation-impact preview — funnels through
+`cleanTransactionSpec`, one guard closes all of them. The investment commands
+reach those accounts through `prepareInvestmentTransactionForWrite` and
+`investmentReconciliationImpactForCreate`: unexported methods that take no
+caller-supplied flag, so the exemption cannot be requested from the API layer
+or set by populating a request field. `PostingAccountRule` gained the account
+kind and its `base_kind` family to make this decidable.
+
+Keyed on the `security_holding` base_kind family via the single
+`subledgerManagedBaseKind` constant, which covers both the `security_holding`
+and `fund_holding` kinds — the original finding named only the first. The
+recurring-template validator had the same defect for the same reason (it
+compared against the bare `security_holding` code) and now uses the same
+constant. Frontend: `$lib/accounts/subledger-accounts.ts` keeps these accounts
+out of the transaction editor's pickers in every mode, not just template mode.
+
+Proved by named tests in
+`backend/internal/app/transactions_subledger_guard_test.go` — rejection for
+both holding kinds and both signs, an edit that introduces a holding posting,
+preview/commit parity, and the other half of the guard: buy, sell and the
+investment impact preview must still reach these accounts. Plus
+`frontend/src/lib/accounts/subledger-accounts.test.ts`. Each fails without the
+fix.
+
+**Deliberately excluded: `crypto_wallet`** (base_kind `digital_asset`). The
+investment commands do not offer crypto accounts, so guarding them would remove
+the only way to record a crypto balance without providing a replacement. A
+crypto position entered generically therefore still has no lots behind it. That
+is the same defect class, narrowed to an account kind with no supported
+alternative; closing it needs crypto support in the investment workflows first,
+which is R16 scope. Pinned by
+`TestCreateTransactionStillAllowsCryptoWalletPostings` so it stays a decision
+rather than becoming an oversight again.
 
 ### T-97 Fractional sale eligibility depends on acquisition scale `[ ]`
 
