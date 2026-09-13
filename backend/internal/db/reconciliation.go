@@ -862,6 +862,56 @@ type checkpointInvalidationParams struct {
 	Reason       string
 }
 
+// checkpointBoundaryParams describes one write's crossing of the reconciliation
+// boundary, to be decided inside that write's own transaction.
+type checkpointBoundaryParams struct {
+	BookID int64
+	// Candidates are the (account, commodity, date, sequence) positions this
+	// write touches. They are derived from the spec and the current record
+	// alone — no checkpoint state — so they stay valid however long ago the
+	// caller built them.
+	Candidates             []PeriodScopedCheckpointRef
+	ReconciliationOverride bool
+	ActorUserID            int64
+	AuditEventID           int64
+	OccurredAt             string
+	Reason                 string
+}
+
+// enforceCheckpointBoundaryTx resolves the candidates against the checkpoints
+// that exist right now, inside the caller's write transaction, and applies the
+// reconciliation guard to the result.
+//
+// T-94. This used to be two steps in two different places: the service resolved
+// the refs before BeginTx and refused the write if the list was non-empty, and
+// the repository invalidated whatever list it was handed — treating an empty one
+// as "nothing to do" rather than as a claim about checkpoint state. Anything
+// that finished a reconciliation in between therefore got a posting into its
+// reconciled period with the checkpoint left active, and nothing afterwards can
+// see it: checkpointIntegrityCheck sums only the postings linked to a
+// checkpoint, and the stale entry is linked to none. Deciding here, against the
+// same snapshot the write commits in, is what makes the guard a guard.
+func enforceCheckpointBoundaryTx(ctx context.Context, tx *sql.Tx, params checkpointBoundaryParams) ([]int64, error) {
+	refs, err := periodScopedCheckpointInvalidationRefs(ctx, tx, params.BookID, params.Candidates)
+	if err != nil {
+		return nil, err
+	}
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	if !params.ReconciliationOverride {
+		return nil, ErrReconciliationOverrideRequired
+	}
+	return invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+		BookID:       params.BookID,
+		Refs:         refs,
+		ActorUserID:  params.ActorUserID,
+		AuditEventID: params.AuditEventID,
+		OccurredAt:   params.OccurredAt,
+		Reason:       params.Reason,
+	})
+}
+
 func invalidateReconciliationCheckpoints(ctx context.Context, tx *sql.Tx, params checkpointInvalidationParams) ([]int64, error) {
 	if len(params.Refs) == 0 {
 		return nil, nil
@@ -1241,6 +1291,16 @@ type PeriodScopedCheckpointRef struct {
 //
 // Candidates with no active checkpoint are silently excluded.
 func (r *TransactionRepository) PeriodScopedCheckpointInvalidationRefs(ctx context.Context, bookID int64, candidates []PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {
+	return periodScopedCheckpointInvalidationRefs(ctx, r.database, bookID, candidates)
+}
+
+// periodScopedCheckpointInvalidationRefs is the body of the method above,
+// against any queryer. Write paths pass their own open transaction so the
+// answer is resolved against the state the write will actually commit against;
+// passing the pool instead answers a question about the past (T-94).
+func periodScopedCheckpointInvalidationRefs(ctx context.Context, queryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, bookID int64, candidates []PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {
 	if len(candidates) == 0 {
 		return nil, nil
 	}
@@ -1255,7 +1315,7 @@ func (r *TransactionRepository) PeriodScopedCheckpointInvalidationRefs(ctx conte
 		}
 		seen[key] = true
 
-		checkpoint, err := latestActiveReconciliationCheckpoint(ctx, r.database, bookID, candidate.AccountID, candidate.CommodityID)
+		checkpoint, err := latestActiveReconciliationCheckpoint(ctx, queryer, bookID, candidate.AccountID, candidate.CommodityID)
 		if errors.Is(err, ErrReconciliationCheckpoint) {
 			continue // no active checkpoint for this account/commodity
 		}

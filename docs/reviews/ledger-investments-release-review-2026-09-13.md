@@ -11,6 +11,14 @@ workflow defect. This supersedes the 2026-09-11 triage's statement that no known
 supported workflow can silently corrupt financial state. No production fixes
 are included in this review.
 
+**Update 2026-09-13: all three P1s (T-94, T-95, T-96) are fixed**, each with
+named regression tests that fail without its fix. The release is no longer held
+by a known integrity defect. What remains before onboarding is T-97 for
+fractional-investment support (P2, gate 2) and the non-code gates below: the
+representative household dry run (gate 4), acknowledging the investment feature
+limits (gate 5), and starting durable data only on the frozen baseline (gate 6).
+Those are the operator's to clear, not the code's.
+
 The existing accounting foundation is substantial: exact quantities,
 per-entry/per-commodity balancing, append-only versions, atomic trade/lot
 writes, disposal policy snapshots, and reconciliation/lifecycle tests. Passing
@@ -20,6 +28,12 @@ this review can establish correctness for every possible edge case.
 ## Confirmed findings
 
 ### T-94 / P1 — reconciliation checks and commits are not atomic
+
+**Fixed 2026-09-13.** Enforcement moved inside the write transaction, with the
+service passing candidates rather than a resolved ref list; see
+`docs/backlog.md` (T-94) for what shipped, the named tests, and the narrower
+posting-sequence residual left open. The finding as written below stands as the
+record of the defect.
 
 Locations: `backend/internal/app/transactions_write.go:35` and
 `backend/internal/db/transactions_write.go:72`.
@@ -219,8 +233,9 @@ Prioritize invariant/state-transition coverage over a larger global percentage.
 
 ## Gates before household onboarding
 
-1. Fix T-94–T-96 and pass permanent regression cases plus backend race checks.
-   **T-95 and T-96 done 2026-09-13**; T-94 remains.
+1. ~~Fix T-94–T-96 and pass permanent regression cases plus backend race
+   checks.~~ **Done 2026-09-13.** All three are fixed with named regression
+   tests, and the backend race suite is green.
 2. Resolve T-97 before claiming fractional-investment support or onboarding a
    household whose broker trades fractions.
 3. ~~Restore coverage tooling and run the browser release preflight

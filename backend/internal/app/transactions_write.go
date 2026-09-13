@@ -32,6 +32,25 @@ func (s *TransactionService) CreateTransaction(ctx context.Context, input Create
 	return s.enrichOne(ctx, toTransaction(record))
 }
 
+// rejectIfCheckpointAlreadyInTheWay fails a write before it starts when a
+// checkpoint is visibly in its way and no override was granted. It is not the
+// guard — enforceCheckpointBoundaryTx is, inside the write's own transaction
+// (T-94) — but refusing here keeps the common case cheap and gives the API the
+// same error without a rollback.
+func (s *TransactionService) rejectIfCheckpointAlreadyInTheWay(ctx context.Context, candidates []db.PeriodScopedCheckpointRef, override bool) error {
+	if override || len(candidates) == 0 {
+		return nil
+	}
+	refs, err := s.resolveCheckpointRefs(ctx, candidates)
+	if err != nil {
+		return err
+	}
+	if len(refs) > 0 {
+		return ErrReconciliationOverrideRequired
+	}
+	return nil
+}
+
 func (s *TransactionService) prepareCreateTransactionForWrite(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {
 	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{})
 }
@@ -53,17 +72,24 @@ func (s *TransactionService) prepareCreateTransactionForWriteWithOptions(ctx con
 		return db.CreateTransactionParams{}, err
 	}
 
-	refs, err := s.reconciliationInvalidationRefsFromSpec(ctx, params.Spec)
-	if err != nil {
-		return db.CreateTransactionParams{}, err
+	// The write transaction re-resolves these candidates and applies the guard
+	// itself (T-94), so this early check is a courtesy, not the boundary: it
+	// fails the request before any work is done when a checkpoint is already in
+	// the way, and it is what the import loop reads to mark a row skipped. A
+	// checkpoint that appears after this point is caught at commit instead.
+	candidates := reconciliationCandidatesFromSpec(params.Spec)
+	if !input.ReconciliationOverride {
+		refs, err := s.resolveCheckpointRefs(ctx, candidates)
+		if err != nil {
+			return db.CreateTransactionParams{}, err
+		}
+		if len(refs) > 0 {
+			return db.CreateTransactionParams{}, ErrReconciliationOverrideRequired
+		}
 	}
-	if len(refs) > 0 && !input.ReconciliationOverride {
-		return db.CreateTransactionParams{}, ErrReconciliationOverrideRequired
-	}
-	if input.ReconciliationOverride {
-		params.InvalidateCheckpointRefs = refs
-		params.InvalidateCheckpointReason = params.ChangeReason
-	}
+	params.CheckpointCandidates = candidates
+	params.ReconciliationOverride = input.ReconciliationOverride
+	params.InvalidateCheckpointReason = params.ChangeReason
 
 	return params, nil
 }
@@ -156,7 +182,7 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		return Transaction{}, err
 	}
 
-	var invalidationRefs []db.CheckpointInvalidationRef
+	var candidates []db.PeriodScopedCheckpointRef
 	if promotingDraft {
 		// Promotion changes no posting's own fields, so the diff-based guard
 		// below would find nothing to flag even though every posting is
@@ -164,15 +190,12 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		// already-assigned real positions instead — the same period-scoped
 		// check used for unvoid/restore, since promotion is structurally the
 		// same "posting enters a reconciled period" case.
-		invalidationRefs, err = s.periodScopedRefsFromRecord(ctx, current)
+		candidates = periodScopedCandidatesFromRecord(current)
 	} else {
-		invalidationRefs, err = s.reconciliationInvalidationRefs(ctx, current, spec)
+		candidates = reconciliationCandidates(current, spec)
 	}
-	if err != nil {
+	if err := s.rejectIfCheckpointAlreadyInTheWay(ctx, candidates, input.ReconciliationOverride); err != nil {
 		return Transaction{}, err
-	}
-	if len(invalidationRefs) > 0 && !input.ReconciliationOverride {
-		return Transaction{}, ErrReconciliationOverrideRequired
 	}
 
 	now := s.now().UTC()
@@ -196,7 +219,8 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		Spec:                       spec,
 		RecordedAt:                 now.Format(time.RFC3339),
 		ChangeReason:               changeReason,
-		InvalidateCheckpointRefs:   invalidationRefs,
+		CheckpointCandidates:       candidates,
+		ReconciliationOverride:     input.ReconciliationOverride,
 		InvalidateCheckpointReason: changeReason,
 	})
 	if err != nil {
@@ -275,12 +299,9 @@ func (s *TransactionService) VoidTransaction(ctx context.Context, input VoidTran
 	if err := s.rejectInvestmentLinkedMutation(ctx, input.TransactionID); err != nil {
 		return Transaction{}, err
 	}
-	invalidationRefs, err := s.periodScopedRefsFromRecord(ctx, current)
-	if err != nil {
+	candidates := periodScopedCandidatesFromRecord(current)
+	if err := s.rejectIfCheckpointAlreadyInTheWay(ctx, candidates, input.ReconciliationOverride); err != nil {
 		return Transaction{}, err
-	}
-	if len(invalidationRefs) > 0 && !input.ReconciliationOverride {
-		return Transaction{}, ErrReconciliationOverrideRequired
 	}
 
 	record, err := s.repository.VoidTransaction(ctx, db.VoidTransactionParams{
@@ -293,7 +314,8 @@ func (s *TransactionService) VoidTransaction(ctx context.Context, input VoidTran
 		Operation:                  "transaction.void",
 		RecordedAt:                 now.Format(time.RFC3339),
 		ChangeReason:               changeReason,
-		InvalidateCheckpointRefs:   invalidationRefs,
+		CheckpointCandidates:       candidates,
+		ReconciliationOverride:     input.ReconciliationOverride,
 		InvalidateCheckpointReason: changeReason,
 	})
 	if err != nil {
@@ -314,18 +336,16 @@ func (s *TransactionService) UnvoidTransaction(ctx context.Context, input Transa
 	if current.Status != "voided" {
 		return current, nil
 	}
-	refs, err := s.periodScopedRefsFromTransaction(ctx, current)
-	if err != nil {
+	candidates := periodScopedCandidatesFromTransaction(current)
+	if err := s.rejectIfCheckpointAlreadyInTheWay(ctx, candidates, input.ReconciliationOverride); err != nil {
 		return Transaction{}, err
-	}
-	if len(refs) > 0 && !input.ReconciliationOverride {
-		return Transaction{}, ErrReconciliationOverrideRequired
 	}
 	record, err := s.repository.UnvoidTransaction(ctx, db.TransactionLifecycleParams{
 		BookID: BookID, TransactionID: input.TransactionID, ActorUserID: input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OriginType: input.OriginType,
 		Operation: "transaction.unvoid", RecordedAt: now, ChangeReason: changeReason,
-		InvalidateCheckpointRefs: refs, InvalidateCheckpointReason: changeReason,
+		CheckpointCandidates: candidates, ReconciliationOverride: input.ReconciliationOverride,
+		InvalidateCheckpointReason: changeReason,
 	})
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)
@@ -352,15 +372,12 @@ func (s *TransactionService) setTransactionDeleted(ctx context.Context, input Tr
 	if deleted && current.Status == "draft" {
 		return Transaction{}, ErrTransactionPosted
 	}
-	refs, err := s.periodScopedRefsFromTransaction(ctx, current)
-	if err != nil {
-		return Transaction{}, err
-	}
 	// Both directions of this flag are guarded: soft-deleting removes postings
 	// from a reconciled period, and restoring puts them back — either changes
 	// what a completed reconciliation reflects, symmetric with unvoid's guard.
-	if len(refs) > 0 && !input.ReconciliationOverride {
-		return Transaction{}, ErrReconciliationOverrideRequired
+	candidates := periodScopedCandidatesFromTransaction(current)
+	if err := s.rejectIfCheckpointAlreadyInTheWay(ctx, candidates, input.ReconciliationOverride); err != nil {
+		return Transaction{}, err
 	}
 	operation := "transaction.restore"
 	if deleted {
@@ -371,7 +388,8 @@ func (s *TransactionService) setTransactionDeleted(ctx context.Context, input Tr
 			BookID: BookID, TransactionID: input.TransactionID, ActorUserID: input.OwnerUserID,
 			AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OriginType: input.OriginType,
 			Operation: operation, RecordedAt: now, ChangeReason: changeReason,
-			InvalidateCheckpointRefs: refs, InvalidateCheckpointReason: changeReason,
+			CheckpointCandidates: candidates, ReconciliationOverride: input.ReconciliationOverride,
+			InvalidateCheckpointReason: changeReason,
 		}, Deleted: deleted,
 	})
 	if err != nil {

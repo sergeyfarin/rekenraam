@@ -68,16 +68,14 @@ func createTransactionTx(ctx context.Context, tx *sql.Tx, params CreateTransacti
 }
 
 func invalidateCreateTransactionCheckpointsTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams, auditEventID int64) ([]int64, error) {
-	if len(params.InvalidateCheckpointRefs) == 0 {
-		return nil, nil
-	}
-	return invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-		BookID:       params.BookID,
-		Refs:         params.InvalidateCheckpointRefs,
-		ActorUserID:  params.ActorUserID,
-		AuditEventID: auditEventID,
-		OccurredAt:   params.CreatedAt,
-		Reason:       params.InvalidateCheckpointReason,
+	return enforceCheckpointBoundaryTx(ctx, tx, checkpointBoundaryParams{
+		BookID:                 params.BookID,
+		Candidates:             params.CheckpointCandidates,
+		ReconciliationOverride: params.ReconciliationOverride,
+		ActorUserID:            params.ActorUserID,
+		AuditEventID:           auditEventID,
+		OccurredAt:             params.CreatedAt,
+		Reason:                 params.InvalidateCheckpointReason,
 	})
 }
 
@@ -194,13 +192,14 @@ func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params Up
 		if err != nil {
 			return TransactionRecord{}, mapTransactionConstraintError(err)
 		}
-		invalidatedCheckpointIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-			BookID:       params.BookID,
-			Refs:         params.InvalidateCheckpointRefs,
-			ActorUserID:  params.ActorUserID,
-			AuditEventID: auditEventID,
-			OccurredAt:   params.RecordedAt,
-			Reason:       params.InvalidateCheckpointReason,
+		invalidatedCheckpointIDs, err := enforceCheckpointBoundaryTx(ctx, tx, checkpointBoundaryParams{
+			BookID:                 params.BookID,
+			Candidates:             params.CheckpointCandidates,
+			ReconciliationOverride: params.ReconciliationOverride,
+			ActorUserID:            params.ActorUserID,
+			AuditEventID:           auditEventID,
+			OccurredAt:             params.RecordedAt,
+			Reason:                 params.InvalidateCheckpointReason,
 		})
 		if err != nil {
 			return TransactionRecord{}, err
@@ -270,13 +269,14 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 		if err != nil {
 			return TransactionRecord{}, mapTransactionConstraintError(err)
 		}
-		invalidatedCheckpointIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-			BookID:       params.BookID,
-			Refs:         params.InvalidateCheckpointRefs,
-			ActorUserID:  params.ActorUserID,
-			AuditEventID: auditEventID,
-			OccurredAt:   params.RecordedAt,
-			Reason:       params.InvalidateCheckpointReason,
+		invalidatedCheckpointIDs, err := enforceCheckpointBoundaryTx(ctx, tx, checkpointBoundaryParams{
+			BookID:                 params.BookID,
+			Candidates:             params.CheckpointCandidates,
+			ReconciliationOverride: params.ReconciliationOverride,
+			ActorUserID:            params.ActorUserID,
+			AuditEventID:           auditEventID,
+			OccurredAt:             params.RecordedAt,
+			Reason:                 params.InvalidateCheckpointReason,
 		})
 		if err != nil {
 			return TransactionRecord{}, err
@@ -343,9 +343,10 @@ func (r *TransactionRepository) UnvoidTransaction(ctx context.Context, params Tr
 		if err != nil {
 			return TransactionRecord{}, mapTransactionConstraintError(err)
 		}
-		invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-			BookID: params.BookID, Refs: params.InvalidateCheckpointRefs, ActorUserID: params.ActorUserID,
-			AuditEventID: auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
+		invalidated, err := enforceCheckpointBoundaryTx(ctx, tx, checkpointBoundaryParams{
+			BookID: params.BookID, Candidates: params.CheckpointCandidates, ActorUserID: params.ActorUserID,
+			ReconciliationOverride: params.ReconciliationOverride,
+			AuditEventID:           auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
 		})
 		if err != nil {
 			return TransactionRecord{}, err
@@ -400,9 +401,10 @@ func (r *TransactionRepository) SetTransactionDeleted(ctx context.Context, param
 	`, params.BookID, params.TransactionID, action, params.RecordedAt, params.ActorUserID, auditEventID, params.ChangeReason); err != nil {
 			return TransactionRecord{}, fmt.Errorf("insert transaction deletion event: %w", err)
 		}
-		invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
-			BookID: params.BookID, Refs: params.InvalidateCheckpointRefs, ActorUserID: params.ActorUserID,
-			AuditEventID: auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
+		invalidated, err := enforceCheckpointBoundaryTx(ctx, tx, checkpointBoundaryParams{
+			BookID: params.BookID, Candidates: params.CheckpointCandidates, ActorUserID: params.ActorUserID,
+			ReconciliationOverride: params.ReconciliationOverride,
+			AuditEventID:           auditEventID, OccurredAt: params.RecordedAt, Reason: params.InvalidateCheckpointReason,
 		})
 		if err != nil {
 			return TransactionRecord{}, err

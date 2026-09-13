@@ -34,17 +34,49 @@ rewritten, and this mapping is how to read it.
 
 ## General
 
-### T-94 Reconciliation guard can go stale before commit `[ ]`
+### T-94 Reconciliation guard can go stale before commit `[x]`
 
-**P1 / v0.1 blocker.** `backend/internal/app/transactions_write.go:35` reads
-checkpoint references before `BeginTx`; `backend/internal/db/transactions_write.go:72`
-trusts them. A prepared entry can commit after another request finishes
-reconciliation, changing its balance without invalidation. Reproduced with a
-deterministic preparation/finish/commit interleaving in one process.
+**Was P1 / v0.1 blocker. Fixed 2026-09-13.** The guard now runs inside the
+write transaction. `enforceCheckpointBoundaryTx`
+(`backend/internal/db/reconciliation.go`) resolves the checkpoints a write
+crosses against the transaction it is committing in, then refuses or
+invalidates — one enforcement point shared by create, update, void, unvoid and
+soft-delete/restore. Reorder already did this correctly and was the model.
 
-Move enforcement into the write transaction and cover advancing checkpoints,
-overrides and the other mutation paths. Full evidence and executable probes:
-`docs/reviews/ledger-investments-release-review-2026-09-13.md` (T-94).
+The structural change is that the service now passes **candidates** — the
+(account, commodity, date, sequence) positions a write touches, derived from
+the spec and the current record with no checkpoint read — instead of a resolved
+ref list. Candidates cannot go stale, so there is no decision left to carry
+across the gap. `CreateTransactionParams`, `UpdateTransactionParams` and
+`VoidTransactionParams` carry `CheckpointCandidates` plus
+`ReconciliationOverride` in place of `InvalidateCheckpointRefs`. The service
+keeps an early rejection (`rejectIfCheckpointAlreadyInTheWay`) so the common
+case fails before any work and the import loop still sees
+`ErrReconciliationOverrideRequired` to mark a row skipped — but it is a
+courtesy, not the boundary.
+
+Proved by named tests in
+`backend/internal/app/transactions_checkpoint_boundary_test.go`: the
+validate/reconcile/commit interleaving is refused without an override; with an
+override it invalidates the checkpoint that appeared after validation (the case
+a pre-resolved empty ref list got wrong in the permissive direction); a
+checkpoint that *advances* after validation is the one invalidated; and update,
+void and soft-delete are refused by the repository itself when called directly.
+Each fails with enforcement stubbed out.
+
+**Residual, deliberately not chased:** the lifecycle paths build their
+candidates from a record read before `BeginTx`, so a concurrent reorder could
+change a posting's `account_day_sequence` between that read and the write. That
+is a different and much narrower race than the one fixed here — it can only
+misjudge a boundary by a sequence position, not skip the guard entirely — and
+closing it means building candidates in-transaction per path, which the three
+lifecycle writers do not share a record shape for.
+
+Related: this bug's residue was undetectable after the fact, and still is for
+any historical instance. `checkpointIntegrityCheck` sums only the postings
+linked to a checkpoint, so a stale entry — linked to none — leaves the check
+reporting success. Widening that diagnostic to notice unreconciled postings
+inside a reconciled window is a separate open item.
 
 ### T-95 Investment disposals can consume future acquisitions `[x]`
 

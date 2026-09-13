@@ -555,8 +555,11 @@ The v0.1 migration freeze and open reliability dispositions are recorded in
 `docs/reviews/v0.1-release-triage-2026-09-11.md`. Its release decision is
 superseded by `docs/reviews/ledger-investments-release-review-2026-09-13.md`:
 **hold v0.1 and real-data onboarding for T-94–T-96**, and resolve T-97 before
-fractional-investment onboarding. T-95 and T-96 are fixed (2026-09-13); T-94
-still holds the release. The public-announcement work below remains
+fractional-investment onboarding. T-94, T-95 and T-96 are all fixed
+(2026-09-13), so no known integrity defect holds the release. T-97 and that
+review's remaining non-code gates — the household dry run, the investment
+feature limits, and starting durable data on the frozen baseline — are still
+open. The public-announcement work below remains
 a separate, later gate.
 
 ### Before making the repository public

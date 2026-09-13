@@ -199,46 +199,64 @@ type DeletedTransactionRecord struct {
 }
 
 type CreateTransactionParams struct {
-	BookID                     int64
-	CorrectionOfTransactionID  sql.NullInt64
-	ActorUserID                int64
-	AuthSessionID              int64
-	RequestID                  string
-	OriginType                 string
-	Operation                  string
-	Spec                       TransactionSpec
-	CreatedAt                  string
-	ChangeReason               string
-	InvalidateCheckpointRefs   []CheckpointInvalidationRef
+	BookID                    int64
+	CorrectionOfTransactionID sql.NullInt64
+	ActorUserID               int64
+	AuthSessionID             int64
+	RequestID                 string
+	OriginType                string
+	Operation                 string
+	Spec                      TransactionSpec
+	CreatedAt                 string
+	ChangeReason              string
+	// CheckpointCandidates are the positions this write touches; the write
+	// transaction resolves them into the checkpoints that must be invalidated
+	// and applies the override guard there (T-94). Callers pass candidates, not
+	// resolved refs, because a ref list resolved before BeginTx is a statement
+	// about checkpoint state at a moment that has already passed.
+	CheckpointCandidates       []PeriodScopedCheckpointRef
+	ReconciliationOverride     bool
 	InvalidateCheckpointReason string
 }
 
 type UpdateTransactionParams struct {
-	BookID                     int64
-	TransactionID              int64
-	ActorUserID                int64
-	AuthSessionID              int64
-	RequestID                  string
-	OriginType                 string
-	Operation                  string
-	Spec                       TransactionSpec
-	RecordedAt                 string
-	ChangeReason               string
-	InvalidateCheckpointRefs   []CheckpointInvalidationRef
+	BookID        int64
+	TransactionID int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	Spec          TransactionSpec
+	RecordedAt    string
+	ChangeReason  string
+	// CheckpointCandidates are the positions this write touches; the write
+	// transaction resolves them into the checkpoints that must be invalidated
+	// and applies the override guard there (T-94). Callers pass candidates, not
+	// resolved refs, because a ref list resolved before BeginTx is a statement
+	// about checkpoint state at a moment that has already passed.
+	CheckpointCandidates       []PeriodScopedCheckpointRef
+	ReconciliationOverride     bool
 	InvalidateCheckpointReason string
 }
 
 type VoidTransactionParams struct {
-	BookID                     int64
-	TransactionID              int64
-	ActorUserID                int64
-	AuthSessionID              int64
-	RequestID                  string
-	OriginType                 string
-	Operation                  string
-	RecordedAt                 string
-	ChangeReason               string
-	InvalidateCheckpointRefs   []CheckpointInvalidationRef
+	BookID        int64
+	TransactionID int64
+	ActorUserID   int64
+	AuthSessionID int64
+	RequestID     string
+	OriginType    string
+	Operation     string
+	RecordedAt    string
+	ChangeReason  string
+	// CheckpointCandidates are the positions this write touches; the write
+	// transaction resolves them into the checkpoints that must be invalidated
+	// and applies the override guard there (T-94). Callers pass candidates, not
+	// resolved refs, because a ref list resolved before BeginTx is a statement
+	// about checkpoint state at a moment that has already passed.
+	CheckpointCandidates       []PeriodScopedCheckpointRef
+	ReconciliationOverride     bool
 	InvalidateCheckpointReason string
 }
 

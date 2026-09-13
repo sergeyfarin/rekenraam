@@ -33,7 +33,7 @@ func (s *TransactionService) reconciliationImpactForCreate(ctx context.Context, 
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	refs, err := s.reconciliationInvalidationRefsFromSpec(ctx, spec)
+	refs, err := s.resolveCheckpointRefs(ctx, reconciliationCandidatesFromSpec(spec))
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
@@ -71,7 +71,7 @@ func (s *TransactionService) ReconciliationImpactForUpdate(ctx context.Context, 
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	refs, err := s.reconciliationInvalidationRefs(ctx, current, spec)
+	refs, err := s.resolveCheckpointRefs(ctx, reconciliationCandidates(current, spec))
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
@@ -110,7 +110,7 @@ func (s *TransactionService) ReconciliationImpactForPost(ctx context.Context, ow
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	refs, err := s.periodScopedRefsFromRecord(ctx, current)
+	refs, err := s.resolveCheckpointRefs(ctx, periodScopedCandidatesFromRecord(current))
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
@@ -120,11 +120,11 @@ func (s *TransactionService) ReconciliationImpactForPost(ctx context.Context, ow
 	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
 }
 
-// periodScopedRefsFromTransaction returns CheckpointInvalidationRefs for all
+// periodScopedCandidatesFromTransaction returns checkpoint candidates for all
 // postings in the transaction that fall within the period of an active
 // reconciliation checkpoint (the period-scoped rule from docs/conventions.md).
 // This is used for void, unvoid, soft-delete, and restore guards.
-func (s *TransactionService) periodScopedRefsFromTransaction(ctx context.Context, transaction Transaction) ([]db.CheckpointInvalidationRef, error) {
+func periodScopedCandidatesFromTransaction(transaction Transaction) []db.PeriodScopedCheckpointRef {
 	candidates := make([]db.PeriodScopedCheckpointRef, 0)
 	for _, entry := range transaction.JournalEntries {
 		for _, posting := range entry.Postings {
@@ -136,12 +136,12 @@ func (s *TransactionService) periodScopedRefsFromTransaction(ctx context.Context
 			})
 		}
 	}
-	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
+	return candidates
 }
 
-// periodScopedRefsFromRecord is the same as periodScopedRefsFromTransaction but
+// periodScopedCandidatesFromRecord is the same as periodScopedCandidatesFromTransaction but
 // takes a db.TransactionRecord (used in the update path before enrichment).
-func (s *TransactionService) periodScopedRefsFromRecord(ctx context.Context, record db.TransactionRecord) ([]db.CheckpointInvalidationRef, error) {
+func periodScopedCandidatesFromRecord(record db.TransactionRecord) []db.PeriodScopedCheckpointRef {
 	candidates := make([]db.PeriodScopedCheckpointRef, 0)
 	for _, entry := range record.JournalEntries {
 		for _, posting := range entry.Postings {
@@ -153,18 +153,18 @@ func (s *TransactionService) periodScopedRefsFromRecord(ctx context.Context, rec
 			})
 		}
 	}
-	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
+	return candidates
 }
 
-// reconciliationInvalidationRefs returns refs for the period-scoped update guard.
+// reconciliationCandidates returns candidates for the period-scoped update guard.
 // Only postings that change a reconciliation-affecting field (account, commodity,
 // quantity, or entry_date) are checked — pure memo/metadata edits are exempt.
 // For each changed posting, both the current position (with its known sequence)
 // and the proposed next position (with MaxInt64 sequence, reflecting that a new
 // allocation will be above any existing statement_account_sequence) are added.
-func (s *TransactionService) reconciliationInvalidationRefs(ctx context.Context, current db.TransactionRecord, spec db.TransactionSpec) ([]db.CheckpointInvalidationRef, error) {
+func reconciliationCandidates(current db.TransactionRecord, spec db.TransactionSpec) []db.PeriodScopedCheckpointRef {
 	if current.Status == "draft" && spec.Status == "draft" {
-		return nil, nil
+		return nil
 	}
 	// Index current postings by line_key for O(1) lookup.
 	type currentPosting struct {
@@ -216,10 +216,7 @@ func (s *TransactionService) reconciliationInvalidationRefs(ctx context.Context,
 		}
 	}
 
-	if len(candidates) == 0 {
-		return nil, nil
-	}
-	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
+	return candidates
 }
 
 func reconciliationAffectingChange(currentDate string, current db.PostingRecord, nextDate string, next db.PostingSpec) bool {
@@ -230,15 +227,15 @@ func reconciliationAffectingChange(currentDate string, current db.PostingRecord,
 		current.QuantityScale != next.QuantityScale
 }
 
-// reconciliationInvalidationRefsFromSpec checks whether any posting in the spec
+// reconciliationCandidatesFromSpec names every position the spec would occupy,
 // would land inside an already-reconciled period. Used for the create-time guard.
 // New postings always get sequence MAX+1, so math.MaxInt64 correctly represents
-// "not inside" for the same-date case (see reconciliationInvalidationRefs).
-func (s *TransactionService) reconciliationInvalidationRefsFromSpec(ctx context.Context, spec db.TransactionSpec) ([]db.CheckpointInvalidationRef, error) {
+// "not inside" for the same-date case (see reconciliationCandidates).
+func reconciliationCandidatesFromSpec(spec db.TransactionSpec) []db.PeriodScopedCheckpointRef {
 	// Producer drafts are outside the ledger even when their dates fall in a
 	// reconciled period. Promotion has its own guard over the stored positions.
 	if spec.Status == "draft" {
-		return nil, nil
+		return nil
 	}
 	candidates := make([]db.PeriodScopedCheckpointRef, 0)
 	for _, entry := range spec.JournalEntries {
@@ -251,6 +248,16 @@ func (s *TransactionService) reconciliationInvalidationRefsFromSpec(ctx context.
 			})
 		}
 	}
+	return candidates
+}
+
+// resolveCheckpointRefs answers, right now, which active checkpoints the given
+// candidates fall inside. Only previews and the service's early rejection use
+// it: the answer is advisory, because it is read outside the write transaction
+// and anything can change before the write commits. The write's own guard lives
+// in enforceCheckpointBoundaryTx, which resolves the same candidates against the
+// transaction it is committing in (T-94).
+func (s *TransactionService) resolveCheckpointRefs(ctx context.Context, candidates []db.PeriodScopedCheckpointRef) ([]db.CheckpointInvalidationRef, error) {
 	return s.repository.PeriodScopedCheckpointInvalidationRefs(ctx, BookID, candidates)
 }
 

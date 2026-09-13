@@ -208,7 +208,7 @@ func (s *TransactionService) isRestoreBlocked(ctx context.Context, txn Transacti
 	if txn.Status == "voided" {
 		return false, nil
 	}
-	refs, err := s.periodScopedRefsFromTransaction(ctx, txn)
+	refs, err := s.resolveCheckpointRefs(ctx, periodScopedCandidatesFromTransaction(txn))
 	if err != nil {
 		return false, fmt.Errorf("check restore guard: %w", err)
 	}
