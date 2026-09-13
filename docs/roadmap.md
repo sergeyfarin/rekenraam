@@ -552,8 +552,11 @@ These are a parallel release-readiness track, not a reason to delay local
 daily-driver work.
 
 The v0.1 migration freeze and open reliability dispositions are recorded in
-`docs/reviews/v0.1-release-triage-2026-09-11.md`. That review governs the tag
-gate; the public-announcement work below remains a separate, later gate.
+`docs/reviews/v0.1-release-triage-2026-09-11.md`. Its release decision is
+superseded by `docs/reviews/ledger-investments-release-review-2026-09-13.md`:
+**hold v0.1 and real-data onboarding for T-94–T-96**, and resolve T-97 before
+fractional-investment onboarding. The public-announcement work below remains
+a separate, later gate.
 
 ### Before making the repository public
 

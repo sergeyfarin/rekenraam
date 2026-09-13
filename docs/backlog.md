@@ -34,6 +34,47 @@ rewritten, and this mapping is how to read it.
 
 ## General
 
+### T-94 Reconciliation guard can go stale before commit `[ ]`
+
+**P1 / v0.1 blocker.** `backend/internal/app/transactions_write.go:35` reads
+checkpoint references before `BeginTx`; `backend/internal/db/transactions_write.go:72`
+trusts them. A prepared entry can commit after another request finishes
+reconciliation, changing its balance without invalidation. Reproduced with a
+deterministic preparation/finish/commit interleaving in one process.
+
+Move enforcement into the write transaction and cover advancing checkpoints,
+overrides and the other mutation paths. Full evidence and executable probes:
+`docs/reviews/ledger-investments-release-review-2026-09-13.md` (T-94).
+
+### T-95 Investment disposals can consume future acquisitions `[ ]`
+
+**P1 / v0.1 blocker.** `backend/internal/db/investments.go:1300`, `:1387`,
+`:2512` select/consume current open lots without enforcing acquisition date.
+A May sale consumes a June acquisition under all four methods. Protect previews,
+sales and write-offs, and define safe out-of-order historical-entry behavior.
+Evidence and required test matrix: the 2026-09-13 release review (T-95).
+
+### T-96 Generic postings bypass the investment subledger `[ ]`
+
+**P1 / v0.1 blocker.** `backend/internal/app/transactions_validate.go:337`
+accepts ordinary postings to security holdings without lots; the normal editor
+includes those accounts (`frontend/src/lib/transactions/transaction-editor.svelte:176`).
+The existing linked-transaction lifecycle fence does not protect new unlinked
+transactions. Reject or route holding quantity changes through atomic investment
+workflows, including create/edit/opening/import paths. Reproduced in the
+2026-09-13 release review (T-96).
+
+### T-97 Fractional sale eligibility depends on acquisition scale `[ ]`
+
+**P2 / fractional-investment onboarding blocker.**
+`backend/internal/db/investments.go:1348` rejects selling 0.5 shares from a lot
+acquired as 10 at scale 0, despite commodity precision allowing the sale.
+Average-cost and specific-lot scale restrictions also need review. Align exact
+remaining quantities without rounding or rewriting original acquisition facts;
+cover all methods and mixed import precision. Reproduction and validation
+matrix: the 2026-09-13 release review (T-97).
+
+
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 
 **Depends on** (assessed 2026-08-07 — this is scheduled product work, not a
