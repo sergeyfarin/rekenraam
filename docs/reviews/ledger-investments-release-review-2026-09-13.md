@@ -64,8 +64,11 @@ count. The stale entry is linked to nothing, so both sums still agree and the
 check reports "every active checkpoint still adds up". The write guard enforces
 a stronger rule than the diagnostic does — any posting landing in a reconciled
 window invalidates the checkpoint — so running a self-check after onboarding is
-not a mitigation for T-94, and the diagnostic's own narrative overstates what it
-verifies.
+not a mitigation for T-94. (Corrected: an earlier revision of this paragraph
+said the diagnostic's narrative overstated what it verifies. It does not — both
+its doc comment and its user-facing text scope themselves to the postings
+*linked* to a checkpoint, which is exactly what they sum. The gap is one of
+coverage, not of honesty.)
 
 Required fix: resolve/enforce the reconciliation boundary against current state
 inside the same transaction as the financial write. Cover create first, then

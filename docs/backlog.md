@@ -72,11 +72,19 @@ misjudge a boundary by a sequence position, not skip the guard entirely — and
 closing it means building candidates in-transaction per path, which the three
 lifecycle writers do not share a record shape for.
 
-Related: this bug's residue was undetectable after the fact, and still is for
-any historical instance. `checkpointIntegrityCheck` sums only the postings
-linked to a checkpoint, so a stale entry — linked to none — leaves the check
-reporting success. Widening that diagnostic to notice unreconciled postings
-inside a reconciled window is a separate open item.
+Related, and deliberately **not** turned into a follow-up item:
+`checkpointIntegrityCheck` sums only the postings linked to a checkpoint, so a
+stale entry — linked to none — would leave the check reporting success. That
+mattered while it was the only thing that could find residue from this bug, and
+it does not now: there are no databases predating the fix, so there is no
+residue to find, and the guard is enforced in-transaction on every write path.
+The diagnostic is honest about its own scope (it says it checks "the postings
+underneath" a checkpoint, which is what it sums), so there is nothing to
+correct either. Widening it to notice unreconciled postings inside a reconciled
+window would only add depth against rows arriving from outside the app — a
+hand-edited or patched database, the case `CheckAccountVersionCoverage`
+describes. Worth doing if that ever stops being hypothetical; not worth
+carrying as an open item before v0.1.
 
 ### T-95 Investment disposals can consume future acquisitions `[x]`
 
