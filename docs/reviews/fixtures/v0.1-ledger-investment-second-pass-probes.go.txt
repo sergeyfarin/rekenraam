@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
@@ -79,6 +80,7 @@ func TestSecondPassFractionalSaleRetainsPricedMarketValue(t *testing.T) {
 	before, err := f.investmentService.ListUnrealizedGains(ctx)
 	require.NoError(t, err)
 	require.Len(t, before, 1)
+	require.NotNil(t, before[0].MarketValueValue)
 	t.Logf("before=%+v", before[0])
 	sale := sellInput(f, "2026-02-01", 1)
 	sale.QuantityScale = 6
@@ -89,6 +91,7 @@ func TestSecondPassFractionalSaleRetainsPricedMarketValue(t *testing.T) {
 	after, err := f.investmentService.ListUnrealizedGains(ctx)
 	require.NoError(t, err)
 	require.Len(t, after, 1)
+	require.NotNil(t, after[0].LatestPriceValue)
 	t.Logf("after=%+v", after[0])
 	require.NotNil(t, after[0].MarketValueValue, "a 100,000 EUR priced position must not lose its valuation after a valid fractional sale")
 }

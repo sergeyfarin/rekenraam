@@ -34,7 +34,17 @@ rewritten, and this mapping is how to read it.
 
 ## General
 
-### T-94 Reconciliation guard can go stale before commit `[x]`
+### T-94 Reconciliation guard can go stale before commit `[~]`
+
+**Second pass: P1 / release blocker remains.** The original stale-checkpoint
+case is fixed, but the candidates can themselves become stale after another
+transaction edit. A prepared metadata-only edit (empty candidates) overwrites
+a newer reconciled 20 EUR posting with its old 10 EUR value, leaving the
+checkpoint active. This is broader than the sequence-only residual below.
+Recompute from current transaction facts inside the write or reject a stale
+version. Evidence: `docs/reviews/ledger-investments-second-pass-2026-09-13.md`,
+T-94; executable `TestSecondPassStaleMetadataEditChangesReconciledAmount`.
+The earlier closure assessment below is retained as fix history.
 
 **Was P1 / v0.1 blocker. Fixed 2026-09-13.** The guard now runs inside the
 write transaction. `enforceCheckpointBoundaryTx`
@@ -86,7 +96,18 @@ hand-edited or patched database, the case `CheckAccountVersionCoverage`
 describes. Worth doing if that ever stops being hypothetical; not worth
 carrying as an open item before v0.1.
 
-### T-95 Investment disposals can consume future acquisitions `[x]`
+### T-95 Investment disposals can consume future acquisitions `[~]`
+
+**Second pass: P1 / release blocker remains.** Date filtering fixes the original
+future-lot selection. A backdated average-cost disposal can still consume
+future basis redistributed onto an eligible old lot by a later sale. Confirmed:
+January 10 shares / 100 EUR, June 10 / 300 EUR, July sell 5, then March sell 5;
+March wrongly takes 100 EUR basis instead of 50. Reject unsupported out-of-order
+events or provide explicit correct replay. This is a disposal, not merely the
+backdated-acquisition limitation below. Evidence:
+`docs/reviews/ledger-investments-second-pass-2026-09-13.md`, T-95;
+`TestSecondPassBackdatedSaleUsesFuturePooledBasis`.
+The earlier closure assessment below is retained as fix history.
 
 **Was P1 / v0.1 blocker. Fixed 2026-09-13.** The three lot-selection queries
 (FIFO/LIFO, average cost, and cost-commodity resolution) now restrict to
@@ -213,6 +234,29 @@ already enforces on the journal side of the same position, and account
 structural fields lock once there is posted activity. The widen-on-demand design
 does not need to consult it, so nothing reads it today.
 
+
+### T-98 Investment API does not validate holding and settlement roles `[ ]`
+
+**P1 / release blocker.** `backend/internal/app/investments.go:2188` accepts
+positive account/commodity IDs without checking their domain roles; the private
+investment preparation exemption (`transactions_write.go:43`) then permits all
+holding postings. A buy using one holding as both holding/cash and its security
+as both commodities commits zero net journal shares plus an open 10-share lot.
+The normal UI excludes this cash choice, but the API must reject it. Validate
+roles and narrow exemptions to supported subledger effects; different IDs alone
+are insufficient. Evidence: the second-pass review, T-98, and
+`TestSecondPassInvestmentBuyCannotUseHoldingAsCashLeg`.
+
+### T-99 Fractional disposal can silently remove a priced valuation `[ ]`
+
+**P2.** `backend/internal/db/investments.go:3065` omits market value/gain if
+raw coefficients exceed int64. After T-97, buying 1,000 shares for 100,000 EUR
+and selling 0.000001 at the same unit price widens the quantity scale and makes
+both values null despite a current price and an exact representable market
+value of 99,999.9999 EUR. Normalize redundant zeros or use lossless coefficients;
+keep absent-price and overflow outcomes distinct. Test downstream gains after
+fractional disposal, not just lot conservation. Evidence: the second-pass
+review, T-99, and `TestSecondPassFractionalSaleRetainsPricedMarketValue`.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 

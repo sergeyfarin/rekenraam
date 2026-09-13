@@ -5,6 +5,11 @@ real transactions, using one owner and one app process per database.
 
 ## Decision
 
+**Second-pass update:** [the follow-up review](ledger-investments-second-pass-2026-09-13.md)
+confirms that the original seven reproductions pass, but reopens T-94/T-95 for
+additional reproduced integrity cases and adds T-98/T-99. Its hold recommendation
+supersedes the all-clear update below; the earlier text remains fix history.
+
 **Hold the release and real-data onboarding.** Three confirmed P1 integrity
 issues remain in supported write paths, plus one P2 fractional-investment
 workflow defect. This supersedes the 2026-09-11 triage's statement that no known
