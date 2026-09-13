@@ -275,8 +275,14 @@ run and needs nothing.
 - Migration numbers are monotonic database sequence numbers, not release
   numbers. Release notes record the highest migration included in each release.
 - CI validates the fresh-install path on every run, because every job migrates
-  from an empty database. There is no historical-upgrade test yet; it arrives
-  with the `v0.1.0` freeze.
+  from an empty database. The historical-upgrade path is covered too, by
+  `TestMigrateUpgradesV01DatabaseToFreshHeadSchema` in `internal/db`: it builds
+  the frozen `0001` state, adds durable user data, upgrades to HEAD, and asserts
+  the result's schema matches a fresh install. Note what it does *not* yet
+  prove — its fixture is a single `users` row, so it demonstrates schema
+  convergence, not that a data-moving migration preserves ledger, lot, or
+  reconciliation data. A migration that rewrites tables rather than adding them
+  needs that fixture widened first.
 
 ## Commit Conventions
 

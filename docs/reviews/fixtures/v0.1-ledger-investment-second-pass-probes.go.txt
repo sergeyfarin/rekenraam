@@ -1,0 +1,94 @@
+package app
+
+import (
+	"context"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
+)
+
+func TestSecondPassStaleMetadataEditChangesReconciledAmount(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	original := postEUR(t, f, "2026-01-01", 10)
+	current, err := f.transactionService.repository.TransactionByID(ctx, BookID, original.ID)
+	require.NoError(t, err)
+	input := transactionInputFromTransaction(original)
+	input.Description = "memo edit"
+	spec, err := f.transactionService.cleanTransactionSpec(ctx, input, cleanTransactionOptions{ForcedStatus: "posted", ExistingLineKeys: lineKeySet(current), ExistingPostings: existingPostingStateSet(current)})
+	require.NoError(t, err)
+	candidates := reconciliationCandidates(current, spec)
+	require.Empty(t, candidates)
+	changed := transactionInputFromTransaction(original)
+	changed.JournalEntries[0].Postings[0].QuantityValue = exact.New(20)
+	changed.JournalEntries[0].Postings[1].QuantityValue = exact.New(-20)
+	_, err = f.transactionService.UpdateTransaction(ctx, UpdateTransactionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", TransactionID: original.ID, Spec: changed})
+	require.NoError(t, err)
+	checkpoint := reconcileCash(t, f, "2026-01-31", 20)
+	result, err := f.transactionService.repository.UpdateTransaction(ctx, db.UpdateTransactionParams{BookID: BookID, TransactionID: original.ID, ActorUserID: f.ownerUserID, OriginType: "browser_api", Operation: "transaction.update", Spec: spec, RecordedAt: "2026-09-13T12:00:00Z", ChangeReason: "memo edit", CheckpointCandidates: candidates})
+	t.Logf("err=%v checkpoint=%d active=%v", err, checkpoint, activeCheckpointIDs(t, f))
+	if err == nil {
+		t.Logf("new posting amount=%s", result.JournalEntries[0].Postings[0].QuantityValue)
+	}
+	require.Error(t, err, "stale metadata-only edit must not replace a reconciled amount")
+}
+
+func TestSecondPassBackdatedSaleUsesFuturePooledBasis(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 10, 10000)
+	buyOn(t, f, "2026-06-01", 10, 30000)
+	later := sellInput(f, "2026-07-01", 5)
+	later.CostBasisMethod = "average_cost"
+	_, err := f.investmentService.Sell(ctx, later)
+	require.NoError(t, err)
+	earlier := sellInput(f, "2026-03-01", 5)
+	earlier.CostBasisMethod = "average_cost"
+	result, err := f.investmentService.Sell(ctx, earlier)
+	t.Logf("backdated sale err=%v allocations=%+v", err, result.Allocations)
+	require.Error(t, err, "unsupported backdated disposal must not consume basis redistributed by a future sale")
+}
+
+func TestSecondPassInvestmentBuyCannotUseHoldingAsCashLeg(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	holding := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+	input := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID, HoldingAccountID: holding, CashAccountID: holding, QuantityValue: exact.New(10), CashAmountValue: 10, CashCommodityID: f.stockCommodityID}
+	result, err := f.investmentService.Buy(ctx, input)
+	t.Logf("buy err=%v lot=%v", err, result.LotID)
+	if err == nil {
+		total := exact.NewScaledInt()
+		for _, p := range result.Transaction.JournalEntries[0].Postings {
+			if p.AccountID == holding {
+				total.AddCoefficient(p.QuantityValue, p.QuantityScale)
+			}
+		}
+		lots, readErr := f.investmentService.ListLots(ctx, holding, f.stockCommodityID)
+		require.NoError(t, readErr)
+		t.Logf("holding journal quantity=%s, lot quantity=%s", total.BigInt(), lots[0].RemainingQuantityValue)
+	}
+	require.Error(t, err, "cash role must not bypass subledger ownership for an extra holding posting")
+}
+
+func TestSecondPassFractionalSaleRetainsPricedMarketValue(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 1000, 10000000)
+	before, err := f.investmentService.ListUnrealizedGains(ctx)
+	require.NoError(t, err)
+	require.Len(t, before, 1)
+	t.Logf("before=%+v", before[0])
+	sale := sellInput(f, "2026-02-01", 1)
+	sale.QuantityScale = 6
+	sale.CashAmountValue = 100
+	sale.CashAmountScale = 6
+	_, err = f.investmentService.Sell(ctx, sale)
+	require.NoError(t, err)
+	after, err := f.investmentService.ListUnrealizedGains(ctx)
+	require.NoError(t, err)
+	require.Len(t, after, 1)
+	t.Logf("after=%+v", after[0])
+	require.NotNil(t, after[0].MarketValueValue, "a 100,000 EUR priced position must not lose its valuation after a valid fractional sale")
+}
