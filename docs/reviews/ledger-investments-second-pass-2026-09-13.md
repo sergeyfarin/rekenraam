@@ -7,6 +7,11 @@ implementation. Concurrent migration-fixture work is outside this review.
 
 ## Recommendation
 
+**Third-pass update:** [the next review](ledger-investments-third-pass-2026-09-13.md)
+confirms the latest fixes' focused tests and valuation example, but finds a
+promotion gap in T-94 and an account-role interleaving (T-100). Its hold
+recommendation supersedes the closure update below.
+
 **Keep the release on hold.** The original seven reproductions now pass, as do
 the focused permanent tests for the four fixes. The fixes are useful and close
 their original cases. Four additional probes nevertheless fail: two demonstrate

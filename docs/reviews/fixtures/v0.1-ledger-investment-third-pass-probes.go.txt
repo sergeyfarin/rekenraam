@@ -1,0 +1,73 @@
+package app
+
+import (
+	"context"
+	"github.com/stretchr/testify/require"
+	"rekenraam/backend/internal/exact"
+	"testing"
+)
+
+func TestThirdPassPromotionMustPreserveItsFirstReadVersion(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	postEUR(t, f, "2026-01-01", 10)
+	checkpoint := reconcileCash(t, f, "2026-01-31", 10)
+	input := ordinaryEntry(f.cashAccountID, f.incomeAccountID, f.eurCommodityID, 5)
+	input.Status = "draft"
+	input.TransactionDate = "2026-01-02"
+	draft, err := f.transactionService.CreateTransaction(ctx, CreateTransactionInput{OwnerUserID: f.ownerUserID, OriginType: "scheduled", Spec: input})
+	require.NoError(t, err)
+	// PostTransaction has captured this version before entering UpdateTransaction.
+	stalePromotion := transactionInputFromTransaction(draft)
+	stalePromotion.Status = "posted"
+	edited := transactionInputFromTransaction(draft)
+	edited.TransactionDate = "2026-02-01"
+	edited.JournalEntries[0].EntryDate = "2026-02-01"
+	_, err = f.transactionService.UpdateTransaction(ctx, UpdateTransactionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", TransactionID: draft.ID, Spec: edited})
+	require.NoError(t, err)
+	// Run the exact second phase of PostTransaction after the intervening edit.
+	posted, err := f.transactionService.UpdateTransaction(ctx, UpdateTransactionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "transaction.post", TransactionID: draft.ID, Spec: stalePromotion, AllowDraftPromotion: true})
+	t.Logf("err=%v posted_date=%s active=%v checkpoint=%d", err, posted.TransactionDate, activeCheckpointIDs(t, f), checkpoint)
+	require.Error(t, err, "a promotion prepared from the older in-period draft must not post behind the checkpoint")
+}
+
+func TestThirdPassPreparedPostingMustRevalidateAccountRole(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	ordinary, err := f.accountService.CreateAccount(ctx, CreateAccountInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.create", Name: "Unposted asset", AccountClass: "asset", AccountKind: "other_asset", DefaultCommodityID: &f.stockCommodityID, OpenedOn: "2026-01-01", EffectiveFrom: "2026-01-01"})
+	require.NoError(t, err)
+	f.cashAccountID = ordinary.ID
+	input := ordinaryEntry(f.cashAccountID, f.incomeAccountID, f.stockCommodityID, 10)
+	params, err := f.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Spec: input})
+	require.NoError(t, err)
+	current, err := f.accountService.Account(ctx, f.cashAccountID)
+	require.NoError(t, err)
+	allows := true
+	changed, err := f.accountService.UpdateAccount(ctx, UpdateAccountInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.update", AccountID: current.ID, Code: current.Code, Name: current.Name, AccountClass: "asset", AccountKind: "security_holding", AllowsPostings: &allows, DefaultCommodityID: &f.stockCommodityID, OpenedOn: current.OpenedOn, EffectiveFrom: "2026-01-01"})
+	require.NoError(t, err)
+	require.Equal(t, "security_holding", changed.AccountKind)
+	_, freshErr := f.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Spec: input})
+	require.Error(t, freshErr)
+	created, err := f.transactionService.repository.CreateTransaction(ctx, params)
+	lots, readErr := f.investmentService.ListLots(ctx, f.cashAccountID, f.stockCommodityID)
+	require.NoError(t, readErr)
+	t.Logf("commit err=%v transaction=%d lots=%d fresh_validation=%v", err, created.ID, len(lots), freshErr)
+	require.Error(t, err, "a first posting must not apply a role decision from a superseded account version")
+}
+
+func TestThirdPassPriorFractionalValuation(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 1000, 10000000)
+	sale := sellInput(f, "2026-02-01", 1)
+	sale.QuantityScale = 6
+	sale.CashAmountValue = 100
+	sale.CashAmountScale = 6
+	_, err := f.investmentService.Sell(ctx, sale)
+	require.NoError(t, err)
+	gains, err := f.investmentService.ListUnrealizedGains(ctx)
+	require.NoError(t, err)
+	require.Len(t, gains, 1)
+	require.NotNil(t, gains[0].MarketValueValue)
+	require.Zero(t, exact.ScaledIntFromInt64(*gains[0].MarketValueValue, *gains[0].MarketValueScale).Cmp(exact.ScaledIntFromInt64(999999999, 4)))
+}

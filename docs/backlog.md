@@ -34,7 +34,16 @@ rewritten, and this mapping is how to read it.
 
 ## General
 
-### T-94 Reconciliation guard can go stale before commit `[x]`
+### T-94 Reconciliation guard can go stale before commit `[~]`
+
+**Third pass: P1 / promotion gap remains.** `PostTransaction` captures a draft
+spec, then `UpdateTransaction` reads the draft again and supplies that newer
+version to the repository guard. A draft moved from January into February
+between those reads can still post the old January spec behind an active
+January checkpoint without an override. Carry the first source version through
+promotion or prepare from one authoritative record. The earlier write-boundary
+fix remains valid. Evidence: `docs/reviews/ledger-investments-third-pass-2026-09-13.md`,
+`TestThirdPassPromotionMustPreserveItsFirstReadVersion`.
 
 **Second pass fixed 2026-09-13.** The candidates were not the only thing
 prepared outside the write: so were the spec and the transaction facts they
@@ -330,6 +339,18 @@ Proved by `TestFractionalSaleRetainsPricedMarketValue`
 `backend/internal/db/investments_valuation_test.go` for the restatement and the
 no-price reason, and `TestNormalized*` in `backend/internal/exact/scaled_test.go`.
 All fail with the restatement stubbed out.
+
+### T-100 Posting validation can outlive the account role it checked `[ ]`
+
+**P1 / release blocker.** `backend/internal/app/transactions_validate.go:356`
+resolves account rules before the write. Prepare a generic 10-security-unit
+entry into an unused `other_asset`, change it through the account service to
+`security_holding`, then commit the prepared entry: it succeeds with no lots.
+Fresh preparation correctly rejects the same entry. Account creation and the
+kind change both succeed through real services. Check effective account/version
+dependencies inside the write, and sweep reciprocal structural-edit races plus
+investment/import paths. Evidence: the third-pass review and
+`TestThirdPassPreparedPostingMustRevalidateAccountRole`.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 
