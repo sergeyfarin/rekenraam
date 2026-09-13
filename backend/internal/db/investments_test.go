@@ -306,10 +306,17 @@ func TestInvestmentLotsDisposeFIFOAlignsMismatchedQuantityScale(t *testing.T) {
 	assert.Equal(t, int64(125000), lots[0].RemainingCostBasisValue)
 }
 
-func TestInvestmentLotsDisposeFIFORejectsSaleFinerThanLotScale(t *testing.T) {
-	// A lot recorded at scale 0 (whole shares only) cannot satisfy a partial
-	// sale that requires fractional-share precision (2.50 shares) — this must
-	// surface as a validation error, not a silently truncated/wrong disposal.
+// T-97. This test used to assert the opposite: that a lot recorded at scale 0
+// could not satisfy a sale needing fractional precision. That refusal was never
+// about the lot's contents — five shares are five shares — only about the
+// number of decimal places whoever entered the purchase happened to type. A
+// broker that sells fractions made it a dead end that no user could act on,
+// since the only escape was to have written "5.00" months earlier.
+//
+// The disposal now widens both sides to the finer scale and proceeds. What must
+// still hold is conservation: the lot keeps exactly what was not sold, and the
+// basis follows the quantity.
+func TestInvestmentLotsDisposeFIFOSellsFinerThanTheLotScale(t *testing.T) {
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -326,13 +333,30 @@ func TestInvestmentLotsDisposeFIFORejectsSaleFinerThanLotScale(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = repo.DisposeLots(ctx, DisposeLotsParams{
+	// Sell 2.50 of the 5 whole shares.
+	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
 		BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
 		EventDate: "2026-03-01", QuantityValue: exact.New(250), QuantityScale: 2,
 		CreatedAt: "2026-03-01T09:00:00Z", ActorUserID: ownerID,
 		OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "fractional sale of whole-share lot",
 	})
-	require.ErrorIs(t, err, ErrInvalidDisposalParams)
+	require.NoError(t, err)
+	require.Len(t, disposals, 1)
+	require.Equal(t, "250", disposals[0].QuantityValue.String())
+	require.Equal(t, 2, disposals[0].QuantityScale)
+	// Half the lot went, so half the basis went with it.
+	require.Equal(t, int64(2500), disposals[0].CostBasisValue)
+
+	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
+	require.NoError(t, err)
+	require.Len(t, lots, 1)
+	require.Equal(t, "open", lots[0].Status)
+	require.Equal(t, "250", lots[0].RemainingQuantityValue.String())
+	require.Equal(t, 2, lots[0].RemainingQuantityScale, "the projection widened to carry the fraction")
+	require.Equal(t, int64(2500), lots[0].RemainingCostBasisValue)
+	// The acquisition record is evidence and does not move.
+	require.Equal(t, "5", lots[0].QuantityValue.String())
+	require.Equal(t, 0, lots[0].QuantityScale)
 }
 
 func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
@@ -1158,7 +1182,12 @@ func TestInvestmentLotsAverageCostClosedLotHasZeroBasis(t *testing.T) {
 	assert.Equal(t, int64(0), lots[0].RemainingCostBasisValue)
 }
 
-func TestInvestmentLotsAverageCostMismatchedScaleReturnsError(t *testing.T) {
+// T-97. Previously an error. Average-cost pooling does require one shared scale
+// to sum at, but refusing the position was the wrong way to get one: a user
+// holding a whole-share lot and a fractional-share lot in the same position had
+// no way to sell any of it, and no way to change how either was recorded.
+// Widening to the finer scale gives the pool math what it needs.
+func TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentScales(t *testing.T) {
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -1186,23 +1215,46 @@ func TestInvestmentLotsAverageCostMismatchedScaleReturnsError(t *testing.T) {
 	`, accountID, instrument.CommodityID, currencyID, ownerID, ownerID)
 	require.NoError(t, err)
 
-	_, err = repo.DisposeLots(ctx, DisposeLotsParams{
+	// Pool is 100 shares at 100.00 plus 0.50 shares at 50.00 — 100.5 shares for
+	// 150.00. Selling 50 takes 150.00 × 50 / 100.5 = 74.62 of basis (truncated).
+	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
 		BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
 		EventDate: "2026-04-01", QuantityValue: exact.New(50), QuantityScale: 0,
 		CostBasisMethod: "average_cost", CreatedAt: "2026-04-01T09:00:00Z",
 		ActorUserID: ownerID, OriginType: "browser_api",
 		Operation: "investment.lot.dispose", ChangeReason: "scale mismatch test",
 	})
-	require.ErrorIs(t, err, ErrInvalidDisposalParams)
+	require.NoError(t, err)
+
+	disposedBasis := int64(0)
+	for _, disposal := range disposals {
+		require.Equal(t, 2, disposal.CostBasisScale)
+		disposedBasis += disposal.CostBasisValue
+	}
+	require.Equal(t, int64(7462), disposedBasis)
+
+	// Conservation: what the lots still carry is the pool minus what left it.
+	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
+	require.NoError(t, err)
+	remainingQuantity := exact.NewScaledInt()
+	remainingBasis := exact.NewScaledInt()
+	for _, lot := range lots {
+		remainingQuantity.AddCoefficient(lot.RemainingQuantityValue, lot.RemainingQuantityScale)
+		remainingBasis.AddInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)
+	}
+	require.Equal(t, 0, remainingQuantity.Cmp(exact.ScaledIntFromInt64(5050, 2)), "100.5 shares less 50 sold")
+	require.Equal(t, 0, remainingBasis.Cmp(exact.ScaledIntFromInt64(15000-7462, 2)))
 }
 
-func TestInvestmentLotsAverageCostRejectsMismatchedCostBasisScale(t *testing.T) {
-	// Average-cost pooling sums remaining_cost_basis_value as raw int64s across
-	// all open lots; if two lots carry different cost_basis_scale, that sum
-	// blends incommensurate magnitudes (e.g. 100 EUR at scale 2 plus 100 EUR at
-	// scale 4 would wrongly add to "10100" instead of recognizing both as the
-	// same amount). This must be rejected, mirroring the existing quantity-scale
-	// guard for this method.
+// T-97, the basis axis of the same defect. Pooling sums cost basis as raw
+// int64s, so two lots at different cost_basis_scale would blend incommensurate
+// magnitudes — 100 EUR at scale 2 plus 100 EUR at scale 4 adding to "10100"
+// rather than to 200 EUR. That hazard is real, and this test used to pin the
+// refusal that avoided it. Aligning to the finer scale avoids it too, and
+// actually answers the question the refusal dodged: both lots are 100 EUR, and
+// the pool is 200 EUR. Mixed cash precision arrives through imports, so a
+// refusal here was reachable without anyone doing anything unusual.
+func TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentCostBasisScales(t *testing.T) {
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -1230,14 +1282,30 @@ func TestInvestmentLotsAverageCostRejectsMismatchedCostBasisScale(t *testing.T) 
 	`, accountID, instrument.CommodityID, currencyID, ownerID, ownerID)
 	require.NoError(t, err)
 
-	_, err = repo.DisposeLots(ctx, DisposeLotsParams{
+	// 200 shares for 200.00 pooled; selling 50 takes 50.00 of basis exactly.
+	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
 		BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
 		EventDate: "2026-04-01", QuantityValue: exact.New(50), QuantityScale: 0,
 		CostBasisMethod: "average_cost", CreatedAt: "2026-04-01T09:00:00Z",
 		ActorUserID: ownerID, OriginType: "browser_api",
 		Operation: "investment.lot.dispose", ChangeReason: "cost basis scale mismatch test",
 	})
-	require.ErrorIs(t, err, ErrInvalidDisposalParams)
+	require.NoError(t, err)
+
+	disposedBasis := exact.NewScaledInt()
+	for _, disposal := range disposals {
+		disposedBasis.AddInt64(disposal.CostBasisValue, disposal.CostBasisScale)
+	}
+	require.Equal(t, 0, disposedBasis.Cmp(exact.ScaledIntFromInt64(500000, 4)),
+		"50 shares out of a 200-share pool worth 200.00 is 50.00, not a blended magnitude")
+
+	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
+	require.NoError(t, err)
+	remainingBasis := exact.NewScaledInt()
+	for _, lot := range lots {
+		remainingBasis.AddInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)
+	}
+	require.Equal(t, 0, remainingBasis.Cmp(exact.ScaledIntFromInt64(1500000, 4)), "200.00 less 50.00")
 }
 
 func TestInvestmentLotsSpecificLotValidatesOwnershipAndQuantity(t *testing.T) {

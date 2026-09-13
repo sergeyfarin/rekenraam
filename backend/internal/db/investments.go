@@ -1013,7 +1013,33 @@ func createLotTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotPara
 	return createLotWithAuditTx(ctx, tx, params, auditEventID)
 }
 
+// rescaleQuantity re-expresses a coefficient at a higher scale. Only widening
+// is supported: narrowing would discard quantity, which is never something this
+// package may do silently.
+func rescaleQuantity(value exact.Coefficient, from int, to int) (exact.Coefficient, error) {
+	if to == from {
+		return value, nil
+	}
+	if to < from {
+		return "", fmt.Errorf("%w: cannot narrow a quantity from scale %d to %d", ErrInvalidDisposalParams, from, to)
+	}
+	widened := new(big.Int).Mul(value.BigInt(), exact.Pow10(to-from))
+	return exact.FromBig(widened)
+}
+
 func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotParams, auditEventID int64) (InvestmentLotRecord, error) {
+	// A lot's projection starts at the scale its acquisition was recorded at and
+	// widens only when a disposal actually needs finer precision (T-97). It is
+	// tempting to normalize every lot to the position's full precision up front
+	// instead, which would make the scales uniform by construction — but a
+	// position's quantity scale propagates into every figure derived from it:
+	// PositionsWithGains computes marketScale as quantity scale + price scale -
+	// base quantity scale, so padding a quantity by six places pads the reported
+	// market value and unrealized gain by six places too. The values stay
+	// correct, but the integers grow by a factor of a million, and that function
+	// drops market value and gain entirely when the result no longer fits in an
+	// int64. Widening on demand keeps the precision where it is needed without
+	// making every position pay for it.
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_lots (
 			book_id, account_id, commodity_id, opened_on, source_transaction_id, status,
@@ -1363,29 +1389,25 @@ func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 		if remaining.Sign() <= 0 {
 			break
 		}
-		lotScaleFactor := exact.Pow10(commonScale - lot.scale)
-		lotAtCommonScale := new(big.Int).Mul(lot.value.BigInt(), lotScaleFactor)
+		lotAtCommonScale := new(big.Int).Mul(lot.value.BigInt(), exact.Pow10(commonScale-lot.scale))
 
 		takeAtCommonScale := new(big.Int).Set(lotAtCommonScale)
 		if takeAtCommonScale.Cmp(remaining) > 0 {
 			takeAtCommonScale.Set(remaining)
 		}
 
-		// Convert the take back to the lot's own scale for disposeLotTx, which
-		// requires the disposal quantity to be expressed at the lot's scale. A
-		// full-lot take is always exact; a partial take is only representable
-		// when it carries no precision finer than the lot's own scale.
-		takeAtLotScale, remainder := new(big.Int), new(big.Int)
-		takeAtLotScale.QuoRem(takeAtCommonScale, lotScaleFactor, remainder)
-		if remainder.Sign() != 0 {
-			return nil, fmt.Errorf("%w: sale quantity is not representable at lot %d's quantity scale %d", ErrInvalidDisposalParams, lot.id, lot.scale)
-		}
-		takeCoeff, err := exact.FromBig(takeAtLotScale)
+		// Hand the take to disposeLotTx at the common scale. This used to be
+		// converted back to the lot's own scale first, and refused when that
+		// conversion had a remainder — which is how selling half a share out of
+		// a lot entered as "10" became impossible while the same lot entered as
+		// "10.0" allowed it (T-97). disposeLotTx aligns for itself now, so the
+		// round trip and its refusal are both gone.
+		takeCoeff, err := exact.FromBig(takeAtCommonScale)
 		if err != nil {
 			return nil, err
 		}
 
-		disposal, err := disposeLotTx(ctx, tx, params, lot.id, takeCoeff, lot.scale, auditEventID)
+		disposal, err := disposeLotTx(ctx, tx, params, lot.id, takeCoeff, commonScale, auditEventID)
 		if err != nil {
 			return nil, err
 		}
@@ -1434,27 +1456,37 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		return nil, ErrInsufficientLots
 	}
 
-	// Enforce consistent quantity scale across all open lots. The pool math
-	// below (pooledQty, pooledBasis, and the per-lot reported/deducted basis
-	// split) treats every lot's quantity_value and cost_basis_value as plain
-	// int64s at one shared scale each; mixing scales here would silently
-	// blend incommensurate magnitudes.
-	commonScale := lots[0].quantityScale
-	for _, lot := range lots[1:] {
-		if lot.quantityScale != commonScale {
-			return nil, fmt.Errorf("%w: average_cost disposal requires all open lots to share the same quantity scale", ErrInvalidDisposalParams)
-		}
-	}
-	if params.QuantityScale != commonScale {
-		return nil, fmt.Errorf("%w: average_cost disposal: sale quantity scale %d does not match lot scale %d", ErrInvalidDisposalParams, params.QuantityScale, commonScale)
-	}
-	// Enforce consistent cost-basis scale across all open lots for the same
-	// reason: pooledBasis sums remaining_cost_basis_value as raw int64s.
+	// The pool math below treats every lot's quantity and basis as plain
+	// integers at one shared scale each, which is why mixing scales would
+	// blend incommensurate magnitudes. This used to be enforced by refusing
+	// any position whose lots disagreed — a refusal the user could do nothing
+	// about, since the scales came from however each purchase happened to be
+	// typed or imported (T-97). Widening every lot to the most precise scale
+	// present satisfies the same requirement without turning a presentation
+	// detail into a dead end. Nothing narrows, so no quantity or basis is
+	// rounded away to make the pool line up.
+	commonScale := params.QuantityScale
 	commonCostScale := lots[0].costBasisScale
-	for _, lot := range lots[1:] {
-		if lot.costBasisScale != commonCostScale {
-			return nil, fmt.Errorf("%w: average_cost disposal requires all open lots to share the same cost basis scale", ErrInvalidDisposalParams)
+	for _, lot := range lots {
+		if lot.quantityScale > commonScale {
+			commonScale = lot.quantityScale
 		}
+		if lot.costBasisScale > commonCostScale {
+			commonCostScale = lot.costBasisScale
+		}
+	}
+	for i := range lots {
+		quantity, err := rescaleQuantity(lots[i].quantityValue, lots[i].quantityScale, commonScale)
+		if err != nil {
+			return nil, err
+		}
+		lots[i].quantityValue, lots[i].quantityScale = quantity, commonScale
+
+		basis, err := exact.ScaledIntFromInt64(lots[i].costBasisValue, lots[i].costBasisScale).TruncatedTo(commonCostScale).Int64()
+		if err != nil {
+			return nil, fmt.Errorf("align lot %d cost basis to scale %d: %w", lots[i].id, commonCostScale, err)
+		}
+		lots[i].costBasisValue, lots[i].costBasisScale = basis, commonCostScale
 	}
 
 	// Compute pool totals.
@@ -1464,7 +1496,11 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		pooledQty.Add(pooledQty, lot.quantityValue.BigInt())
 		pooledBasis.Add(pooledBasis, big.NewInt(lot.costBasisValue))
 	}
-	sellQty := params.QuantityValue.BigInt()
+	sellQtyCoeff, err := rescaleQuantity(params.QuantityValue, params.QuantityScale, commonScale)
+	if err != nil {
+		return nil, err
+	}
+	sellQty := sellQtyCoeff.BigInt()
 	if sellQty.Cmp(pooledQty) > 0 {
 		return nil, ErrInsufficientLots
 	}
@@ -1576,10 +1612,11 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		}
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE investment_lots
-			SET remaining_quantity_value = ?, remaining_cost_basis_value = ?, status = ?,
+			SET remaining_quantity_value = ?, remaining_quantity_scale = ?,
+				remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?, status = ?,
 				updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
 			WHERE book_id = ? AND id = ?
-		`, nextQty, nextBasisValue, status, params.CreatedAt, params.ActorUserID, auditEventID,
+		`, nextQty, commonScale, nextBasisValue, commonCostScale, status, params.CreatedAt, params.ActorUserID, auditEventID,
 			params.BookID, lot.id); err != nil {
 			return nil, fmt.Errorf("update average-cost lot projection: %w", err)
 		}
@@ -2554,14 +2591,30 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 	if lot.OpenedOn > params.EventDate {
 		return LotDisposalRecord{}, fmt.Errorf("%w: lot %d was acquired on %s, after the disposal date %s", ErrInvalidDisposalParams, lotID, lot.OpenedOn, params.EventDate)
 	}
-	if quantityScale != lot.RemainingQuantityScale {
-		return LotDisposalRecord{}, fmt.Errorf("lot allocation scale does not match lot scale")
+	// The disposal and the lot need to be at a common scale for the comparison,
+	// the subtraction and the basis proration below — they do not need to be at
+	// the *lot's* scale, which is what this used to insist on (T-97). Widen both
+	// to whichever carries more precision; neither side ever narrows, so no
+	// quantity is rounded away to make the arithmetic line up.
+	commonScale := quantityScale
+	if lot.RemainingQuantityScale > commonScale {
+		commonScale = lot.RemainingQuantityScale
 	}
-	if quantityValue.Sign() <= 0 || quantityValue.Cmp(lot.RemainingQuantityValue) > 0 {
+	disposedAtCommon, err := rescaleQuantity(quantityValue, quantityScale, commonScale)
+	if err != nil {
+		return LotDisposalRecord{}, err
+	}
+	remainingAtCommon, err := rescaleQuantity(lot.RemainingQuantityValue, lot.RemainingQuantityScale, commonScale)
+	if err != nil {
+		return LotDisposalRecord{}, err
+	}
+	if disposedAtCommon.Sign() <= 0 || disposedAtCommon.Cmp(remainingAtCommon) > 0 {
 		return LotDisposalRecord{}, ErrInsufficientLots
 	}
-	costBasisValue := proratedCostBasis(lot.RemainingCostBasisValue, quantityValue, lot.RemainingQuantityValue)
-	nextRemainingQuantity, err := exact.FromBig(new(big.Int).Sub(lot.RemainingQuantityValue.BigInt(), quantityValue.BigInt()))
+	// Both quantities are at commonScale, so the ratio is unaffected by which
+	// scale that is.
+	costBasisValue := proratedCostBasis(lot.RemainingCostBasisValue, disposedAtCommon, remainingAtCommon)
+	nextRemainingQuantity, err := exact.FromBig(new(big.Int).Sub(remainingAtCommon.BigInt(), disposedAtCommon.BigInt()))
 	if err != nil {
 		return LotDisposalRecord{}, err
 	}
@@ -2572,10 +2625,10 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE investment_lots
-		SET remaining_quantity_value = ?, remaining_cost_basis_value = ?, status = ?,
+		SET remaining_quantity_value = ?, remaining_quantity_scale = ?, remaining_cost_basis_value = ?, status = ?,
 			updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
 		WHERE book_id = ? AND id = ?
-	`, nextRemainingQuantity, nextRemainingCost, status, params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
+	`, nextRemainingQuantity, commonScale, nextRemainingCost, status, params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("update disposed investment lot: %w", err)
 	}
 	result, err := tx.ExecContext(ctx, `

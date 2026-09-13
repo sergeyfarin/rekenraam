@@ -155,15 +155,55 @@ which is R16 scope. Pinned by
 `TestCreateTransactionStillAllowsCryptoWalletPostings` so it stays a decision
 rather than becoming an oversight again.
 
-### T-97 Fractional sale eligibility depends on acquisition scale `[ ]`
+### T-97 Fractional sale eligibility depends on acquisition scale `[x]`
 
-**P2 / fractional-investment onboarding blocker.**
-`backend/internal/db/investments.go:1348` rejects selling 0.5 shares from a lot
-acquired as 10 at scale 0, despite commodity precision allowing the sale.
-Average-cost and specific-lot scale restrictions also need review. Align exact
-remaining quantities without rounding or rewriting original acquisition facts;
-cover all methods and mixed import precision. Reproduction and validation
-matrix: the 2026-09-13 release review (T-97).
+**Was P2 / fractional-investment onboarding blocker. Fixed 2026-09-13.** Three
+rules all insisted a disposal be expressed at the lot's own stored scale, and
+that scale was however many decimal places the purchase happened to be typed
+with. Disposals now widen both sides to whichever carries more precision:
+
+- `disposeLotTx` aligns the disposal and the lot instead of demanding equality.
+  The prorated basis is unaffected, because it only ever needed the two
+  quantities at *a* common scale, not at the lot's.
+- FIFO/LIFO drops the round trip that converted each take back to the lot's
+  scale and refused when that had a remainder. It existed only to satisfy the
+  rule above.
+- Average cost widens every lot's quantity **and** cost basis to the finest
+  scale present rather than refusing a position whose lots disagree. That closes
+  the basis axis of the same defect (Q3), which mixed-precision imports reach
+  without anyone doing anything unusual.
+
+Nothing ever narrows, so no quantity or basis is rounded away to make the
+arithmetic line up, and `quantity_value`/`quantity_scale` — the acquisition
+evidence — are never touched. A lot's `remaining_quantity_scale` widens on
+demand and is written back.
+
+Proved by `backend/internal/app/investments_fractional_test.go`: half a share
+out of a whole-share lot under all four methods with preview/commit parity; the
+same position entered as "10" and "10.00" behaving identically; four quarter
+sales draining a lot to exactly zero with no residual basis; and a 1.001-share
+sale from a 1-share lot still refused as a shortfall rather than truncated.
+Four tests that certified the old refusals were rewritten to assert the
+conservation that now holds, not deleted.
+
+**Rejected: normalizing every lot's projection scale at creation.** It looked
+better — uniform scales by construction, and the schema already separates
+`quantity_*` from `remaining_*` — but a position's quantity scale propagates
+into everything derived from it. `PositionsWithGains` computes `marketScale` as
+quantity scale + price scale − base quantity scale, so padding quantities by six
+places pads reported market value and unrealized gain by six places; the values
+stay correct but the integers grow by a factor of a million, and that function
+silently drops market value and gain when the result no longer fits an int64.
+Widening on demand keeps the precision where it is needed without making every
+position pay for it. A comment in `createLotWithAuditTx` records this so the
+idea is not retried.
+
+Canonical-scale note (Q1, agreed): the holding account's
+`quantity_scale_override` was chosen as the projection ceiling and is still the
+right answer if normalization is ever revisited — it is what `cleanPosting`
+already enforces on the journal side of the same position, and account
+structural fields lock once there is posted activity. The widen-on-demand design
+does not need to consult it, so nothing reads it today.
 
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`

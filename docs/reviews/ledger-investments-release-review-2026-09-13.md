@@ -11,13 +11,13 @@ workflow defect. This supersedes the 2026-09-11 triage's statement that no known
 supported workflow can silently corrupt financial state. No production fixes
 are included in this review.
 
-**Update 2026-09-13: all three P1s (T-94, T-95, T-96) are fixed**, each with
-named regression tests that fail without its fix. The release is no longer held
-by a known integrity defect. What remains before onboarding is T-97 for
-fractional-investment support (P2, gate 2) and the non-code gates below: the
-representative household dry run (gate 4), acknowledging the investment feature
-limits (gate 5), and starting durable data only on the frozen baseline (gate 6).
-Those are the operator's to clear, not the code's.
+**Update 2026-09-13: all four findings (T-94, T-95, T-96, T-97) are fixed**,
+each with named regression tests that fail without its fix. No known integrity
+defect or fractional-investment limitation holds the release. What remains are
+the non-code gates below: the representative household dry run (gate 4),
+acknowledging the investment feature limits (gate 5), and starting durable data
+only on the frozen baseline (gate 6). Those are the operator's to clear, not the
+code's.
 
 The existing accounting foundation is substantial: exact quantities,
 per-entry/per-commodity balancing, append-only versions, atomic trade/lot
@@ -151,6 +151,12 @@ corporate-action workflow.
 
 ### T-97 / P2 — fractional sales depend on purchase text precision
 
+**Fixed 2026-09-13.** Disposals widen both sides to the finer scale instead of
+requiring the lot's; the average-cost basis-scale restriction is gone the same
+way. See `docs/backlog.md` (T-97) for what shipped, the named tests, and why
+normalizing lot scales at creation was rejected. The finding as written below
+stands as the record of the defect.
+
 Location: `backend/internal/db/investments.go:1348` (also the scale restrictions
 in average-cost and specific-lot disposal).
 
@@ -236,8 +242,8 @@ Prioritize invariant/state-transition coverage over a larger global percentage.
 1. ~~Fix T-94–T-96 and pass permanent regression cases plus backend race
    checks.~~ **Done 2026-09-13.** All three are fixed with named regression
    tests, and the backend race suite is green.
-2. Resolve T-97 before claiming fractional-investment support or onboarding a
-   household whose broker trades fractions.
+2. ~~Resolve T-97 before claiming fractional-investment support or onboarding a
+   household whose broker trades fractions.~~ **Done 2026-09-13.**
 3. ~~Restore coverage tooling and run the browser release preflight
    successfully; check skipped counts because its journey group is serial.~~
    **Satisfied 2026-09-13:** coverage reports 78.9% and the preflight passes

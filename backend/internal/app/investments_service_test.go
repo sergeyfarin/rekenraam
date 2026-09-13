@@ -1411,14 +1411,13 @@ func TestListEventSuggestions_ReturnsSeededSuggestions(t *testing.T) {
 	assert.Len(t, suggestions, 2)
 }
 
-// TestSell_AverageCostMismatchedQuantityScaleFailsLoudlyAtServiceLayer is the
-// service-path counterpart to db.TestInvestmentLotsAverageCostMismatchedScaleReturnsError
-// (Workstream 5 item 6): two ordinary Buy calls with different QuantityScale
-// values for the same holding account/commodity is a real, reachable way to
-// end up with open lots at different scales (validateTradeInput has no
-// cross-lot scale consistency check) — average_cost must reject this loudly
-// through Sell/PreviewSell, not just at the raw disposeLotTx layer.
-func TestSell_AverageCostMismatchedQuantityScaleFailsLoudlyAtServiceLayer(t *testing.T) {
+// T-97 at the service layer. Two ordinary Buy calls that differ only in how the
+// quantity was written — "10" and "10.00" — is the ordinary way a position ends
+// up with lots at different scales, and this test used to pin average_cost
+// refusing to sell any of it. Refusing loudly was the right instinct while the
+// pool math could not handle the mismatch; now that it aligns, the honest
+// answer is the sale, and it must be the same one preview promised.
+func TestSell_AverageCostPoolsLotsBoughtAtDifferentQuantityScales(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1437,21 +1436,42 @@ func TestSell_AverageCostMismatchedQuantityScaleFailsLoudlyAtServiceLayer(t *tes
 	})
 	require.NoError(t, err)
 
-	_, err = f.investmentService.PreviewSell(ctx, InvestmentTradeInput{
+	sale := InvestmentTradeInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 		QuantityValue: exact.New(5), QuantityScale: 0,
 		CashAmountValue: 60000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
 		CostBasisMethod: "average_cost",
-	})
-	require.Error(t, err, "average_cost must fail loudly, not silently mis-compute, when open lots have mismatched quantity scales")
+	}
 
-	_, err = f.investmentService.Sell(ctx, InvestmentTradeInput{
-		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
-		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
-		QuantityValue: exact.New(5), QuantityScale: 0,
-		CashAmountValue: 60000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
-		CostBasisMethod: "average_cost",
-	})
-	require.Error(t, err, "commit must reject the same way preview did")
+	// 20 shares pooled at 2200.00, so 5 shares carry 550.00 of basis and a
+	// 600.00 sale realizes 50.00.
+	preview, err := f.investmentService.PreviewSell(ctx, sale)
+	require.NoError(t, err)
+	previewBasis := exact.NewScaledInt()
+	for _, allocation := range preview.Allocations {
+		previewBasis.AddInt64(allocation.CostBasisValue, allocation.CostBasisScale)
+	}
+	require.Equal(t, 0, previewBasis.Cmp(exact.ScaledIntFromInt64(55000, 2)))
+	require.Equal(t, int64(5000), preview.RealizedGain)
+
+	sold, err := f.investmentService.Sell(ctx, sale)
+	require.NoError(t, err)
+	soldBasis := exact.NewScaledInt()
+	for _, allocation := range sold.Allocations {
+		soldBasis.AddInt64(allocation.CostBasisValue, allocation.CostBasisScale)
+	}
+	require.Equal(t, 0, previewBasis.Cmp(soldBasis), "preview and commit must agree")
+
+	// The position keeps the other 15 shares and the basis that goes with them.
+	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
+	require.NoError(t, err)
+	remainingQuantity := exact.NewScaledInt()
+	remainingBasis := exact.NewScaledInt()
+	for _, lot := range lots {
+		remainingQuantity.AddCoefficient(lot.RemainingQuantityValue, lot.RemainingQuantityScale)
+		remainingBasis.AddInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)
+	}
+	require.Equal(t, 0, remainingQuantity.Cmp(exact.ScaledIntFromInt64(15, 0)))
+	require.Equal(t, 0, remainingBasis.Cmp(exact.ScaledIntFromInt64(165000, 2)))
 }
