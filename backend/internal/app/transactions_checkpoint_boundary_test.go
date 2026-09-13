@@ -222,8 +222,10 @@ func TestWritePathsEnforceTheCheckpointBoundaryInTheRepository(t *testing.T) {
 		f, created, candidates, versionID := setup(t)
 		current, err := f.transactionService.repository.TransactionByID(ctx, BookID, created.ID)
 		require.NoError(t, err)
+		dependencies := newAccountRuleDependencies()
 		spec, err := f.transactionService.cleanTransactionSpec(ctx, transactionInputFromTransaction(created), cleanTransactionOptions{
 			ForcedStatus: "posted", ExistingLineKeys: lineKeySet(current), ExistingPostings: existingPostingStateSet(current),
+			AccountRuleDependencies: dependencies,
 		})
 		require.NoError(t, err)
 		_, err = f.transactionService.repository.UpdateTransaction(ctx, db.UpdateTransactionParams{
@@ -231,6 +233,7 @@ func TestWritePathsEnforceTheCheckpointBoundaryInTheRepository(t *testing.T) {
 			OriginType: "browser_api", Operation: "transaction.update",
 			Spec: spec, RecordedAt: "2026-03-01T00:00:00Z",
 			ChangeReason: "edited", CheckpointCandidates: candidates, ExpectedVersionID: versionID,
+			AccountRuleDependencies: dependencies.list(),
 		})
 		require.ErrorIs(t, err, db.ErrReconciliationOverrideRequired)
 	})

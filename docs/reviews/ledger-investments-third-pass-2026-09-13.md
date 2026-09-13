@@ -4,6 +4,20 @@ Reviewed `2904cf7e`, including the other agent's implementation summary and the
 new role, chronology, valuation, and transaction-version tests. Also inspected
 the upgraded migration-fixture coverage from `1e52eb71`.
 
+## Resolution (added 2026-09-13, after the review)
+
+Both P1 gaps are fixed. T-94's promotion now carries the version its spec was
+read from (`UpdateTransactionInput.ExpectedVersionID`), refuses a promotion that
+names none, and builds its checkpoint candidates from the postings that
+actually enter the ledger. T-100's prepared writes now name the accounts their
+posting checks read, and `requireAccountRuleDependenciesTx` re-checks them
+inside `createTransactionWithAuditTx` and `UpdateTransaction`; the reciprocal
+structural-edit race is closed by re-asking the postings question inside
+`AccountRepository.UpdateAccount`'s own transaction. Named regression tests
+live in `backend/internal/app/transactions_prepared_write_race_test.go` and all
+fail with their guard stubbed out; the two probes below now pass. Full detail
+is in `docs/backlog.md` T-94 and T-100.
+
 ## Result
 
 **Two confirmed P1 integrity gaps remain; hold the release.** The latest fixes

@@ -67,10 +67,15 @@ func (s *TransactionService) prepareInvestmentTransactionForWrite(ctx context.Co
 }
 
 func (s *TransactionService) prepareCreateTransactionForWriteWithOptions(ctx context.Context, input CreateTransactionInput, options cleanTransactionOptions) (db.CreateTransactionParams, error) {
+	// Only the paths that go on to write collect these: the account facts the
+	// posting checks below are decided against travel with the params, and the
+	// write refuses them if any of those accounts has moved on (T-100).
+	options.AccountRuleDependencies = newAccountRuleDependencies()
 	params, err := s.prepareCreateTransaction(ctx, input, options)
 	if err != nil {
 		return db.CreateTransactionParams{}, err
 	}
+	params.AccountRuleDependencies = options.AccountRuleDependencies.list()
 
 	// The write transaction re-resolves these candidates and applies the guard
 	// itself (T-94), so this early check is a courtesy, not the boundary: it
@@ -154,6 +159,17 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		}
 		return Transaction{}, fmt.Errorf("read transaction: %w", err)
 	}
+	if input.ExpectedVersionID > 0 && input.ExpectedVersionID != current.VersionID {
+		// The caller composed its spec against a different version than the one
+		// this read found, so the spec describes a transaction that no longer
+		// exists. Refusing here rather than at the write keeps the two reads
+		// from being silently mixed: everything below — the promotion
+		// candidates included — is derived from `current`, and pairing those
+		// with someone else's spec is exactly the hole the write's own version
+		// check cannot see, because the version it is handed is this read's
+		// (T-94).
+		return Transaction{}, ErrTransactionVersionStale
+	}
 	if current.Status == "voided" {
 		return Transaction{}, ErrTransactionVoided
 	}
@@ -169,14 +185,23 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 	// validation — which only runs for status=="posted" — checks the status
 	// that will actually be persisted.
 	promotingDraft := current.Status == "draft" && input.AllowDraftPromotion
+	if input.AllowDraftPromotion && input.ExpectedVersionID <= 0 {
+		// A promotion always comes from a caller that read the draft first and
+		// turned it into a spec, so it always has a version to bind to. Without
+		// one there is nothing to check the spec against, and a draft edited in
+		// between would be promoted under the old spec's dates (T-94).
+		return Transaction{}, ValidationError{Message: "draft promotion must name the version it was prepared from"}
+	}
 	forcedStatus := "posted"
 	if current.Status == "draft" && !promotingDraft {
 		forcedStatus = "draft"
 	}
+	dependencies := newAccountRuleDependencies()
 	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{
-		ForcedStatus:     forcedStatus,
-		ExistingLineKeys: lineKeySet(current),
-		ExistingPostings: existingPostingStateSet(current),
+		ForcedStatus:            forcedStatus,
+		ExistingLineKeys:        lineKeySet(current),
+		ExistingPostings:        existingPostingStateSet(current),
+		AccountRuleDependencies: dependencies,
 	})
 	if err != nil {
 		return Transaction{}, err
@@ -190,7 +215,13 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		// already-assigned real positions instead — the same period-scoped
 		// check used for unvoid/restore, since promotion is structurally the
 		// same "posting enters a reconciled period" case.
-		candidates = periodScopedCandidatesFromRecord(current)
+		//
+		// Both the stored positions and the promoted spec's own are named. The
+		// version check above makes them describe the same transaction, so in
+		// practice this is one set counted twice; naming both keeps the guard
+		// about the postings that actually enter the ledger even if a future
+		// caller promotes and edits in a single write (T-94).
+		candidates = append(periodScopedCandidatesFromRecord(current), reconciliationCandidatesFromSpec(spec)...)
 	} else {
 		candidates = reconciliationCandidates(current, spec)
 	}
@@ -224,7 +255,8 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		InvalidateCheckpointReason: changeReason,
 		// The spec and the candidates above both describe this version; the
 		// write refuses them if the transaction has moved on since (T-94).
-		ExpectedVersionID: current.VersionID,
+		ExpectedVersionID:       current.VersionID,
+		AccountRuleDependencies: dependencies.list(),
 	})
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)
@@ -254,6 +286,11 @@ func (s *TransactionService) PostTransaction(ctx context.Context, input PostTran
 	spec := transactionInputFromTransaction(current)
 	spec.Status = "posted"
 	return s.UpdateTransaction(ctx, UpdateTransactionInput{
+		// This spec is this read of the draft, so the promotion is bound to the
+		// version it came from. UpdateTransaction reads the draft again, and an
+		// edit landing between the two reads must fail the promotion rather
+		// than post this spec's dates against that read's version (T-94).
+		ExpectedVersionID:      current.VersionID,
 		OwnerUserID:            input.OwnerUserID,
 		AuthSessionID:          input.AuthSessionID,
 		RequestID:              input.RequestID,

@@ -364,21 +364,20 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 	if err != nil {
 		return Account{}, err
 	}
-	if commodityChanged {
+	structureChanged := accountStructureChanged(current, spec, input.OpenedOn)
+	// Asking here gives the caller the specific message and costs nothing when
+	// the answer is no. It is not the guard: a posting prepared against this
+	// account's current structure can still commit before this update does, so
+	// the write asks again inside its own transaction (T-100).
+	if commodityChanged || structureChanged {
 		hasPostings, err := s.repository.AccountHasPostings(ctx, BookID, input.AccountID)
 		if err != nil {
 			return Account{}, fmt.Errorf("check account postings: %w", err)
 		}
 		if hasPostings {
-			return Account{}, ErrAccountCurrencyLocked
-		}
-	}
-	if accountStructureChanged(current, spec, input.OpenedOn) {
-		hasPostings, err := s.repository.AccountHasPostings(ctx, BookID, input.AccountID)
-		if err != nil {
-			return Account{}, fmt.Errorf("check account postings: %w", err)
-		}
-		if hasPostings {
+			if commodityChanged {
+				return Account{}, ErrAccountCurrencyLocked
+			}
 			return Account{}, ErrAccountStructureLocked
 		}
 	}
@@ -416,10 +415,19 @@ func (s *AccountService) UpdateAccount(ctx context.Context, input UpdateAccountI
 		ChangeReason:    changeReason,
 		RecordedAt:      now.Format(time.RFC3339),
 		EffectiveFrom:   effectiveFrom,
+		// The same two questions, re-asked inside the write transaction, where
+		// the answer cannot change before the version is inserted (T-100).
+		RequireNoPostingsForStructure: structureChanged,
+		RequireNoPostingsForCommodity: commodityChanged,
 	})
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
+		switch {
+		case errors.Is(err, db.ErrNotFound):
 			return Account{}, ErrAccountNotFound
+		case errors.Is(err, db.ErrAccountCurrencyLocked):
+			return Account{}, ErrAccountCurrencyLocked
+		case errors.Is(err, db.ErrAccountStructureLocked):
+			return Account{}, ErrAccountStructureLocked
 		}
 		return Account{}, fmt.Errorf("persist account update: %w", err)
 	}

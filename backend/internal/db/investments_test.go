@@ -1620,8 +1620,9 @@ func TestListRealizedGainsSumsMultipleCashProceedsLegs(t *testing.T) {
 				},
 			}},
 		},
-		CreatedAt:    "2026-06-15T10:00:00Z",
-		ChangeReason: "test split settlement",
+		CreatedAt:               "2026-06-15T10:00:00Z",
+		ChangeReason:            "test split settlement",
+		AccountRuleDependencies: accountRuleDependenciesFor(t, database, cashAccountA, cashAccountB),
 	})
 	require.NoError(t, err)
 
@@ -1793,4 +1794,20 @@ func TestPositionsWithGainsComputedCorrectly(t *testing.T) {
 	assert.Equal(t, int64(90000), *g.MarketValueValue)
 	assert.Equal(t, int64(34000), *g.UnrealizedGainValue)
 	assert.Equal(t, 2, *g.UnrealizedGainScale)
+}
+
+// accountRuleDependenciesFor stands in for what the service records while it
+// cleans a spec: the account versions the posting checks were decided against.
+// A write that names none is refused outright (T-100), so a hand-built params
+// struct has to name them the same way a prepared one does.
+func accountRuleDependenciesFor(t *testing.T, database *sql.DB, accountIDs ...int64) []AccountRuleDependency {
+	t.Helper()
+	dependencies := make([]AccountRuleDependency, 0, len(accountIDs))
+	for _, accountID := range accountIDs {
+		var latestVersionID int64
+		require.NoError(t, database.QueryRowContext(context.Background(),
+			`SELECT MAX(id) FROM account_versions WHERE account_id = ?`, accountID).Scan(&latestVersionID))
+		dependencies = append(dependencies, AccountRuleDependency{AccountID: accountID, LatestVersionID: latestVersionID})
+	}
+	return dependencies
 }

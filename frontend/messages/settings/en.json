@@ -143,6 +143,7 @@
   "api_error_investment_event_out_of_order": "This position is entered in order: a trade cannot be dated before a sale that has already been recorded for it. Record it after that sale, or correct the sale first.",
   "api_error_transaction_draft_not_user_creatable": "Draft entries can only be created by an automatic workflow. Save manual entries directly to the ledger.",
   "api_error_transaction_version_stale": "This entry changed in another tab or window while you were editing it. Reload it and make your change again.",
+  "api_error_posting_account_version_stale": "An account used by this entry changed while you were entering it. Reload it and make your entry again.",
   "api_error_network": "The server could not be reached. Check the connection and try again.",
   "api_error_not_found": "The requested item could not be found.",
   "api_error_provider_error": "The external provider rejected the request. Check the connection and try again.",

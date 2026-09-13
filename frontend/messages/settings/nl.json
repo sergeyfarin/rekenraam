@@ -143,6 +143,7 @@
   "api_error_investment_event_out_of_order": "Deze positie wordt op volgorde ingevoerd: een transactie kan niet gedateerd worden vóór een verkoop die er al voor is vastgelegd. Voer hem na die verkoop in, of corrigeer eerst de verkoop.",
   "api_error_transaction_draft_not_user_creatable": "Conceptboekingen kunnen alleen door een automatische workflow worden aangemaakt. Sla handmatige boekingen direct op in het grootboek.",
   "api_error_transaction_version_stale": "Deze boeking is in een ander tabblad of venster gewijzigd terwijl u hem bewerkte. Laad hem opnieuw en pas hem nogmaals aan.",
+  "api_error_posting_account_version_stale": "Een rekening in deze boeking is gewijzigd terwijl u hem invoerde. Laad hem opnieuw en voer hem nogmaals in.",
   "api_error_network": "De server is niet bereikbaar. Controleer de verbinding en probeer het opnieuw.",
   "api_error_not_found": "Het gevraagde item is niet gevonden.",
   "api_error_provider_error": "De externe aanbieder heeft het verzoek geweigerd. Controleer de verbinding en probeer het opnieuw.",

@@ -143,6 +143,7 @@
   "api_error_investment_event_out_of_order": "Esta posición se registra en orden: una operación no puede tener fecha anterior a una venta ya registrada. Regístrela después de esa venta, o corrija primero la venta.",
   "api_error_transaction_draft_not_user_creatable": "Solo un proceso automático puede crear borradores. Guarda los asientos manuales directamente en el libro mayor.",
   "api_error_transaction_version_stale": "Este asiento cambió en otra pestaña o ventana mientras lo editaba. Vuelva a cargarlo y realice el cambio de nuevo.",
+  "api_error_posting_account_version_stale": "Una cuenta usada por este asiento cambió mientras lo introducía. Vuelva a cargarlo e introdúzcalo de nuevo.",
   "api_error_network": "No se ha podido contactar con el servidor. Compruebe la conexión y vuelva a intentarlo.",
   "api_error_not_found": "No se ha encontrado el elemento solicitado.",
   "api_error_provider_error": "El proveedor externo ha rechazado la solicitud. Compruebe la conexión y vuelva a intentarlo.",

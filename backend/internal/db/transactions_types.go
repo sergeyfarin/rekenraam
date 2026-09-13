@@ -18,6 +18,10 @@ var (
 	ErrTransactionVersionStale = errors.New("transaction changed after this edit was prepared")
 	ErrTransactionDeleted      = errors.New("soft-deleted transaction cannot be updated")
 	ErrArchivedTag             = errors.New("archived tag cannot be assigned")
+	// ErrPostingAccountVersionStale reports a write whose posting checks were
+	// decided against an account version that is no longer the account's
+	// latest. See requireAccountRuleDependenciesTx (T-100).
+	ErrPostingAccountVersionStale = errors.New("posting account changed after this write was prepared")
 )
 
 type TransactionRepository struct {
@@ -220,6 +224,10 @@ type CreateTransactionParams struct {
 	CheckpointCandidates       []PeriodScopedCheckpointRef
 	ReconciliationOverride     bool
 	InvalidateCheckpointReason string
+	// AccountRuleDependencies are the accounts whose versions the posting
+	// checks in Spec were decided against. The write transaction refuses the
+	// spec if any of them has been restructured since (T-100).
+	AccountRuleDependencies []AccountRuleDependency
 }
 
 type UpdateTransactionParams struct {
@@ -246,6 +254,10 @@ type UpdateTransactionParams struct {
 	// transaction has moved on since (T-94); it is required, because a spec
 	// prepared against no particular version cannot be checked at all.
 	ExpectedVersionID int64
+	// AccountRuleDependencies are the accounts whose versions the posting
+	// checks in Spec were decided against. The write transaction refuses the
+	// spec if any of them has been restructured since (T-100).
+	AccountRuleDependencies []AccountRuleDependency
 }
 
 type VoidTransactionParams struct {
@@ -302,6 +314,26 @@ type ApproveTransactionParams struct {
 	ChangeReason  string
 }
 
+// AccountRuleDependency names an account a prepared write's posting checks
+// depend on, together with the account's newest version at the moment those
+// checks were made. The financial write re-reads the same number inside its own
+// database transaction and refuses the write if it has moved (T-100).
+//
+// The dependency is account-wide rather than as-of-the-entry-date on purpose.
+// The rule it has to interlock with — "an account's structure may not change
+// once it has postings" — is itself account-wide, so a per-date dependency
+// would leave a gap: an edit effective in February could be admitted while an
+// unrelated January posting was in flight, and neither side would see the
+// other. Comparing the account's newest version makes the two rules exclude
+// each other in both commit orders.
+type AccountRuleDependency struct {
+	AccountID int64
+	// LatestVersionID is the account's highest account_versions.id at
+	// preparation time, used as an opaque change token for the account's whole
+	// version history.
+	LatestVersionID int64
+}
+
 type PostingAccountRule struct {
 	AccountID             int64
 	AccountClass          string
@@ -313,6 +345,13 @@ type PostingAccountRule struct {
 	AllowsPostings        bool
 	IsSystem              bool
 	AccountKind           string
+	// VersionID is the account version this rule was resolved from — the one
+	// effective on the entry date.
+	VersionID int64
+	// LatestVersionID is the account's newest version, which may be later than
+	// VersionID when the account has edits effective after the entry date. It
+	// is the change token carried in AccountRuleDependency (T-100).
+	LatestVersionID int64
 	// BaseKind is the account kind's family from the account_kinds table
 	// (e.g. both security_holding and fund_holding have base_kind
 	// "security_holding"). Rules that apply to a family of kinds key off this

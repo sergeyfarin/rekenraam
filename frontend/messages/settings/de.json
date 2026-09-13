@@ -143,6 +143,7 @@
   "api_error_investment_event_out_of_order": "Diese Position wird in zeitlicher Reihenfolge erfasst: Ein Handel kann nicht vor einem bereits erfassten Verkauf datiert werden. Erfassen Sie ihn nach diesem Verkauf oder korrigieren Sie zuerst den Verkauf.",
   "api_error_transaction_draft_not_user_creatable": "Entwürfe können nur durch einen automatischen Ablauf erstellt werden. Speichern Sie manuelle Buchungen direkt im Hauptbuch.",
   "api_error_transaction_version_stale": "Dieser Eintrag wurde in einem anderen Tab oder Fenster geändert, während Sie ihn bearbeitet haben. Laden Sie ihn neu und nehmen Sie die Änderung erneut vor.",
+  "api_error_posting_account_version_stale": "Ein in diesem Eintrag verwendetes Konto wurde geändert, während Sie ihn erfasst haben. Laden Sie neu und erfassen Sie ihn erneut.",
   "api_error_network": "Der Server ist nicht erreichbar. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
   "api_error_not_found": "Der angeforderte Eintrag wurde nicht gefunden.",
   "api_error_provider_error": "Der externe Anbieter hat die Anfrage abgelehnt. Prüfen Sie die Verbindung und versuchen Sie es erneut.",

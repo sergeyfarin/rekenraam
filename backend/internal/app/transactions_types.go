@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"sort"
 
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
@@ -16,7 +17,12 @@ var (
 	// version another write has already replaced. The caller has to re-read and
 	// decide again; retrying the same body would reapply facts the user never
 	// saw (T-94).
-	ErrTransactionVersionStale        = errors.New("transaction changed after this edit was prepared")
+	ErrTransactionVersionStale = errors.New("transaction changed after this edit was prepared")
+	// ErrPostingAccountVersionStale reports a write whose posting checks were
+	// decided against an account that has been restructured since (T-100).
+	// Like ErrTransactionVersionStale it is a retry-after-reload conflict, not
+	// a rejection of what the caller asked for.
+	ErrPostingAccountVersionStale     = errors.New("posting account changed after this write was prepared")
 	ErrTransactionDeleted             = errors.New("soft-deleted transaction must be restored first")
 	ErrTransactionDraftNotVoidable    = errors.New("draft transaction cannot be voided; post or delete it instead")
 	ErrInvestmentWorkflowRequired     = errors.New("investment-linked transaction requires an investment workflow")
@@ -172,6 +178,15 @@ type UpdateTransactionInput struct {
 	ChangeReason           string
 	ReconciliationOverride bool
 	AllowDraftPromotion    bool
+	// ExpectedVersionID is the transaction version the caller composed Spec
+	// from. It is how a caller that read the transaction itself — PostTransaction
+	// builds the promotion spec out of its own read — binds that spec to the
+	// version it came from: this method reads the transaction a second time,
+	// and without the binding the write would be checked against a version
+	// nobody prepared anything against (T-94). Callers that hand over a spec
+	// they did not derive from a prior read may leave it zero; promotion may
+	// not.
+	ExpectedVersionID int64
 }
 
 type PostTransactionInput struct {
@@ -321,6 +336,43 @@ type cleanTransactionOptions struct {
 	// struct rather than on CreateTransactionInput so that the exemption cannot
 	// be reached from the API layer by populating a request field.
 	AllowSubledgerManagedPostings bool
+	// AccountRuleDependencies, when non-nil, collects the accounts whose
+	// versions this spec's posting checks were decided against, so the write
+	// can refuse the spec if one of them is restructured before it commits
+	// (T-100). Only the paths that go on to write set it; previews and
+	// template validation leave it nil.
+	AccountRuleDependencies *accountRuleDependencies
+}
+
+// accountRuleDependencies accumulates, while a spec is being cleaned, the
+// account version each posting check was decided against. One entry per
+// account: every check on the same account reads the same version, so a second
+// sighting is either identical or a bug in the caller's ordering.
+type accountRuleDependencies struct {
+	latestVersionByAccount map[int64]int64
+}
+
+func newAccountRuleDependencies() *accountRuleDependencies {
+	return &accountRuleDependencies{latestVersionByAccount: map[int64]int64{}}
+}
+
+func (d *accountRuleDependencies) observe(rule db.PostingAccountRule) {
+	if d == nil || rule.AccountID <= 0 {
+		return
+	}
+	d.latestVersionByAccount[rule.AccountID] = rule.LatestVersionID
+}
+
+func (d *accountRuleDependencies) list() []db.AccountRuleDependency {
+	if d == nil {
+		return nil
+	}
+	dependencies := make([]db.AccountRuleDependency, 0, len(d.latestVersionByAccount))
+	for accountID, latestVersionID := range d.latestVersionByAccount {
+		dependencies = append(dependencies, db.AccountRuleDependency{AccountID: accountID, LatestVersionID: latestVersionID})
+	}
+	sort.Slice(dependencies, func(i, j int) bool { return dependencies[i].AccountID < dependencies[j].AccountID })
+	return dependencies
 }
 
 type existingPostingState struct {

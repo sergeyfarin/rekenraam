@@ -15,6 +15,12 @@ func (r *TransactionRepository) PostingAccountRule(ctx context.Context, bookID i
 	if err := r.database.QueryRowContext(ctx, `
 		SELECT
 			a.id,
+			av.id,
+			(
+				SELECT MAX(latest_av.id)
+				FROM account_versions latest_av
+				WHERE latest_av.account_id = a.id
+			),
 			av.account_class,
 			av.status,
 			av.opened_on,
@@ -40,6 +46,8 @@ func (r *TransactionRepository) PostingAccountRule(ctx context.Context, bookID i
 			)
 	`, bookID, accountID, entryDate).Scan(
 		&rule.AccountID,
+		&rule.VersionID,
+		&rule.LatestVersionID,
 		&rule.AccountClass,
 		&rule.Status,
 		&rule.OpenedOn,
@@ -75,6 +83,12 @@ func (r *TransactionRepository) EarliestPostingAccountRule(ctx context.Context, 
 	if err := r.database.QueryRowContext(ctx, `
 		SELECT
 			a.id,
+			av.id,
+			(
+				SELECT MAX(latest_av.id)
+				FROM account_versions latest_av
+				WHERE latest_av.account_id = a.id
+			),
 			av.account_class,
 			av.status,
 			av.opened_on,
@@ -99,6 +113,8 @@ func (r *TransactionRepository) EarliestPostingAccountRule(ctx context.Context, 
 			)
 	`, bookID, accountID).Scan(
 		&rule.AccountID,
+		&rule.VersionID,
+		&rule.LatestVersionID,
 		&rule.AccountClass,
 		&rule.Status,
 		&rule.OpenedOn,

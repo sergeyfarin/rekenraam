@@ -34,16 +34,33 @@ rewritten, and this mapping is how to read it.
 
 ## General
 
-### T-94 Reconciliation guard can go stale before commit `[~]`
+### T-94 Reconciliation guard can go stale before commit `[x]`
 
-**Third pass: P1 / promotion gap remains.** `PostTransaction` captures a draft
-spec, then `UpdateTransaction` reads the draft again and supplies that newer
-version to the repository guard. A draft moved from January into February
-between those reads can still post the old January spec behind an active
-January checkpoint without an override. Carry the first source version through
-promotion or prepare from one authoritative record. The earlier write-boundary
-fix remains valid. Evidence: `docs/reviews/ledger-investments-third-pass-2026-09-13.md`,
-`TestThirdPassPromotionMustPreserveItsFirstReadVersion`.
+**Third pass fixed 2026-09-13.** The version guard was sound; what defeated it
+was the seam above it. `PostTransaction` read the draft, built the promotion
+spec from it, and handed that spec to `UpdateTransaction`, which read the draft
+a *second* time and supplied that read's version to the repository — so the
+version checked was never the one the spec came from, and the check passed no
+matter what happened in between. A draft moved from January to February between
+the two reads posted the old January spec behind an active January checkpoint
+with no override.
+
+`UpdateTransactionInput.ExpectedVersionID` now carries the version a caller
+composed its spec from; `PostTransaction` passes the version of its own read,
+and `UpdateTransaction` refuses the promotion when the second read disagrees.
+A promotion that names no version is refused outright, so no future caller can
+reintroduce the unbound path. Independently, the promotion's checkpoint
+candidates are now the union of the stored positions and the promoted spec's
+own — the guard describes the postings that actually enter the ledger, and
+catches the same interleaving a second way.
+
+Proved by `backend/internal/app/transactions_prepared_write_race_test.go`
+(`TestDraftPromotionPreparedBeforeAnEditIsRefused` asserts the refusal, that
+the intervening edit is what stands, and that the January checkpoint is
+untouched; `TestDraftPromotionWithoutItsSourceVersionIsRefused` pins the
+contract; `TestPostTransactionStillPromotesAnUntouchedDraft` keeps the ordinary
+promotion working). Both fail with the check stubbed out. The reviewer's
+`TestThirdPassPromotionMustPreserveItsFirstReadVersion` probe passes.
 
 **Second pass fixed 2026-09-13.** The candidates were not the only thing
 prepared outside the write: so were the spec and the transaction facts they
@@ -340,17 +357,50 @@ Proved by `TestFractionalSaleRetainsPricedMarketValue`
 no-price reason, and `TestNormalized*` in `backend/internal/exact/scaled_test.go`.
 All fail with the restatement stubbed out.
 
-### T-100 Posting validation can outlive the account role it checked `[ ]`
+### T-100 Posting validation can outlive the account role it checked `[x]`
 
-**P1 / release blocker.** `backend/internal/app/transactions_validate.go:356`
-resolves account rules before the write. Prepare a generic 10-security-unit
-entry into an unused `other_asset`, change it through the account service to
-`security_holding`, then commit the prepared entry: it succeeds with no lots.
-Fresh preparation correctly rejects the same entry. Account creation and the
-kind change both succeed through real services. Check effective account/version
-dependencies inside the write, and sweep reciprocal structural-edit races plus
-investment/import paths. Evidence: the third-pass review and
-`TestThirdPassPreparedPostingMustRevalidateAccountRole`.
+**Fixed 2026-09-13.** Posting eligibility — does this account take postings, is
+it a holding account the investment subledger owns, does it fix a default
+commodity — was resolved before the write opened, and the write looked at
+nothing but the spec it was handed. An ordinary 10-unit entry prepared against
+an unused `other_asset` account committed after that account had become a
+`security_holding`, leaving journal quantities with no lot behind them: exactly
+what the T-96 fence exists to prevent, and refused when the same entry is
+prepared fresh.
+
+The rules stay in the service, where they can produce messages a caller can
+act on. What moved into the write is the question of whether the facts they
+were decided on still hold: a prepared write now names the accounts its posting
+checks read (`db.AccountRuleDependency`, collected by `cleanPosting` while the
+spec is cleaned), and `requireAccountRuleDependenciesTx` re-reads each
+account's newest version inside the write transaction and refuses the spec if
+it has moved. It lives in `createTransactionWithAuditTx` — the funnel every
+create path meets, generic, recurring and the investment writes that pair a
+journal with lots — and in `UpdateTransaction`. A write that reaches it without
+naming the accounts in its own spec is refused rather than silently unguarded.
+
+The dependency is account-wide rather than as-of-the-entry-date, because the
+rule it interlocks with is: **the reciprocal race is closed at the same time.**
+`AccountService.UpdateAccount` still asks "does this account have postings?"
+first, for the specific message, but that lock is now also enforced inside
+`AccountRepository.UpdateAccount`'s own transaction
+(`RequireNoPostingsForStructure` / `RequireNoPostingsForCommodity`). Whichever
+of the two commits second now fails, in both orders.
+
+The refusal surfaces as `app.ErrPostingAccountVersionStale` → HTTP 409
+`POSTING_ACCOUNT_VERSION_STALE`, translated in all six locales as "reload and
+make your entry again".
+
+Proved by `backend/internal/app/transactions_prepared_write_race_test.go`:
+`TestPreparedPostingIsRefusedAfterTheAccountBecomesAHolding` (generic path;
+asserts no transaction and no lots were written),
+`TestPreparedInvestmentPostingIsRefusedAfterTheHoldingAccountChanges` (through
+`CreateTransactionAndLot`, the investment subledger's own write), and
+`TestAccountStructureChangeIsRefusedWhenAPostingCommitsFirst` (the reciprocal
+direction). All fail with the guard stubbed out. Imports and recurring
+generation both prepare through `prepareCreateTransactionForWrite` and so carry
+dependencies by construction. The reviewer's
+`TestThirdPassPreparedPostingMustRevalidateAccountRole` probe passes.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 

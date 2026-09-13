@@ -143,6 +143,7 @@
   "api_error_investment_event_out_of_order": "Cette position se saisit dans l'ordre : une opération ne peut pas être datée avant une vente déjà enregistrée. Enregistrez-la après cette vente, ou corrigez d'abord la vente.",
   "api_error_transaction_draft_not_user_creatable": "Seul un processus automatique peut créer des brouillons. Enregistrez les écritures manuelles directement dans le grand livre.",
   "api_error_transaction_version_stale": "Cette écriture a été modifiée dans un autre onglet ou une autre fenêtre pendant votre saisie. Rechargez-la et refaites votre modification.",
+  "api_error_posting_account_version_stale": "Un compte utilisé par cette écriture a été modifié pendant votre saisie. Rechargez-la et ressaisissez-la.",
   "api_error_network": "Le serveur est injoignable. Vérifiez la connexion et réessayez.",
   "api_error_not_found": "L'élément demandé est introuvable.",
   "api_error_provider_error": "Le fournisseur externe a rejeté la demande. Vérifiez la connexion et réessayez.",

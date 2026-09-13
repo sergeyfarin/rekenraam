@@ -370,6 +370,10 @@ func (s *TransactionService) cleanPosting(ctx context.Context, input PostingInpu
 		}
 		return db.PostingSpec{}, fmt.Errorf("read posting account rule: %w", err)
 	}
+	// Every check below reads this account version, so the write's dependency
+	// on it starts here — before the first decision is made, and whether or not
+	// that decision is a rejection (T-100).
+	options.AccountRuleDependencies.observe(accountRule)
 	if accountRule.Status != "active" || !accountRule.AllowsPostings {
 		return db.PostingSpec{}, ValidationError{Message: "posting account is not active for postings"}
 	}

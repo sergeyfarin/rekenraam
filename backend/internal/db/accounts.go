@@ -12,6 +12,13 @@ import (
 var (
 	ErrSystemAccountsSetupComplete = errors.New("system accounts setup already complete")
 	ErrAccountDeleteNotPermitted   = errors.New("account cannot be deleted")
+	// ErrAccountStructureLocked and ErrAccountCurrencyLocked report a
+	// structural or default-commodity edit that the account write found
+	// postings for inside its own database transaction (T-100). The service
+	// asks the same questions first, for a cheap answer and a message that
+	// names the field; these fire when the answer changed before the write.
+	ErrAccountStructureLocked = errors.New("account structure cannot be changed after postings exist")
+	ErrAccountCurrencyLocked  = errors.New("account currency cannot be changed after postings exist")
 )
 
 type AccountRepository struct {
@@ -109,6 +116,14 @@ type UpdateAccountParams struct {
 	ChangeReason    string
 	RecordedAt      string
 	EffectiveFrom   string
+	// RequireNoPostingsForStructure and RequireNoPostingsForCommodity re-ask,
+	// inside the write transaction, the question the service already asked
+	// outside it: does this account have any postings? An account whose
+	// structure or default commodity is changing must have none, and a posting
+	// prepared against the old structure can commit in between (T-100). Set
+	// them whenever the corresponding part of the spec actually changes.
+	RequireNoPostingsForStructure bool
+	RequireNoPostingsForCommodity bool
 }
 
 type DeleteAccountParams struct {
@@ -406,6 +421,18 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, params UpdateAcco
 	current, err := currentAccountByID(ctx, tx, params.BookID, params.AccountID)
 	if err != nil {
 		return AccountRecord{}, err
+	}
+	if params.RequireNoPostingsForStructure || params.RequireNoPostingsForCommodity {
+		hasPostings, err := accountHasPostings(ctx, tx, params.BookID, params.AccountID)
+		if err != nil {
+			return AccountRecord{}, err
+		}
+		if hasPostings {
+			if params.RequireNoPostingsForCommodity {
+				return AccountRecord{}, ErrAccountCurrencyLocked
+			}
+			return AccountRecord{}, ErrAccountStructureLocked
+		}
 	}
 
 	status := params.Status
@@ -744,8 +771,18 @@ func (r *AccountRepository) CurrentCurrencyByCode(ctx context.Context, bookID in
 }
 
 func (r *AccountRepository) AccountHasPostings(ctx context.Context, bookID int64, accountID int64) (bool, error) {
+	return accountHasPostings(ctx, r.database, bookID, accountID)
+}
+
+// rowQueryer is satisfied by both *sql.DB and *sql.Tx, so a question can be
+// asked either outside a write or inside one without a second copy of the query.
+type rowQueryer interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func accountHasPostings(ctx context.Context, queryer rowQueryer, bookID int64, accountID int64) (bool, error) {
 	var exists int
-	if err := r.database.QueryRowContext(ctx, `
+	if err := queryer.QueryRowContext(ctx, `
 		SELECT EXISTS(
 			SELECT 1
 			FROM posting_versions

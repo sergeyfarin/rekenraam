@@ -19,6 +19,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   INVESTMENT_EVENT_OUT_OF_ORDER: () => m.api_error_investment_event_out_of_order(),
   TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   TRANSACTION_VERSION_STALE: () => m.api_error_transaction_version_stale(),
+  POSTING_ACCOUNT_VERSION_STALE: () => m.api_error_posting_account_version_stale(),
   RECURRING_TEMPLATE_UNBALANCED: () => m.api_error_recurring_template_unbalanced(),
   RECURRING_SCHEDULE_INVALID: () => m.api_error_recurring_schedule_invalid(),
   RECURRING_OCCURRENCE_ALREADY_MATERIALIZED: () => m.api_error_recurring_occurrence_already_materialized(),

@@ -79,8 +79,15 @@ func invalidateCreateTransactionCheckpointsTx(ctx context.Context, tx *sql.Tx, p
 	})
 }
 
+// createTransactionWithAuditTx is where every path that puts a new transaction
+// into the ledger meets — the generic create, the recurring generator, and the
+// investment writes that pair a journal with lots — so it is where a prepared
+// write's account dependencies have to be checked (T-100).
 func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams) (TransactionRecord, int64, error) {
 	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return TransactionRecord{}, 0, err
+	}
+	if err := requireAccountRuleDependenciesTx(ctx, tx, params.Spec, params.AccountRuleDependencies); err != nil {
 		return TransactionRecord{}, 0, err
 	}
 
@@ -137,6 +144,61 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 	return record, auditEventID, nil
 }
 
+// requireAccountRuleDependenciesTx refuses a write whose posting checks were
+// decided against account versions that are no longer current (T-100).
+//
+// Posting eligibility — does this account take postings at all, is it a holding
+// account the investment subledger owns, does it fix a default commodity — is
+// resolved by the service before the write transaction opens. An account edit
+// that lands in between is not visible to those checks, and the write itself
+// looks at nothing but the spec it was handed, so an ordinary entry prepared
+// against an unused other_asset account could still commit after that account
+// had become a security holding, leaving journal quantities no lot accounts
+// for. The same window runs the other way: an account restructure is admitted
+// on the strength of "this account has no postings yet", which can stop being
+// true before it commits.
+//
+// Both sides of that window are closed by checking, inside the write, that the
+// account has not gained a version since the checks were made — the mirror of
+// the account write's own in-transaction postings check. The rules themselves
+// stay where they are, in the service, where they can produce the messages a
+// caller can act on; what moves down here is only the question of whether the
+// facts they were decided on still hold.
+func requireAccountRuleDependenciesTx(ctx context.Context, tx *sql.Tx, spec TransactionSpec, dependencies []AccountRuleDependency) error {
+	prepared := make(map[int64]int64, len(dependencies))
+	for _, dependency := range dependencies {
+		if dependency.AccountID <= 0 || dependency.LatestVersionID <= 0 {
+			return fmt.Errorf("%w: account %d was prepared without a version", ErrPostingAccountVersionStale, dependency.AccountID)
+		}
+		prepared[dependency.AccountID] = dependency.LatestVersionID
+	}
+
+	for _, entry := range spec.JournalEntries {
+		for _, posting := range entry.Postings {
+			expected, ok := prepared[posting.AccountID]
+			if !ok {
+				// A write path that reaches here without naming the account
+				// versions its checks were decided against has no guard at
+				// all, which is the state this check exists to end. Refusing
+				// is the only answer that does not quietly restore it.
+				return fmt.Errorf("%w: account %d was not named by the prepared write", ErrPostingAccountVersionStale, posting.AccountID)
+			}
+			var latestVersionID sql.NullInt64
+			if err := tx.QueryRowContext(ctx, `
+				SELECT MAX(id)
+				FROM account_versions
+				WHERE account_id = ?
+			`, posting.AccountID).Scan(&latestVersionID); err != nil {
+				return fmt.Errorf("read account version for posting dependency: %w", err)
+			}
+			if !latestVersionID.Valid || latestVersionID.Int64 != expected {
+				return fmt.Errorf("%w: account %d was checked against version %d, current is %d", ErrPostingAccountVersionStale, posting.AccountID, expected, latestVersionID.Int64)
+			}
+		}
+	}
+	return nil
+}
+
 // requireExpectedVersionTx refuses a write whose inputs were prepared against a
 // different version of the transaction than the one it is about to replace
 // (T-94).
@@ -177,6 +239,9 @@ func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params Up
 			return TransactionRecord{}, err
 		}
 		if err := requireExpectedVersionTx(params.ExpectedVersionID, current); err != nil {
+			return TransactionRecord{}, err
+		}
+		if err := requireAccountRuleDependenciesTx(ctx, tx, params.Spec, params.AccountRuleDependencies); err != nil {
 			return TransactionRecord{}, err
 		}
 		if current.Status == "voided" {
