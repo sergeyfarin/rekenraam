@@ -62,6 +62,11 @@ preparation, too.
 
 ### T-95 / P1 — disposals consume lots acquired after the sale date
 
+**Fixed 2026-09-13.** Temporal eligibility is now enforced in the three
+lot-selection queries and in `disposeLotTx`; see `docs/backlog.md` (T-95) for
+what shipped, the named regression tests, and what the fix deliberately does
+not cover. The finding as written below stands as the record of the defect.
+
 Locations: `backend/internal/db/investments.go:1300`, `:1387`, and `:2512`.
 
 FIFO/LIFO and average-cost queries select current open lots without an
@@ -208,6 +213,7 @@ Prioritize invariant/state-transition coverage over a larger global percentage.
 ## Gates before household onboarding
 
 1. Fix T-94–T-96 and pass permanent regression cases plus backend race checks.
+   **T-95 done 2026-09-13**; T-94 and T-96 remain.
 2. Resolve T-97 before claiming fractional-investment support or onboarding a
    household whose broker trades fractions.
 3. ~~Restore coverage tooling and run the browser release preflight

@@ -46,13 +46,43 @@ Move enforcement into the write transaction and cover advancing checkpoints,
 overrides and the other mutation paths. Full evidence and executable probes:
 `docs/reviews/ledger-investments-release-review-2026-09-13.md` (T-94).
 
-### T-95 Investment disposals can consume future acquisitions `[ ]`
+### T-95 Investment disposals can consume future acquisitions `[x]`
 
-**P1 / v0.1 blocker.** `backend/internal/db/investments.go:1300`, `:1387`,
-`:2512` select/consume current open lots without enforcing acquisition date.
-A May sale consumes a June acquisition under all four methods. Protect previews,
-sales and write-offs, and define safe out-of-order historical-entry behavior.
-Evidence and required test matrix: the 2026-09-13 release review (T-95).
+**Was P1 / v0.1 blocker. Fixed 2026-09-13.** The three lot-selection queries
+(FIFO/LIFO, average cost, and cost-commodity resolution) now restrict to
+`opened_on <= event_date`, and `disposeLotTx` — the per-lot sink every method,
+preview and write-off funnels through — rejects a lot acquired after the
+disposal date. The sink is what closes `specific_lot`, which names its lot
+outright and never passes through a selection query. The boundary is inclusive,
+so same-day buy-and-sell still works. An unset or malformed event date is now
+rejected in `disposeLotsWithAuditTx` rather than silently matching no lots.
+
+Proved by named tests in `backend/internal/app/investments_temporal_test.go`:
+`TestSellRejectsLotsAcquiredAfterTheSaleDateUnderEveryMethod` (all four methods,
+preview and commit, asserting the lot is left untouched),
+`TestSellAllowsAcquisitionAndDisposalOnTheSameDay` (the inclusive boundary),
+`TestSellSelectsOnlyLotsHeldOnTheSaleDate` and
+`TestSellUnderLIFOIgnoresLotsAcquiredAfterTheSaleDate` (selection, not just
+rejection — a future lot must not supply basis while quantities still look
+right), `TestSellWithSpecificLotRejectsAnAllocationDatedAfterTheSale`, and
+`TestWriteOffRejectsLotsAcquiredAfterTheWriteOffDate`. Each fails without the
+fix.
+
+Two API tests reached the reconciliation-override guard through a write-off
+dated before the fixture's own buy date, and were re-dated rather than
+weakened: what they are about is the override, not out-of-order disposal.
+
+Sweep (checklist item 13): all five `status = 'open'` lot queries were checked.
+The two left unfiltered are current-state projections —
+`updatePositionMethodFamilyTx` (is the position closed *now*) and the positions
+read model — and both now carry a comment saying so, so a later sweep does not
+"fix" them.
+
+**Not closed by this:** out-of-order entry in the other direction. A backdated
+*acquisition* entered after a later disposal still does not re-pool the earlier
+sale's basis, and a corrective replay policy remains undefined. Temporal
+eligibility stops the corruption; it does not make historical back-entry a
+supported workflow.
 
 ### T-96 Generic postings bypass the investment subledger `[ ]`
 

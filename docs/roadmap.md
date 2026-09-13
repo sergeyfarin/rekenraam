@@ -555,7 +555,8 @@ The v0.1 migration freeze and open reliability dispositions are recorded in
 `docs/reviews/v0.1-release-triage-2026-09-11.md`. Its release decision is
 superseded by `docs/reviews/ledger-investments-release-review-2026-09-13.md`:
 **hold v0.1 and real-data onboarding for T-94–T-96**, and resolve T-97 before
-fractional-investment onboarding. The public-announcement work below remains
+fractional-investment onboarding. T-95 is fixed (2026-09-13); T-94 and T-96
+still hold the release. The public-announcement work below remains
 a separate, later gate.
 
 ### Before making the repository public

@@ -1129,6 +1129,15 @@ func disposeLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams) ([
 	return disposeLotsWithAuditTx(ctx, tx, params, auditEventID)
 }
 
+// isDisposalCalendarDate reports whether a disposal's event date is a real
+// YYYY-MM-DD calendar date, matching the CHECK constraint on the columns it is
+// compared against. Lot eligibility is decided by string comparison, which is
+// only meaningful for that shape.
+func isDisposalCalendarDate(date string) bool {
+	_, err := time.Parse(time.DateOnly, date)
+	return err == nil
+}
+
 var validCostBasisMethods = map[string]bool{
 	"fifo":         true,
 	"lifo":         true,
@@ -1145,6 +1154,13 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 		return nil, fmt.Errorf("%w: cost basis method %q is not supported", ErrInvalidDisposalParams, method)
 	}
 	params.CostBasisMethod = method
+	// Every lot-eligibility comparison below is a string comparison against
+	// this date, and an empty or malformed one sorts below every stored
+	// opened_on — which would read as "no lots are eligible" rather than as the
+	// programming error it is. Reject it here instead.
+	if !isDisposalCalendarDate(params.EventDate) {
+		return nil, fmt.Errorf("%w: disposal event date %q is not a calendar date", ErrInvalidDisposalParams, params.EventDate)
+	}
 	costCommodityID, err := resolveDisposalCostCommodityTx(ctx, tx, params)
 	if err != nil {
 		return nil, err
@@ -1178,9 +1194,10 @@ func resolveDisposalCostCommodityTx(ctx context.Context, tx *sql.Tx, params Disp
 		SELECT DISTINCT cost_commodity_id
 		FROM investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND status = 'open'
+			AND opened_on <= ?
 			AND (? = 0 OR cost_commodity_id = ?)
 		ORDER BY cost_commodity_id
-	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.CostCommodityID)
+	`, params.BookID, params.AccountID, params.CommodityID, params.EventDate, params.CostCommodityID, params.CostCommodityID)
 	if err != nil {
 		return 0, fmt.Errorf("read disposal cost commodities: %w", err)
 	}
@@ -1231,6 +1248,11 @@ func enforcePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispo
 }
 
 func updatePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, method string, auditEventID int64) error {
+	// Deliberately not date-filtered, unlike the lot-eligibility queries above
+	// (T-95). This asks whether the position is closed *now* so the method-family
+	// lock can be released; a lot opened after this disposal's date still keeps
+	// the position open and the lock in force. Adding `opened_on <= ?` here would
+	// release the lock while shares are still held.
 	var openCount int
 	if err := tx.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM investment_lots
@@ -1300,7 +1322,8 @@ func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 		SELECT id, remaining_quantity_value, remaining_quantity_scale
 		FROM investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND status = 'open'
-		`+orderClause, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID)
+			AND opened_on <= ?
+		`+orderClause, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate)
 	if err != nil {
 		return nil, fmt.Errorf("read %s lots: %w", method, err)
 	}
@@ -1389,8 +1412,9 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		       remaining_cost_basis_value, remaining_cost_basis_scale
 		FROM investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND status = 'open'
+			AND opened_on <= ?
 		ORDER BY opened_on, id
-	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID)
+	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate)
 	if err != nil {
 		return nil, fmt.Errorf("read average-cost lots: %w", err)
 	}
@@ -2517,6 +2541,18 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 	if lot.AccountID != params.AccountID || lot.CommodityID != params.CommodityID ||
 		lot.CostCommodityID != params.CostCommodityID || lot.Status != "open" {
 		return LotDisposalRecord{}, ErrNotFound
+	}
+	// Temporal eligibility (T-95). A disposal may only consume shares that were
+	// already held on its own event date; same-day acquisition and disposal is
+	// legitimate, so the boundary is inclusive. The selection queries above
+	// filter future lots out so FIFO/LIFO/average-cost pick the right eligible
+	// lot instead of failing here, but specific_lot names a lot directly and
+	// every method — sale, write-off, preview — funnels through this function,
+	// so this is the check no disposal path can bypass. Without it a May sale
+	// consumes a June acquisition: the position goes negative in history and
+	// the disposal's basis comes from shares that did not exist yet.
+	if lot.OpenedOn > params.EventDate {
+		return LotDisposalRecord{}, fmt.Errorf("%w: lot %d was acquired on %s, after the disposal date %s", ErrInvalidDisposalParams, lotID, lot.OpenedOn, params.EventDate)
 	}
 	if quantityScale != lot.RemainingQuantityScale {
 		return LotDisposalRecord{}, fmt.Errorf("lot allocation scale does not match lot scale")

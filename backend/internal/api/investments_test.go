@@ -732,8 +732,16 @@ func TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates(t *testing
 	instrument := createInstrumentForSession(t, handler, f, "DEADCO4")
 	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
 
+	// The acquisition has to precede the backdated disposal below. What this
+	// test is about is the reconciliation override, and it reached that guard
+	// through a write-off dated before the shared fixture's own buy date —
+	// which T-95 now rejects on its own terms, before reconciliation is ever
+	// consulted. Buying in January keeps the disposal inside the reconciled
+	// window without also making it a sale of shares not yet held.
+	buy := tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000)
+	buy.TransactionDate = "2026-01-01"
 	buyRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
-		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+		buy, http.StatusCreated)
 	var bought investmentTradeResponse
 	require.NoError(t, json.NewDecoder(buyRes.Body).Decode(&bought))
 
@@ -788,8 +796,14 @@ func TestInvestmentReconciliationImpact_NamesTheCheckpointsTheWriteInvalidates(t
 	instrument := createInstrumentForSession(t, handler, f, "DEADCO5")
 	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
 
+	// Dated before the backdated write-off below, for the same reason as
+	// TestInvestmentTrade_ReconciliationOverrideProceedsAndInvalidates: the
+	// subject here is which checkpoints the preview names, not whether a
+	// disposal may precede its acquisition (T-95).
+	buy := tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000)
+	buy.TransactionDate = "2026-01-01"
 	buyRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
-		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+		buy, http.StatusCreated)
 	var bought investmentTradeResponse
 	require.NoError(t, json.NewDecoder(buyRes.Body).Decode(&bought))
 
