@@ -174,6 +174,38 @@ func (s *ScaledInt) TruncatedTo(scale int) *ScaledInt {
 	return restated
 }
 
+// Normalized returns a copy restated at the shallowest scale that still
+// represents the same value exactly: redundant trailing decimal zeros are
+// removed, down to scale 0. Nothing is rounded — 1.500 becomes 1.5, and 1.234
+// is returned unchanged.
+//
+// Use it when a computed value must land in a fixed-width column and its
+// scale, rather than its magnitude, is what makes it too wide. A product of two
+// scaled values carries the sum of their scales, so a result that is perfectly
+// representable can still overflow an int64 purely through zeros it does not
+// need (T-99).
+func (s *ScaledInt) Normalized() *ScaledInt {
+	normalized := &ScaledInt{value: new(big.Int).Set(s.value), scale: s.scale}
+	if normalized.scale == 0 {
+		return normalized
+	}
+	if normalized.value.Sign() == 0 {
+		normalized.scale = 0
+		return normalized
+	}
+	ten := big.NewInt(10)
+	quotient, remainder := new(big.Int), new(big.Int)
+	for normalized.scale > 0 {
+		quotient.QuoRem(normalized.value, ten, remainder)
+		if remainder.Sign() != 0 {
+			break
+		}
+		normalized.value.Set(quotient)
+		normalized.scale--
+	}
+	return normalized
+}
+
 // Int64 returns the coefficient as an int64, or ErrInt64Range if it does not
 // fit. Callers storing into an int64 column must use this rather than
 // BigInt().Int64(), which wraps silently.

@@ -21,6 +21,9 @@ var (
 	ErrInsufficientLots           = errors.New("insufficient lots")
 	ErrInvalidDisposalParams      = errors.New("invalid disposal parameters")
 	ErrEventSuggestionNotPending  = errors.New("investment event suggestion is not pending")
+	// ErrOutOfOrderPositionEvent reports a lot event dated before something the
+	// position has already recorded. See requirePositionEventInOrderTx.
+	ErrOutOfOrderPositionEvent = errors.New("investment events must be entered in chronological order")
 )
 
 type InvestmentRepository struct {
@@ -1028,6 +1031,12 @@ func rescaleQuantity(value exact.Coefficient, from int, to int) (exact.Coefficie
 }
 
 func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotParams, auditEventID int64) (InvestmentLotRecord, error) {
+	// A lot the position should have owned when it was last disposed of cannot
+	// be added afterwards: the disposal took its basis from a pool this lot was
+	// not in, and nothing recomputes that (T-95).
+	if err := requirePositionEventInOrderTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.OpenedOn, "an acquisition"); err != nil {
+		return InvestmentLotRecord{}, err
+	}
 	// A lot's projection starts at the scale its acquisition was recorded at and
 	// widens only when a disposal actually needs finer precision (T-97). It is
 	// tempting to normalize every lot to the position's full precision up front
@@ -1171,6 +1180,72 @@ var validCostBasisMethods = map[string]bool{
 	"specific_lot": true,
 }
 
+// acquisitionEventKinds are the lot events that only add to a position. Every
+// other kind — disposals, splits, manual adjustments — reads the position's
+// current projection and rewrites it, which is what makes ordering matter.
+var acquisitionEventKinds = []string{"acquisition", "reinvested_dividend"}
+
+// latestPositionRewriteDateTx returns the most recent date on which something
+// rewrote a position's projection. An empty string means nothing has.
+func latestPositionRewriteDateTx(ctx context.Context, tx *sql.Tx, bookID int64, accountID int64, commodityID int64) (string, error) {
+	placeholders := strings.TrimSuffix(strings.Repeat("?, ", len(acquisitionEventKinds)), ", ")
+	args := []any{bookID, accountID, commodityID}
+	for _, kind := range acquisitionEventKinds {
+		args = append(args, kind)
+	}
+	var latest string
+	if err := tx.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(e.event_date), '')
+		FROM investment_lot_events e
+		JOIN investment_lots l ON l.id = e.lot_id
+		WHERE l.book_id = ? AND l.account_id = ? AND l.commodity_id = ?
+			AND e.event_kind NOT IN (`+placeholders+`)
+	`, args...).Scan(&latest); err != nil {
+		return "", fmt.Errorf("read latest position rewrite date: %w", err)
+	}
+	return latest, nil
+}
+
+// requirePositionEventInOrderTx refuses a lot event dated before the last event
+// that rewrote the position's projection (T-95).
+//
+// A lot's cost_basis_value is immutable acquisition evidence, but the
+// projection every method reads — remaining quantity and remaining basis — is
+// not: a disposal rewrites it from whatever the previous events left behind.
+// Average cost redistributes pooled basis across the surviving lots, and
+// FIFO/LIFO consume specific ones. So the projection is only meaningful as of
+// the last disposal applied to it, and an event dated earlier reads a position
+// that has already moved past it. The reported case: buy 10 in January for
+// 100, buy 10 in June for 300, sell 5 in July at average cost — after which
+// January's surviving 5 shares carry 100 of pooled basis — then enter a sale
+// dated March. The March sale passes the opened_on filter, selects the January
+// lot, and takes basis that only exists because of a June purchase and a July
+// sale.
+//
+// A backdated event is refused only against *disposals*, not against later
+// acquisitions, because acquisitions alone leave the projection intact: the
+// opened_on filters already keep a later purchase out of an earlier sale's
+// pool, and its own remaining basis is still exactly what was paid. Selling in
+// March after entering a June purchase therefore still works, and so does
+// entering the June purchase afterwards.
+//
+// Replaying a position under a corrected history is a real feature, with
+// elections and journal entries to preserve, and it is not this. Until it
+// exists, the honest answer is to refuse the event rather than to quietly
+// compute it against the wrong state. The comparison is inclusive, so same-day
+// events stay legal in the order they are entered: buying and selling on one
+// day, or two sales on one day, both still work.
+func requirePositionEventInOrderTx(ctx context.Context, tx *sql.Tx, bookID int64, accountID int64, commodityID int64, eventDate string, what string) error {
+	latest, err := latestPositionRewriteDateTx(ctx, tx, bookID, accountID, commodityID)
+	if err != nil {
+		return err
+	}
+	if latest == "" || eventDate >= latest {
+		return nil
+	}
+	return fmt.Errorf("%w: %s dated %s is before this position's disposal on %s", ErrOutOfOrderPositionEvent, what, eventDate, latest)
+}
+
 func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64) ([]LotDisposalRecord, error) {
 	method := params.CostBasisMethod
 	if method == "" {
@@ -1186,6 +1261,11 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 	// programming error it is. Reject it here instead.
 	if !isDisposalCalendarDate(params.EventDate) {
 		return nil, fmt.Errorf("%w: disposal event date %q is not a calendar date", ErrInvalidDisposalParams, params.EventDate)
+	}
+	// A disposal reads the projection a previous disposal left behind, so none
+	// may already sit after this date (T-95).
+	if err := requirePositionEventInOrderTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.EventDate, "a disposal"); err != nil {
+		return nil, err
 	}
 	costCommodityID, err := resolveDisposalCostCommodityTx(ctx, tx, params)
 	if err != nil {
@@ -2991,10 +3071,42 @@ type UnrealizedGainRecord struct {
 	MarketValueScale        *int
 	UnrealizedGainValue     *int64
 	UnrealizedGainScale     *int
+	ValuationUnavailable    string
+}
+
+// Valuation unavailability reasons reported by PositionsWithGains when market
+// value and unrealized gain are absent. They are distinct outcomes: a position
+// nobody has priced is ordinary, while one whose value the read model cannot
+// represent is a defect to surface rather than disguise as a missing price.
+const (
+	ValuationNoPrice         = "no_price"
+	ValuationUnrepresentable = "unrepresentable"
+)
+
+// int64AtUsableScale restates a computed valuation so it fits the read model's
+// int64 columns, reporting whether it could. The scale it was computed at is
+// kept whenever the coefficient already fits, so ordinary positions report
+// exactly the precision they always have; only a value that would otherwise be
+// dropped is restated by removing the trailing zeros it does not need (T-99).
+// A product of quantity and price carries the sum of their scales, so widening
+// a lot's quantity scale by six places during a fractional disposal multiplies
+// the reported market value's coefficient by a million without changing what
+// it is worth.
+func int64AtUsableScale(value *exact.ScaledInt) (int64, int, bool) {
+	if fitted, err := value.Int64(); err == nil {
+		return fitted, value.Scale(), true
+	}
+	normalized := value.Normalized()
+	fitted, err := normalized.Int64()
+	if err != nil {
+		return 0, 0, false
+	}
+	return fitted, normalized.Scale(), true
 }
 
 // PositionsWithGains returns all open positions with unrealized gain computed when a
-// price observation is available. Nil gain fields mean no price is known.
+// price observation is available. Absent gain fields carry a ValuationUnavailable
+// reason saying whether no price is known or the value cannot be represented.
 func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID int64) ([]UnrealizedGainRecord, error) {
 	positions, err := r.Positions(ctx, bookID)
 	if err != nil {
@@ -3015,18 +3127,16 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 			LatestPriceDate:         pos.LatestPriceDate,
 		}
 		if pos.LatestPriceValue.Valid && pos.LatestPriceScale.Valid {
-			// market_value = quantity × (price_value / base_quantity_value)
-			// All arithmetic in big.Int to avoid float loss.
+			// market_value = quantity × price_value ÷ base_quantity_value,
+			// through exact.MulDivRound so the whole thing is one big.Int
+			// expression with a single rounding step at the end — the same
+			// helper the reporting conversions use, rather than a second
+			// hand-rolled copy of the arithmetic.
 			//
-			// price_observations stores: price_value at price_scale, and base_quantity_value
-			// at base_quantity_scale. The per-unit price is price_value/base_quantity_value
-			// at scale (price_scale - base_quantity_scale).
-			//
-			// market_numerator   = qty × price_value  (integer product)
-			// market_denominator = base_quantity_value (integer divisor)
-			// market_scale       = qty_scale + price_scale - base_quantity_scale
-			//
-			// Defaults when base_quantity fields are NULL: value=1, scale=0.
+			// price_observations stores price_value at price_scale and
+			// base_quantity_value at base_quantity_scale, so a quote can be
+			// "per 100 units" as easily as per one. Defaults when those columns
+			// are NULL: value=1, scale=0.
 			baseQtyValue := int64(1)
 			baseQtyScale := 0
 			if pos.LatestPriceBaseQuantityValue.Valid {
@@ -3040,36 +3150,39 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 			}
 
 			priceScale := int(pos.LatestPriceScale.Int64)
-			marketScale := pos.QuantityScale + priceScale - baseQtyScale
-
-			qtyBig := pos.QuantityValue.BigInt()
-			numeratorBig := new(big.Int).Mul(qtyBig, big.NewInt(pos.LatestPriceValue.Int64))
-			marketBig := new(big.Int).Quo(numeratorBig, big.NewInt(baseQtyValue)) // integer division
-
-			// Align market and cost to the larger scale for subtraction.
-			costBig := big.NewInt(pos.RemainingCostBasisValue)
-			costScale := pos.RemainingCostBasisScale
-			gainScale := max(marketScale, costScale)
-			if marketScale < gainScale {
-				diff := gainScale - marketScale
-				factor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(diff)), nil)
-				marketBig.Mul(marketBig, factor)
-			}
-			if costScale < gainScale {
-				diff := gainScale - costScale
-				factor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(diff)), nil)
-				costBig.Mul(costBig, factor)
+			// The product's natural scale is the sum of the quantity's and the
+			// price's, less the base quantity's; a price quoted per fractional
+			// base quantity can drive that below zero, which is not a scale.
+			// Compute at whichever of that, the cost basis's scale and zero is
+			// deepest, so nothing is rounded away before the subtraction.
+			gainScale := max(max(pos.QuantityScale+priceScale-baseQtyScale, pos.RemainingCostBasisScale), 0)
+			marketBig, err := exact.MulDivRound(
+				pos.QuantityValue.BigInt(), pos.QuantityScale,
+				big.NewInt(pos.LatestPriceValue.Int64), priceScale,
+				big.NewInt(baseQtyValue), baseQtyScale,
+				gainScale,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("value position %d/%d: %w", pos.AccountID, pos.CommodityID, err)
 			}
 
-			gainBig := new(big.Int).Sub(marketBig, costBig)
-			if marketBig.IsInt64() && gainBig.IsInt64() {
-				mv := marketBig.Int64()
-				gain := gainBig.Int64()
-				record.MarketValueValue = &mv
-				record.MarketValueScale = &gainScale
-				record.UnrealizedGainValue = &gain
-				record.UnrealizedGainScale = &gainScale
+			market := exact.ScaledIntFromBig(marketBig, gainScale)
+			cost := exact.ScaledIntFromInt64(pos.RemainingCostBasisValue, pos.RemainingCostBasisScale)
+			gain := exact.ScaledIntFromBig(marketBig, gainScale)
+			gain.SubScaled(cost)
+
+			marketValue, marketValueScale, marketFits := int64AtUsableScale(market)
+			gainValue, gainValueScale, gainFits := int64AtUsableScale(gain)
+			if marketFits && gainFits {
+				record.MarketValueValue = &marketValue
+				record.MarketValueScale = &marketValueScale
+				record.UnrealizedGainValue = &gainValue
+				record.UnrealizedGainScale = &gainValueScale
+			} else {
+				record.ValuationUnavailable = ValuationUnrepresentable
 			}
+		} else {
+			record.ValuationUnavailable = ValuationNoPrice
 		}
 		records = append(records, record)
 	}

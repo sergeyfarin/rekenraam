@@ -1020,6 +1020,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "dividend default not found")
 	case errors.Is(err, app.ErrInvestmentLotsInsufficient):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "insufficient investment lots")
+	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
 	// Every investment trade goes through the transaction write guard, so a
 	// backdated trade into a reconciled period raises this. It was unmapped and
 	// surfaced as a 500 "internal server error", which told the user nothing and
@@ -1274,6 +1276,7 @@ type unrealizedGainResponse struct {
 	MarketValueScale        *int              `json:"market_value_scale,omitempty"`
 	UnrealizedGainValue     *int64            `json:"unrealized_gain_value,omitempty"`
 	UnrealizedGainScale     *int              `json:"unrealized_gain_scale,omitempty"`
+	ValuationUnavailable    string            `json:"valuation_unavailable,omitempty"`
 }
 
 type realizedGainTotalResponse struct {
@@ -1341,6 +1344,7 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				MarketValueScale:        e.MarketValueScale,
 				UnrealizedGainValue:     e.UnrealizedGainValue,
 				UnrealizedGainScale:     e.UnrealizedGainScale,
+				ValuationUnavailable:    e.ValuationUnavailable,
 			})
 		}
 

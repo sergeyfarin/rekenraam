@@ -34,16 +34,32 @@ rewritten, and this mapping is how to read it.
 
 ## General
 
-### T-94 Reconciliation guard can go stale before commit `[~]`
+### T-94 Reconciliation guard can go stale before commit `[x]`
 
-**Second pass: P1 / release blocker remains.** The original stale-checkpoint
-case is fixed, but the candidates can themselves become stale after another
-transaction edit. A prepared metadata-only edit (empty candidates) overwrites
-a newer reconciled 20 EUR posting with its old 10 EUR value, leaving the
-checkpoint active. This is broader than the sequence-only residual below.
-Recompute from current transaction facts inside the write or reject a stale
-version. Evidence: `docs/reviews/ledger-investments-second-pass-2026-09-13.md`,
-T-94; executable `TestSecondPassStaleMetadataEditChangesReconciledAmount`.
+**Second pass fixed 2026-09-13.** The candidates were not the only thing
+prepared outside the write: so were the spec and the transaction facts they
+were derived from. A write now names the version it was prepared against
+(`ExpectedVersionID` on the update/void/unvoid/soft-delete params) and
+`requireExpectedVersionTx` (`backend/internal/db/transactions_write.go`)
+refuses to apply it to any other version, inside the same transaction that
+reads it. A missing version is refused too, so a future write path cannot opt
+out by forgetting. Approve is deliberately exempt and says so: it carries no
+spec and no candidates from outside the write.
+
+The refusal surfaces as `app.ErrTransactionVersionStale` → HTTP 409
+`TRANSACTION_VERSION_STALE`, which the frontend translates as "reload and make
+your change again" — an ordinary metadata edit against the current version
+still commits without an override, which was the trap to avoid.
+
+Proved by `backend/internal/app/transactions_stale_version_test.go`: the
+reported interleaving (prepare a memo edit, let another edit change the amount
+and reconcile it, then commit) is refused with the 20 EUR amount and its
+checkpoint intact; update, void, unvoid and soft-delete each refuse a
+superseded version and a missing one; a stale draft promotion leaves the draft
+a draft. All fail with the check stubbed out. The sequence-position residual
+described below is closed by the same guard, since a reorder supersedes the
+version the candidates were built from.
+
 The earlier closure assessment below is retained as fix history.
 
 **Was P1 / v0.1 blocker. Fixed 2026-09-13.** The guard now runs inside the
@@ -96,17 +112,37 @@ hand-edited or patched database, the case `CheckAccountVersionCoverage`
 describes. Worth doing if that ever stops being hypothetical; not worth
 carrying as an open item before v0.1.
 
-### T-95 Investment disposals can consume future acquisitions `[~]`
+### T-95 Investment disposals can consume future acquisitions `[x]`
 
-**Second pass: P1 / release blocker remains.** Date filtering fixes the original
-future-lot selection. A backdated average-cost disposal can still consume
-future basis redistributed onto an eligible old lot by a later sale. Confirmed:
-January 10 shares / 100 EUR, June 10 / 300 EUR, July sell 5, then March sell 5;
-March wrongly takes 100 EUR basis instead of 50. Reject unsupported out-of-order
-events or provide explicit correct replay. This is a disposal, not merely the
-backdated-acquisition limitation below. Evidence:
-`docs/reviews/ledger-investments-second-pass-2026-09-13.md`, T-95;
-`TestSecondPassBackdatedSaleUsesFuturePooledBasis`.
+**Second pass fixed 2026-09-13.** Filtering `opened_on` made lot *selection*
+historical; it could not make a lot's remaining basis historical, because a
+later average-cost sale has already redistributed that projection across the
+survivors. `requirePositionEventInOrderTx`
+(`backend/internal/db/investments.go`) now refuses any lot event dated before
+the position's most recent projection-rewriting event, in the two shared sinks
+every path funnels through — `disposeLotsWithAuditTx` (sell, write-off,
+preview, import) and `createLotWithAuditTx` (buy, reinvested dividend,
+import). `ErrOutOfOrderPositionEvent` surfaces on every one of them as HTTP 409
+`INVESTMENT_EVENT_OUT_OF_ORDER` — its own code rather than a bare validation
+failure, because the rule is not visible in the form: the message names the
+disposal that blocks the date, and the six locales explain that a position is
+entered in order.
+
+The rule is narrower than "chronological entry only", deliberately: a
+backdated event is refused against later **disposals**, not against later
+acquisitions. Acquisitions alone leave the projection intact — the `opened_on`
+filters keep a later purchase out of an earlier sale's pool and its own basis
+is still exactly what was paid — so selling in March after entering a June
+purchase still works. Same-day ordering is by entry: the comparison is
+inclusive, so buy-and-sell on one day and two sales on one day both still work.
+
+Proved by named tests in `backend/internal/app/investments_temporal_test.go`:
+the reported January/June/July/March sequence is refused at both preview and
+commit with the position unchanged; a backdated write-off and a backdated
+purchase after a sale are refused; the March sale that follows only purchases
+still commits and takes 50.00 EUR of basis; same-day events still commit. All
+fail with the guard stubbed out.
+
 The earlier closure assessment below is retained as fix history.
 
 **Was P1 / v0.1 blocker. Fixed 2026-09-13.** The three lot-selection queries
@@ -235,28 +271,65 @@ structural fields lock once there is posted activity. The widen-on-demand design
 does not need to consult it, so nothing reads it today.
 
 
-### T-98 Investment API does not validate holding and settlement roles `[ ]`
+### T-98 Investment API does not validate holding and settlement roles `[x]`
 
-**P1 / release blocker.** `backend/internal/app/investments.go:2188` accepts
-positive account/commodity IDs without checking their domain roles; the private
-investment preparation exemption (`transactions_write.go:43`) then permits all
-holding postings. A buy using one holding as both holding/cash and its security
-as both commodities commits zero net journal shares plus an open 10-share lot.
-The normal UI excludes this cash choice, but the API must reject it. Validate
-roles and narrow exemptions to supported subledger effects; different IDs alone
-are insufficient. Evidence: the second-pass review, T-98, and
-`TestSecondPassInvestmentBuyCannotUseHoldingAsCashLeg`.
+**Was P1 / release blocker. Fixed 2026-09-13.** The investment commands earn
+their exemption from the T-96 subledger fence by writing the lots their
+postings stand for, but the exemption was granted per command rather than per
+posting — so a command could spend it on a posting no lot accounted for.
+`backend/internal/app/investments_roles.go` now checks, against the account as
+of the transaction's own date, that each account plays the role the command
+means it to: the holding account is subledger-managed, the settlement account
+is an asset or liability that is not, income is an income account, withholding
+is not the income it was deducted from, and no role may be a system account.
+Commodity kinds are checked the same way — the traded commodity is never a
+currency, the settlement commodity always is. Checking that the IDs differ
+would not have been enough: two different holding accounts fail identically,
+and the role rules catch that.
 
-### T-99 Fractional disposal can silently remove a priced valuation `[ ]`
+The exemption itself was narrowed too: a cash dividend creates no lot, so
+`dividend()` now prepares through the ordinary path instead of the investment
+one, and can no longer reach a holding account at all.
 
-**P2.** `backend/internal/db/investments.go:3065` omits market value/gain if
-raw coefficients exceed int64. After T-97, buying 1,000 shares for 100,000 EUR
-and selling 0.000001 at the same unit price widens the quantity scale and makes
-both values null despite a current price and an exact representable market
-value of 99,999.9999 EUR. Normalize redundant zeros or use lossless coefficients;
-keep absent-price and overflow outcomes distinct. Test downstream gains after
-fractional disposal, not just lot conservation. Evidence: the second-pass
-review, T-99, and `TestSecondPassFractionalSaleRetainsPricedMarketValue`.
+Wired into `buyPlan`, `sellPlan`, `PreviewSell`, `dividendPlan` and
+`reinvestedDividendPlan`, so preview and commit refuse identically. Proved by
+`backend/internal/app/investments_roles_test.go` (six rejected combinations
+plus the write-off that legitimately has no cash leg, each asserting no lot
+survives) and
+`TestBuyInvestment_RejectsHoldingAccountRolesThroughHTTP` in
+`backend/internal/api/investments_test.go`, which exercises the write boundary
+the UI picker never touches. All fail with the validation stubbed out.
+
+The investments test fixtures used an ordinary checking account as the holding
+account, which is why nothing caught this; they now seed a real
+`security_holding` account and a real income account.
+
+### T-99 Fractional disposal can silently remove a priced valuation `[x]`
+
+**Was P2. Fixed 2026-09-13.** Market value is quantity × price, so its
+coefficient carries the sum of both scales; a fractional disposal widening the
+quantity scale by six places was enough to push an ordinary six-figure
+position past int64, after which `PositionsWithGains` dropped both the value
+and the gain and the UI showed the position as unpriced.
+
+`exact.ScaledInt.Normalized()` is the new shared primitive — it restates a
+value at the shallowest scale that still represents it exactly — and
+`int64AtUsableScale` (`backend/internal/db/investments.go`) uses it only when
+the computed coefficient does not fit, so every position that already reported
+a valuation reports exactly the same one. The valuation arithmetic moved onto
+`exact.ScaledInt` at the same time, including a defensive restatement for
+prices quoted per fractional base quantity.
+
+Absent and unrepresentable are now distinct outcomes: `valuation_unavailable`
+(`no_price` | `unrepresentable`) on the unrealized-gains response, with the
+gains table showing "Value out of range" rather than the no-price dash.
+
+Proved by `TestFractionalSaleRetainsPricedMarketValue`
+(`backend/internal/app/investments_valuation_test.go`), which asserts the exact
+99,999.9999 EUR across the whole buy → fractional sale → gains chain,
+`backend/internal/db/investments_valuation_test.go` for the restatement and the
+no-price reason, and `TestNormalized*` in `backend/internal/exact/scaled_test.go`.
+All fail with the restatement stubbed out.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 

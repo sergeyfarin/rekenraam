@@ -156,6 +156,10 @@ helpers. The reconciliation probe deliberately executes the same preparation
 and commit phases with an intervening service update/reconciliation, rather
 than relying on a timing-sensitive goroutine race.
 
+**All four findings were fixed on 2026-09-13** (see `docs/backlog.md`, T-94,
+T-95, T-98, T-99). The probes below reproduce on the reviewed revision, not on
+`HEAD`, where all four pass and permanent regression tests have replaced them.
+
 To reproduce on the reviewed code, first ensure the destination is absent:
 
 ```sh

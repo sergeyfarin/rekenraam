@@ -78,7 +78,9 @@ func newInvestmentsTestFixtureWithOptions(t *testing.T, withPricing bool) *inves
 	require.NoError(t, err)
 
 	cashAccountID := seedTestAccount(t, database, "active", true)
-	holdingAccountID := seedTestAccount(t, database, "active", true)
+	// A real holding account: the investment subledger owns these, and the role
+	// rules the services enforce only mean anything against one (T-98).
+	holdingAccountID := seedTestAccountWithClass(t, database, "active", true, "asset", "security_holding")
 	incomeAccountID := seedTestAccountWithClass(t, database, "active", true, "income", "income")
 	seedCommodityTradingAccount(t, database)
 

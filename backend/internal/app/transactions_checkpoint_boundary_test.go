@@ -206,18 +206,20 @@ func TestCreateTransactionInvalidatesTheCheckpointActiveAtCommitTime(t *testing.
 func TestWritePathsEnforceTheCheckpointBoundaryInTheRepository(t *testing.T) {
 	ctx := context.Background()
 
-	setup := func(t *testing.T) (*investmentsTestFixture, Transaction, []db.PeriodScopedCheckpointRef) {
+	// The version is passed the way the service passes it (T-94), so each write
+	// gets as far as the checkpoint guard — which is what this test is about.
+	setup := func(t *testing.T) (*investmentsTestFixture, Transaction, []db.PeriodScopedCheckpointRef, int64) {
 		t.Helper()
 		f := newInvestmentsTestFixture(t)
 		created := postEUR(t, f, "2026-01-01", 10)
 		reconcileCash(t, f, "2026-01-31", 10)
 		current, err := f.transactionService.repository.TransactionByID(ctx, BookID, created.ID)
 		require.NoError(t, err)
-		return f, created, periodScopedCandidatesFromRecord(current)
+		return f, created, periodScopedCandidatesFromRecord(current), current.VersionID
 	}
 
 	t.Run("update", func(t *testing.T) {
-		f, created, candidates := setup(t)
+		f, created, candidates, versionID := setup(t)
 		current, err := f.transactionService.repository.TransactionByID(ctx, BookID, created.ID)
 		require.NoError(t, err)
 		spec, err := f.transactionService.cleanTransactionSpec(ctx, transactionInputFromTransaction(created), cleanTransactionOptions{
@@ -228,28 +230,28 @@ func TestWritePathsEnforceTheCheckpointBoundaryInTheRepository(t *testing.T) {
 			BookID: BookID, TransactionID: created.ID, ActorUserID: f.ownerUserID,
 			OriginType: "browser_api", Operation: "transaction.update",
 			Spec: spec, RecordedAt: "2026-03-01T00:00:00Z",
-			ChangeReason: "edited", CheckpointCandidates: candidates,
+			ChangeReason: "edited", CheckpointCandidates: candidates, ExpectedVersionID: versionID,
 		})
 		require.ErrorIs(t, err, db.ErrReconciliationOverrideRequired)
 	})
 
 	t.Run("void", func(t *testing.T) {
-		f, created, candidates := setup(t)
+		f, created, candidates, versionID := setup(t)
 		_, err := f.transactionService.repository.VoidTransaction(ctx, db.VoidTransactionParams{
 			BookID: BookID, TransactionID: created.ID, ActorUserID: f.ownerUserID,
 			OriginType: "browser_api", Operation: "transaction.void", RecordedAt: "2026-03-01T00:00:00Z",
-			ChangeReason: "voided", CheckpointCandidates: candidates,
+			ChangeReason: "voided", CheckpointCandidates: candidates, ExpectedVersionID: versionID,
 		})
 		require.ErrorIs(t, err, db.ErrReconciliationOverrideRequired)
 	})
 
 	t.Run("soft_delete", func(t *testing.T) {
-		f, created, candidates := setup(t)
+		f, created, candidates, versionID := setup(t)
 		_, err := f.transactionService.repository.SetTransactionDeleted(ctx, db.SetTransactionDeletedParams{
 			TransactionLifecycleParams: db.TransactionLifecycleParams{
 				BookID: BookID, TransactionID: created.ID, ActorUserID: f.ownerUserID,
 				OriginType: "browser_api", Operation: "transaction.soft_delete", RecordedAt: "2026-03-01T00:00:00Z",
-				ChangeReason: "deleted", CheckpointCandidates: candidates,
+				ChangeReason: "deleted", CheckpointCandidates: candidates, ExpectedVersionID: versionID,
 			}, Deleted: true,
 		})
 		require.ErrorIs(t, err, db.ErrReconciliationOverrideRequired)

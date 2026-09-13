@@ -1026,3 +1026,91 @@ func postingByAccount(t *testing.T, transaction transactionResponse, accountID i
 	require.Failf(t, "posting not found", "account_id=%d", accountID)
 	return postingResponse{}
 }
+
+// T-98. The write boundary is the API, not the picker: the buy form never
+// offers a holding account as the cash leg, and that is exactly why the
+// endpoint has to refuse it on its own.
+func TestBuyInvestment_RejectsHoldingAccountRolesThroughHTTP(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "ROLE")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	otherHolding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+
+	cases := []struct {
+		name string
+		body investmentTradeRequest
+	}{
+		{
+			name: "the holding account settles its own purchase",
+			body: investmentTradeRequest{
+				TransactionDate: "2026-02-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+				CashAccountID: holding.ID, QuantityValue: exact.New(10), QuantityScale: 0,
+				CashAmountValue: 10, CashAmountScale: 0, CashCommodityID: instrument.CommodityID,
+			},
+		},
+		{
+			name: "another holding account settles the purchase",
+			body: investmentTradeRequest{
+				TransactionDate: "2026-02-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+				CashAccountID: otherHolding.ID, QuantityValue: exact.New(10), QuantityScale: 0,
+				CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: f.commodityID,
+			},
+		},
+		{
+			name: "the security is its own settlement commodity",
+			body: investmentTradeRequest{
+				TransactionDate: "2026-02-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+				CashAccountID: f.cashAccount.ID, QuantityValue: exact.New(10), QuantityScale: 0,
+				CashAmountValue: 100000, CashAmountScale: 2, CashCommodityID: instrument.CommodityID,
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", tc.body, http.StatusBadRequest)
+			var body errorResponse
+			require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+			assert.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+		})
+	}
+
+	// Nothing was created by any of them.
+	res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/investments/positions", nil, http.StatusOK)
+	var positions investmentPositionsResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&positions))
+	assert.Empty(t, positions.Positions)
+}
+
+// T-95. A backdated trade is refused with its own code, not a bare validation
+// failure: the rule is not visible in the form, so the client has something
+// specific to explain.
+func TestSellInvestment_BackdatedBehindASaleReportsItsOwnCode(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+
+	instrument := createInstrumentForSession(t, handler, f, "ORDR")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+
+	sell := investmentTradeRequest{
+		TransactionDate: "2026-07-01", CommodityID: instrument.CommodityID, HoldingAccountID: holding.ID,
+		CashAccountID: f.cashAccount.ID, QuantityValue: exact.New(5), QuantityScale: 0,
+		CashAmountValue: 60000, CashAmountScale: 2, CashCommodityID: f.commodityID,
+	}
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sell, http.StatusCreated)
+
+	backdated := sell
+	backdated.TransactionDate = "2026-03-01"
+	for _, path := range []string{"/api/v1/investments/sell", "/api/v1/investments/sell/preview"} {
+		res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, backdated, http.StatusConflict)
+		var body errorResponse
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+		assert.Equal(t, "INVESTMENT_EVENT_OUT_OF_ORDER", body.Error.Code)
+		assert.Contains(t, body.Error.Message, "2026-07-01", "the message names the disposal that blocks it")
+	}
+}

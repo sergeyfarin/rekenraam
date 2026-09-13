@@ -131,7 +131,7 @@ func TestPreviewSellRealizedGainAlignsMismatchedCostBasisScales(t *testing.T) {
 	require.NoError(t, err)
 
 	cashAccountID := seedTestAccount(t, database, "active", true)
-	holdingAccountID := seedTestAccount(t, database, "active", true)
+	holdingAccountID := seedTestAccountWithClass(t, database, "active", true, "asset", "security_holding")
 	seedCommodityTradingAccount(t, database)
 
 	accountRepository := db.NewAccountRepository(database)

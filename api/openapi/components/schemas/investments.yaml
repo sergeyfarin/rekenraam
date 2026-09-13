@@ -1190,17 +1190,30 @@ UnrealizedGainEntry:
     market_value_value:
       type: integer
       format: int64
-      description: quantity × latest_price. Omitted when no price exists.
+      description: >-
+        quantity × latest_price. Omitted when valuation_unavailable is present.
     market_value_scale:
       type: integer
-      description: Omitted when no price exists.
+      description: >-
+        Scale of market_value_value. Reduced below the computed precision only
+        when redundant trailing zeros would otherwise overflow int64.
     unrealized_gain_value:
       type: integer
       format: int64
-      description: market_value − remaining_cost_basis. Omitted when no price exists.
+      description: >-
+        market_value − remaining_cost_basis. Omitted when valuation_unavailable
+        is present.
     unrealized_gain_scale:
       type: integer
-      description: Omitted when no price exists.
+      description: Omitted when valuation_unavailable is present.
+    valuation_unavailable:
+      type: string
+      enum: [no_price, unrepresentable]
+      description: >-
+        Present only when market value and unrealized gain are omitted, saying
+        why. no_price means no price observation exists for the position;
+        unrepresentable means one is priced but the value does not fit the
+        response's int64 fields.
 
 RealizedGainTotal:
   type: object

@@ -51,6 +51,15 @@
     return formatScaledValue(String(value), scale, locale);
   }
 
+  // A position with no price and one the backend could not represent both come
+  // back without a market value; only the second is worth telling the user
+  // about, so the two reasons must not share the placeholder dash.
+  function unavailableLabel(reason: string | undefined): string {
+    return reason === 'unrepresentable'
+      ? m.investments_gains_value_out_of_range()
+      : m.investments_gains_no_price();
+  }
+
   function gainClass(value: number | bigint): string {
     const n = typeof value === 'bigint' ? value : BigInt(Math.trunc(Number(value)));
     if (n > 0n) return 'text-green-700 dark:text-green-400';
@@ -100,7 +109,7 @@
                     {#if pos.market_value_value !== undefined && pos.market_value_scale !== undefined}
                       {formatGain(pos.market_value_value, pos.market_value_scale)}
                     {:else}
-                      <span class="text-muted">{m.investments_gains_no_price()}</span>
+                      <span class="text-muted">{unavailableLabel(pos.valuation_unavailable)}</span>
                     {/if}
                   </td>
                   <td class="py-3 pl-3 pr-5 text-right font-mono">
@@ -109,7 +118,7 @@
                         {formatGain(pos.unrealized_gain_value, pos.unrealized_gain_scale)}
                       </span>
                     {:else}
-                      <span class="text-muted">{m.investments_gains_no_price()}</span>
+                      <span class="text-muted">{unavailableLabel(pos.valuation_unavailable)}</span>
                     {/if}
                   </td>
                 </tr>

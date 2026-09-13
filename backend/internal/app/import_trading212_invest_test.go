@@ -65,7 +65,8 @@ func newInvestTestFixtureWithOptions(t *testing.T, seedTradingAccount bool) *inv
 	require.NoError(t, err)
 
 	cashAccountID := seedTestAccount(t, database, "active", true)
-	categoryAccountID := seedTestAccount(t, database, "active", true)
+	// Dividend income lands here, so it has to be an income account (T-98).
+	categoryAccountID := seedTestAccountWithClass(t, database, "active", true, "income", "income")
 	var tradingAccountID int64
 	if seedTradingAccount {
 		tradingAccountID = seedCommodityTradingAccount(t, database)

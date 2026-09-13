@@ -222,6 +222,9 @@ func (s *TransactionService) UpdateTransaction(ctx context.Context, input Update
 		CheckpointCandidates:       candidates,
 		ReconciliationOverride:     input.ReconciliationOverride,
 		InvalidateCheckpointReason: changeReason,
+		// The spec and the candidates above both describe this version; the
+		// write refuses them if the transaction has moved on since (T-94).
+		ExpectedVersionID: current.VersionID,
 	})
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)
@@ -317,6 +320,7 @@ func (s *TransactionService) VoidTransaction(ctx context.Context, input VoidTran
 		CheckpointCandidates:       candidates,
 		ReconciliationOverride:     input.ReconciliationOverride,
 		InvalidateCheckpointReason: changeReason,
+		ExpectedVersionID:          current.VersionID,
 	})
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)
@@ -345,7 +349,7 @@ func (s *TransactionService) UnvoidTransaction(ctx context.Context, input Transa
 		AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OriginType: input.OriginType,
 		Operation: "transaction.unvoid", RecordedAt: now, ChangeReason: changeReason,
 		CheckpointCandidates: candidates, ReconciliationOverride: input.ReconciliationOverride,
-		InvalidateCheckpointReason: changeReason,
+		InvalidateCheckpointReason: changeReason, ExpectedVersionID: current.VersionID,
 	})
 	if err != nil {
 		return Transaction{}, mapTransactionDBError(err)
@@ -389,7 +393,7 @@ func (s *TransactionService) setTransactionDeleted(ctx context.Context, input Tr
 			AuthSessionID: input.AuthSessionID, RequestID: input.RequestID, OriginType: input.OriginType,
 			Operation: operation, RecordedAt: now, ChangeReason: changeReason,
 			CheckpointCandidates: candidates, ReconciliationOverride: input.ReconciliationOverride,
-			InvalidateCheckpointReason: changeReason,
+			InvalidateCheckpointReason: changeReason, ExpectedVersionID: current.VersionID,
 		}, Deleted: deleted,
 	})
 	if err != nil {

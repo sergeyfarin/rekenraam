@@ -21,12 +21,21 @@ const (
 )
 
 var (
-	ErrInvestmentInstrumentNotFound   = errors.New("investment instrument not found")
-	ErrInvestmentInstrumentExists     = errors.New("investment instrument already exists")
-	ErrCostBasisProfileNotFound       = errors.New("cost basis profile not found")
-	ErrCostBasisProfileExists         = errors.New("cost basis profile already exists")
-	ErrDividendDefaultNotFound        = errors.New("dividend default not found")
-	ErrInvestmentLotsInsufficient     = errors.New("insufficient investment lots")
+	ErrInvestmentInstrumentNotFound = errors.New("investment instrument not found")
+	ErrInvestmentInstrumentExists   = errors.New("investment instrument already exists")
+	ErrCostBasisProfileNotFound     = errors.New("cost basis profile not found")
+	ErrCostBasisProfileExists       = errors.New("cost basis profile already exists")
+	ErrDividendDefaultNotFound      = errors.New("dividend default not found")
+	ErrInvestmentLotsInsufficient   = errors.New("insufficient investment lots")
+	// ErrInvestmentEventOutOfOrder reports a trade dated before something that
+	// has already rewritten the position's cost-basis projection. It is the
+	// repository's sentinel under this package's own name, so the API can key
+	// on it without importing db and the explanation the repository wrote —
+	// which event, which date, which disposal — reaches the user intact. It is
+	// not a plain validation failure because the rule is not discoverable from
+	// the form: the user has to be told that a position is entered in order,
+	// not merely that something is wrong (T-95).
+	ErrInvestmentEventOutOfOrder      = db.ErrOutOfOrderPositionEvent
 	ErrInvestmentSuggestionNotFound   = errors.New("investment event suggestion not found")
 	ErrInvestmentSuggestionNotPending = errors.New("investment event suggestion is not pending")
 	ErrAutomationRuleNotFound         = errors.New("investment automation rule not found")
@@ -296,9 +305,12 @@ type InvestmentWriteOffInput struct {
 }
 
 // asTradeInput reuses the shared disposal planner, which only reads the lot
-// selection fields. The zero cash fields are never consulted.
+// selection fields. The zero cash fields are never consulted — WriteOff says so
+// outright, so a validator handed this input knows the missing cash leg is the
+// point rather than an omission.
 func (input InvestmentWriteOffInput) asTradeInput() InvestmentTradeInput {
 	return InvestmentTradeInput{
+		WriteOff:         true,
 		OwnerUserID:      input.OwnerUserID,
 		AuthSessionID:    input.AuthSessionID,
 		RequestID:        input.RequestID,
@@ -975,6 +987,9 @@ func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeIn
 	if err := validateTradeInput(input); err != nil {
 		return investmentTransactionPlan{}, err
 	}
+	if err := s.validateTradeRoles(ctx, input); err != nil {
+		return investmentTransactionPlan{}, err
+	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -1068,6 +1083,9 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		transactionRecord, lot, err = s.repository.CreateTransactionAndLotWithPostWrite(ctx, transactionParams, lotParams, postWrite)
 	}
 	if err != nil {
+		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
+			return InvestmentTradeResult{}, err
+		}
 		return InvestmentTradeResult{}, fmt.Errorf("create buy transaction and lot: %w", mapTransactionDBError(err))
 	}
 	transaction := toTransaction(transactionRecord)
@@ -1135,6 +1153,9 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 	if err := validateTradeInput(input); err != nil {
 		return SellPreviewResult{}, err
 	}
+	if err := s.validateTradeRoles(ctx, input); err != nil {
+		return SellPreviewResult{}, err
+	}
 	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
 	if err != nil {
 		return SellPreviewResult{}, err
@@ -1146,6 +1167,9 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 		}
 		if errors.Is(err, db.ErrInvalidDisposalParams) {
 			return SellPreviewResult{}, ValidationError{Message: err.Error()}
+		}
+		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
+			return SellPreviewResult{}, err
 		}
 		return SellPreviewResult{}, fmt.Errorf("preview sell disposals: %w", err)
 	}
@@ -1237,6 +1261,11 @@ func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input Investmen
 	if _, err := validateWriteOffInput(input); err != nil {
 		return SellPreviewResult{}, err
 	}
+	// The commit path reaches these through sellPlan, and a preview that
+	// accepts what the commit will refuse is worse than no preview (T-98).
+	if err := s.validateTradeRoles(ctx, input.asTradeInput()); err != nil {
+		return SellPreviewResult{}, err
+	}
 	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
 	if err != nil {
 		return SellPreviewResult{}, err
@@ -1248,6 +1277,9 @@ func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input Investmen
 		}
 		if errors.Is(err, db.ErrInvalidDisposalParams) {
 			return SellPreviewResult{}, ValidationError{Message: err.Error()}
+		}
+		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
+			return SellPreviewResult{}, err
 		}
 		return SellPreviewResult{}, fmt.Errorf("preview write-off disposals: %w", err)
 	}
@@ -1310,6 +1342,9 @@ func (s *InvestmentService) sellWithPostWrite(ctx context.Context, input Investm
 
 func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeInput) (investmentTransactionPlan, error) {
 	if err := validateTradeInput(input); err != nil {
+		return investmentTransactionPlan{}, err
+	}
+	if err := s.validateTradeRoles(ctx, input); err != nil {
 		return investmentTransactionPlan{}, err
 	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
@@ -1417,6 +1452,9 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		if errors.Is(err, db.ErrInvalidDisposalParams) {
 			return InvestmentTradeResult{}, ValidationError{Message: err.Error()}
 		}
+		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
+			return InvestmentTradeResult{}, err
+		}
 		return InvestmentTradeResult{}, fmt.Errorf("dispose sell lots: %w", err)
 	}
 	transaction := toTransaction(transactionRecord)
@@ -1473,6 +1511,9 @@ func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInpu
 	}
 	if incomeAccountID <= 0 {
 		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
+	}
+	if err := s.validateDividendRoles(ctx, input, date, incomeAccountID); err != nil {
+		return investmentTransactionPlan{}, err
 	}
 	memo, err := cleanOptionalText(input.Memo, "memo", investmentTextMaxBytes)
 	if err != nil {
@@ -1541,7 +1582,12 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 	if postWrite == nil {
 		return s.transactionService.CreateTransaction(ctx, createInput)
 	}
-	params, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, createInput)
+	// A cash dividend touches cash, income and withholding only — it creates no
+	// lot — so it goes through the ordinary preparation. Handing it the
+	// subledger exemption just because it is an investment command would let an
+	// imported dividend post to a holding account with nothing to account for
+	// the shares (T-98).
+	params, err := s.transactionService.prepareCreateTransactionForWrite(ctx, createInput)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -1570,6 +1616,9 @@ func (s *InvestmentService) reinvestedDividendPlan(ctx context.Context, input Re
 	}
 	if incomeAccountID <= 0 {
 		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
+	}
+	if err := s.validateReinvestedDividendRoles(ctx, input, date, incomeAccountID); err != nil {
+		return investmentTransactionPlan{}, err
 	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
 	if err != nil {
@@ -1649,6 +1698,9 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 		EventKind:       "reinvested_dividend",
 	})
 	if err != nil {
+		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
+			return InvestmentTradeResult{}, err
+		}
 		return InvestmentTradeResult{}, fmt.Errorf("create reinvested dividend transaction and lot: %w", mapTransactionDBError(err))
 	}
 	transaction := toTransaction(transactionRecord)
@@ -2561,6 +2613,7 @@ type UnrealizedGainEntry struct {
 	MarketValueScale        *int
 	UnrealizedGainValue     *int64
 	UnrealizedGainScale     *int
+	ValuationUnavailable    string
 }
 
 func (s *InvestmentService) ListRealizedGains(ctx context.Context, params GainsReportParams) ([]RealizedGainEntry, error) {
@@ -2615,6 +2668,7 @@ func (s *InvestmentService) ListUnrealizedGains(ctx context.Context) ([]Unrealiz
 			MarketValueScale:        r.MarketValueScale,
 			UnrealizedGainValue:     r.UnrealizedGainValue,
 			UnrealizedGainScale:     r.UnrealizedGainScale,
+			ValuationUnavailable:    r.ValuationUnavailable,
 		})
 	}
 	return entries, nil

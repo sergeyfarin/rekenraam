@@ -280,6 +280,51 @@ func TestScaledIntReportsThirtyNineDigitResult(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Normalized
+// ---------------------------------------------------------------------------
+
+func TestNormalizedRemovesOnlyRedundantZeros(t *testing.T) {
+	cases := []struct {
+		name          string
+		value         string
+		scale         int
+		expected      string
+		expectedScale int
+	}{
+		{"padded product", "9999999990000000000", 14, "999999999", 4},
+		{"one redundant place", "1500", 3, "15", 1},
+		{"nothing to remove", "1234", 3, "1234", 3},
+		{"whole number keeps its zeros", "1000", 0, "1000", 0},
+		{"trailing zeros above the point stay", "100000", 2, "1000", 0},
+		{"negative", "-2500000", 6, "-25", 1},
+		{"zero collapses to scale 0", "0", 8, "0", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			original := ScaledIntFromCoefficient(MustParse(tc.value), tc.scale)
+			normalized := original.Normalized()
+
+			assert.Equal(t, tc.expected, normalized.BigInt().String())
+			assert.Equal(t, tc.expectedScale, normalized.Scale())
+			assert.Equal(t, 0, normalized.Cmp(original), "normalizing must not change the value")
+			assert.Equal(t, tc.scale, original.Scale(), "the receiver is not mutated")
+		})
+	}
+}
+
+func TestNormalizedMakesAPaddedValueFitInt64(t *testing.T) {
+	// The failure T-99 was made of: 999.999999 × 100 is 99,999.9999, which fits
+	// an int64 comfortably — but carried at the sum of both scales it does not.
+	padded := ScaledIntFromCoefficient(MustParse("9999999990000000000"), 14)
+	_, err := padded.Int64()
+	require.ErrorIs(t, err, ErrInt64Range)
+
+	fitted, err := padded.Normalized().Int64()
+	require.NoError(t, err)
+	assert.Equal(t, int64(999999999), fitted)
+}
+
+// ---------------------------------------------------------------------------
 // Pow10
 // ---------------------------------------------------------------------------
 

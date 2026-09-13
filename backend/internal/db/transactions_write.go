@@ -137,6 +137,34 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 	return record, auditEventID, nil
 }
 
+// requireExpectedVersionTx refuses a write whose inputs were prepared against a
+// different version of the transaction than the one it is about to replace
+// (T-94).
+//
+// A write is prepared in two halves: the service reads the transaction, cleans
+// a spec against it and derives the checkpoint candidates the write touches;
+// then the repository opens a transaction and applies them. Between the two,
+// another request can change the same transaction. The candidates were honest
+// when they were computed — a description-only edit really did touch no
+// reconciled position — but by commit time the spec they describe is a
+// different edit: it restores the amount the other request changed, and the
+// guard has been handed an empty candidate list for a write that now moves a
+// reconciled balance.
+//
+// Recomputing the diff inside the write would mean running the cleaner and the
+// whole service-side spec pipeline down here. Refusing the stale write instead
+// is both cheaper and more honest: the edit was composed against facts that no
+// longer hold, so the caller has to see the new ones and decide again.
+func requireExpectedVersionTx(expectedVersionID int64, current TransactionRecord) error {
+	if expectedVersionID <= 0 {
+		return fmt.Errorf("%w: no expected version was supplied", ErrTransactionVersionStale)
+	}
+	if expectedVersionID != current.VersionID {
+		return fmt.Errorf("%w: prepared against version %d, current is %d", ErrTransactionVersionStale, expectedVersionID, current.VersionID)
+	}
+	return nil
+}
+
 func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params UpdateTransactionParams) (TransactionRecord, error) {
 	return withTransactionRecordTx(r, ctx, "update transaction", func(tx *sql.Tx) (TransactionRecord, error) {
 
@@ -146,6 +174,9 @@ func (r *TransactionRepository) UpdateTransaction(ctx context.Context, params Up
 
 		current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
 		if err != nil {
+			return TransactionRecord{}, err
+		}
+		if err := requireExpectedVersionTx(params.ExpectedVersionID, current); err != nil {
 			return TransactionRecord{}, err
 		}
 		if current.Status == "voided" {
@@ -218,6 +249,9 @@ func (r *TransactionRepository) VoidTransaction(ctx context.Context, params Void
 		}
 		current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
 		if err != nil {
+			return TransactionRecord{}, err
+		}
+		if err := requireExpectedVersionTx(params.ExpectedVersionID, current); err != nil {
 			return TransactionRecord{}, err
 		}
 		if current.Status == "voided" {
@@ -297,6 +331,9 @@ func (r *TransactionRepository) UnvoidTransaction(ctx context.Context, params Tr
 		if err != nil {
 			return TransactionRecord{}, err
 		}
+		if err := requireExpectedVersionTx(params.ExpectedVersionID, current); err != nil {
+			return TransactionRecord{}, err
+		}
 		if current.DeletedAt.Valid {
 			return TransactionRecord{}, ErrTransactionDeleted
 		}
@@ -363,6 +400,9 @@ func (r *TransactionRepository) SetTransactionDeleted(ctx context.Context, param
 		}
 		current, err := transactionByID(ctx, tx, params.BookID, params.TransactionID)
 		if err != nil {
+			return TransactionRecord{}, err
+		}
+		if err := requireExpectedVersionTx(params.ExpectedVersionID, current); err != nil {
 			return TransactionRecord{}, err
 		}
 		if current.DeletedAt.Valid == params.Deleted {
@@ -433,6 +473,9 @@ func (r *TransactionRepository) ApproveTransaction(ctx context.Context, params A
 		if err != nil {
 			return TransactionRecord{}, err
 		}
+		// No version check here: approval carries no spec and no candidates
+		// prepared outside this transaction — everything it decides, it decides
+		// from the record it just read (T-94).
 		if current.Status == "voided" {
 			return TransactionRecord{}, ErrTransactionVoided
 		}

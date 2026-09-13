@@ -26,6 +26,8 @@ func writeTransactionServiceError(w http.ResponseWriter, r *http.Request, logger
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "posted or voided transaction cannot be deleted")
 	case errors.Is(err, app.ErrTransactionVoided):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "voided transaction cannot be edited")
+	case errors.Is(err, app.ErrTransactionVersionStale):
+		writeAPIError(w, http.StatusConflict, "TRANSACTION_VERSION_STALE", "transaction changed after this edit was prepared; reload it and try again")
 	case errors.Is(err, app.ErrTransactionDeleted):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "soft-deleted transaction must be restored first")
 	case errors.Is(err, app.ErrTransactionDraftNotVoidable):

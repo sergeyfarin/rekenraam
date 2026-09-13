@@ -13,8 +13,11 @@ var (
 	ErrTransactionHasPostedVersions = errors.New("transaction has posted or voided versions")
 	ErrTransactionReconciled        = errors.New("transaction has reconciled postings")
 	ErrTransactionVoided            = errors.New("voided transaction cannot be updated")
-	ErrTransactionDeleted           = errors.New("soft-deleted transaction cannot be updated")
-	ErrArchivedTag                  = errors.New("archived tag cannot be assigned")
+	// ErrTransactionVersionStale reports a write prepared against a transaction
+	// version that is no longer current. See requireExpectedVersionTx.
+	ErrTransactionVersionStale = errors.New("transaction changed after this edit was prepared")
+	ErrTransactionDeleted      = errors.New("soft-deleted transaction cannot be updated")
+	ErrArchivedTag             = errors.New("archived tag cannot be assigned")
 )
 
 type TransactionRepository struct {
@@ -238,6 +241,11 @@ type UpdateTransactionParams struct {
 	CheckpointCandidates       []PeriodScopedCheckpointRef
 	ReconciliationOverride     bool
 	InvalidateCheckpointReason string
+	// ExpectedVersionID is the transaction version this write was prepared
+	// against. The write transaction refuses to apply the spec if the
+	// transaction has moved on since (T-94); it is required, because a spec
+	// prepared against no particular version cannot be checked at all.
+	ExpectedVersionID int64
 }
 
 type VoidTransactionParams struct {
@@ -258,6 +266,9 @@ type VoidTransactionParams struct {
 	CheckpointCandidates       []PeriodScopedCheckpointRef
 	ReconciliationOverride     bool
 	InvalidateCheckpointReason string
+	// ExpectedVersionID is the transaction version whose positions the
+	// candidates above were derived from. See UpdateTransactionParams (T-94).
+	ExpectedVersionID int64
 }
 
 type TransactionLifecycleParams = VoidTransactionParams

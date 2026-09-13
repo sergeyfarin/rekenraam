@@ -8,10 +8,15 @@ import (
 )
 
 var (
-	ErrTransactionNotFound            = errors.New("transaction not found")
-	ErrTransactionProtected           = errors.New("transaction requires corrective workflow")
-	ErrTransactionPosted              = errors.New("posted or voided transaction cannot be deleted")
-	ErrTransactionVoided              = errors.New("voided transaction cannot be edited")
+	ErrTransactionNotFound  = errors.New("transaction not found")
+	ErrTransactionProtected = errors.New("transaction requires corrective workflow")
+	ErrTransactionPosted    = errors.New("posted or voided transaction cannot be deleted")
+	ErrTransactionVoided    = errors.New("voided transaction cannot be edited")
+	// ErrTransactionVersionStale reports an edit prepared against a transaction
+	// version another write has already replaced. The caller has to re-read and
+	// decide again; retrying the same body would reapply facts the user never
+	// saw (T-94).
+	ErrTransactionVersionStale        = errors.New("transaction changed after this edit was prepared")
 	ErrTransactionDeleted             = errors.New("soft-deleted transaction must be restored first")
 	ErrTransactionDraftNotVoidable    = errors.New("draft transaction cannot be voided; post or delete it instead")
 	ErrInvestmentWorkflowRequired     = errors.New("investment-linked transaction requires an investment workflow")

@@ -17507,18 +17507,23 @@ export interface components {
             latest_price_date?: string;
             /**
              * Format: int64
-             * @description quantity × latest_price. Omitted when no price exists.
+             * @description quantity × latest_price. Omitted when valuation_unavailable is present.
              */
             market_value_value?: number;
-            /** @description Omitted when no price exists. */
+            /** @description Scale of market_value_value. Reduced below the computed precision only when redundant trailing zeros would otherwise overflow int64. */
             market_value_scale?: number;
             /**
              * Format: int64
-             * @description market_value − remaining_cost_basis. Omitted when no price exists.
+             * @description market_value − remaining_cost_basis. Omitted when valuation_unavailable is present.
              */
             unrealized_gain_value?: number;
-            /** @description Omitted when no price exists. */
+            /** @description Omitted when valuation_unavailable is present. */
             unrealized_gain_scale?: number;
+            /**
+             * @description Present only when market value and unrealized gain are omitted, saying why. no_price means no price observation exists for the position; unrepresentable means one is priced but the value does not fit the response's int64 fields.
+             * @enum {string}
+             */
+            valuation_unavailable?: "no_price" | "unrepresentable";
         };
         RealizedGainTotal: {
             /** Format: int64 */
@@ -17538,7 +17543,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

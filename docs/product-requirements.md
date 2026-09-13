@@ -332,6 +332,20 @@ Goal: add power-user workflows after the core ledger is stable.
   average cost, and specific lot. A committed disposal preserves the resolved
   method and policy provenance; alternative methods are read-side projections,
   not destructive rematching of the operational lots.
+- A position's events are entered in order relative to its own disposals: a
+  trade dated before a sale that position has already recorded is refused, and
+  the refusal says which sale blocks the date. A disposal rewrites the
+  remaining-basis projection later events read, so an event behind one would be
+  computed against a state that has moved on. Backdating behind later
+  *purchases* is unaffected, and same-day events are ordered by entry. Replaying
+  a position under corrected history — preserving elections, journal entries and
+  provenance — is a separate, later capability, not a relaxation of this rule.
+- Every account an investment command names must play the role that command
+  means it to play, checked at the API rather than assumed from the UI's
+  pickers: holdings are subledger-managed accounts, settlement is ordinary cash,
+  income is income, and the traded commodity is never the currency that settles
+  it. The subledger exemption that lets these commands post to holding accounts
+  covers only the postings whose lots they actually write.
 - Dividend and reinvested-dividend workflows with optional per-security income
   and withholding defaults.
 - Provider events and reviewable suggestions for dividends, distributions,

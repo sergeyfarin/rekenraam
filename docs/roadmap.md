@@ -549,17 +549,20 @@ The current parity lens is:
 ## Public-release gates
 
 **Second-pass review:** `docs/reviews/ledger-investments-second-pass-2026-09-13.md`
-reopens T-94/T-95 and adds the T-98 integrity blocker plus T-99 valuation defect.
-Hold v0.1 pending these findings; this supersedes the first-pass closure below.
+reopened T-94/T-95 and added the T-98 integrity blocker plus T-99 valuation
+defect. **All four are fixed and regression-tested (2026-09-13)**, each with
+named tests that fail with the fix stubbed out; the review's four reproductions
+now pass. The code gate is clear of these findings — the household dry run,
+acknowledgement of investment feature limits, and the frozen database baseline
+still apply.
 
 These are a parallel release-readiness track, not a reason to delay local
 daily-driver work.
 
 The v0.1 migration freeze and earlier reliability dispositions are recorded in
 `docs/reviews/v0.1-release-triage-2026-09-11.md`. The first-pass fixes close
-their original seven reproductions; the second-pass findings above now govern
-the code release gate. The household dry run, acknowledgement of investment
-feature limits, and use of the frozen database baseline also remain required.
+their original seven reproductions and the second-pass fixes close its four, so
+the code release gate is clear; the non-code gates above still stand.
 Public-announcement work below is a separate, later gate.
 
 ### Before making the repository public

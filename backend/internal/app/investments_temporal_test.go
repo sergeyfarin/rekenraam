@@ -174,3 +174,120 @@ func TestWriteOffRejectsLotsAcquiredAfterTheWriteOffDate(t *testing.T) {
 	_, err = f.investmentService.WriteOff(ctx, input)
 	require.Error(t, err, "write-off dated before the acquisition must be refused")
 }
+
+// T-95, second pass. Filtering by opened_on keeps a disposal from consuming a
+// lot that did not exist yet, but it does not make the lot's *remaining* basis
+// historical. A later average-cost sale has already redistributed pooled basis
+// across the survivors, so an older lot that passes the date filter can hand a
+// backdated sale basis that only exists because of purchases and sales that
+// came after it. The projection is only true as of the last disposal applied
+// to it, and events dated before that one are now refused outright.
+
+func TestBackdatedSaleIsRefusedOnceALaterSaleHasPooledTheBasis(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+
+	buyOn(t, f, "2026-01-01", 10, 10000) // 10 shares at 10.00
+	buyOn(t, f, "2026-06-01", 10, 30000) // 10 shares at 30.00
+
+	later := sellInput(f, "2026-07-01", 5)
+	later.CostBasisMethod = "average_cost"
+	_, err := f.investmentService.Sell(ctx, later)
+	require.NoError(t, err)
+
+	// January's surviving 5 shares now carry 100.00 of pooled basis rather than
+	// the 50.00 they were bought for, so a March sale selecting that lot would
+	// take basis created by a June purchase and a July sale.
+	earlier := sellInput(f, "2026-03-01", 5)
+	earlier.CostBasisMethod = "average_cost"
+
+	_, err = f.investmentService.PreviewSell(ctx, earlier)
+	require.EqualError(t, err, "investment events must be entered in chronological order: a disposal dated 2026-03-01 is before this position's disposal on 2026-07-01")
+
+	_, err = f.investmentService.Sell(ctx, earlier)
+	require.EqualError(t, err, "investment events must be entered in chronological order: a disposal dated 2026-03-01 is before this position's disposal on 2026-07-01")
+
+	// The refusal left the position exactly as the July sale did.
+	positions, err := f.investmentService.Positions(ctx)
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	require.Equal(t, "15", positions[0].QuantityValue.String())
+}
+
+func TestBackdatedWriteOffIsRefusedAfterASale(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 10, 10000)
+	_, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 5))
+	require.NoError(t, err)
+
+	input := InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01", CommodityID: f.stockCommodityID,
+		HoldingAccountID: f.holdingAccountID, QuantityValue: exact.New(1),
+		Reason: "delisted", ChangeReason: "delisted",
+	}
+	_, err = f.investmentService.PreviewWriteOff(ctx, input)
+	require.ErrorContains(t, err, "chronological order")
+	_, err = f.investmentService.WriteOff(ctx, input)
+	require.ErrorContains(t, err, "chronological order")
+}
+
+func TestBackdatedPurchaseIsRefusedAfterASale(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 10, 10000)
+	_, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 5))
+	require.NoError(t, err)
+
+	// The July sale priced a pool this lot was not in, and nothing recomputes
+	// it, so the lot cannot be slipped in behind the sale.
+	_, err = f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, QuantityValue: exact.New(10),
+		CashAmountValue: 30000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.EqualError(t, err, "investment events must be entered in chronological order: an acquisition dated 2026-03-01 is before this position's disposal on 2026-07-01")
+
+	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
+	require.NoError(t, err)
+	require.Len(t, lots, 1, "the refused purchase created no lot")
+}
+
+func TestBackdatedSaleStillWorksWhenOnlyPurchasesFollowIt(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 10, 10000)
+	buyOn(t, f, "2026-06-01", 10, 30000)
+
+	// Nothing has rewritten the projection yet: the June lot's basis is still
+	// exactly what was paid for it, and the opened_on filter keeps it out of a
+	// March sale's pool. So this is computable, and it stays allowed.
+	sale := sellInput(f, "2026-03-01", 5)
+	sale.CostBasisMethod = "average_cost"
+	preview, err := f.investmentService.PreviewSell(ctx, sale)
+	require.NoError(t, err)
+	require.Len(t, preview.Allocations, 1)
+	require.Equal(t, int64(5000), preview.Allocations[0].CostBasisValue, "5 shares of the 10.00 January lot")
+
+	_, err = f.investmentService.Sell(ctx, sale)
+	require.NoError(t, err)
+}
+
+func TestSameDayEventsStayLegalInEntryOrder(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 10, 10000)
+
+	// Buy and sell on one day, then sell again on that same day: the guard is
+	// inclusive, so a day's own events are ordered by entry, not refused.
+	_, err := f.investmentService.Sell(ctx, sellInput(f, "2026-01-01", 4))
+	require.NoError(t, err)
+	_, err = f.investmentService.Sell(ctx, sellInput(f, "2026-01-01", 3))
+	require.NoError(t, err)
+
+	positions, err := f.investmentService.Positions(ctx)
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	require.Equal(t, "3", positions[0].QuantityValue.String())
+}

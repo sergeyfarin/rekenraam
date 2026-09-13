@@ -324,6 +324,8 @@ func mapTransactionDBError(err error) error {
 		return ErrTransactionPosted
 	case errors.Is(err, db.ErrTransactionVoided):
 		return ErrTransactionVoided
+	case errors.Is(err, db.ErrTransactionVersionStale):
+		return ErrTransactionVersionStale
 	case errors.Is(err, db.ErrTransactionDeleted):
 		return ErrTransactionDeleted
 	case errors.Is(err, db.ErrTransactionReconciled):
