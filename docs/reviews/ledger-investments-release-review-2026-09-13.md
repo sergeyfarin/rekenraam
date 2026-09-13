@@ -43,6 +43,16 @@ memory race; the race detector and a single SQLite connection do not prevent
 another request executing between preparation and `BeginTx`. Two app processes
 are not required, so T-72's multi-instance deferral does not cover this.
 
+The residue is also undetectable after the fact. `checkpointIntegrityCheck`
+(`backend/internal/app/self_check.go:661`) sums only the postings *linked* to a
+checkpoint and compares that to the statement balance, plus a superseded-version
+count. The stale entry is linked to nothing, so both sums still agree and the
+check reports "every active checkpoint still adds up". The write guard enforces
+a stronger rule than the diagnostic does — any posting landing in a reconciled
+window invalidates the checkpoint — so running a self-check after onboarding is
+not a mitigation for T-94, and the diagnostic's own narrative overstates what it
+verifies.
+
 Required fix: resolve/enforce the reconciliation boundary against current state
 inside the same transaction as the financial write. Cover create first, then
 inspect update, lifecycle, reorder, import, and investment paths for the same
@@ -65,6 +75,13 @@ negative historical holding and attributes basis to an acquisition that had not
 yet occurred. With older eligible lots as well, future lots can also distort
 LIFO selection and average-cost basis without causing a negative holding.
 
+Every method funnels through `disposeLotTx` (`:2512`), which re-reads the lot
+and already rejects mismatched account, commodity and status — but never
+compares `opened_on` with the disposal date. That makes it the one choke point
+where a date guard closes `specific_lot` and backstops the other three; the
+per-method queries still need `opened_on <= ?` so FIFO/LIFO/average-cost
+*select* eligible lots rather than failing at the sink.
+
 Required fix: apply temporal eligibility consistently to simulation, committed
 sales, specific allocations, and write-offs. Explicitly define safe handling
 of out-of-order historical trades against the current operational projection:
@@ -82,8 +99,16 @@ Locations: `backend/internal/app/transactions_validate.go:337` and
 Generic posting validation checks account eligibility and commodity precision,
 but does not require an investment-aware workflow for a security holding.
 The ordinary editor offers holding accounts; only template mode excludes them.
+
 The existing investment lifecycle fence checks links on an existing transaction,
 so it cannot protect the creation of a transaction with no lot links.
+
+Scope is wider than the account kind named above. The backend app layer has no
+concept of holding account kinds at all, so `fund_holding` and `crypto_wallet`
+are equally unprotected, and the frontend's single fence excludes only
+`security_holding` — `fund_holding` is offered even in template mode. A fix
+must key off the investment-account kind set (`buy-form.svelte:93`), not off
+`security_holding` alone.
 
 Reproduced: create a balanced ordinary transaction with +10 security units in a
 `security_holding` account and -10 units in another posting-enabled account.
@@ -165,13 +190,18 @@ Prioritize invariant/state-transition coverage over a larger global percentage.
   warnings, and 24 Vitest files / 377 tests passed.
 - Application probes: ran with `-count=1`; all seven intended assertions failed,
   confirming the findings above. Temporary active test file removed afterward.
-- `COVERAGE=1 ./scripts/test-backend.sh`: failed during coverage build. Installed
-  Go 1.27.0 reports `no such tool "covdata"` and coverage package-resolution
-  errors. No trustworthy current coverage percentage was produced; historical
-  percentages in the backlog are not a substitute.
-- `pnpm test:release-preflight`: failed because Playwright's managed web server
-  could not start (exit 1). No browser journey passed in this attempt. The
-  returned log does not identify the underlying server/build failure.
+- `COVERAGE=1 ./scripts/test-backend.sh`: **corrected 2026-09-13.** This review
+  first recorded a coverage-build failure blamed on a missing `covdata` tool.
+  That does not reproduce. Go 1.27 no longer ships `covdata` as a separate
+  binary under `$(go env GOROOT)/pkg/tool` — it is built into the `go` command,
+  so `go tool covdata` works and an `ls` of the tool directory is not evidence
+  that it is absent. A clean re-run passes and reports **78.9% of statements**
+  merged across the backend. Coverage tooling is not a release gate.
+- `pnpm test:release-preflight`: **corrected 2026-09-13.** A clean re-run passes:
+  the managed web server builds and starts, and **7 of 7 tests pass with 0
+  skipped** (2 bootstrap + 5 preflight journeys) in 40s. The earlier exit 1 was
+  local, not a defect in the harness or the build; `pnpm build` also succeeds on
+  its own.
 - No production database was inspected or altered. Tests used isolated
   fixtures; the standard browser harness targets its disposable e2e database.
 
@@ -180,8 +210,10 @@ Prioritize invariant/state-transition coverage over a larger global percentage.
 1. Fix T-94–T-96 and pass permanent regression cases plus backend race checks.
 2. Resolve T-97 before claiming fractional-investment support or onboarding a
    household whose broker trades fractions.
-3. Restore coverage tooling and run the browser release preflight successfully;
-   check skipped counts because its journey group is serial.
+3. ~~Restore coverage tooling and run the browser release preflight
+   successfully; check skipped counts because its journey group is serial.~~
+   **Satisfied 2026-09-13:** coverage reports 78.9% and the preflight passes
+   7/7 with 0 skipped. Keep both green, but neither is an open blocker.
 4. Exercise a representative disposable household book: salary, bills, refund,
    credit card, transfer, split, reconciliation and correction, plus broker buys,
    partial sales, dividend, fees/withholding and historical import. Compare
