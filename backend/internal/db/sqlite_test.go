@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"rekenraam/backend/internal/exact"
 	"rekenraam/backend/migrations"
 )
 
@@ -227,10 +229,18 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoint_postings"))
 }
 
-// The v0.1 database starts at migration 1. This test deliberately constructs
-// that released state with only the frozen baseline, adds durable user data,
-// upgrades it to HEAD, and compares its schema with a fresh HEAD install. When
-// 0002 lands this becomes a real multi-step upgrade without changing the test.
+// The v0.1 database starts at migration 1. This test builds that released
+// state from the frozen baseline plus a frozen seed — a real book written
+// through the real API and dumped — then upgrades it to HEAD and checks that
+// both the schema and the data came through.
+//
+// The data half is the point. Schema convergence alone says a migration
+// produced the right shape; it says nothing about whether it carried the
+// ledger across. While every migration only adds tables that distinction is
+// academic, but the first migration that rewrites one — SQLite's twelve-step
+// table rebuild, which is how a post-v0.1 schema redesign has to happen — makes
+// this test the only thing standing between a redesign and silent data loss.
+// It needs to be watching the ledger by then, not just the DDL.
 func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
 	ctx := context.Background()
 	upgraded := openTestDatabase(t)
@@ -245,21 +255,279 @@ func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
 	_, err = provider.Up(ctx)
 	require.NoError(t, err)
 
-	_, err = upgraded.ExecContext(ctx, `
-		INSERT INTO users (id, username, password_hash, is_owner, created_at, updated_at)
-		VALUES (41, 'upgrade-probe', 'not-a-real-password-hash', 1,
-			'2026-09-11T00:00:00Z', '2026-09-11T00:00:00Z')
-	`)
+	seed, err := os.ReadFile(filepath.Join("testdata", "v01_seed.sql"))
 	require.NoError(t, err)
-	require.NoError(t, Migrate(ctx, upgraded))
+	// The dump is in table order, not dependency order, so a row can reference
+	// one that has not been inserted yet. defer_foreign_keys holds every check
+	// until COMMIT — which still enforces them, just once the whole book is
+	// present. Turning foreign keys off outright would not.
+	loadTx, err := upgraded.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	_, err = loadTx.ExecContext(ctx, `PRAGMA defer_foreign_keys = ON`)
+	require.NoError(t, err)
+	_, err = loadTx.ExecContext(ctx, string(seed))
+	require.NoError(t, err, "the frozen seed must load into the frozen baseline")
+	require.NoError(t, loadTx.Commit(), "the frozen seed must satisfy every foreign key")
 
-	var username string
-	require.NoError(t, upgraded.QueryRowContext(ctx, "SELECT username FROM users WHERE id = 41").Scan(&username))
-	assert.Equal(t, "upgrade-probe", username, "upgrade must preserve released user data")
+	before := captureLedgerState(t, upgraded)
+	require.NoError(t, Migrate(ctx, upgraded))
+	after := captureLedgerState(t, upgraded)
+
+	assert.Equal(t, before, after, "upgrading must not change a single durable figure")
+
+	// Stated separately from the snapshot comparison so a failure names what
+	// broke rather than dumping two large maps side by side.
+	assertUpgradedBookIsIntact(t, upgraded)
 
 	fresh := openTestDatabase(t)
 	require.NoError(t, Migrate(ctx, fresh))
 	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, upgraded))
+}
+
+// captureLedgerState reads every durable figure the seed carries, keyed so a
+// diff points at the row that moved. Counting rows is not enough: a migration
+// that rebuilt a table and mangled a coefficient, a scale, or a lifecycle flag
+// would leave every count identical.
+func captureLedgerState(t *testing.T, database *sql.DB) map[string]string {
+	t.Helper()
+	ctx := context.Background()
+	state := map[string]string{}
+
+	// Row counts across every table that carries user data, so a table that
+	// loses or gains rows is caught even where no query below inspects it.
+	rows, err := database.QueryContext(ctx, `
+		SELECT name FROM sqlite_master
+		WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'transaction_search%'
+		ORDER BY name
+	`)
+	require.NoError(t, err)
+	var tables []string
+	for rows.Next() {
+		var name string
+		require.NoError(t, rows.Scan(&name))
+		tables = append(tables, name)
+	}
+	require.NoError(t, rows.Err())
+	require.NoError(t, rows.Close())
+	for _, table := range tables {
+		var count int64
+		require.NoError(t, database.QueryRowContext(ctx, `SELECT count(*) FROM "`+table+`"`).Scan(&count))
+		state["count:"+table] = strconv.FormatInt(count, 10)
+	}
+
+	// Exact figures, as strings, so a rescaled or rounded value is a diff
+	// rather than an equal number at a different precision.
+	for key, query := range map[string]string{
+		"postings": `SELECT pl.id || '=' || pv.account_id || '/' || pv.commodity_id || '/' ||
+				pv.quantity_value || 'e-' || pv.quantity_scale || '/' || pv.reconciliation_status
+			FROM posting_versions pv JOIN posting_lines pl ON pl.id = pv.posting_line_id
+			ORDER BY pv.id`,
+		"transactions": `SELECT t.id || '=' || tv.version_seq || '/' || tv.status || '/' ||
+				tv.transaction_date || '/' || coalesce(t.deleted_at, '-')
+			FROM transaction_versions tv JOIN transactions t ON t.id = tv.transaction_id
+			ORDER BY tv.id`,
+		"lots": `SELECT id || '=' || opened_on || '/' || status || '/' ||
+				quantity_value || 'e-' || quantity_scale || '/' ||
+				remaining_quantity_value || 'e-' || remaining_quantity_scale || '/' ||
+				cost_basis_value || 'e-' || cost_basis_scale || '/' ||
+				remaining_cost_basis_value || 'e-' || remaining_cost_basis_scale
+			FROM investment_lots ORDER BY id`,
+		"lot_events": `SELECT id || '=' || lot_id || '/' || event_kind || '/' || event_date || '/' ||
+				quantity_value || 'e-' || quantity_scale || '/' || cost_basis_value || 'e-' || cost_basis_scale ||
+				'/' || coalesce(cost_basis_method, '-')
+			FROM investment_lot_events ORDER BY id`,
+		"disposal_decisions": `SELECT id || '=' || event_date || '/' || cost_basis_method || '/' || resolution_tier || '/' ||
+				quantity_value || 'e-' || quantity_scale || '/' || disposed_basis_value || 'e-' || disposed_basis_scale
+			FROM investment_disposal_decisions ORDER BY id`,
+		"disposal_allocations": `SELECT id || '=' || lot_id || '/' || quantity_value || 'e-' || quantity_scale || '/' ||
+				cost_basis_value || 'e-' || cost_basis_scale
+			FROM investment_disposal_allocations ORDER BY id`,
+		"checkpoints": `SELECT id || '=' || account_id || '/' || commodity_id || '/' || status || '/' ||
+				statement_date || '/' || statement_account_sequence || '/' ||
+				statement_balance_value || 'e-' || statement_balance_scale
+			FROM reconciliation_checkpoints ORDER BY id`,
+		"checkpoint_postings": `SELECT checkpoint_id || '=' || posting_version_id FROM reconciliation_checkpoint_postings
+			ORDER BY checkpoint_id, posting_version_id`,
+		"accounts": `SELECT a.id || '=' || coalesce(a.system_role, '-') || '/' || av.version_seq || '/' ||
+				av.account_class || '/' || av.account_kind || '/' || av.status || '/' || av.opened_on || '/' ||
+				coalesce(av.default_commodity_id, 0) || '/' || coalesce(av.quantity_scale_override, -1)
+			FROM account_versions av JOIN accounts a ON a.id = av.account_id ORDER BY av.id`,
+		"commodities": `SELECT c.id || '=' || c.code || '/' || c.kind || '/' || cv.standard_scale || '/' || cv.max_quantity_scale
+			FROM commodity_versions cv JOIN commodities c ON c.id = cv.commodity_id ORDER BY cv.id`,
+		"prices": `SELECT id || '=' || series_id || '/' || valuation_date || '/' ||
+				price_value || 'e-' || price_scale || '/' || coalesce(voided_at, '-')
+			FROM price_observations ORDER BY id`,
+		"budget_targets": `SELECT id || '=' || category_account_id || '/' || commodity_id || '/' || period_start || '/' ||
+				quantity_value || 'e-' || quantity_scale
+			FROM budget_targets ORDER BY id`,
+		"recurring": `SELECT rt.id || '=' || rt.name || '/' || rt.frequency || '/' || rt.starts_on || '/' ||
+				rtp.account_id || '/' || rtp.quantity_value || 'e-' || rtp.quantity_scale
+			FROM recurring_template_postings rtp JOIN recurring_templates rt ON rt.id = rtp.template_id
+			ORDER BY rtp.id`,
+		"tag_links": `SELECT 'txn:' || transaction_id || '=' || tag_id FROM transaction_tags ORDER BY transaction_id, tag_id`,
+		"audit":     `SELECT id || '=' || operation || '/' || origin_type || '/' || occurred_at FROM audit_events ORDER BY id`,
+		"deletions": `SELECT id || '=' || transaction_id || '/' || action || '/' || occurred_at
+			FROM transaction_deletion_events ORDER BY id`,
+	} {
+		state[key] = joinQueryRows(t, database, query)
+	}
+
+	return state
+}
+
+func joinQueryRows(t *testing.T, database *sql.DB, query string) string {
+	t.Helper()
+	rows, err := database.QueryContext(context.Background(), query)
+	require.NoError(t, err, query)
+	defer rows.Close()
+	var lines []string
+	for rows.Next() {
+		var line string
+		require.NoError(t, rows.Scan(&line))
+		lines = append(lines, line)
+	}
+	require.NoError(t, rows.Err())
+	return strings.Join(lines, "\n")
+}
+
+// assertUpgradedBookIsIntact restates the book's own invariants against the
+// upgraded database, so a migration that preserved every value but broke a
+// relationship between them still fails. These are the same properties the
+// app's self-check asserts; a released database that upgrades into one the
+// self-check would reject has not been upgraded.
+func assertUpgradedBookIsIntact(t *testing.T, database *sql.DB) {
+	t.Helper()
+	ctx := context.Background()
+
+	// The seed is not empty. A migration that dropped everything would
+	// otherwise satisfy every equality above it.
+	var postings int64
+	require.NoError(t, database.QueryRowContext(ctx, `SELECT count(*) FROM posting_versions`).Scan(&postings))
+	require.Greater(t, postings, int64(20), "the frozen seed must still be a real book")
+
+	// SQLite's own view of the file, including every foreign key the rebuild
+	// would have had to re-point.
+	var integrity string
+	require.NoError(t, database.QueryRowContext(ctx, `PRAGMA integrity_check`).Scan(&integrity))
+	assert.Equal(t, "ok", integrity)
+	foreignKeyRows, err := database.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	require.NoError(t, err)
+	defer foreignKeyRows.Close()
+	assert.False(t, foreignKeyRows.Next(), "upgrade left a dangling foreign key")
+
+	// Double entry, per commodity, over the current posted ledger. Coefficients
+	// are strings and scales differ, so this sums in Go rather than in SQL.
+	balanceRows, err := database.QueryContext(ctx, `
+		SELECT pv.commodity_id, pv.quantity_value, pv.quantity_scale
+		FROM posting_versions pv
+		JOIN journal_entries je ON je.id = pv.journal_entry_id
+		JOIN current_transaction_versions tv ON tv.id = je.transaction_version_id
+		JOIN transactions t ON t.id = tv.transaction_id
+		WHERE tv.status = 'posted' AND t.deleted_at IS NULL
+	`)
+	require.NoError(t, err)
+	defer balanceRows.Close()
+	totals := map[int64]*exact.ScaledInt{}
+	for balanceRows.Next() {
+		var commodityID int64
+		var value exact.Coefficient
+		var scale int
+		require.NoError(t, balanceRows.Scan(&commodityID, &value, &scale))
+		if totals[commodityID] == nil {
+			totals[commodityID] = exact.NewScaledInt()
+		}
+		totals[commodityID].AddCoefficient(value, scale)
+	}
+	require.NoError(t, balanceRows.Err())
+	require.NotEmpty(t, totals)
+	for commodityID, total := range totals {
+		assert.Zerof(t, total.Sign(), "commodity %d does not sum to zero after upgrade", commodityID)
+	}
+
+	// Lot conservation: every open lot still holds something, no lot holds
+	// more than it was acquired with, and the closed one holds nothing.
+	lotRows, err := database.QueryContext(ctx, `
+		SELECT id, status, quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale
+		FROM investment_lots ORDER BY id
+	`)
+	require.NoError(t, err)
+	defer lotRows.Close()
+	seenLot := false
+	for lotRows.Next() {
+		var id int64
+		var status string
+		var acquired, remaining exact.Coefficient
+		var acquiredScale, remainingScale int
+		require.NoError(t, lotRows.Scan(&id, &status, &acquired, &acquiredScale, &remaining, &remainingScale))
+		seenLot = true
+		acquiredTotal := exact.ScaledIntFromCoefficient(acquired, acquiredScale)
+		remainingTotal := exact.ScaledIntFromCoefficient(remaining, remainingScale)
+		assert.LessOrEqualf(t, remainingTotal.Cmp(acquiredTotal), 0, "lot %d holds more than it acquired", id)
+		assert.GreaterOrEqualf(t, remainingTotal.Sign(), 0, "lot %d went negative", id)
+		if status == "closed" {
+			assert.Zerof(t, remainingTotal.Sign(), "closed lot %d still holds something", id)
+		} else {
+			assert.Positivef(t, remainingTotal.Sign(), "open lot %d holds nothing", id)
+		}
+	}
+	require.NoError(t, lotRows.Err())
+	require.True(t, seenLot, "the frozen seed must still carry investment lots")
+
+	// The reconciliation checkpoint still sums to the statement it recorded,
+	// from the postings it named.
+	checkpointRows, err := database.QueryContext(ctx, `
+		SELECT c.id, c.statement_balance_value, c.statement_balance_scale
+		FROM reconciliation_checkpoints c WHERE c.status = 'active' ORDER BY c.id
+	`)
+	require.NoError(t, err)
+	defer checkpointRows.Close()
+	type checkpoint struct {
+		id        int64
+		statement *exact.ScaledInt
+	}
+	var checkpoints []checkpoint
+	for checkpointRows.Next() {
+		var id int64
+		var value exact.Coefficient
+		var scale int
+		require.NoError(t, checkpointRows.Scan(&id, &value, &scale))
+		checkpoints = append(checkpoints, checkpoint{id: id, statement: exact.ScaledIntFromCoefficient(value, scale)})
+	}
+	require.NoError(t, checkpointRows.Err())
+	require.NotEmpty(t, checkpoints, "the frozen seed must still carry an active checkpoint")
+	for _, entry := range checkpoints {
+		cleared := exact.NewScaledInt()
+		postingRows, err := database.QueryContext(ctx, `
+			SELECT pv.quantity_value, pv.quantity_scale
+			FROM reconciliation_checkpoint_postings cp
+			JOIN posting_versions pv ON pv.id = cp.posting_version_id
+			WHERE cp.checkpoint_id = ?
+		`, entry.id)
+		require.NoError(t, err)
+		for postingRows.Next() {
+			var value exact.Coefficient
+			var scale int
+			require.NoError(t, postingRows.Scan(&value, &scale))
+			cleared.AddCoefficient(value, scale)
+		}
+		require.NoError(t, postingRows.Err())
+		require.NoError(t, postingRows.Close())
+		assert.Zerof(t, cleared.Cmp(entry.statement), "checkpoint %d no longer sums to its statement balance", entry.id)
+	}
+
+	// Lifecycle states the seed deliberately carries, so a migration cannot
+	// quietly resurrect a voided or deleted transaction.
+	var voided, deleted, superseded int64
+	require.NoError(t, database.QueryRowContext(ctx,
+		`SELECT count(*) FROM current_transaction_versions WHERE status = 'voided'`).Scan(&voided))
+	require.NoError(t, database.QueryRowContext(ctx,
+		`SELECT count(*) FROM transactions WHERE deleted_at IS NOT NULL`).Scan(&deleted))
+	require.NoError(t, database.QueryRowContext(ctx,
+		`SELECT count(*) FROM transaction_versions tv
+		 WHERE NOT EXISTS (SELECT 1 FROM current_transaction_versions c WHERE c.id = tv.id)`).Scan(&superseded))
+	assert.Equal(t, int64(1), voided, "the seeded voided transaction must stay voided")
+	assert.Equal(t, int64(1), deleted, "the seeded soft-deleted transaction must stay deleted")
+	assert.Positive(t, superseded, "the seeded edit must leave a superseded version behind")
 }
 
 func schemaFingerprint(t *testing.T, database *sql.DB) []string {

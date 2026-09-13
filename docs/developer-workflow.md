@@ -275,14 +275,25 @@ run and needs nothing.
 - Migration numbers are monotonic database sequence numbers, not release
   numbers. Release notes record the highest migration included in each release.
 - CI validates the fresh-install path on every run, because every job migrates
-  from an empty database. The historical-upgrade path is covered too, by
-  `TestMigrateUpgradesV01DatabaseToFreshHeadSchema` in `internal/db`: it builds
-  the frozen `0001` state, adds durable user data, upgrades to HEAD, and asserts
-  the result's schema matches a fresh install. Note what it does *not* yet
-  prove — its fixture is a single `users` row, so it demonstrates schema
-  convergence, not that a data-moving migration preserves ledger, lot, or
-  reconciliation data. A migration that rewrites tables rather than adding them
-  needs that fixture widened first.
+  from an empty database. The historical-upgrade path is covered by
+  `TestMigrateUpgradesV01DatabaseToFreshHeadSchema` in `internal/db`: it loads
+  the frozen seed at `internal/db/testdata/v01_seed.sql` into a database
+  migrated only to `0001`, upgrades it to HEAD, and asserts both that the schema
+  matches a fresh install **and** that every durable figure survived — row
+  counts per table, exact coefficients and scales, lifecycle states, lot and
+  checkpoint conservation, per-commodity balance, and `foreign_key_check`.
+- **The seed fixtures are frozen.** A seed stands in for a database written by a
+  released version, so regenerating one against a later schema defeats the test
+  it feeds. A new release gets a *new* seed file, built with
+  `./scripts/build-release-seed.sh <out.sql>` — which drives the real HTTP API
+  (`TestBuildReleaseSeedFixture` in `internal/api`) so the fixture is a book the
+  app would actually have written, then shapes the dump. Output is not
+  byte-reproducible: it carries real timestamps and request UUIDs.
+- This is what stands between a post-`v0.1.0` schema redesign and silent data
+  loss. SQLite's twelve-step table rebuild is how such a redesign has to happen,
+  and a rebuild that re-points the wrong foreign key or rescales a coefficient
+  leaves every row count identical. Widen the seed before writing a migration
+  that touches something it does not cover.
 
 ## Commit Conventions
 
