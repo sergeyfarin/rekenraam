@@ -59,6 +59,12 @@ It challenges the positioning and evaluates optional AI/MCP, data ownership,
 release readiness and adoption experiments. Its recommendations are proposals,
 not changes to the accepted roadmap or ADRs.
 
+Desktop distribution feasibility:
+[2026-09-19 desktop application review](reviews/desktop-application-feasibility-2026-09-19.md).
+It evaluates a thin Wails host, required architecture and release work, ongoing
+cost, and repository strategy. It is analysis only; native desktop remains out
+of scope until an accepted ADR changes the product decision.
+
 ## Folders
 
 - **[plans/](plans/)** — feature plans: design + acceptance criteria for one
