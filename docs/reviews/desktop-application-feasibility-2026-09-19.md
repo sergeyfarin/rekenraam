@@ -27,10 +27,11 @@ The recommended shape is:
 2. Add Wails as a thin, optional desktop host around the same application
    runtime. Do **not** expose the domain services again as a parallel set of
    Wails JavaScript bindings.
-3. Run the existing HTTP handler on an ephemeral loopback port owned by the
-   desktop process, and navigate the WebView to that origin. This preserves the
-   browser/API contract and is safer than inventing a second transport. Bind to
-   loopback only, never to the LAN.
+3. First try mounting the existing `http.Handler` inside Wails' in-process asset
+   server. This retains the API boundary without opening a TCP listener and
+   avoids Windows firewall, endpoint-protection, port, and packaged-app loopback
+   friction. Use an ephemeral loopback listener only as a proven fallback when
+   Wails' request/response adapter cannot support a required API behavior.
 4. Keep everything in this repository. Add a second Go command and desktop
    packaging assets; continue sharing the frontend, migrations, services,
    OpenAPI contract, and tests.
@@ -44,7 +45,7 @@ The recommended shape is:
 Wails is the best conceptual fit among the common desktop wrappers because it
 uses Go and the platform WebView. As of this review, however, Wails v2 is the
 stable line and Wails v3 is still beta. Wails v3 has the cleaner window and
-packaging APIs for the proposed loopback-host design, so a supported release
+asset/packaging APIs for the proposed in-process-host design, so a supported release
 should either wait for and pin a stable v3 release or explicitly accept the
 cost of integrating v2. A production decision must pin an exact Wails version;
 it must not follow `latest`.
@@ -108,7 +109,7 @@ shared application runtime
   ├─ starts/stops workers and schedulers
   └─ exposes the existing http.Handler
         ├─ web host: configured TCP listener for VPS/Docker/LAN
-        └─ desktop host: ephemeral loopback listener + Wails window
+        └─ desktop host: Wails in-process adapter (loopback fallback)
 ```
 
 The reusable runtime should return an owned object with explicit `Handler`,
@@ -154,43 +155,72 @@ external link, reveal the data directory, show application version, or request
 a clean restart. Those capabilities should sit behind a frontend platform
 adapter so ordinary screens remain host-neutral.
 
-### Prefer an ephemeral loopback origin
+### Prefer Wails' in-process HTTP handler, with loopback as a fallback
 
-The least disruptive transport is an HTTP listener on an OS-assigned port,
-bound only to loopback, followed by a WebView navigation to a URL such as
-`http://localhost:<port>/`.
+“Keep the HTTP API” does not have to mean “open a local server port.” Wails can
+adapt WebView requests to a Go `http.Handler` through its asset server. The
+desktop host can therefore mount the existing Rekenraam handler in-process:
 
-This keeps the current assumptions intact:
+```text
+WebView fetch('/api/v1/...')
+  -> Wails asset-server request adapter (no TCP socket)
+  -> existing Rekenraam http.Handler
+  -> existing middleware, endpoint and application service
+```
+
+This is still a thin Wails host rather than a Wails-binding rewrite. It has
+important operational advantages over loopback:
+
+- no listening socket or port allocation;
+- no Windows firewall prompt or rule to reason about;
+- less friction from endpoint protection and corporate network policy;
+- no MSIX/AppContainer loopback exemption question;
+- no other local process can probe an HTTP port; and
+- no need to distinguish “the desktop instance's local server” from a normal
+  self-hosted instance in support material.
+
+It also keeps most of the current application contract intact:
 
 - relative API URLs;
-- `HttpOnly`, `SameSite=Strict` session cookies;
-- the synchronizer CSRF token;
-- request `Origin` validation;
+- one handler and middleware chain;
 - security headers and API 404 behavior;
 - uploads and streaming downloads; and
 - API-level integration and end-to-end tests.
 
-The packaged app must validate this on every WebView engine. In particular,
-current session cookies are always marked `Secure`, relying on browsers'
-localhost treatment for local development. The spike must prove that the
-Windows WebView2, macOS WKWebView, and Linux WebKitGTK versions in scope accept
-and return those cookies on the chosen loopback hostname. It must also prove the
-exact `Origin` and `Host` headers used for mutations. These behaviors must not
-be assumed from Chrome testing.
+The qualification is important: Wails' asset server is an HTTP-shaped adapter,
+not a complete network HTTP server. Wails v2 documents method, header, body, and
+status support across the three platforms, but no WebSockets, no response-body
+streaming on Windows, and no HTTP redirects on macOS/Linux. Its documentation
+also warns that this custom-handler development path is incompatible with Vite
+5+, while Rekenraam uses a newer Vite. Wails v3 is intended to provide a more
+consistent development/production asset path, but is beta at the time of this
+review.
 
-The listener must use an OS-assigned port rather than a fixed port, bind only to
-loopback, reject unexpected hosts, and shut down with the window. Authentication
-still matters: another process running as the same OS user can reach loopback,
-and the desktop window can be left open. The existing setup token protects an
-uninitialized database and should remain enforced, although the desktop host
-can hand the one-time token to its own window without asking the user to find it
-in a console log.
+The in-process option must therefore pass a transport conformance suite before
+selection. Test every HTTP method Rekenraam uses, large multipart imports,
+headers, error status codes, cookies, origin/CSRF validation, CSV/QIF/ZIP
+downloads, cancellation, and frontend development hot reload on every claimed
+platform. In particular, Windows uses a `wails.localhost` origin while Wails has
+historically used a custom `wails://` scheme on macOS/Linux. Current `Secure`
+cookie and exact-Origin assumptions will probably need an explicit desktop
+transport policy even though the endpoint handlers remain shared.
 
-Wails' internal asset-handler route is worth testing as a secondary option
-because it avoids a TCP listener. It must not be selected until session-cookie,
-custom-origin, upload/download, security-header, and Vite development behavior
-are proven. A custom `wails://` origin is not automatically equivalent to the
-accepted same-origin HTTP security model.
+An ephemeral loopback listener remains the fallback because it provides real
+browser HTTP semantics. If required, it must bind only to loopback, use an
+OS-assigned port, reject unexpected hosts, and stop with the window. The spike
+must prove `Secure` cookie behavior in each WebView. Authentication and the
+existing setup token remain required because other same-user processes can
+reach a loopback port. On Windows, ordinary unpackaged Win32 loopback may work
+without user-visible firewall configuration, but packaged/AppContainer rules,
+endpoint security, and managed-device policies still make “no listener” the
+cleaner supported shape.
+
+The decision order is therefore:
+
+1. in-process Wails asset-server handler if it passes conformance;
+2. loopback HTTP if a concrete required behavior cannot be made reliable; and
+3. narrowly scoped Wails bindings only for native host capabilities, never as a
+   replacement business API.
 
 ## Required changes
 
@@ -365,7 +395,7 @@ They are planning ranges, not commitments.
 
 | Scope | Estimated effort | Main uncertainty |
 |---|---:|---|
-| Technical spike on one OS | 3–7 working days | Wails version, cookie/origin behavior, shutdown and download behavior |
+| Technical spike on one OS | 3–7 working days | internal-handler conformance, Wails version, cookie/origin behavior, shutdown and download behavior |
 | Unsigned internal desktop build on one OS | 1–2 additional weeks | runtime extraction, data paths, secret bootstrap, file UX |
 | Supported signed release on the first OS | 2–4 additional weeks | installer, signing, recovery, clean-machine testing, documentation |
 | Add a second OS | 1–3 additional weeks | signing/notarization and WebView differences |
@@ -431,7 +461,7 @@ As of 2026-09-19, the Wails project describes v2 as stable and v3 as beta.
 Current v2 documentation lists Windows, macOS, and Linux support, WebView2 on
 Windows, and GTK/WebKitGTK dependencies on Linux. Wails v3 documentation exposes
 a direct per-window URL and stronger packaging/signing tasks, which align well
-with the proposed loopback-host design, but beta status is an avoidable release
+with the proposed desktop host, but beta status is an avoidable release
 risk for a finance application.
 
 Recommended version policy:
@@ -483,7 +513,8 @@ If the spike succeeds and demand justifies the cost, add an ADR that supersedes
 the current “native desktop out of scope” requirement. The ADR should lock:
 
 - local-data versus remote-client scope;
-- HTTP loopback versus internal asset-handler transport;
+- internal asset-handler versus HTTP loopback transport, selected by the
+  conformance results;
 - authentication/setup behavior;
 - desktop data and secret locations;
 - initial OS/architecture support;
@@ -517,6 +548,7 @@ External primary sources checked on 2026-09-19:
 - [Wails repository version status](https://github.com/wailsapp/wails)
 - [Wails v2 installation and platform requirements](https://v2.wails.io/docs/gettingstarted/installation/)
 - [Wails v2 application development and HTTP asset handler](https://wails.io/docs/guides/application-development/)
+- [Wails v2 asset-server HTTP feature matrix](https://wails.io/docs/reference/options/#assetserver)
 - [Wails v2 Linux runtime dependencies](https://wails.io/docs/guides/linux-distro-support/)
 - [Wails v3 window URL option](https://v3.wails.io/features/windows/options/)
 - [Wails v3 Windows packaging and signing](https://v3.wails.io/guides/build/windows/)
