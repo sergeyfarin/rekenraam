@@ -201,14 +201,14 @@
                   </td>
                   <td class="py-3 pl-3 pr-5 text-right font-mono">
                     <span class={gainClass(entry.realized_gain_value)}>
-                      {formatGain(entry.realized_gain_value, entry.proceeds_scale)}
+                      {formatGain(entry.realized_gain_value, entry.realized_gain_scale)}
                     </span>
                   </td>
                 </tr>
               {/each}
             </tbody>
             <tfoot>
-              {#each realizedTotals as tot (tot.cost_commodity_id + '_' + tot.total_gain_scale)}
+              {#each realizedTotals as tot (tot.cost_commodity_id)}
                 <tr class="border-t-2 border-border bg-surface-strong/30">
                   <td colspan="5" class="py-3 pl-5 pr-3 text-sm font-semibold text-foreground">
                     {m.investments_gains_realized_total()}

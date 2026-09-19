@@ -17476,9 +17476,11 @@ export interface components {
             proceeds_scale: number;
             /**
              * Format: int64
-             * @description proceeds_value − disposed_basis (aligned to proceeds_scale).
+             * @description proceeds_value − disposed_basis, in minor units at realized_gain_scale. Format it with realized_gain_scale, never with proceeds_scale.
              */
             realized_gain_value: number;
+            /** @description Scale of realized_gain_value: the deeper of proceeds_scale and disposed_basis_scale, so the difference is exact. It is not always proceeds_scale — 11 EUR of proceeds entered at scale 0 against a 10.99 EUR basis is a 0.01 EUR gain at scale 2. */
+            realized_gain_scale: number;
         };
         UnrealizedGainEntry: {
             /** Format: int64 */
@@ -17530,7 +17532,7 @@ export interface components {
             cost_commodity_id: number;
             /**
              * Format: int64
-             * @description Sum of realized_gain_value for all entries sharing this cost_commodity_id and scale.
+             * @description Exact sum of realized_gain_value for every entry with this cost_commodity_id. One row per cost commodity: entries are summed across differing realized_gain_scale values, and total_gain_scale is the scale the sum needs.
              */
             total_gain_value: number;
             total_gain_scale: number;

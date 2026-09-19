@@ -5,6 +5,31 @@ current journal, investment and accounting read paths. Reproductions ran in an
 isolated archive of that revision with migrated test databases; no household
 records were used or changed.
 
+## Resolution (added 2026-09-19, after the review)
+
+All three findings are fixed.
+
+- **T-100.** `accountInRole` records the version each role check read, the plan
+  carries that collector, and journal preparation adds to the same one.
+  `accountRuleDependencies.observe` now keeps the *first* sighting of an
+  account rather than the last, so the write is checked against the version the
+  role was decided against instead of against a later read of itself. Swept
+  across sell, write-off, dividend and reinvestment.
+- **T-101.** The gain is subtracted at whichever scale is deeper and carries
+  its own `realized_gain_scale`, matching the shape `unrealized_gain_scale`
+  already had; realized totals are one exactly-summed row per cost commodity.
+  The UI formats the gain with that scale.
+- **T-102.** "Touches selected cash" is asked per commodity group within an
+  entry rather than once for the whole entry — strictly narrowing, and net
+  movement is unchanged.
+
+Named regression tests are in `investments_plan_binding_test.go`,
+`investments_gain_precision_test.go` and `cashflow_commodity_scope_test.go`;
+each fails with its own fix stubbed out. Two lines of the retained probe source
+were updated for the two interfaces the fixes changed — see the note at the top
+of the fixture — and all four probes pass. Full detail is in `docs/backlog.md`
+T-100, T-101 and T-102.
+
 ## Result
 
 **Hold the v0.1 financial correctness gate.** The two previous reproductions

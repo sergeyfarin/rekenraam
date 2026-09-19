@@ -356,8 +356,18 @@ func newAccountRuleDependencies() *accountRuleDependencies {
 	return &accountRuleDependencies{latestVersionByAccount: map[int64]int64{}}
 }
 
+// observe records the version a check read, keeping the *first* sighting of
+// each account. The earliest read is the one at risk: an investment command
+// decides an account's role while planning and only reads the same account
+// again while preparing the journal, so recording the later read would hand
+// the write a version nothing was decided against and the guard would compare
+// the account to itself (T-100). Keeping the first means a version that
+// appeared between the two reads fails the write, which is the point.
 func (d *accountRuleDependencies) observe(rule db.PostingAccountRule) {
 	if d == nil || rule.AccountID <= 0 {
+		return
+	}
+	if _, seen := d.latestVersionByAccount[rule.AccountID]; seen {
 		return
 	}
 	d.latestVersionByAccount[rule.AccountID] = rule.LatestVersionID

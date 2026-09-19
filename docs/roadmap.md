@@ -589,12 +589,14 @@ The current parity lens is:
 
 **Fourth-pass review (2026-09-19):**
 `docs/reviews/ledger-investments-fourth-pass-2026-09-19.md` verifies that the
-previous six regression tests pass, but finds an earlier investment-role
+previous six regression tests pass, and found an earlier investment-role
 validation window (reopened T-100, P1), precision-dependent realized gains
 (T-101, P2), and non-cash legs counted in cashflow transfers (T-102, P2).
-**Hold the v0.1 financial correctness gate until all three are fixed.**
-T-94's draft-promotion correction remains verified. The household dry run,
-investment feature limits and frozen baseline gates still remain required.
+**All three are fixed as of 2026-09-19**, each with named regression tests that
+fail without their fix and with the reviewer's own probes passing, so the
+code-side release gate is clear again. T-94's draft-promotion correction
+remains verified. The household dry run, investment feature limits and frozen
+baseline gates still remain required.
 
 These are a parallel release-readiness track, not a reason to delay local
 daily-driver work.

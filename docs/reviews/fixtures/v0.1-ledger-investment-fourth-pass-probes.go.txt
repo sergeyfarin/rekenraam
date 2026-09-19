@@ -1,3 +1,14 @@
+// Fourth-pass review probes. Two lines differ from the copy filed with the
+// review on 2026-09-19, because the fixes changed the two interfaces the probes
+// reach through — neither changes what is being asserted:
+//
+//   - prepareInvestmentTransactionForWrite now takes the collector the plan
+//     recorded its role reads into, which is what buy itself passes (T-100).
+//   - the realized gain carries its own realized_gain_scale rather than being
+//     read at proceeds_scale (T-101).
+//
+// All four now pass.
+
 package app
 
 import (
@@ -28,7 +39,7 @@ func TestFourthPassGainPreservesBasisPrecision(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, gains, 1)
 			t.Logf("preview gain=%d scale=%d, posted gain=%d proceeds scale=%d, disposed basis=%d scale=%d", preview.RealizedGain, preview.RealizedGainScale, gains[0].RealizedGainValue, gains[0].ProceedsScale, gains[0].DisposedBasisValue, gains[0].DisposedBasisScale)
-			require.Equal(t, 0, exact.ScaledIntFromInt64(gains[0].RealizedGainValue, gains[0].ProceedsScale).Cmp(exact.ScaledIntFromInt64(1, 2)), "11 EUR minus 10.99 EUR must be 0.01 EUR irrespective of how proceeds were entered")
+			require.Equal(t, 0, exact.ScaledIntFromInt64(gains[0].RealizedGainValue, gains[0].RealizedGainScale).Cmp(exact.ScaledIntFromInt64(1, 2)), "11 EUR minus 10.99 EUR must be 0.01 EUR irrespective of how proceeds were entered")
 		})
 	}
 }
@@ -48,7 +59,7 @@ func TestFourthPassInvestmentRoleReadMustBindToWrite(t *testing.T) {
 	require.NoError(t, err)
 	_, freshErr := f.investmentService.buyPlan(ctx, input)
 	require.Error(t, freshErr)
-	params, err := f.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create)
+	params, err := f.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create, plan.AccountRuleDependencies)
 	require.NoError(t, err)
 	_, lot, err := f.investmentService.repository.CreateTransactionAndLot(ctx, params, db.CreateInvestmentLotParams{
 		BookID: BookID, AccountID: f.holdingAccountID, CommodityID: f.stockCommodityID, OpenedOn: input.TransactionDate, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CostBasisValue: input.CashAmountValue, CostBasisScale: input.CashAmountScale, CostCommodityID: f.eurCommodityID, MetadataJSON: plan.MetadataJSON, CreatedAt: "2026-09-19T12:00:00Z", CreatedByUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.lot.create", ChangeReason: "created lot from buy transaction", EventKind: "acquisition",

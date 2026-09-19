@@ -1259,6 +1259,7 @@ type realizedGainResponse struct {
 	ProceedsValue      int64             `json:"proceeds_value"`
 	ProceedsScale      int               `json:"proceeds_scale"`
 	RealizedGainValue  int64             `json:"realized_gain_value"`
+	RealizedGainScale  int               `json:"realized_gain_scale"`
 }
 
 type unrealizedGainResponse struct {
@@ -1325,6 +1326,7 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				ProceedsValue:      e.ProceedsValue,
 				ProceedsScale:      e.ProceedsScale,
 				RealizedGainValue:  e.RealizedGainValue,
+				RealizedGainScale:  e.RealizedGainScale,
 			})
 		}
 		unrealizedResponses := make([]unrealizedGainResponse, 0, len(unrealized))
@@ -1348,27 +1350,35 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 			})
 		}
 
-		// Compute realized totals grouped by (cost_commodity_id, proceeds_scale).
-		// All entries sharing the same currency and scale can be summed directly.
-		type totalKey struct {
-			costCommodityID int64
-			scale           int
-		}
-		totalsMap := map[totalKey]int64{}
-		var totalsOrder []totalKey
+		// Realized totals are grouped by cost commodity alone and summed
+		// exactly. Grouping by scale as well used to stand in for "can be added
+		// without loss", but a gain now carries whatever scale its own
+		// subtraction needed (T-101), so two gains in the same currency can
+		// legitimately differ in scale — splitting them into separate totals
+		// would report one currency twice and make neither row the total.
+		// exact.ScaledInt deepens as it adds, so one row per currency holds the
+		// sum without rounding.
+		totalsMap := map[int64]*exact.ScaledInt{}
+		var totalsOrder []int64
 		for _, e := range realized {
-			k := totalKey{e.CostCommodityID, e.ProceedsScale}
-			if _, exists := totalsMap[k]; !exists {
-				totalsOrder = append(totalsOrder, k)
+			if totalsMap[e.CostCommodityID] == nil {
+				totalsMap[e.CostCommodityID] = exact.NewScaledInt()
+				totalsOrder = append(totalsOrder, e.CostCommodityID)
 			}
-			totalsMap[k] += e.RealizedGainValue
+			totalsMap[e.CostCommodityID].AddInt64(e.RealizedGainValue, e.RealizedGainScale)
 		}
 		realizedTotals := make([]realizedGainTotalResponse, 0, len(totalsOrder))
-		for _, k := range totalsOrder {
+		for _, commodityID := range totalsOrder {
+			total := totalsMap[commodityID]
+			totalValue, err := total.Int64()
+			if err != nil {
+				writeServiceInternalError(w, r, logger, "sum realized gains", err)
+				return
+			}
 			realizedTotals = append(realizedTotals, realizedGainTotalResponse{
-				CostCommodityID: k.costCommodityID,
-				TotalGainValue:  totalsMap[k],
-				TotalGainScale:  k.scale,
+				CostCommodityID: commodityID,
+				TotalGainValue:  totalValue,
+				TotalGainScale:  total.Scale(),
 			})
 		}
 		writeJSON(w, http.StatusOK, investmentGainsResponse{

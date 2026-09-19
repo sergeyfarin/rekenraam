@@ -55,6 +55,14 @@ func (s *TransactionService) prepareCreateTransactionForWrite(ctx context.Contex
 	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{})
 }
 
+// prepareCreateTransactionForWriteCarrying is prepareCreateTransactionForWrite
+// for a caller that already made account decisions of its own — the dividend
+// plan validates roles before any posting exists — and must have those earlier
+// reads, not this one's, bound to the write (T-100).
+func (s *TransactionService) prepareCreateTransactionForWriteCarrying(ctx context.Context, input CreateTransactionInput, dependencies *accountRuleDependencies) (db.CreateTransactionParams, error) {
+	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{AccountRuleDependencies: dependencies})
+}
+
 // prepareInvestmentTransactionForWrite is the investment subledger's entry into
 // the shared transaction write path, and the only way a posting to a
 // subledger-managed holding account gets past cleanPosting's T-96 guard. It is
@@ -62,15 +70,23 @@ func (s *TransactionService) prepareCreateTransactionForWrite(ctx context.Contex
 // requested from the API layer or set by populating a request field — a caller
 // either is the investment service or it is not. Every use of it must write the
 // matching lot facts in the same database transaction as the journal.
-func (s *TransactionService) prepareInvestmentTransactionForWrite(ctx context.Context, input CreateTransactionInput) (db.CreateTransactionParams, error) {
-	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{AllowSubledgerManagedPostings: true})
+func (s *TransactionService) prepareInvestmentTransactionForWrite(ctx context.Context, input CreateTransactionInput, dependencies *accountRuleDependencies) (db.CreateTransactionParams, error) {
+	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{
+		AllowSubledgerManagedPostings: true,
+		AccountRuleDependencies:       dependencies,
+	})
 }
 
 func (s *TransactionService) prepareCreateTransactionForWriteWithOptions(ctx context.Context, input CreateTransactionInput, options cleanTransactionOptions) (db.CreateTransactionParams, error) {
 	// Only the paths that go on to write collect these: the account facts the
 	// posting checks below are decided against travel with the params, and the
-	// write refuses them if any of those accounts has moved on (T-100).
-	options.AccountRuleDependencies = newAccountRuleDependencies()
+	// write refuses them if any of those accounts has moved on (T-100). A
+	// caller that already read some of these accounts for its own decisions
+	// passes its collector in, so the versions carried are the ones those
+	// earlier decisions were made against.
+	if options.AccountRuleDependencies == nil {
+		options.AccountRuleDependencies = newAccountRuleDependencies()
+	}
 	params, err := s.prepareCreateTransaction(ctx, input, options)
 	if err != nil {
 		return db.CreateTransactionParams{}, err

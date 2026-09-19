@@ -981,13 +981,19 @@ type investmentTransactionPlan struct {
 	// Date is the validated transaction date. The dividend paths normalise it,
 	// so callers must use this rather than the raw input.
 	Date string
+	// AccountRuleDependencies holds the account versions this plan's role
+	// checks were decided against. The journal preparation that follows adds
+	// its own reads to the same collector, and the write refuses the command
+	// if any of those accounts changed after the role was decided (T-100).
+	AccountRuleDependencies *accountRuleDependencies
 }
 
 func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeInput) (investmentTransactionPlan, error) {
 	if err := validateTradeInput(input); err != nil {
 		return investmentTransactionPlan{}, err
 	}
-	if err := s.validateTradeRoles(ctx, input); err != nil {
+	dependencies := newAccountRuleDependencies()
+	if err := s.validateTradeRoles(ctx, input, dependencies); err != nil {
 		return investmentTransactionPlan{}, err
 	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
@@ -1010,8 +1016,9 @@ func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeIn
 		status = "posted"
 	}
 	return investmentTransactionPlan{
-		MetadataJSON: metadataJSON,
-		Date:         input.TransactionDate,
+		AccountRuleDependencies: dependencies,
+		MetadataJSON:            metadataJSON,
+		Date:                    input.TransactionDate,
 		Create: CreateTransactionInput{
 			OwnerUserID:            input.OwnerUserID,
 			AuthSessionID:          input.AuthSessionID,
@@ -1050,7 +1057,7 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		return InvestmentTradeResult{}, err
 	}
 	metadataJSON := plan.MetadataJSON
-	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create)
+	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create, plan.AccountRuleDependencies)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -1153,7 +1160,7 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 	if err := validateTradeInput(input); err != nil {
 		return SellPreviewResult{}, err
 	}
-	if err := s.validateTradeRoles(ctx, input); err != nil {
+	if err := s.validateTradeRoles(ctx, input, nil); err != nil {
 		return SellPreviewResult{}, err
 	}
 	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
@@ -1263,7 +1270,7 @@ func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input Investmen
 	}
 	// The commit path reaches these through sellPlan, and a preview that
 	// accepts what the commit will refuse is worse than no preview (T-98).
-	if err := s.validateTradeRoles(ctx, input.asTradeInput()); err != nil {
+	if err := s.validateTradeRoles(ctx, input.asTradeInput(), nil); err != nil {
 		return SellPreviewResult{}, err
 	}
 	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
@@ -1344,7 +1351,8 @@ func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeI
 	if err := validateTradeInput(input); err != nil {
 		return investmentTransactionPlan{}, err
 	}
-	if err := s.validateTradeRoles(ctx, input); err != nil {
+	dependencies := newAccountRuleDependencies()
+	if err := s.validateTradeRoles(ctx, input, dependencies); err != nil {
 		return investmentTransactionPlan{}, err
 	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
@@ -1367,8 +1375,9 @@ func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeI
 		status = "posted"
 	}
 	return investmentTransactionPlan{
-		MetadataJSON: metadataJSON,
-		Date:         input.TransactionDate,
+		AccountRuleDependencies: dependencies,
+		MetadataJSON:            metadataJSON,
+		Date:                    input.TransactionDate,
 		Create: CreateTransactionInput{
 			OwnerUserID:            input.OwnerUserID,
 			AuthSessionID:          input.AuthSessionID,
@@ -1405,7 +1414,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		return InvestmentTradeResult{}, err
 	}
 	metadataJSON := plan.MetadataJSON
-	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create)
+	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create, plan.AccountRuleDependencies)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -1512,7 +1521,8 @@ func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInpu
 	if incomeAccountID <= 0 {
 		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
 	}
-	if err := s.validateDividendRoles(ctx, input, date, incomeAccountID); err != nil {
+	dependencies := newAccountRuleDependencies()
+	if err := s.validateDividendRoles(ctx, input, date, incomeAccountID, dependencies); err != nil {
 		return investmentTransactionPlan{}, err
 	}
 	memo, err := cleanOptionalText(input.Memo, "memo", investmentTextMaxBytes)
@@ -1544,8 +1554,9 @@ func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInpu
 		)
 	}
 	return investmentTransactionPlan{
-		MetadataJSON: input.MetadataJSON,
-		Date:         date,
+		AccountRuleDependencies: dependencies,
+		MetadataJSON:            input.MetadataJSON,
+		Date:                    date,
 		Create: CreateTransactionInput{
 			OwnerUserID:            input.OwnerUserID,
 			AuthSessionID:          input.AuthSessionID,
@@ -1587,7 +1598,7 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 	// subledger exemption just because it is an investment command would let an
 	// imported dividend post to a holding account with nothing to account for
 	// the shares (T-98).
-	params, err := s.transactionService.prepareCreateTransactionForWrite(ctx, createInput)
+	params, err := s.transactionService.prepareCreateTransactionForWriteCarrying(ctx, createInput, plan.AccountRuleDependencies)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -1617,7 +1628,8 @@ func (s *InvestmentService) reinvestedDividendPlan(ctx context.Context, input Re
 	if incomeAccountID <= 0 {
 		return investmentTransactionPlan{}, ValidationError{Message: "dividend income account is required"}
 	}
-	if err := s.validateReinvestedDividendRoles(ctx, input, date, incomeAccountID); err != nil {
+	dependencies := newAccountRuleDependencies()
+	if err := s.validateReinvestedDividendRoles(ctx, input, date, incomeAccountID, dependencies); err != nil {
 		return investmentTransactionPlan{}, err
 	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
@@ -1636,7 +1648,8 @@ func (s *InvestmentService) reinvestedDividendPlan(ctx context.Context, input Re
 		status = "posted"
 	}
 	return investmentTransactionPlan{
-		Date: date,
+		AccountRuleDependencies: dependencies,
+		Date:                    date,
 		Create: CreateTransactionInput{
 			OwnerUserID:            input.OwnerUserID,
 			AuthSessionID:          input.AuthSessionID,
@@ -1673,7 +1686,7 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 		return InvestmentTradeResult{}, err
 	}
 	date := plan.Date
-	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create)
+	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create, plan.AccountRuleDependencies)
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
@@ -2595,6 +2608,9 @@ type RealizedGainEntry struct {
 	ProceedsValue      int64
 	ProceedsScale      int
 	RealizedGainValue  int64
+	// RealizedGainScale is the gain's own scale — the deeper of proceeds and
+	// disposed basis, which is not always the proceeds scale (T-101).
+	RealizedGainScale int
 }
 
 // UnrealizedGainEntry is an open position with unrealized gain when a price is available.
@@ -2636,6 +2652,7 @@ func (s *InvestmentService) ListRealizedGains(ctx context.Context, params GainsR
 			ProceedsValue:      r.ProceedsValue,
 			ProceedsScale:      r.ProceedsScale,
 			RealizedGainValue:  r.RealizedGainValue,
+			RealizedGainScale:  r.RealizedGainScale,
 		})
 	}
 	return entries, nil

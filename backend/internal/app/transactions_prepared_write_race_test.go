@@ -196,7 +196,7 @@ func TestPreparedInvestmentPostingIsRefusedAfterTheHoldingAccountChanges(t *test
 	entry := ordinaryEntry(f.holdingAccountID, f.incomeAccountID, f.stockCommodityID, 10)
 	params, err := f.transactionService.prepareInvestmentTransactionForWrite(ctx, CreateTransactionInput{
 		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Spec: entry,
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	allowsPostings := true

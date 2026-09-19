@@ -357,18 +357,42 @@ Proved by `TestFractionalSaleRetainsPricedMarketValue`
 no-price reason, and `TestNormalized*` in `backend/internal/exact/scaled_test.go`.
 All fail with the restatement stubbed out.
 
-### T-100 Posting validation can outlive the account role it checked `[ ]`
+### T-100 Posting validation can outlive the account role it checked `[x]`
 
-**Reopened 2026-09-19 — P1.** The post-preparation interleaving below is fixed,
-but investment role checks run earlier, in `buyPlan`. Changing the unused
-holding account to `other_asset` between that plan and journal preparation
-lets the write capture the newer version and commit the stale plan's lot.
-An ordinary posting can then leave zero journal shares beside a 10-share lot.
-Carry the role check's original version through preparation/commit, or check
-roles within the write transaction. The fresh regression tests for the
-previous fix still pass. See
-`docs/reviews/ledger-investments-fourth-pass-2026-09-19.md` and
-`TestFourthPassInvestmentRoleReadMustBindToWrite` in its retained probe source.
+**Second window fixed 2026-09-19.** The guard added below was fed by the wrong
+read. An investment command decides an account's *role* while it builds its
+plan — this is a holding account the subledger owns, that is where the cash
+settles — and only reads those accounts again while preparing the journal.
+The dependency collector started at that second read, so the write compared the
+account to itself and passed. A holding account changed to `other_asset`
+between the two phases kept a role it no longer had: the buy committed, and an
+ordinary balanced entry could then take the journal to zero shares beside a
+ten-share lot.
+
+`accountInRole` now records the version it read, `investmentTransactionPlan`
+carries that collector, and journal preparation adds to the same one.
+`accountRuleDependencies.observe` keeps the **first** sighting of each account
+rather than the last, which is the whole fix in one line: the earliest read is
+the one a decision was made against, and a version appearing between the two
+reads is exactly what must fail the write. Preview paths pass nil — they decide
+nothing that outlives the request.
+
+Which disturbance is reachable differs by command, and that is part of the
+answer: selling needs a position, and once an account has postings the
+reciprocal structural lock already refuses a kind change, so the two guards
+compose. A reinvestment can be a position's first acquisition, so the role
+change itself is still reachable there and is tested as such.
+
+Proved by `backend/internal/app/investments_plan_binding_test.go`:
+`TestBuyPlannedBeforeItsHoldingAccountChangedIsRefused` (the reported case, end
+to end through `CreateTransactionAndLot`, asserting no lot and no transaction),
+`TestEveryInvestmentPlanBindsItsRoleReadsToTheWrite` (the sweep over sell,
+write-off, dividend and reinvestment),
+`TestInvestmentPlanRecordsTheVersionItsRolesRead` (the mechanism: preparation
+must not overwrite the planning-time version), and
+`TestOrdinaryInvestmentCommandsStillCommit` as the control. All fail with
+`observe` reverted to last-wins. The reviewer's
+`TestFourthPassInvestmentRoleReadMustBindToWrite` probe passes.
 
 **Fixed 2026-09-13.** Posting eligibility — does this account take postings, is
 it a holding account the investment subledger owns, does it fix a default
@@ -413,32 +437,58 @@ generation both prepare through `prepareCreateTransactionForWrite` and so carry
 dependencies by construction. The reviewer's
 `TestThirdPassPreparedPostingMustRevalidateAccountRole` probe passes.
 
-### T-101 Realized gains truncate cost basis to the proceeds scale `[ ]`
+### T-101 Realized gains truncate cost basis to the proceeds scale `[x]`
 
-**Found 2026-09-19 — P2.** Buy one share for 10.99 EUR and sell for 11 EUR at
-scale zero: the preview correctly shows 0.01 EUR gain, but the posted gains
-report shows 1 EUR. `InvestmentRepository.ListRealizedGains` truncates the
-negative disposed basis before subtraction. The identical sale entered as
-11.00 EUR correctly shows 0.01 EUR. Preserve exact common-scale subtraction
-and carry the resulting scale consistently through the report API, totals and
-UI. Add equivalent-value/different-scale tests and preview-to-report identity
-checks for gains and losses. See
-`docs/reviews/ledger-investments-fourth-pass-2026-09-19.md` and its retained
-`TestFourthPassGainPreservesBasisPrecision` reproduction.
+**Fixed 2026-09-19.** `ListRealizedGains` restated the disposed cost basis to
+whatever scale the *proceeds* happened to be entered at, then subtracted.
+Selling for 11 EUR entered as value 11 at scale 0 truncated a 10.99 EUR basis
+to 10 EUR and reported a 1 EUR gain instead of 0.01 EUR — a hundredfold error
+produced by nothing but how the amount was typed, and visible in the UI, which
+formatted the gain with `proceeds_scale`. The same rounding could hide a loss.
+The lot records were always right; only the report was wrong.
 
-### T-102 Cashflow counts non-cash security legs as transfers `[ ]`
+The two operands are now added at whichever scale is deeper (`exact.ScaledInt`
+deepens as it adds), and the gain carries its own `realized_gain_scale` — the
+same shape `unrealized_gain_scale` already had, and the reason the preview was
+right all along. Realized totals are grouped by cost commodity alone and summed
+exactly: grouping by scale as well used to stand in for "addable without loss",
+but two gains in one currency can now legitimately differ in scale, and
+splitting them would report a currency twice with neither row being the total.
 
-**Found 2026-09-19 — P2.** A normal 100 EUR purchase of 10 shares produces
-cashflow transfer-in of 10 shares and transfer-out of 100 EUR plus 10 shares,
-even though only the cash account is selected. `classifyCashflowEntry` sees a
-cash posting anywhere in the entry and classifies all commodities, including
-the holding/trading pair that never touches selected cash. Net movement stays
-correct, so net-only assertions miss the inflated gross flows. Restrict
-classification to commodity groups touching the selected cash scope, preserving
-the genuine cash settlement counterpart. Add buy/sell and FX-transfer tests
-for gross measures and reporting-currency totals. See
-`docs/reviews/ledger-investments-fourth-pass-2026-09-19.md` and its retained
-`TestFourthPassCashflowDoesNotCountNonCashSecurityLegs` reproduction.
+Proved by `backend/internal/app/investments_gain_precision_test.go`:
+`TestRealizedGainIsTheSameHoweverProceedsWereEntered` (both scale directions),
+`TestRealizedGainMatchesItsPreview` (gain, loss, a loss the old rounding hid,
+and a deep-proceeds/shallow-basis case, each asserting preview equals report),
+and `TestRealizedGainClosesAMixedScaleMultiLotPositionExactly`. All fail with
+the truncation restored. The reviewer's
+`TestFourthPassGainPreservesBasisPrecision` probe passes in both scales.
+
+### T-102 Cashflow counts non-cash security legs as transfers `[x]`
+
+**Fixed 2026-09-19.** `classifyCashflowEntry` asked "does this journal entry
+touch a selected cash account?" once for the whole entry, then classified every
+other posting in it. An entry balances separately in each commodity, though, so
+one entry can carry movements with nothing to do with each other: a share
+purchase is euros leaving cash for the trading account, and shares arriving
+from it. Only the euro pair crosses the cash boundary. A 100 EUR purchase
+therefore reported 10 shares transferred in and 100 EUR *plus* 10 shares out —
+and with a reporting currency, 100 EUR in and 200 EUR out instead of 0 and 100.
+
+The question is now asked per commodity: a posting is classified only if some
+posting in the same commodity within that entry is in the selected cash scope.
+This is strictly narrowing — every posting classified after was classified
+before — and net movement is untouched, since a cash posting is trivially in
+its own commodity's group. That is also why the report's arithmetic identity
+never saw the defect: the spurious legs balanced.
+
+Proved by `backend/internal/app/cashflow_commodity_scope_test.go`:
+`TestCashflowExcludesTheSecurityLegsOfABuy` and `...OfASell` (gross measures,
+not just net), `TestCashflowReportingTotalsDropTheSecurityLegs` (the converted
+totals, where the error was a wrong euro figure rather than a stray commodity),
+and `TestCashflowStillClassifiesEveryCommodityThatTouchesCash` as the guard
+against over-narrowing. The first three fail with the per-entry test restored.
+The reviewer's `TestFourthPassCashflowDoesNotCountNonCashSecurityLegs` probe
+passes.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 

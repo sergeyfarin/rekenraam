@@ -72,7 +72,14 @@ var (
 // role. It repeats the postable checks cleanPosting makes, because a role
 // violation must be refused before the plan is built rather than reported as a
 // posting error about an account the caller never named directly.
-func (s *InvestmentService) accountInRole(ctx context.Context, accountID int64, date string, role accountRoleForInvestment) (db.PostingAccountRule, error) {
+//
+// The version it reads is recorded in dependencies, when the caller supplies
+// one. A role decision made here is only honest for as long as the account
+// still is what it was read as, and the command that acts on it commits later,
+// in a database transaction of its own — so the version has to travel with the
+// write and be checked there (T-100). Previews pass nil: they decide nothing
+// that outlives the request.
+func (s *InvestmentService) accountInRole(ctx context.Context, accountID int64, date string, role accountRoleForInvestment, dependencies *accountRuleDependencies) (db.PostingAccountRule, error) {
 	if accountID <= 0 {
 		return db.PostingAccountRule{}, ValidationError{Message: role.label + " is required"}
 	}
@@ -83,6 +90,9 @@ func (s *InvestmentService) accountInRole(ctx context.Context, accountID int64, 
 		}
 		return db.PostingAccountRule{}, fmt.Errorf("read %s rule: %w", role.label, err)
 	}
+	// Recorded before the first rule is applied, so a rejection and an
+	// acceptance bind to the same version.
+	dependencies.observe(rule)
 	if rule.Status != "active" || !rule.AllowsPostings {
 		return db.PostingAccountRule{}, ValidationError{Message: role.label + " is not active for postings"}
 	}
@@ -133,9 +143,9 @@ func (s *InvestmentService) requireCommodityKind(ctx context.Context, commodityI
 
 // validateTradeRoles checks a buy, sell or write-off. A write-off has no cash
 // leg at all, so it has no settlement role to check.
-func (s *InvestmentService) validateTradeRoles(ctx context.Context, input InvestmentTradeInput) error {
+func (s *InvestmentService) validateTradeRoles(ctx context.Context, input InvestmentTradeInput, dependencies *accountRuleDependencies) error {
 	date := input.TransactionDate
-	if _, err := s.accountInRole(ctx, input.HoldingAccountID, date, holdingRole); err != nil {
+	if _, err := s.accountInRole(ctx, input.HoldingAccountID, date, holdingRole, dependencies); err != nil {
 		return err
 	}
 	if err := s.requireCommodityKind(ctx, input.CommodityID, date, "traded commodity", false); err != nil {
@@ -144,7 +154,7 @@ func (s *InvestmentService) validateTradeRoles(ctx context.Context, input Invest
 	if input.WriteOff {
 		return nil
 	}
-	if _, err := s.accountInRole(ctx, input.CashAccountID, date, settlementRole); err != nil {
+	if _, err := s.accountInRole(ctx, input.CashAccountID, date, settlementRole, dependencies); err != nil {
 		return err
 	}
 	return s.requireCommodityKind(ctx, input.CashCommodityID, date, "settlement commodity", true)
@@ -152,11 +162,11 @@ func (s *InvestmentService) validateTradeRoles(ctx context.Context, input Invest
 
 // validateDividendRoles checks a cash dividend. It writes no lots, so it names
 // no holding account — and must not be able to reach one.
-func (s *InvestmentService) validateDividendRoles(ctx context.Context, input DividendInput, date string, incomeAccountID int64) error {
-	if _, err := s.accountInRole(ctx, input.CashAccountID, date, settlementRole); err != nil {
+func (s *InvestmentService) validateDividendRoles(ctx context.Context, input DividendInput, date string, incomeAccountID int64, dependencies *accountRuleDependencies) error {
+	if _, err := s.accountInRole(ctx, input.CashAccountID, date, settlementRole, dependencies); err != nil {
 		return err
 	}
-	if _, err := s.accountInRole(ctx, incomeAccountID, date, incomeRole); err != nil {
+	if _, err := s.accountInRole(ctx, incomeAccountID, date, incomeRole, dependencies); err != nil {
 		return err
 	}
 	if input.WithholdingValue != nil && *input.WithholdingValue > 0 {
@@ -164,7 +174,7 @@ func (s *InvestmentService) validateDividendRoles(ctx context.Context, input Div
 		if input.WithholdingAccountID != nil {
 			withholdingAccountID = *input.WithholdingAccountID
 		}
-		if _, err := s.accountInRole(ctx, withholdingAccountID, date, withholdingRole); err != nil {
+		if _, err := s.accountInRole(ctx, withholdingAccountID, date, withholdingRole, dependencies); err != nil {
 			return err
 		}
 	}
@@ -179,11 +189,11 @@ func (s *InvestmentService) validateDividendRoles(ctx context.Context, input Div
 // validateReinvestedDividendRoles checks a reinvestment, which acquires shares
 // against income instead of against cash: a holding account and an income
 // account, and no settlement account at all.
-func (s *InvestmentService) validateReinvestedDividendRoles(ctx context.Context, input ReinvestedDividendInput, date string, incomeAccountID int64) error {
-	if _, err := s.accountInRole(ctx, input.HoldingAccountID, date, holdingRole); err != nil {
+func (s *InvestmentService) validateReinvestedDividendRoles(ctx context.Context, input ReinvestedDividendInput, date string, incomeAccountID int64, dependencies *accountRuleDependencies) error {
+	if _, err := s.accountInRole(ctx, input.HoldingAccountID, date, holdingRole, dependencies); err != nil {
 		return err
 	}
-	if _, err := s.accountInRole(ctx, incomeAccountID, date, incomeRole); err != nil {
+	if _, err := s.accountInRole(ctx, incomeAccountID, date, incomeRole, dependencies); err != nil {
 		return err
 	}
 	if err := s.requireCommodityKind(ctx, input.CommodityID, date, "traded commodity", false); err != nil {

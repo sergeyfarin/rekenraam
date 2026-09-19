@@ -2799,6 +2799,11 @@ type RealizedGainRecord struct {
 	ProceedsValue      int64
 	ProceedsScale      int
 	RealizedGainValue  int64
+	// RealizedGainScale is the gain's own scale, which is the deeper of the
+	// proceeds and disposed-basis scales. It is not always the proceeds scale:
+	// 11 EUR of proceeds entered at scale 0 against a 10.99 EUR basis yields
+	// 0.01 EUR, a figure scale 0 cannot hold (T-101).
+	RealizedGainScale int
 }
 
 type realizedGainEventRow struct {
@@ -2976,17 +2981,24 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			record.ProceedsScale = record.DisposedBasisScale
 		}
 
-		// The gain is reported at the proceeds scale, so restate the disposed
-		// basis there first.
 		// disposed_basis_value is stored as a negative number (the lot event records
 		// the deduction from cost basis). Gain = proceeds − |cost| = proceeds + disposed_basis.
+		//
+		// The two operands are added at whichever scale is deeper, because the
+		// scale a figure was *entered* at says nothing about the precision its
+		// difference needs: restating the basis to the proceeds scale first
+		// truncated 10.99 EUR of cost to 10 EUR and turned a one-cent gain into
+		// a one-euro one, and could as easily hide a loss (T-101). Add
+		// deepens the accumulator on its own, so the result carries the exact
+		// difference and reports the scale it needs.
 		gain := exact.ScaledIntFromInt64(record.ProceedsValue, record.ProceedsScale)
-		gain.AddScaled(g.costBasis.TruncatedTo(record.ProceedsScale))
+		gain.AddScaled(g.costBasis)
 		gainValue, err := gain.Int64()
 		if err != nil {
 			return nil, fmt.Errorf("realized gain value: %w", err)
 		}
 		record.RealizedGainValue = gainValue
+		record.RealizedGainScale = gain.Scale()
 		records = append(records, record)
 	}
 	return records, nil

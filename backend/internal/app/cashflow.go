@@ -255,19 +255,32 @@ func (s *TransactionService) Cashflow(ctx context.Context, input CashflowInput) 
 // A cash-to-cash transfer inside the selected scope disappears here without a
 // special case: both legs land in netMovement and cancel, and the entry has no
 // counterparts left to classify (cashflow rule 2).
+//
+// "Touches cash" is asked per commodity, not per entry (T-102). A journal entry
+// balances separately in each commodity, so its commodity groups are separate
+// movements that happen to be recorded together. A share purchase is two of
+// them: euros leaving the cash account for the trading account, and shares
+// arriving from it. Only the euro group moves anything across the boundary of
+// the selected cash scope; asking the question once for the whole entry
+// classified the share pair as well, and reported ten shares transferred in
+// *and* out of an account that never held a share. Net movement was unaffected
+// — the spurious legs balance — which is exactly why the arithmetic identity
+// could not see them.
 func classifyCashflowEntry(postings []db.ReportCashflowPostingRecord, cashAccountIDs map[int64]bool, totals *cashflowTotals) {
-	touchesCash := false
+	commoditiesTouchingCash := map[int64]bool{}
 	for _, posting := range postings {
 		if cashAccountIDs[posting.AccountID] {
-			touchesCash = true
-			break
+			commoditiesTouchingCash[posting.CommodityID] = true
 		}
 	}
-	if !touchesCash {
+	if len(commoditiesTouchingCash) == 0 {
 		return
 	}
 
 	for _, posting := range postings {
+		if !commoditiesTouchingCash[posting.CommodityID] {
+			continue
+		}
 		if cashAccountIDs[posting.AccountID] {
 			addCashflowAmount(totals.netMovement, posting, false)
 			continue
