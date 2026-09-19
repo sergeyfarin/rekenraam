@@ -4,6 +4,40 @@
 **Status:** Analysis and recommendation only. This document does not change the
 current product decision that native desktop applications are out of scope.
 
+## Follow-up decision — 2026-09-19
+
+After reviewing the transport and framework tradeoffs, the owner chose to wait
+for a stable Wails v3 before reconsidering desktop implementation. This is not a
+promise to build a desktop edition when v3 becomes stable; demand and the gates
+in this review still apply.
+
+If desktop work is reconsidered, the preferred order is now explicit:
+
+1. reuse the existing `http.Handler` through Wails' in-process asset server if
+   the transport conformance spike passes;
+2. use loopback HTTP only when a required behavior cannot be made reliable
+   through the in-process adapter; and
+3. use narrow Wails bindings only for native host capabilities, never as a
+   parallel business API.
+
+Tauri and Electron remain technically possible but are not preferred. Tauri
+would add Rust, its IPC/capability model, and a second native toolchain to a Go
+application. Electron would add Node.js, bundled Chromium, Electron-specific
+hardening, and its release/update ecosystem. Both retain the web frontend but
+increase dependency and operational surface without improving reuse of the Go
+backend. A non-web frontend is a substantially larger divergence: it would
+duplicate screens, form behavior, localization, accessibility, client-side
+validation, and UI tests, turning most future product slices into two-client
+work.
+
+One preparation item is valuable independently of every desktop choice:
+extracting application construction and shutdown from `runServe` into a reusable,
+Wails-independent runtime package. The owner asked for that work to move earlier
+in `docs/roadmap.md` even if desktop ships much later or never. Its web-product
+benefits are explicit lifecycle ownership, cleanup of partial startup failures,
+testable composition, and a smaller server command; the roadmap scope fence
+forbids adding Wails or changing runtime behavior as part of that extraction.
+
 ## Executive conclusion
 
 Rekenraam can become a desktop application without rewriting its ledger,

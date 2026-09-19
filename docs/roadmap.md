@@ -6,8 +6,11 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-09-10 (R8 budgets and T-76 disposal provenance shipped;
-T-75b remains scheduled separately).
+Last reviewed: 2026-09-19 (shared runtime construction/lifecycle extraction
+scheduled before the next large backend feature slice; this is independently
+useful architecture work and does not bring native desktop into scope).
+Earlier: 2026-09-10 (R8 budgets and T-76 disposal provenance shipped; T-75b
+remains scheduled separately).
 Earlier: 2026-08-20 (merge of two long-diverged branches). R2's
 acceptance review closed 2026-08-19 — filters, drill-down, CSV, print, and
 charts all shipped, so it moves to ✅ below. R16 slice 1 (write-off, price
@@ -103,6 +106,42 @@ in `docs/reviews/competitive-analysis-2026-07.md`.
 Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
+
+### Next architecture maintenance — extract the reusable application runtime
+
+Do this before the next large backend feature slice (the remaining R16 work or
+R17), in the next suitable backend maintenance window. It is deliberately
+scheduled early even though native desktop remains out of scope and may never
+ship: `backend/cmd/rekenraam/command.go` currently combines application
+construction, worker startup, HTTP listener ownership, and shutdown in one
+`runServe` function. Separating those responsibilities makes startup failure,
+resource ownership, lifecycle tests, and future non-server hosts easier to
+reason about in the web product itself.
+
+Scope fence:
+
+1. Extract a Wails-independent package inside the existing `backend` Go module
+   that opens and locks SQLite, runs migrations, constructs repositories and
+   services, starts background workers/schedulers, and exposes the existing
+   `http.Handler`.
+2. Return an explicitly owned runtime with bounded, idempotent shutdown. Partial
+   startup failure must close every database, lock, worker, and other resource
+   already acquired.
+3. Leave the server command responsible for configuration/CLI selection, the
+   configured TCP listener, OS signal handling, and translating startup or
+   shutdown failure into logs and an exit code.
+4. Preserve all routes, middleware order, configuration semantics, database
+   behavior, worker schedules, and web deployment behavior. Do not add Wails,
+   desktop build assets, alternate authentication, or a second API transport in
+   this item.
+5. Add focused construction, partial-failure cleanup, cancellation, and repeated
+   close tests, then run the normal backend, integrated-build, and browser smoke
+   validation appropriate to a composition-root change.
+
+The point-in-time desktop analysis and later-framework discussion live in
+`docs/reviews/desktop-application-feasibility-2026-09-19.md`. That review is a
+possible future consumer of this boundary, not the justification required for
+the work and not a commitment to a desktop release.
 
 ### Done — R2: reports users can act on
 
