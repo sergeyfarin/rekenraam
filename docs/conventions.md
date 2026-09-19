@@ -463,6 +463,17 @@ rewrite, rename, or deletion fails the backend suite.
 - Playwright covers critical user journeys.
 - Playwright specs must never hard-code a ledger date. Accounts created during a run get `effective_from` set to the run date, and `PostingAccountRule` resolves the account version as-of the posting's entry date, so a fixed posting date starts failing with `VALIDATION_FAILED: posting account is invalid` the moment wall-clock time passes it. Derive dates from `todayISO()` / `todayQIF()` / `monthStartISO()` in `e2e/playwright/support/dates.ts`.
 - Financial invariants, reconciliation behavior, imports, and calculations require named backend test cases.
+- Financial calculation and report suites must include independent expected
+  amounts as well as conservation identities. A balanced journal does not prove
+  gross report classification, cost-basis selection, or report serialization is
+  correct. Exercise equivalent
+  decimal representations, mixed commodities and account scopes, and both gross
+  and net amounts; use exact test oracles without floating point.
+- Journal/subledger sequence tests must compare both against the entered facts
+  after each operation, and inspect durable state after previews and rejected
+  writes. Keep deterministic seeds reproducible. For financial regressions,
+  verify the named test fails when the relevant defect is restored in an isolated
+  checkout; a compile failure does not count as detecting the defect.
 
 ## Archive Translation Rules
 

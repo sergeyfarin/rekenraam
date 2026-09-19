@@ -490,6 +490,26 @@ against over-narrowing. The first three fail with the per-entry test restored.
 The reviewer's `TestFourthPassCashflowDoesNotCountNonCashSecurityLegs` probe
 passes.
 
+### T-103 Partial cost-basis allocation depends on purchase text precision `[ ]`
+
+**Found 2026-09-19 — P2.** Buy three shares for 10 EUR and sell one for 5 EUR.
+Entering the identical purchase as `10`/scale 0, `1000`/scale 2 or
+`100000`/scale 4 reports partial gains of 2, 1.67 or 1.6667 EUR under all four
+disposal methods. Truncation uses the recorded purchase scale as an implicit
+allocation-precision policy. Basis is conserved and eventual full-closure gain
+is correct, so balance/conservation checks alone miss the wrong interim gains.
+This is distinct from the fixed T-101 report-subtraction defect.
+
+Define allocation precision independently of input representation, apply it to
+both per-lot and average-cost projections, preserve residual conservation and
+checked coefficient ranges, and assess existing lot/disposal evidence before
+changing historical results. The active regression
+`TestFinancialPartialDisposalGainMustNotDependOnPurchaseTextPrecision` in
+`backend/internal/app/investments_partial_precision_test.go` currently fails for
+all four methods; the CI failure is intentional evidence of this open defect.
+See `docs/reviews/financial-test-hardening-2026-09-19.md` for the reproduction and
+the additional passing tests and mutation checks.
+
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 
 **Depends on** (assessed 2026-08-07 — this is scheduled product work, not a

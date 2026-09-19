@@ -61,6 +61,25 @@ correctly formatted for the toolchain actually compiling them.
 ./scripts/test-backend.sh
 ```
 
+The financial property tests run in the normal backend suite. For a focused
+iteration on ledger, cashflow, lot conservation and gains arithmetic:
+
+```sh
+cd backend
+go test ./internal/app ./internal/api -run '^TestFinancial' -count=1
+```
+
+These include independent exact expected amounts, fixed-seed trade sequences,
+gross cashflow scope checks and HTTP scale/total assertions. Keep the full
+backend script as the completion gate. See
+[financial test hardening](reviews/financial-test-hardening-2026-09-19.md) for
+scope, mutation evidence and limitations; coverage percentage alone is not a
+financial correctness gate.
+The test-hardening review also records the active T-103 partial-disposal
+regression: until that defect is fixed, its four method subtests are expected
+to fail. Do not skip the test or turn the current wrong results into expected
+values to make the gate green.
+
 The backend suite enforces released-migration checksums and exercises the
 upgrade from the frozen v0.1 schema to `HEAD`, including schema equivalence and
 sentinel-data preservation. A checksum failure means the old migration must be

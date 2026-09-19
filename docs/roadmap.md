@@ -594,9 +594,13 @@ validation window (reopened T-100, P1), precision-dependent realized gains
 (T-101, P2), and non-cash legs counted in cashflow transfers (T-102, P2).
 **All three are fixed as of 2026-09-19**, each with named regression tests that
 fail without their fix and with the reviewer's own probes passing, so the
-code-side release gate is clear again. T-94's draft-promotion correction
-remains verified. The household dry run, investment feature limits and frozen
-baseline gates still remain required.
+previous reproductions are closed. Subsequent test hardening found **T-103
+(P2): partial-disposal basis depends on purchase text precision**. Its active
+regression fails under all four disposal methods; **hold the financial
+correctness gate until it is fixed**. See
+`docs/reviews/financial-test-hardening-2026-09-19.md`. T-94's draft-promotion
+correction remains verified. The household dry run, investment feature limits
+and frozen baseline gates still remain required.
 
 These are a parallel release-readiness track, not a reason to delay local
 daily-driver work.
