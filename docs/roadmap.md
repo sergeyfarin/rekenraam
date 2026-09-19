@@ -587,13 +587,14 @@ The current parity lens is:
 
 ## Public-release gates
 
-**Third-pass review:** `docs/reviews/ledger-investments-third-pass-2026-09-13.md`
-confirms the prior fixes' focused tests and a fresh 7/7 browser preflight, and
-found two remaining integrity gaps: draft promotion (T-94) and account-role
-changes during posting preparation (T-100). **Both are fixed as of 2026-09-13**
-with named regression tests and the reviewer's own probes passing, so the
-code-side release gate is clear; the household dry run, investment feature
-limits and frozen baseline gates still remain required.
+**Fourth-pass review (2026-09-19):**
+`docs/reviews/ledger-investments-fourth-pass-2026-09-19.md` verifies that the
+previous six regression tests pass, but finds an earlier investment-role
+validation window (reopened T-100, P1), precision-dependent realized gains
+(T-101, P2), and non-cash legs counted in cashflow transfers (T-102, P2).
+**Hold the v0.1 financial correctness gate until all three are fixed.**
+T-94's draft-promotion correction remains verified. The household dry run,
+investment feature limits and frozen baseline gates still remain required.
 
 These are a parallel release-readiness track, not a reason to delay local
 daily-driver work.

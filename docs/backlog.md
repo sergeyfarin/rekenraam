@@ -357,7 +357,18 @@ Proved by `TestFractionalSaleRetainsPricedMarketValue`
 no-price reason, and `TestNormalized*` in `backend/internal/exact/scaled_test.go`.
 All fail with the restatement stubbed out.
 
-### T-100 Posting validation can outlive the account role it checked `[x]`
+### T-100 Posting validation can outlive the account role it checked `[ ]`
+
+**Reopened 2026-09-19 — P1.** The post-preparation interleaving below is fixed,
+but investment role checks run earlier, in `buyPlan`. Changing the unused
+holding account to `other_asset` between that plan and journal preparation
+lets the write capture the newer version and commit the stale plan's lot.
+An ordinary posting can then leave zero journal shares beside a 10-share lot.
+Carry the role check's original version through preparation/commit, or check
+roles within the write transaction. The fresh regression tests for the
+previous fix still pass. See
+`docs/reviews/ledger-investments-fourth-pass-2026-09-19.md` and
+`TestFourthPassInvestmentRoleReadMustBindToWrite` in its retained probe source.
 
 **Fixed 2026-09-13.** Posting eligibility — does this account take postings, is
 it a holding account the investment subledger owns, does it fix a default
@@ -401,6 +412,33 @@ direction). All fail with the guard stubbed out. Imports and recurring
 generation both prepare through `prepareCreateTransactionForWrite` and so carry
 dependencies by construction. The reviewer's
 `TestThirdPassPreparedPostingMustRevalidateAccountRole` probe passes.
+
+### T-101 Realized gains truncate cost basis to the proceeds scale `[ ]`
+
+**Found 2026-09-19 — P2.** Buy one share for 10.99 EUR and sell for 11 EUR at
+scale zero: the preview correctly shows 0.01 EUR gain, but the posted gains
+report shows 1 EUR. `InvestmentRepository.ListRealizedGains` truncates the
+negative disposed basis before subtraction. The identical sale entered as
+11.00 EUR correctly shows 0.01 EUR. Preserve exact common-scale subtraction
+and carry the resulting scale consistently through the report API, totals and
+UI. Add equivalent-value/different-scale tests and preview-to-report identity
+checks for gains and losses. See
+`docs/reviews/ledger-investments-fourth-pass-2026-09-19.md` and its retained
+`TestFourthPassGainPreservesBasisPrecision` reproduction.
+
+### T-102 Cashflow counts non-cash security legs as transfers `[ ]`
+
+**Found 2026-09-19 — P2.** A normal 100 EUR purchase of 10 shares produces
+cashflow transfer-in of 10 shares and transfer-out of 100 EUR plus 10 shares,
+even though only the cash account is selected. `classifyCashflowEntry` sees a
+cash posting anywhere in the entry and classifies all commodities, including
+the holding/trading pair that never touches selected cash. Net movement stays
+correct, so net-only assertions miss the inflated gross flows. Restrict
+classification to commodity groups touching the selected cash scope, preserving
+the genuine cash settlement counterpart. Add buy/sell and FX-transfer tests
+for gross measures and reporting-currency totals. See
+`docs/reviews/ledger-investments-fourth-pass-2026-09-19.md` and its retained
+`TestFourthPassCashflowDoesNotCountNonCashSecurityLegs` reproduction.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 

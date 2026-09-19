@@ -4,6 +4,12 @@ Reviewed `2904cf7e`, including the other agent's implementation summary and the
 new role, chronology, valuation, and transaction-version tests. Also inspected
 the upgraded migration-fixture coverage from `1e52eb71`.
 
+Current release status is superseded by the
+[fourth-pass review](ledger-investments-fourth-pass-2026-09-19.md): the concrete
+reproductions below remain fixed, but an earlier investment-role read window
+reopens T-100, and realized-gain precision and cashflow classification defects
+are recorded as T-101 and T-102.
+
 ## Resolution (added 2026-09-13, after the review)
 
 Both P1 gaps are fixed. T-94's promotion now carries the version its spec was

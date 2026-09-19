@@ -1,0 +1,183 @@
+package app
+
+import (
+	"context"
+	"github.com/stretchr/testify/require"
+	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
+	"testing"
+)
+
+func TestFourthPassGainPreservesBasisPrecision(t *testing.T) {
+	for _, scale := range []int{0, 2} {
+		t.Run(string(rune('0'+scale)), func(t *testing.T) {
+			f := newInvestmentsTestFixture(t)
+			ctx := context.Background()
+			buyOn(t, f, "2026-01-01", 1, 1099)
+			sale := sellInput(f, "2026-02-01", 1)
+			sale.CashAmountValue = 11
+			sale.CashAmountScale = scale
+			if scale == 2 {
+				sale.CashAmountValue = 1100
+			}
+			preview, err := f.investmentService.PreviewSell(ctx, sale)
+			require.NoError(t, err)
+			_, err = f.investmentService.Sell(ctx, sale)
+			require.NoError(t, err)
+			gains, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
+			require.NoError(t, err)
+			require.Len(t, gains, 1)
+			t.Logf("preview gain=%d scale=%d, posted gain=%d proceeds scale=%d, disposed basis=%d scale=%d", preview.RealizedGain, preview.RealizedGainScale, gains[0].RealizedGainValue, gains[0].ProceedsScale, gains[0].DisposedBasisValue, gains[0].DisposedBasisScale)
+			require.Equal(t, 0, exact.ScaledIntFromInt64(gains[0].RealizedGainValue, gains[0].ProceedsScale).Cmp(exact.ScaledIntFromInt64(1, 2)), "11 EUR minus 10.99 EUR must be 0.01 EUR irrespective of how proceeds were entered")
+		})
+	}
+}
+
+func TestFourthPassInvestmentRoleReadMustBindToWrite(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	input := sellInput(f, "2026-01-01", 10)
+	plan, err := f.investmentService.buyPlan(ctx, input)
+	require.NoError(t, err)
+	holding, err := f.accountService.Account(ctx, f.holdingAccountID)
+	require.NoError(t, err)
+	allows := true
+	_, err = f.accountService.UpdateAccount(ctx, UpdateAccountInput{
+		OwnerUserID: f.ownerUserID, OriginType: "browser_api", Operation: "account.update", AccountID: holding.ID, Code: holding.Code, Name: holding.Name, AccountClass: "asset", AccountKind: "other_asset", AllowsPostings: &allows, DefaultCommodityID: &f.stockCommodityID, OpenedOn: holding.OpenedOn, EffectiveFrom: "2026-01-01",
+	})
+	require.NoError(t, err)
+	_, freshErr := f.investmentService.buyPlan(ctx, input)
+	require.Error(t, freshErr)
+	params, err := f.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create)
+	require.NoError(t, err)
+	_, lot, err := f.investmentService.repository.CreateTransactionAndLot(ctx, params, db.CreateInvestmentLotParams{
+		BookID: BookID, AccountID: f.holdingAccountID, CommodityID: f.stockCommodityID, OpenedOn: input.TransactionDate, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CostBasisValue: input.CashAmountValue, CostBasisScale: input.CashAmountScale, CostCommodityID: f.eurCommodityID, MetadataJSON: plan.MetadataJSON, CreatedAt: "2026-09-19T12:00:00Z", CreatedByUserID: f.ownerUserID, OriginType: "browser_api", Operation: "investment.lot.create", ChangeReason: "created lot from buy transaction", EventKind: "acquisition",
+	})
+	t.Logf("fresh plan rejected: %v; stale plan committed lot %d, error=%v", freshErr, lot.ID, err)
+	if err == nil {
+		_, editErr := f.transactionService.CreateTransaction(ctx, CreateTransactionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Spec: ordinaryEntry(f.holdingAccountID, f.incomeAccountID, f.stockCommodityID, -10)})
+		require.NoError(t, editErr)
+		postings, readErr := f.transactionService.repository.LedgerPostingsThrough(ctx, BookID, "2026-12-31", "posted")
+		require.NoError(t, readErr)
+		balance := exact.NewScaledInt()
+		for _, p := range postings {
+			if p.AccountID == f.holdingAccountID && p.CommodityID == f.stockCommodityID {
+				balance.Add(p.QuantityValue.BigInt(), p.QuantityScale)
+			}
+		}
+		lots, readErr := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
+		require.NoError(t, readErr)
+		require.Len(t, lots, 1)
+		t.Logf("after accepted ordinary posting: ledger balance=%s scale=%d; lot remains=%s scale=%d", balance.String(), balance.Scale(), lots[0].RemainingQuantityValue.String(), lots[0].RemainingQuantityScale)
+	}
+	require.Error(t, err, "role validation must remain bound to the version it checked")
+}
+
+// Exercise the public command path, not just standalone lot operations.
+func TestFourthPassJournalAndLotsConserveAcrossTradeSequences(t *testing.T) {
+	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
+		t.Run(method, func(t *testing.T) {
+			f := newInvestmentsTestFixture(t)
+			ctx := context.Background()
+			check := func() {
+				postings, err := f.transactionService.repository.LedgerPostingsThrough(ctx, BookID, "2026-12-31", "posted")
+				require.NoError(t, err)
+				holding := exact.NewScaledInt()
+				entries := map[[2]int64]*exact.ScaledInt{}
+				for _, p := range postings {
+					key := [2]int64{p.JournalEntryID, p.CommodityID}
+					if entries[key] == nil {
+						entries[key] = exact.NewScaledInt()
+					}
+					entries[key].AddCoefficient(p.QuantityValue, p.QuantityScale)
+					if p.AccountID == f.holdingAccountID && p.CommodityID == f.stockCommodityID {
+						holding.AddCoefficient(p.QuantityValue, p.QuantityScale)
+					}
+				}
+				for _, total := range entries {
+					require.Zero(t, total.Sign(), "each entry must balance separately in each commodity")
+				}
+				lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
+				require.NoError(t, err)
+				qty := exact.NewScaledInt()
+				basis := exact.NewScaledInt()
+				for _, lot := range lots {
+					qty.AddCoefficient(lot.RemainingQuantityValue, lot.RemainingQuantityScale)
+					basis.AddInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)
+					require.GreaterOrEqual(t, lot.RemainingQuantityValue.Sign(), 0)
+					require.GreaterOrEqual(t, lot.RemainingCostBasisValue, int64(0))
+				}
+				require.Zero(t, holding.Cmp(qty), "journal holding must equal remaining lots after every command")
+				rows, err := f.database.QueryContext(ctx, `SELECT le.cost_basis_value,le.cost_basis_scale FROM investment_lot_events le JOIN investment_lots l ON l.id=le.lot_id WHERE l.account_id=?`, f.holdingAccountID)
+				require.NoError(t, err)
+				events := exact.NewScaledInt()
+				for rows.Next() {
+					var v int64
+					var scale int
+					require.NoError(t, rows.Scan(&v, &scale))
+					events.AddInt64(v, scale)
+				}
+				require.NoError(t, rows.Err())
+				require.NoError(t, rows.Close())
+				require.Zero(t, basis.Cmp(events), "remaining basis must equal acquisition basis less every disposal")
+			}
+			for i, b := range []struct {
+				q  int64
+				s  int
+				c  int64
+				cs int
+			}{{3, 0, 1001, 2}, {25, 1, 20999, 3}, {175, 2, 701, 2}} {
+				in := sellInput(f, "2026-01-01", b.q)
+				in.QuantityScale = b.s
+				in.CashAmountValue = b.c
+				in.CashAmountScale = b.cs
+				_, err := f.investmentService.Buy(ctx, in)
+				require.NoError(t, err, "buy %d", i)
+				check()
+			}
+			for i, q := range []int64{1, 24, 50, 100, 33, 67, 125, 200, 125} {
+				in := sellInput(f, "2026-02-01", q)
+				in.QuantityScale = 2
+				in.CostBasisMethod = method
+				if method == "specific_lot" {
+					lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
+					require.NoError(t, err)
+					left := q
+					for _, lot := range lots {
+						scaled, err := exact.ScaledIntFromCoefficient(lot.RemainingQuantityValue, lot.RemainingQuantityScale).TruncatedTo(2).Int64()
+						require.NoError(t, err)
+						take := min(left, scaled)
+						if take > 0 {
+							in.LotAllocations = append(in.LotAllocations, InvestmentLotAllocationInput{LotID: lot.ID, QuantityValue: exact.New(take), QuantityScale: 2})
+							left -= take
+						}
+					}
+					require.Zero(t, left)
+				}
+				_, err := f.investmentService.Sell(ctx, in)
+				require.NoError(t, err, "sale %d", i)
+				check()
+			}
+		})
+	}
+}
+
+func TestFourthPassCashflowDoesNotCountNonCashSecurityLegs(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 10, 10000)
+	report, err := f.transactionService.Cashflow(ctx, CashflowInput{StartDate: "2026-01-01", EndDate: "2026-01-31", Bucket: "month"})
+	require.NoError(t, err)
+	require.Len(t, report.Buckets, 1)
+	b := report.Buckets[0]
+	t.Logf("scope=%s accounts=%v; transfer in=%+v; transfer out=%+v; net=%+v", report.CashScope, report.Filters.ResolvedAccountIDs, b.TransferIn, b.TransferOut, b.NetMovement)
+	f.transactionService.SetPricingRepository(db.NewPricingRepository(f.database))
+	converted, err := f.transactionService.Cashflow(ctx, CashflowInput{StartDate: "2026-01-01", EndDate: "2026-01-31", Bucket: "month", Reporting: &ReportingCurrencyInput{CommodityID: f.eurCommodityID, MaxStalenessDay: 30}})
+	require.NoError(t, err)
+	t.Logf("converted transfer in=%+v out=%+v net=%+v", converted.Buckets[0].ConvertedTransferIn, converted.Buckets[0].ConvertedTransferOut, converted.Buckets[0].ConvertedNetMovement)
+	for _, measure := range [][]BalanceQuantity{b.TransferIn, b.TransferOut} {
+		for _, amount := range measure {
+			require.NotEqual(t, f.stockCommodityID, amount.CommodityID, "no stock entered or left the selected cash account")
+		}
+	}
+}
