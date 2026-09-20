@@ -490,25 +490,72 @@ against over-narrowing. The first three fail with the per-entry test restored.
 The reviewer's `TestFourthPassCashflowDoesNotCountNonCashSecurityLegs` probe
 passes.
 
-### T-103 Partial cost-basis allocation depends on purchase text precision `[ ]`
+### T-103 Partial cost-basis allocation depends on purchase text precision `[x]`
 
-**Found 2026-09-19 — P2.** Buy three shares for 10 EUR and sell one for 5 EUR.
-Entering the identical purchase as `10`/scale 0, `1000`/scale 2 or
-`100000`/scale 4 reports partial gains of 2, 1.67 or 1.6667 EUR under all four
-disposal methods. Truncation uses the recorded purchase scale as an implicit
-allocation-precision policy. Basis is conserved and eventual full-closure gain
-is correct, so balance/conservation checks alone miss the wrong interim gains.
-This is distinct from the fixed T-101 report-subtraction defect.
+**Fixed 2026-09-20.** A partial disposal split a lot's — or an average-cost
+pool's — basis at whichever scale the purchase happened to be recorded at,
+which made the *text* of an input into an accounting policy. Three shares
+bought for exactly 10 EUR allocated 3 EUR of basis to one share when the
+amount was typed `10`, 3.33 when typed `10.00`, and 3.3333 when typed
+`10.0000`, under every disposal method. Basis was conserved and the eventual
+full closure was right either way, which is why conservation and closure checks
+could not see it: the error was only ever in the *interim* gain.
 
-Define allocation precision independently of input representation, apply it to
-both per-lot and average-cost projections, preserve residual conservation and
-checked coefficient ranges, and assess existing lot/disposal evidence before
-changing historical results. The active regression
-`TestFinancialPartialDisposalGainMustNotDependOnPurchaseTextPrecision` in
-`backend/internal/app/investments_partial_precision_test.go` currently fails for
-all four methods; the CI failure is intentional evidence of this open defect.
-See `docs/reviews/financial-test-hardening-2026-09-19.md` for the reproduction and
-the additional passing tests and mutation checks.
+**The policy is the cost commodity's own maximum scale** — the same ceiling
+every amount in that currency is already held to. It is deliberately not the
+currency's *standard* scale, which would read better but cannot be used: a
+basis legitimately recorded deeper than it (10.0001 EUR in a currency shown to
+two places) would have to be truncated to reach it, destroying recorded basis
+to make a rounding rule fit. The ceiling can only ever deepen a recorded basis.
+
+Three properties make it a policy rather than a default:
+
+- **One scale per position, not per lot.** `positionBasisAllocationScaleTx`
+  resolves it once per disposal command over every open lot eligible on the
+  event date, and `disposeLotsWithAuditTx` passes it to all four methods. A
+  per-lot choice would vary with each lot's magnitude and put one position's
+  projection rows back at mixed scales, the state T-97 removed.
+- **Range is handled explicitly.** `costBasisAllocationScale` backs off from
+  the ceiling until every restated figure *and their total* fit the int64 the
+  projection columns are. The backoff keys on magnitude, never on spelling, so
+  two writings of the same amount still land on the same scale.
+- **Nothing historical is rewritten.** A lot's original `cost_basis_value` is
+  untouched, recorded disposal events are untouched, and a projection widens
+  only when a disposal actually needs it — the lazy widening T-97 introduced.
+  Truncating division and residual conservation are unchanged; only the
+  precision the split is taken at, and its independence from the input.
+
+Proved by `backend/internal/app/investments_partial_precision_test.go` (the
+reviewer's regression, now passing under all four methods) and
+`backend/internal/db/investments_allocation_scale_test.go` (the ceiling decides
+it; a deeper recorded basis is never narrowed; the backoff is magnitude-driven
+and considers the position's total). Four fault injections — falling back to
+the recorded scale, dropping the backoff, ignoring the position total, and
+choosing per lot instead of per position — are each detected. The review's own
+"FIFO ordering for LIFO" and "extra minor unit in average cost" mutations are
+still detected by the restated method oracle.
+
+**Tests whose expected numbers changed.** A policy change moves real answers,
+so several tests were restated rather than merely rescaled, and each is worth
+reading as documentation of the new policy:
+`TestFinancialPartialDisposalsUseChosenMethodAndRetainResidual` (the four
+hand-calculated method answers are now 0.673333 / 2.030000 / 1.216000 /
+1.351666 — still four distinct values, still conserving to a total gain of
+-1.01 at closure), `TestInvestmentLotsProrateRoundingIntoFinalDisposal`,
+`TestInvestmentLotsAverageCostPoolMath`,
+`TestInvestmentLotsAverageCostResidualConservation` and
+`TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentScales`. Everything
+else that moved was a test comparing raw coefficients across scales; those now
+compare values (`assertBasisValue`, `assertMoneyValue`, and the invariant sums
+in `investments_invariants_test.go`), which is the assertion they should always
+have made.
+
+**Visible consequence.** A partial disposal's basis and gain are now reported
+at the allocation scale, so the gains screen can show a figure like
+1.666667 EUR where it used to show 1.67. That is the exact result of the
+split; presenting it more shallowly is a display decision that has not been
+taken. See `docs/reviews/financial-test-hardening-2026-09-19.md` for the
+original reproduction.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 

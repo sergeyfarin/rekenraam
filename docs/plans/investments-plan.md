@@ -191,7 +191,18 @@ The alternative reporting views remain R18 work.
 > divergence as expected behavior. R12a must restore one conserved pool and add
 > a sequential-sales regression before average cost is again called complete.
 
-The existing helper `proratedCostBasis` (`backend/internal/db/investments.go:1599`,
+**Allocation precision (T-103, settled 2026-09-20).** Everything below says at
+what *ratio* basis is split and how the residual is kept; it did not say at
+what *scale*, and the answer used to fall out of whichever scale each purchase
+was recorded at — so the same 10 EUR allocated differently depending on whether
+it was typed `10`, `10.00` or `10.0000`. The scale is now a policy: **the cost
+commodity's own maximum scale**, resolved once per disposal command over the
+whole position (`positionBasisAllocationScaleTx`), backing off only as far as
+the int64 projection columns require, and never below a scale already
+recorded. Truncating division and residual assignment are unchanged; the rules
+below apply at that scale.
+
+The existing helper `proratedCostBasis` (`backend/internal/db/investments.go`,
 used by `disposeLotTx`) prorates basis **within a single lot** by truncating integer
 division (`Quo`), and `nextRemainingCost = remaining − disposed` keeps that one lot
 self-consistent. Average-cost is different: it disposes across **multiple** open lots

@@ -258,6 +258,19 @@ func TestIgnoreSuggestion_AcceptedSuggestionCannotBeIgnored(t *testing.T) {
 
 // --- 3a: trade entrypoints ---
 
+// assertMoneyValue compares a coefficient/scale pair against an expected
+// amount stated at whatever scale reads most naturally. Basis and gain
+// coefficients are no longer readable without their own scale: a disposal
+// splits basis at the position's allocation scale, a property of the cost
+// commodity rather than of how a purchase was typed (T-103), and a gain
+// carries the scale its own subtraction needed (T-101).
+func assertMoneyValue(t *testing.T, expectedValue int64, expectedScale int, gotValue int64, gotScale int, msgAndArgs ...any) {
+	t.Helper()
+	expected := exact.ScaledIntFromInt64(expectedValue, expectedScale)
+	got := exact.ScaledIntFromInt64(gotValue, gotScale)
+	assert.Zerof(t, got.Cmp(expected), "expected %s, got %s %v", expected.String(), got.String(), msgAndArgs)
+}
+
 func TestSell_PostsFourLegTransactionAndDisposesLot(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
@@ -285,7 +298,7 @@ func TestSell_PostsFourLegTransactionAndDisposesLot(t *testing.T) {
 	require.Len(t, sold.Allocations, 1)
 	assert.Equal(t, *bought.LotID, sold.Allocations[0].LotID)
 	assert.Equal(t, "10", sold.Allocations[0].QuantityValue.String())
-	assert.Equal(t, int64(100000), sold.Allocations[0].CostBasisValue)
+	assertMoneyValue(t, 100000, 2, sold.Allocations[0].CostBasisValue, sold.Allocations[0].CostBasisScale)
 
 	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
 	require.NoError(t, err)
@@ -467,7 +480,7 @@ func TestWriteOff_ClosesLotsWithZeroProceedsAndTwoCommodityLegs(t *testing.T) {
 	assert.Len(t, written.Transaction.JournalEntries[0].Postings, 2)
 	require.Len(t, written.Allocations, 1)
 	assert.Equal(t, *bought.LotID, written.Allocations[0].LotID)
-	assert.Equal(t, int64(100000), written.Allocations[0].CostBasisValue)
+	assertMoneyValue(t, 100000, 2, written.Allocations[0].CostBasisValue, written.Allocations[0].CostBasisScale)
 
 	// The shares must leave open lots — the defect T-38 describes is that they
 	// never did.
@@ -496,7 +509,7 @@ func TestWriteOff_RealizesTheWholeBasisAsALoss(t *testing.T) {
 		QuantityValue: exact.New(10), QuantityScale: 0, Reason: "delisted",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, int64(-100000), preview.RealizedGain, "zero proceeds means the entire basis is lost")
+	assertMoneyValue(t, -100000, 2, preview.RealizedGain, preview.RealizedGainScale, "zero proceeds means the entire basis is lost")
 	assert.Equal(t, int64(0), preview.CashAmountValue)
 
 	_, err = f.investmentService.WriteOff(ctx, InvestmentWriteOffInput{
@@ -512,7 +525,7 @@ func TestWriteOff_RealizesTheWholeBasisAsALoss(t *testing.T) {
 	gains, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
 	require.NoError(t, err)
 	require.Len(t, gains, 1)
-	assert.Equal(t, int64(-100000), gains[0].RealizedGainValue)
+	assertMoneyValue(t, -100000, 2, gains[0].RealizedGainValue, gains[0].RealizedGainScale)
 	assert.Equal(t, int64(0), gains[0].ProceedsValue)
 }
 
@@ -833,7 +846,7 @@ func TestSell_MethodActuallyChangesDisposedBasis(t *testing.T) {
 		return f
 	}
 
-	fifoBasis := func() int64 {
+	fifoBasis := func() *exact.ScaledInt {
 		f := newSeededFixture(t)
 		preview, err := f.investmentService.PreviewSell(context.Background(), InvestmentTradeInput{
 			OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
@@ -843,14 +856,14 @@ func TestSell_MethodActuallyChangesDisposedBasis(t *testing.T) {
 			CostBasisMethod: "fifo",
 		})
 		require.NoError(t, err)
-		var total int64
+		total := exact.NewScaledInt()
 		for _, a := range preview.Allocations {
-			total += a.CostBasisValue
+			total.AddInt64(a.CostBasisValue, a.CostBasisScale)
 		}
 		return total
 	}()
 
-	lifoBasis := func() int64 {
+	lifoBasis := func() *exact.ScaledInt {
 		f := newSeededFixture(t)
 		preview, err := f.investmentService.PreviewSell(context.Background(), InvestmentTradeInput{
 			OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
@@ -860,16 +873,16 @@ func TestSell_MethodActuallyChangesDisposedBasis(t *testing.T) {
 			CostBasisMethod: "lifo",
 		})
 		require.NoError(t, err)
-		var total int64
+		total := exact.NewScaledInt()
 		for _, a := range preview.Allocations {
-			total += a.CostBasisValue
+			total.AddInt64(a.CostBasisValue, a.CostBasisScale)
 		}
 		return total
 	}()
 
-	assert.Equal(t, int64(100000), fifoBasis, "fifo disposes the older (cheaper) lot first")
-	assert.Equal(t, int64(150000), lifoBasis, "lifo disposes the newer (pricier) lot first")
-	assert.NotEqual(t, fifoBasis, lifoBasis)
+	assert.Zero(t, fifoBasis.Cmp(exact.ScaledIntFromInt64(100000, 2)), "fifo disposes the older (cheaper) lot first: got %s", fifoBasis.String())
+	assert.Zero(t, lifoBasis.Cmp(exact.ScaledIntFromInt64(150000, 2)), "lifo disposes the newer (pricier) lot first: got %s", lifoBasis.String())
+	assert.NotZero(t, fifoBasis.Cmp(lifoBasis))
 }
 
 func TestSell_InsufficientLotsReturnsSentinelError(t *testing.T) {
@@ -1286,7 +1299,7 @@ func TestListRealizedGains_AppLayerMapsSignAndFilters(t *testing.T) {
 	entries, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
-	assert.Equal(t, int64(20000), entries[0].RealizedGainValue, "sold for 1200.00, cost 1000.00 -> 200.00 gain")
+	assertMoneyValue(t, 20000, 2, entries[0].RealizedGainValue, entries[0].RealizedGainScale, "sold for 1200.00, cost 1000.00 -> 200.00 gain")
 
 	inRange, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{From: "2026-02-01", To: "2026-02-01"})
 	require.NoError(t, err)
@@ -1455,7 +1468,7 @@ func TestSell_AverageCostPoolsLotsBoughtAtDifferentQuantityScales(t *testing.T) 
 		previewBasis.AddInt64(allocation.CostBasisValue, allocation.CostBasisScale)
 	}
 	require.Equal(t, 0, previewBasis.Cmp(exact.ScaledIntFromInt64(55000, 2)))
-	require.Equal(t, int64(5000), preview.RealizedGain)
+	assertMoneyValue(t, 5000, 2, preview.RealizedGain, preview.RealizedGainScale)
 
 	sold, err := f.investmentService.Sell(ctx, sale)
 	require.NoError(t, err)

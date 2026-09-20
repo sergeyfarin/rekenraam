@@ -674,7 +674,9 @@ func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
 	assert.Equal(t, "10", afterSale.column(afterSale.rows[0], "quantity"))
 	assert.Equal(t, "6", afterSale.column(afterSale.rows[0], "remaining_quantity"))
 	assert.Equal(t, "1000.00", afterSale.column(afterSale.rows[0], "cost_basis"))
-	assert.Equal(t, "600.00", afterSale.column(afterSale.rows[0], "remaining_cost_basis"))
+	// Carried at its own scale, which after a partial disposal is the
+	// position's allocation scale rather than the purchase's (T-103).
+	assert.Equal(t, "600.000000", afterSale.column(afterSale.rows[0], "remaining_cost_basis"))
 
 	bundleAfterSale := downloadBundle(t, handler, f.sessionCookie, "")
 	decisions := bundleAfterSale.table(t, "disposal-decisions.csv")
@@ -682,7 +684,7 @@ func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
 	assert.Equal(t, "specific_lot", decisions.column(decisions.rows[0], "cost_basis_method"))
 	assert.Equal(t, "transaction", decisions.column(decisions.rows[0], "resolution_tier"))
 	assert.Equal(t, "4", decisions.column(decisions.rows[0], "quantity"))
-	assert.Equal(t, "400.00", decisions.column(decisions.rows[0], "disposed_basis"))
+	assert.Equal(t, "400.000000", decisions.column(decisions.rows[0], "disposed_basis"))
 	assert.NotEmpty(t, decisions.column(decisions.rows[0], "transaction_version_id"))
 	assert.NotEmpty(t, decisions.column(decisions.rows[0], "audit_event_id"))
 
@@ -690,7 +692,7 @@ func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
 	require.Len(t, allocations.rows, 1)
 	assert.Equal(t, decisions.column(decisions.rows[0], "decision_id"), allocations.column(allocations.rows[0], "decision_id"))
 	assert.Equal(t, "4", allocations.column(allocations.rows[0], "quantity"))
-	assert.Equal(t, "400.00", allocations.column(allocations.rows[0], "cost_basis"))
+	assert.Equal(t, "400.000000", allocations.column(allocations.rows[0], "cost_basis"))
 	assert.NotEmpty(t, allocations.column(allocations.rows[0], "lot_event_id"))
 }
 

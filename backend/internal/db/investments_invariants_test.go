@@ -68,18 +68,25 @@ func seedLots(t *testing.T, database *sql.DB, repo *InvestmentRepository, accoun
 
 // --- Reusable invariant assertions ---
 
-func sumAcquiredBasis(lots []InvestmentLotRecord) int64 {
-	var total int64
+// Basis figures are summed as values, not as raw coefficients. A position's
+// lots do not all carry the same scale: a projection widens to the allocation
+// scale only when a disposal actually touches it (T-97, T-103), so a partly
+// sold position legitimately holds one lot at the scale it was bought at and
+// another at the scale its basis was split at. Adding those coefficients
+// compares nothing.
+
+func sumAcquiredBasis(lots []InvestmentLotRecord) *exact.ScaledInt {
+	total := exact.NewScaledInt()
 	for _, l := range lots {
-		total += l.CostBasisValue
+		total.AddInt64(l.CostBasisValue, l.CostBasisScale)
 	}
 	return total
 }
 
-func sumRemainingBasis(lots []InvestmentLotRecord) int64 {
-	var total int64
+func sumRemainingBasis(lots []InvestmentLotRecord) *exact.ScaledInt {
+	total := exact.NewScaledInt()
 	for _, l := range lots {
-		total += l.RemainingCostBasisValue
+		total.AddInt64(l.RemainingCostBasisValue, l.RemainingCostBasisScale)
 	}
 	return total
 }
@@ -93,10 +100,10 @@ func sumRemainingQuantity(t *testing.T, lots []InvestmentLotRecord) *big.Int {
 	return total
 }
 
-func sumDisposedBasis(disposals []LotDisposalRecord) int64 {
-	var total int64
+func sumDisposedBasis(disposals []LotDisposalRecord) *exact.ScaledInt {
+	total := exact.NewScaledInt()
 	for _, d := range disposals {
-		total += d.CostBasisValue
+		total.AddInt64(d.CostBasisValue, d.CostBasisScale)
 	}
 	return total
 }
@@ -126,10 +133,11 @@ func assertNoNegativeRemainders(t *testing.T, lots []InvestmentLotRecord) {
 // remaining basis — no cross-lot redistribution, so summing always balances
 // exactly against what was originally acquired. Does NOT apply to
 // average_cost — see assertAverageCostPoolInvariants.
-func assertLotLevelMethodConservesBasisExactly(t *testing.T, acquiredBasisBefore int64, disposals []LotDisposalRecord, lotsAfter []InvestmentLotRecord) {
+func assertLotLevelMethodConservesBasisExactly(t *testing.T, acquiredBasisBefore *exact.ScaledInt, disposals []LotDisposalRecord, lotsAfter []InvestmentLotRecord) {
 	t.Helper()
-	got := sumDisposedBasis(disposals) + sumRemainingBasis(lotsAfter)
-	assert.Equal(t, acquiredBasisBefore, got, "disposed + remaining must equal originally acquired basis exactly")
+	got := sumDisposedBasis(disposals)
+	got.AddScaled(sumRemainingBasis(lotsAfter))
+	assert.Zero(t, got.Cmp(acquiredBasisBefore), "disposed + remaining must equal originally acquired basis exactly: got %s, acquired %s", got.String(), acquiredBasisBefore.String())
 }
 
 // assertAverageCostPoolInvariants tests what actually holds for average_cost
@@ -140,13 +148,18 @@ func assertLotLevelMethodConservesBasisExactly(t *testing.T, acquiredBasisBefore
 // provide. It does not assert reported-basis-plus-remaining equals acquired
 // basis; that does not hold when lots have mixed unit costs (see the file
 // comment above).
-func assertAverageCostPoolInvariants(t *testing.T, poolBasisBefore int64, poolQtyBefore *big.Int, soldQty *big.Int, disposals []LotDisposalRecord, lotsAfter []InvestmentLotRecord) {
+func assertAverageCostPoolInvariants(t *testing.T, poolBasisBefore *exact.ScaledInt, poolQtyBefore *big.Int, soldQty *big.Int, disposals []LotDisposalRecord, lotsAfter []InvestmentLotRecord) {
 	t.Helper()
 
-	expectedDisposedTotal := new(big.Int).Mul(big.NewInt(poolBasisBefore), soldQty)
+	// The pool rate is taken at the allocation scale the disposal used, so the
+	// oracle is computed there too — the same truncating division, restated
+	// pool basis over pool quantity.
+	allocationScale := disposals[0].CostBasisScale
+	pooledAtAllocation := poolBasisBefore.TruncatedTo(allocationScale)
+	expectedDisposedTotal := new(big.Int).Mul(pooledAtAllocation.BigInt(), soldQty)
 	expectedDisposedTotal.Quo(expectedDisposedTotal, poolQtyBefore)
-	require.True(t, expectedDisposedTotal.IsInt64(), "expected disposed total overflowed int64")
-	assert.Equal(t, expectedDisposedTotal.Int64(), sumDisposedBasis(disposals), "sum of reported disposed basis must exactly equal the pool-rate total — the residual-assignment invariant")
+	assert.Zero(t, sumDisposedBasis(disposals).Cmp(exact.ScaledIntFromBig(expectedDisposedTotal, allocationScale)),
+		"sum of reported disposed basis must exactly equal the pool-rate total — the residual-assignment invariant")
 
 	expectedRemainingQty := new(big.Int).Sub(poolQtyBefore, soldQty)
 	assert.Equal(t, expectedRemainingQty.String(), sumRemainingQuantity(t, lotsAfter).String(), "pool quantity must reduce by exactly the sold amount")
@@ -212,6 +225,17 @@ func TestInvariant_ConservationAcrossMethodsAndScenarios(t *testing.T) {
 				{openedOn: "2026-02-01", qty: 2_000_000, basis: 1_800_000_000_000_000, basisScale: 2},
 			},
 			sellQty: 2_500_000,
+		},
+		{
+			// Each lot could be restated to the commodity's ceiling on its own;
+			// the two together could not. The allocation scale is chosen for
+			// the position, so conservation has to survive the backoff (T-103).
+			name: "lots that fit singly but not summed",
+			lots: []lotSpec{
+				{openedOn: "2026-01-01", qty: 1_000_000, basis: 500_000_000_000_000, basisScale: 2},
+				{openedOn: "2026-02-01", qty: 1_000_000, basis: 500_000_000_000_000, basisScale: 2},
+			},
+			sellQty: 1_500_000,
 		},
 	}
 	methods := []string{"fifo", "lifo", "average_cost", "specific_lot"}
@@ -288,7 +312,7 @@ func TestInvariant_InterleavedAcquisitionsAndDisposalsConserveBasis(t *testing.T
 	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
 	repo := NewInvestmentRepository(database)
 
-	var totalAcquired int64
+	totalAcquired := exact.NewScaledInt()
 	acquire := func(openedOn string, qty int64, basis int64) {
 		_, err := repo.CreateLot(ctx, CreateInvestmentLotParams{
 			BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
@@ -299,9 +323,9 @@ func TestInvariant_InterleavedAcquisitionsAndDisposalsConserveBasis(t *testing.T
 			ChangeReason: "interleaved test", EventKind: "acquisition",
 		})
 		require.NoError(t, err)
-		totalAcquired += basis
+		totalAcquired.AddInt64(basis, 2)
 	}
-	var totalDisposed int64
+	totalDisposed := exact.NewScaledInt()
 	dispose := func(eventDate string, qty int64) {
 		disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
 			BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
@@ -310,7 +334,7 @@ func TestInvariant_InterleavedAcquisitionsAndDisposalsConserveBasis(t *testing.T
 			OriginType: "browser_api", Operation: "investment.lot.dispose", ChangeReason: "interleaved test",
 		})
 		require.NoError(t, err)
-		totalDisposed += sumDisposedBasis(disposals)
+		totalDisposed.AddScaled(sumDisposedBasis(disposals))
 	}
 
 	acquire("2026-01-01", 100, 10000)
@@ -320,7 +344,10 @@ func TestInvariant_InterleavedAcquisitionsAndDisposalsConserveBasis(t *testing.T
 
 	lotsAfter := snapshotLots(t, repo, accountID, instrument.CommodityID)
 	assertNoNegativeRemainders(t, lotsAfter)
-	assert.Equal(t, totalAcquired, totalDisposed+sumRemainingBasis(lotsAfter), "cumulative basis must balance across the whole interleaved sequence, fifo has no reporting/deduction split")
+	balance := exact.NewScaledInt()
+	balance.AddScaled(totalDisposed)
+	balance.AddScaled(sumRemainingBasis(lotsAfter))
+	assert.Zero(t, balance.Cmp(totalAcquired), "cumulative basis must balance across the whole interleaved sequence, fifo has no reporting/deduction split: got %s, acquired %s", balance.String(), totalAcquired.String())
 }
 
 // --- FIFO orders by opened_on, not insertion order ---
@@ -387,7 +414,7 @@ func TestInvariant_MethodActuallyChangesDisposedBasis(t *testing.T) {
 		return repo, accountID, instrument.CommodityID
 	}
 
-	disposedTotal := func(t *testing.T, method string) int64 {
+	disposedTotal := func(t *testing.T, method string) *exact.ScaledInt {
 		repo, accountID, commodityID := newSeed(t)
 		disposals, err := repo.DisposeLots(context.Background(), DisposeLotsParams{
 			BookID: 1, AccountID: accountID, CommodityID: commodityID,
@@ -403,9 +430,9 @@ func TestInvariant_MethodActuallyChangesDisposedBasis(t *testing.T) {
 	lifoTotal := disposedTotal(t, "lifo")
 	averageCostTotal := disposedTotal(t, "average_cost")
 
-	assert.NotEqual(t, fifoTotal, lifoTotal, "fifo disposes the oldest (cheapest) lots first, lifo the newest (priciest)")
-	assert.NotEqual(t, fifoTotal, averageCostTotal)
-	assert.NotEqual(t, lifoTotal, averageCostTotal)
+	assert.NotZero(t, fifoTotal.Cmp(lifoTotal), "fifo disposes the oldest (cheapest) lots first, lifo the newest (priciest)")
+	assert.NotZero(t, fifoTotal.Cmp(averageCostTotal))
+	assert.NotZero(t, lifoTotal.Cmp(averageCostTotal))
 }
 
 // --- Oversell fails atomically ---

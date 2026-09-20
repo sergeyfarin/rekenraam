@@ -1276,15 +1276,23 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 		return nil, err
 	}
 
+	// One allocation scale for the whole command, resolved before any lot is
+	// touched, so every method splits basis at the same precision and that
+	// precision does not depend on how the purchases were typed (T-103).
+	allocationScale, err := positionBasisAllocationScaleTx(ctx, tx, params)
+	if err != nil {
+		return nil, err
+	}
+
 	var disposals []LotDisposalRecord
 	if method == "specific_lot" {
-		disposals, err = disposeSpecificLotsTx(ctx, tx, params, auditEventID)
+		disposals, err = disposeSpecificLotsTx(ctx, tx, params, auditEventID, allocationScale)
 	} else if len(params.Allocations) > 0 {
 		return nil, fmt.Errorf("%w: explicit lot allocations are only permitted for specific_lot cost basis method", ErrInvalidDisposalParams)
 	} else if method == "average_cost" {
-		disposals, err = disposeAverageCostTx(ctx, tx, params, auditEventID)
+		disposals, err = disposeAverageCostTx(ctx, tx, params, auditEventID, allocationScale)
 	} else {
-		disposals, err = disposeFIFOOrLIFOTx(ctx, tx, params, auditEventID, method)
+		disposals, err = disposeFIFOOrLIFOTx(ctx, tx, params, auditEventID, method, allocationScale)
 	}
 	if err != nil {
 		return nil, err
@@ -1393,7 +1401,7 @@ func updatePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispos
 	return nil
 }
 
-func disposeSpecificLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64) ([]LotDisposalRecord, error) {
+func disposeSpecificLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64, allocationScale int) ([]LotDisposalRecord, error) {
 	if len(params.Allocations) == 0 {
 		return nil, fmt.Errorf("%w: specific_lot method requires explicit lot allocations", ErrInvalidDisposalParams)
 	}
@@ -1410,7 +1418,7 @@ func disposeSpecificLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPa
 	}
 	disposals := make([]LotDisposalRecord, 0, len(params.Allocations))
 	for _, allocation := range params.Allocations {
-		disposal, err := disposeLotTx(ctx, tx, params, allocation.LotID, allocation.QuantityValue, allocation.QuantityScale, auditEventID)
+		disposal, err := disposeLotTx(ctx, tx, params, allocation.LotID, allocation.QuantityValue, allocation.QuantityScale, auditEventID, allocationScale)
 		if err != nil {
 			return nil, err
 		}
@@ -1419,7 +1427,7 @@ func disposeSpecificLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPa
 	return disposals, nil
 }
 
-func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64, method string) ([]LotDisposalRecord, error) {
+func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64, method string, allocationScale int) ([]LotDisposalRecord, error) {
 	orderClause := "ORDER BY opened_on, id"
 	if method == "lifo" {
 		orderClause = "ORDER BY opened_on DESC, id DESC"
@@ -1487,7 +1495,7 @@ func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 			return nil, err
 		}
 
-		disposal, err := disposeLotTx(ctx, tx, params, lot.id, takeCoeff, commonScale, auditEventID)
+		disposal, err := disposeLotTx(ctx, tx, params, lot.id, takeCoeff, commonScale, auditEventID, allocationScale)
 		if err != nil {
 			return nil, err
 		}
@@ -1508,7 +1516,7 @@ type avgCostLotRef struct {
 	costBasisScale int
 }
 
-func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64) ([]LotDisposalRecord, error) {
+func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64, allocationScale int) ([]LotDisposalRecord, error) {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, remaining_quantity_value, remaining_quantity_scale,
 		       remaining_cost_basis_value, remaining_cost_basis_scale
@@ -1546,15 +1554,17 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 	// detail into a dead end. Nothing narrows, so no quantity or basis is
 	// rounded away to make the pool line up.
 	commonScale := params.QuantityScale
-	commonCostScale := lots[0].costBasisScale
 	for _, lot := range lots {
 		if lot.quantityScale > commonScale {
 			commonScale = lot.quantityScale
 		}
-		if lot.costBasisScale > commonCostScale {
-			commonCostScale = lot.costBasisScale
-		}
 	}
+	// The pooled basis is split at the commodity's allocation scale rather
+	// than at the deepest scale the purchases happened to be typed at, so the
+	// pool rate does not change when the same money is written differently
+	// (T-103). It is never shallower than a recorded basis, so this still only
+	// ever widens.
+	commonCostScale := allocationScale
 	for i := range lots {
 		quantity, err := rescaleQuantity(lots[i].quantityValue, lots[i].quantityScale, commonScale)
 		if err != nil {
@@ -1644,7 +1654,7 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 				created_at, created_by_user_id, created_audit_event_id
 			) VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, 'average_cost', ?, ?, ?, ?)
 		`, params.BookID, lot.id, nullablePositiveInt64(params.TransactionID), params.EventDate,
-			takeCoeff.Negated(), lot.quantityScale, -reportedValue, lot.costBasisScale,
+			takeCoeff.Negated(), lot.quantityScale, -reportedValue, commonCostScale,
 			params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
 		if err != nil {
 			return nil, fmt.Errorf("insert average-cost disposal lot event: %w", err)
@@ -1654,7 +1664,7 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 			return nil, fmt.Errorf("read average-cost disposal lot event id: %w", err)
 		}
 		disposals = append(disposals, LotDisposalRecord{EventID: eventID, LotID: lot.id, QuantityValue: takeCoeff,
-			QuantityScale: lot.quantityScale, CostBasisValue: reportedValue, CostBasisScale: lot.costBasisScale,
+			QuantityScale: lot.quantityScale, CostBasisValue: reportedValue, CostBasisScale: commonCostScale,
 			CostCommodityID: params.CostCommodityID})
 		disposedBasisRemaining.Sub(disposedBasisRemaining, reported)
 	}
@@ -2650,7 +2660,140 @@ func scanInvestmentLots(rows *sql.Rows) ([]InvestmentLotRecord, error) {
 	return records, nil
 }
 
-func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lotID int64, quantityValue exact.Coefficient, quantityScale int, auditEventID int64) (LotDisposalRecord, error) {
+// Cost-basis allocation precision (T-103).
+//
+// A partial disposal splits a lot's — or an average-cost pool's — recorded
+// basis in the ratio of the quantities. That split used to happen at whichever
+// scale the purchase happened to be recorded at, which made the *text* of an
+// input into an accounting policy: three shares bought for exactly 10 EUR
+// allocated 3 EUR of basis to one share when the amount was entered as "10",
+// 3.33 when entered as "10.00", and 3.3333 when entered as "10.0000". All
+// three are the same acquisition and must allocate the same basis.
+//
+// The policy is the cost commodity's own maximum scale: the same ceiling every
+// amount in that currency is already held to, so it can only ever deepen a
+// recorded basis. It is deliberately not the currency's *standard* scale,
+// which would be the natural choice for presentation but cannot be used here —
+// a basis legitimately recorded deeper than it (10.0001 EUR in a currency
+// displayed to two places) would have to be truncated to reach it, destroying
+// recorded basis to make a rounding rule fit. Nothing about an allocation may
+// lose money that was actually spent.
+//
+// Truncating division and residual conservation are unchanged: the remainder
+// stays in the lot, so the basis a position holds plus the basis it has
+// disposed of still equals what it cost. What changes is only the precision
+// the split is taken at, and that it no longer varies with the input.
+
+// recordedBasis is one stored basis figure and the scale it is stored at.
+type recordedBasis struct {
+	value int64
+	scale int
+}
+
+// costBasisAllocationScaleTx resolves the allocation scale for a disposal
+// against the cost commodity as it stands on the event date.
+func costBasisAllocationScaleTx(ctx context.Context, tx *sql.Tx, costCommodityID int64, eventDate string, recorded []recordedBasis) (int, error) {
+	var ceiling int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT cv.max_quantity_scale
+		FROM commodity_versions cv
+		WHERE cv.commodity_id = ?
+			AND cv.id = (
+				SELECT asof_cv.id
+				FROM commodity_versions asof_cv
+				WHERE asof_cv.commodity_id = cv.commodity_id
+					AND asof_cv.effective_from <= ?
+				ORDER BY asof_cv.effective_from DESC, asof_cv.version_seq DESC
+				LIMIT 1
+			)
+	`, costCommodityID, eventDate).Scan(&ceiling); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, fmt.Errorf("%w: cost commodity %d has no version on %s", ErrInvalidDisposalParams, costCommodityID, eventDate)
+		}
+		return 0, fmt.Errorf("read cost commodity allocation scale: %w", err)
+	}
+	return costBasisAllocationScale(ceiling, recorded), nil
+}
+
+// costBasisAllocationScale picks the deepest scale at or below ceiling that
+// every recorded basis can be restated to and still fit the int64 the
+// projection columns are, and never one shallower than a basis already stored.
+//
+// The backoff is the explicit answer to coefficient range. It keys on the
+// magnitude of the basis rather than on how it was written, so two spellings
+// of the same amount still reach the same scale — which is the property this
+// whole policy exists to hold.
+func costBasisAllocationScale(ceiling int, recorded []recordedBasis) int {
+	deepest := 0
+	for _, basis := range recorded {
+		if basis.scale > deepest {
+			deepest = basis.scale
+		}
+	}
+	if ceiling < deepest {
+		// A basis was recorded deeper than the commodity now allows. Narrowing
+		// it would discard money that is already on the books, so the recorded
+		// precision wins.
+		return deepest
+	}
+	scale := ceiling
+	for scale > deepest && !basisFitsInt64At(recorded, scale) {
+		scale--
+	}
+	return scale
+}
+
+// basisFitsInt64At checks every restated figure *and* their total. The total
+// matters because a position's basis is summed — by the projection rows a
+// disposal rewrites and by every caller that adds them up — so a scale at
+// which each lot fits alone but the position does not is no use.
+func basisFitsInt64At(recorded []recordedBasis, scale int) bool {
+	total := new(big.Int)
+	for _, basis := range recorded {
+		restated := big.NewInt(basis.value)
+		if basis.scale < scale {
+			restated.Mul(restated, exact.Pow10(scale-basis.scale))
+		}
+		if !restated.IsInt64() {
+			return false
+		}
+		total.Add(total, new(big.Int).Abs(restated))
+	}
+	return total.IsInt64()
+}
+
+// positionBasisAllocationScaleTx resolves the one allocation scale a disposal
+// uses, over every open lot of the position that is eligible on its event
+// date — not per lot. Two lots of one position must split their basis at the
+// same precision: a scale chosen per lot would vary with each lot's magnitude
+// and put a single position's projection rows back at mixed scales, which is
+// the state T-97 removed.
+func positionBasisAllocationScaleTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams) (int, error) {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT remaining_cost_basis_value, remaining_cost_basis_scale
+		FROM investment_lots
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
+			AND status = 'open' AND opened_on <= ?
+	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate)
+	if err != nil {
+		return 0, fmt.Errorf("read position basis for allocation scale: %w", err)
+	}
+	defer rows.Close()
+	var recorded []recordedBasis
+	for rows.Next() {
+		var basis recordedBasis
+		if err := rows.Scan(&basis.value, &basis.scale); err != nil {
+			return 0, fmt.Errorf("scan position basis for allocation scale: %w", err)
+		}
+		recorded = append(recorded, basis)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate position basis for allocation scale: %w", err)
+	}
+	return costBasisAllocationScaleTx(ctx, tx, params.CostCommodityID, params.EventDate, recorded)
+}
+
+func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lotID int64, quantityValue exact.Coefficient, quantityScale int, auditEventID int64, allocationScale int) (LotDisposalRecord, error) {
 	lot, err := investmentLotByIDTx(ctx, tx, params.BookID, lotID)
 	if err != nil {
 		return LotDisposalRecord{}, err
@@ -2691,24 +2834,31 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 	if disposedAtCommon.Sign() <= 0 || disposedAtCommon.Cmp(remainingAtCommon) > 0 {
 		return LotDisposalRecord{}, ErrInsufficientLots
 	}
+	// The basis is split at the position's allocation scale, not at whichever
+	// scale this purchase was typed at (T-103).
+	remainingCost, err := exact.ScaledIntFromInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale).TruncatedTo(allocationScale).Int64()
+	if err != nil {
+		return LotDisposalRecord{}, fmt.Errorf("restate lot %d cost basis to scale %d: %w", lotID, allocationScale, err)
+	}
 	// Both quantities are at commonScale, so the ratio is unaffected by which
 	// scale that is.
-	costBasisValue := proratedCostBasis(lot.RemainingCostBasisValue, disposedAtCommon, remainingAtCommon)
+	costBasisValue := proratedCostBasis(remainingCost, disposedAtCommon, remainingAtCommon)
 	nextRemainingQuantity, err := exact.FromBig(new(big.Int).Sub(remainingAtCommon.BigInt(), disposedAtCommon.BigInt()))
 	if err != nil {
 		return LotDisposalRecord{}, err
 	}
-	nextRemainingCost := lot.RemainingCostBasisValue - costBasisValue
+	nextRemainingCost := remainingCost - costBasisValue
 	status := "open"
 	if nextRemainingQuantity.Sign() == 0 {
 		status = "closed"
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE investment_lots
-		SET remaining_quantity_value = ?, remaining_quantity_scale = ?, remaining_cost_basis_value = ?, status = ?,
+		SET remaining_quantity_value = ?, remaining_quantity_scale = ?,
+			remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?, status = ?,
 			updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
 		WHERE book_id = ? AND id = ?
-	`, nextRemainingQuantity, commonScale, nextRemainingCost, status, params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
+	`, nextRemainingQuantity, commonScale, nextRemainingCost, allocationScale, status, params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("update disposed investment lot: %w", err)
 	}
 	result, err := tx.ExecContext(ctx, `
@@ -2719,7 +2869,7 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		)
 		VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, params.BookID, lotID, nullablePositiveInt64(params.TransactionID), params.EventDate,
-		quantityValue.Negated(), quantityScale, -costBasisValue, lot.RemainingCostBasisScale,
+		quantityValue.Negated(), quantityScale, -costBasisValue, allocationScale,
 		params.CostBasisMethod, params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
 	if err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("insert disposal lot event: %w", err)
@@ -2734,7 +2884,7 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		QuantityValue:   quantityValue,
 		QuantityScale:   quantityScale,
 		CostBasisValue:  costBasisValue,
-		CostBasisScale:  lot.RemainingCostBasisScale,
+		CostBasisScale:  allocationScale,
 		CostCommodityID: lot.CostCommodityID,
 	}, nil
 }

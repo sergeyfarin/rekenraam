@@ -86,6 +86,19 @@ func TestInvestmentInstrumentCreatesSecurityCommodityAndVersionHistory(t *testin
 	assert.Equal(t, 2, countRows(t, database, "investment_instrument_versions"))
 }
 
+// assertBasisValue compares a recorded basis against an expected amount stated
+// at whatever scale reads most naturally, because a basis coefficient means
+// nothing without its own scale. A partial disposal splits basis at the
+// position's allocation scale — a property of the cost commodity, not of the
+// scale a purchase happened to be typed at (T-103) — so these coefficients are
+// deeper than the amounts that produced them.
+func assertBasisValue(t *testing.T, expectedValue int64, expectedScale int, gotValue int64, gotScale int, msgAndArgs ...any) {
+	t.Helper()
+	expected := exact.ScaledIntFromInt64(expectedValue, expectedScale)
+	got := exact.ScaledIntFromInt64(gotValue, gotScale)
+	assert.Zerof(t, got.Cmp(expected), "expected basis %s, got %s %v", expected.String(), got.String(), msgAndArgs)
+}
+
 func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
@@ -151,9 +164,9 @@ func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 	require.Len(t, disposals, 2)
 	assert.Equal(t, firstLot.ID, disposals[0].LotID)
 	assert.Equal(t, exact.New(100000000), disposals[0].QuantityValue)
-	assert.Equal(t, int64(250000), disposals[0].CostBasisValue)
+	assertBasisValue(t, 250000, 2, disposals[0].CostBasisValue, disposals[0].CostBasisScale)
 	assert.Equal(t, exact.New(25000000), disposals[1].QuantityValue)
-	assert.Equal(t, int64(75000), disposals[1].CostBasisValue)
+	assertBasisValue(t, 75000, 2, disposals[1].CostBasisValue, disposals[1].CostBasisScale)
 
 	lots, err := repository.ListLots(ctx, 1, accountID, instrument.CommodityID)
 	require.NoError(t, err)
@@ -162,7 +175,7 @@ func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 	assert.Equal(t, exact.New(0), lots[0].RemainingQuantityValue)
 	assert.Equal(t, "open", lots[1].Status)
 	assert.Equal(t, exact.New(25000000), lots[1].RemainingQuantityValue)
-	assert.Equal(t, int64(75000), lots[1].RemainingCostBasisValue)
+	assertBasisValue(t, 75000, 2, lots[1].RemainingCostBasisValue, lots[1].RemainingCostBasisScale)
 }
 
 func TestCreateTransactionAndDisposeLotsRollsBackTransactionOnInsufficientLots(t *testing.T) {
@@ -296,14 +309,14 @@ func TestInvestmentLotsDisposeFIFOAlignsMismatchedQuantityScale(t *testing.T) {
 	assert.Equal(t, lot.ID, disposals[0].LotID)
 	assert.Equal(t, exact.New(50000000), disposals[0].QuantityValue)
 	assert.Equal(t, 6, disposals[0].QuantityScale)
-	assert.Equal(t, int64(125000), disposals[0].CostBasisValue)
+	assertBasisValue(t, 125000, 2, disposals[0].CostBasisValue, disposals[0].CostBasisScale)
 
 	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
 	require.NoError(t, err)
 	require.Len(t, lots, 1)
 	assert.Equal(t, "open", lots[0].Status)
 	assert.Equal(t, exact.New(50000000), lots[0].RemainingQuantityValue)
-	assert.Equal(t, int64(125000), lots[0].RemainingCostBasisValue)
+	assertBasisValue(t, 125000, 2, lots[0].RemainingCostBasisValue, lots[0].RemainingCostBasisScale)
 }
 
 // T-97. This test used to assert the opposite: that a lot recorded at scale 0
@@ -345,7 +358,7 @@ func TestInvestmentLotsDisposeFIFOSellsFinerThanTheLotScale(t *testing.T) {
 	require.Equal(t, "250", disposals[0].QuantityValue.String())
 	require.Equal(t, 2, disposals[0].QuantityScale)
 	// Half the lot went, so half the basis went with it.
-	require.Equal(t, int64(2500), disposals[0].CostBasisValue)
+	assertBasisValue(t, 2500, 2, disposals[0].CostBasisValue, disposals[0].CostBasisScale)
 
 	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
 	require.NoError(t, err)
@@ -353,7 +366,7 @@ func TestInvestmentLotsDisposeFIFOSellsFinerThanTheLotScale(t *testing.T) {
 	require.Equal(t, "open", lots[0].Status)
 	require.Equal(t, "250", lots[0].RemainingQuantityValue.String())
 	require.Equal(t, 2, lots[0].RemainingQuantityScale, "the projection widened to carry the fraction")
-	require.Equal(t, int64(2500), lots[0].RemainingCostBasisValue)
+	assertBasisValue(t, 2500, 2, lots[0].RemainingCostBasisValue, lots[0].RemainingCostBasisScale)
 	// The acquisition record is evidence and does not move.
 	require.Equal(t, "5", lots[0].QuantityValue.String())
 	require.Equal(t, 0, lots[0].QuantityScale)
@@ -402,7 +415,9 @@ func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, first, 1)
-	assert.Equal(t, int64(33), first[0].CostBasisValue)
+	// One of three shares of a 1.00 lot: 1.00 split at the allocation scale is
+	// 0.333333, with the untaken remainder staying in the lot (T-103).
+	assertBasisValue(t, 333333, 6, first[0].CostBasisValue, first[0].CostBasisScale)
 
 	second, err := repository.DisposeLots(ctx, DisposeLotsParams{
 		BookID:          1,
@@ -421,7 +436,9 @@ func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, second, 1)
-	assert.Equal(t, int64(67), second[0].CostBasisValue)
+	// The final disposal takes everything left, residual included: 1.00 less
+	// the 0.333333 already gone.
+	assertBasisValue(t, 666667, 6, second[0].CostBasisValue, second[0].CostBasisScale)
 
 	lots, err := repository.ListLots(ctx, 1, accountID, instrument.CommodityID)
 	require.NoError(t, err)
@@ -878,7 +895,7 @@ func TestInvestmentLotsDisposeLIFO(t *testing.T) {
 	// Should have disposed the newest lot (lot[2])
 	assert.Equal(t, lots[2].ID, disposals[0].LotID)
 	assert.Equal(t, exact.New(150), disposals[0].QuantityValue)
-	assert.Equal(t, int64(21000), disposals[0].CostBasisValue)
+	assertBasisValue(t, 21000, 2, disposals[0].CostBasisValue, disposals[0].CostBasisScale)
 
 	remaining, err := repo.ListLots(ctx, 1, accountID, commodityID)
 	require.NoError(t, err)
@@ -981,18 +998,22 @@ func TestInvestmentLotsAverageCostPoolMath(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, disposals, 1)
-	// Reported basis is pool-rate: 56000 * 100 / 450 = 12444 (truncate).
-	assert.Equal(t, int64(12444), disposals[0].CostBasisValue)
+	// Reported basis is pool-rate, taken at the allocation scale:
+	// 560.000000 * 100 / 450 = 124.444444 (truncate).
+	assertBasisValue(t, 124444444, 6, disposals[0].CostBasisValue, disposals[0].CostBasisScale)
 
 	// Remaining projection basis plus the reported disposal conserves the pool.
 	lots, err := repo.ListLots(ctx, 1, accountID, commodityID)
 	require.NoError(t, err)
-	var remainingBasis int64
+	remainingBasis := exact.NewScaledInt()
 	for _, l := range lots {
-		remainingBasis += l.RemainingCostBasisValue
+		remainingBasis.AddInt64(l.RemainingCostBasisValue, l.RemainingCostBasisScale)
 	}
-	assert.Equal(t, int64(43556), remainingBasis)
-	assert.Equal(t, int64(56000), remainingBasis+disposals[0].CostBasisValue)
+	assert.Zero(t, remainingBasis.Cmp(exact.ScaledIntFromInt64(435555556, 6)), "got %s", remainingBasis.String())
+	conserved := exact.NewScaledInt()
+	conserved.AddScaled(remainingBasis)
+	conserved.AddInt64(disposals[0].CostBasisValue, disposals[0].CostBasisScale)
+	assert.Zero(t, conserved.Cmp(exact.ScaledIntFromInt64(56000, 2)), "the pool is conserved: got %s", conserved.String())
 	assert.Equal(t, int64(10000), lots[0].CostBasisValue, "original acquisition basis is immutable")
 }
 
@@ -1032,23 +1053,27 @@ func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, disposals, 2)
-	// Reported basis uses pool rate: total must equal disposedBasisTotal = 6.
-	var totalReported int64
+	// Reported basis uses the pool rate at the allocation scale: 0.10 over
+	// three shares, two sold, is 0.066666 with the remainder conserved.
+	totalReported := exact.NewScaledInt()
 	for _, d := range disposals {
 		assert.GreaterOrEqual(t, d.CostBasisValue, int64(0), "no lot should report negative disposed basis")
-		totalReported += d.CostBasisValue
+		totalReported.AddInt64(d.CostBasisValue, d.CostBasisScale)
 	}
-	assert.Equal(t, int64(6), totalReported, "sum of reported disposal basis should equal pool-rate total")
+	assert.Zero(t, totalReported.Cmp(exact.ScaledIntFromInt64(66666, 6)), "sum of reported disposal basis should equal pool-rate total: got %s", totalReported.String())
 
 	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
 	require.NoError(t, err)
-	var remainingBasis int64
+	remainingBasis := exact.NewScaledInt()
 	for _, l := range lots {
 		assert.GreaterOrEqual(t, l.RemainingCostBasisValue, int64(0), "no lot should have negative remaining basis")
-		remainingBasis += l.RemainingCostBasisValue
+		remainingBasis.AddInt64(l.RemainingCostBasisValue, l.RemainingCostBasisScale)
 	}
-	assert.Equal(t, int64(4), remainingBasis)
-	assert.Equal(t, int64(10), remainingBasis+totalReported)
+	assert.Zero(t, remainingBasis.Cmp(exact.ScaledIntFromInt64(33334, 6)), "got %s", remainingBasis.String())
+	conserved := exact.NewScaledInt()
+	conserved.AddScaled(remainingBasis)
+	conserved.AddScaled(totalReported)
+	assert.Zero(t, conserved.Cmp(exact.ScaledIntFromInt64(10, 2)), "nothing is lost or invented: got %s", conserved.String())
 }
 
 func TestInvestmentLotsAverageCostSequentialSalesConserveUntilFinalClose(t *testing.T) {
@@ -1057,7 +1082,7 @@ func TestInvestmentLotsAverageCostSequentialSalesConserveUntilFinalClose(t *test
 	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
 	repo := NewInvestmentRepository(database)
 
-	var disposedTotal int64
+	disposedTotal := exact.NewScaledInt()
 	for index, quantity := range []int64{100, 200, 150} {
 		disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
 			BookID: 1, AccountID: accountID, CommodityID: commodityID,
@@ -1067,17 +1092,18 @@ func TestInvestmentLotsAverageCostSequentialSalesConserveUntilFinalClose(t *test
 		})
 		require.NoError(t, err)
 		for _, disposal := range disposals {
-			disposedTotal += disposal.CostBasisValue
+			disposedTotal.AddInt64(disposal.CostBasisValue, disposal.CostBasisScale)
 		}
 		lots, err := repo.ListLots(ctx, 1, accountID, commodityID)
 		require.NoError(t, err)
-		var remaining int64
 		projectedBasis := exact.NewScaledInt()
 		for _, lot := range lots {
-			remaining += lot.RemainingCostBasisValue
 			projectedBasis.AddInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)
 		}
-		assert.Equal(t, int64(56000), disposedTotal+remaining, "sale %d must conserve the original pool", index+1)
+		conserved := exact.NewScaledInt()
+		conserved.AddScaled(disposedTotal)
+		conserved.AddScaled(projectedBasis)
+		assert.Zero(t, conserved.Cmp(exact.ScaledIntFromInt64(56000, 2)), "sale %d must conserve the original pool: got %s", index+1, conserved.String())
 
 		// The materialized pool remainder must be reproducible from immutable
 		// acquisition and disposal events, rather than becoming a second source
@@ -1101,7 +1127,7 @@ func TestInvestmentLotsAverageCostSequentialSalesConserveUntilFinalClose(t *test
 		require.NoError(t, eventRows.Close())
 		assert.Equal(t, 0, projectedBasis.Cmp(rebuiltBasis), "sale %d projection must rebuild from immutable events", index+1)
 	}
-	assert.Equal(t, int64(56000), disposedTotal)
+	assert.Zero(t, disposedTotal.Cmp(exact.ScaledIntFromInt64(56000, 2)), "the closed position disposed exactly what it cost: got %s", disposedTotal.String())
 }
 
 func TestInvestmentLotsRejectSwitchAcrossAverageCostWhilePositionOpen(t *testing.T) {
@@ -1216,7 +1242,8 @@ func TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentScales(t *testing.
 	require.NoError(t, err)
 
 	// Pool is 100 shares at 100.00 plus 0.50 shares at 50.00 — 100.5 shares for
-	// 150.00. Selling 50 takes 150.00 × 50 / 100.5 = 74.62 of basis (truncated).
+	// 150.00. Selling 50 takes 150.000000 × 50 / 100.5 = 74.626865 of basis,
+	// truncated at the position's allocation scale (T-103).
 	disposals, err := repo.DisposeLots(ctx, DisposeLotsParams{
 		BookID: 1, AccountID: accountID, CommodityID: instrument.CommodityID,
 		EventDate: "2026-04-01", QuantityValue: exact.New(50), QuantityScale: 0,
@@ -1226,12 +1253,13 @@ func TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentScales(t *testing.
 	})
 	require.NoError(t, err)
 
-	disposedBasis := int64(0)
+	allocationScale := disposals[0].CostBasisScale
+	disposedBasis := exact.NewScaledInt()
 	for _, disposal := range disposals {
-		require.Equal(t, 2, disposal.CostBasisScale)
-		disposedBasis += disposal.CostBasisValue
+		require.Equal(t, allocationScale, disposal.CostBasisScale, "every lot in one position splits basis at one scale")
+		disposedBasis.AddInt64(disposal.CostBasisValue, disposal.CostBasisScale)
 	}
-	require.Equal(t, int64(7462), disposedBasis)
+	require.Zero(t, disposedBasis.Cmp(exact.ScaledIntFromInt64(74626865, 6)), "got %s", disposedBasis.String())
 
 	// Conservation: what the lots still carry is the pool minus what left it.
 	lots, err := repo.ListLots(ctx, 1, accountID, instrument.CommodityID)
@@ -1243,7 +1271,9 @@ func TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentScales(t *testing.
 		remainingBasis.AddInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)
 	}
 	require.Equal(t, 0, remainingQuantity.Cmp(exact.ScaledIntFromInt64(5050, 2)), "100.5 shares less 50 sold")
-	require.Equal(t, 0, remainingBasis.Cmp(exact.ScaledIntFromInt64(15000-7462, 2)))
+	expectedRemaining := exact.ScaledIntFromInt64(15000, 2)
+	expectedRemaining.SubScaled(disposedBasis)
+	require.Zero(t, remainingBasis.Cmp(expectedRemaining), "the pool keeps what the sale did not take: got %s", remainingBasis.String())
 }
 
 // T-97, the basis axis of the same defect. Pooling sums cost basis as raw
@@ -1432,9 +1462,9 @@ func TestListRealizedGainsNilProceedsWhenNoTransaction(t *testing.T) {
 	assert.Equal(t, "2026-04-01", g.DisposalDate)
 	assert.Equal(t, int64(0), g.ProceedsValue)
 	// Disposal events store cost_basis_value as negative (the basis deducted from the lot).
-	assert.Equal(t, int64(-10000), g.DisposedBasisValue)
-	// Gain = proceeds + disposed_basis = 0 + (−10000) = −10000 (a loss of €100.00).
-	assert.Equal(t, int64(-10000), g.RealizedGainValue)
+	assertBasisValue(t, -10000, 2, g.DisposedBasisValue, g.DisposedBasisScale)
+	// Gain = proceeds + disposed_basis = 0 + (−100.00) = a loss of €100.00.
+	assertBasisValue(t, -10000, 2, g.RealizedGainValue, g.RealizedGainScale)
 }
 
 func TestListRealizedGainsDateFilter(t *testing.T) {
@@ -1510,9 +1540,9 @@ func TestListRealizedGainsMultiLotSaleProducesOneRow(t *testing.T) {
 	g := gains[0]
 	// Sold qty = 50 + 50 = 100 (positive, negated back).
 	assert.Equal(t, exact.New(100), g.QuantityValue)
-	// disposed_basis: first 50 from lot-1 (basis 10000 × 50/100 = 5000, negative) +
-	//                 next 50 from lot-1 remainder (basis 5000, negative) = −10000.
-	assert.Equal(t, int64(-10000), g.DisposedBasisValue)
+	// disposed_basis: first 50 from lot-1 (half of 100.00) + the next 50 from
+	// what was left of it, so the whole 100.00, negative.
+	assertBasisValue(t, -10000, 2, g.DisposedBasisValue, g.DisposedBasisScale)
 }
 
 func TestListRealizedGainsAggregatesMixedScaleDisposalEvents(t *testing.T) {

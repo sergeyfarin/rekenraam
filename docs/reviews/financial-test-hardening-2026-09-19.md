@@ -99,6 +99,27 @@ confirms the existing fix's regression. These are targeted fault injections,
 not a claim of exhaustive mutation coverage. Their purpose is to demonstrate
 that green tests discriminate between correct and plausible incorrect logic.
 
+## Resolution of T-103 (added 2026-09-20, after the review)
+
+Fixed. Cost basis is now split at the cost commodity's own maximum scale rather
+than at whichever scale a purchase was recorded at — resolved once per disposal
+command over the whole position, backing off only as far as the int64
+projection columns require, and never below a scale already recorded. The
+currency's *standard* scale was rejected as the ceiling: a basis legitimately
+recorded deeper than it would have to be truncated to reach it, which would
+destroy recorded basis to make a rounding rule fit. Truncating division,
+residual conservation, and the immutability of acquisition and disposal
+evidence are all unchanged.
+
+`TestFinancialPartialDisposalGainMustNotDependOnPurchaseTextPrecision` passes
+under all four methods, and four new fault injections against the policy itself
+are each detected (`docs/backlog.md` T-103). The hand-calculated method oracle
+in `TestFinancialPartialDisposalsUseChosenMethodAndRetainResidual` was restated
+— 0.673333 / 2.030000 / 1.216000 / 1.351666 in place of 0.67 / 2.03 / 1.21 /
+1.34 — because the policy genuinely moves those answers; it still yields four
+distinct values, still conserves, and still detects this review's own FIFO-for-
+LIFO and extra-minor-unit mutations. `./scripts/test-backend.sh` exits 0.
+
 ## New finding: T-103 — partial basis depends on purchase representation
 
 **P2, confirmed on `598c4afc`; unresolved.** Buy three shares for exactly 10 EUR,

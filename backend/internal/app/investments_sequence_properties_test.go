@@ -248,12 +248,31 @@ func TestFinancialClosedPositionGainIgnoresDecimalRepresentation(t *testing.T) {
 // A method that conserves basis can still allocate the wrong basis to today's
 // sale. These hand-calculated partial disposals distinguish all four policies.
 // Acquisition: 3 shares for 1.01 EUR, then 2 for 2.03 EUR. Sell 2 for 2 EUR;
-// the indivisible cent remains in the position until the final close.
+// whatever the split cannot divide evenly remains in the position until the
+// final close.
+//
+// The expected bases are stated at the allocation scale the policy fixes —
+// the cost commodity's own maximum, six places for this fixture's EUR (T-103).
+// They are not stated to two places because the split is not taken to two
+// places; before that policy existed these same figures came out as 0.67,
+// 2.03, 1.21 and 1.34, and would have come out differently again had the
+// purchases been typed with a different number of decimals.
+//
+//   - fifo:         2 of lot A's 3 shares, 1.01 × 2/3 truncated
+//   - lifo:         all of lot B, exactly its 2.03
+//   - average_cost: the 3.04 pool over 5 shares, × 2
+//   - specific_lot: one share from each, 1.01 × 1/3 plus 2.03 × 1/2
 func TestFinancialPartialDisposalsUseChosenMethodAndRetainResidual(t *testing.T) {
 	for _, tc := range []struct {
-		method string
-		basis  int64
-	}{{"fifo", 67}, {"lifo", 203}, {"average_cost", 121}, {"specific_lot", 134}} {
+		method     string
+		basisValue int64
+		basisScale int
+	}{
+		{method: "fifo", basisValue: 673333, basisScale: 6},
+		{method: "lifo", basisValue: 2030000, basisScale: 6},
+		{method: "average_cost", basisValue: 1216000, basisScale: 6},
+		{method: "specific_lot", basisValue: 1351666, basisScale: 6},
+	} {
 		t.Run(tc.method, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
 			ctx := context.Background()
@@ -274,8 +293,9 @@ func TestFinancialPartialDisposalsUseChosenMethodAndRetainResidual(t *testing.T)
 			gains, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
 			require.NoError(t, err)
 			require.Len(t, gains, 1)
-			require.Zero(t, financialRat(fmt.Sprint(gains[0].DisposedBasisValue), gains[0].DisposedBasisScale).Cmp(big.NewRat(-tc.basis, 100)))
-			wantGain := big.NewRat(200-tc.basis, 100)
+			wantBasis := financialRat(fmt.Sprint(tc.basisValue), tc.basisScale)
+			require.Zero(t, financialRat(fmt.Sprint(gains[0].DisposedBasisValue), gains[0].DisposedBasisScale).Cmp(new(big.Rat).Neg(wantBasis)))
+			wantGain := new(big.Rat).Sub(big.NewRat(200, 100), wantBasis)
 			require.Zero(t, financialRat(fmt.Sprint(gains[0].RealizedGainValue), gains[0].RealizedGainScale).Cmp(wantGain))
 			require.Zero(t, financialRat(fmt.Sprint(preview.RealizedGain), preview.RealizedGainScale).Cmp(wantGain))
 			// Close everything: no residual basis may disappear, whatever the earlier

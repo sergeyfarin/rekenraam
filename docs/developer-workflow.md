@@ -75,10 +75,12 @@ backend script as the completion gate. See
 [financial test hardening](reviews/financial-test-hardening-2026-09-19.md) for
 scope, mutation evidence and limitations; coverage percentage alone is not a
 financial correctness gate.
-The test-hardening review also records the active T-103 partial-disposal
-regression: until that defect is fixed, its four method subtests are expected
-to fail. Do not skip the test or turn the current wrong results into expected
-values to make the gate green.
+The test-hardening review records T-103, the partial-disposal allocation
+defect it found; that is fixed (backlog T-103) and its regression passes under
+all four methods, so the whole backend script is green again. Basis is split at
+the cost commodity's maximum scale, one scale per position — when a test's
+expected basis or gain looks deeper than the amount that produced it, that is
+the policy, not a rounding slip.
 
 The backend suite enforces released-migration checksums and exercises the
 upgrade from the frozen v0.1 schema to `HEAD`, including schema equivalence and

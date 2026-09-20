@@ -113,6 +113,18 @@ func tradeRequestBody(f investmentAPITestFixture, holdingAccountID, commodityID 
 
 // --- Lifecycle ---
 
+// assertMoneyValue compares a coefficient/scale pair against an expected
+// amount stated at whatever scale reads most naturally. A gain carries the
+// scale its own subtraction needed (T-101) and a disposed basis the scale the
+// position's allocation policy fixes (T-103), so neither coefficient means
+// anything read on its own.
+func assertMoneyValue(t *testing.T, expectedValue int64, expectedScale int, gotValue int64, gotScale int, msgAndArgs ...any) {
+	t.Helper()
+	expected := exact.ScaledIntFromInt64(expectedValue, expectedScale)
+	got := exact.ScaledIntFromInt64(gotValue, gotScale)
+	assert.Zerof(t, got.Cmp(expected), "expected %s, got %s %v", expected.String(), got.String(), msgAndArgs)
+}
+
 func TestInvestmentLifecycle_InstrumentBuyPreviewSellDividendReflectEverywhere(t *testing.T) {
 	t.Parallel()
 	handler, _ := newSetupTestHandler(t)
@@ -135,7 +147,7 @@ func TestInvestmentLifecycle_InstrumentBuyPreviewSellDividendReflectEverywhere(t
 	previewRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, "/api/v1/investments/sell/preview", previewBody, http.StatusOK)
 	var preview sellPreviewResponse
 	require.NoError(t, json.NewDecoder(previewRes.Body).Decode(&preview))
-	assert.Equal(t, int64(20000), preview.RealizedGain)
+	assertMoneyValue(t, 20000, 2, preview.RealizedGain, preview.RealizedGainScale)
 	assert.Equal(t, "fallback", preview.DisposalDecision.ResolutionTier)
 	assert.Equal(t, "fifo", preview.DisposalDecision.CostBasisMethod)
 	assert.Nil(t, preview.DisposalDecision.ID)
@@ -183,7 +195,7 @@ func TestInvestmentLifecycle_InstrumentBuyPreviewSellDividendReflectEverywhere(t
 	var gains investmentGainsResponse
 	require.NoError(t, json.NewDecoder(gainsRec.Body).Decode(&gains))
 	require.Len(t, gains.Realized, 1)
-	assert.Equal(t, int64(20000), gains.Realized[0].RealizedGainValue)
+	assertMoneyValue(t, 20000, 2, gains.Realized[0].RealizedGainValue, gains.Realized[0].RealizedGainScale)
 }
 
 func TestInvestmentLifecycle_GenericDeleteReturnsInvestmentWorkflowRequired(t *testing.T) {
@@ -230,7 +242,7 @@ func TestWriteOffInvestment_PreviewAndCommitCloseThePositionAtALoss(t *testing.T
 	previewRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, "/api/v1/investments/write-off/preview", body, http.StatusOK)
 	var preview sellPreviewResponse
 	require.NoError(t, json.NewDecoder(previewRes.Body).Decode(&preview))
-	assert.Equal(t, int64(-100000), preview.RealizedGain)
+	assertMoneyValue(t, -100000, 2, preview.RealizedGain, preview.RealizedGainScale)
 	assert.Equal(t, int64(0), preview.CashAmountValue)
 
 	writeOffRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off", body, http.StatusCreated)
@@ -247,7 +259,7 @@ func TestWriteOffInvestment_PreviewAndCommitCloseThePositionAtALoss(t *testing.T
 	var gains investmentGainsResponse
 	require.NoError(t, json.NewDecoder(gainsRec.Body).Decode(&gains))
 	require.Len(t, gains.Realized, 1)
-	assert.Equal(t, int64(-100000), gains.Realized[0].RealizedGainValue)
+	assertMoneyValue(t, -100000, 2, gains.Realized[0].RealizedGainValue, gains.Realized[0].RealizedGainScale)
 	assert.Empty(t, gains.Unrealized, "a written-off position must not linger as an open holding")
 }
 
@@ -628,7 +640,7 @@ func TestWriteOffInvestment_RealizesTheWholeBasisAsALoss(t *testing.T) {
 	var gains investmentGainsResponse
 	require.NoError(t, json.NewDecoder(gainsRec.Body).Decode(&gains))
 	require.Len(t, gains.Realized, 1)
-	assert.Equal(t, int64(-100000), gains.Realized[0].RealizedGainValue)
+	assertMoneyValue(t, -100000, 2, gains.Realized[0].RealizedGainValue, gains.Realized[0].RealizedGainScale)
 	assert.Equal(t, int64(0), gains.Realized[0].ProceedsValue)
 
 	// The transaction carries only the commodity legs — a zero-valued cash

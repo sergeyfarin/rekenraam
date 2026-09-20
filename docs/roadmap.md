@@ -595,9 +595,10 @@ validation window (reopened T-100, P1), precision-dependent realized gains
 **All three are fixed as of 2026-09-19**, each with named regression tests that
 fail without their fix and with the reviewer's own probes passing, so the
 previous reproductions are closed. Subsequent test hardening found **T-103
-(P2): partial-disposal basis depends on purchase text precision**. Its active
-regression fails under all four disposal methods; **hold the financial
-correctness gate until it is fixed**. See
+(P2): partial-disposal basis depends on purchase text precision**, **fixed
+2026-09-20** by fixing the allocation precision to the cost commodity's own
+maximum scale, one scale per position, with explicit range backoff — so the
+code-side gate is clear again. See
 `docs/reviews/financial-test-hardening-2026-09-19.md`. T-94's draft-promotion
 correction remains verified. The household dry run, investment feature limits
 and frozen baseline gates still remain required.

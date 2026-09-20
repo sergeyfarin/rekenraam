@@ -104,7 +104,7 @@ func TestSellSelectsOnlyLotsHeldOnTheSaleDate(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, sold.Allocations, 1)
 	require.Equal(t, *january.LotID, sold.Allocations[0].LotID, "only the January lot was held in March")
-	require.Equal(t, int64(10000), sold.Allocations[0].CostBasisValue, "basis comes from the January acquisition, not June's")
+	assertMoneyValue(t, 10000, 2, sold.Allocations[0].CostBasisValue, sold.Allocations[0].CostBasisScale, "basis comes from the January acquisition, not June's")
 
 	// And the position cannot be overdrawn into the future lot.
 	_, err = f.investmentService.Sell(ctx, sellInput(f, "2026-03-01", 5))
@@ -128,7 +128,7 @@ func TestSellUnderLIFOIgnoresLotsAcquiredAfterTheSaleDate(t *testing.T) {
 	require.Len(t, sold.Allocations, 1)
 	require.Equal(t, *january.LotID, sold.Allocations[0].LotID,
 		"LIFO's newest lot must be the newest one actually held on the sale date")
-	require.Equal(t, int64(10000), sold.Allocations[0].CostBasisValue)
+	assertMoneyValue(t, 10000, 2, sold.Allocations[0].CostBasisValue, sold.Allocations[0].CostBasisScale)
 }
 
 // A specific-lot disposal names its lot outright, so it never passes through
@@ -268,7 +268,7 @@ func TestBackdatedSaleStillWorksWhenOnlyPurchasesFollowIt(t *testing.T) {
 	preview, err := f.investmentService.PreviewSell(ctx, sale)
 	require.NoError(t, err)
 	require.Len(t, preview.Allocations, 1)
-	require.Equal(t, int64(5000), preview.Allocations[0].CostBasisValue, "5 shares of the 10.00 January lot")
+	assertMoneyValue(t, 5000, 2, preview.Allocations[0].CostBasisValue, preview.Allocations[0].CostBasisScale, "5 shares of the 10.00 January lot")
 
 	_, err = f.investmentService.Sell(ctx, sale)
 	require.NoError(t, err)
