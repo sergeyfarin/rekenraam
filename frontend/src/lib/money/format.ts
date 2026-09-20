@@ -1,3 +1,5 @@
+import { roundAmountForDisplay } from './amount';
+
 /**
  * The frontend's single money-*display* layer.
  *
@@ -77,7 +79,7 @@ export function formatQuantity(value: string, scale: number, locale: string): st
   const intPartGrouped = new Intl.NumberFormat(locale).format(BigInt(intStr));
 
   // Get the locale decimal separator from Intl parts.
-  const parts = new Intl.NumberFormat(locale).formatToParts(0);
+  const parts = new Intl.NumberFormat(locale, { minimumFractionDigits: 1 }).formatToParts(0);
   const decimalSep = parts.find((p) => p.type === 'decimal')?.value ?? '.';
 
   const result = `${intPartGrouped}${decimalSep}${fracStr}`;
@@ -107,4 +109,10 @@ function endsAlphanumeric(label: string): boolean {
 	if (last === undefined) return false;
 	// Unicode-aware: a Cyrillic or Greek currency abbreviation is a word too.
 	return /\p{L}|\p{N}/u.test(last);
+}
+
+/** Currency summary display. Call only after exact aggregation, with the
+ * currency's standard scale (not its maximum input/allocation scale). */
+export function formatMoney(value: string, scale: number, standardScale: number, locale: string): string {
+	return formatQuantity(roundAmountForDisplay(value, scale, standardScale), standardScale, locale);
 }

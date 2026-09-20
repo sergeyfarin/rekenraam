@@ -17538,6 +17538,8 @@ export interface components {
             total_gain_scale: number;
         };
         InvestmentGainsResponse: {
+            /** @description Currency labels and standard display scales; calculations retain their recorded precision. */
+            currencies: components["schemas"]["CurrencyResponse"][];
             realized: components["schemas"]["RealizedGainEntry"][];
             unrealized: components["schemas"]["UnrealizedGainEntry"][];
             /** @description Pre-aggregated totals by cost commodity, suitable for display. */

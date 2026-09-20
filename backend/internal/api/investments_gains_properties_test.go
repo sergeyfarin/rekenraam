@@ -85,6 +85,14 @@ func TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency(t *testing.T
 	var result investmentGainsResponse
 	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &result))
 	require.Len(t, result.RealizedTotals, 2)
+	currencies := map[int64]currencyResponse{}
+	for _, currency := range result.Currencies {
+		currencies[currency.ID] = currency
+	}
+	require.Equal(t, "EUR", currencies[euro.ID].Code)
+	require.Equal(t, 2, currencies[euro.ID].StandardScale)
+	require.Equal(t, "USD", currencies[f.commodityID].Code)
+	require.Equal(t, 2, currencies[f.commodityID].StandardScale)
 	wantByCurrency := map[int64]*big.Rat{f.commodityID: big.NewRat(1999, 100), euro.ID: big.NewRat(-1, 1)}
 	for _, total := range result.RealizedTotals {
 		want, exists := wantByCurrency[total.CostCommodityID]
@@ -96,4 +104,29 @@ func TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency(t *testing.T
 	}
 	require.Empty(t, wantByCurrency)
 
+}
+
+// A representability limit is a rejected command, not a successful write that
+// turns the gains endpoint into a 500 on the next read.
+func TestFinancialUnrepresentableAcquisitionIsValidationError(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "RANGE")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	buy := tradeRequestBody(f, holding.ID, instrument.CommodityID, "3", 1000)
+	buy.TransactionDate = "2026-02-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", buy, http.StatusCreated)
+	sale := buy
+	sale.TransactionDate = "2026-02-02"
+	sale.QuantityValue = "1"
+	sale.CashAmountValue = 500
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sale, http.StatusCreated)
+	before := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/investments/gains", nil, http.StatusOK)
+	buy.TransactionDate = "2026-02-03"
+	buy.QuantityValue = "1"
+	buy.CashAmountValue = 1_000_000_000_000_000
+	rejected := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", buy, http.StatusBadRequest)
+	require.Contains(t, rejected.Body.String(), "VALIDATION_FAILED")
+	after := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/investments/gains", nil, http.StatusOK)
+	require.JSONEq(t, before.Body.String(), after.Body.String())
 }

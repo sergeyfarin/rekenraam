@@ -174,6 +174,11 @@ When a feature introduces a durable new rule, update one of those documents in t
   field is `exact.Coefficient`.
 ## Data And Persistence Conventions
 
+- Investment cost-basis projections currently use int64 coefficients. Acquisitions
+  and disposals must reject a resulting open position whose exact basis cannot
+  be represented at its recorded scale, inside the same transaction as all
+  journal, lot and audit writes. Include future-dated lots when checking the
+  current position; never truncate recorded residuals to satisfy this limit.
 - Never store money or quantities as floating point.
 - Store exact values as a canonical integer coefficient plus scale and
   commodity identifier. Quantity coefficients use decimal strings at storage
@@ -332,6 +337,12 @@ rewrite, rename, or deletion fails the backend suite.
   formats through `Intl` anyway, its default calculator is JS numbers, and it models
   a fixed exponent per currency, which is the wrong shape for a ledger that stores a
   24-scale crypto quantity beside a 2-scale euro. The reasoning is in `format.ts`.
+- Investment gains summaries display monetary values at the cost currency's
+  `standard_scale`, labelled with its currency code. Round to the nearest display
+  unit, ties away from zero, only after exact backend aggregation. This is not an
+  allocation or posting rule: stored amounts, fractional share quantities, and
+  detailed lot values retain their precision. Use `formatMoney` for these summary
+  amounts and `formatQuantity` for exact quantities.
 - The two halves of `$lib/money` are not interchangeable, and a report or export must
   pick the right one rather than growing inline math: `format.ts` for anything a user
   only reads, `amount.ts` (`formatLedgerAmount`) for anything that must round-trip

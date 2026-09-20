@@ -318,6 +318,8 @@ func (s *TransactionService) enrichCheckpointRefs(ctx context.Context, refs []db
 
 func mapTransactionDBError(err error) error {
 	switch {
+	case errors.Is(err, db.ErrInvestmentBasisRange):
+		return ValidationError{Message: err.Error()}
 	case errors.Is(err, db.ErrNotFound):
 		return ErrTransactionNotFound
 	case errors.Is(err, db.ErrTransactionHasPostedVersions):

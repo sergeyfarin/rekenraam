@@ -598,7 +598,11 @@ previous reproductions are closed. Subsequent test hardening found **T-103
 (P2): partial-disposal basis depends on purchase text precision**, **fixed
 2026-09-20** by fixing the allocation precision to the cost commodity's own
 maximum scale, one scale per position, with explicit range backoff — so the
-code-side gate is clear again. See
+original code-side reproduction is closed. Follow-up verification found T-104
+(later acquisitions could exceed already widened projection range), fixed by
+atomic range admission checks with active sequence regressions. Gains-summary
+display now uses standard currency precision; see
+`docs/reviews/allocation-and-gains-verification-2026-09-20.md`. See
 `docs/reviews/financial-test-hardening-2026-09-19.md`. T-94's draft-promotion
 correction remains verified. The household dry run, investment feature limits
 and frozen baseline gates still remain required.

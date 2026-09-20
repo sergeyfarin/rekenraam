@@ -1287,14 +1287,20 @@ type realizedGainTotalResponse struct {
 }
 
 type investmentGainsResponse struct {
+	Currencies     []currencyResponse          `json:"currencies"`
 	Realized       []realizedGainResponse      `json:"realized"`
 	Unrealized     []unrealizedGainResponse    `json:"unrealized"`
 	RealizedTotals []realizedGainTotalResponse `json:"realized_totals"`
 }
 
-func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, currencyService *app.CurrencyService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, ok := authenticatedOwner(w, r, logger, authService); !ok {
+			return
+		}
+		currencies, err := currencyService.ListCurrencies(r.Context())
+		if err != nil {
+			writeCurrencyServiceError(w, r, logger, "list gains currencies", err)
 			return
 		}
 		params := app.GainsReportParams{
@@ -1382,6 +1388,7 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 			})
 		}
 		writeJSON(w, http.StatusOK, investmentGainsResponse{
+			Currencies:     toCurrencyResponses(currencies),
 			Realized:       realizedResponses,
 			Unrealized:     unrealizedResponses,
 			RealizedTotals: realizedTotals,

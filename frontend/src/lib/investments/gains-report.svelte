@@ -4,9 +4,9 @@
   import StatePanel from '$lib/components/state-panel.svelte';
   import {
     investmentGainsQueryOptions,
-    investmentInstrumentsQueryOptions,
-    type UnrealizedGainEntry
+    investmentInstrumentsQueryOptions
   } from '$lib/api/investments';
+  import { formatMoney, joinCommodityAmount } from '$lib/money/format';
   import { formatScaledValue } from './investment-labels';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
@@ -44,11 +44,15 @@
 
   const realized = $derived(gainsQuery.data?.realized ?? []);
   const unrealized = $derived(gainsQuery.data?.unrealized ?? []);
-  // Totals are pre-aggregated by the backend, grouped by cost_commodity_id + scale.
+  // Totals are pre-aggregated by the backend, grouped by cost_commodity_id before display rounding.
   const realizedTotals = $derived(gainsQuery.data?.realized_totals ?? []);
 
-  function formatGain(value: number | bigint, scale: number): string {
-    return formatScaledValue(String(value), scale, locale);
+  function formatGain(value: number | bigint, scale: number, currencyID: number): string {
+    const currency = gainsQuery.data?.currencies.find((c) => c.id === currencyID);
+    const amount = currency
+      ? formatMoney(String(value), scale, currency.standard_scale, locale)
+      : formatScaledValue(String(value), scale, locale);
+    return joinCommodityAmount(currency?.code ?? `#${currencyID}`, amount);
   }
 
   // A position with no price and one the backend could not represent both come
@@ -96,18 +100,18 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-border">
-              {#each unrealized as pos (pos.account_id + '_' + pos.commodity_id)}
+              {#each unrealized as pos (pos.account_id + '_' + pos.commodity_id + '_' + pos.cost_commodity_id)}
                 <tr class="hover:bg-surface-strong/20">
                   <td class="py-3 pl-5 pr-3 font-medium text-foreground">{instrumentName(pos.commodity_id)}</td>
                   <td class="px-3 py-3 text-right font-mono text-foreground">
                     {formatScaledValue(pos.quantity_value, pos.quantity_scale, locale)}
                   </td>
                   <td class="px-3 py-3 text-right font-mono text-muted">
-                    {formatScaledValue(String(pos.remaining_cost_basis_value), pos.remaining_cost_basis_scale, locale)}
+                    {formatGain(pos.remaining_cost_basis_value, pos.remaining_cost_basis_scale, pos.cost_commodity_id)}
                   </td>
                   <td class="px-3 py-3 text-right font-mono text-foreground">
                     {#if pos.market_value_value !== undefined && pos.market_value_scale !== undefined}
-                      {formatGain(pos.market_value_value, pos.market_value_scale)}
+                      {formatGain(pos.market_value_value, pos.market_value_scale, pos.cost_commodity_id)}
                     {:else}
                       <span class="text-muted">{unavailableLabel(pos.valuation_unavailable)}</span>
                     {/if}
@@ -115,7 +119,7 @@
                   <td class="py-3 pl-3 pr-5 text-right font-mono">
                     {#if pos.unrealized_gain_value !== undefined && pos.unrealized_gain_scale !== undefined}
                       <span class={gainClass(pos.unrealized_gain_value)}>
-                        {formatGain(pos.unrealized_gain_value, pos.unrealized_gain_scale)}
+                        {formatGain(pos.unrealized_gain_value, pos.unrealized_gain_scale, pos.cost_commodity_id)}
                       </span>
                     {:else}
                       <span class="text-muted">{unavailableLabel(pos.valuation_unavailable)}</span>
@@ -186,7 +190,7 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-border">
-              {#each realized as entry (entry.disposal_date + '_' + entry.commodity_id + '_' + entry.account_id)}
+              {#each realized as entry}
                 <tr class="hover:bg-surface-strong/20">
                   <td class="py-3 pl-5 pr-3 font-mono text-xs text-muted">{entry.disposal_date}</td>
                   <td class="px-3 py-3 text-foreground">{instrumentName(entry.commodity_id)}</td>
@@ -194,14 +198,14 @@
                     {formatScaledValue(entry.quantity_value, entry.quantity_scale, locale)}
                   </td>
                   <td class="px-3 py-3 text-right font-mono text-foreground">
-                    {formatGain(entry.proceeds_value, entry.proceeds_scale)}
+                    {formatGain(entry.proceeds_value, entry.proceeds_scale, entry.cost_commodity_id)}
                   </td>
                   <td class="px-3 py-3 text-right font-mono text-muted">
-                    {formatGain(-entry.disposed_basis_value, entry.disposed_basis_scale)}
+                    {formatGain(-entry.disposed_basis_value, entry.disposed_basis_scale, entry.cost_commodity_id)}
                   </td>
                   <td class="py-3 pl-3 pr-5 text-right font-mono">
                     <span class={gainClass(entry.realized_gain_value)}>
-                      {formatGain(entry.realized_gain_value, entry.realized_gain_scale)}
+                      {formatGain(entry.realized_gain_value, entry.realized_gain_scale, entry.cost_commodity_id)}
                     </span>
                   </td>
                 </tr>
@@ -215,7 +219,7 @@
                   </td>
                   <td class="py-3 pl-3 pr-5 text-right font-mono font-semibold">
                     <span class={gainClass(tot.total_gain_value)}>
-                      {formatGain(tot.total_gain_value, tot.total_gain_scale)}
+                      {formatGain(tot.total_gain_value, tot.total_gain_scale, tot.cost_commodity_id)}
                     </span>
                   </td>
                 </tr>

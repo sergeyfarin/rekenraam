@@ -1249,10 +1249,16 @@ RealizedGainTotal:
 InvestmentGainsResponse:
   type: object
   required:
+    - currencies
     - realized
     - unrealized
     - realized_totals
   properties:
+    currencies:
+      type: array
+      description: Currency labels and standard display scales; calculations retain their recorded precision.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/CurrencyResponse"
     realized:
       type: array
       items:

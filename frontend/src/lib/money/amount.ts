@@ -260,3 +260,14 @@ export function sumByCommodity(postings: PostingAmount[]): CommodityTotal[] {
 		return { commodityID, value: total.toString(), scale };
 	});
 }
+
+/** Display-only rounding: nearest unit at the requested scale, ties away from zero.
+ * Never use this to allocate basis, persist amounts, or sum report rows. */
+export function roundAmountForDisplay(value: string, scale: number, displayScale: number): string {
+	const coefficient = BigInt(value);
+	if (displayScale >= scale) return rescale(coefficient, scale, displayScale).toString();
+	const divisor = 10n ** BigInt(scale - displayScale);
+	const magnitude = coefficient < 0n ? -coefficient : coefficient;
+	const rounded = (magnitude + divisor / 2n) / divisor;
+	return (coefficient < 0n ? -rounded : rounded).toString();
+}

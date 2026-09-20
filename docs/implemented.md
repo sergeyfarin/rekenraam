@@ -394,3 +394,15 @@ Online import (R7) is fully shipped for Trading 212 (Slices 1–4b: connections,
 fetch, durable worker, online batch flow, scheduled auto-refresh, investment
 lot import — see "Online Connections" above, `docs/plans/trading212-import-plan.md`).
 A second online provider is not started.
+
+
+### Gains precision and range admission (2026-09-20)
+
+Gains-summary monetary values use currency-labelled standard display precision;
+share quantities and detailed lot values retain exact precision. Totals are
+aggregated before display rounding. Same-day sales render independently, and
+unrealized position keys distinguish cost currencies. Investment acquisitions
+and disposals atomically reject a resulting cost-basis projection outside its
+exact int64 range, preserving the journal, lots and audit on rejection (T-104).
+See `docs/reviews/allocation-and-gains-verification-2026-09-20.md` for validation
+and the supported-range limitation.

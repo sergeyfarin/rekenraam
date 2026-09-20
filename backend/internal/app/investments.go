@@ -1172,7 +1172,7 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 		if errors.Is(err, db.ErrInsufficientLots) {
 			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
 		}
-		if errors.Is(err, db.ErrInvalidDisposalParams) {
+		if errors.Is(err, db.ErrInvalidDisposalParams) || errors.Is(err, db.ErrInvestmentBasisRange) {
 			return SellPreviewResult{}, ValidationError{Message: err.Error()}
 		}
 		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
@@ -1282,7 +1282,7 @@ func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input Investmen
 		if errors.Is(err, db.ErrInsufficientLots) {
 			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
 		}
-		if errors.Is(err, db.ErrInvalidDisposalParams) {
+		if errors.Is(err, db.ErrInvalidDisposalParams) || errors.Is(err, db.ErrInvestmentBasisRange) {
 			return SellPreviewResult{}, ValidationError{Message: err.Error()}
 		}
 		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
@@ -1458,7 +1458,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		if errors.Is(err, db.ErrInsufficientLots) {
 			return InvestmentTradeResult{}, ErrInvestmentLotsInsufficient
 		}
-		if errors.Is(err, db.ErrInvalidDisposalParams) {
+		if errors.Is(err, db.ErrInvalidDisposalParams) || errors.Is(err, db.ErrInvestmentBasisRange) {
 			return InvestmentTradeResult{}, ValidationError{Message: err.Error()}
 		}
 		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {

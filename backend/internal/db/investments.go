@@ -19,6 +19,7 @@ var (
 	ErrCostBasisProfileExists     = errors.New("cost basis profile already exists")
 	ErrDividendDefaultExists      = errors.New("dividend default already exists")
 	ErrInsufficientLots           = errors.New("insufficient lots")
+	ErrInvestmentBasisRange       = errors.New("investment position basis exceeds supported exact range")
 	ErrInvalidDisposalParams      = errors.New("invalid disposal parameters")
 	ErrEventSuggestionNotPending  = errors.New("investment event suggestion is not pending")
 	// ErrOutOfOrderPositionEvent reports a lot event dated before something the
@@ -1075,6 +1076,9 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 	`, params.BookID, lotID, params.EventKind, nullablePositiveInt64(params.SourceTransactionID), params.OpenedOn, params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID); err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("insert investment lot event: %w", err)
 	}
+	if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
+		return InvestmentLotRecord{}, err
+	}
 	record, err := investmentLotByIDTx(ctx, tx, params.BookID, lotID)
 	if err != nil {
 		return InvestmentLotRecord{}, err
@@ -1295,6 +1299,11 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 		disposals, err = disposeFIFOOrLIFOTx(ctx, tx, params, auditEventID, method, allocationScale)
 	}
 	if err != nil {
+		return nil, err
+	}
+	// Include future acquisitions too: widening an eligible lot must not make
+	// the current all-lots position unreadable (T-104).
+	if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
 		return nil, err
 	}
 	if err := updatePositionMethodFamilyTx(ctx, tx, params, method, auditEventID); err != nil {
@@ -2712,7 +2721,11 @@ func costBasisAllocationScaleTx(ctx context.Context, tx *sql.Tx, costCommodityID
 		}
 		return 0, fmt.Errorf("read cost commodity allocation scale: %w", err)
 	}
-	return costBasisAllocationScale(ceiling, recorded), nil
+	scale := costBasisAllocationScale(ceiling, recorded)
+	if !basisFitsInt64At(recorded, scale) {
+		return 0, ErrInvestmentBasisRange
+	}
+	return scale, nil
 }
 
 // costBasisAllocationScale picks the deepest scale at or below ceiling that
@@ -3370,4 +3383,36 @@ func mapInvestmentConstraintError(err error) error {
 	default:
 		return err
 	}
+}
+
+// T-104: admission is checked inside the same transaction as journal, lot and
+// audit writes. Never accept a new projection that the position read model
+// cannot sum exactly. This also covers reinvestment/import acquisition paths.
+func requirePositionBasisRangeTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64) error {
+	rows, err := tx.QueryContext(ctx, `
+		SELECT remaining_cost_basis_value, remaining_cost_basis_scale
+		FROM investment_lots
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
+			AND status = 'open'
+	`, bookID, accountID, commodityID, costCommodityID)
+	if err != nil {
+		return fmt.Errorf("read position basis range: %w", err)
+	}
+	defer rows.Close()
+	total := exact.NewScaledInt()
+	for rows.Next() {
+		var value int64
+		var scale int
+		if err := rows.Scan(&value, &scale); err != nil {
+			return fmt.Errorf("scan position basis range: %w", err)
+		}
+		total.AddInt64(value, scale)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate position basis range: %w", err)
+	}
+	if _, err := total.Int64(); err != nil {
+		return ErrInvestmentBasisRange
+	}
+	return nil
 }

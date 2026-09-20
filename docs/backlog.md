@@ -550,12 +550,38 @@ compare values (`assertBasisValue`, `assertMoneyValue`, and the invariant sums
 in `investments_invariants_test.go`), which is the assertion they should always
 have made.
 
-**Visible consequence.** A partial disposal's basis and gain are now reported
-at the allocation scale, so the gains screen can show a figure like
-1.666667 EUR where it used to show 1.67. That is the exact result of the
-split; presenting it more shallowly is a display decision that has not been
-taken. See `docs/reviews/financial-test-hardening-2026-09-19.md` for the
-original reproduction.
+**Display decision (2026-09-20).** Gains-summary money uses the currency's
+standard scale, with its currency code: EUR 1.67, not six-place EUR 1.666667.
+Fractional-share quantities and detailed lot values keep their precision.
+Totals are aggregated exactly before rounding; ties round away from zero.
+See `docs/reviews/allocation-and-gains-verification-2026-09-20.md`.
+
+### T-104 Later acquisition can exceed an already widened basis range `[x]`
+
+**P2, fixed 2026-09-20; extreme accepted-value boundary.** After buying three
+shares for EUR 10.00 and selling one, the remaining basis is 6.666667 at scale
+6. A later EUR 10 trillion purchase was accepted at scale 2, making positions
+unreadable and blocking LIFO/average-cost sales. This is far outside family use,
+but within the accepted input range. No silent monetary corruption was observed.
+
+Acquisitions (including reinvestment and import writes) now check the combined
+open position's exact basis range inside the transaction containing journal,
+lot, event and audit writes. An unrepresentable command returns a validation
+error and rolls back. Disposals also check the resulting position including
+future acquisitions: widening an older eligible lot must not break the current
+report. The allocation selector refuses an impossible deepest-scale fallback.
+Existing recorded residuals and historical records are never truncated.
+
+Active tests in `backend/internal/app/investments_basis_range_test.go` cover
+all four disposal methods, buy/reinvestment rejection, unchanged durable state,
+subsequent valid trades, future-lot interaction, and the exact one-cent
+accept/reject boundary at equivalent input scales. API tests require a 400 and
+unchanged gains. Both acquisition and disposal guards have independent mutation
+evidence. See `docs/reviews/allocation-and-gains-verification-2026-09-20.md`.
+
+This is explicit admission control for the current int64 projection format,
+not an expansion of supported range or a repair of previously imported invalid
+positions.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 
@@ -701,13 +727,14 @@ exactness past `Number.MAX_SAFE_INTEGER`.
 initially as the highest-priority item of the three, on the strength of a
 `BigInt(Math.trunc(Number(value)))` at line ~55. Checked properly: that
 conversion feeds **only `gainClass`**, whose entire output is a CSS colour
-chosen by a sign comparison, and `Number()` rounding preserves sign. Also
-checked and correct: `formatGain(entry.realized_gain_value,
-entry.proceeds_scale)` uses `proceeds_scale` deliberately — the OpenAPI
-description of `realized_gain_value` is "proceeds_value − disposed_basis
-(**aligned to proceeds_scale**)", so there is no `realized_gain_scale` to use.
-And `formatScaledValue` in `investment-labels.ts` is already a thin alias over
-the shared `formatQuantity`, not a duplicate. Nothing to do here.
+chosen by a sign comparison, and `Number()` rounding preserves sign.
+The original audit also accepted `proceeds_scale` for realized gains; that
+assessment was superseded by T-101. Gains now carry `realized_gain_scale`
+so subtraction preserves the deeper basis precision. The 2026-09-20 follow-up
+uses shared `formatMoney` for currency-standard summary display while retaining
+exact arithmetic and quantity formatting. The numeric investment API contract
+still needs its separate string-coefficient migration.
+
 
 **Open, and larger than first recorded —
 `routes/app/settings/currencies/+page.svelte`.** Two separate issues in

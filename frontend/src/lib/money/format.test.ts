@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatQuantity, joinCommodityAmount } from './format';
+import { formatQuantity, formatMoney, joinCommodityAmount } from './format';
 import { formatLedgerAmount, parseDecimalAmount } from './amount';
 
 describe('formatQuantity', () => {
@@ -50,14 +50,8 @@ describe('formatQuantity', () => {
     expect(formatQuantity('', 2, 'en-US')).toBe('');
   });
 
-  it('locale separator: respects locale decimal character', () => {
-    // Node.js test environments often lack full ICU locale data, so we test
-    // that the function correctly passes the locale to Intl rather than testing
-    // a specific non-en locale. The implementation uses Intl.NumberFormat to
-    // derive separators, so browsers with full ICU data will produce locale-correct output.
-    const enResult = formatQuantity('12345', 2, 'en-US');
-    expect(enResult).toContain('123');
-    expect(enResult).toContain('45');
+  it.each(['nl-NL', 'de-DE'])('uses the decimal comma in %s', (locale) => {
+    expect(formatQuantity('123456', 2, locale)).toBe('1.234,56');
   });
 });
 
@@ -124,4 +118,31 @@ describe('joinCommodityAmount', () => {
 		expect(joinCommodityAmount(' USD ', '42.00')).toBe('USD 42.00');
 		expect(joinCommodityAmount(' $ ', '42.00')).toBe('$42.00');
 	});
+});
+
+
+describe('currency summary display', () => {
+  it.each([
+    ['1666667', 6, 2, '1.67'],
+    ['-1666667', 6, 2, '-1.67'],
+    ['1005', 3, 2, '1.01'],
+    ['-1005', 3, 2, '-1.01'],
+    ['-4', 3, 2, '0.00'],
+    ['9995', 3, 2, '10.00'],
+    ['1235', 1, 0, '124'],
+    ['1234567', 6, 3, '1.235'],
+    ['10', 0, 3, '10.000'],
+    ['90071992547409935', 3, 2, '90,071,992,547,409.94']
+  ])('rounds %s at scale %i to %i places', (value, scale, standardScale, expected) => {
+    expect(formatMoney(value, scale, standardScale, 'en-US')).toBe(expected);
+  });
+
+  it('formats currency precision with locale separators', () => {
+    expect(formatMoney('1234567890', 6, 2, 'nl-NL')).toBe('1.234,57');
+  });
+
+  it('keeps the exact quantity formatter available for shares and details', () => {
+    expect(formatQuantity('1666667', 6, 'en-US')).toBe('1.666667');
+    expect(formatMoney('1666667', 6, 2, 'en-US')).toBe('1.67');
+  });
 });
