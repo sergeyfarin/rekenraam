@@ -32,6 +32,7 @@ const (
 	CheckBookBalance            = "book_balance"
 	CheckVersionIntegrity       = "version_integrity"
 	CheckLotReconciliation      = "lot_reconciliation"
+	CheckCommodityPositionSign  = "commodity_position_sign"
 	CheckCheckpointIntegrity    = "checkpoint_integrity"
 	CheckAccountVersionCoverage = "account_version_coverage"
 	CheckSQLiteIntegrity        = "sqlite_integrity"
@@ -112,6 +113,10 @@ var checkNarratives = map[string]checkNarrative{
 	CheckLotReconciliation: {
 		explanation: "Open investment lots must account for exactly what the holding account holds, and no lot may have negative or over-consumed remaining quantity.",
 		nextStep:    "Compare the named account's holdings with its lots. A mismatch means gains and cost basis are being computed from a position the ledger does not agree with.",
+	},
+	CheckCommodityPositionSign: {
+		explanation: "An account cannot hold a negative number of units of something countable — a share, a fund unit, a coin. Money goes negative all the time: an overdraft and a credit-card balance are real. Units are not: holding minus four bitcoin is not a position, it is a bookkeeping error. The clearing account the app posts the other half of every commodity movement to is excluded, because being negative is what it is for.",
+		nextStep:    "Look at the named accounts' registers for that commodity. Usually a disposal was entered before the acquisition that covers it, or one was entered twice; a holding account managed by the investment subledger cannot reach this state through the app, but a crypto wallet or an ordinary account holding an instrument can.",
 	},
 	CheckCheckpointIntegrity: {
 		explanation: "An active reconciliation checkpoint must still add up to the statement balance it recorded, from postings that are still current.",
@@ -282,6 +287,11 @@ func (s *SelfCheckService) executeChecks(ctx context.Context) ([]SelfCheckResult
 		return nil, err
 	}
 
+	positions, err := s.commodityPositionSignCheck(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
+
 	checkpoints, err := s.checkpointIntegrityCheck(ctx, snapshot)
 	if err != nil {
 		return nil, err
@@ -292,7 +302,7 @@ func (s *SelfCheckService) executeChecks(ctx context.Context) ([]SelfCheckResult
 		return nil, err
 	}
 
-	results := append(balances, structural, lots, checkpoints, coverage, integrity, s.attachmentsCheck())
+	results := append(balances, structural, lots, positions, checkpoints, coverage, integrity, s.attachmentsCheck())
 	for index := range results {
 		narrative := checkNarratives[results[index].CheckID]
 		results[index].Explanation = narrative.explanation
@@ -729,6 +739,59 @@ func (s *SelfCheckService) attachmentsCheck() SelfCheckResult {
 		Status:  SelfCheckNotApplicable,
 		Summary: "attachment storage is not implemented yet, so there is nothing to verify",
 	}
+}
+
+// commodityPositionSignCheck answers a question the lot reconciliation cannot:
+// the lot check compares holdings against lots, so it only sees accounts the
+// investment subledger manages. A crypto wallet has no lots at all, and an
+// ordinary asset account can be handed an instrument without one, so both can
+// be driven below zero by an ordinary balanced entry — a sale recorded before
+// the purchase that covers it, or a sale recorded twice. Nothing refuses it at
+// the write, because refusing would also refuse a statement imported out of
+// order, and nothing downstream notices: the entry balances, the book balances,
+// and net worth simply reports the impossible position as a negative asset.
+func (s *SelfCheckService) commodityPositionSignCheck(ctx context.Context, snapshot *sql.Tx) (SelfCheckResult, error) {
+	type position struct {
+		accountID   int64
+		commodityID int64
+	}
+	balances := map[position]*exact.ScaledInt{}
+	if err := s.repository.StreamPostedNonCurrencyPostings(ctx, snapshot, BookID, func(record db.SelfCheckCommodityPositionRecord) error {
+		key := position{accountID: record.AccountID, commodityID: record.CommodityID}
+		if balances[key] == nil {
+			balances[key] = exact.NewScaledInt()
+		}
+		balances[key].AddCoefficient(record.QuantityValue, record.QuantityScale)
+		return nil
+	}); err != nil {
+		return SelfCheckResult{}, err
+	}
+
+	result := SelfCheckResult{CheckID: CheckCommodityPositionSign, Status: SelfCheckPassed, Summary: "no account holds a negative quantity of a countable commodity"}
+	// The stream is unordered — it is folded into a map, so an ORDER BY would
+	// only cost a sort on a large book. The sample is capped, though, so which
+	// accounts it names is sorted here instead of left to map iteration.
+	keys := make([]position, 0, len(balances))
+	for key, balance := range balances {
+		if balance.Sign() < 0 {
+			keys = append(keys, key)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].accountID != keys[j].accountID {
+			return keys[i].accountID < keys[j].accountID
+		}
+		return keys[i].commodityID < keys[j].commodityID
+	})
+	for _, key := range keys {
+		result.Sample = appendCapped(result.Sample, key.accountID)
+	}
+	if len(keys) > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount = int64(len(keys))
+		result.Summary = fmt.Sprintf("%d account positions hold a negative quantity of a countable commodity", len(keys))
+	}
+	return result, nil
 }
 
 func appendCapped(sample []int64, id int64) []int64 {
