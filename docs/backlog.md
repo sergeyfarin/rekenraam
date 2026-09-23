@@ -630,7 +630,48 @@ makes the healthy-book control fail.
 
 **Still open, deliberately:** the wrong position is detected, not prevented, and
 a negative crypto balance still values into net worth until someone corrects
-it. Prevention needs the product decision above.
+it. Prevention needs the product decision above; tracked as T-106 below.
+
+### Finance follow-ups pending GitHub issue tracking
+
+Checked 2026-09-23: `gh` is installed, but `gh auth status` reports that the
+saved token for `sergeyfarin` is invalid, and `gh repo view` cannot connect to
+`api.github.com` from this workspace. Keep the following actionable items here
+until GitHub access works again. Recheck authentication and connectivity before
+moving them to GitHub; do not treat the CLI's presence as a working connection.
+
+### T-106 Negative countable positions can still affect reports `[ ]`
+
+**P2, follow-up to T-105.** `commodity_position_sign` detects a current negative
+non-currency balance in self-check, but ordinary entries can still create one.
+Until it is corrected, a negative coin or share balance can be valued as an
+asset in net worth. A later offsetting entry can make the current self-check
+pass without proving that earlier dated positions were valid.
+
+Decide how to handle out-of-order imports, corrections, and unsupported shorts
+before adding a write-time rule. Then ensure current and historical reports do
+not present an invalid countable position as an ordinary holding. Test a wallet
+oversell followed by a later replenishment, including its effect on net worth
+and the self-check at each date. T-105's current-state diagnostic remains
+useful regardless of that policy.
+
+### T-107 Investment money fields still cross JSON as numbers `[ ]`
+
+**P2, precision boundary.** Investment quantities use decimal strings, but
+several monetary coefficients in the investment API still use Go `int64` and
+OpenAPI `integer/int64`, generated as TypeScript `number`. This includes cash
+amounts, disposed basis, proceeds, and realized gains. A coefficient above
+JavaScript's safe-integer limit can change before the frontend's BigInt money
+formatter sees it. The input adapter rejects unsafe coefficients, but that
+does not make every read model or imported value exact in the browser.
+
+Migrate these monetary coefficients across the API, OpenAPI schema, typed
+client, and forms to canonical decimal strings, while retaining exact backend
+arithmetic. Add an end-to-end round-trip using a representable investment
+amount with a coefficient above `2^53`, plus mixed-scale gain and currency
+summary cases. Coordinate this contract change with R16; its current roadmap
+description does not explicitly include the migration. The existing G-09 FX
+display `Number` conversion is a separate, already recorded open item.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 
