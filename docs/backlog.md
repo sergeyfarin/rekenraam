@@ -632,13 +632,13 @@ makes the healthy-book control fail.
 a negative crypto balance still values into net worth until someone corrects
 it. Prevention needs the product decision above; tracked as T-106 below.
 
-### Finance follow-ups pending GitHub issue tracking
+### Finance follow-ups pending GitHub issue publication
 
-Checked 2026-09-23: `gh` is installed, but `gh auth status` reports that the
-saved token for `sergeyfarin` is invalid, and `gh repo view` cannot connect to
-`api.github.com` from this workspace. Keep the following actionable items here
-until GitHub access works again. Recheck authentication and connectivity before
-moving them to GitHub; do not treat the CLI's presence as a working connection.
+Checked 2026-09-23: `gh repo view sergeyfarin/rekenraam` succeeds with network
+access enabled for this task. The earlier authentication and connection errors
+occurred in the restricted command environment; they did not establish that
+the user's GitHub CLI was broken. T-106 and T-107 remain documented here until
+publication as public GitHub issues is approved, then they can be linked here.
 
 ### T-106 Negative countable positions can still affect reports `[ ]`
 
