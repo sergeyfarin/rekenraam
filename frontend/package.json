@@ -21,7 +21,7 @@
         "@sveltejs/kit": "2.70.3",
         "@sveltejs/vite-plugin-svelte": "7.3.0",
         "@tailwindcss/vite": "4.3.3",
-        "@types/node": "26.5.1",
+        "@types/node": "26.6.2",
         "@vitest/ui": "5.0.1",
         "bits-ui": "2.19.2",
         "clsx": "2.1.1",
