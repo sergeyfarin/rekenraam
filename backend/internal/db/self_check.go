@@ -119,6 +119,52 @@ func (r *SelfCheckRepository) StreamPostedInvestmentPostings(ctx context.Context
 	return nil
 }
 
+// SelfCheckCommodityPositionRecord is one posting of a commodity that exists in
+// countable units rather than as money.
+type SelfCheckCommodityPositionRecord struct {
+	AccountID     int64
+	CommodityID   int64
+	QuantityValue exact.Coefficient
+	QuantityScale int
+}
+
+// StreamPostedNonCurrencyPostings visits every posted posting of a commodity
+// whose kind is not a currency, skipping the commodity_trading clearing
+// account. That account is the counterparty of every commodity movement and is
+// negative by construction; every other account holds units it either has or
+// does not.
+func (r *SelfCheckRepository) StreamPostedNonCurrencyPostings(ctx context.Context, transaction *sql.Tx, bookID int64, visit func(SelfCheckCommodityPositionRecord) error) error {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT pv.account_id, pv.commodity_id, pv.quantity_value, pv.quantity_scale
+		FROM current_transaction_versions tv
+		JOIN transactions t ON t.id = tv.transaction_id
+		JOIN journal_entries je ON je.transaction_version_id = tv.id
+		JOIN posting_versions pv ON pv.journal_entry_id = je.id
+		JOIN accounts a ON a.id = pv.account_id
+		JOIN commodities c ON c.id = pv.commodity_id
+		WHERE tv.book_id = ? AND tv.status = 'posted' AND t.deleted_at IS NULL
+			AND c.kind <> 'currency'
+			AND (a.system_role IS NULL OR a.system_role <> 'commodity_trading')
+	`, bookID)
+	if err != nil {
+		return fmt.Errorf("read self-check commodity positions: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var record SelfCheckCommodityPositionRecord
+		if err := rows.Scan(&record.AccountID, &record.CommodityID, &record.QuantityValue, &record.QuantityScale); err != nil {
+			return fmt.Errorf("scan self-check commodity position: %w", err)
+		}
+		if err := visit(record); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate self-check commodity positions: %w", err)
+	}
+	return nil
+}
+
 // SelfCheckLotRecord is one investment lot's current standing.
 type SelfCheckLotRecord struct {
 	LotID                   int64

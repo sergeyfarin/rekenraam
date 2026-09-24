@@ -246,6 +246,13 @@ which is R16 scope. Pinned by
 `TestCreateTransactionStillAllowsCryptoWalletPostings` so it stays a decision
 rather than becoming an oversight again.
 
+**Consequence found and mitigated 2026-09-21 (T-105).** Leaving crypto outside
+the fence also leaves it outside the *detection* the fence's accounts get. The
+lot reconciliation check compares holdings against lots, so an account with no
+lots is invisible to it, and a crypto wallet could be driven below zero by an
+ordinary balanced entry — a disposal recorded before the acquisition covering
+it, or one recorded twice — with nothing anywhere noticing. See T-105.
+
 ### T-97 Fractional sale eligibility depends on acquisition scale `[x]`
 
 **Was P2 / fractional-investment onboarding blocker. Fixed 2026-09-13.** Three
@@ -582,6 +589,48 @@ evidence. See `docs/reviews/allocation-and-gains-verification-2026-09-20.md`.
 This is explicit admission control for the current int64 projection format,
 not an expansion of supported range or a repair of previously imported invalid
 positions.
+
+### T-105 A countable commodity could go negative unnoticed `[x]`
+
+**Found and fixed 2026-09-21 while reviewing report and accounting coverage.**
+An account could hold a negative quantity of something countable — a share, a
+fund unit, a coin — and nothing in the app would say so. Selling five bitcoin
+from a wallet holding half of one is an ordinary balanced entry: it balances,
+the transaction balances, the book balances, and net worth then reports minus
+four and a half coins as an asset, valued at the current price.
+
+Money going negative is ordinary — an overdraft and a credit-card balance are
+real positions. Units are not. The distinction had no representation anywhere.
+
+Why nothing caught it: the subledger fence (T-96) keeps ordinary entries out of
+*holding* accounts and the subledger itself refuses to oversell, so securities
+held properly are safe. But the fence is keyed on account kind, and the
+`lot_reconciliation` self-check compares holdings against lots, so both only
+cover accounts the subledger manages. A crypto wallet has no lots at all, and
+an instrument posted to an ordinary asset account has none either. Both sit
+outside every existing guard and every existing diagnostic.
+
+**Fixed as a self-check, `commodity_position_sign`**, not as a write-time
+refusal. Refusing at the write would also refuse a statement imported out of
+order — a real workflow — and whether the app should ever accept a short is a
+product decision, not a bug fix. A diagnostic catches the state however it
+arose, including from an import or a restored database, which a write-time
+guard cannot. It sums every posted posting of a non-currency commodity per
+account and fails when any position is negative, excluding the
+`commodity_trading` clearing account, which is the counterparty of every
+commodity movement and negative by construction.
+
+Proved by `backend/internal/app/self_check_commodity_position_test.go`: the
+negative wallet and the negative instrument on an ordinary account are both
+found and no other check sees them; a book that buys, sells, reinvests, writes
+off and round-trips crypto produces no finding at all; and a subledger-managed
+holding account still cannot reach the state through the app. Both exclusions —
+the clearing account and currencies — are load-bearing, and removing either
+makes the healthy-book control fail.
+
+**Still open, deliberately:** the wrong position is detected, not prevented, and
+a negative crypto balance still values into net worth until someone corrects
+it. Prevention needs the product decision above.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 

@@ -15581,7 +15581,7 @@ export interface components {
         /** @description One check's verdict, in the terms a person needs: what was checked, what was found, where to look, and what to do about it. A failure a reader cannot act on is only half reported. */
         SelfCheckResult: {
             /** @enum {string} */
-            check_id: "entry_balance" | "transaction_balance" | "book_balance" | "version_integrity" | "lot_reconciliation" | "checkpoint_integrity" | "account_version_coverage" | "sqlite_integrity" | "attachments";
+            check_id: "entry_balance" | "transaction_balance" | "book_balance" | "version_integrity" | "lot_reconciliation" | "commodity_position_sign" | "checkpoint_integrity" | "account_version_coverage" | "sqlite_integrity" | "attachments";
             /**
              * @description not_applicable is reserved for a check that cannot run yet — attachments until R14a. It never passes by default: passing a check nobody ran is how a coverage claim gets made by accident.
              * @enum {string}

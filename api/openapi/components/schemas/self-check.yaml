@@ -21,6 +21,7 @@ SelfCheckResult:
         - book_balance
         - version_integrity
         - lot_reconciliation
+        - commodity_position_sign
         - checkpoint_integrity
         - account_version_coverage
         - sqlite_integrity

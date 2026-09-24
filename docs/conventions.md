@@ -179,6 +179,13 @@ When a feature introduces a durable new rule, update one of those documents in t
   be represented at its recorded scale, inside the same transaction as all
   journal, lot and audit writes. Include future-dated lots when checking the
   current position; never truncate recorded residuals to satisfy this limit.
+- Money and countable commodities are not the same kind of quantity. A currency
+  balance may be negative — an overdraft and a credit-card balance are real
+  positions — and a non-currency balance may not: there is no such thing as
+  minus four bitcoin or minus ten shares outside a short, which this app does
+  not support. The `commodity_position_sign` self-check is where that rule
+  lives (T-105); the `commodity_trading` clearing account is exempt, because
+  holding the other half of every commodity movement is what it is for.
 - Never store money or quantities as floating point.
 - Store exact values as a canonical integer coefficient plus scale and
   commodity identifier. Quantity coefficients use decimal strings at storage
