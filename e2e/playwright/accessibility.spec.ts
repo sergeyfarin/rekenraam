@@ -144,17 +144,22 @@ test('the reporting-currency select is never operable before its fade finishes',
   await readyForLedger(page);
   const today = todayISO();
 
-  // Hold the currencies response long enough that the select is observably
-  // disabled first, so the sampler is already running when the state flips.
+  // Hold the currencies response until the disabled select has rendered and
+  // the sampler is running. A fixed delay can expire before hydration on CI.
+  let releaseCurrencies: (() => void) | undefined;
+  const currenciesHeld = new Promise<void>((resolve) => {
+    releaseCurrencies = resolve;
+  });
   await page.route('**/api/v1/currencies*', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await currenciesHeld;
     await route.continue();
   });
 
   await page.goto(`/app/reports?view=spending&start_date=${today}&end_date=${today}&bucket=month`);
   await expect(page.getByRole('heading').first()).toBeVisible();
+  await expect(page.locator('select')).toBeDisabled();
 
-  const faded = await page.evaluate(async () => {
+  const fadedPromise = page.evaluate(async () => {
     const select = document.querySelector('select') as HTMLSelectElement | null;
     if (!select) return 'no select on the spending report';
     if (!select.disabled) return 'the select was never disabled, so this proves nothing';
@@ -169,9 +174,13 @@ test('the reporting-currency select is never operable before its fade finishes',
         if (elapsed > 10_000) return resolve('the select never became enabled');
         requestAnimationFrame(frame);
       };
+      document.documentElement.dataset.fadeSamplerReady = 'true';
       frame();
     });
   });
+  await page.waitForFunction(() => document.documentElement.dataset.fadeSamplerReady === 'true');
+  releaseCurrencies?.();
+  const faded = await fadedPromise;
 
   expect(
     faded,
