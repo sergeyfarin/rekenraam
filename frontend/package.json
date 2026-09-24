@@ -38,7 +38,7 @@
         "vitest": "5.0.0"
     },
     "dependencies": {
-        "@inlang/paraglide-js": "2.25.1",
+        "@inlang/paraglide-js": "2.25.4",
         "@tanstack/svelte-query": "6.2.3",
         "@tanstack/svelte-table": "9.2.4",
         "date-fns": "4.4.0",
