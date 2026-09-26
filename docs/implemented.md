@@ -407,3 +407,10 @@ and disposals atomically reject a resulting cost-basis projection outside its
 exact int64 range, preserving the journal, lots and audit on rejection (T-104).
 See `docs/reviews/allocation-and-gains-verification-2026-09-20.md` for validation
 and the supported-range limitation.
+
+As of 2026-09-26, investment monetary coefficients cross JSON as exact decimal
+strings in requests, lots, positions, previews, and gains (T-107). The backend
+still computes and stores these fields as checked int64 coefficients. A named
+API regression round-trips a value above JavaScript's safe-integer limit through
+a trade and gains summary; frontend forms keep the backend range without
+converting coefficients to `Number`.

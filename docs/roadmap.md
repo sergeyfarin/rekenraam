@@ -475,6 +475,10 @@ split by risk:
    change journal and subledger atomically, preserve original events, and retain
    the generic mutation fence. T-76 disposal provenance is a prerequisite.
 
+The investment monetary JSON precision boundary (T-107) was closed ahead of
+the remaining R16 lifecycle work: requests and read models now carry exact
+decimal coefficient strings while the backend keeps its int64 admission range.
+
 ### R17 — crypto instrument type
 
 Decided 2026-08-05 (review §4.1): widen the persona to crypto-holding
@@ -610,7 +614,7 @@ and frozen baseline gates still remain required.
 T-106's dated negative-position detection and net-worth warning shipped
 2026-09-26. Out-of-order imports remain accepted; a genuine short sale needs
 an explicit named workflow (T-108). T-107's investment money JSON precision
-boundary remains open and should be resolved with the R16 contract work.
+boundary also closed on 2026-09-26.
 
 These are a parallel release-readiness track, not a reason to delay local
 daily-driver work.

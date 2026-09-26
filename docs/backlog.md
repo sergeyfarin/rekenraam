@@ -657,23 +657,24 @@ replenishment, and out-of-order import. The existing healthy-book and currency
 exclusions remain covered. An explicit short sale is distinct and tracked as
 T-108.
 
-### T-107 Investment money fields still cross JSON as numbers `[ ]`
+### T-107 Investment money fields still cross JSON as numbers `[x]`
 
-**P2, precision boundary.** Investment quantities use decimal strings, but
-several monetary coefficients in the investment API still use Go `int64` and
-OpenAPI `integer/int64`, generated as TypeScript `number`. This includes cash
-amounts, disposed basis, proceeds, and realized gains. A coefficient above
-JavaScript's safe-integer limit can change before the frontend's BigInt money
-formatter sees it. The input adapter rejects unsafe coefficients, but that
-does not make every read model or imported value exact in the browser.
+**P2, fixed 2026-09-26.** The 21 investment monetary-coefficient schema fields
+now use canonical decimal strings, including cash and dividend requests, lot
+basis, preview, prices, proceeds, realized and unrealized gains, and currency
+totals. API DTOs serialize strings and accept legacy numeric input while
+retaining int64 backend arithmetic. The three investment forms send strings
+and enforce the backend int64 range without narrowing it to JavaScript's safe
+integer range. Gains display and sign handling remain exact in the browser.
 
-Migrate these monetary coefficients across the API, OpenAPI schema, typed
-client, and forms to canonical decimal strings, while retaining exact backend
-arithmetic. Add an end-to-end round-trip using a representable investment
-amount with a coefficient above `2^53`, plus mixed-scale gain and currency
-summary cases. Coordinate this contract change with R16; its current roadmap
-description does not explicitly include the migration. The existing G-09 FX
-display `Number` conversion is a separate, already recorded open item.
+`TestInvestmentMoneyAboveJavaScriptSafeIntegerRoundTripsAsStrings` proves a
+representable coefficient above `2^53` survives a buy request, lot read, sell
+request, realized gain, and currency total. The existing
+`TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency` covers mixed
+scales and separate currency summaries; form tests cover the int64 edge.
+`TestInvestmentMoneyCoefficientWireBoundary` covers canonical spelling,
+the signed int64 endpoints, and legacy numeric input.
+G-09's FX display `Number` conversion remains a separate open item.
 
 ### T-108 Explicit short-sale positions need a named workflow `[ ]`
 
@@ -787,12 +788,10 @@ extracted to `lib/investments/form-amounts.ts` (`parseMagnitude`,
 `parseMoneyMagnitude`, `parseTradeAmounts`, `parseDividendAmounts`) with 35
 named tests, and the components now just call it.
 
-`toSafeInt` deliberately did **not** move onto `$lib/money`. It is not money
-arithmetic that drifted; it is the adapter for the `integer/int64` contract
-quirk described below. It now lives once as `toInt64Coefficient` in
-`lib/api/investments.ts`, next to the contract it adapts — putting a
-`BigInt`→`Number` converter into `amount.ts` would contradict that module's
-invariant that no `Number` ever touches a coefficient.
+At the time, `toSafeInt` moved to a shared `toInt64Coefficient` adapter for the
+old `integer/int64` wire contract. T-107 later removed that conversion: money
+now crosses JSON as strings, and `$lib/money/amount.ts` checks the remaining
+backend int64 range without converting a coefficient to `Number`.
 
 Also fixed in passing: `dividend-form` and `sell-form` returned silently when
 an amount failed to parse, so a typo left the submit button doing nothing with
@@ -857,8 +856,8 @@ ratio of two scaled values:
 
 Issue 2 is a mechanical fix. Issue 1 needs a decision first — whether a
 displayed rate truncates or rounds half-up — so this was **not** folded into
-the 2026-08-08 sweep silently. Worth pairing with R16, which already owns the
-`integer/int64` money-field inconsistency in the investments contract.
+the 2026-08-08 sweep silently. The investment money-field inconsistency was
+closed by T-107; the FX display conversion remains independent of R16.
 
 ### G-08 Amount input is not locale-aware `[~]`
 

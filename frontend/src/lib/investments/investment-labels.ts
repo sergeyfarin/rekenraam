@@ -5,8 +5,8 @@ export type InvestmentPositionResponse = components['schemas']['InvestmentPositi
 export type InvestmentLotResponse = components['schemas']['InvestmentLotResponse'];
 export type InvestmentInstrumentResponse = components['schemas']['InvestmentInstrumentResponse'];
 
-export function formatScaledValue(value: string | number, scale: number, locale: string): string {
-  return formatQuantity(String(value), scale, locale);
+export function formatScaledValue(value: string, scale: number, locale: string): string {
+  return formatQuantity(value, scale, locale);
 }
 
 export function lotStatusLabel(status: string): string {

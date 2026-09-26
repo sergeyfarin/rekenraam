@@ -107,7 +107,7 @@ func tradeRequestBody(f investmentAPITestFixture, holdingAccountID, commodityID 
 	return investmentTradeRequest{
 		TransactionDate: "2026-02-01", CommodityID: commodityID, HoldingAccountID: holdingAccountID,
 		CashAccountID: f.cashAccount.ID, QuantityValue: qty, QuantityScale: 0,
-		CashAmountValue: cashValue, CashAmountScale: 2, CashCommodityID: f.commodityID,
+		CashAmountValue: moneyCoefficient(cashValue), CashAmountScale: 2, CashCommodityID: f.commodityID,
 	}
 }
 
@@ -118,10 +118,10 @@ func tradeRequestBody(f investmentAPITestFixture, holdingAccountID, commodityID 
 // scale its own subtraction needed (T-101) and a disposed basis the scale the
 // position's allocation policy fixes (T-103), so neither coefficient means
 // anything read on its own.
-func assertMoneyValue(t *testing.T, expectedValue int64, expectedScale int, gotValue int64, gotScale int, msgAndArgs ...any) {
+func assertMoneyValue(t *testing.T, expectedValue int64, expectedScale int, gotValue moneyCoefficient, gotScale int, msgAndArgs ...any) {
 	t.Helper()
 	expected := exact.ScaledIntFromInt64(expectedValue, expectedScale)
-	got := exact.ScaledIntFromInt64(gotValue, gotScale)
+	got := exact.ScaledIntFromInt64(int64(gotValue), gotScale)
 	assert.Zerof(t, got.Cmp(expected), "expected %s, got %s %v", expected.String(), got.String(), msgAndArgs)
 }
 
@@ -243,7 +243,7 @@ func TestWriteOffInvestment_PreviewAndCommitCloseThePositionAtALoss(t *testing.T
 	var preview sellPreviewResponse
 	require.NoError(t, json.NewDecoder(previewRes.Body).Decode(&preview))
 	assertMoneyValue(t, -100000, 2, preview.RealizedGain, preview.RealizedGainScale)
-	assert.Equal(t, int64(0), preview.CashAmountValue)
+	assert.Equal(t, moneyCoefficient(0), preview.CashAmountValue)
 
 	writeOffRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/write-off", body, http.StatusCreated)
 	var written investmentTradeResponse
@@ -641,7 +641,7 @@ func TestWriteOffInvestment_RealizesTheWholeBasisAsALoss(t *testing.T) {
 	require.NoError(t, json.NewDecoder(gainsRec.Body).Decode(&gains))
 	require.Len(t, gains.Realized, 1)
 	assertMoneyValue(t, -100000, 2, gains.Realized[0].RealizedGainValue, gains.Realized[0].RealizedGainScale)
-	assert.Equal(t, int64(0), gains.Realized[0].ProceedsValue)
+	assert.Equal(t, moneyCoefficient(0), gains.Realized[0].ProceedsValue)
 
 	// The transaction carries only the commodity legs — a zero-valued cash
 	// posting would be noise a reconciler has to look at and dismiss.

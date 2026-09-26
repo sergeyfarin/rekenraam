@@ -234,9 +234,9 @@
           cash_account_id: Number(cashAccountID),
           cash_commodity_id: cashCommodityID,
           income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
-          amount_value: amount.int64,
+          amount_value: amount.value,
           amount_scale: amount.scale,
-          withholding_value: withholding?.int64,
+          withholding_value: withholding?.value,
           withholding_scale: withholding?.scale,
           withholding_account_id:
             withholding && withholdingAccountID ? Number(withholdingAccountID) : undefined,
@@ -255,9 +255,8 @@
         await recordDividend(payload, csrfToken);
       } else {
         if (!selectedInstrument || !quantity) return;
-        // quantity_value is an exact coefficient string on the wire, so it
-        // needs no safe-integer cap. amount_value above is a real int64 and
-        // keeps its own.
+        // Both coefficients cross JSON as strings. Quantity allows 38 digits;
+        // amount_value keeps the backend int64 range.
         const payload: ReinvestedDividendRequest = {
           transaction_date: transactionDate,
           commodity_id: selectedInstrument.commodity_id,
@@ -265,7 +264,7 @@
           income_account_id: incomeAccountID ? Number(incomeAccountID) : undefined,
           quantity_value: quantity.value,
           quantity_scale: quantity.scale,
-          amount_value: amount.int64,
+          amount_value: amount.value,
           amount_scale: amount.scale,
           cash_commodity_id: cashCommodityID,
           memo: memo.trim() || undefined

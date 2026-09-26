@@ -168,10 +168,11 @@ When a feature introduces a durable new rule, update one of those documents in t
   reintroduces exactly the JavaScript precision loss the string form exists to
   prevent — and because `Coefficient.UnmarshalJSON` also accepts a bare JSON
   number, the backend keeps working and nothing fails loudly. Seven investment
-  schemas drifted this way undetected until 2026-08-06. Amount fields backed
-  by a real Go `int64` (`cash_amount_value`, `cost_basis_value`,
-  `price_value`) stay `integer`; the distinguishing question is whether the Go
-  field is `exact.Coefficient`.
+  schemas drifted this way undetected until 2026-08-06. Investment money
+  coefficients now also cross JSON as canonical decimal strings, even while
+  their backend storage and arithmetic remain `int64`; their OpenAPI schemas
+  must never describe them as `integer`.
+
 ## Data And Persistence Conventions
 
 - Investment cost-basis projections currently use int64 coefficients. Acquisitions
@@ -181,11 +182,11 @@ When a feature introduces a durable new rule, update one of those documents in t
   current position; never truncate recorded residuals to satisfy this limit.
 - Money and countable commodities are not the same kind of quantity. A currency
   balance may be negative — an overdraft and a credit-card balance are real
-  positions — and a non-currency balance may not: there is no such thing as
-  minus four bitcoin or minus ten shares outside a short, which this app does
-  not support. The `commodity_position_sign` self-check is where that rule
-  lives (T-105); the `commodity_trading` clearing account is exempt, because
-  holding the other half of every commodity movement is what it is for.
+  positions. A negative non-currency balance may be an out-of-order entry, an
+  error, or an intentional short. Until an explicit short-sale workflow names
+  and tracks the short position, it is unclassified: dated self-checks and
+  net-worth reports must flag it (T-105/T-106). The `commodity_trading` clearing
+  account is exempt because it holds the other half of commodity movements.
 - Never store money or quantities as floating point.
 - Store exact values as a canonical integer coefficient plus scale and
   commodity identifier. Quantity coefficients use decimal strings at storage

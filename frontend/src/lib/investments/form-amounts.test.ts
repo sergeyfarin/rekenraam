@@ -70,26 +70,26 @@ describe('parseMagnitude', () => {
 });
 
 describe('parseMoneyMagnitude', () => {
-  it('carries both the exact coefficient and its int64 form', () => {
+  it('carries the exact coefficient as a decimal string', () => {
     expect(parseMoneyMagnitude('12.50')).toEqual({
       ok: true,
-      field: { value: '1250', scale: 2, int64: 1250 }
+      field: { value: '1250', scale: 2 }
     });
   });
 
-  it('rejects a coefficient a JS number cannot carry losslessly', () => {
-    // These API money fields are typed integer/int64, but int64 reaches far
-    // past Number.MAX_SAFE_INTEGER. Above the safe range the value must be
-    // refused, not silently rounded onto the wire.
-    expect(parseMoneyMagnitude('90071992547409.93')).toEqual({ ok: false, reason: 'too_large' });
-  });
-
-  it('accepts a value at the top of the safe range', () => {
-    // Number.MAX_SAFE_INTEGER is 9007199254740991.
-    expect(parseMoneyMagnitude('90071992547409.91')).toEqual({
+  it('accepts a coefficient above the JavaScript safe-integer range', () => {
+    expect(parseMoneyMagnitude('90071992547409.93')).toEqual({
       ok: true,
-      field: { value: '9007199254740991', scale: 2, int64: 9007199254740991 }
+      field: { value: '9007199254740993', scale: 2 }
     });
+  });
+
+  it('accepts the backend int64 boundary and rejects the next coefficient', () => {
+    expect(parseMoneyMagnitude('92233720368547758.07')).toEqual({
+      ok: true,
+      field: { value: '9223372036854775807', scale: 2 }
+    });
+    expect(parseMoneyMagnitude('92233720368547758.08')).toEqual({ ok: false, reason: 'too_large' });
   });
 
   it('reports a negative money amount as negative, not as too large', () => {
@@ -105,7 +105,7 @@ describe('parseTradeAmounts (buy and sell)', () => {
       ok: true,
       values: {
         quantity: { value: '10', scale: 0 },
-        cashAmount: { value: '150000', scale: 2, int64: 150000 }
+        cashAmount: { value: '150000', scale: 2 }
       }
     });
   });
@@ -152,10 +152,9 @@ describe('parseTradeAmounts (buy and sell)', () => {
     expect(result).toMatchObject({ ok: true, values: { quantity: { value: '1', scale: 8 } } });
   });
 
-  it('lets a quantity exceed the int64 money cap, since it travels as a string', () => {
-    // quantity_value is a lossless coefficient string on the wire, so it must
-    // not inherit the money fields' safe-integer limit.
-    const result = parseTradeAmounts({ quantityStr: '90071992547409.93', cashAmountStr: '1.00' });
+  it('lets a quantity exceed the int64 money cap', () => {
+    // Quantity coefficients use the wider 38-digit contract.
+    const result = parseTradeAmounts({ quantityStr: '10000000000000000000', cashAmountStr: '1.00' });
 
     expect(result.ok).toBe(true);
   });
@@ -174,7 +173,7 @@ describe('parseDividendAmounts', () => {
     expect(parseDividendAmounts(base)).toEqual({
       ok: true,
       values: {
-        amount: { value: '10000', scale: 2, int64: 10000 },
+        amount: { value: '10000', scale: 2 },
         withholding: null,
         quantity: null
       }
@@ -190,7 +189,7 @@ describe('parseDividendAmounts', () => {
   it('validates withholding when it is filled in', () => {
     const result = parseDividendAmounts({ ...base, includeWithholding: true, withholdingStr: '15.00' });
 
-    expect(result).toMatchObject({ ok: true, values: { withholding: { value: '1500', scale: 2, int64: 1500 } } });
+    expect(result).toMatchObject({ ok: true, values: { withholding: { value: '1500', scale: 2 } } });
   });
 
   it('ignores a withholding value when the section is closed', () => {
@@ -226,7 +225,7 @@ describe('parseDividendAmounts', () => {
 
     expect(result).toMatchObject({
       ok: true,
-      values: { amount: { int64: 10000 }, quantity: { value: '25', scale: 1 } }
+      values: { amount: { value: '10000' }, quantity: { value: '25', scale: 1 } }
     });
   });
 

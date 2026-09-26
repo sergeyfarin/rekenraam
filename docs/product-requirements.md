@@ -338,6 +338,10 @@ Goal: add power-user workflows after the core ledger is stable.
   must be named explicitly as a short sale and represented as a short position;
   an ordinary negative holding must not silently acquire that meaning. The
   explicit short-sale workflow is future scope.
+- Investment monetary coefficients cross the JSON API as canonical decimal
+  strings, including requests, lot basis, proceeds, and gains. The current
+  backend int64 range remains an admission limit; browser Number conversion
+  must not narrow that range or change an accepted coefficient.
 - A position's events are entered in order relative to its own disposals: a
   trade dated before a sale that position has already recorded is refused, and
   the refusal says which sale blocks the date. A disposal rewrites the

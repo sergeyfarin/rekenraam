@@ -20,6 +20,7 @@
   import EventSuggestions from '$lib/investments/event-suggestions.svelte';
   import { parseISO } from 'date-fns';
   import { formatScaledValue } from './investment-labels';
+  import { coefficientSign } from '$lib/money/amount';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
 
@@ -82,7 +83,7 @@
   const isLoading = $derived(positionsQuery.isPending || instrumentsQuery.isPending);
   const isError = $derived(positionsQuery.isError || instrumentsQuery.isError);
   const positions = $derived(positionsQuery.data?.positions ?? []);
-  const openPositions = $derived(positions.filter((p) => Number(p.quantity_value) !== 0));
+  const openPositions = $derived(positions.filter((p) => coefficientSign(p.quantity_value) !== 0));
 
   // Trade form modal
   type TradeModal = 'buy' | 'sell' | 'dividend' | 'reinvested' | null;

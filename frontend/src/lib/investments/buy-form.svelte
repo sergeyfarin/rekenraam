@@ -148,8 +148,8 @@
     e.preventDefault();
     if (!canSubmit || !selectedInstrument || !cashCommodityID) return;
 
-    // quantity_value is an exact coefficient string on the wire, so it needs
-    // no safe-integer cap; cash_amount_value is a real int64 and still does.
+    // Both coefficients cross JSON as strings. The quantity allows 38 digits;
+    // the cash coefficient keeps its backend int64 range.
     const amounts = parseTradeAmounts({ quantityStr, cashAmountStr });
     if (!amounts.ok) {
       formError = new Error(amountErrorMessage(amounts.reason));
@@ -164,7 +164,7 @@
       cash_account_id: Number(cashAccountID),
       quantity_value: quantity.value,
       quantity_scale: quantity.scale,
-      cash_amount_value: cashAmount.int64,
+      cash_amount_value: cashAmount.value,
       cash_amount_scale: cashAmount.scale,
       cash_commodity_id: cashCommodityID,
       memo: memo.trim() || undefined

@@ -7,6 +7,7 @@
     investmentInstrumentsQueryOptions
   } from '$lib/api/investments';
   import { formatMoney, joinCommodityAmount } from '$lib/money/format';
+  import { coefficientSign, negateCoefficient } from '$lib/money/amount';
   import { formatScaledValue } from './investment-labels';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
@@ -47,7 +48,7 @@
   // Totals are pre-aggregated by the backend, grouped by cost_commodity_id before display rounding.
   const realizedTotals = $derived(gainsQuery.data?.realized_totals ?? []);
 
-  function formatGain(value: number | bigint, scale: number, currencyID: number): string {
+  function formatGain(value: string, scale: number, currencyID: number): string {
     const currency = gainsQuery.data?.currencies.find((c) => c.id === currencyID);
     const amount = currency
       ? formatMoney(String(value), scale, currency.standard_scale, locale)
@@ -64,10 +65,10 @@
       : m.investments_gains_no_price();
   }
 
-  function gainClass(value: number | bigint): string {
-    const n = typeof value === 'bigint' ? value : BigInt(Math.trunc(Number(value)));
-    if (n > 0n) return 'text-green-700 dark:text-green-400';
-    if (n < 0n) return 'text-destructive';
+  function gainClass(value: string): string {
+    const sign = coefficientSign(value);
+    if (sign > 0) return 'text-green-700 dark:text-green-400';
+    if (sign < 0) return 'text-destructive';
     return 'text-muted';
   }
 </script>
@@ -201,7 +202,7 @@
                     {formatGain(entry.proceeds_value, entry.proceeds_scale, entry.cost_commodity_id)}
                   </td>
                   <td class="px-3 py-3 text-right font-mono text-muted">
-                    {formatGain(-entry.disposed_basis_value, entry.disposed_basis_scale, entry.cost_commodity_id)}
+                    {formatGain(negateCoefficient(entry.disposed_basis_value), entry.disposed_basis_scale, entry.cost_commodity_id)}
                   </td>
                   <td class="py-3 pl-3 pr-5 text-right font-mono">
                     <span class={gainClass(entry.realized_gain_value)}>

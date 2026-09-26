@@ -30,7 +30,7 @@ func TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency(t *testing.T
 		doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", buy, http.StatusCreated)
 		sale := buy
 		sale.TransactionDate = fmt.Sprintf("2026-02-%02d", 2*i+2)
-		sale.CashAmountValue = trade.proceeds
+		sale.CashAmountValue = moneyCoefficient(trade.proceeds)
 		sale.CashAmountScale = trade.proceedsScale
 		doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sale, http.StatusCreated)
 	}
@@ -104,6 +104,54 @@ func TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency(t *testing.T
 	}
 	require.Empty(t, wantByCurrency)
 
+}
+
+func TestInvestmentMoneyAboveJavaScriptSafeIntegerRoundTripsAsStrings(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "LARGE")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	trade := tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 0)
+	trade.TransactionDate = "2026-03-01"
+	encoded, err := json.Marshal(trade)
+	require.NoError(t, err)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(encoded, &body))
+	body["cash_amount_value"] = "9007199254740993"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", body, http.StatusCreated)
+
+	lots := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/investments/lots", nil, http.StatusOK)
+	var lotResult struct {
+		Lots []struct {
+			CostBasisValue string `json:"cost_basis_value"`
+		} `json:"lots"`
+	}
+	require.NoError(t, json.Unmarshal(lots.Body.Bytes(), &lotResult))
+	require.Len(t, lotResult.Lots, 1)
+	require.Equal(t, "9007199254740993", lotResult.Lots[0].CostBasisValue)
+
+	body["transaction_date"] = "2026-03-02"
+	body["cash_amount_value"] = "18014398509481987"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", body, http.StatusCreated)
+	gains := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/investments/gains", nil, http.StatusOK)
+	var gainResult struct {
+		Realized []struct {
+			ProceedsValue     string `json:"proceeds_value"`
+			RealizedGainValue string `json:"realized_gain_value"`
+			RealizedGainScale int    `json:"realized_gain_scale"`
+		} `json:"realized"`
+		RealizedTotals []struct {
+			TotalGainValue string `json:"total_gain_value"`
+			TotalGainScale int    `json:"total_gain_scale"`
+		} `json:"realized_totals"`
+	}
+	require.NoError(t, json.Unmarshal(gains.Body.Bytes(), &gainResult))
+	require.Len(t, gainResult.Realized, 1)
+	require.Equal(t, "18014398509481987", gainResult.Realized[0].ProceedsValue)
+	require.Equal(t, "9007199254740994000", gainResult.Realized[0].RealizedGainValue)
+	require.Equal(t, 5, gainResult.Realized[0].RealizedGainScale)
+	require.Equal(t, "9007199254740994000", gainResult.RealizedTotals[0].TotalGainValue)
+	require.Equal(t, 5, gainResult.RealizedTotals[0].TotalGainScale)
 }
 
 // A representability limit is a rejected command, not a successful write that

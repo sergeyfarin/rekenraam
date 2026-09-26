@@ -98,22 +98,22 @@ type costBasisProfileRequest struct {
 }
 
 type dividendDefaultResponse struct {
-	ID                      int64           `json:"id"`
-	BookID                  int64           `json:"book_id"`
-	CommodityID             *int64          `json:"commodity_id,omitempty"`
-	IncomeAccountID         int64           `json:"income_account_id"`
-	WithholdingAccountID    *int64          `json:"withholding_account_id,omitempty"`
-	DefaultWithholdingValue *int64          `json:"default_withholding_value,omitempty"`
-	DefaultWithholdingScale *int            `json:"default_withholding_scale,omitempty"`
-	WithholdingRateBPS      *int64          `json:"withholding_rate_bps,omitempty"`
-	TaxCountryCode          string          `json:"tax_country_code,omitempty"`
-	TaxTreatment            string          `json:"tax_treatment,omitempty"`
-	Status                  string          `json:"status"`
-	EffectiveFrom           string          `json:"effective_from"`
-	EffectiveTo             string          `json:"effective_to,omitempty"`
-	Metadata                json.RawMessage `json:"metadata"`
-	CreatedAt               string          `json:"created_at"`
-	UpdatedAt               string          `json:"updated_at"`
+	ID                      int64             `json:"id"`
+	BookID                  int64             `json:"book_id"`
+	CommodityID             *int64            `json:"commodity_id,omitempty"`
+	IncomeAccountID         int64             `json:"income_account_id"`
+	WithholdingAccountID    *int64            `json:"withholding_account_id,omitempty"`
+	DefaultWithholdingValue *moneyCoefficient `json:"default_withholding_value,omitempty"`
+	DefaultWithholdingScale *int              `json:"default_withholding_scale,omitempty"`
+	WithholdingRateBPS      *int64            `json:"withholding_rate_bps,omitempty"`
+	TaxCountryCode          string            `json:"tax_country_code,omitempty"`
+	TaxTreatment            string            `json:"tax_treatment,omitempty"`
+	Status                  string            `json:"status"`
+	EffectiveFrom           string            `json:"effective_from"`
+	EffectiveTo             string            `json:"effective_to,omitempty"`
+	Metadata                json.RawMessage   `json:"metadata"`
+	CreatedAt               string            `json:"created_at"`
+	UpdatedAt               string            `json:"updated_at"`
 }
 
 type dividendDefaultsResponse struct {
@@ -121,19 +121,19 @@ type dividendDefaultsResponse struct {
 }
 
 type dividendDefaultRequest struct {
-	CommodityID             *int64          `json:"commodity_id"`
-	IncomeAccountID         int64           `json:"income_account_id"`
-	WithholdingAccountID    *int64          `json:"withholding_account_id"`
-	DefaultWithholdingValue *int64          `json:"default_withholding_value"`
-	DefaultWithholdingScale *int            `json:"default_withholding_scale"`
-	WithholdingRateBPS      *int64          `json:"withholding_rate_bps"`
-	TaxCountryCode          string          `json:"tax_country_code"`
-	TaxTreatment            string          `json:"tax_treatment"`
-	Status                  string          `json:"status"`
-	EffectiveFrom           string          `json:"effective_from"`
-	EffectiveTo             string          `json:"effective_to"`
-	Metadata                json.RawMessage `json:"metadata"`
-	ChangeReason            string          `json:"change_reason"`
+	CommodityID             *int64            `json:"commodity_id"`
+	IncomeAccountID         int64             `json:"income_account_id"`
+	WithholdingAccountID    *int64            `json:"withholding_account_id"`
+	DefaultWithholdingValue *moneyCoefficient `json:"default_withholding_value"`
+	DefaultWithholdingScale *int              `json:"default_withholding_scale"`
+	WithholdingRateBPS      *int64            `json:"withholding_rate_bps"`
+	TaxCountryCode          string            `json:"tax_country_code"`
+	TaxTreatment            string            `json:"tax_treatment"`
+	Status                  string            `json:"status"`
+	EffectiveFrom           string            `json:"effective_from"`
+	EffectiveTo             string            `json:"effective_to"`
+	Metadata                json.RawMessage   `json:"metadata"`
+	ChangeReason            string            `json:"change_reason"`
 }
 
 type investmentTradeRequest struct {
@@ -143,7 +143,7 @@ type investmentTradeRequest struct {
 	CashAccountID    int64                            `json:"cash_account_id"`
 	QuantityValue    exact.Coefficient                `json:"quantity_value"`
 	QuantityScale    int                              `json:"quantity_scale"`
-	CashAmountValue  int64                            `json:"cash_amount_value"`
+	CashAmountValue  moneyCoefficient                 `json:"cash_amount_value"`
 	CashAmountScale  int                              `json:"cash_amount_scale"`
 	CashCommodityID  int64                            `json:"cash_commodity_id"`
 	Memo             string                           `json:"memo"`
@@ -183,9 +183,9 @@ type sellPreviewResponse struct {
 	CostBasisMethod   string                          `json:"cost_basis_method"`
 	DisposalDecision  disposalDecisionResponse        `json:"disposal_decision"`
 	Allocations       []investmentLotDisposalResponse `json:"allocations"`
-	RealizedGain      int64                           `json:"realized_gain"`
+	RealizedGain      moneyCoefficient                `json:"realized_gain"`
 	RealizedGainScale int                             `json:"realized_gain_scale"`
-	CashAmountValue   int64                           `json:"cash_amount_value"`
+	CashAmountValue   moneyCoefficient                `json:"cash_amount_value"`
 	CashAmountScale   int                             `json:"cash_amount_scale"`
 }
 
@@ -226,26 +226,26 @@ type investmentLotDisposalResponse struct {
 	LotID          int64             `json:"lot_id"`
 	QuantityValue  exact.Coefficient `json:"quantity_value"`
 	QuantityScale  int               `json:"quantity_scale"`
-	CostBasisValue int64             `json:"cost_basis_value"`
+	CostBasisValue moneyCoefficient  `json:"cost_basis_value"`
 	CostBasisScale int               `json:"cost_basis_scale"`
 }
 
 type dividendRequest struct {
-	TransactionDate        string `json:"transaction_date"`
-	CommodityID            *int64 `json:"commodity_id"`
-	CashAccountID          int64  `json:"cash_account_id"`
-	CashCommodityID        int64  `json:"cash_commodity_id"`
-	IncomeAccountID        *int64 `json:"income_account_id"`
-	AmountValue            int64  `json:"amount_value"`
-	AmountScale            int    `json:"amount_scale"`
-	WithholdingValue       *int64 `json:"withholding_value"`
-	WithholdingScale       *int   `json:"withholding_scale"`
-	WithholdingAccountID   *int64 `json:"withholding_account_id"`
-	Memo                   string `json:"memo"`
-	PayeeID                *int64 `json:"payee_id"`
-	Status                 string `json:"status"`
-	ChangeReason           string `json:"change_reason"`
-	ReconciliationOverride bool   `json:"reconciliation_override"`
+	TransactionDate        string            `json:"transaction_date"`
+	CommodityID            *int64            `json:"commodity_id"`
+	CashAccountID          int64             `json:"cash_account_id"`
+	CashCommodityID        int64             `json:"cash_commodity_id"`
+	IncomeAccountID        *int64            `json:"income_account_id"`
+	AmountValue            moneyCoefficient  `json:"amount_value"`
+	AmountScale            int               `json:"amount_scale"`
+	WithholdingValue       *moneyCoefficient `json:"withholding_value"`
+	WithholdingScale       *int              `json:"withholding_scale"`
+	WithholdingAccountID   *int64            `json:"withholding_account_id"`
+	Memo                   string            `json:"memo"`
+	PayeeID                *int64            `json:"payee_id"`
+	Status                 string            `json:"status"`
+	ChangeReason           string            `json:"change_reason"`
+	ReconciliationOverride bool              `json:"reconciliation_override"`
 }
 
 type reinvestedDividendRequest struct {
@@ -255,7 +255,7 @@ type reinvestedDividendRequest struct {
 	IncomeAccountID        *int64            `json:"income_account_id"`
 	QuantityValue          exact.Coefficient `json:"quantity_value"`
 	QuantityScale          int               `json:"quantity_scale"`
-	AmountValue            int64             `json:"amount_value"`
+	AmountValue            moneyCoefficient  `json:"amount_value"`
 	AmountScale            int               `json:"amount_scale"`
 	CashCommodityID        int64             `json:"cash_commodity_id"`
 	Memo                   string            `json:"memo"`
@@ -277,9 +277,9 @@ type investmentLotResponse struct {
 	QuantityScale           int               `json:"quantity_scale"`
 	RemainingQuantityValue  exact.Coefficient `json:"remaining_quantity_value"`
 	RemainingQuantityScale  int               `json:"remaining_quantity_scale"`
-	CostBasisValue          int64             `json:"cost_basis_value"`
+	CostBasisValue          moneyCoefficient  `json:"cost_basis_value"`
 	CostBasisScale          int               `json:"cost_basis_scale"`
-	RemainingCostBasisValue int64             `json:"remaining_cost_basis_value"`
+	RemainingCostBasisValue moneyCoefficient  `json:"remaining_cost_basis_value"`
 	RemainingCostBasisScale int               `json:"remaining_cost_basis_scale"`
 	CostCommodityID         int64             `json:"cost_commodity_id"`
 	Metadata                json.RawMessage   `json:"metadata"`
@@ -296,10 +296,10 @@ type investmentPositionResponse struct {
 	CommodityID             int64             `json:"commodity_id"`
 	QuantityValue           exact.Coefficient `json:"quantity_value"`
 	QuantityScale           int               `json:"quantity_scale"`
-	RemainingCostBasisValue int64             `json:"remaining_cost_basis_value"`
+	RemainingCostBasisValue moneyCoefficient  `json:"remaining_cost_basis_value"`
 	RemainingCostBasisScale int               `json:"remaining_cost_basis_scale"`
 	CostCommodityID         int64             `json:"cost_commodity_id"`
-	LatestPriceValue        *int64            `json:"latest_price_value,omitempty"`
+	LatestPriceValue        *moneyCoefficient `json:"latest_price_value,omitempty"`
 	LatestPriceScale        *int              `json:"latest_price_scale,omitempty"`
 	LatestPriceDate         string            `json:"latest_price_date,omitempty"`
 }
@@ -589,7 +589,7 @@ func saveDividendDefault(logger *slog.Logger, authService *app.AuthService, inve
 		dividendDefault, err := investmentService.SaveDividendDefault(r.Context(), app.DividendDefaultInput{
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 			DefaultID: defaultID, CommodityID: request.CommodityID, IncomeAccountID: request.IncomeAccountID,
-			WithholdingAccountID: request.WithholdingAccountID, DefaultWithholdingValue: request.DefaultWithholdingValue,
+			WithholdingAccountID: request.WithholdingAccountID, DefaultWithholdingValue: moneyInt64Pointer(request.DefaultWithholdingValue),
 			DefaultWithholdingScale: request.DefaultWithholdingScale, WithholdingRateBPS: request.WithholdingRateBPS,
 			TaxCountryCode: request.TaxCountryCode, TaxTreatment: request.TaxTreatment, Status: request.Status,
 			EffectiveFrom: request.EffectiveFrom, EffectiveTo: request.EffectiveTo, MetadataJSON: rawJSONText(request.Metadata),
@@ -636,9 +636,9 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 			CostBasisMethod:   preview.CostBasisMethod,
 			DisposalDecision:  toDisposalDecisionResponse(preview.DisposalDecision),
 			Allocations:       toInvestmentLotDisposalResponses(preview.Allocations),
-			RealizedGain:      preview.RealizedGain,
+			RealizedGain:      moneyCoefficient(preview.RealizedGain),
 			RealizedGainScale: preview.RealizedGainScale,
-			CashAmountValue:   preview.CashAmountValue,
+			CashAmountValue:   moneyCoefficient(preview.CashAmountValue),
 			CashAmountScale:   preview.CashAmountScale,
 		})
 	}
@@ -708,9 +708,9 @@ func writeOffPreviewInvestment(logger *slog.Logger, authService *app.AuthService
 			CostBasisMethod:   preview.CostBasisMethod,
 			DisposalDecision:  toDisposalDecisionResponse(preview.DisposalDecision),
 			Allocations:       toInvestmentLotDisposalResponses(preview.Allocations),
-			RealizedGain:      preview.RealizedGain,
+			RealizedGain:      moneyCoefficient(preview.RealizedGain),
 			RealizedGainScale: preview.RealizedGainScale,
-			CashAmountValue:   preview.CashAmountValue,
+			CashAmountValue:   moneyCoefficient(preview.CashAmountValue),
 			CashAmountScale:   preview.CashAmountScale,
 		})
 	}
@@ -1069,7 +1069,7 @@ func toInvestmentTradeInput(owner app.Owner, r *http.Request, request investment
 		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, HoldingAccountID: request.HoldingAccountID,
 		CashAccountID: request.CashAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
-		CashAmountValue: request.CashAmountValue, CashAmountScale: request.CashAmountScale, CashCommodityID: request.CashCommodityID,
+		CashAmountValue: int64(request.CashAmountValue), CashAmountScale: request.CashAmountScale, CashCommodityID: request.CashCommodityID,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
 		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
 		ReconciliationOverride: request.ReconciliationOverride,
@@ -1080,8 +1080,8 @@ func toDividendInput(owner app.Owner, r *http.Request, request dividendRequest) 
 	return app.DividendInput{
 		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, CashAccountID: request.CashAccountID,
-		CashCommodityID: request.CashCommodityID, IncomeAccountID: request.IncomeAccountID, AmountValue: request.AmountValue,
-		AmountScale: request.AmountScale, WithholdingValue: request.WithholdingValue, WithholdingScale: request.WithholdingScale,
+		CashCommodityID: request.CashCommodityID, IncomeAccountID: request.IncomeAccountID, AmountValue: int64(request.AmountValue),
+		AmountScale: request.AmountScale, WithholdingValue: moneyInt64Pointer(request.WithholdingValue), WithholdingScale: request.WithholdingScale,
 		WithholdingAccountID: request.WithholdingAccountID, Memo: request.Memo, PayeeID: request.PayeeID,
 		Status: request.Status, ChangeReason: request.ChangeReason,
 		ReconciliationOverride: request.ReconciliationOverride,
@@ -1093,7 +1093,7 @@ func toReinvestedDividendInput(owner app.Owner, r *http.Request, request reinves
 		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, HoldingAccountID: request.HoldingAccountID,
 		IncomeAccountID: request.IncomeAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
-		AmountValue: request.AmountValue, AmountScale: request.AmountScale, CashCommodityID: request.CashCommodityID,
+		AmountValue: int64(request.AmountValue), AmountScale: request.AmountScale, CashCommodityID: request.CashCommodityID,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, ChangeReason: request.ChangeReason,
 		ReconciliationOverride: request.ReconciliationOverride,
 	}
@@ -1139,7 +1139,7 @@ func toCostBasisProfileResponses(profiles []app.CostBasisProfile) []costBasisPro
 }
 
 func toDividendDefaultResponse(dividendDefault app.DividendDefault) dividendDefaultResponse {
-	return dividendDefaultResponse{ID: dividendDefault.ID, BookID: dividendDefault.BookID, CommodityID: dividendDefault.CommodityID, IncomeAccountID: dividendDefault.IncomeAccountID, WithholdingAccountID: dividendDefault.WithholdingAccountID, DefaultWithholdingValue: dividendDefault.DefaultWithholdingValue, DefaultWithholdingScale: dividendDefault.DefaultWithholdingScale, WithholdingRateBPS: dividendDefault.WithholdingRateBPS, TaxCountryCode: dividendDefault.TaxCountryCode, TaxTreatment: dividendDefault.TaxTreatment, Status: dividendDefault.Status, EffectiveFrom: dividendDefault.EffectiveFrom, EffectiveTo: dividendDefault.EffectiveTo, Metadata: json.RawMessage(dividendDefault.MetadataJSON), CreatedAt: dividendDefault.CreatedAt, UpdatedAt: dividendDefault.UpdatedAt}
+	return dividendDefaultResponse{ID: dividendDefault.ID, BookID: dividendDefault.BookID, CommodityID: dividendDefault.CommodityID, IncomeAccountID: dividendDefault.IncomeAccountID, WithholdingAccountID: dividendDefault.WithholdingAccountID, DefaultWithholdingValue: moneyCoefficientPointer(dividendDefault.DefaultWithholdingValue), DefaultWithholdingScale: dividendDefault.DefaultWithholdingScale, WithholdingRateBPS: dividendDefault.WithholdingRateBPS, TaxCountryCode: dividendDefault.TaxCountryCode, TaxTreatment: dividendDefault.TaxTreatment, Status: dividendDefault.Status, EffectiveFrom: dividendDefault.EffectiveFrom, EffectiveTo: dividendDefault.EffectiveTo, Metadata: json.RawMessage(dividendDefault.MetadataJSON), CreatedAt: dividendDefault.CreatedAt, UpdatedAt: dividendDefault.UpdatedAt}
 }
 
 func toDividendDefaultResponses(defaults []app.DividendDefault) []dividendDefaultResponse {
@@ -1175,13 +1175,13 @@ func toDisposalDecisionResponse(decision app.DisposalDecision) disposalDecisionR
 func toInvestmentLotDisposalResponses(disposals []app.InvestmentLotDisposal) []investmentLotDisposalResponse {
 	responses := make([]investmentLotDisposalResponse, 0, len(disposals))
 	for _, disposal := range disposals {
-		responses = append(responses, investmentLotDisposalResponse{LotID: disposal.LotID, QuantityValue: disposal.QuantityValue, QuantityScale: disposal.QuantityScale, CostBasisValue: disposal.CostBasisValue, CostBasisScale: disposal.CostBasisScale})
+		responses = append(responses, investmentLotDisposalResponse{LotID: disposal.LotID, QuantityValue: disposal.QuantityValue, QuantityScale: disposal.QuantityScale, CostBasisValue: moneyCoefficient(disposal.CostBasisValue), CostBasisScale: disposal.CostBasisScale})
 	}
 	return responses
 }
 
 func toInvestmentLotResponse(lot app.InvestmentLot) investmentLotResponse {
-	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: lot.CostBasisValue, CostBasisScale: lot.CostBasisScale, RemainingCostBasisValue: lot.RemainingCostBasisValue, RemainingCostBasisScale: lot.RemainingCostBasisScale, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt}
+	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: moneyCoefficient(lot.CostBasisValue), CostBasisScale: lot.CostBasisScale, RemainingCostBasisValue: moneyCoefficient(lot.RemainingCostBasisValue), RemainingCostBasisScale: lot.RemainingCostBasisScale, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt}
 }
 
 func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse {
@@ -1195,7 +1195,7 @@ func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse 
 func toInvestmentPositionResponses(positions []app.InvestmentPosition) []investmentPositionResponse {
 	responses := make([]investmentPositionResponse, 0, len(positions))
 	for _, position := range positions {
-		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: position.RemainingCostBasisValue, RemainingCostBasisScale: position.RemainingCostBasisScale, CostCommodityID: position.CostCommodityID, LatestPriceValue: position.LatestPriceValue, LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate})
+		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: moneyCoefficient(position.RemainingCostBasisValue), RemainingCostBasisScale: position.RemainingCostBasisScale, CostCommodityID: position.CostCommodityID, LatestPriceValue: moneyCoefficientPointer(position.LatestPriceValue), LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate})
 	}
 	return responses
 }
@@ -1254,11 +1254,11 @@ type realizedGainResponse struct {
 	TransactionID      *int64            `json:"transaction_id,omitempty"`
 	QuantityValue      exact.Coefficient `json:"quantity_value"`
 	QuantityScale      int               `json:"quantity_scale"`
-	DisposedBasisValue int64             `json:"disposed_basis_value"`
+	DisposedBasisValue moneyCoefficient  `json:"disposed_basis_value"`
 	DisposedBasisScale int               `json:"disposed_basis_scale"`
-	ProceedsValue      int64             `json:"proceeds_value"`
+	ProceedsValue      moneyCoefficient  `json:"proceeds_value"`
 	ProceedsScale      int               `json:"proceeds_scale"`
-	RealizedGainValue  int64             `json:"realized_gain_value"`
+	RealizedGainValue  moneyCoefficient  `json:"realized_gain_value"`
 	RealizedGainScale  int               `json:"realized_gain_scale"`
 }
 
@@ -1268,22 +1268,22 @@ type unrealizedGainResponse struct {
 	CostCommodityID         int64             `json:"cost_commodity_id"`
 	QuantityValue           exact.Coefficient `json:"quantity_value"`
 	QuantityScale           int               `json:"quantity_scale"`
-	RemainingCostBasisValue int64             `json:"remaining_cost_basis_value"`
+	RemainingCostBasisValue moneyCoefficient  `json:"remaining_cost_basis_value"`
 	RemainingCostBasisScale int               `json:"remaining_cost_basis_scale"`
-	LatestPriceValue        *int64            `json:"latest_price_value,omitempty"`
+	LatestPriceValue        *moneyCoefficient `json:"latest_price_value,omitempty"`
 	LatestPriceScale        *int              `json:"latest_price_scale,omitempty"`
 	LatestPriceDate         string            `json:"latest_price_date,omitempty"`
-	MarketValueValue        *int64            `json:"market_value_value,omitempty"`
+	MarketValueValue        *moneyCoefficient `json:"market_value_value,omitempty"`
 	MarketValueScale        *int              `json:"market_value_scale,omitempty"`
-	UnrealizedGainValue     *int64            `json:"unrealized_gain_value,omitempty"`
+	UnrealizedGainValue     *moneyCoefficient `json:"unrealized_gain_value,omitempty"`
 	UnrealizedGainScale     *int              `json:"unrealized_gain_scale,omitempty"`
 	ValuationUnavailable    string            `json:"valuation_unavailable,omitempty"`
 }
 
 type realizedGainTotalResponse struct {
-	CostCommodityID int64 `json:"cost_commodity_id"`
-	TotalGainValue  int64 `json:"total_gain_value"`
-	TotalGainScale  int   `json:"total_gain_scale"`
+	CostCommodityID int64            `json:"cost_commodity_id"`
+	TotalGainValue  moneyCoefficient `json:"total_gain_value"`
+	TotalGainScale  int              `json:"total_gain_scale"`
 }
 
 type investmentGainsResponse struct {
@@ -1327,11 +1327,11 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				TransactionID:      e.TransactionID,
 				QuantityValue:      e.QuantityValue,
 				QuantityScale:      e.QuantityScale,
-				DisposedBasisValue: e.DisposedBasisValue,
+				DisposedBasisValue: moneyCoefficient(e.DisposedBasisValue),
 				DisposedBasisScale: e.DisposedBasisScale,
-				ProceedsValue:      e.ProceedsValue,
+				ProceedsValue:      moneyCoefficient(e.ProceedsValue),
 				ProceedsScale:      e.ProceedsScale,
-				RealizedGainValue:  e.RealizedGainValue,
+				RealizedGainValue:  moneyCoefficient(e.RealizedGainValue),
 				RealizedGainScale:  e.RealizedGainScale,
 			})
 		}
@@ -1343,14 +1343,14 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				CostCommodityID:         e.CostCommodityID,
 				QuantityValue:           e.QuantityValue,
 				QuantityScale:           e.QuantityScale,
-				RemainingCostBasisValue: e.RemainingCostBasisValue,
+				RemainingCostBasisValue: moneyCoefficient(e.RemainingCostBasisValue),
 				RemainingCostBasisScale: e.RemainingCostBasisScale,
-				LatestPriceValue:        e.LatestPriceValue,
+				LatestPriceValue:        moneyCoefficientPointer(e.LatestPriceValue),
 				LatestPriceScale:        e.LatestPriceScale,
 				LatestPriceDate:         e.LatestPriceDate,
-				MarketValueValue:        e.MarketValueValue,
+				MarketValueValue:        moneyCoefficientPointer(e.MarketValueValue),
 				MarketValueScale:        e.MarketValueScale,
-				UnrealizedGainValue:     e.UnrealizedGainValue,
+				UnrealizedGainValue:     moneyCoefficientPointer(e.UnrealizedGainValue),
 				UnrealizedGainScale:     e.UnrealizedGainScale,
 				ValuationUnavailable:    e.ValuationUnavailable,
 			})
@@ -1383,7 +1383,7 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 			}
 			realizedTotals = append(realizedTotals, realizedGainTotalResponse{
 				CostCommodityID: commodityID,
-				TotalGainValue:  totalValue,
+				TotalGainValue:  moneyCoefficient(totalValue),
 				TotalGainScale:  total.Scale(),
 			})
 		}

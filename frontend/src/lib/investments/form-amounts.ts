@@ -1,5 +1,4 @@
-import { parseDecimalAmount, type ScaledAmount } from '$lib/money/amount';
-import { toInt64Coefficient } from '$lib/api/investments';
+import { fitsInt64Coefficient, parseDecimalAmount, type ScaledAmount } from '$lib/money/amount';
 
 /**
  * Submit-time amount validation for the three investment forms.
@@ -30,19 +29,15 @@ import { toInt64Coefficient } from '$lib/api/investments';
  *    rejects `1,50` outright, so the user gets a rejection instead of a
  *    hundredfold overstatement. `1,234.56` still parses as 1234.56.
  *
- * No arithmetic happens here beyond what `$lib/money` does. Quantities travel
- * as exact coefficient strings; money fields additionally pass through
- * `toInt64Coefficient` because of the contract quirk documented there.
+ * No arithmetic happens here beyond what `$lib/money` does. Quantities and
+ * money travel as exact coefficient strings; money keeps its backend int64 cap.
  */
 
 /** Why a field was rejected. The component maps this to a translated message. */
 export type AmountFieldError = 'invalid' | 'negative' | 'too_large';
 
-/** A money field, carrying both the exact coefficient and its int64 form. */
-export interface MoneyField extends ScaledAmount {
-  /** The coefficient as the `number` this API's money fields are typed as. */
-  int64: number;
-}
+/** A money field, carrying the exact coefficient within the backend int64 range. */
+export type MoneyField = ScaledAmount;
 
 export type FieldResult<T> = { ok: true; field: T } | { ok: false; reason: AmountFieldError };
 
@@ -64,19 +59,18 @@ export function parseMagnitude(input: string, options: { maxScale?: number } = {
 }
 
 /**
- * Parse a magnitude destined for one of this API's `integer/int64` money
- * fields, rejecting values that a JS `number` cannot carry losslessly.
+ * Parse a magnitude destined for an investment money field, rejecting values
+ * outside the backend's int64 coefficient range.
  */
 export function parseMoneyMagnitude(input: string, options: { maxScale?: number } = {}): FieldResult<MoneyField> {
   const parsed = parseMagnitude(input, options);
   if (!parsed.ok) {
     return parsed;
   }
-  const int64 = toInt64Coefficient(parsed.field.value);
-  if (int64 === null) {
+  if (!fitsInt64Coefficient(parsed.field.value)) {
     return { ok: false, reason: 'too_large' };
   }
-  return { ok: true, field: { ...parsed.field, int64 } };
+  return parsed;
 }
 
 /** Which field of a form failed, so the component can point at the right input. */

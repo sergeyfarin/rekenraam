@@ -114,6 +114,18 @@ export function negateCoefficient(value: string): string {
 	return isNeg ? abs : `-${abs}`;
 }
 
+/** Sign of an exact integer coefficient without converting through Number. */
+export function coefficientSign(value: string): -1 | 0 | 1 {
+	const coefficient = BigInt(value);
+	return coefficient < 0n ? -1 : coefficient > 0n ? 1 : 0;
+}
+
+/** The investment subledger still stores money coefficients in signed int64. */
+export function fitsInt64Coefficient(value: string): boolean {
+	const coefficient = BigInt(value);
+	return coefficient >= -9223372036854775808n && coefficient <= 9223372036854775807n;
+}
+
 /**
  * Present a posting as an inflow-positive amount for the account it sits on.
  *

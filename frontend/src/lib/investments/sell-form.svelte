@@ -22,6 +22,7 @@
   } from '$lib/api/investments';
   import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
   import { formatScaledValue, costBasisMethodLabel } from '$lib/investments/investment-labels';
+  import { coefficientSign } from '$lib/money/amount';
   import { getLocale } from '$lib/paraglide/runtime.js';
 
   let {
@@ -186,8 +187,8 @@
   async function triggerPreview() {
     if (!selectedInstrument || !cashCommodityID) return;
 
-    // quantity_value is an exact coefficient string on the wire, so it needs
-    // no safe-integer cap; cash_amount_value is a real int64 and still does.
+    // Both coefficients cross JSON as strings. The quantity allows 38 digits;
+    // the cash coefficient keeps its backend int64 range.
     const amounts = parseTradeAmounts({ quantityStr, cashAmountStr });
     if (!amounts.ok) {
       // The preview is debounced and fires while the user is still typing, so
@@ -213,7 +214,7 @@
         cash_account_id: Number(cashAccountID),
         quantity_value: quantity.value,
         quantity_scale: quantity.scale,
-        cash_amount_value: cashAmount.int64,
+        cash_amount_value: cashAmount.value,
         cash_amount_scale: cashAmount.scale,
         cash_commodity_id: cashCommodityID,
         cost_basis_method: costBasisMethod
@@ -247,7 +248,7 @@
       cash_account_id: Number(cashAccountID),
       quantity_value: quantity.value,
       quantity_scale: quantity.scale,
-      cash_amount_value: cashAmount.int64,
+      cash_amount_value: cashAmount.value,
       cash_amount_scale: cashAmount.scale,
       cash_commodity_id: cashCommodityID,
       cost_basis_method: costBasisMethod,
@@ -301,7 +302,7 @@
   // specific_lot excluded until lot-allocation picker UI is added (requires per-lot selection UI)
   const COST_BASIS_METHODS: CostBasisMethod[] = ['fifo', 'lifo', 'average_cost'];
 
-  function formatGain(gain: number, scale: number): string {
+  function formatGain(gain: string, scale: number): string {
     return formatScaledValue(gain, scale, locale);
   }
 </script>
@@ -493,8 +494,8 @@
           {#if cashCurrencyCode}<span class="ml-1 text-muted">{cashCurrencyCode}</span>{/if}
         </span>
         <span class="text-muted">{m.investments_sell_preview_gain()}</span>
-        <span class="text-right font-mono {preview.realized_gain >= 0 ? 'text-foreground' : 'text-destructive'}">
-          {preview.realized_gain >= 0 ? '+' : ''}{formatGain(preview.realized_gain, preview.realized_gain_scale)}
+        <span class="text-right font-mono {coefficientSign(preview.realized_gain) >= 0 ? 'text-foreground' : 'text-destructive'}">
+          {coefficientSign(preview.realized_gain) >= 0 ? '+' : ''}{formatGain(preview.realized_gain, preview.realized_gain_scale)}
           {#if cashCurrencyCode}<span class="ml-1 text-muted">{cashCurrencyCode}</span>{/if}
         </span>
       </div>

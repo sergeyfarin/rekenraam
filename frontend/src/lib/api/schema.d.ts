@@ -17070,8 +17070,7 @@ export interface components {
             income_account_id: number;
             /** Format: int64 */
             withholding_account_id?: number;
-            /** Format: int64 */
-            default_withholding_value?: number;
+            default_withholding_value?: string;
             default_withholding_scale?: number;
             /** Format: int64 */
             withholding_rate_bps?: number;
@@ -17100,8 +17099,7 @@ export interface components {
             income_account_id: number;
             /** Format: int64 */
             withholding_account_id?: number;
-            /** Format: int64 */
-            default_withholding_value?: number;
+            default_withholding_value?: string;
             default_withholding_scale?: number;
             /** Format: int64 */
             withholding_rate_bps?: number;
@@ -17136,8 +17134,7 @@ export interface components {
             /** @description Lossless exact integer coefficient normalized to quantity_scale. */
             quantity_value: string;
             quantity_scale: number;
-            /** Format: int64 */
-            cash_amount_value: number;
+            cash_amount_value: string;
             cash_amount_scale: number;
             /** Format: int64 */
             cash_commodity_id: number;
@@ -17181,8 +17178,7 @@ export interface components {
             /** @description Lossless exact integer coefficient normalized to quantity_scale. */
             quantity_value: string;
             quantity_scale: number;
-            /** Format: int64 */
-            cost_basis_value: number;
+            cost_basis_value: string;
             cost_basis_scale: number;
         };
         InvestmentTradeResponse: {
@@ -17229,15 +17225,11 @@ export interface components {
             cost_basis_method: components["schemas"]["CostBasisMethod"];
             disposal_decision: components["schemas"]["DisposalDecisionResponse"];
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
-            /**
-             * Format: int64
-             * @description Realized gain coefficient in the cost commodity (cash proceeds minus disposed cost basis), at realized_gain_scale.
-             */
-            realized_gain: number;
+            /** @description Realized gain coefficient in the cost commodity (cash proceeds minus disposed cost basis), at realized_gain_scale. */
+            realized_gain: string;
             /** @description Decimal scale for realized_gain. May differ from cash_amount_scale when disposed lots carry a finer cost-basis scale. */
             realized_gain_scale: number;
-            /** Format: int64 */
-            cash_amount_value: number;
+            cash_amount_value: string;
             cash_amount_scale: number;
         };
         DividendRequest: {
@@ -17251,11 +17243,9 @@ export interface components {
             cash_commodity_id: number;
             /** Format: int64 */
             income_account_id?: number;
-            /** Format: int64 */
-            amount_value: number;
+            amount_value: string;
             amount_scale: number;
-            /** Format: int64 */
-            withholding_value?: number;
+            withholding_value?: string;
             withholding_scale?: number;
             /** Format: int64 */
             withholding_account_id?: number;
@@ -17279,8 +17269,7 @@ export interface components {
             /** @description Lossless exact integer coefficient normalized to quantity_scale. */
             quantity_value: string;
             quantity_scale: number;
-            /** Format: int64 */
-            amount_value: number;
+            amount_value: string;
             amount_scale: number;
             /** Format: int64 */
             cash_commodity_id: number;
@@ -17312,11 +17301,9 @@ export interface components {
             /** @description Lossless exact integer coefficient normalized to remaining_quantity_scale. */
             remaining_quantity_value: string;
             remaining_quantity_scale: number;
-            /** Format: int64 */
-            cost_basis_value: number;
+            cost_basis_value: string;
             cost_basis_scale: number;
-            /** Format: int64 */
-            remaining_cost_basis_value: number;
+            remaining_cost_basis_value: string;
             remaining_cost_basis_scale: number;
             /** Format: int64 */
             cost_commodity_id: number;
@@ -17339,13 +17326,11 @@ export interface components {
             /** @description Lossless exact integer coefficient normalized to quantity_scale. */
             quantity_value: string;
             quantity_scale: number;
-            /** Format: int64 */
-            remaining_cost_basis_value: number;
+            remaining_cost_basis_value: string;
             remaining_cost_basis_scale: number;
             /** Format: int64 */
             cost_commodity_id: number;
-            /** Format: int64 */
-            latest_price_value?: number;
+            latest_price_value?: string;
             latest_price_scale?: number;
             /** Format: date */
             latest_price_date?: string;
@@ -17472,23 +17457,14 @@ export interface components {
             /** @description Disposed quantity as a base-10 integer string. */
             quantity_value: string;
             quantity_scale: number;
-            /**
-             * Format: int64
-             * @description Disposed cost basis in minor units at disposed_basis_scale.
-             */
-            disposed_basis_value: number;
+            /** @description Disposed cost basis in minor units at disposed_basis_scale. */
+            disposed_basis_value: string;
             disposed_basis_scale: number;
-            /**
-             * Format: int64
-             * @description Cash proceeds in minor units at proceeds_scale.
-             */
-            proceeds_value: number;
+            /** @description Cash proceeds in minor units at proceeds_scale. */
+            proceeds_value: string;
             proceeds_scale: number;
-            /**
-             * Format: int64
-             * @description proceeds_value − disposed_basis, in minor units at realized_gain_scale. Format it with realized_gain_scale, never with proceeds_scale.
-             */
-            realized_gain_value: number;
+            /** @description proceeds_value − disposed_basis, in minor units at realized_gain_scale. Format it with realized_gain_scale, never with proceeds_scale. */
+            realized_gain_value: string;
             /** @description Scale of realized_gain_value: the deeper of proceeds_scale and disposed_basis_scale, so the difference is exact. It is not always proceeds_scale — 11 EUR of proceeds entered at scale 0 against a 10.99 EUR basis is a 0.01 EUR gain at scale 2. */
             realized_gain_scale: number;
         };
@@ -17502,14 +17478,10 @@ export interface components {
             /** @description Remaining quantity as a base-10 integer string. */
             quantity_value: string;
             quantity_scale: number;
-            /** Format: int64 */
-            remaining_cost_basis_value: number;
+            remaining_cost_basis_value: string;
             remaining_cost_basis_scale: number;
-            /**
-             * Format: int64
-             * @description Omitted when no price observation exists.
-             */
-            latest_price_value?: number;
+            /** @description Omitted when no price observation exists. */
+            latest_price_value?: string;
             /** @description Omitted when no price observation exists. */
             latest_price_scale?: number;
             /**
@@ -17517,18 +17489,12 @@ export interface components {
              * @description Omitted when no price observation exists.
              */
             latest_price_date?: string;
-            /**
-             * Format: int64
-             * @description quantity × latest_price. Omitted when valuation_unavailable is present.
-             */
-            market_value_value?: number;
+            /** @description quantity × latest_price. Omitted when valuation_unavailable is present. */
+            market_value_value?: string;
             /** @description Scale of market_value_value. Reduced below the computed precision only when redundant trailing zeros would otherwise overflow int64. */
             market_value_scale?: number;
-            /**
-             * Format: int64
-             * @description market_value − remaining_cost_basis. Omitted when valuation_unavailable is present.
-             */
-            unrealized_gain_value?: number;
+            /** @description market_value − remaining_cost_basis. Omitted when valuation_unavailable is present. */
+            unrealized_gain_value?: string;
             /** @description Omitted when valuation_unavailable is present. */
             unrealized_gain_scale?: number;
             /**
@@ -17540,11 +17506,8 @@ export interface components {
         RealizedGainTotal: {
             /** Format: int64 */
             cost_commodity_id: number;
-            /**
-             * Format: int64
-             * @description Exact sum of realized_gain_value for every entry with this cost_commodity_id. One row per cost commodity: entries are summed across differing realized_gain_scale values, and total_gain_scale is the scale the sum needs.
-             */
-            total_gain_value: number;
+            /** @description Exact sum of realized_gain_value for every entry with this cost_commodity_id. One row per cost commodity: entries are summed across differing realized_gain_scale values, and total_gain_scale is the scale the sum needs. */
+            total_gain_value: string;
             total_gain_scale: number;
         };
         InvestmentGainsResponse: {

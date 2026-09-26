@@ -280,8 +280,8 @@ DividendDefaultResponse:
       type: integer
       format: int64
     default_withholding_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     default_withholding_scale:
       type: integer
     withholding_rate_bps:
@@ -336,8 +336,8 @@ DividendDefaultRequest:
       type: integer
       format: int64
     default_withholding_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     default_withholding_scale:
       type: integer
     withholding_rate_bps:
@@ -409,8 +409,8 @@ InvestmentTradeRequest:
     quantity_scale:
       type: integer
     cash_amount_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     cash_amount_scale:
       type: integer
     cash_commodity_id:
@@ -517,8 +517,8 @@ InvestmentLotDisposalResponse:
     quantity_scale:
       type: integer
     cost_basis_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     cost_basis_scale:
       type: integer
 
@@ -623,15 +623,15 @@ SellPreviewResponse:
       items:
         $ref: "#/InvestmentLotDisposalResponse"
     realized_gain:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: Realized gain coefficient in the cost commodity (cash proceeds minus disposed cost basis), at realized_gain_scale.
     realized_gain_scale:
       type: integer
       description: Decimal scale for realized_gain. May differ from cash_amount_scale when disposed lots carry a finer cost-basis scale.
     cash_amount_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     cash_amount_scale:
       type: integer
 
@@ -660,13 +660,13 @@ DividendRequest:
       type: integer
       format: int64
     amount_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     amount_scale:
       type: integer
     withholding_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     withholding_scale:
       type: integer
     withholding_account_id:
@@ -719,8 +719,8 @@ ReinvestedDividendRequest:
     quantity_scale:
       type: integer
     amount_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     amount_scale:
       type: integer
     cash_commodity_id:
@@ -797,13 +797,13 @@ InvestmentLotResponse:
     remaining_quantity_scale:
       type: integer
     cost_basis_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     cost_basis_scale:
       type: integer
     remaining_cost_basis_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     remaining_cost_basis_scale:
       type: integer
     cost_commodity_id:
@@ -853,16 +853,16 @@ InvestmentPositionResponse:
     quantity_scale:
       type: integer
     remaining_cost_basis_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     remaining_cost_basis_scale:
       type: integer
     cost_commodity_id:
       type: integer
       format: int64
     latest_price_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     latest_price_scale:
       type: integer
     latest_price_date:
@@ -1131,20 +1131,20 @@ RealizedGainEntry:
     quantity_scale:
       type: integer
     disposed_basis_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: Disposed cost basis in minor units at disposed_basis_scale.
     disposed_basis_scale:
       type: integer
     proceeds_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: Cash proceeds in minor units at proceeds_scale.
     proceeds_scale:
       type: integer
     realized_gain_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: >-
         proceeds_value − disposed_basis, in minor units at realized_gain_scale.
         Format it with realized_gain_scale, never with proceeds_scale.
@@ -1182,13 +1182,13 @@ UnrealizedGainEntry:
     quantity_scale:
       type: integer
     remaining_cost_basis_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
     remaining_cost_basis_scale:
       type: integer
     latest_price_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: Omitted when no price observation exists.
     latest_price_scale:
       type: integer
@@ -1198,8 +1198,8 @@ UnrealizedGainEntry:
       format: date
       description: Omitted when no price observation exists.
     market_value_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: >-
         quantity × latest_price. Omitted when valuation_unavailable is present.
     market_value_scale:
@@ -1208,8 +1208,8 @@ UnrealizedGainEntry:
         Scale of market_value_value. Reduced below the computed precision only
         when redundant trailing zeros would otherwise overflow int64.
     unrealized_gain_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: >-
         market_value − remaining_cost_basis. Omitted when valuation_unavailable
         is present.
@@ -1236,8 +1236,8 @@ RealizedGainTotal:
       type: integer
       format: int64
     total_gain_value:
-      type: integer
-      format: int64
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: >-
         Exact sum of realized_gain_value for every entry with this
         cost_commodity_id. One row per cost commodity: entries are summed
