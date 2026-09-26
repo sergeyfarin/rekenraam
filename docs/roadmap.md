@@ -455,6 +455,11 @@ ADR 0013 now defines the named operation and long/short position foundation.
 The proposed implementation sequence and data contract are in
 `docs/plans/investment-operation-refactor-plan.md`; the plan adds no shipped
 capability by itself.
+R16 slice 1's equations, posting matrices, fee policy and cross-currency
+admission rules are specified in
+`docs/plans/investment-operation-slice-1-contract.md`. A fresh/seeded export
+contract test pins the current investment bundle before the 2a rewrite; this
+design gate adds no user-facing command.
 The schema and existing-command operation identity have landed in the unused
 v0.1 candidate baseline. Native replay, side-aware reads/self-checks and the
 short-sale/cover commands remain before T-108 is usable. The next execution

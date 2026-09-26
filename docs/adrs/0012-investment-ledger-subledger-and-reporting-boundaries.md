@@ -79,9 +79,10 @@ reporting-policy question.
 
 Each recognized charge's operational treatment is an immutable election
 with the selected policy and version recorded at commit. Resolve it from
-the trade, account, book, then a named fallback; later default changes do
-not reinterpret prior trades. Ordinary same-currency commissions default
-to inclusion in clearing, preserving the existing net-cash trade behavior.
+the transaction, account, global book policy, then a named fallback; later
+default changes do not reinterpret prior trades. Ordinary same-currency
+commissions default to inclusion in clearing, preserving the existing
+net-cash trade behavior.
 
 The operational disposal decision remains durable even when alternative reports
 are available. Every committed disposal snapshots its resolved method, the tier

@@ -5,11 +5,14 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-09-26 (ADR 0013 and the named investment operation/position
-side foundation landed; the R16 refactor plan sets the remaining order.)
+Last updated: 2026-09-26 (R16 slice 1's economics and fresh/seeded export
+contract is complete; the foundation rewrite remains next.)
 
 ## Next investment slices
 
+- [x] R16 slice 1: posting equations, fee defaults, cross-currency admission,
+  mixed-scale examples, and fresh/seeded export contract. See
+  `docs/plans/investment-operation-slice-1-contract.md`.
 - [ ] Operation/schema and exact-trade foundation: version-pinned journal links,
   components, separate lot state, and generalized import identity in two
   validated sub-slices; then gross/charges/net trade economics.

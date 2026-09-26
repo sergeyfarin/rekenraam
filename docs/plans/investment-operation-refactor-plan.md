@@ -119,13 +119,14 @@ clearing identity. Slice 1 fixes the per-kind equations and tests both
 treatments; this operational rule is not a universal tax rule.
 
 Store each known charge component's treatment as an immutable election,
-resolved from explicit transaction choice, account policy, book policy, or
+resolved from explicit transaction choice, account policy, global book policy, or
 fallback, in that order. Snapshot the winning tier, version/effective date,
 and expense account when used; later default changes never reinterpret a
 committed trade. The fallback for ordinary same-currency trade commissions
 is `clearing_included`, preserving today's net-cash treatment. A charge kind
-without a specified fallback stays in review. Imports use the same policy
-resolution, and changing an election requires an explicit correction.
+without a specified fallback is rejected with a named error in manual entry;
+an import row stays in review. Imports use the same policy resolution, and
+changing an election requires an explicit correction.
 
 Link each immutable **lot effect** to `operation_id`, with side (`long` or
 `short`), effect kind, quantity delta, basis/opening-proceeds delta, currency,
@@ -442,15 +443,17 @@ self-check contracts if it changes them, and adds named tests with independent
 expected amounts and conservation checks. Stop at a gate before widening the
 next family.
 
-1. **Baseline contract and fixtures.** Specify exact equations and posting
-   matrices for current buy/sell/dividend/reinvestment/write-off, including
-   mixed-scale and multi-currency charges. Write migration and export contract
+1. **Baseline contract and fixtures — complete 2026-09-26.** Specify exact
+   equations and posting matrices for current buy/sell/dividend/reinvestment/
+   write-off, including mixed-scale and multi-currency charges. Write migration and export contract
    tests against fresh and seeded candidate databases. Settle the operational
    fee/basis and cross-currency rules here, including capitalized-in-clearing
    versus separately expensed charges. Define versioned book/account fee
    defaults, the per-charge election and provenance fields, and the
-   same-currency commission fallback before shaping the schema. This
-   slice does not yet rewrite `0001`.
+   same-currency commission fallback before shaping the schema. The accepted
+   equations and first-slice admission limits are in
+   [the slice 1 contract](investment-operation-slice-1-contract.md). This
+   slice does not rewrite `0001`.
 2. **Foundation in two independently validated sub-slices.** Both keep the
    app runnable; neither opens a new user-facing investment operation.
 
@@ -491,7 +494,9 @@ next family.
    mapping. Move gains from cash-posting inference to explicit per-disposal
    economics; preserve write-off as zero proceeds. Show gross, charges, and net in
    preview and UI. For fees in another currency, require explicit cash legs
-   and rate/source facts; do not hide an implicit conversion. Derive a
+   and a mapped expense account; require rate/source facts and an approved
+   bridge before such a fee affects cost-currency basis or proceeds. Do not
+   hide an implicit conversion. Derive a
    trade-implied unit price from gross consideration in the quote commodity
    divided by quantity, excluding fees/taxes and hidden FX. If gross is
    unknown, keep the net-derived estimate usable with an approximate label
