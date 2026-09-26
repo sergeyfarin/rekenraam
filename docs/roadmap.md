@@ -452,6 +452,9 @@ unpaginated summary counts support the editor and navigation badge.
 ### R16 — investment lifecycle completeness
 
 ADR 0013 now defines the named operation and long/short position foundation.
+The proposed implementation sequence and data contract are in
+`docs/plans/investment-operation-refactor-plan.md`; the plan adds no shipped
+capability by itself.
 The schema and existing-command operation identity have landed in the unused
 v0.1 candidate baseline. Native replay, side-aware reads/self-checks and the
 short-sale/cover commands remain before T-108 is usable. Transfers and
