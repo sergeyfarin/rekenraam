@@ -108,6 +108,16 @@ for that account and component role.
 Gross consideration may be source evidence with no individual posting; a
 linked net settlement or fee must not disagree with its posting.
 
+For the operational basis/proceeds policy, a charge contributes to basis or
+reduces proceeds only when its value reaches `commodity_trading` in the cost
+currency, either in net settlement or through an explicit clearing leg. A
+charge separately posted to expense is excluded from operational
+basis/proceeds and reported as that expense. Do not count one charge both in
+a lot result and in an expense account. A cross-currency charge needs
+explicit conversion/value legs before it can affect the cost-currency
+clearing identity. Slice 1 fixes the per-kind equations and tests both
+treatments; this operational rule is not a universal tax rule.
+
 Link each immutable **lot effect** to `operation_id`, with side (`long` or
 `short`), effect kind, quantity delta, basis/opening-proceeds delta, currency,
 and source/destination lot references as appropriate. Retain the present
@@ -223,9 +233,19 @@ The value bridge is an equity contribution/withdrawal, not cash or a sale;
 workflow. A transfer wholly inside the book needs neither bridge nor
 external equity. The ordinary long-position transfer slice does not imply
 support for transferring a short obligation before T-108.
-Seed the new equity account under a stable system role and translation key;
-include it in export, restore, reports, and self-check without making its
-English display label part of the accounting contract.
+Add the new equity role to `accounts.system_role`'s baseline `CHECK` list
+and seed its account in slice 2a, before transfer commands ship. Give it a
+stable translation key and include it in export, restore, reports, and
+self-check without making its English display label part of the accounting
+contract. After release, adding that role would require an `accounts` table
+rebuild despite its many financial references.
+
+For a transfer out, store sourced quantity, dates, and any broker-reported
+basis as immutable evidence. The *operational* carried-basis bridge is a
+method/election-derived amount, snapshotted with calculation provenance and
+one value leg per cost currency. An alternative R18 report profile never
+changes that posted bridge; a correction to the economic history may
+require a new journal adjustment as described below.
 
 If basis is unknown, post only the balanced security legs and mark the
 position and `commodity_trading` residual **basis unresolved**. Do not
@@ -238,7 +258,9 @@ it does not edit the original transfer or substitute zero basis.
 Return of capital reduces each eligible lot's basis only to zero. Allocate
 the cash/basis effect across eligible lots using sourced allocations or an
 explicit per-share rule with a deterministic exact remainder. Record any
-excess as a separate unresolved economic component, not negative basis or
+reported excess as source evidence; the effective excess is a replay-derived
+allocation (cash received less eligible basis reduction), not a fixed source
+component. It remains unresolved rather than becoming negative basis or
 ordinary dividend income. Post the actual cash; require an explicit
 accounting/reporting classification before treating the excess as gain.
 This is a domain safeguard, not a universal tax rule. For example,
@@ -254,9 +276,10 @@ and handle fractional cash in lieu as its own linked disposal/cash event.
 For return of capital, debit the receiving cash account and credit
 `commodity_trading` in that cash commodity. A cash-in-lieu disposal uses
 the ordinary sale cash and security balancing legs, with its fractional
-basis allocation recorded separately. Each kind's plan must specify all
-postings, basis effects, date rules, and reconciliation impact before its
-write command is exposed.
+basis allocation recorded as a replay-derived revision, separate from
+immutable fractional quantity and cash received. Each kind's plan must
+specify all postings, basis effects, date rules, and reconciliation impact
+before its write command is exposed.
 
 The existing QIF export intentionally excludes investment accounts and
 non-currency holdings; the lossless investment export is the CSV bundle.
@@ -299,6 +322,10 @@ but replay must not count both the old and replacement acquisitions.
 Per-lot disposal allocations and remaining-balance rows are replay outputs.
 Original allocation snapshots remain evidence of what the first commit did;
 feeding them back as FIFO/LIFO/average inputs would defeat re-selection.
+The operational transfer-out carried-basis amount, return-of-capital basis
+reduction/excess split, and cash-in-lieu disposed basis are also replay
+outputs. Preserve their first committed snapshots and append effective
+revisions; never rewrite source components or original posted journal rows.
 Build the projection from these ordered inputs for each affected
 `(book_id, holding_account_id, commodity_id, side, cost_commodity_id)`.
 Use effective date plus durable operation/effect sequence for same-day order.
@@ -331,9 +358,28 @@ expose the generic investment void/unvoid path. Reconciliation guards cover
 both original-date reversal and replacement-date posting. Any trade-implied
 price observation associated with the corrected trade must be superseded or
 voided with provenance in the same SQLite command transaction, not left as
-a current price for a reversed fill. The present post-commit best-effort
-trade-price write must become an atomic, version-linked observation write
-before this correction gate passes.
+a current price for a reversed fill. Slice 2a replaces the present
+post-commit best-effort trade-price write with an atomic, version-linked
+observation write; this correction slice uses that same path.
+
+If replay changes a previously posted transfer-out bridge, append the exact
+per-currency difference between old and new effective bridge amounts as a
+balanced `commodity_trading`/external-transfer-equity adjustment at the
+transfer's financial date. Link it to the correcting operation, the original
+transfer, and both calculation revisions; include every affected account,
+currency, and date in the reconciliation-impact preview. Commit the
+adjustment, revised subledger projections, audit event, and checkpoint
+effects together. If any dependent amount cannot be calculated exactly or
+the reconciliation guard rejects a required adjustment, reject the correction
+with the later transfer named and leave the database unchanged. An unchanged,
+explicitly unknown-basis transfer remains unresolved under the existing
+rule; it does not fabricate a bridge. A pure change of reporting profile
+never triggers an adjustment.
+
+If a later formal posting classifies return-of-capital excess, its
+replay-changed amount needs the same guarded adjustment or the correction
+must fail with that classification named. Cash-in-lieu basis alone changes
+its subledger gain result, not its fixed cash or security journal legs.
 
 - `specific_lot`: retain the elected lot IDs and quantities. Reject replay
   with a named dependent-operation conflict if a chosen lot is not eligible
@@ -363,7 +409,8 @@ keep using an original allocation that replay has superseded; historical
 views can select an earlier knowledge cutoff only under R18's explicit
 projection contract.
 
-If the corrected history makes a later disposal/cover impossible,
+If the corrected history makes a later disposal/cover impossible, or leaves
+a required known-basis bridge or classification allocation uncomputable,
 return a conflict naming that dependent operation, leaving all records and
 checkpoints unchanged. The reconciliation impact preview must account for
 every changed posted account balance and date. Accept older imports only when
@@ -382,7 +429,8 @@ next family.
    matrices for current buy/sell/dividend/reinvestment/write-off, including
    mixed-scale and multi-currency charges. Write migration and export contract
    tests against fresh and seeded candidate databases. Settle the operational
-   fee/basis and cross-currency rules here, before shaping the schema. This
+   fee/basis and cross-currency rules here, including capitalized-in-clearing
+   versus separately expensed charges, before shaping the schema. This
    slice does not yet rewrite `0001`.
 2. **Foundation in two independently validated sub-slices.** Both keep the
    app runnable; neither opens a new user-facing investment operation.
@@ -390,11 +438,18 @@ next family.
    - **2a — investment schema and writer.** Introduce the parent/link/date/
      component tables, operation-keyed disposal decisions, side-keyed basis
      state, fact/projection split, canonical TEXT coefficients, and direct
-     effect links. Implement ADR 0013's link cardinality. Route existing
+     effect links. Add and seed `external_investment_transfer_equity` in the
+     baseline account-role `CHECK`, with export and self-check coverage.
+     Implement ADR 0013's link cardinality. Route existing
      commands through the new writer while preserving current import
-     identity callbacks. Prove equivalent journal, lots, gains, audit count,
-     checkpoint behavior, and import idempotency for old cases. Version the
-     investment export contract without losing old facts.
+     identity callbacks. Move trade-implied price creation into that same
+     SQLite transaction, with version provenance and failure rollback;
+     mark observations made from net-only cash as approximate and exclude
+     them from trusted valuation until gross consideration is known. Prove
+     equivalent journal, lots, realized gains, audit count, checkpoint
+     behavior, and import idempotency for old cases; test the explicit
+     valuation-availability change for net-only observations.
+     Version the investment export contract without losing old facts.
    - **2b — generalized import identity.** Replace the one-transaction
      result with ordered operation/transaction child links. Keep the current
      unique `(book_id, dedupe_fingerprint)` admission rule. Test bank CSV,
@@ -412,7 +467,11 @@ next family.
    mapping. Move gains from cash-posting inference to explicit per-disposal
    economics; preserve write-off as zero proceeds. Show gross, charges, and net in
    preview and UI. For fees in another currency, require explicit cash legs
-   and rate/source facts; do not hide an implicit conversion.
+   and rate/source facts; do not hide an implicit conversion. Derive a
+   trade-implied unit price from gross consideration in the quote commodity
+   divided by quantity, excluding fees/taxes and hidden FX. If gross is
+   unknown, do not promote a net-derived estimate to a trusted price;
+   supersede any earlier estimate when sourced gross becomes available.
 4. **Replay and investment-native correction (T-75b).** Implement rebuild,
    correction/reversal, dependency conflicts, and reconciliation preview.
    Exercise a corrected old buy followed by several sells under each basis
@@ -430,7 +489,10 @@ next family.
    rule, dated eligibility rule, reconciliation preview, and unknown-basis
    behavior; the shared schema alone is not that specification. Add manual
    commands before provider auto-acceptance. These address the
-   common broker migration and everyday holding cases in R16 first.
+   common broker migration and everyday holding cases in R16 first. When
+   these commands ship, test a changed transfer-out bridge adjustment and
+   reconciliation refusal, plus return-of-capital and cash-in-lieu replay
+   revisions against their posted and source facts.
 6. **Short sale and cover (T-108).** Add side-aware lot opening and covering,
    disposal allocation/realized-result logic, portfolio/gains/self-check,
    mobile UI, import classification, and cash-only borrow costs. A negative
@@ -448,6 +510,11 @@ next family.
   gross `+100` and commission `-2` settles `+98`. Both produce the expected
   journal postings, basis/proceeds, and gain; rebate and separately paid fee
   cases reconcile exactly. Source-only net remains marked as such.
+- For a 100 purchase plus a 2 same-currency commission, capitalized treatment
+  leaves +102 in cost-currency clearing and a 102 opening basis; expensed
+  treatment leaves +100 in clearing, a 100 basis, and +2 in expense. For a
+  120 sale with a 2 commission, the corresponding proceeds are 118 or 120,
+  respectively. No result counts the fee in both gain and expense.
 - Every operation's linked posted journal and lot effects agree after each
   command and after rebuilding projections; failure injected at each write
   stage leaves no partial operation, audit, checkpoint invalidation, or import
@@ -467,6 +534,10 @@ next family.
   reversal and replacement (or only a reversal), and groups all rows in the
   register. Its pinned links pass self-check even after later corrections;
   its postings and dependent lot effects net to the corrected facts.
+- Correcting an acquisition before a transfer out changes the effective
+  carried basis and appends only the delta bridge at the transfer date under
+  the reconciliation guard. Return-of-capital excess and cash-in-lieu basis
+  gain revisions use the recalculated lot state while source cash stays fixed.
 - One unknown-basis lot makes average-cost pool gains unavailable; resolving
   that lot via an audited operation rebuilds the pool and affected decisions.
 - Transfer and split preserve total basis. Return of capital changes basis

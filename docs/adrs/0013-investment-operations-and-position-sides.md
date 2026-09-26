@@ -70,7 +70,10 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
    equity, so closing the transferred position does not leave all sale proceeds
    in clearing. Unknown carried basis remains an explicit unresolved state;
    clearing cannot be called gain until a sourced basis-resolution operation
-   supplies the bridge and replays the position.
+   supplies the bridge and replays the position. A transfer-out bridge uses
+   the committed operational carried-basis calculation. A later correction
+   that changes that calculation appends a balanced dated bridge adjustment
+   with reconciliation review; it does not rewrite the original journal.
 7. The implementation proceeds in bounded slices: operation/side schema and
    exact trade economics; replay and native correction; transfers, basis
    adjustments, and splits; short opening and covering with diagnostics and

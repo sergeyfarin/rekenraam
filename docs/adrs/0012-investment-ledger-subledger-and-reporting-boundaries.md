@@ -35,7 +35,11 @@ Investment accounting has four explicit layers.
    flow residual, not a method-independent realized gain: part of the cash
    residual is still capital attributable to the remaining holding. A basis
    policy is required to split it. The journal does not change merely because a
-   report selects FIFO, LIFO, average cost, or a valuation method.
+   report selects FIFO, LIFO, average cost, or a valuation method. An external
+   transfer-out bridge may record the carried value calculated under the
+   committed operational basis election. If corrected economic history
+   changes that value, append a guarded, dated adjustment; an alternative
+   reporting profile alone never changes posted journal amounts.
 2. **Investment subledger.** Immutable acquisition, disposal, transfer,
    corporate-action, basis-adjustment, and lot-election events record the
    relationships the journal alone cannot express. An investment mutation is one
@@ -62,6 +66,16 @@ Investment accounting has four explicit layers.
    unmatched foreign-currency charge breaks that simple identity; a report
    must flag or explicitly adjust it before reclassification. A report must
    never silently manufacture ledger postings.
+
+For operational gains, a trade charge enters acquisition basis or reduces
+disposal proceeds only to the extent its cost-currency value enters
+`commodity_trading`, whether as part of net settlement or an explicit
+clearing leg. A separately expensed charge stays out of operational
+basis/proceeds, so the combined after-expense result must include that
+expense separately. Do not count one charge in both places. Cross-currency
+charges require explicit value/conversion legs before they can enter the
+same-currency clearing identity. Tax-specific treatment remains a separate
+reporting-policy question.
 
 The operational disposal decision remains durable even when alternative reports
 are available. Every committed disposal snapshots its resolved method, the tier
