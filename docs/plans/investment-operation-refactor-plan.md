@@ -118,6 +118,15 @@ explicit conversion/value legs before it can affect the cost-currency
 clearing identity. Slice 1 fixes the per-kind equations and tests both
 treatments; this operational rule is not a universal tax rule.
 
+Store each known charge component's treatment as an immutable election,
+resolved from explicit transaction choice, account policy, book policy, or
+fallback, in that order. Snapshot the winning tier, version/effective date,
+and expense account when used; later default changes never reinterpret a
+committed trade. The fallback for ordinary same-currency trade commissions
+is `clearing_included`, preserving today's net-cash treatment. A charge kind
+without a specified fallback stays in review. Imports use the same policy
+resolution, and changing an election requires an explicit correction.
+
 Link each immutable **lot effect** to `operation_id`, with side (`long` or
 `short`), effect kind, quantity delta, basis/opening-proceeds delta, currency,
 and source/destination lot references as appropriate. Retain the present
@@ -251,9 +260,12 @@ If basis is unknown, post only the balanced security legs and mark the
 position and `commodity_trading` residual **basis unresolved**. Do not
 interpret the residual as gain or permit an optional gain reclassification.
 A later `transfer_basis_resolve` operation supplies sourced carried basis,
-posts the missing value bridge dated to the transfer, and replays affected
-lots and disposals through the reconciliation guard. It appends a fact;
-it does not edit the original transfer or substitute zero basis.
+posts the missing full value bridge dated to the transfer, and replays
+affected lots and disposals through the reconciliation guard. This applies
+to unknown-basis transfers **in and out**. It appends a fact; it does not
+edit the original transfer or substitute zero basis. A correction that would
+turn a known-basis transfer out into an unknown-basis one is refused with
+that transfer named, leaving its original bridge and all other state intact.
 
 Return of capital reduces each eligible lot's basis only to zero. Allocate
 the cash/basis effect across eligible lots using sourced allocations or an
@@ -329,9 +341,10 @@ revisions; never rewrite source components or original posted journal rows.
 Build the projection from these ordered inputs for each affected
 `(book_id, holding_account_id, commodity_id, side, cost_commodity_id)`.
 Use effective date plus durable operation/effect sequence for same-day order.
-On a correction/reversal, append the new operation and corrective journal
-transaction(s), then replay from the first affected intent within the same
-SQLite transaction. Keep the committed decision's method, resolution tier,
+On a correction, reversal, accepted backdated acquisition/import, or basis
+resolution, append the new operation and its required journal postings,
+then replay from the first affected intent within the same SQLite
+transaction. Keep the committed decision's method, resolution tier,
 profile/account version, and any explicit user election. Distinguish the
 immutable **original allocation snapshot** from the **effective replay
 allocation**: append a numbered revision/effect set linked to the correction and
@@ -362,22 +375,26 @@ a current price for a reversed fill. Slice 2a replaces the present
 post-commit best-effort trade-price write with an atomic, version-linked
 observation write; this correction slice uses that same path.
 
-If replay changes a previously posted transfer-out bridge, append the exact
-per-currency difference between old and new effective bridge amounts as a
+If replay from any accepted operation changes a previously posted
+transfer-out bridge, append the exact per-currency difference between old
+and new effective bridge amounts as a
 balanced `commodity_trading`/external-transfer-equity adjustment at the
-transfer's financial date. Link it to the correcting operation, the original
-transfer, and both calculation revisions; include every affected account,
-currency, and date in the reconciliation-impact preview. Commit the
-adjustment, revised subledger projections, audit event, and checkpoint
+transfer's financial date. Link it to the operation that triggered replay,
+the original transfer, and both calculation revisions; include every
+affected account, currency, and date in the reconciliation-impact preview.
+Commit the adjustment, revised subledger projections, audit event, and checkpoint
 effects together. If any dependent amount cannot be calculated exactly or
-the reconciliation guard rejects a required adjustment, reject the correction
-with the later transfer named and leave the database unchanged. An unchanged,
-explicitly unknown-basis transfer remains unresolved under the existing
-rule; it does not fabricate a bridge. A pure change of reporting profile
-never triggers an adjustment.
+the reconciliation guard rejects a required adjustment, reject the triggering
+command with the later transfer named and leave the database unchanged.
+An unchanged, explicitly unknown-basis transfer remains unresolved under
+the existing rule; it does not fabricate a bridge. A pure change of
+reporting profile never triggers an adjustment.
+
+A basis-resolution operation that first makes an unknown-basis transfer out
+known posts the **full** bridge, rather than computing a delta from zero.
 
 If a later formal posting classifies return-of-capital excess, its
-replay-changed amount needs the same guarded adjustment or the correction
+replay-changed amount needs the same guarded adjustment or the triggering command
 must fail with that classification named. Cash-in-lieu basis alone changes
 its subledger gain result, not its fixed cash or security journal legs.
 
@@ -430,7 +447,9 @@ next family.
    mixed-scale and multi-currency charges. Write migration and export contract
    tests against fresh and seeded candidate databases. Settle the operational
    fee/basis and cross-currency rules here, including capitalized-in-clearing
-   versus separately expensed charges, before shaping the schema. This
+   versus separately expensed charges. Define versioned book/account fee
+   defaults, the per-charge election and provenance fields, and the
+   same-currency commission fallback before shaping the schema. This
    slice does not yet rewrite `0001`.
 2. **Foundation in two independently validated sub-slices.** Both keep the
    app runnable; neither opens a new user-facing investment operation.
@@ -443,12 +462,17 @@ next family.
      Implement ADR 0013's link cardinality. Route existing
      commands through the new writer while preserving current import
      identity callbacks. Move trade-implied price creation into that same
-     SQLite transaction, with version provenance and failure rollback;
-     mark observations made from net-only cash as approximate and exclude
-     them from trusted valuation until gross consideration is known. Prove
-     equivalent journal, lots, realized gains, audit count, checkpoint
-     behavior, and import idempotency for old cases; test the explicit
-     valuation-availability change for net-only observations.
+     SQLite transaction, with typed source-transaction-version provenance
+     and an approximate flag for net-derived observations. Preserve the
+     existing latest-price selection and valuation availability in this
+     slice; the flag does not filter a price out. Reuse the command's one
+     audit event for the observation and any new price series, including
+     `price_observations.created_audit_event_id`; no second pricing audit
+     event is inserted. Store the fee-treatment election/provenance columns
+     and versioned defaults even though the new charge-entry UI arrives in
+     slice 3. Prove equivalent journal, lots, gains, valuations,
+     checkpoint behavior, and import idempotency for old cases; assert one
+     audit event and shared audit IDs in the price-write test.
      Version the investment export contract without losing old facts.
    - **2b — generalized import identity.** Replace the one-transaction
      result with ordered operation/transaction child links. Keep the current
@@ -470,8 +494,13 @@ next family.
    and rate/source facts; do not hide an implicit conversion. Derive a
    trade-implied unit price from gross consideration in the quote commodity
    divided by quantity, excluding fees/taxes and hidden FX. If gross is
-   unknown, do not promote a net-derived estimate to a trusted price;
-   supersede any earlier estimate when sourced gross becomes available.
+   unknown, keep the net-derived estimate usable with an approximate label
+   in the API and UI. On the same valuation date, an explicit manual or
+   valuation override retains priority; a trusted provider or gross-derived
+   price ranks above an approximate net-derived price. Define a stable tie
+   break for equal-ranked sources and test that an approximate observation
+   cannot displace a trusted same-date price merely by arriving later.
+   Supersede an estimate when sourced gross for its trade becomes available.
 4. **Replay and investment-native correction (T-75b).** Implement rebuild,
    correction/reversal, dependency conflicts, and reconciliation preview.
    Exercise a corrected old buy followed by several sells under each basis
@@ -515,6 +544,15 @@ next family.
   treatment leaves +100 in clearing, a 100 basis, and +2 in expense. For a
   120 sale with a 2 commission, the corresponding proceeds are 118 or 120,
   respectively. No result counts the fee in both gain and expense.
+- Fee treatment for each charge records its resolved tier and policy version;
+  changing an account or book default does not alter an earlier trade, and
+  imported charges use the same resolution as manually entered charges.
+- In 2a a holding priced only by a net-derived trade observation retains its
+  valuation and unrealized gain while the observation gains an approximate
+  flag and transaction-version provenance. The trade, price, and any newly
+  created series share exactly one audit event. In slice 3 a trusted price
+  on the same date outranks that estimate; the estimate remains usable and
+  visibly labeled when it is the best available price.
 - Every operation's linked posted journal and lot effects agree after each
   command and after rebuilding projections; failure injected at each write
   stage leaves no partial operation, audit, checkpoint invalidation, or import
@@ -538,6 +576,10 @@ next family.
   carried basis and appends only the delta bridge at the transfer date under
   the reconciliation guard. Return-of-capital excess and cash-in-lieu basis
   gain revisions use the recalculated lot state while source cash stays fixed.
+- A backdated acquisition that changes a later transfer-out basis makes the
+  same guarded delta adjustment. Resolving an unknown-basis transfer out
+  posts its full bridge; a correction that would make a known transferred
+  basis unknown fails atomically with that transfer named.
 - One unknown-basis lot makes average-cost pool gains unavailable; resolving
   that lot via an audited operation rebuilds the pool and affected decisions.
 - Transfer and split preserve total basis. Return of capital changes basis

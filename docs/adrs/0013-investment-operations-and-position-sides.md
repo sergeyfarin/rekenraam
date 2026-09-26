@@ -74,6 +74,10 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
    the committed operational carried-basis calculation. A later correction
    that changes that calculation appends a balanced dated bridge adjustment
    with reconciliation review; it does not rewrite the original journal.
+   Backdated acquisitions or basis resolutions that trigger the same replay
+   use the same guarded adjustment. Unknown-basis transfers out post only
+   security legs until a sourced resolution posts the full bridge; a
+   correction that would make a known outbound basis unknown is refused.
 7. The implementation proceeds in bounded slices: operation/side schema and
    exact trade economics; replay and native correction; transfers, basis
    adjustments, and splits; short opening and covering with diagnostics and
