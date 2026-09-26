@@ -18,9 +18,9 @@ import (
 	"rekenraam/backend/internal/db"
 )
 
-// Slice 1 pins the investment export on both a fresh baseline and a book
-// containing lots, a partial disposal, a dividend, and trade-derived prices.
-// The 2a baseline rewrite must update this alongside its new lossless files.
+// The slice 1 economics fixture now pins the slice 2a investment export on
+// both a fresh baseline and a book with lots, a partial disposal, a dividend,
+// and trade-derived prices.
 func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 	for _, seeded := range []bool{false, true} {
 		name := "fresh"
@@ -68,17 +68,25 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				} `json:"files"`
 			}
 			require.NoError(t, json.Unmarshal(files["manifest.json"], &manifest))
-			require.Equal(t, 1, manifest.SchemaVersion)
+			require.Equal(t, 2, manifest.SchemaVersion)
 			manifestRows := map[string]int64{}
 			for _, file := range manifest.Files {
 				manifestRows[file.Name] = file.Rows
 			}
 			for file, header := range map[string][]string{
-				"lots.csv":                  {"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status", "quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis", "cost_commodity_id", "source_transaction_id"},
-				"investment-operations.csv": {"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id"},
-				"disposal-decisions.csv":    {"decision_id", "transaction_id", "transaction_version_id", "account_id", "commodity_id", "cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method", "resolution_tier", "account_version_id", "profile_id", "profile_version_id", "source_effective_from", "source_recorded_at", "created_at", "audit_event_id"},
-				"disposal-allocations.csv":  {"decision_id", "allocation_seq", "lot_event_id", "lot_id", "quantity", "cost_basis"},
-				"prices.csv":                {"base_commodity_id", "quote_commodity_id", "valuation_date", "price", "base_quantity", "quote_type", "adjustment_basis", "is_manual", "is_derived", "source"},
+				"lots.csv":                               {"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status", "quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis", "cost_commodity_id", "source_transaction_id"},
+				"investment-operations.csv":              {"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id"},
+				"investment-operation-journal-links.csv": {"operation_id", "link_seq", "transaction_version_id", "role"},
+				"investment-operation-dates.csv":         {"operation_id", "date_role", "event_date"},
+				"investment-operation-components.csv":    {"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id"},
+				"investment-lot-facts.csv":               {"lot_id", "operation_id", "account_id", "commodity_id", "position_side", "opened_on", "quantity_value", "quantity_scale", "consideration_value", "consideration_scale", "cost_commodity_id", "audit_event_id"},
+				"investment-lot-events.csv":              {"lot_event_id", "lot_id", "event_kind", "transaction_id", "event_date", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "cost_basis_method", "metadata_json", "audit_event_id"},
+				"investment-lot-effects.csv":             {"operation_id", "effect_seq", "lot_event_id"},
+				"investment-fee-policies.csv":            {"policy_id", "account_id", "charge_kind", "created_at", "audit_event_id"},
+				"investment-fee-policy-versions.csv":     {"version_id", "policy_id", "version_seq", "effective_from", "treatment", "charge_account_id", "recorded_at", "audit_event_id"},
+				"disposal-decisions.csv":                 {"decision_id", "transaction_id", "transaction_version_id", "account_id", "commodity_id", "cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method", "resolution_tier", "account_version_id", "profile_id", "profile_version_id", "source_effective_from", "source_recorded_at", "created_at", "audit_event_id", "operation_id", "position_side"},
+				"disposal-allocations.csv":               {"decision_id", "allocation_seq", "lot_event_id", "lot_id", "quantity", "cost_basis"},
+				"prices.csv":                             {"base_commodity_id", "quote_commodity_id", "valuation_date", "price", "base_quantity", "quote_type", "adjustment_basis", "is_manual", "is_derived", "source", "is_approximate", "source_transaction_version_id", "audit_event_id"},
 			} {
 				rows := readInvestmentContractCSV(t, files, file)
 				require.Equal(t, header, rows[0], file)
@@ -107,6 +115,8 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				require.Equal(t, "1300.00", decisions[1][8])
 				require.Equal(t, "fifo", decisions[1][9])
 				require.Equal(t, "fallback", decisions[1][10])
+				require.Equal(t, operations[3][0], decisions[1][18], "disposal decision links its operation")
+				require.Equal(t, "long", decisions[1][19])
 				require.NotEmpty(t, decisions[1][2], "the export must retain the posted transaction version")
 
 				allocations := readInvestmentContractCSV(t, files, "disposal-allocations.csv")
@@ -116,6 +126,16 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				require.Equal(t, "1000.00", allocations[1][5])
 				require.Equal(t, "300.00", allocations[2][5])
 				require.Len(t, readInvestmentContractCSV(t, files, "prices.csv"), 4)
+				prices := readInvestmentContractCSV(t, files, "prices.csv")
+				require.Equal(t, "true", prices[1][10], "net-derived trade price remains usable but approximate")
+				require.Equal(t, "11", prices[1][11], "price points to its posted transaction version")
+				require.Equal(t, operations[1][4], prices[1][12], "trade and price share one audit event")
+				require.Contains(t, string(files["accounts.csv"]), "external_investment_transfer_equity")
+				require.Len(t, readInvestmentContractCSV(t, files, "investment-operation-journal-links.csv"), 5)
+				require.Len(t, readInvestmentContractCSV(t, files, "investment-operation-components.csv"), 5)
+				require.Len(t, readInvestmentContractCSV(t, files, "investment-lot-facts.csv"), 3)
+				require.Len(t, readInvestmentContractCSV(t, files, "investment-lot-effects.csv"), 5)
+				require.Len(t, readInvestmentContractCSV(t, files, "investment-fee-policy-versions.csv"), 2)
 			}
 		})
 	}

@@ -457,7 +457,7 @@ next family.
 2. **Foundation in two independently validated sub-slices.** Both keep the
    app runnable; neither opens a new user-facing investment operation.
 
-   - **2a — investment schema and writer.** Introduce the parent/link/date/
+   - **2a — investment schema and writer — complete 2026-09-26.** Introduce the parent/link/date/
      component tables, operation-keyed disposal decisions, side-keyed basis
      state, fact/projection split, canonical TEXT coefficients, and direct
      effect links. Add and seed `external_investment_transfer_equity` in the
@@ -471,7 +471,10 @@ next family.
      slice; the flag does not filter a price out. Reuse the command's one
      audit event for the observation and any new price series, including
      `price_observations.created_audit_event_id`; no second pricing audit
-     event is inserted. Store the fee-treatment election/provenance columns
+     event is inserted. A valid trade whose derived unit quote overflows the
+     price table's int64 coefficient or rounds to zero remains posted without
+     an observation; price creation is atomic when the quote is representable.
+     Store the fee-treatment election/provenance columns
      and versioned defaults even though the new charge-entry UI arrives in
      slice 3. Prove equivalent journal, lots, gains, valuations,
      checkpoint behavior, and import idempotency for old cases; assert one

@@ -24,6 +24,7 @@ SelfCheckResult:
         - commodity_position_sign
         - checkpoint_integrity
         - account_version_coverage
+        - investment_foundation
         - sqlite_integrity
         - attachments
     status:

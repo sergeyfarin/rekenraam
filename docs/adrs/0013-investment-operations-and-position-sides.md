@@ -67,7 +67,7 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
    identity and basis between holding accounts without realizing a gain. An
    external in-kind transfer with known carried basis also needs a balanced
    basis-currency bridge between `commodity_trading` and explicit book-boundary
-   equity, so closing the transferred position does not leave all sale proceeds
+   equity (`external_investment_transfer_equity`), so closing the transferred position does not leave all sale proceeds
    in clearing. Unknown carried basis remains an explicit unresolved state;
    clearing cannot be called gain until a sourced basis-resolution operation
    supplies the bridge and replays the position. A transfer-out bridge uses

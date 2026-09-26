@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"rekenraam/backend/internal/db"
-	"rekenraam/backend/internal/exact"
 	"rekenraam/backend/internal/marketdata"
 	"rekenraam/backend/internal/testdb"
 
@@ -348,7 +347,7 @@ func TestBackgroundWorkEnqueueCoalescesActiveDuplicates(t *testing.T) {
 	assert.Equal(t, "2026-06-12T02:00:00Z", next.AvailableAt)
 }
 
-// --- CreatePrice / CreateTradeImpliedPrice ---
+// --- CreatePrice ---
 
 func TestCreatePrice_HappyPathAndDuplicateSameDateAppends(t *testing.T) {
 	// cleanPriceObservationSpec's own rejections are already covered by
@@ -389,26 +388,6 @@ func TestCreatePrice_RequiresOwner(t *testing.T) {
 	_, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	_, err := service.CreatePrice(ctx, PriceObservationInput{
 		BaseCommodityID: 1, QuoteCommodityID: 1, PriceValue: 100, PriceScale: 2, ValuationDate: "2026-06-12",
-	})
-	require.Error(t, err)
-}
-
-func TestCreateTradeImpliedPrice_RejectsZeroQuantityOrCash(t *testing.T) {
-	// The happy path (half-up rounding, correct scale) is already exercised
-	// indirectly by every investments Buy/Sell test that wires a real
-	// PricingService — this covers the validation edge this file doesn't.
-	ctx := context.Background()
-	_, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
-
-	err := service.CreateTradeImpliedPrice(ctx, CreateTradeImpliedPriceInput{
-		CommodityID: 1, QuoteCommodityID: 1, PriceDate: "2026-06-12",
-		QuantityValue: exact.New(0), QuantityScale: 0, CashValue: 1000, CashScale: 2,
-	})
-	require.Error(t, err)
-
-	err = service.CreateTradeImpliedPrice(ctx, CreateTradeImpliedPriceInput{
-		CommodityID: 1, QuoteCommodityID: 1, PriceDate: "2026-06-12",
-		QuantityValue: exact.New(10), QuantityScale: 0, CashValue: 0, CashScale: 2,
 	})
 	require.Error(t, err)
 }

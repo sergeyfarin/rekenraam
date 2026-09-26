@@ -278,6 +278,19 @@ rewrite) — migrations run at startup, so deleting the file is the whole reset:
 rm -f backend/var/rekenraam.sqlite backend/var/rekenraam.sqlite-shm backend/var/rekenraam.sqlite-wal
 ```
 
+**BREAKING DEV DATABASE, R16 slice 2a:** the pre-release `0001` investment
+foundation rewrite changes table columns and the baseline checksum. Stop the
+app and remove the SQLite file named by your disposable `DATABASE_URL` along
+with its `-wal` and `-shm` sidecars before restarting. For the common local
+`dev.sqlite` path, run:
+
+```sh
+rm -f backend/var/dev.sqlite backend/var/dev.sqlite-wal backend/var/dev.sqlite-shm
+```
+
+No installed v0.1 database exists; do not use this reset rule for a later
+installed release.
+
 The final pre-`v0.1.0` consolidation changed the highest schema version from 8
 to 1. Databases and backups made before that consolidation are incompatible in
 both directions: export anything worth keeping before updating, then recreate
@@ -375,7 +388,7 @@ once a released version exists, `main` is something users can be running.
 
 ### Backend
 
-- Usually validate with `./scripts/test-backend.sh` — it gates on `gofmt -l`, then runs `go vet ./...` and `go test -race ./...`.
+- Usually validate with `./scripts/test-backend.sh` — it gates on `gofmt -l`, then runs `go vet ./...` and `go test -race -p 1 ./...`. Packages run serially to keep the SQLite integration suites within Go's unchanged per-package timeout.
 - If backend changes affect the integrated binary shape, also run `pnpm build`.
 
 ### Frontend

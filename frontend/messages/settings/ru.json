@@ -963,6 +963,7 @@
   "account_system_role_unassigned_income": "Нераспределённые доходы",
   "account_system_role_unassigned_expense": "Нераспределённые расходы",
   "account_system_role_commodity_trading": "Клиринг валют и инструментов",
+  "account_system_role_external_investment_transfer_equity": "Внешние переводы инвестиций",
   "api_error_forecast_too_large": "Этот прогноз слишком велик для расчёта. Выберите меньше счетов или более короткий период.",
   "api_error_forecast_basis_changed": "Прогноз изменился. Обновите его, прежде чем снова открывать подробности."
 }

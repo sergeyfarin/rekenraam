@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	"rekenraam/backend/internal/db"
-	"rekenraam/backend/internal/exact"
 	"rekenraam/backend/internal/marketdata"
 )
 
@@ -98,20 +96,6 @@ type PriceObservationInput struct {
 	SeriesMetadataJSON      string
 	MetadataJSON            string
 	ChangeReason            string
-}
-
-type CreateTradeImpliedPriceInput struct {
-	OwnerUserID      int64
-	AuthSessionID    int64
-	RequestID        string
-	CommodityID      int64
-	QuoteCommodityID int64
-	PriceDate        string
-	QuantityValue    exact.Coefficient
-	QuantityScale    int
-	CashValue        int64
-	CashScale        int
-	PriceScale       int
 }
 
 type PricingPolicy struct {
@@ -343,52 +327,6 @@ func (s *PricingService) VoidPrice(ctx context.Context, input VoidPriceInput) ([
 		}
 	}
 	return toPriceObservations(records), nil
-}
-
-func (s *PricingService) CreateTradeImpliedPrice(ctx context.Context, input CreateTradeImpliedPriceInput) error {
-	if input.QuantityValue.Sign() <= 0 || input.CashValue <= 0 {
-		return ValidationError{Message: "trade quantity and cash amount are required"}
-	}
-	priceScale := input.PriceScale
-	if priceScale < 0 || priceScale > 12 {
-		priceScale = 8
-	}
-	priceValue, err := scaledDivision(input.CashValue, input.CashScale, input.QuantityValue, input.QuantityScale, priceScale)
-	if err != nil {
-		return err
-	}
-	sourceID, err := s.repository.ManualSourceID(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = s.repository.CreatePriceObservation(ctx, db.CreatePriceObservationParams{
-		BookID:        BookID,
-		ActorUserID:   input.OwnerUserID,
-		AuthSessionID: input.AuthSessionID,
-		RequestID:     input.RequestID,
-		OriginType:    "browser_api",
-		Operation:     "pricing.price.trade_implied",
-		CreatedAt:     s.now().UTC().Format(time.RFC3339),
-		ChangeReason:  "created trade-implied price observation",
-		Spec: db.PriceObservationSpec{
-			BaseCommodityID:    input.CommodityID,
-			QuoteCommodityID:   input.QuoteCommodityID,
-			QuoteType:          "trade_implied",
-			AdjustmentBasis:    "not_applicable",
-			PriceValue:         priceValue,
-			PriceScale:         priceScale,
-			BaseQuantityValue:  1,
-			BaseQuantityScale:  0,
-			ValuationDate:      input.PriceDate,
-			SourceID:           sql.NullInt64{Int64: sourceID, Valid: true},
-			IsManual:           false,
-			IsDerived:          true,
-			DerivationJSON:     "{}",
-			SeriesMetadataJSON: "{}",
-			MetadataJSON:       "{}",
-		},
-	})
-	return err
 }
 
 func (s *PricingService) GetPolicy(ctx context.Context) (PricingPolicy, error) {

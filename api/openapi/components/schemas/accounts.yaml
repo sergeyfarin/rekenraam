@@ -50,6 +50,7 @@ SystemAccountRole:
     - unassigned_expense
     - transfer_clearing
     - commodity_trading
+    - external_investment_transfer_equity
 AccountResponse:
   type: object
   required:

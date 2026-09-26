@@ -22,7 +22,7 @@ import (
 // BundleSchemaVersion is the archive's own version, carried in manifest.json.
 // Columns are appended within a version; a change that cannot be made by
 // appending increments this and needs an ADR (ADR 0011).
-const BundleSchemaVersion = 1
+const BundleSchemaVersion = 2
 
 // bundleFile is one entry of the archive, recorded in the manifest with the
 // checksum computed while it was written.
@@ -183,6 +183,30 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		{"tags.csv", func(w io.Writer) (int64, error) { return s.writeTagsCSV(ctx, w, snapshot) }},
 		{"lots.csv", func(w io.Writer) (int64, error) { return s.writeLotsCSV(ctx, w, snapshot, paths) }},
 		{"investment-operations.csv", func(w io.Writer) (int64, error) { return s.writeInvestmentOperationsCSV(ctx, w, snapshot) }},
+		{"investment-operation-journal-links.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "journal-links", []string{"operation_id", "link_seq", "transaction_version_id", "role"})
+		}},
+		{"investment-operation-dates.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "dates", []string{"operation_id", "date_role", "event_date"})
+		}},
+		{"investment-operation-components.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "components", []string{"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id"})
+		}},
+		{"investment-lot-facts.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "lot-facts", []string{"lot_id", "operation_id", "account_id", "commodity_id", "position_side", "opened_on", "quantity_value", "quantity_scale", "consideration_value", "consideration_scale", "cost_commodity_id", "audit_event_id"})
+		}},
+		{"investment-lot-events.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "lot-events", []string{"lot_event_id", "lot_id", "event_kind", "transaction_id", "event_date", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "cost_basis_method", "metadata_json", "audit_event_id"})
+		}},
+		{"investment-lot-effects.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "lot-effects", []string{"operation_id", "effect_seq", "lot_event_id"})
+		}},
+		{"investment-fee-policies.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "fee-policies", []string{"policy_id", "account_id", "charge_kind", "created_at", "audit_event_id"})
+		}},
+		{"investment-fee-policy-versions.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "fee-policy-versions", []string{"version_id", "policy_id", "version_seq", "effective_from", "treatment", "charge_account_id", "recorded_at", "audit_event_id"})
+		}},
 		{"disposal-decisions.csv", func(w io.Writer) (int64, error) { return s.writeDisposalDecisionsCSV(ctx, w, snapshot) }},
 		{"disposal-allocations.csv", func(w io.Writer) (int64, error) { return s.writeDisposalAllocationsCSV(ctx, w, snapshot) }},
 		{"prices.csv", func(w io.Writer) (int64, error) { return s.writePricesCSV(ctx, w, snapshot) }},
@@ -492,7 +516,7 @@ func (s *ExportService) writeInvestmentOperationsCSV(ctx context.Context, out io
 	for _, operation := range operations {
 		if err := writer.Write([]string{
 			strconv.FormatInt(operation.OperationID, 10),
-			strconv.FormatInt(operation.TransactionID, 10),
+			nullableID(operation.TransactionID),
 			operation.Kind,
 			operation.EventDate,
 			strconv.FormatInt(operation.AuditEventID, 10),
@@ -502,6 +526,23 @@ func (s *ExportService) writeInvestmentOperationsCSV(ctx context.Context, out io
 		count++
 	}
 	return finishBundleCSV(writer, count)
+}
+
+func (s *ExportService) writeInvestmentFoundationCSV(ctx context.Context, out io.Writer, snapshot *sql.Tx, kind string, header []string) (int64, error) {
+	rows, err := s.repository.ExportInvestmentFoundation(ctx, snapshot, BookID, kind)
+	if err != nil {
+		return 0, err
+	}
+	writer, err := newBundleCSV(out, header)
+	if err != nil {
+		return 0, err
+	}
+	for _, row := range rows {
+		if err := writer.Write(row); err != nil {
+			return 0, fmt.Errorf("write investment %s row: %w", kind, err)
+		}
+	}
+	return finishBundleCSV(writer, int64(len(rows)))
 }
 
 func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Writer, snapshot *sql.Tx) (int64, error) {
@@ -514,6 +555,7 @@ func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Wr
 		"cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method",
 		"resolution_tier", "account_version_id", "profile_id", "profile_version_id",
 		"source_effective_from", "source_recorded_at", "created_at", "audit_event_id",
+		"operation_id", "position_side",
 	})
 	if err != nil {
 		return 0, err
@@ -528,6 +570,7 @@ func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Wr
 			decision.ResolutionTier, nullableID(decision.AccountVersionID), nullableID(decision.ProfileID),
 			nullableID(decision.ProfileVersionID), decision.SourceEffectiveFrom.String,
 			decision.SourceRecordedAt.String, decision.CreatedAt, strconv.FormatInt(decision.CreatedAuditEventID, 10),
+			strconv.FormatInt(decision.OperationID, 10), decision.PositionSide,
 		}); err != nil {
 			return int64(index), fmt.Errorf("write disposal decision row: %w", err)
 		}
@@ -567,6 +610,7 @@ func (s *ExportService) writePricesCSV(ctx context.Context, out io.Writer, snaps
 	writer, err := newBundleCSV(out, []string{
 		"base_commodity_id", "quote_commodity_id", "valuation_date", "price",
 		"base_quantity", "quote_type", "adjustment_basis", "is_manual", "is_derived", "source",
+		"is_approximate", "source_transaction_version_id", "audit_event_id",
 	})
 	if err != nil {
 		return 0, err
@@ -585,6 +629,9 @@ func (s *ExportService) writePricesCSV(ctx context.Context, out io.Writer, snaps
 			boolToken(price.IsManual),
 			boolToken(price.IsDerived),
 			price.SourceCode.String,
+			boolToken(price.IsApproximate),
+			nullableID(price.SourceTransactionVersionID),
+			nullableID(price.AuditEventID),
 		}
 		if err := writer.Write(record); err != nil {
 			return rows, fmt.Errorf("write price row: %w", err)
@@ -785,7 +832,15 @@ value in this archive was ever a floating-point number.`,
   commodities.csv    currencies, securities, and crypto, with their scales
   tags.csv           tag names behind the tag columns in ledger.csv
   lots.csv           investment lots as they currently stand
-  investment-operations.csv  named investment transactions and audit links
+  investment-operations.csv  named investment command parents
+  investment-operation-journal-links.csv  posted versions made by each operation
+  investment-operation-dates.csv  typed trade, settlement, and payment dates
+  investment-operation-components.csv  exact source amounts and fee elections
+  investment-lot-facts.csv  immutable lot-opening source facts
+  investment-lot-events.csv  immutable acquisition and disposal events
+  investment-lot-effects.csv  direct operation-to-event links
+  investment-fee-policies.csv  book and account charge policy identities
+  investment-fee-policy-versions.csv  dated, immutable charge policy versions
   disposal-decisions.csv  immutable resolved cost-basis elections
   disposal-allocations.csv  exact lot allocations for those elections
   prices.csv         non-voided price observations
@@ -839,6 +894,11 @@ audit-complete record is the SQLite backup.
 Attachments are not included; they are not implemented yet, and manifest.json
 says so rather than leaving you to assume either way.
 lots.csv is a statement of current lot state, not a replayable event log.
+The investment-operation, lot-fact, and lot-event files preserve the source
+and projection evidence separately. A net-only trade explicitly marks gross
+unknown. A trade-implied price derived from net cash remains usable for
+valuation and is flagged approximate; its source transaction version and
+shared audit event are in prices.csv.
 disposal-decisions.csv and disposal-allocations.csv preserve why historical lots
 were consumed even after account or global cost-basis defaults change.`,
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1062,6 +1063,18 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
+	transactionParams.InvestmentComponents = []db.InvestmentComponentSpec{{
+		Kind: "net_settlement", CommodityID: input.CashCommodityID,
+		AmountValue: strconv.FormatInt(-input.CashAmountValue, 10), AmountScale: input.CashAmountScale,
+		AmountDate: input.TransactionDate, GrossUnknown: true,
+	}}
+	if s.pricingService != nil {
+		transactionParams.TradeImpliedPrice, err = tradePriceSpec(input.CommodityID, input.CashCommodityID,
+			input.TransactionDate, input.QuantityValue, input.QuantityScale, input.CashAmountValue, input.CashAmountScale, true)
+		if err != nil {
+			return InvestmentTradeResult{}, err
+		}
+	}
 	now := s.now().UTC().Format(time.RFC3339)
 	lotParams := db.CreateInvestmentLotParams{
 		BookID:          BookID,
@@ -1097,22 +1110,27 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		return InvestmentTradeResult{}, fmt.Errorf("create buy transaction and lot: %w", mapTransactionDBError(err))
 	}
 	transaction := toTransaction(transactionRecord)
-	if s.pricingService != nil {
-		_ = s.pricingService.CreateTradeImpliedPrice(ctx, CreateTradeImpliedPriceInput{
-			OwnerUserID:      input.OwnerUserID,
-			AuthSessionID:    input.AuthSessionID,
-			RequestID:        input.RequestID,
-			CommodityID:      input.CommodityID,
-			QuoteCommodityID: input.CashCommodityID,
-			PriceDate:        input.TransactionDate,
-			QuantityValue:    input.QuantityValue,
-			QuantityScale:    input.QuantityScale,
-			CashValue:        input.CashAmountValue,
-			CashScale:        input.CashAmountScale,
-			PriceScale:       8,
-		})
-	}
 	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
+}
+
+func tradePriceSpec(baseID, quoteID int64, date string, quantity exact.Coefficient, quantityScale int, cash int64, cashScale int, approximate bool) (*db.TradeImpliedPriceSpec, error) {
+	priceValue, err := scaledDivision(cash, cashScale, quantity, quantityScale, 8)
+	if errors.Is(err, errScaledDivisionOverflow) {
+		// The trade is exact even when its unit quote cannot fit in the
+		// price table's int64 coefficient at scale eight. Keep the trade and
+		// leave this observation absent, as the previous best-effort writer did.
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if priceValue <= 0 {
+		return nil, nil
+	}
+	return &db.TradeImpliedPriceSpec{
+		BaseCommodityID: baseID, QuoteCommodityID: quoteID, ValuationDate: date,
+		PriceValue: priceValue, PriceScale: 8, Approximate: approximate,
+	}, nil
 }
 
 func (s *InvestmentService) resolveCostBasisMethod(ctx context.Context, holdingAccountID int64, txnOverride string) (string, db.DisposalDecisionSource, error) {
@@ -1420,6 +1438,20 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
+	if !input.WriteOff {
+		transactionParams.InvestmentComponents = []db.InvestmentComponentSpec{{
+			Kind: "net_settlement", CommodityID: input.CashCommodityID,
+			AmountValue: strconv.FormatInt(input.CashAmountValue, 10), AmountScale: input.CashAmountScale,
+			AmountDate: input.TransactionDate, GrossUnknown: true,
+		}}
+		if s.pricingService != nil {
+			transactionParams.TradeImpliedPrice, err = tradePriceSpec(input.CommodityID, input.CashCommodityID,
+				input.TransactionDate, input.QuantityValue, input.QuantityScale, input.CashAmountValue, input.CashAmountScale, true)
+			if err != nil {
+				return InvestmentTradeResult{}, err
+			}
+		}
+	}
 	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
 	if err != nil {
 		return InvestmentTradeResult{}, err
@@ -1469,21 +1501,6 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		return InvestmentTradeResult{}, fmt.Errorf("dispose sell lots: %w", err)
 	}
 	transaction := toTransaction(transactionRecord)
-	if s.pricingService != nil {
-		_ = s.pricingService.CreateTradeImpliedPrice(ctx, CreateTradeImpliedPriceInput{
-			OwnerUserID:      input.OwnerUserID,
-			AuthSessionID:    input.AuthSessionID,
-			RequestID:        input.RequestID,
-			CommodityID:      input.CommodityID,
-			QuoteCommodityID: input.CashCommodityID,
-			PriceDate:        input.TransactionDate,
-			QuantityValue:    input.QuantityValue,
-			QuantityScale:    input.QuantityScale,
-			CashValue:        input.CashAmountValue,
-			CashScale:        input.CashAmountScale,
-			PriceScale:       8,
-		})
-	}
 	committedDecision := toDisposalDecision(decision)
 	return InvestmentTradeResult{Transaction: transaction, Allocations: toInvestmentLotDisposals(disposals), DisposalDecision: &committedDecision}, nil
 }
@@ -1593,9 +1610,6 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 		return Transaction{}, err
 	}
 	createInput := plan.Create
-	if postWrite == nil {
-		return s.transactionService.CreateTransaction(ctx, createInput)
-	}
 	// A cash dividend touches cash, income and withholding only — it creates no
 	// lot — so it goes through the ordinary preparation. Handing it the
 	// subledger exemption just because it is an investment command would let an
@@ -1604,6 +1618,22 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 	params, err := s.transactionService.prepareCreateTransactionForWriteCarrying(ctx, createInput, plan.AccountRuleDependencies)
 	if err != nil {
 		return Transaction{}, err
+	}
+	params.InvestmentComponents = []db.InvestmentComponentSpec{{
+		Kind: "dividend_gross", CommodityID: input.CashCommodityID,
+		AmountValue: strconv.FormatInt(input.AmountValue, 10), AmountScale: input.AmountScale,
+		AmountDate: plan.Date,
+	}}
+	if input.WithholdingValue != nil && *input.WithholdingValue > 0 {
+		scale := input.AmountScale
+		if input.WithholdingScale != nil {
+			scale = *input.WithholdingScale
+		}
+		params.InvestmentComponents = append(params.InvestmentComponents, db.InvestmentComponentSpec{
+			Kind: "withholding", CommodityID: input.CashCommodityID,
+			AmountValue: strconv.FormatInt(-*input.WithholdingValue, 10), AmountScale: scale,
+			AmountDate: plan.Date,
+		})
 	}
 	record, err := s.transactionService.repository.CreateTransactionWithPostWrite(ctx, params, postWrite)
 	if err != nil {
@@ -1694,6 +1724,18 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
+	transactionParams.InvestmentComponents = []db.InvestmentComponentSpec{{
+		Kind: "reinvested_distribution", CommodityID: input.CashCommodityID,
+		AmountValue: strconv.FormatInt(input.AmountValue, 10), AmountScale: input.AmountScale,
+		AmountDate: date,
+	}}
+	if s.pricingService != nil {
+		transactionParams.TradeImpliedPrice, err = tradePriceSpec(input.CommodityID, input.CashCommodityID,
+			date, input.QuantityValue, input.QuantityScale, input.AmountValue, input.AmountScale, false)
+		if err != nil {
+			return InvestmentTradeResult{}, err
+		}
+	}
 	transactionRecord, lot, err := s.repository.CreateTransactionAndLot(ctx, transactionParams, db.CreateInvestmentLotParams{
 		BookID:          BookID,
 		AccountID:       input.HoldingAccountID,
@@ -1721,21 +1763,6 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 		return InvestmentTradeResult{}, fmt.Errorf("create reinvested dividend transaction and lot: %w", mapTransactionDBError(err))
 	}
 	transaction := toTransaction(transactionRecord)
-	if s.pricingService != nil {
-		_ = s.pricingService.CreateTradeImpliedPrice(ctx, CreateTradeImpliedPriceInput{
-			OwnerUserID:      input.OwnerUserID,
-			AuthSessionID:    input.AuthSessionID,
-			RequestID:        input.RequestID,
-			CommodityID:      input.CommodityID,
-			QuoteCommodityID: input.CashCommodityID,
-			PriceDate:        date,
-			QuantityValue:    input.QuantityValue,
-			QuantityScale:    input.QuantityScale,
-			CashValue:        input.AmountValue,
-			CashScale:        input.AmountScale,
-			PriceScale:       8,
-		})
-	}
 	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
 }
 
@@ -2563,6 +2590,8 @@ func dividendDefaultOperation(defaultID int64) string {
 	return "investment.dividend_default.create"
 }
 
+var errScaledDivisionOverflow = errors.New("scaled division overflow")
+
 func scaledDivision(numerator int64, numeratorScale int, denominator exact.Coefficient, denominatorScale int, resultScale int) (int64, error) {
 	if denominator.Sign() == 0 {
 		return 0, fmt.Errorf("division by zero")
@@ -2592,7 +2621,7 @@ func scaledDivision(numerator int64, numeratorScale int, denominator exact.Coeff
 	}
 
 	if !q.IsInt64() {
-		return 0, fmt.Errorf("scaled division overflow")
+		return 0, errScaledDivisionOverflow
 	}
 	return q.Int64(), nil
 }

@@ -638,6 +638,30 @@ func (r *AccountRepository) EnsureSystemAccounts(ctx context.Context, params Ens
 		}
 		records = append(records, record)
 	}
+	// The pre-release investment contract resolves an unspecified ordinary
+	// commission through the book's versioned clearing-included fallback.
+	_, err = tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO investment_fee_policies
+			(book_id, account_id, charge_kind, created_at, created_audit_event_id)
+		VALUES (?, NULL, 'commission', ?, ?)
+	`, params.BookID, params.CreatedAt, auditEventID)
+	if err != nil {
+		return EnsureSystemAccountsRecord{}, fmt.Errorf("seed commission treatment policy: %w", err)
+	}
+	var policyID int64
+	if err := tx.QueryRowContext(ctx, `
+		SELECT id FROM investment_fee_policies
+		WHERE book_id = ? AND account_id IS NULL AND charge_kind = 'commission'
+	`, params.BookID).Scan(&policyID); err != nil {
+		return EnsureSystemAccountsRecord{}, fmt.Errorf("read commission treatment policy id: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO investment_fee_policy_versions
+			(policy_id, version_seq, effective_from, treatment, recorded_at, audit_event_id)
+		VALUES (?, 1, '0001-01-01', 'clearing_included', ?, ?)
+	`, policyID, params.CreatedAt, auditEventID); err != nil {
+		return EnsureSystemAccountsRecord{}, fmt.Errorf("seed commission treatment version: %w", err)
+	}
 
 	result, err := tx.ExecContext(ctx, `
 		UPDATE setup_steps

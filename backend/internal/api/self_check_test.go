@@ -71,7 +71,7 @@ func TestRunSelfCheckPassesOnALiveBookAndExplainsEachCheck(t *testing.T) {
 
 	for _, expected := range []string{
 		"entry_balance", "transaction_balance", "book_balance", "version_integrity",
-		"lot_reconciliation", "checkpoint_integrity", "account_version_coverage",
+		"lot_reconciliation", "checkpoint_integrity", "account_version_coverage", "investment_foundation",
 		"sqlite_integrity", "attachments",
 	} {
 		assert.Containsf(t, byID, expected, "the run must include %s", expected)

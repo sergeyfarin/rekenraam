@@ -40,12 +40,14 @@ go vet ./...
 # and muddies both signals). Writes backend/coverage.out and prints the merged
 # total. Default mode is unchanged: the race-detector run.
 if [ "${COVERAGE:-0}" = "1" ]; then
-  go test ./... -coverpkg=./... -coverprofile=coverage.out
+  go test -p 1 ./... -coverpkg=./... -coverprofile=coverage.out
   go tool cover -func=coverage.out | tail -1
 else
   # Ordinary integration fixtures copy a process-wide migrated SQLite template
-  # (internal/testdb) instead of replaying the full schema per test. Keep Go's
-  # default per-package timeout visible: if a package approaches it again, the
-  # fixture economics need attention rather than more timeout headroom (T-70).
-  go test -race ./...
+  # (internal/testdb) instead of replaying the full schema per test. Run
+  # packages serially so the largest SQLite integration suites do not contend
+  # with each other for CPU and hit Go's default per-package timeout. Keep that
+  # timeout visible: if one package approaches it alone, fixture economics
+  # need attention rather than more timeout headroom (T-70).
+  go test -race -p 1 ./...
 fi

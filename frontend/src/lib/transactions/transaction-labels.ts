@@ -38,6 +38,7 @@ export function systemRoleLabel(role: string): string {
     case 'unassigned_income': return m.account_system_role_unassigned_income();
     case 'unassigned_expense': return m.account_system_role_unassigned_expense();
     case 'commodity_trading': return m.account_system_role_commodity_trading();
+    case 'external_investment_transfer_equity': return m.account_system_role_external_investment_transfer_equity();
     case 'transfer_clearing':
       return m.account_system_role_transfer_clearing();
     case 'opening_balance':

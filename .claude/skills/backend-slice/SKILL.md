@@ -108,7 +108,7 @@ strings to the client.
 ## Validation
 
 ```sh
-./scripts/test-backend.sh            # go test ./... — the default gate
+./scripts/test-backend.sh            # go test -race -p 1 ./... — the default gate
 cd backend && go vet ./... && "$(go env GOROOT)/bin/gofmt" -l .
 pnpm build                           # only if the integrated binary shape changed
 ```

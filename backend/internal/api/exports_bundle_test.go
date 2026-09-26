@@ -171,7 +171,7 @@ func TestExportBundleChecksumsVerify(t *testing.T) {
 		assert.Equalf(t, int64(len(content)), file.Bytes, "%s byte count is wrong", file.Name)
 	}
 
-	assert.Equal(t, 1, bundle.manifest.SchemaVersion)
+	assert.Equal(t, 2, bundle.manifest.SchemaVersion)
 	assert.Equal(t, "journal_entry", bundle.manifest.SelectionUnit)
 	assert.True(t, bundle.manifest.IncludesSystemAccounts)
 	assert.True(t, bundle.manifest.AllTransactionsComplete)
@@ -728,6 +728,7 @@ func TestBundlePricesFileCarriesObservationsAtTheirOwnScale(t *testing.T) {
 	require.Equal(t, []string{
 		"base_commodity_id", "quote_commodity_id", "valuation_date", "price",
 		"base_quantity", "quote_type", "adjustment_basis", "is_manual", "is_derived", "source",
+		"is_approximate", "source_transaction_version_id", "audit_event_id",
 	}, prices.header)
 	require.NotEmpty(t, prices.rows)
 

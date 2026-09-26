@@ -138,7 +138,7 @@ type ExportLotRecord struct {
 
 type ExportInvestmentOperationRecord struct {
 	OperationID   int64
-	TransactionID int64
+	TransactionID sql.NullInt64
 	Kind          string
 	EventDate     string
 	AuditEventID  int64
@@ -188,6 +188,8 @@ type ExportDisposalDecisionRecord struct {
 	SourceRecordedAt     sql.NullString
 	CreatedAt            string
 	CreatedAuditEventID  int64
+	OperationID          int64
+	PositionSide         string
 }
 
 type ExportDisposalAllocationRecord struct {
@@ -202,18 +204,21 @@ type ExportDisposalAllocationRecord struct {
 }
 
 type ExportPriceRecord struct {
-	BaseCommodityID   int64
-	QuoteCommodityID  int64
-	ValuationDate     string
-	PriceValue        int64
-	PriceScale        int
-	BaseQuantityValue int64
-	BaseQuantityScale int
-	QuoteType         string
-	AdjustmentBasis   string
-	IsManual          bool
-	IsDerived         bool
-	SourceCode        sql.NullString
+	BaseCommodityID            int64
+	QuoteCommodityID           int64
+	ValuationDate              string
+	PriceValue                 int64
+	PriceScale                 int
+	BaseQuantityValue          int64
+	BaseQuantityScale          int
+	QuoteType                  string
+	AdjustmentBasis            string
+	IsManual                   bool
+	IsDerived                  bool
+	IsApproximate              bool
+	SourceTransactionVersionID sql.NullInt64
+	AuditEventID               sql.NullInt64
+	SourceCode                 sql.NullString
 }
 
 // LedgerExportTotalsRecord answers "what would this export contain" without
@@ -858,7 +863,7 @@ func (r *ExportRepository) ExportDisposalDecisions(ctx context.Context, transact
 			cost_commodity_id, event_date, quantity_value, quantity_scale,
 			disposed_basis_value, disposed_basis_scale, cost_basis_method, resolution_tier,
 			account_version_id, profile_id, profile_version_id, source_effective_from,
-			source_recorded_at, created_at, created_audit_event_id
+			source_recorded_at, created_at, created_audit_event_id, operation_id, position_side
 		FROM investment_disposal_decisions
 		WHERE book_id = ?
 		ORDER BY event_date, id
@@ -876,7 +881,7 @@ func (r *ExportRepository) ExportDisposalDecisions(ctx context.Context, transact
 			&record.DisposedBasisScale, &record.CostBasisMethod, &record.ResolutionTier,
 			&record.AccountVersionID, &record.ProfileID, &record.ProfileVersionID,
 			&record.SourceEffectiveFrom, &record.SourceRecordedAt, &record.CreatedAt,
-			&record.CreatedAuditEventID); err != nil {
+			&record.CreatedAuditEventID, &record.OperationID, &record.PositionSide); err != nil {
 			return nil, fmt.Errorf("scan export disposal decision: %w", err)
 		}
 		records = append(records, record)
@@ -924,7 +929,8 @@ func (r *ExportRepository) ExportPrices(ctx context.Context, transaction *sql.Tx
 			po.price_value, po.price_scale,
 			po.base_quantity_value, po.base_quantity_scale,
 			po.quote_type, po.adjustment_basis,
-			po.is_manual, po.is_derived,
+			po.is_manual, po.is_derived, po.is_approximate,
+			po.source_transaction_version_id, po.created_audit_event_id,
 			source.code
 		FROM price_observations po
 		LEFT JOIN market_data_sources source ON source.id = po.source_id
@@ -951,6 +957,9 @@ func (r *ExportRepository) ExportPrices(ctx context.Context, transaction *sql.Tx
 			&price.AdjustmentBasis,
 			&price.IsManual,
 			&price.IsDerived,
+			&price.IsApproximate,
+			&price.SourceTransactionVersionID,
+			&price.AuditEventID,
 			&price.SourceCode,
 		); err != nil {
 			return nil, fmt.Errorf("scan export price: %w", err)

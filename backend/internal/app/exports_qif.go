@@ -310,7 +310,7 @@ func (s *ExportService) writeQIFArchive(
 		Excluded      []QIFAccountStatus   `json:"excluded_accounts"`
 		Files         []bundleFile         `json:"files"`
 	}{
-		SchemaVersion: BundleSchemaVersion,
+		SchemaVersion: 1,
 		GeneratedAt:   s.now().UTC().Format(time.RFC3339),
 		Format:        "qif",
 		DateLayout:    string(classified.Layout),

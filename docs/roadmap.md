@@ -459,11 +459,15 @@ R16 slice 1's equations, posting matrices, fee policy and cross-currency
 admission rules are specified in
 `docs/plans/investment-operation-slice-1-contract.md`. A fresh/seeded export
 contract test pins the current investment bundle before the 2a rewrite; this
-design gate adds no user-facing command.
+design gate adds no user-facing command. Slice 2a now records operation links,
+typed dates, exact source components and lot-opening facts, side-keyed basis
+state, and atomic trade prices with one audit event. The investment bundle is
+version 2 and preserves the new evidence. Slice 2b is next: generalized import
+identity across compound operations.
 The schema and existing-command operation identity have landed in the unused
 v0.1 candidate baseline. Native replay, side-aware reads/self-checks and the
 short-sale/cover commands remain before T-108 is usable. The next execution
-order is the operation/schema and exact-trade foundation, native correction,
+order is generalized import identity, exact-trade economics, native correction,
 transfers and basis actions including manual splits, then short-sale/cover;
 compound corporate actions follow. Return-of-capital and cash-in-lieu
 suggestions are currently refused as dividend income (T-109) until their

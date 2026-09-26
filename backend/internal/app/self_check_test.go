@@ -68,7 +68,7 @@ func TestSelfCheckPassesOnHealthyBook(t *testing.T) {
 
 	expected := []string{
 		CheckEntryBalance, CheckTransactionBalance, CheckBookBalance, CheckVersionIntegrity,
-		CheckLotReconciliation, CheckCommodityPositionSign, CheckCheckpointIntegrity, CheckAccountVersionCoverage,
+		CheckLotReconciliation, CheckCommodityPositionSign, CheckCheckpointIntegrity, CheckAccountVersionCoverage, CheckInvestmentFoundation,
 		CheckSQLiteIntegrity, CheckAttachments,
 	}
 	require.Len(t, run.Results, len(expected))
@@ -83,6 +83,28 @@ func TestSelfCheckPassesOnHealthyBook(t *testing.T) {
 	// The reserved slot reports not_applicable rather than passing: passing a
 	// check nobody ran is how a coverage claim gets made by accident.
 	assert.Equal(t, SelfCheckNotApplicable, resultFor(t, run, CheckAttachments).Status)
+}
+
+func TestSelfCheckFindsInvestmentOperationWithoutPostedVersionLink(t *testing.T) {
+	harness := newSelfCheckHarness(t)
+	ctx := context.Background()
+	result, err := harness.writer.ExecContext(ctx, `
+		INSERT INTO audit_events (book_id, actor_user_id, occurred_at, origin_type, operation)
+		VALUES (1, 1, '2026-08-24T04:00:00Z', 'internal', 'test.orphan_investment_operation')
+	`)
+	require.NoError(t, err)
+	auditID, err := result.LastInsertId()
+	require.NoError(t, err)
+	_, err = harness.writer.ExecContext(ctx, `
+		INSERT INTO investment_operations
+			(book_id, transaction_id, operation_kind, event_date, created_at, created_audit_event_id)
+		VALUES (1, 1, 'buy', '2026-01-01', '2026-08-24T04:00:00Z', ?)
+	`, auditID)
+	require.NoError(t, err)
+	run := harness.run(t)
+	resultCheck := resultFor(t, run, CheckInvestmentFoundation)
+	assert.Equal(t, SelfCheckFailed, resultCheck.Status)
+	assert.Contains(t, resultCheck.Summary, "posted operation missing its version link")
 }
 
 // One deliberate corruption per check, written with raw SQL because every one

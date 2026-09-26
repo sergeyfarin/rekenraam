@@ -599,20 +599,21 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 
 	var body completeSystemAccountsSetupResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
-	require.Len(t, body.Accounts, 8)
+	require.Len(t, body.Accounts, 9)
 	assert.Equal(t, setupStepResponse{Key: "system_accounts", Status: "completed"}, body.Setup.Steps[3])
 
 	expectedRoles := map[string]struct {
 		accountClass string
 		accountKind  string
 	}{
-		"opening_balance":    {accountClass: "equity", accountKind: "equity"},
-		"import_imbalance":   {accountClass: "equity", accountKind: "equity"},
-		"retained_earnings":  {accountClass: "equity", accountKind: "equity"},
-		"unassigned_income":  {accountClass: "income", accountKind: "income"},
-		"unassigned_expense": {accountClass: "expense", accountKind: "expense"},
-		"transfer_clearing":  {accountClass: "asset", accountKind: "receivable"},
-		"commodity_trading":  {accountClass: "equity", accountKind: "equity"},
+		"opening_balance":                     {accountClass: "equity", accountKind: "equity"},
+		"import_imbalance":                    {accountClass: "equity", accountKind: "equity"},
+		"retained_earnings":                   {accountClass: "equity", accountKind: "equity"},
+		"unassigned_income":                   {accountClass: "income", accountKind: "income"},
+		"unassigned_expense":                  {accountClass: "expense", accountKind: "expense"},
+		"transfer_clearing":                   {accountClass: "asset", accountKind: "receivable"},
+		"commodity_trading":                   {accountClass: "equity", accountKind: "equity"},
+		"external_investment_transfer_equity": {accountClass: "equity", accountKind: "equity"},
 	}
 	seenRoles := make(map[string]bool, len(expectedRoles))
 	var starterCashAccounts []accountResponse
@@ -635,13 +636,14 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 		seenRoles[account.SystemRole] = true
 	}
 	assert.Equal(t, map[string]bool{
-		"opening_balance":    true,
-		"import_imbalance":   true,
-		"retained_earnings":  true,
-		"unassigned_income":  true,
-		"unassigned_expense": true,
-		"transfer_clearing":  true,
-		"commodity_trading":  true,
+		"opening_balance":                     true,
+		"import_imbalance":                    true,
+		"retained_earnings":                   true,
+		"unassigned_income":                   true,
+		"unassigned_expense":                  true,
+		"transfer_clearing":                   true,
+		"commodity_trading":                   true,
+		"external_investment_transfer_equity": true,
 	}, seenRoles)
 	require.Len(t, starterCashAccounts, 1)
 	assert.False(t, starterCashAccounts[0].IsSystem)
@@ -660,7 +662,7 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 	assert.Equal(t, "cash:USD", defaultList.Accounts[0].Code)
 
 	systemList := listAccountsForSession(t, handler, sessionCookie, "?include_system=true")
-	require.Len(t, systemList.Accounts, 8)
+	require.Len(t, systemList.Accounts, 9)
 	var systemCount int
 	for _, account := range systemList.Accounts {
 		if account.IsSystem {
@@ -668,7 +670,7 @@ func TestSystemAccountSetupCreatesRolesAndProtectsThem(t *testing.T) {
 			systemCount++
 		}
 	}
-	assert.Equal(t, 7, systemCount)
+	assert.Equal(t, 8, systemCount)
 
 	var completedAt sql.NullString
 	var auditEventID sql.NullInt64

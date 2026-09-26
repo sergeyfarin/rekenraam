@@ -35,6 +35,7 @@ const (
 	CheckCommodityPositionSign  = "commodity_position_sign"
 	CheckCheckpointIntegrity    = "checkpoint_integrity"
 	CheckAccountVersionCoverage = "account_version_coverage"
+	CheckInvestmentFoundation   = "investment_foundation"
 	CheckSQLiteIntegrity        = "sqlite_integrity"
 	CheckAttachments            = "attachments"
 )
@@ -125,6 +126,10 @@ var checkNarratives = map[string]checkNarrative{
 	CheckAccountVersionCoverage: {
 		explanation: "Every posting must have a version of its account that was in effect on the posting's date.",
 		nextStep:    "The app refuses to create these, so a non-zero count means rows arrived from outside it — a backfill, a manual repair, or a restored and patched database. Exports have been quietly falling back to each account's earliest version for these rows.",
+	},
+	CheckInvestmentFoundation: {
+		explanation: "Named investment operations must link their posted versions, source lots and effects. A completed setup also needs its external investment transfer equity account and commission default.",
+		nextStep:    "Review the named operation or lot and the setup accounts. Preserve the original rows before correcting any missing source or link.",
 	},
 	CheckSQLiteIntegrity: {
 		explanation: "The database file itself must pass SQLite's integrity_check and foreign_key_check.",
@@ -281,6 +286,10 @@ func (s *SelfCheckService) executeChecks(ctx context.Context) ([]SelfCheckResult
 	if err != nil {
 		return nil, err
 	}
+	investmentFoundation, err := s.investmentFoundationCheck(ctx, snapshot)
+	if err != nil {
+		return nil, err
+	}
 
 	lots, err := s.lotReconciliationCheck(ctx, snapshot)
 	if err != nil {
@@ -302,13 +311,69 @@ func (s *SelfCheckService) executeChecks(ctx context.Context) ([]SelfCheckResult
 		return nil, err
 	}
 
-	results := append(balances, structural, lots, positions, checkpoints, coverage, integrity, s.attachmentsCheck())
+	results := append(balances, structural, lots, positions, checkpoints, coverage, investmentFoundation, integrity, s.attachmentsCheck())
 	for index := range results {
 		narrative := checkNarratives[results[index].CheckID]
 		results[index].Explanation = narrative.explanation
 		results[index].NextStep = narrative.nextStep
 	}
 	return results, nil
+}
+
+func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapshot *sql.Tx) (SelfCheckResult, error) {
+	result := SelfCheckResult{CheckID: CheckInvestmentFoundation, Status: SelfCheckPassed, Summary: "investment operations, source facts, and setup defaults are linked"}
+	checks := []struct {
+		label string
+		query string
+	}{
+		{"completed setup missing transfer equity account", `
+			SELECT b.id FROM books b JOIN setup_steps step ON step.step_key = 'system_accounts'
+			WHERE b.id = ? AND step.completed_at IS NOT NULL AND NOT EXISTS (
+				SELECT 1 FROM accounts a JOIN current_account_versions av ON av.account_id = a.id
+				WHERE a.book_id = b.id AND a.system_role = 'external_investment_transfer_equity'
+				  AND av.account_class = 'equity' AND av.account_kind = 'equity')`},
+		{"completed setup missing commission default", `
+			SELECT b.id FROM books b JOIN setup_steps step ON step.step_key = 'system_accounts'
+			WHERE b.id = ? AND step.completed_at IS NOT NULL AND NOT EXISTS (
+				SELECT 1 FROM investment_fee_policies p
+				JOIN investment_fee_policy_versions v ON v.policy_id = p.id
+				WHERE p.book_id = b.id AND p.account_id IS NULL AND p.charge_kind = 'commission'
+				  AND v.version_seq = 1 AND v.treatment = 'clearing_included')`},
+		{"posted operation missing its version link", `
+			SELECT o.id FROM investment_operations o WHERE o.book_id = ? AND o.transaction_id IS NOT NULL
+			AND (SELECT COUNT(*) FROM investment_operation_journal_links l
+			     JOIN transaction_versions v ON v.id = l.transaction_version_id
+			     WHERE l.operation_id = o.id AND v.transaction_id = o.transaction_id) <> 1`},
+		{"operation lot missing immutable source facts", `
+			SELECT l.id FROM investment_lots l JOIN investment_operations o ON o.transaction_id = l.source_transaction_id
+			WHERE l.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_lot_facts f
+				WHERE f.lot_id = l.id AND f.operation_id = o.id)`},
+		{"operation lot event missing effect link", `
+			SELECT e.id FROM investment_lot_events e JOIN investment_operations o ON o.transaction_id = e.transaction_id
+			WHERE e.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+				WHERE x.lot_event_id = e.id AND x.operation_id = o.id)`},
+	}
+	var summaries []string
+	for _, check := range checks {
+		anomaly, err := s.repository.CountStructuralAnomaly(ctx, snapshot, check.query, BookID)
+		if err != nil {
+			return SelfCheckResult{}, err
+		}
+		if anomaly.Count == 0 {
+			continue
+		}
+		result.Status = SelfCheckFailed
+		result.FindingCount += anomaly.Count
+		result.Sample = append(result.Sample, anomaly.Sample...)
+		summaries = append(summaries, fmt.Sprintf("%d %s", anomaly.Count, check.label))
+	}
+	if result.Status == SelfCheckFailed {
+		if len(result.Sample) > db.SelfCheckSampleLimit {
+			result.Sample = result.Sample[:db.SelfCheckSampleLimit]
+		}
+		result.Summary = joinSummaries(summaries)
+	}
+	return result, nil
 }
 
 // balanceChecks folds every posted posting once and answers three questions

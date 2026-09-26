@@ -1,3 +1,5 @@
+-- BREAKING DEV DATABASE: pre-release ADR 0013 investment foundation rewrite.
+-- Disposable developer databases must be reset before running this baseline.
 -- +goose Up
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY,
@@ -276,7 +278,8 @@ CREATE TABLE IF NOT EXISTS accounts (
       'unassigned_income',
       'unassigned_expense',
       'transfer_clearing',
-      'commodity_trading'
+      'commodity_trading',
+      'external_investment_transfer_equity'
     )
   ),
   created_at TEXT NOT NULL,
@@ -943,6 +946,8 @@ CREATE TABLE IF NOT EXISTS price_observations (
   provider_observation_id TEXT,
   is_manual INTEGER NOT NULL DEFAULT 0 CHECK (is_manual IN (0, 1)),
   is_derived INTEGER NOT NULL DEFAULT 0 CHECK (is_derived IN (0, 1)),
+  is_approximate INTEGER NOT NULL DEFAULT 0 CHECK (is_approximate IN (0, 1)),
+  source_transaction_version_id INTEGER REFERENCES transaction_versions(id) ON DELETE RESTRICT,
   supersedes_observation_id INTEGER REFERENCES price_observations(id) ON DELETE RESTRICT,
   ingest_run_id INTEGER,
   derivation_json TEXT NOT NULL DEFAULT '{}',
@@ -1102,9 +1107,9 @@ CREATE TABLE IF NOT EXISTS investment_lots (
   quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
   remaining_quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(remaining_quantity_value) BETWEEN 1 AND 38),
   remaining_quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (remaining_quantity_scale BETWEEN 0 AND 24),
-  cost_basis_value INTEGER NOT NULL,
+  cost_basis_value TEXT NOT NULL CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
   cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
-  remaining_cost_basis_value INTEGER NOT NULL,
+  remaining_cost_basis_value TEXT NOT NULL CHECK (length(remaining_cost_basis_value) BETWEEN 1 AND 38),
   remaining_cost_basis_scale INTEGER NOT NULL CHECK (remaining_cost_basis_scale BETWEEN 0 AND 12),
   cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   metadata_json TEXT NOT NULL DEFAULT '{}',
@@ -1132,7 +1137,7 @@ CREATE TABLE IF NOT EXISTS investment_lot_events (
   event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
   quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
-  cost_basis_value INTEGER NOT NULL DEFAULT 0,
+  cost_basis_value TEXT NOT NULL DEFAULT '0' CHECK (length(cost_basis_value) BETWEEN 1 AND 39),
   cost_basis_scale INTEGER NOT NULL DEFAULT 0 CHECK (cost_basis_scale BETWEEN 0 AND 12),
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
@@ -1157,10 +1162,11 @@ CREATE TABLE IF NOT EXISTS investment_position_basis_state (
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   method_family TEXT NOT NULL CHECK (method_family IN ('individual_lot', 'average_cost')),
+  position_side TEXT NOT NULL DEFAULT 'long' CHECK (position_side IN ('long', 'short')),
   updated_at TEXT NOT NULL,
   updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  UNIQUE (book_id, account_id, commodity_id, cost_commodity_id)
+  UNIQUE (book_id, account_id, commodity_id, cost_commodity_id, position_side)
 );
 
 CREATE TABLE IF NOT EXISTS investment_disposal_decisions (
@@ -1168,6 +1174,8 @@ CREATE TABLE IF NOT EXISTS investment_disposal_decisions (
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
   transaction_version_id INTEGER NOT NULL REFERENCES transaction_versions(id) ON DELETE RESTRICT,
+  operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  position_side TEXT NOT NULL DEFAULT 'long' CHECK (position_side IN ('long', 'short')),
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
@@ -1204,7 +1212,7 @@ CREATE TABLE IF NOT EXISTS investment_disposal_allocations (
   allocation_seq INTEGER NOT NULL CHECK (allocation_seq > 0),
   quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38),
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
-  cost_basis_value INTEGER NOT NULL,
+  cost_basis_value TEXT NOT NULL CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
   cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
   UNIQUE (decision_id, allocation_seq),
   UNIQUE (lot_event_id)
@@ -1216,7 +1224,7 @@ CREATE INDEX IF NOT EXISTS investment_disposal_decisions_event_idx
 CREATE TABLE IF NOT EXISTS investment_operations (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  transaction_id INTEGER NOT NULL UNIQUE REFERENCES transactions(id) ON DELETE RESTRICT,
+  transaction_id INTEGER UNIQUE REFERENCES transactions(id) ON DELETE RESTRICT,
   operation_kind TEXT NOT NULL CHECK (length(trim(operation_kind)) > 0 AND operation_kind = trim(operation_kind)),
   event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
   created_at TEXT NOT NULL,
@@ -1229,12 +1237,10 @@ CREATE INDEX IF NOT EXISTS investment_operations_book_kind_date_idx
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_operations_same_book
 BEFORE INSERT ON investment_operations
-WHEN NOT EXISTS (
-  SELECT 1 FROM transactions t
-  JOIN audit_events a ON a.id = NEW.created_audit_event_id
-  WHERE t.id = NEW.transaction_id AND t.book_id = NEW.book_id
-    AND a.book_id = NEW.book_id
-)
+WHEN NOT EXISTS (SELECT 1 FROM audit_events a WHERE a.id = NEW.created_audit_event_id AND a.book_id = NEW.book_id)
+  OR (NEW.transaction_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM transactions t WHERE t.id = NEW.transaction_id AND t.book_id = NEW.book_id
+  ))
 BEGIN
   SELECT RAISE(ABORT, 'investment operation must reference a transaction and audit event in the same book');
 END;
@@ -1254,6 +1260,307 @@ BEFORE DELETE ON investment_operations
 BEGIN
   SELECT RAISE(ABORT, 'investment operations are immutable');
 END;
+-- +goose StatementEnd
+
+-- A parent may have no journal link (basis-only action) or several links
+-- (compound action). Existing one-transaction operations use link_seq = 1.
+CREATE TABLE IF NOT EXISTS investment_operation_journal_links (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  transaction_version_id INTEGER NOT NULL REFERENCES transaction_versions(id) ON DELETE RESTRICT,
+  link_seq INTEGER NOT NULL CHECK (link_seq > 0),
+  role TEXT NOT NULL CHECK (length(trim(role)) > 0 AND role = trim(role)),
+  UNIQUE (operation_id, link_seq),
+  UNIQUE (transaction_version_id)
+);
+
+CREATE TABLE IF NOT EXISTS investment_operation_dates (
+  operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  date_role TEXT NOT NULL CHECK (date_role IN ('trade', 'settlement', 'ex', 'record', 'payable', 'payment', 'effective')),
+  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  PRIMARY KEY (operation_id, date_role)
+);
+
+-- Immutable source components. A current net-only trade records only its
+-- settlement fact; gross_unknown stays explicit until a correction supplies it.
+CREATE TABLE IF NOT EXISTS investment_operation_components (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  component_seq INTEGER NOT NULL CHECK (component_seq > 0),
+  component_kind TEXT NOT NULL CHECK (length(trim(component_kind)) > 0 AND component_kind = trim(component_kind)),
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  amount_value TEXT NOT NULL CHECK (
+    length(amount_value) BETWEEN 1 AND 39 AND (
+      amount_value = '0' OR
+      (amount_value NOT GLOB '*[^0-9]*' AND substr(amount_value, 1, 1) BETWEEN '1' AND '9') OR
+      (substr(amount_value, 1, 1) = '-' AND substr(amount_value, 2) NOT GLOB '*[^0-9]*'
+       AND substr(amount_value, 2, 1) BETWEEN '1' AND '9')
+    )
+  ),
+  amount_scale INTEGER NOT NULL CHECK (amount_scale BETWEEN 0 AND 24),
+  amount_date TEXT NOT NULL CHECK (amount_date GLOB '????-??-??'),
+  gross_unknown INTEGER NOT NULL DEFAULT 0 CHECK (gross_unknown IN (0, 1)),
+  charge_treatment TEXT CHECK (charge_treatment IS NULL OR charge_treatment IN ('clearing_included', 'separately_expensed')),
+  charge_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
+  resolution_tier TEXT CHECK (resolution_tier IS NULL OR resolution_tier IN ('transaction', 'account', 'global', 'fallback')),
+  fee_policy_version_id INTEGER REFERENCES investment_fee_policy_versions(id) ON DELETE RESTRICT,
+  source_evidence_json TEXT NOT NULL DEFAULT '{}',
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (operation_id, component_seq),
+  CHECK ((component_kind = 'charge') = (charge_treatment IS NOT NULL)),
+  CHECK (charge_treatment != 'separately_expensed' OR charge_account_id IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS investment_fee_policies (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
+  charge_kind TEXT NOT NULL CHECK (length(trim(charge_kind)) > 0 AND charge_kind = trim(charge_kind)),
+  created_at TEXT NOT NULL,
+  created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS investment_fee_policy_versions (
+  id INTEGER PRIMARY KEY,
+  policy_id INTEGER NOT NULL REFERENCES investment_fee_policies(id) ON DELETE RESTRICT,
+  version_seq INTEGER NOT NULL CHECK (version_seq > 0),
+  effective_from TEXT NOT NULL CHECK (effective_from GLOB '????-??-??'),
+  treatment TEXT NOT NULL CHECK (treatment IN ('clearing_included', 'separately_expensed')),
+  charge_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
+  recorded_at TEXT NOT NULL,
+  audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (policy_id, version_seq),
+  CHECK (treatment != 'separately_expensed' OR charge_account_id IS NOT NULL)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS investment_fee_policy_scope_idx
+  ON investment_fee_policies (book_id, IFNULL(account_id, 0), charge_kind);
+
+-- investment_lots is the rebuildable current projection. The committed
+-- opening lot terms live here and are never changed by a disposal or replay;
+-- raw trade amounts remain in investment_operation_components.
+CREATE TABLE IF NOT EXISTS investment_lot_facts (
+  lot_id INTEGER PRIMARY KEY REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  position_side TEXT NOT NULL CHECK (position_side IN ('long', 'short')),
+  opened_on TEXT NOT NULL CHECK (opened_on GLOB '????-??-??'),
+  quantity_value TEXT NOT NULL CHECK (
+    length(quantity_value) BETWEEN 1 AND 38 AND quantity_value NOT GLOB '*[^0-9]*'
+    AND substr(quantity_value, 1, 1) BETWEEN '1' AND '9'
+  ),
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
+  consideration_value TEXT NOT NULL CHECK (
+    length(consideration_value) BETWEEN 1 AND 38 AND (
+      consideration_value = '0' OR
+      (consideration_value NOT GLOB '*[^0-9]*' AND substr(consideration_value, 1, 1) BETWEEN '1' AND '9') OR
+      (substr(consideration_value, 1, 1) = '-' AND substr(consideration_value, 2) NOT GLOB '*[^0-9]*'
+       AND substr(consideration_value, 2, 1) BETWEEN '1' AND '9')
+    )
+  ),
+  consideration_scale INTEGER NOT NULL CHECK (consideration_scale BETWEEN 0 AND 12),
+  cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS investment_operation_lot_effects (
+  operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  lot_event_id INTEGER NOT NULL UNIQUE REFERENCES investment_lot_events(id) ON DELETE RESTRICT,
+  effect_seq INTEGER NOT NULL CHECK (effect_seq > 0),
+  PRIMARY KEY (operation_id, effect_seq)
+);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operation_links_valid
+BEFORE INSERT ON investment_operation_journal_links
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_operations o
+  JOIN transaction_versions v ON v.id = NEW.transaction_version_id
+  WHERE o.id = NEW.operation_id AND o.book_id = NEW.book_id
+    AND v.book_id = NEW.book_id AND v.status = 'posted'
+    AND v.transaction_kind = 'investment'
+    AND (NEW.link_seq <> 1 OR o.transaction_id IS NULL OR o.transaction_id = v.transaction_id)
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment journal link must use a posted investment version in the same book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_components_same_book
+BEFORE INSERT ON investment_operation_components
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_operations o
+  JOIN commodities c ON c.id = NEW.commodity_id
+  JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  WHERE o.id = NEW.operation_id AND o.book_id = NEW.book_id
+    AND c.book_id = NEW.book_id AND a.book_id = NEW.book_id
+    AND (NEW.charge_account_id IS NULL OR EXISTS (
+      SELECT 1 FROM accounts charge WHERE charge.id = NEW.charge_account_id AND charge.book_id = NEW.book_id))
+    AND (NEW.fee_policy_version_id IS NULL OR EXISTS (
+      SELECT 1 FROM investment_fee_policy_versions v
+      JOIN investment_fee_policies p ON p.id = v.policy_id
+      WHERE v.id = NEW.fee_policy_version_id AND p.book_id = NEW.book_id))
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment component references another book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lot_facts_same_book
+BEFORE INSERT ON investment_lot_facts
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_lots l
+  JOIN investment_operations o ON o.id = NEW.operation_id
+  JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  WHERE l.id = NEW.lot_id AND l.book_id = NEW.book_id
+    AND l.account_id = NEW.account_id AND l.commodity_id = NEW.commodity_id
+    AND l.position_side = NEW.position_side AND o.book_id = NEW.book_id
+    AND l.opened_on = NEW.opened_on AND l.quantity_value = NEW.quantity_value
+    AND l.quantity_scale = NEW.quantity_scale
+    AND l.cost_basis_value = NEW.consideration_value
+    AND l.cost_basis_scale = NEW.consideration_scale
+    AND l.cost_commodity_id = NEW.cost_commodity_id
+    AND a.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment lot fact references another book or position');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lot_effects_same_book
+BEFORE INSERT ON investment_operation_lot_effects
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_operations o
+  JOIN investment_lot_events e ON e.id = NEW.lot_event_id
+  WHERE o.id = NEW.operation_id AND o.book_id = e.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment lot effect references another book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_decisions_same_book
+BEFORE INSERT ON investment_disposal_decisions
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_operations o
+  JOIN transactions t ON t.id = NEW.transaction_id
+  JOIN transaction_versions v ON v.id = NEW.transaction_version_id
+  WHERE o.id = NEW.operation_id AND o.book_id = NEW.book_id
+    AND t.book_id = NEW.book_id AND v.book_id = NEW.book_id
+    AND v.transaction_id = t.id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment disposal decision references another book or transaction');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operation_journal_links_no_update
+BEFORE UPDATE ON investment_operation_journal_links
+BEGIN SELECT RAISE(ABORT, 'investment journal links are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operation_journal_links_no_delete
+BEFORE DELETE ON investment_operation_journal_links
+BEGIN SELECT RAISE(ABORT, 'investment journal links are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operation_components_no_update
+BEFORE UPDATE ON investment_operation_components
+BEGIN SELECT RAISE(ABORT, 'investment components are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operation_components_no_delete
+BEFORE DELETE ON investment_operation_components
+BEGIN SELECT RAISE(ABORT, 'investment components are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lot_facts_no_update
+BEFORE UPDATE ON investment_lot_facts
+BEGIN SELECT RAISE(ABORT, 'investment lot facts are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lot_facts_no_delete
+BEFORE DELETE ON investment_lot_facts
+BEGIN SELECT RAISE(ABORT, 'investment lot facts are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operation_lot_effects_no_update
+BEFORE UPDATE ON investment_operation_lot_effects
+BEGIN SELECT RAISE(ABORT, 'investment lot effects are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operation_lot_effects_no_delete
+BEFORE DELETE ON investment_operation_lot_effects
+BEGIN SELECT RAISE(ABORT, 'investment lot effects are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operation_dates_no_update
+BEFORE UPDATE ON investment_operation_dates
+BEGIN SELECT RAISE(ABORT, 'investment dates are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operation_dates_no_delete
+BEFORE DELETE ON investment_operation_dates
+BEGIN SELECT RAISE(ABORT, 'investment dates are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lot_events_no_update
+BEFORE UPDATE ON investment_lot_events
+BEGIN SELECT RAISE(ABORT, 'investment lot events are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_lot_events_no_delete
+BEFORE DELETE ON investment_lot_events
+BEGIN SELECT RAISE(ABORT, 'investment lot events are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_fee_policy_versions_no_update
+BEFORE UPDATE ON investment_fee_policy_versions
+BEGIN SELECT RAISE(ABORT, 'investment fee policy versions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_fee_policy_versions_no_delete
+BEFORE DELETE ON investment_fee_policy_versions
+BEGIN SELECT RAISE(ABORT, 'investment fee policy versions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_fee_policies_no_update
+BEFORE UPDATE ON investment_fee_policies
+BEGIN SELECT RAISE(ABORT, 'investment fee policies are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_fee_policies_no_delete
+BEFORE DELETE ON investment_fee_policies
+BEGIN SELECT RAISE(ABORT, 'investment fee policies are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_decisions_no_update
+BEFORE UPDATE ON investment_disposal_decisions
+BEGIN SELECT RAISE(ABORT, 'investment disposal decisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_decisions_no_delete
+BEFORE DELETE ON investment_disposal_decisions
+BEGIN SELECT RAISE(ABORT, 'investment disposal decisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_allocations_no_update
+BEFORE UPDATE ON investment_disposal_allocations
+BEGIN SELECT RAISE(ABORT, 'investment disposal allocations are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_allocations_no_delete
+BEFORE DELETE ON investment_disposal_allocations
+BEGIN SELECT RAISE(ABORT, 'investment disposal allocations are immutable'); END;
 -- +goose StatementEnd
 
 CREATE TABLE IF NOT EXISTS investment_provider_events (
@@ -1910,6 +2217,10 @@ WHEN NOT EXISTS (
     AND ps.quote_commodity_id = NEW.quote_commodity_id
     AND c.book_id = NEW.book_id
     AND q.book_id = NEW.book_id
+    AND (NEW.source_transaction_version_id IS NULL OR EXISTS (
+      SELECT 1 FROM transaction_versions tv
+      WHERE tv.id = NEW.source_transaction_version_id AND tv.book_id = NEW.book_id
+    ))
 )
 BEGIN
   SELECT RAISE(ABORT, 'price observation series and commodities must belong to one book');
@@ -2916,13 +3227,46 @@ DROP TRIGGER IF EXISTS import_rules_targets_same_book_insert;
 DROP INDEX IF EXISTS import_rules_book_order_idx;
 DROP TABLE IF EXISTS import_rules;
 DROP INDEX IF EXISTS investment_disposal_decisions_event_idx;
+DROP TRIGGER IF EXISTS investment_disposal_allocations_no_delete;
+DROP TRIGGER IF EXISTS investment_disposal_allocations_no_update;
+DROP TRIGGER IF EXISTS investment_disposal_decisions_no_delete;
+DROP TRIGGER IF EXISTS investment_disposal_decisions_no_update;
+DROP TRIGGER IF EXISTS investment_fee_policies_no_delete;
+DROP TRIGGER IF EXISTS investment_fee_policies_no_update;
+DROP TRIGGER IF EXISTS investment_fee_policy_versions_no_delete;
+DROP TRIGGER IF EXISTS investment_fee_policy_versions_no_update;
+DROP TRIGGER IF EXISTS investment_lot_events_no_delete;
+DROP TRIGGER IF EXISTS investment_lot_events_no_update;
+DROP TRIGGER IF EXISTS investment_operation_dates_no_delete;
+DROP TRIGGER IF EXISTS investment_operation_dates_no_update;
+DROP TRIGGER IF EXISTS investment_operation_lot_effects_no_delete;
+DROP TRIGGER IF EXISTS investment_operation_lot_effects_no_update;
+DROP TRIGGER IF EXISTS investment_lot_facts_no_delete;
+DROP TRIGGER IF EXISTS investment_lot_facts_no_update;
+DROP TRIGGER IF EXISTS investment_operation_components_no_delete;
+DROP TRIGGER IF EXISTS investment_operation_components_no_update;
+DROP TRIGGER IF EXISTS investment_operation_journal_links_no_delete;
+DROP TRIGGER IF EXISTS investment_operation_journal_links_no_update;
+DROP TRIGGER IF EXISTS investment_lot_effects_same_book;
+DROP TRIGGER IF EXISTS investment_disposal_decisions_same_book;
+DROP TRIGGER IF EXISTS investment_lot_facts_same_book;
+DROP TRIGGER IF EXISTS investment_components_same_book;
+DROP TRIGGER IF EXISTS investment_operation_links_valid;
+DROP TABLE IF EXISTS investment_operation_lot_effects;
+DROP TABLE IF EXISTS investment_lot_facts;
+DROP TABLE IF EXISTS investment_operation_components;
+DROP INDEX IF EXISTS investment_fee_policy_scope_idx;
+DROP TABLE IF EXISTS investment_fee_policy_versions;
+DROP TABLE IF EXISTS investment_fee_policies;
+DROP TABLE IF EXISTS investment_operation_dates;
+DROP TABLE IF EXISTS investment_operation_journal_links;
 DROP TRIGGER IF EXISTS investment_operations_no_delete;
 DROP TRIGGER IF EXISTS investment_operations_no_update;
 DROP TRIGGER IF EXISTS investment_operations_same_book;
 DROP INDEX IF EXISTS investment_operations_book_kind_date_idx;
-DROP TABLE IF EXISTS investment_operations;
 DROP TABLE IF EXISTS investment_disposal_allocations;
 DROP TABLE IF EXISTS investment_disposal_decisions;
+DROP TABLE IF EXISTS investment_operations;
 DROP TABLE IF EXISTS investment_position_basis_state;
 DROP INDEX IF EXISTS investment_lot_events_transaction_idx;
 DROP INDEX IF EXISTS self_check_results_check_idx;

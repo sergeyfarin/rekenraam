@@ -21,6 +21,11 @@ func (r *TransactionRepository) CreateTransactionWithPostWrite(ctx context.Conte
 }
 
 func (r *TransactionRepository) createTransaction(ctx context.Context, params CreateTransactionParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, error) {
+	if params.Spec.InvestmentOperationKind != "" {
+		record, _, err := executeInvestmentWriteTx(ctx, r.database, params,
+			func(*sql.Tx, TransactionRecord, int64) (struct{}, error) { return struct{}{}, nil }, postWrite)
+		return record, err
+	}
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return TransactionRecord{}, fmt.Errorf("begin create transaction: %w", err)
@@ -153,6 +158,11 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 	})
 	if err != nil {
 		return TransactionRecord{}, 0, err
+	}
+	if params.Spec.InvestmentOperationKind != "" {
+		if err := recordInvestmentFoundationTx(ctx, tx, params, record, auditEventID); err != nil {
+			return TransactionRecord{}, 0, err
+		}
 	}
 
 	return record, auditEventID, nil

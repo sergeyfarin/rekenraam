@@ -147,6 +147,17 @@ append-only: columns are added at the end, never reordered, renamed, or removed
 within a major export schema version. A change that cannot be made that way
 requires a new ADR.
 
+The pre-release investment foundation extends the bundle archive to manifest
+schema version 2. It adds operation-to-journal links, typed dates, exact
+source components, lot-opening facts, lot events and effects, and versioned fee
+policies as separate CSV files. `prices.csv` appends approximate, source
+transaction version, and audit identifiers. `disposal-decisions.csv` appends
+operation ID and position side so each election stays tied to its operation.
+The original posting-level
+`ledger.csv` contract and QIF archive version remain unchanged. The added
+investment files retain their stored coefficients and scales so an unknown
+gross amount is never inferred from a net settlement.
+
 ### 7. Exports read through a dedicated read-only connection, in one snapshot
 
 The main pool is `SetMaxOpenConns(1)` (ADR 0004): a read transaction held there

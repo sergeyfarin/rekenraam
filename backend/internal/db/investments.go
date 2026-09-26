@@ -1068,14 +1068,39 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 	if err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("read investment lot id: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `
+	eventResult, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_lot_events (
 			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 			cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id
 		)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, params.BookID, lotID, params.EventKind, nullablePositiveInt64(params.SourceTransactionID), params.OpenedOn, params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID); err != nil {
+	`, params.BookID, lotID, params.EventKind, nullablePositiveInt64(params.SourceTransactionID), params.OpenedOn, params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID)
+	if err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("insert investment lot event: %w", err)
+	}
+	if params.SourceTransactionID > 0 {
+		operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, params.SourceTransactionID)
+		if err != nil {
+			return InvestmentLotRecord{}, err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO investment_lot_facts
+				(lot_id, book_id, operation_id, account_id, commodity_id, position_side,
+				 opened_on, quantity_value, quantity_scale, consideration_value,
+				 consideration_scale, cost_commodity_id, created_audit_event_id)
+			VALUES (?, ?, ?, ?, ?, 'long', ?, ?, ?, ?, ?, ?, ?)
+		`, lotID, params.BookID, operationID, params.AccountID, params.CommodityID,
+			params.OpenedOn, params.QuantityValue, params.QuantityScale,
+			params.CostBasisValue, params.CostBasisScale, params.CostCommodityID, auditEventID); err != nil {
+			return InvestmentLotRecord{}, fmt.Errorf("record investment lot source facts: %w", err)
+		}
+		eventID, err := eventResult.LastInsertId()
+		if err != nil {
+			return InvestmentLotRecord{}, fmt.Errorf("read acquisition event id: %w", err)
+		}
+		if err := linkLotEffectTx(ctx, tx, operationID, eventID); err != nil {
+			return InvestmentLotRecord{}, err
+		}
 	}
 	if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
 		return InvestmentLotRecord{}, err
@@ -1357,7 +1382,7 @@ func enforcePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispo
 	var existing string
 	err := tx.QueryRowContext(ctx, `
 		SELECT method_family FROM investment_position_basis_state
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'
 	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID).Scan(&existing)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
@@ -1386,7 +1411,7 @@ func updatePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispos
 	}
 	if openCount == 0 {
 		_, err := tx.ExecContext(ctx, `DELETE FROM investment_position_basis_state
-			WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?`,
+			WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'`,
 			params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID)
 		if err != nil {
 			return fmt.Errorf("close position basis method state: %w", err)
@@ -1395,10 +1420,10 @@ func updatePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispos
 	}
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_position_basis_state (
-			book_id, account_id, commodity_id, cost_commodity_id, method_family,
+			book_id, account_id, commodity_id, cost_commodity_id, position_side, method_family,
 			updated_at, updated_by_user_id, updated_audit_event_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (book_id, account_id, commodity_id, cost_commodity_id) DO UPDATE SET
+		) VALUES (?, ?, ?, ?, 'long', ?, ?, ?, ?)
+		ON CONFLICT (book_id, account_id, commodity_id, cost_commodity_id, position_side) DO UPDATE SET
 			method_family = excluded.method_family,
 			updated_at = excluded.updated_at,
 			updated_by_user_id = excluded.updated_by_user_id,
@@ -1736,41 +1761,11 @@ func (r *InvestmentRepository) CreateTransactionAndLotWithPostWrite(ctx context.
 }
 
 func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, InvestmentLotRecord, error) {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return TransactionRecord{}, InvestmentLotRecord{}, fmt.Errorf("begin create investment transaction and lot: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
-
-	transaction, auditEventID, err := createTransactionWithAuditTx(ctx, tx, transactionParams)
-	if err != nil {
-		return TransactionRecord{}, InvestmentLotRecord{}, err
-	}
-	lotParams.SourceTransactionID = transaction.ID
-	lot, err := createLotWithAuditTx(ctx, tx, lotParams, auditEventID)
-	if err != nil {
-		return TransactionRecord{}, InvestmentLotRecord{}, err
-	}
-	invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, transactionParams, auditEventID)
-	if err != nil {
-		return TransactionRecord{}, InvestmentLotRecord{}, err
-	}
-	transaction.InvalidatedCheckpointIDs = invalidatedIDs
-	if postWrite != nil {
-		if err := postWrite(tx, transaction.ID); err != nil {
-			return TransactionRecord{}, InvestmentLotRecord{}, err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, InvestmentLotRecord{}, fmt.Errorf("commit create investment transaction and lot: %w", err)
-	}
-	committed = true
-	return transaction, lot, nil
+	return executeInvestmentWriteTx(ctx, r.database, transactionParams,
+		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (InvestmentLotRecord, error) {
+			lotParams.SourceTransactionID = transaction.ID
+			return createLotWithAuditTx(ctx, tx, lotParams, auditEventID)
+		}, postWrite)
 }
 
 func (r *InvestmentRepository) CreateTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams) (TransactionRecord, []LotDisposalRecord, error) {
@@ -1795,50 +1790,36 @@ func (r *InvestmentRepository) CreateTransactionAndDisposeLotsWithDecisionAndPos
 }
 
 func (r *InvestmentRepository) createTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return TransactionRecord{}, nil, DisposalDecisionRecord{}, fmt.Errorf("begin create investment transaction and dispose lots: %w", err)
+	type result struct {
+		disposals []LotDisposalRecord
+		decision  DisposalDecisionRecord
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
-
-	transaction, auditEventID, err := createTransactionWithAuditTx(ctx, tx, transactionParams)
-	if err != nil {
-		return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
-	}
-	disposalParams.TransactionID = transaction.ID
-	disposals, err := disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID)
-	if err != nil {
-		return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
-	}
-	decision, err := createDisposalDecisionTx(ctx, tx, transaction, disposalParams, disposals, auditEventID)
+	transaction, outcome, err := executeInvestmentWriteTx(ctx, r.database, transactionParams,
+		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (result, error) {
+			disposalParams.TransactionID = transaction.ID
+			disposals, err := disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID)
+			if err != nil {
+				return result{}, err
+			}
+			decision, err := createDisposalDecisionTx(ctx, tx, transaction, disposalParams, disposals, auditEventID)
+			if err != nil {
+				return result{}, err
+			}
+			return result{disposals: disposals, decision: decision}, nil
+		}, postWrite)
 	if err != nil {
 		return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
 	}
-	invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, transactionParams, auditEventID)
-	if err != nil {
-		return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
-	}
-	transaction.InvalidatedCheckpointIDs = invalidatedIDs
-	if postWrite != nil {
-		if err := postWrite(tx, transaction.ID); err != nil {
-			return TransactionRecord{}, nil, DisposalDecisionRecord{}, err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, nil, DisposalDecisionRecord{}, fmt.Errorf("commit create investment transaction and dispose lots: %w", err)
-	}
-	committed = true
-	return transaction, disposals, decision, nil
+	return transaction, outcome.disposals, outcome.decision, nil
 }
 
 func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction TransactionRecord, params DisposeLotsParams, disposals []LotDisposalRecord, auditEventID int64) (DisposalDecisionRecord, error) {
 	if len(disposals) == 0 {
 		return DisposalDecisionRecord{}, fmt.Errorf("create disposal decision: no allocations")
+	}
+	operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
+	if err != nil {
+		return DisposalDecisionRecord{}, err
 	}
 	costCommodityID := params.CostCommodityID
 	if costCommodityID == 0 {
@@ -1860,13 +1841,13 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_disposal_decisions (
-			book_id, transaction_id, transaction_version_id, account_id, commodity_id,
+			book_id, transaction_id, transaction_version_id, operation_id, position_side, account_id, commodity_id,
 			cost_commodity_id, event_date, quantity_value, quantity_scale,
 			disposed_basis_value, disposed_basis_scale, cost_basis_method, resolution_tier,
 			account_version_id, profile_id, profile_version_id, source_effective_from,
 			source_recorded_at, created_at, created_by_user_id, created_audit_event_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, params.BookID, transaction.ID, transaction.VersionID, params.AccountID, params.CommodityID,
+		) VALUES (?, ?, ?, ?, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, transaction.ID, transaction.VersionID, operationID, params.AccountID, params.CommodityID,
 		costCommodityID, params.EventDate, params.QuantityValue, params.QuantityScale,
 		disposedBasisValue, disposedBasis.Scale(), params.CostBasisMethod, source.ResolutionTier,
 		nullablePositiveInt64(source.AccountVersionID), nullablePositiveInt64(source.ProfileID),
@@ -1880,6 +1861,9 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 		return DisposalDecisionRecord{}, fmt.Errorf("read disposal decision id: %w", err)
 	}
 	for index, allocation := range disposals {
+		if err := linkLotEffectTx(ctx, tx, operationID, allocation.EventID); err != nil {
+			return DisposalDecisionRecord{}, err
+		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_disposal_allocations (
 				book_id, decision_id, lot_event_id, lot_id, allocation_seq,

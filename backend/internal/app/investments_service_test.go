@@ -225,6 +225,8 @@ func TestAcceptSuggestion_BasisEventsCannotPostAsDividendIncome(t *testing.T) {
 func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
+	var initialAuditCount int64
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM audit_events`).Scan(&initialAuditCount))
 	trade := InvestmentTradeInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
@@ -277,11 +279,81 @@ func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, item.kind, kind)
 		assert.NotEmpty(t, eventDate)
+		var linkCount int
+		require.NoError(t, f.database.QueryRowContext(ctx, `
+			SELECT count(*) FROM investment_operation_journal_links l
+			JOIN investment_operations o ON o.id = l.operation_id
+			JOIN transaction_versions v ON v.id = l.transaction_version_id
+			WHERE o.transaction_id = ? AND v.transaction_id = ?
+		`, item.transactionID, item.transactionID).Scan(&linkCount))
+		assert.Equal(t, 1, linkCount, item.kind)
 	}
+	var finalAuditCount, pricedCount, distinctAuditCount, lotFactCount, componentCount int64
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM audit_events`).Scan(&finalAuditCount))
+	assert.Equal(t, initialAuditCount+5, finalAuditCount, "each investment command has one audit event, including price creation")
+	require.NoError(t, f.database.QueryRowContext(ctx, `
+		SELECT count(*), count(DISTINCT po.created_audit_event_id)
+		FROM price_observations po
+		JOIN transaction_versions v ON v.id = po.source_transaction_version_id
+		JOIN transactions t ON t.id = v.transaction_id
+		WHERE t.id IN (?, ?, ?)
+		  AND po.created_audit_event_id = t.created_audit_event_id
+	`, buy.Transaction.ID, sell.Transaction.ID, reinvestment.Transaction.ID).Scan(&pricedCount, &distinctAuditCount))
+	assert.EqualValues(t, 3, pricedCount)
+	assert.EqualValues(t, 3, distinctAuditCount)
+	var approximateCount, seriesAuditMatches int64
+	require.NoError(t, f.database.QueryRowContext(ctx, `
+		SELECT count(*) FROM price_observations
+		WHERE is_approximate = 1 AND source_transaction_version_id IN (?, ?)
+	`, buy.Transaction.VersionID, sell.Transaction.VersionID).Scan(&approximateCount))
+	assert.EqualValues(t, 2, approximateCount)
+	require.NoError(t, f.database.QueryRowContext(ctx, `
+		SELECT count(*) FROM price_series ps
+		JOIN transactions t ON t.created_audit_event_id = ps.created_audit_event_id
+		WHERE t.id = ?
+	`, buy.Transaction.ID).Scan(&seriesAuditMatches))
+	assert.EqualValues(t, 1, seriesAuditMatches, "new price series shares the buy's audit event")
+	require.NoError(t, f.database.QueryRowContext(ctx, `
+		SELECT count(*) FROM investment_lot_facts WHERE book_id = 1
+	`).Scan(&lotFactCount))
+	assert.EqualValues(t, 2, lotFactCount)
+	require.NoError(t, f.database.QueryRowContext(ctx, `
+		SELECT count(*) FROM investment_operation_components WHERE book_id = 1
+	`).Scan(&componentCount))
+	assert.EqualValues(t, 4, componentCount, "buy, sell, dividend, and reinvestment source facts")
 	_, err = f.database.ExecContext(ctx, `UPDATE investment_operations SET operation_kind = 'short_sale' WHERE transaction_id = ?`, buy.Transaction.ID)
 	require.ErrorContains(t, err, "investment operations are immutable")
 	_, err = f.database.ExecContext(ctx, `DELETE FROM investment_operations WHERE transaction_id = ?`, buy.Transaction.ID)
 	require.ErrorContains(t, err, "investment operations are immutable")
+}
+
+func TestInvestmentTradePriceFailureRollsBackEntireCommand(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	_, err := f.database.ExecContext(ctx, `
+		CREATE TRIGGER reject_trade_price BEFORE INSERT ON price_observations
+		BEGIN SELECT RAISE(ABORT, 'price rejected for rollback test'); END
+	`)
+	require.NoError(t, err)
+	before := f.transactionCount(t)
+	var auditsBefore int64
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM audit_events`).Scan(&auditsBefore))
+	_, err = f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		QuantityValue: exact.New(10), CashAmountValue: 100000, CashAmountScale: 2,
+	})
+	require.ErrorContains(t, err, "price rejected for rollback test")
+	assert.Equal(t, before, f.transactionCount(t))
+	var auditsAfter int64
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM audit_events`).Scan(&auditsAfter))
+	assert.Equal(t, auditsBefore, auditsAfter)
+	for _, table := range []string{"investment_operations", "investment_operation_journal_links", "investment_operation_components", "investment_lots", "investment_lot_facts", "price_series"} {
+		var count int64
+		require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM `+table).Scan(&count))
+		assert.Zero(t, count, table)
+	}
 }
 
 func TestAcceptSuggestion_InvalidCashAccountMarksFailedWithoutPosting(t *testing.T) {

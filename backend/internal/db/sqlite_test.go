@@ -1258,9 +1258,9 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   100,
-		"table":   84,
-		"trigger": 56,
+		"index":   101,
+		"table":   91,
+		"trigger": 81,
 		"view":    6,
 	}, objectCounts, "the consolidated baseline must retain every schema object")
 
@@ -1283,6 +1283,13 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		"investment_lots":                         "table",
 		"investment_lots_side_position_idx":       "index",
 		"investment_operations":                   "table",
+		"investment_operation_journal_links":      "table",
+		"investment_operation_dates":              "table",
+		"investment_operation_components":         "table",
+		"investment_lot_facts":                    "table",
+		"investment_operation_lot_effects":        "table",
+		"investment_fee_policies":                 "table",
+		"investment_fee_policy_versions":          "table",
 		"investment_operations_same_book":         "trigger",
 		"investment_operations_no_update":         "trigger",
 		"investment_operations_no_delete":         "trigger",
