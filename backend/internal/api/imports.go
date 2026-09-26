@@ -27,17 +27,25 @@ type importBatchResponse struct {
 }
 
 type importStagedRowResponse struct {
-	ID                     int64  `json:"id"`
-	BatchID                int64  `json:"batch_id"`
-	RowIndex               int    `json:"row_index"`
-	DedupeFingerprint      string `json:"dedupe_fingerprint"`
-	NormalizedJSON         string `json:"normalized"`
-	RawJSON                string `json:"raw"`
-	DedupeStatus           string `json:"dedupe_status"`
-	ResolutionJSON         string `json:"resolution"`
-	CommitStatus           string `json:"commit_status"`
-	CommittedTransactionID *int64 `json:"committed_transaction_id,omitempty"`
-	CommitError            string `json:"commit_error,omitempty"`
+	ID                     int64                        `json:"id"`
+	BatchID                int64                        `json:"batch_id"`
+	RowIndex               int                          `json:"row_index"`
+	DedupeFingerprint      string                       `json:"dedupe_fingerprint"`
+	NormalizedJSON         string                       `json:"normalized"`
+	RawJSON                string                       `json:"raw"`
+	DedupeStatus           string                       `json:"dedupe_status"`
+	ResolutionJSON         string                       `json:"resolution"`
+	CommitStatus           string                       `json:"commit_status"`
+	CommittedIdentityID    *int64                       `json:"committed_identity_id,omitempty"`
+	CommittedTransactionID *int64                       `json:"committed_transaction_id,omitempty"`
+	CommitEffects          []importCommitEffectResponse `json:"commit_effects"`
+	CommitError            string                       `json:"commit_error,omitempty"`
+}
+
+type importCommitEffectResponse struct {
+	EffectSeq     int64  `json:"effect_seq"`
+	OperationID   *int64 `json:"operation_id,omitempty"`
+	TransactionID *int64 `json:"transaction_id,omitempty"`
 }
 
 type parseWarningResponse struct {
@@ -817,6 +825,12 @@ func toImportBatchResponse(b app.ImportBatch) importBatchResponse {
 }
 
 func toImportStagedRowResponse(row app.ImportStagedRow) importStagedRowResponse {
+	effects := make([]importCommitEffectResponse, 0, len(row.CommitEffects))
+	for _, effect := range row.CommitEffects {
+		effects = append(effects, importCommitEffectResponse{
+			EffectSeq: effect.EffectSeq, OperationID: effect.OperationID, TransactionID: effect.TransactionID,
+		})
+	}
 	normalized := row.NormalizedJSON
 	if normalized == "" {
 		normalized = "{}"
@@ -839,7 +853,9 @@ func toImportStagedRowResponse(row app.ImportStagedRow) importStagedRowResponse 
 		DedupeStatus:           row.DedupeStatus,
 		ResolutionJSON:         resolution,
 		CommitStatus:           row.CommitStatus,
+		CommittedIdentityID:    row.CommittedIdentityID,
 		CommittedTransactionID: row.CommittedTransactionID,
+		CommitEffects:          effects,
 		CommitError:            row.CommitError,
 	}
 }

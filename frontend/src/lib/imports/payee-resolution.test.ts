@@ -30,7 +30,8 @@ function row(
     raw: '{}',
     dedupe_status: dedupeStatus,
     resolution: '{}',
-    commit_status: 'pending'
+    commit_status: 'pending',
+    commit_effects: []
   };
 }
 

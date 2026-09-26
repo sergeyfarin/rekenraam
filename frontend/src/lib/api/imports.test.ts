@@ -32,7 +32,8 @@ function importBatchResponse(rows: { id: number }[], nextCursor: string | null):
       raw: '{}',
       dedupe_status: 'new',
       resolution: '{}',
-      commit_status: 'pending'
+      commit_status: 'pending',
+      commit_effects: []
     })),
     next_cursor: nextCursor
   };

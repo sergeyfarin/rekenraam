@@ -1048,10 +1048,10 @@ func (s *ImportService) recordImportStagedRowTerminal(ctx context.Context, resul
 	if err != nil {
 		return fmt.Errorf("reload committed staged row: %w", err)
 	}
-	if row.CommitStatus != "committed" || !row.CommittedTransactionID.Valid {
+	if row.CommitStatus != "committed" || !row.CommittedIdentityID.Valid || len(row.CommitEffects) == 0 {
 		return fmt.Errorf("staged row %d reported committed transition conflict but is not committed", params.RowID)
 	}
-	if expectedTransactionID != nil && row.CommittedTransactionID.Int64 != *expectedTransactionID {
+	if expectedTransactionID != nil && *expectedTransactionID > 0 && (!row.CommittedTransactionID.Valid || row.CommittedTransactionID.Int64 != *expectedTransactionID) {
 		return fmt.Errorf("staged row %d committed transaction does not match import identity", params.RowID)
 	}
 	result.CommittedCount++
@@ -1071,7 +1071,7 @@ func (s *ImportService) resolveConcurrentImportCommit(ctx context.Context, row d
 	if !found {
 		return errors.New("commit identity conflict without existing identity")
 	}
-	if _, err := s.repository.MarkImportStagedRowCommittedIfPending(ctx, row.ID, identity.CommittedTransactionID); err != nil {
+	if _, err := s.repository.MarkImportStagedRowCommittedIfPending(ctx, row.ID, identity.ID, identity.CommittedTransactionID); err != nil {
 		return fmt.Errorf("mark existing commit identity as committed: %w", err)
 	}
 	return nil
@@ -1083,19 +1083,21 @@ func (s *ImportService) resolveConcurrentImportCommit(ctx context.Context, row d
 // writes. Keeping the identity and staged-row marker in that tx makes the
 // at-least-once import retry boundary genuinely idempotent.
 func (s *ImportService) recordCommitIdentityAndMarkRowInTx(ctx context.Context, tx *sql.Tx, rowID int64, dedupeFingerprint string, sourceKind string, accountID int64, transactionID int64, nowStr string) error {
-	if err := s.repository.CreateCommitIdentity(ctx, tx, db.CreateImportCommitIdentityParams{
+	identityID, err := s.repository.CreateCommitIdentityWithEffects(ctx, tx, db.CreateImportCommitIdentityParams{
 		BookID:                 BookID,
 		DedupeFingerprint:      dedupeFingerprint,
 		CommittedTransactionID: transactionID,
 		SourceKind:             sourceKind,
 		AccountID:              accountID,
 		CreatedAt:              nowStr,
-	}); err != nil {
+	}, []db.CreateImportCommitEffectParams{{TransactionID: sql.NullInt64{Int64: transactionID, Valid: true}}})
+	if err != nil {
 		return fmt.Errorf("create investment commit identity: %w", err)
 	}
 	if err := s.repository.CommitImportStagedRowInTx(ctx, tx, db.CommitImportStagedRowParams{
 		RowID:                  rowID,
 		CommitStatus:           "committed",
+		CommittedIdentityID:    sql.NullInt64{Int64: identityID, Valid: true},
 		CommittedTransactionID: sql.NullInt64{Int64: transactionID, Valid: true},
 	}); err != nil {
 		return fmt.Errorf("mark investment row committed: %w", err)
@@ -1450,6 +1452,10 @@ func toImportBatches(records []db.ImportBatchRecord) []ImportBatch {
 }
 
 func toImportStagedRow(rec db.ImportStagedRowRecord) ImportStagedRow {
+	var identityID *int64
+	if rec.CommittedIdentityID.Valid {
+		identityID = &rec.CommittedIdentityID.Int64
+	}
 	var txnID *int64
 	if rec.CommittedTransactionID.Valid {
 		txnID = &rec.CommittedTransactionID.Int64
@@ -1457,6 +1463,19 @@ func toImportStagedRow(rec db.ImportStagedRowRecord) ImportStagedRow {
 	commitError := ""
 	if rec.CommitError.Valid {
 		commitError = rec.CommitError.String
+	}
+	effects := make([]ImportCommitEffect, 0, len(rec.CommitEffects))
+	for _, effect := range rec.CommitEffects {
+		converted := ImportCommitEffect{EffectSeq: effect.EffectSeq}
+		if effect.OperationID.Valid {
+			id := effect.OperationID.Int64
+			converted.OperationID = &id
+		}
+		if effect.TransactionID.Valid {
+			id := effect.TransactionID.Int64
+			converted.TransactionID = &id
+		}
+		effects = append(effects, converted)
 	}
 	return ImportStagedRow{
 		ID:                     rec.ID,
@@ -1469,7 +1488,9 @@ func toImportStagedRow(rec db.ImportStagedRowRecord) ImportStagedRow {
 		DedupeStatus:           rec.DedupeStatus,
 		ResolutionJSON:         rec.ResolutionJSON,
 		CommitStatus:           rec.CommitStatus,
+		CommittedIdentityID:    identityID,
 		CommittedTransactionID: txnID,
+		CommitEffects:          effects,
 		CommitError:            commitError,
 	}
 }

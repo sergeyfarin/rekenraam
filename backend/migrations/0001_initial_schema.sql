@@ -2505,6 +2505,9 @@ CREATE TABLE import_staged_rows (
   commit_status TEXT NOT NULL DEFAULT 'pending' CHECK (
     commit_status IN ('pending', 'committed', 'skipped', 'failed')
   ),
+  committed_identity_id INTEGER REFERENCES import_commit_identities(id) ON DELETE RESTRICT,
+  -- Compatibility summary for current single-transaction consumers. The
+  -- ordered identity effects below are the authoritative committed result.
   committed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
   commit_error TEXT,
   UNIQUE (batch_id, row_index)
@@ -2517,7 +2520,6 @@ CREATE TABLE import_commit_identities (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   dedupe_fingerprint TEXT NOT NULL,
-  committed_transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE RESTRICT,
   source_kind TEXT NOT NULL,
   account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
   created_at TEXT NOT NULL,
@@ -2525,6 +2527,81 @@ CREATE TABLE import_commit_identities (
 );
 
 CREATE INDEX import_commit_identities_book_idx ON import_commit_identities (book_id, created_at DESC);
+
+-- One source row can produce several ordered effects, including a basis-only
+-- operation without a journal transaction. A journal-only bank row has one
+-- child with operation_id NULL.
+CREATE TABLE import_commit_identity_effects (
+  identity_id INTEGER NOT NULL REFERENCES import_commit_identities(id) ON DELETE RESTRICT,
+  effect_seq INTEGER NOT NULL CHECK (effect_seq > 0),
+  operation_id INTEGER REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
+  PRIMARY KEY (identity_id, effect_seq),
+  CHECK (operation_id IS NOT NULL OR transaction_id IS NOT NULL)
+);
+
+CREATE UNIQUE INDEX import_commit_identity_effects_operation_idx
+  ON import_commit_identity_effects (operation_id) WHERE operation_id IS NOT NULL;
+CREATE UNIQUE INDEX import_commit_identity_effects_transaction_idx
+  ON import_commit_identity_effects (transaction_id) WHERE transaction_id IS NOT NULL;
+
+-- +goose StatementBegin
+CREATE TRIGGER import_commit_identity_effects_same_book
+BEFORE INSERT ON import_commit_identity_effects
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM import_commit_identities i
+    WHERE i.id = NEW.identity_id
+      AND (NEW.operation_id IS NULL OR EXISTS (
+        SELECT 1 FROM investment_operations o WHERE o.id = NEW.operation_id AND o.book_id = i.book_id
+      ))
+      AND (NEW.transaction_id IS NULL OR EXISTS (
+        SELECT 1 FROM transactions t WHERE t.id = NEW.transaction_id AND t.book_id = i.book_id
+      ))
+      AND (NEW.operation_id IS NULL OR NEW.transaction_id IS NULL OR EXISTS (
+        SELECT 1 FROM investment_operation_journal_links l
+        JOIN transaction_versions v ON v.id = l.transaction_version_id
+        WHERE l.operation_id = NEW.operation_id AND v.transaction_id = NEW.transaction_id
+      ))
+  ) THEN RAISE(ABORT, 'import effect must belong to identity book') END;
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER import_staged_rows_identity_same_book
+BEFORE UPDATE OF commit_status, committed_identity_id, committed_transaction_id ON import_staged_rows
+BEGIN
+  SELECT CASE WHEN NEW.commit_status = 'committed' AND NOT EXISTS (
+    SELECT 1 FROM import_commit_identities i
+    WHERE i.id = NEW.committed_identity_id AND i.book_id = NEW.book_id
+      AND i.dedupe_fingerprint = NEW.dedupe_fingerprint
+  ) THEN RAISE(ABORT, 'staged row identity must match book and fingerprint') END;
+  SELECT CASE WHEN NEW.commit_status = 'committed' AND NOT EXISTS (
+    SELECT 1 FROM import_commit_identity_effects e WHERE e.identity_id = NEW.committed_identity_id
+  ) THEN RAISE(ABORT, 'committed staged row requires identity effects') END;
+  SELECT CASE WHEN NEW.commit_status = 'committed' AND NEW.committed_transaction_id IS NOT (
+    SELECT e.transaction_id FROM import_commit_identity_effects e
+    WHERE e.identity_id = NEW.committed_identity_id AND e.transaction_id IS NOT NULL
+    ORDER BY e.effect_seq LIMIT 1
+  ) THEN RAISE(ABORT, 'staged row transaction summary must match first effect') END;
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER import_commit_identity_effects_no_update
+BEFORE UPDATE ON import_commit_identity_effects
+BEGIN
+  SELECT RAISE(ABORT, 'import commit effect is immutable');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER import_commit_identity_effects_no_delete
+BEFORE DELETE ON import_commit_identity_effects
+BEGIN
+  SELECT RAISE(ABORT, 'import commit effect is immutable');
+END;
+-- +goose StatementEnd
 
 ALTER TABLE account_versions ADD COLUMN cost_basis_method TEXT CHECK (
   cost_basis_method IS NULL OR cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')
@@ -3295,6 +3372,13 @@ DROP INDEX IF EXISTS import_batches_connection_idx;
 DROP INDEX IF EXISTS import_connections_book_idx;
 DROP TABLE IF EXISTS import_connections;
 DROP INDEX IF EXISTS background_work_items_active_unique_idx;
+DROP TRIGGER IF EXISTS import_staged_rows_identity_same_book;
+DROP TRIGGER IF EXISTS import_commit_identity_effects_no_delete;
+DROP TRIGGER IF EXISTS import_commit_identity_effects_no_update;
+DROP TRIGGER IF EXISTS import_commit_identity_effects_same_book;
+DROP INDEX IF EXISTS import_commit_identity_effects_transaction_idx;
+DROP INDEX IF EXISTS import_commit_identity_effects_operation_idx;
+DROP TABLE IF EXISTS import_commit_identity_effects;
 DROP INDEX IF EXISTS import_commit_identities_book_idx;
 DROP TABLE IF EXISTS import_commit_identities;
 DROP INDEX IF EXISTS import_staged_rows_book_fingerprint_idx;

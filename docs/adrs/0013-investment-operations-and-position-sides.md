@@ -34,6 +34,12 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
    Operation kinds are stable, non-empty codes, validated by their command;
    the database does not need a new migration for each new code. They are not
    reconstructed from transaction descriptions or negative quantities.
+   One imported source fingerprint admits one book-wide identity with ordered
+   child effects. Each child names an investment operation, a journal
+   transaction, or both; a staged row links to the same identity. All children,
+   dedupe admission, and the staged result commit with the journal and
+   subledger writes. The first transaction ID may be exposed as a compatibility
+   summary, but the ordered children are the committed result.
 2. Position lots have an explicit **long or short side** and a positive open and
    remaining quantity. A long lot preserves acquisition cost; a short lot
    preserves opening proceeds. A cover consumes short lots and measures its

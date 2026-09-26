@@ -287,7 +287,19 @@ func TestImportQIFLifecycle_StartPatchPreviewCommitCreatesLedgerTransaction(t *t
 	for _, row := range got.Rows {
 		assert.Equal(t, "committed", row.CommitStatus)
 		require.NotNil(t, row.CommittedTransactionID)
+		require.NotNil(t, row.CommittedIdentityID)
+		require.Len(t, row.CommitEffects, 1)
+		assert.Equal(t, int64(1), row.CommitEffects[0].EffectSeq)
+		assert.Equal(t, row.CommittedTransactionID, row.CommitEffects[0].TransactionID)
+		assert.Nil(t, row.CommitEffects[0].OperationID)
 	}
+	bundle := downloadBundle(t, handler, sessionCookie, "")
+	identities := bundle.table(t, "import-identities.csv")
+	effects := bundle.table(t, "import-identity-effects.csv")
+	require.Len(t, identities.rows, 2)
+	require.Len(t, effects.rows, 2)
+	assert.Equal(t, identities.column(identities.rows[0], "identity_id"), effects.column(effects.rows[0], "identity_id"))
+	assert.Equal(t, "1", effects.column(effects.rows[0], "effect_seq"))
 
 	list := listTransactionsForSession(t, handler, sessionCookie, "?q=Grocery")
 	require.Len(t, list.Transactions, 1)

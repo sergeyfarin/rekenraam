@@ -157,6 +157,10 @@ The original posting-level
 `ledger.csv` contract and QIF archive version remain unchanged. The added
 investment files retain their stored coefficients and scales so an unknown
 gross amount is never inferred from a net settlement.
+The same version adds `import-identities.csv` and
+`import-identity-effects.csv` for committed source fingerprints and their
+ordered operation/transaction links. Import profiles, batches, and staged raw
+rows remain outside this portable ledger archive.
 
 ### 7. Exports read through a dedicated read-only connection, in one snapshot
 

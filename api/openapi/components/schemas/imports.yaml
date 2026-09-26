@@ -151,6 +151,7 @@ ImportStagedRowResponse:
     - dedupe_status
     - resolution
     - commit_status
+    - commit_effects
   properties:
     id:
       type: integer
@@ -175,9 +176,29 @@ ImportStagedRowResponse:
       description: JSON string matching ImportResolution.
     commit_status:
       $ref: "../../openapi.yaml#/components/schemas/ImportCommitStatus"
+    committed_identity_id:
+      type: integer
+      format: int64
     committed_transaction_id:
       type: integer
       format: int64
+      description: First linked transaction for older single-result consumers; commit_effects is authoritative.
+    commit_effects:
+      type: array
+      items:
+        type: object
+        required:
+          - effect_seq
+        properties:
+          effect_seq:
+            type: integer
+            format: int64
+          operation_id:
+            type: integer
+            format: int64
+          transaction_id:
+            type: integer
+            format: int64
     commit_error:
       type: string
 ParseWarning:

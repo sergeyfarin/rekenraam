@@ -152,6 +152,160 @@ func TestCSVImportSavedProfileStagesAndCommitsThroughRealLedgerService(t *testin
 	require.NoError(t, err)
 	assert.Equal(t, 1, committed.CommittedCount)
 	assert.Equal(t, 1, plainImportTransactionCount(t, f))
+	staged, err := f.importRepo.ListAllImportStagedRows(ctx, result.Batch.ID)
+	require.NoError(t, err)
+	require.Len(t, staged, 1)
+	require.True(t, staged[0].CommittedIdentityID.Valid)
+	require.Len(t, staged[0].CommitEffects, 1)
+	assert.Equal(t, staged[0].CommittedTransactionID.Int64, staged[0].CommitEffects[0].TransactionID.Int64)
+}
+
+func TestImportIdentityOrdersTwoTransactionsAndRollsBackPartialEffects(t *testing.T) {
+	f := newPlainImportTestFixture(t)
+	ctx := context.Background()
+	batchID, _ := f.stageQIFRow(t, "!Type:Bank\nD2026-08-28\nT-12.34\nPBooks\n^\n")
+	staged, err := f.importRepo.ListAllImportStagedRows(ctx, batchID)
+	require.NoError(t, err)
+	require.Len(t, staged, 1)
+	resolution, err := parseResolutionJSON(staged[0].ResolutionJSON)
+	require.NoError(t, err)
+	spec, err := buildTransactionSpec(staged[0], resolution)
+	require.NoError(t, err)
+	prepared, err := f.importService.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
+		OwnerUserID: f.ownerUserID, OriginType: "import", Operation: "transaction.create",
+		Spec: spec, ChangeReason: "ordered import effects",
+	})
+	require.NoError(t, err)
+	params := db.CommitImportedTransactionParams{
+		Identity: db.CreateImportCommitIdentityParams{
+			BookID: BookID, DedupeFingerprint: staged[0].DedupeFingerprint,
+			SourceKind: "qif", AccountID: f.checkingAccountID, CreatedAt: "2026-08-28T00:00:00Z",
+		},
+		Row: db.CommitImportStagedRowParams{RowID: staged[0].ID},
+	}
+	createTwo := func(tx *sql.Tx) ([]db.CreateImportCommitEffectParams, error) {
+		var effects []db.CreateImportCommitEffectParams
+		for range 2 {
+			record, err := f.importService.transactionService.createTransactionRecordInTx(ctx, tx, prepared)
+			if err != nil {
+				return nil, err
+			}
+			effects = append(effects, db.CreateImportCommitEffectParams{
+				TransactionID: sql.NullInt64{Int64: record.ID, Valid: true},
+			})
+		}
+		return effects, nil
+	}
+	effects, err := f.importRepo.CommitImportedEffects(ctx, params, createTwo)
+	require.NoError(t, err)
+	require.Len(t, effects, 2)
+	assert.NotEqual(t, effects[0].TransactionID.Int64, effects[1].TransactionID.Int64)
+	assert.Equal(t, 2, plainImportTransactionCount(t, f))
+	staged, err = f.importRepo.ListAllImportStagedRows(ctx, batchID)
+	require.NoError(t, err)
+	require.True(t, staged[0].CommittedIdentityID.Valid)
+	require.Len(t, staged[0].CommitEffects, 2)
+	assert.Equal(t, int64(1), staged[0].CommitEffects[0].EffectSeq)
+	assert.Equal(t, int64(2), staged[0].CommitEffects[1].EffectSeq)
+	assert.Equal(t, effects[0].TransactionID.Int64, staged[0].CommittedTransactionID.Int64)
+
+	// The book-wide fingerprint blocks a different source kind too; both
+	// proposed transactions must roll back with the conflicting identity.
+	params.Identity.SourceKind = "csv"
+	_, err = f.importRepo.CommitImportedEffects(ctx, params, createTwo)
+	require.ErrorIs(t, err, db.ErrCommitIdentityConflict)
+	assert.Equal(t, 2, plainImportTransactionCount(t, f))
+	var identityCount int
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM import_commit_identities WHERE book_id = ? AND dedupe_fingerprint = ?`, BookID, params.Identity.DedupeFingerprint).Scan(&identityCount))
+	assert.Equal(t, 1, identityCount)
+
+	secondBatchID, _ := f.stageQIFRow(t, "!Type:Bank\nD2026-08-29\nT-17.00\nPTravel\n^\n")
+	secondRows, err := f.importRepo.ListAllImportStagedRows(ctx, secondBatchID)
+	require.NoError(t, err)
+	require.Len(t, secondRows, 1)
+	secondResolution, err := parseResolutionJSON(secondRows[0].ResolutionJSON)
+	require.NoError(t, err)
+	secondSpec, err := buildTransactionSpec(secondRows[0], secondResolution)
+	require.NoError(t, err)
+	secondPrepared, err := f.importService.transactionService.prepareCreateTransactionForWrite(ctx, CreateTransactionInput{
+		OwnerUserID: f.ownerUserID, OriginType: "import", Operation: "transaction.create",
+		Spec: secondSpec, ChangeReason: "partial effect failure",
+	})
+	require.NoError(t, err)
+	params.Identity.DedupeFingerprint = secondRows[0].DedupeFingerprint
+	params.Row.RowID = secondRows[0].ID
+	_, err = f.importRepo.CommitImportedEffects(ctx, params, func(tx *sql.Tx) ([]db.CreateImportCommitEffectParams, error) {
+		record, err := f.importService.transactionService.createTransactionRecordInTx(ctx, tx, secondPrepared)
+		if err != nil {
+			return nil, err
+		}
+		return []db.CreateImportCommitEffectParams{
+			{TransactionID: sql.NullInt64{Int64: record.ID, Valid: true}},
+			{TransactionID: sql.NullInt64{Int64: 999999, Valid: true}},
+		}, nil
+	})
+	require.Error(t, err)
+	assert.Equal(t, 2, plainImportTransactionCount(t, f), "first child must roll back when second is invalid")
+	_, found, err := f.importRepo.FindCommitIdentity(ctx, BookID, secondRows[0].DedupeFingerprint)
+	require.NoError(t, err)
+	assert.False(t, found)
+	secondRows, err = f.importRepo.ListAllImportStagedRows(ctx, secondBatchID)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", secondRows[0].CommitStatus)
+	assert.Empty(t, secondRows[0].CommitEffects)
+}
+
+func TestImportIdentityCanRecordBasisOnlyOperationWithoutJournalTransaction(t *testing.T) {
+	f := newPlainImportTestFixture(t)
+	ctx := context.Background()
+	batchID, _ := f.stageQIFRow(t, "!Type:Bank\nD2026-08-28\nT-12.34\nPBasis source\n^\n")
+	rows, err := f.importRepo.ListAllImportStagedRows(ctx, batchID)
+	require.NoError(t, err)
+	params := db.CommitImportedTransactionParams{
+		Identity: db.CreateImportCommitIdentityParams{
+			BookID: BookID, DedupeFingerprint: rows[0].DedupeFingerprint,
+			SourceKind: "qif", AccountID: f.checkingAccountID, CreatedAt: "2026-08-28T00:00:00Z",
+		},
+		Row: db.CommitImportStagedRowParams{RowID: rows[0].ID},
+	}
+	_, err = f.importRepo.CommitImportedEffects(ctx, params, func(tx *sql.Tx) ([]db.CreateImportCommitEffectParams, error) {
+		audit, err := tx.ExecContext(ctx, `
+			INSERT INTO audit_events (book_id, actor_user_id, occurred_at, origin_type, operation)
+			VALUES (?, ?, '2026-08-28T00:00:00Z', 'import', 'investment.basis_adjust')
+		`, BookID, f.ownerUserID)
+		if err != nil {
+			return nil, err
+		}
+		auditID, err := audit.LastInsertId()
+		if err != nil {
+			return nil, err
+		}
+		operation, err := tx.ExecContext(ctx, `
+			INSERT INTO investment_operations (book_id, operation_kind, event_date, created_at, created_audit_event_id)
+			VALUES (?, 'basis_adjust', '2026-08-28', '2026-08-28T00:00:00Z', ?)
+		`, BookID, auditID)
+		if err != nil {
+			return nil, err
+		}
+		operationID, err := operation.LastInsertId()
+		if err != nil {
+			return nil, err
+		}
+		return []db.CreateImportCommitEffectParams{{OperationID: sql.NullInt64{Int64: operationID, Valid: true}}}, nil
+	})
+	require.NoError(t, err)
+	rows, err = f.importRepo.ListAllImportStagedRows(ctx, batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "committed", rows[0].CommitStatus)
+	assert.False(t, rows[0].CommittedTransactionID.Valid)
+	require.Len(t, rows[0].CommitEffects, 1)
+	assert.True(t, rows[0].CommitEffects[0].OperationID.Valid)
+	assert.False(t, rows[0].CommitEffects[0].TransactionID.Valid)
+	identity, found, err := f.importRepo.FindCommitIdentity(ctx, BookID, rows[0].DedupeFingerprint)
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Zero(t, identity.CommittedTransactionID)
 }
 
 func TestImportProfileUpdateAndDeletePreserveHistoricalBatch(t *testing.T) {

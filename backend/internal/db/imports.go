@@ -57,8 +57,16 @@ type ImportStagedRowRecord struct {
 	DedupeStatus           string
 	ResolutionJSON         string
 	CommitStatus           string
+	CommittedIdentityID    sql.NullInt64
 	CommittedTransactionID sql.NullInt64
+	CommitEffects          []ImportCommitEffectRecord
 	CommitError            sql.NullString
+}
+
+type ImportCommitEffectRecord struct {
+	EffectSeq     int64
+	OperationID   sql.NullInt64
+	TransactionID sql.NullInt64
 }
 
 type ImportCommitIdentityRecord struct {
@@ -222,6 +230,7 @@ type UpdateImportStagedRowResolutionParams struct {
 type CommitImportStagedRowParams struct {
 	RowID                  int64
 	CommitStatus           string
+	CommittedIdentityID    sql.NullInt64
 	CommittedTransactionID sql.NullInt64
 	CommitError            sql.NullString
 }
@@ -233,6 +242,11 @@ type CreateImportCommitIdentityParams struct {
 	SourceKind             string
 	AccountID              int64
 	CreatedAt              string
+}
+
+type CreateImportCommitEffectParams struct {
+	OperationID   sql.NullInt64
+	TransactionID sql.NullInt64
 }
 
 type CommitImportedTransactionParams struct {
@@ -1122,7 +1136,7 @@ func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params List
 		dbRows, err = r.database.QueryContext(ctx, `
 			SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
 			       raw_json, normalized_json, dedupe_status, resolution_json,
-			       commit_status, committed_transaction_id, commit_error
+			       commit_status, committed_identity_id, committed_transaction_id, commit_error
 			FROM import_staged_rows
 			WHERE batch_id = ? AND (row_index > ? OR (row_index = ? AND id > ?))
 			ORDER BY row_index ASC, id ASC
@@ -1132,7 +1146,7 @@ func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params List
 		dbRows, err = r.database.QueryContext(ctx, `
 			SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
 			       raw_json, normalized_json, dedupe_status, resolution_json,
-			       commit_status, committed_transaction_id, commit_error
+			       commit_status, committed_identity_id, committed_transaction_id, commit_error
 			FROM import_staged_rows
 			WHERE batch_id = ?
 			ORDER BY row_index ASC, id ASC
@@ -1142,9 +1156,15 @@ func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params List
 	if err != nil {
 		return nil, fmt.Errorf("list staged rows: %w", err)
 	}
-	defer dbRows.Close()
-
-	return scanImportStagedRows(dbRows)
+	records, scanErr := scanImportStagedRows(dbRows)
+	closeErr := dbRows.Close()
+	if scanErr != nil {
+		return nil, scanErr
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("close staged rows: %w", closeErr)
+	}
+	return r.attachCommitEffects(ctx, params.BatchID, records)
 }
 
 // ListAllImportStagedRows returns every row for a batch with no limit.
@@ -1153,7 +1173,7 @@ func (r *ImportRepository) ListAllImportStagedRows(ctx context.Context, batchID 
 	dbRows, err := r.database.QueryContext(ctx, `
 		SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
 		       raw_json, normalized_json, dedupe_status, resolution_json,
-		       commit_status, committed_transaction_id, commit_error
+		       commit_status, committed_identity_id, committed_transaction_id, commit_error
 		FROM import_staged_rows
 		WHERE batch_id = ?
 		ORDER BY row_index ASC, id ASC
@@ -1161,9 +1181,15 @@ func (r *ImportRepository) ListAllImportStagedRows(ctx context.Context, batchID 
 	if err != nil {
 		return nil, fmt.Errorf("list all staged rows: %w", err)
 	}
-	defer dbRows.Close()
-
-	return scanImportStagedRows(dbRows)
+	records, scanErr := scanImportStagedRows(dbRows)
+	closeErr := dbRows.Close()
+	if scanErr != nil {
+		return nil, scanErr
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("close staged rows: %w", closeErr)
+	}
+	return r.attachCommitEffects(ctx, batchID, records)
 }
 
 func scanImportStagedRows(dbRows *sql.Rows) ([]ImportStagedRowRecord, error) {
@@ -1178,6 +1204,63 @@ func scanImportStagedRows(dbRows *sql.Rows) ([]ImportStagedRowRecord, error) {
 	return records, dbRows.Err()
 }
 
+func (r *ImportRepository) attachCommitEffects(ctx context.Context, batchID int64, records []ImportStagedRowRecord) ([]ImportStagedRowRecord, error) {
+	if len(records) == 0 {
+		return records, nil
+	}
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT e.identity_id, e.effect_seq, e.operation_id, e.transaction_id
+		FROM import_commit_identity_effects e
+		WHERE e.identity_id IN (
+			SELECT committed_identity_id FROM import_staged_rows
+			WHERE batch_id = ? AND row_index BETWEEN ? AND ?
+		)
+		ORDER BY e.identity_id, e.effect_seq
+	`, batchID, records[0].RowIndex, records[len(records)-1].RowIndex)
+	if err != nil {
+		return nil, fmt.Errorf("read batch commit effects: %w", err)
+	}
+	defer rows.Close()
+	byIdentity := make(map[int64][]ImportCommitEffectRecord)
+	for rows.Next() {
+		var identityID int64
+		var effect ImportCommitEffectRecord
+		if err := rows.Scan(&identityID, &effect.EffectSeq, &effect.OperationID, &effect.TransactionID); err != nil {
+			return nil, fmt.Errorf("scan batch commit effect: %w", err)
+		}
+		byIdentity[identityID] = append(byIdentity[identityID], effect)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate batch commit effects: %w", err)
+	}
+	for i := range records {
+		if records[i].CommittedIdentityID.Valid {
+			records[i].CommitEffects = byIdentity[records[i].CommittedIdentityID.Int64]
+		}
+	}
+	return records, nil
+}
+
+func (r *ImportRepository) ListCommitIdentityEffects(ctx context.Context, identityID int64) ([]ImportCommitEffectRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT effect_seq, operation_id, transaction_id
+		FROM import_commit_identity_effects WHERE identity_id = ? ORDER BY effect_seq
+	`, identityID)
+	if err != nil {
+		return nil, fmt.Errorf("read commit identity effects: %w", err)
+	}
+	defer rows.Close()
+	var effects []ImportCommitEffectRecord
+	for rows.Next() {
+		var effect ImportCommitEffectRecord
+		if err := rows.Scan(&effect.EffectSeq, &effect.OperationID, &effect.TransactionID); err != nil {
+			return nil, fmt.Errorf("scan commit identity effect: %w", err)
+		}
+		effects = append(effects, effect)
+	}
+	return effects, rows.Err()
+}
+
 type importStagedRowScanner interface {
 	Scan(dest ...any) error
 }
@@ -1187,7 +1270,7 @@ func scanImportStagedRow(row importStagedRowScanner) (ImportStagedRowRecord, err
 	if err := row.Scan(
 		&rec.ID, &rec.BatchID, &rec.BookID, &rec.RowIndex, &rec.DedupeFingerprint,
 		&rec.RawJSON, &rec.NormalizedJSON, &rec.DedupeStatus, &rec.ResolutionJSON,
-		&rec.CommitStatus, &rec.CommittedTransactionID, &rec.CommitError,
+		&rec.CommitStatus, &rec.CommittedIdentityID, &rec.CommittedTransactionID, &rec.CommitError,
 	); err != nil {
 		return ImportStagedRowRecord{}, fmt.Errorf("scan staged row: %w", err)
 	}
@@ -1200,7 +1283,7 @@ func (r *ImportRepository) ImportStagedRowByID(ctx context.Context, rowID int64)
 	rec, err := scanImportStagedRow(r.database.QueryRowContext(ctx, `
 		SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
 		       raw_json, normalized_json, dedupe_status, resolution_json,
-		       commit_status, committed_transaction_id, commit_error
+		       commit_status, committed_identity_id, committed_transaction_id, commit_error
 		FROM import_staged_rows
 		WHERE id = ?
 	`, rowID))
@@ -1209,6 +1292,12 @@ func (r *ImportRepository) ImportStagedRowByID(ctx context.Context, rowID int64)
 	}
 	if err != nil {
 		return ImportStagedRowRecord{}, fmt.Errorf("read staged row: %w", err)
+	}
+	if rec.CommittedIdentityID.Valid {
+		rec.CommitEffects, err = r.ListCommitIdentityEffects(ctx, rec.CommittedIdentityID.Int64)
+		if err != nil {
+			return ImportStagedRowRecord{}, err
+		}
 	}
 	return rec, nil
 }
@@ -1244,12 +1333,12 @@ func (r *ImportRepository) CommitImportStagedRowInTx(ctx context.Context, tx *sq
 // outcome without overwriting a terminal result written by a concurrent
 // commit. The identity and winning row marker are written atomically, so a
 // no-op here means the other caller has already marked the row committed.
-func (r *ImportRepository) MarkImportStagedRowCommittedIfPending(ctx context.Context, rowID, transactionID int64) (bool, error) {
+func (r *ImportRepository) MarkImportStagedRowCommittedIfPending(ctx context.Context, rowID, identityID, transactionID int64) (bool, error) {
 	result, err := r.database.ExecContext(ctx, `
 		UPDATE import_staged_rows
-		SET commit_status = 'committed', committed_transaction_id = ?, commit_error = NULL
+		SET commit_status = 'committed', committed_identity_id = ?, committed_transaction_id = NULLIF(?, 0), commit_error = NULL
 		WHERE id = ? AND commit_status = 'pending'
-	`, transactionID, rowID)
+	`, identityID, transactionID, rowID)
 	if err != nil {
 		return false, fmt.Errorf("mark staged row committed if pending: %w", err)
 	}
@@ -1261,9 +1350,26 @@ func (r *ImportRepository) MarkImportStagedRowCommittedIfPending(ctx context.Con
 }
 
 func (r *ImportRepository) CommitImportedTransaction(ctx context.Context, params CommitImportedTransactionParams, createTransaction func(*sql.Tx) (int64, error)) (int64, error) {
+	effects, err := r.CommitImportedEffects(ctx, params, func(tx *sql.Tx) ([]CreateImportCommitEffectParams, error) {
+		transactionID, err := createTransaction(tx)
+		if err != nil {
+			return nil, err
+		}
+		return []CreateImportCommitEffectParams{{TransactionID: sql.NullInt64{Int64: transactionID, Valid: true}}}, nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return effects[0].TransactionID.Int64, nil
+}
+
+// CommitImportedEffects owns the complete row boundary: journal and operation
+// creation, dedupe admission, ordered effects, and the staged result marker.
+// A failed child or identity write rolls every effect back together.
+func (r *ImportRepository) CommitImportedEffects(ctx context.Context, params CommitImportedTransactionParams, createEffects func(*sql.Tx) ([]CreateImportCommitEffectParams, error)) ([]CreateImportCommitEffectParams, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, fmt.Errorf("begin commit imported transaction: %w", err)
+		return nil, fmt.Errorf("begin commit imported effects: %w", err)
 	}
 	committed := false
 	defer func() {
@@ -1272,29 +1378,35 @@ func (r *ImportRepository) CommitImportedTransaction(ctx context.Context, params
 		}
 	}()
 
-	transactionID, err := createTransaction(tx)
+	effects, err := createEffects(tx)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	identity := params.Identity
-	identity.CommittedTransactionID = transactionID
-	if err := r.CreateCommitIdentity(ctx, tx, identity); err != nil {
-		return 0, fmt.Errorf("create commit identity: %w", err)
+	identityID, err := r.CreateCommitIdentityWithEffects(ctx, tx, identity, effects)
+	if err != nil {
+		return nil, fmt.Errorf("create commit identity: %w", err)
 	}
 
 	row := params.Row
 	row.CommitStatus = "committed"
-	row.CommittedTransactionID = sql.NullInt64{Int64: transactionID, Valid: true}
+	row.CommittedIdentityID = sql.NullInt64{Int64: identityID, Valid: true}
+	for _, effect := range effects {
+		if effect.TransactionID.Valid {
+			row.CommittedTransactionID = effect.TransactionID
+			break
+		}
+	}
 	if err := r.CommitImportStagedRowInTx(ctx, tx, row); err != nil {
-		return 0, fmt.Errorf("mark row committed: %w", err)
+		return nil, fmt.Errorf("mark row committed: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("commit imported transaction: %w", err)
+		return nil, fmt.Errorf("commit imported effects: %w", err)
 	}
 	committed = true
-	return transactionID, nil
+	return effects, nil
 }
 
 type execContexter interface {
@@ -1305,9 +1417,9 @@ type execContexter interface {
 func commitImportStagedRowExec(ctx context.Context, db execContexter, params CommitImportStagedRowParams) error {
 	result, err := db.ExecContext(ctx, `
 		UPDATE import_staged_rows
-		SET commit_status = ?, committed_transaction_id = ?, commit_error = ?
+		SET commit_status = ?, committed_identity_id = ?, committed_transaction_id = ?, commit_error = ?
 		WHERE id = ? AND commit_status <> 'committed'
-	`, params.CommitStatus, params.CommittedTransactionID, params.CommitError, params.RowID)
+	`, params.CommitStatus, params.CommittedIdentityID, params.CommittedTransactionID, params.CommitError, params.RowID)
 	if err != nil {
 		return fmt.Errorf("commit staged row: %w", err)
 	}
@@ -1337,9 +1449,12 @@ func commitImportStagedRowExec(ctx context.Context, db execContexter, params Com
 func (r *ImportRepository) FindCommitIdentity(ctx context.Context, bookID int64, dedupeFingerprint string) (ImportCommitIdentityRecord, bool, error) {
 	var rec ImportCommitIdentityRecord
 	err := r.database.QueryRowContext(ctx, `
-		SELECT id, book_id, dedupe_fingerprint, committed_transaction_id, source_kind, account_id, created_at
-		FROM import_commit_identities
-		WHERE book_id = ? AND dedupe_fingerprint = ?
+		SELECT i.id, i.book_id, i.dedupe_fingerprint,
+			COALESCE((SELECT e.transaction_id FROM import_commit_identity_effects e
+				WHERE e.identity_id = i.id AND e.transaction_id IS NOT NULL ORDER BY e.effect_seq LIMIT 1), 0),
+			i.source_kind, i.account_id, i.created_at
+		FROM import_commit_identities i
+		WHERE i.book_id = ? AND i.dedupe_fingerprint = ?
 	`, bookID, dedupeFingerprint).Scan(
 		&rec.ID, &rec.BookID, &rec.DedupeFingerprint, &rec.CommittedTransactionID,
 		&rec.SourceKind, &rec.AccountID, &rec.CreatedAt,
@@ -1356,33 +1471,59 @@ func (r *ImportRepository) FindCommitIdentity(ctx context.Context, bookID int64,
 var ErrCommitIdentityConflict = errors.New("commit identity already exists for a different transaction")
 
 func (r *ImportRepository) CreateCommitIdentity(ctx context.Context, tx *sql.Tx, params CreateImportCommitIdentityParams) error {
+	_, err := r.CreateCommitIdentityWithEffects(ctx, tx, params, []CreateImportCommitEffectParams{{TransactionID: sql.NullInt64{Int64: params.CommittedTransactionID, Valid: true}}})
+	return err
+}
+
+// CreateCommitIdentityWithEffects admits a source row and all its ordered
+// results inside the caller's journal/subledger transaction.
+func (r *ImportRepository) CreateCommitIdentityWithEffects(ctx context.Context, tx *sql.Tx, params CreateImportCommitIdentityParams, effects []CreateImportCommitEffectParams) (int64, error) {
+	if len(effects) == 0 {
+		return 0, errors.New("import identity requires at least one effect")
+	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT OR IGNORE INTO import_commit_identities
-			(book_id, dedupe_fingerprint, committed_transaction_id, source_kind, account_id, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, params.BookID, params.DedupeFingerprint, params.CommittedTransactionID,
+			(book_id, dedupe_fingerprint, source_kind, account_id, created_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, params.BookID, params.DedupeFingerprint,
 		params.SourceKind, params.AccountID, params.CreatedAt)
 	if err != nil {
-		return fmt.Errorf("create commit identity: %w", err)
+		return 0, fmt.Errorf("create commit identity: %w", err)
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("create commit identity rows affected: %w", err)
+		return 0, fmt.Errorf("create commit identity rows affected: %w", err)
 	}
 	if n == 0 {
-		// Row already existed (race or retry). Verify it points to the same transaction.
-		var existingTxnID int64
-		if err := tx.QueryRowContext(ctx, `
-			SELECT committed_transaction_id FROM import_commit_identities
-			WHERE book_id = ? AND dedupe_fingerprint = ?
-		`, params.BookID, params.DedupeFingerprint).Scan(&existingTxnID); err != nil {
-			return fmt.Errorf("verify commit identity: %w", err)
+		return 0, ErrCommitIdentityConflict
+	}
+	identityID, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("read commit identity id: %w", err)
+	}
+	for i, effect := range effects {
+		if effect.TransactionID.Valid && !effect.OperationID.Valid {
+			var operationID int64
+			err := tx.QueryRowContext(ctx, `
+				SELECT id FROM investment_operations WHERE book_id = ? AND transaction_id = ?
+			`, params.BookID, effect.TransactionID.Int64).Scan(&operationID)
+			if err == nil {
+				effect.OperationID = sql.NullInt64{Int64: operationID, Valid: true}
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				return 0, fmt.Errorf("read imported investment operation: %w", err)
+			}
 		}
-		if existingTxnID != params.CommittedTransactionID {
-			return ErrCommitIdentityConflict
+		if !effect.OperationID.Valid && !effect.TransactionID.Valid {
+			return 0, fmt.Errorf("import effect %d has no operation or transaction", i+1)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO import_commit_identity_effects (identity_id, effect_seq, operation_id, transaction_id)
+			VALUES (?, ?, ?, ?)
+		`, identityID, i+1, effect.OperationID, effect.TransactionID); err != nil {
+			return 0, fmt.Errorf("create import effect %d: %w", i+1, err)
 		}
 	}
-	return nil
+	return identityID, nil
 }
 
 // CurrentBookOwnerID reads the owning user for a book, used by the scheduled

@@ -16496,7 +16496,20 @@ export interface components {
             resolution: string;
             commit_status: components["schemas"]["ImportCommitStatus"];
             /** Format: int64 */
+            committed_identity_id?: number;
+            /**
+             * Format: int64
+             * @description First linked transaction for older single-result consumers; commit_effects is authoritative.
+             */
             committed_transaction_id?: number;
+            commit_effects: {
+                /** Format: int64 */
+                effect_seq: number;
+                /** Format: int64 */
+                operation_id?: number;
+                /** Format: int64 */
+                transaction_id?: number;
+            }[];
             commit_error?: string;
         };
         ParseWarning: {

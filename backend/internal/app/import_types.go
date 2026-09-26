@@ -34,8 +34,16 @@ type ImportStagedRow struct {
 	DedupeStatus           string
 	ResolutionJSON         string
 	CommitStatus           string
+	CommittedIdentityID    *int64
 	CommittedTransactionID *int64
+	CommitEffects          []ImportCommitEffect
 	CommitError            string
+}
+
+type ImportCommitEffect struct {
+	EffectSeq     int64
+	OperationID   *int64
+	TransactionID *int64
 }
 
 // ParseWarning is a non-fatal issue found during parsing.

@@ -480,7 +480,7 @@ next family.
      checkpoint behavior, and import idempotency for old cases; assert one
      audit event and shared audit IDs in the price-write test.
      Version the investment export contract without losing old facts.
-   - **2b — generalized import identity.** Replace the one-transaction
+   - **2b — generalized import identity — complete 2026-09-26.** Replace the one-transaction
      result with ordered operation/transaction child links. Keep the current
      unique `(book_id, dedupe_fingerprint)` admission rule. Test bank CSV,
      bank QIF, and Trading 212 retries, overlaps, duplicate fingerprints,

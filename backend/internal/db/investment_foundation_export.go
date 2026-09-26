@@ -7,7 +7,7 @@ import (
 )
 
 // ExportInvestmentFoundation returns exact stored coefficients and provenance.
-// These rows supplement the human-readable lot and price views in bundle v2.
+// These rows supplement the human-readable lot, price, and import views in bundle v2.
 func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *sql.Tx, bookID int64, kind string) ([][]string, error) {
 	queries := map[string]string{
 		"journal-links": `SELECT l.operation_id, l.link_seq, l.transaction_version_id, l.role
@@ -37,6 +37,11 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 			v.treatment, v.charge_account_id, v.recorded_at, v.audit_event_id
 			FROM investment_fee_policy_versions v JOIN investment_fee_policies p ON p.id = v.policy_id
 			WHERE p.book_id = ? ORDER BY v.policy_id, v.version_seq`,
+		"import-identities": `SELECT id, dedupe_fingerprint, source_kind, account_id, created_at
+			FROM import_commit_identities WHERE book_id = ? ORDER BY id`,
+		"import-effects": `SELECT e.identity_id, e.effect_seq, e.operation_id, e.transaction_id
+			FROM import_commit_identity_effects e JOIN import_commit_identities i ON i.id = e.identity_id
+			WHERE i.book_id = ? ORDER BY e.identity_id, e.effect_seq`,
 	}
 	query, ok := queries[kind]
 	if !ok {

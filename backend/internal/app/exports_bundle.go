@@ -207,6 +207,12 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		{"investment-fee-policy-versions.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "fee-policy-versions", []string{"version_id", "policy_id", "version_seq", "effective_from", "treatment", "charge_account_id", "recorded_at", "audit_event_id"})
 		}},
+		{"import-identities.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "import-identities", []string{"identity_id", "dedupe_fingerprint", "source_kind", "account_id", "created_at"})
+		}},
+		{"import-identity-effects.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "import-effects", []string{"identity_id", "effect_seq", "operation_id", "transaction_id"})
+		}},
 		{"disposal-decisions.csv", func(w io.Writer) (int64, error) { return s.writeDisposalDecisionsCSV(ctx, w, snapshot) }},
 		{"disposal-allocations.csv", func(w io.Writer) (int64, error) { return s.writeDisposalAllocationsCSV(ctx, w, snapshot) }},
 		{"prices.csv", func(w io.Writer) (int64, error) { return s.writePricesCSV(ctx, w, snapshot) }},
@@ -841,6 +847,8 @@ value in this archive was ever a floating-point number.`,
   investment-lot-effects.csv  direct operation-to-event links
   investment-fee-policies.csv  book and account charge policy identities
   investment-fee-policy-versions.csv  dated, immutable charge policy versions
+  import-identities.csv  committed source-row fingerprints and provenance
+  import-identity-effects.csv  ordered operations and transactions per source row
   disposal-decisions.csv  immutable resolved cost-basis elections
   disposal-allocations.csv  exact lot allocations for those elections
   prices.csv         non-voided price observations
