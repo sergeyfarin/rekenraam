@@ -242,19 +242,22 @@ When a feature introduces a durable new rule, update one of those documents in t
 
 ## Project Lifecycle And Migration Immutability
 
-The `v0.1.0` schema baseline is frozen. `0001_initial_schema.sql` is immutable
-from the release-candidate freeze commit onward, including before the tag is
-created. Its SHA-256 is enforced by `backend/migrations/freeze_test.go` so a
-rewrite, rename, or deletion fails the backend suite.
+The earlier release-candidate freeze of `0001_initial_schema.sql` preceded any
+installed or used v0.1 database. ADR 0013 permits an explicitly declared
+pre-release redesign of that baseline. Such a change updates the checksum and
+release fixture, carries `BREAKING DEV DATABASE` in the commit body, and tells
+developers to reset disposable local databases. Prefer a forward migration
+when it produces an equally clear model with less disruption. Once a release
+has actual installations, its migration files are immutable.
 
-- **Released migrations are append-only.** Never edit, consolidate, split,
-  renumber, or delete a frozen migration. Every schema change uses the next
-  sequential file, even while preparing the release that will contain it.
-- **Every release supports forward upgrade from every earlier release.** The
-  migration suite constructs a database at the frozen v0.1 baseline, preserves
-  sentinel data while migrating it to `HEAD`, and compares the result with a
-  fresh `HEAD` schema. Add a released migration's checksum to the freeze test
-  when its release is cut.
+- **Installed release migrations are append-only.** Never edit, consolidate,
+  split, renumber, or delete one. Every later schema change uses the next
+  sequential file.
+- **Every installed release supports forward upgrade from every earlier
+  installed release.** The migration suite preserves sentinel data while
+  migrating old baselines to `HEAD` and compares the result with a fresh
+  `HEAD` schema. Add a release migration's checksum to the freeze test when
+  its release is cut.
 - **Upgrade, do not roll back schema.** Startup applies pending migrations before
   serving. Take and verify a backup before replacing a binary. If the upgrade
   fails, restore that backup and the previous binary; do not rely on Goose down
@@ -265,7 +268,7 @@ rewrite, rename, or deletion fails the backend suite.
   `00NN_` is taken, renumber **your own** file to the next free number before
   pushing. The same holds for the occasional branch — the one merged second
   renumbers itself. Never merge two files sharing a number, and never renumber a
-  frozen migration already on `main` (the checksum gate rejects it).
+  installed-release migration already on `main`.
 - **Migration numbers do not encode product releases.** They are a single
   monotonic database ordering sequence. After `v0.1.0`, each schema change takes
   the next integer regardless of which release eventually contains it; release

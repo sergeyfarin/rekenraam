@@ -263,18 +263,19 @@ func (s *TransactionService) cleanTransactionSpec(ctx context.Context, input Tra
 	}
 
 	return db.TransactionSpec{
-		Status:          status,
-		TransactionKind: kind,
-		TransactionDate: transactionDate,
-		PayeeID:         payeeID,
-		PayeeName:       nullableSQLString(cleanedPayeeName),
-		Description:     description,
-		ExternalRefHint: externalRefHint,
-		NoteMarkdown:    noteMarkdown,
-		MetadataJSON:    metadataJSON,
-		NeedsReview:     input.NeedsReview,
-		TagIDs:          tagIDs,
-		JournalEntries:  entries,
+		Status:                  status,
+		TransactionKind:         kind,
+		InvestmentOperationKind: input.InvestmentOperationKind,
+		TransactionDate:         transactionDate,
+		PayeeID:                 payeeID,
+		PayeeName:               nullableSQLString(cleanedPayeeName),
+		Description:             description,
+		ExternalRefHint:         externalRefHint,
+		NoteMarkdown:            noteMarkdown,
+		MetadataJSON:            metadataJSON,
+		NeedsReview:             input.NeedsReview,
+		TagIDs:                  tagIDs,
+		JournalEntries:          entries,
 	}, nil
 }
 

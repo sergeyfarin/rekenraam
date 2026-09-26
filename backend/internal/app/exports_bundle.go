@@ -182,6 +182,7 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		{"commodities.csv", func(w io.Writer) (int64, error) { return s.writeCommoditiesCSV(ctx, w, snapshot) }},
 		{"tags.csv", func(w io.Writer) (int64, error) { return s.writeTagsCSV(ctx, w, snapshot) }},
 		{"lots.csv", func(w io.Writer) (int64, error) { return s.writeLotsCSV(ctx, w, snapshot, paths) }},
+		{"investment-operations.csv", func(w io.Writer) (int64, error) { return s.writeInvestmentOperationsCSV(ctx, w, snapshot) }},
 		{"disposal-decisions.csv", func(w io.Writer) (int64, error) { return s.writeDisposalDecisionsCSV(ctx, w, snapshot) }},
 		{"disposal-allocations.csv", func(w io.Writer) (int64, error) { return s.writeDisposalAllocationsCSV(ctx, w, snapshot) }},
 		{"prices.csv", func(w io.Writer) (int64, error) { return s.writePricesCSV(ctx, w, snapshot) }},
@@ -442,7 +443,7 @@ func (s *ExportService) writeLotsCSV(ctx context.Context, out io.Writer, snapsho
 		return 0, err
 	}
 	writer, err := newBundleCSV(out, []string{
-		"lot_id", "account_id", "account_path", "commodity_id", "opened_on", "status",
+		"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status",
 		"quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis",
 		"cost_commodity_id", "source_transaction_id",
 	})
@@ -457,6 +458,7 @@ func (s *ExportService) writeLotsCSV(ctx context.Context, out io.Writer, snapsho
 			strconv.FormatInt(lot.AccountID, 10),
 			paths[lot.AccountID],
 			strconv.FormatInt(lot.CommodityID, 10),
+			lot.PositionSide,
 			lot.OpenedOn,
 			lot.Status,
 			exact.Decimal(lot.QuantityValue, lot.QuantityScale),
@@ -473,6 +475,33 @@ func (s *ExportService) writeLotsCSV(ctx context.Context, out io.Writer, snapsho
 	}
 
 	return finishBundleCSV(writer, rows)
+}
+
+func (s *ExportService) writeInvestmentOperationsCSV(ctx context.Context, out io.Writer, snapshot *sql.Tx) (int64, error) {
+	operations, err := s.repository.ExportInvestmentOperations(ctx, snapshot, BookID)
+	if err != nil {
+		return 0, err
+	}
+	writer, err := newBundleCSV(out, []string{
+		"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id",
+	})
+	if err != nil {
+		return 0, err
+	}
+	var count int64
+	for _, operation := range operations {
+		if err := writer.Write([]string{
+			strconv.FormatInt(operation.OperationID, 10),
+			strconv.FormatInt(operation.TransactionID, 10),
+			operation.Kind,
+			operation.EventDate,
+			strconv.FormatInt(operation.AuditEventID, 10),
+		}); err != nil {
+			return count, fmt.Errorf("write investment operation row: %w", err)
+		}
+		count++
+	}
+	return finishBundleCSV(writer, count)
 }
 
 func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Writer, snapshot *sql.Tx) (int64, error) {
@@ -756,6 +785,7 @@ value in this archive was ever a floating-point number.`,
   commodities.csv    currencies, securities, and crypto, with their scales
   tags.csv           tag names behind the tag columns in ledger.csv
   lots.csv           investment lots as they currently stand
+  investment-operations.csv  named investment transactions and audit links
   disposal-decisions.csv  immutable resolved cost-basis elections
   disposal-allocations.csv  exact lot allocations for those elections
   prices.csv         non-voided price observations

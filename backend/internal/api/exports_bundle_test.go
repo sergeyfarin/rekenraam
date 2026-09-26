@@ -155,7 +155,7 @@ func TestExportBundleChecksumsVerify(t *testing.T) {
 
 	for _, name := range []string{
 		"README.txt", "ledger.csv", "accounts.csv", "categories.csv", "payees.csv",
-		"commodities.csv", "tags.csv", "lots.csv", "disposal-decisions.csv",
+		"commodities.csv", "tags.csv", "lots.csv", "investment-operations.csv", "disposal-decisions.csv",
 		"disposal-allocations.csv", "prices.csv", "trial-balance.csv", "manifest.json",
 	} {
 		assert.Containsf(t, bundle.files, name, "the archive must carry %s", name)
@@ -637,7 +637,7 @@ func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
 	lots := bundle.table(t, "lots.csv")
 
 	require.Equal(t, []string{
-		"lot_id", "account_id", "account_path", "commodity_id", "opened_on", "status",
+		"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status",
 		"quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis",
 		"cost_commodity_id", "source_transaction_id",
 	}, lots.header)
@@ -646,6 +646,11 @@ func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
 	row := lots.rows[0]
 	assert.Equal(t, strconvFormatInt(holding.ID), lots.column(row, "account_id"))
 	assert.Equal(t, "open", lots.column(row, "status"))
+	assert.Equal(t, "long", lots.column(row, "position_side"))
+	operations := bundle.table(t, "investment-operations.csv")
+	require.Len(t, operations.rows, 1)
+	assert.Equal(t, "buy", operations.column(operations.rows[0], "operation_kind"))
+	assert.Equal(t, strconvFormatInt(bought.Transaction.ID), operations.column(operations.rows[0], "transaction_id"))
 	assert.Equal(t, "10", lots.column(row, "quantity"))
 	assert.Equal(t, "10", lots.column(row, "remaining_quantity"))
 	// The buy cost 1000.00 in cash, recorded at the cash commodity's scale —

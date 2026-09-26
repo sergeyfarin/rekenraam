@@ -1028,13 +1028,14 @@ func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeIn
 			ChangeReason:           input.ChangeReason,
 			ReconciliationOverride: input.ReconciliationOverride,
 			Spec: TransactionInput{
-				Status:          status,
-				TransactionKind: "investment",
-				TransactionDate: input.TransactionDate,
-				PayeeID:         input.PayeeID,
-				Description:     memo,
-				ExternalRefHint: input.ExternalRefHint,
-				MetadataJSON:    metadataJSON,
+				Status:                  status,
+				TransactionKind:         "investment",
+				InvestmentOperationKind: "buy",
+				TransactionDate:         input.TransactionDate,
+				PayeeID:                 input.PayeeID,
+				Description:             memo,
+				ExternalRefHint:         input.ExternalRefHint,
+				MetadataJSON:            metadataJSON,
 				JournalEntries: []JournalEntryInput{{
 					EntryDate: input.TransactionDate,
 					EntryKind: "investment",
@@ -1387,13 +1388,14 @@ func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeI
 			ChangeReason:           input.ChangeReason,
 			ReconciliationOverride: input.ReconciliationOverride,
 			Spec: TransactionInput{
-				Status:          status,
-				TransactionKind: "investment",
-				TransactionDate: input.TransactionDate,
-				PayeeID:         input.PayeeID,
-				Description:     memo,
-				ExternalRefHint: input.ExternalRefHint,
-				MetadataJSON:    metadataJSON,
+				Status:                  status,
+				TransactionKind:         "investment",
+				InvestmentOperationKind: map[bool]string{true: "write_off", false: "sell"}[input.WriteOff],
+				TransactionDate:         input.TransactionDate,
+				PayeeID:                 input.PayeeID,
+				Description:             memo,
+				ExternalRefHint:         input.ExternalRefHint,
+				MetadataJSON:            metadataJSON,
 				JournalEntries: []JournalEntryInput{{
 					EntryDate: input.TransactionDate,
 					EntryKind: "investment",
@@ -1566,13 +1568,14 @@ func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInpu
 			ChangeReason:           input.ChangeReason,
 			ReconciliationOverride: input.ReconciliationOverride,
 			Spec: TransactionInput{
-				Status:          status,
-				TransactionKind: "investment",
-				TransactionDate: date,
-				PayeeID:         input.PayeeID,
-				Description:     memo,
-				ExternalRefHint: input.ExternalRefHint,
-				MetadataJSON:    input.MetadataJSON,
+				Status:                  status,
+				TransactionKind:         "investment",
+				InvestmentOperationKind: "dividend",
+				TransactionDate:         date,
+				PayeeID:                 input.PayeeID,
+				Description:             memo,
+				ExternalRefHint:         input.ExternalRefHint,
+				MetadataJSON:            input.MetadataJSON,
 				JournalEntries: []JournalEntryInput{{
 					EntryDate: date,
 					EntryKind: "investment",
@@ -1659,11 +1662,12 @@ func (s *InvestmentService) reinvestedDividendPlan(ctx context.Context, input Re
 			ChangeReason:           input.ChangeReason,
 			ReconciliationOverride: input.ReconciliationOverride,
 			Spec: TransactionInput{
-				Status:          status,
-				TransactionKind: "investment",
-				TransactionDate: date,
-				PayeeID:         input.PayeeID,
-				Description:     memo,
+				Status:                  status,
+				TransactionKind:         "investment",
+				InvestmentOperationKind: "reinvested_dividend",
+				TransactionDate:         date,
+				PayeeID:                 input.PayeeID,
+				Description:             memo,
 				JournalEntries: []JournalEntryInput{{
 					EntryDate: date,
 					EntryKind: "investment",
@@ -1796,6 +1800,9 @@ func (s *InvestmentService) AcceptSuggestion(ctx context.Context, ownerUserID in
 	}
 
 	now := s.now().UTC().Format(time.RFC3339)
+	if record.EventFamily == "return_of_capital" || record.EventFamily == "cash_in_lieu" {
+		return s.failSuggestion(ctx, suggestionID, "return of capital or cash in lieu requires an investment basis workflow", now, ownerUserID, authSessionID, requestID)
+	}
 
 	proposal, err := parseProposedDividendTransaction(record.ProposedTransactionJSON)
 	if err != nil {
@@ -1885,12 +1892,14 @@ func (s *InvestmentService) setSuggestionStatus(ctx context.Context, ownerUserID
 
 // proposedTransactionKindDividendIncome is the only proposed_transaction_json
 // "kind" AcceptSuggestion knows how to post. It covers the cash-income-shaped
-// event families (dividend, distribution, cash_in_lieu, return_of_capital) —
-// all reduce to "cash in, income account credited, optional withholding",
+// event families (dividend, distribution) —
+// these reduce to "cash in, income account credited, optional withholding",
 // exactly DividendInput's shape. Structural corporate actions (split,
 // merger, spin_off, ticker_change, delisting, corporate_action) have no
 // lot-mutation design yet and are rejected loudly, not silently ignored —
-// see docs/backlog.md.
+// see docs/backlog.md. Return of capital is refused until its basis-adjustment
+// workflow exists; treating it as income would misstate the position. Cash in
+// lieu also needs an explicit basis treatment before it can be accepted.
 const proposedTransactionKindDividendIncome = "dividend_income"
 
 // proposedDividendTransaction is the contract a future provider-event

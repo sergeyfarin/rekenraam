@@ -1,6 +1,8 @@
 # Upgrade Policy And Operator Guide
 
-The v0.1 schema baseline is migration `0001`. Rekenraam applies pending embedded
+The current v0.1 candidate schema baseline is migration `0001`. It may be
+redesigned before the first installed release under ADR 0013; disposable
+development databases then need a reset. Rekenraam applies pending embedded
 Goose migrations automatically before the HTTP server starts. A migration
 failure stops startup; the app never serves against a partially upgraded schema.
 
@@ -46,9 +48,9 @@ Start the new binary against the existing database. It applies every pending
 migration in order before listening. After startup, run Settings → Data →
 Self-check and retain the pre-upgrade backup until the result is `passed`.
 
-The first release, v0.1.0, has no earlier supported release to upgrade from and
-contains migration `0001`. Later releases must accept a database from any
-earlier tagged release. CI constructs the frozen v0.1 state, inserts sentinel
+The first installed release has no earlier supported release to upgrade from.
+Later releases must accept a database from any earlier installed release. CI
+constructs the current v0.1 candidate state, inserts sentinel
 user data, upgrades it to `HEAD`, and asserts that its schema matches a fresh
 install.
 
@@ -62,9 +64,10 @@ than the binary understands.
 
 ## Maintainer release checklist
 
-- Add schema changes only as the next sequential migration.
-- Run `./scripts/test-backend.sh`; both the immutable checksum and historical
-  upgrade tests must pass.
+- Add schema changes as the next sequential migration unless ADR 0013's
+  pre-release baseline redesign is explicitly declared and tested.
+- Run `./scripts/test-backend.sh`; checksum and historical upgrade tests must
+  pass, updating the candidate checksum and fixture when its baseline changes.
 - Add every newly released migration and its SHA-256 to
   `backend/migrations/freeze_test.go` in the release commit.
 - State the highest migration included in the release notes.

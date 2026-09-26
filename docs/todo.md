@@ -5,8 +5,20 @@ roadmap (initiatives), backlog (defect registry), or the linked review docs.
 Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
-Last updated: 2026-09-10 (R8 budgets and T-76 complete; T-75b remains required
-later work.)
+Last updated: 2026-09-26 (ADR 0013 and the named investment operation/position
+side foundation landed; native replay, T-75b and T-108 remain open.)
+
+## Next investment slices
+
+- [ ] Native position replay and investment correction/reversal (T-75b),
+  preserving journal, lots, elections, prices, reconciliation, and audit links.
+- [ ] T-108 short opening and cover, including side-aware gains, dated net worth,
+  self-checks, export, API, and mobile UI. A negative ordinary holding remains
+  unclassified rather than silently becoming a short.
+- [ ] Return-of-capital basis reduction, security transfers, splits, and
+  structural corporate actions under ADR 0013. Return-of-capital and cash-in-lieu
+  suggestions remain blocked from dividend-income posting until their basis
+  workflows exist.
 
 ## Where things stand
 

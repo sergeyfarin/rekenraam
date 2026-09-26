@@ -9,19 +9,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// frozenMigrationChecksums is the v0.1 schema contract. Existing entries are
-// immutable; future schema work adds a new numbered migration and, when that
-// migration ships in a release, a new checksum here.
+// frozenMigrationChecksums pins the current v0.1 candidate baseline. ADR 0013
+// permits an explicitly declared pre-release redesign before installations;
+// installed-release migrations are immutable.
 var frozenMigrationChecksums = map[string]string{
-	"0001_initial_schema.sql": "3eb4b719e0eeda7b447466099c4287a602b38961fe99a81e24145f435a7da724",
+	"0001_initial_schema.sql": "5026aba4ec089af81a7bb8846a6e1b823f70afbf5de6d39ee79f0a49949258f1",
 }
 
-func TestReleasedMigrationsAreImmutable(t *testing.T) {
+func TestPinnedMigrationChecksums(t *testing.T) {
 	for name, want := range frozenMigrationChecksums {
 		contents, err := FS.ReadFile(name)
-		require.NoErrorf(t, err, "released migration %s must not be renamed or removed", name)
+		require.NoErrorf(t, err, "pinned migration %s must not be renamed or removed", name)
 		sum := sha256.Sum256(contents)
 		assert.Equalf(t, want, hex.EncodeToString(sum[:]),
-			"released migration %s changed; restore it and add a new sequential migration", name)
+			"pinned migration %s changed; restore it or document an ADR-approved pre-release redesign and update this checksum", name)
 	}
 }

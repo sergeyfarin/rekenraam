@@ -684,6 +684,18 @@ and cost-basis rules. The current ordinary-entry and investment-sale paths do
 not identify that intent. Until a dedicated short-sale contract and workflow
 exist, a negative countable position is reported as unclassified for review;
 it is neither silently accepted as a valid short nor forcibly discarded.
+ADR 0013 specifies named operations, separate long/short lot sides, cover
+allocation, journal balancing, and dated classification. Deliver the operation
+and replay foundation before opening this workflow in the UI.
+
+### T-109 Basis-affecting cash suggestions were accepted as income `[x]`
+
+Provider events named `return_of_capital` or `cash_in_lieu` could carry a
+`dividend_income` proposal and be accepted as ordinary dividend income, without
+changing or allocating lot basis. The accept path now reads the provider event
+family and fails those suggestions before any posting. Named test
+`TestAcceptSuggestion_BasisEventsCannotPostAsDividendIncome` proves both
+families leave the journal unchanged. The proper basis workflows remain R16.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 
@@ -1244,12 +1256,14 @@ the current graph is two or three levels deep, so nothing is urgent today.
 
 ### T-55 No historical-upgrade migration test `[x]`
 
-**Closed 2026-09-11 with the v0.1 migration freeze.**
-`TestReleasedMigrationsAreImmutable` pins the released baseline checksum.
+**Closed 2026-09-11 with the v0.1 candidate migration gate.**
+`TestPinnedMigrationChecksums` pins the current candidate baseline checksum;
+ADR 0013 permits its explicit pre-release redesign before installations.
 `TestMigrateUpgradesV01DatabaseToFreshHeadSchema` constructs migration 1 in
 isolation, inserts sentinel user data, migrates to `HEAD`, proves the data
 survives, and compares the resulting schema to a fresh install. It is a no-op
-upgrade while v0.1 is the only release and becomes multi-step as soon as 0002
+upgrade while the candidate baseline is the only migration and becomes
+multi-step as soon as 0002
 lands. The operator path and rollback-by-restored-backup rule are documented in
 `docs/upgrades.md`.
 

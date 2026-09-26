@@ -348,6 +348,7 @@ a truncated download fails to open rather than looking complete. Contents:
 | `commodities.csv` | id, code, name, kind, display scale, max_quantity_scale |
 | `tags.csv` | id, name |
 | `lots.csv` | investment lots: account, commodity, opened_on, original and remaining quantity, remaining cost basis, cost commodity, status |
+| `investment-operations.csv` | named investment operation kind, transaction and audit links, event date |
 | `prices.csv` | non-voided price observations: base, quote, date, price, source |
 | `trial-balance.csv` | per account per commodity: `in_scope`, `opening_balance`, `exported_in_range_movement`, `exported_out_of_range_movement`, `excluded_in_range_movement`, `derived_closing_balance`, `actual_closing_balance` |
 | `README.txt` | what this archive is, what it excludes, how to read it |

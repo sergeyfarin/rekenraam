@@ -339,6 +339,7 @@ type EventSuggestionRecord struct {
 	ID                      int64
 	BookID                  int64
 	ProviderEventID         int64
+	EventFamily             string
 	InstrumentID            sql.NullInt64
 	ConfidenceBPS           int
 	Status                  string
@@ -2168,11 +2169,13 @@ func (r *InvestmentRepository) SetSuggestionStatus(ctx context.Context, bookID i
 func (r *InvestmentRepository) EventSuggestionByID(ctx context.Context, bookID int64, suggestionID int64) (EventSuggestionRecord, error) {
 	var record EventSuggestionRecord
 	err := r.database.QueryRowContext(ctx, `
-		SELECT id, book_id, provider_event_id, instrument_id, confidence_bps, status, proposed_transaction_json,
-			generated_transaction_id, failure_reason, created_at, updated_at
-		FROM investment_event_suggestions
-		WHERE book_id = ? AND id = ?
-	`, bookID, suggestionID).Scan(&record.ID, &record.BookID, &record.ProviderEventID, &record.InstrumentID, &record.ConfidenceBPS, &record.Status, &record.ProposedTransactionJSON, &record.GeneratedTransactionID, &record.FailureReason, &record.CreatedAt, &record.UpdatedAt)
+		SELECT s.id, s.book_id, s.provider_event_id, e.event_family, s.instrument_id,
+			s.confidence_bps, s.status, s.proposed_transaction_json,
+			s.generated_transaction_id, s.failure_reason, s.created_at, s.updated_at
+		FROM investment_event_suggestions s
+		JOIN investment_provider_events e ON e.id = s.provider_event_id AND e.book_id = s.book_id
+		WHERE s.book_id = ? AND s.id = ?
+	`, bookID, suggestionID).Scan(&record.ID, &record.BookID, &record.ProviderEventID, &record.EventFamily, &record.InstrumentID, &record.ConfidenceBPS, &record.Status, &record.ProposedTransactionJSON, &record.GeneratedTransactionID, &record.FailureReason, &record.CreatedAt, &record.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return EventSuggestionRecord{}, ErrNotFound
 	}

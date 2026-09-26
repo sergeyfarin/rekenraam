@@ -451,6 +451,14 @@ unpaginated summary counts support the editor and navigation badge.
 
 ### R16 — investment lifecycle completeness
 
+ADR 0013 now defines the named operation and long/short position foundation.
+The schema and existing-command operation identity have landed in the unused
+v0.1 candidate baseline. Native replay, side-aware reads/self-checks and the
+short-sale/cover commands remain before T-108 is usable. Transfers and
+corporate actions follow. Return-of-capital and cash-in-lieu suggestions are
+currently refused as dividend income (T-109) until their lot-basis treatment
+ships.
+
 Decided 2026-08-05 (review §3e). `competitor-comparison.md` claims corporate
 actions as shipped, but there is **no implementation** — not even manual
 entry. This slice makes the moat claim honest. Sequenced after R5, and
@@ -608,8 +616,9 @@ atomic range admission checks with active sequence regressions. Gains-summary
 display now uses standard currency precision; see
 `docs/reviews/allocation-and-gains-verification-2026-09-20.md`. See
 `docs/reviews/financial-test-hardening-2026-09-19.md`. T-94's draft-promotion
-correction remains verified. The household dry run, investment feature limits
-and frozen baseline gates still remain required.
+correction remains verified. The household dry run and investment feature
+limits still remain required; the candidate baseline must be validated after
+ADR 0013's pre-release redesign.
 
 T-106's dated negative-position detection and net-worth warning shipped
 2026-09-26. Out-of-order imports remain accepted; a genuine short sale needs
@@ -619,8 +628,9 @@ boundary also closed on 2026-09-26.
 These are a parallel release-readiness track, not a reason to delay local
 daily-driver work.
 
-The v0.1 migration freeze and earlier reliability dispositions are recorded in
-`docs/reviews/v0.1-release-triage-2026-09-11.md`. The first-pass fixes close
+The earlier v0.1 migration freeze and reliability dispositions are recorded in
+`docs/reviews/v0.1-release-triage-2026-09-11.md`. ADR 0013 supersedes the
+unused candidate's freeze before installation. The first-pass fixes close
 their original seven reproductions and the second-pass fixes close its four, so
 the latest review above now governs the code release gate; the non-code gates
 also still stand.

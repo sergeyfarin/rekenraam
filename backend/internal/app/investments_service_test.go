@@ -201,6 +201,89 @@ func TestAcceptSuggestion_UnsupportedKindMarksFailedWithoutPosting(t *testing.T)
 	assert.Contains(t, failed.FailureReason, "unsupported proposed transaction kind")
 }
 
+func TestAcceptSuggestion_BasisEventsCannotPostAsDividendIncome(t *testing.T) {
+	for _, family := range []string{"return_of_capital", "cash_in_lieu"} {
+		t.Run(family, func(t *testing.T) {
+			f := newInvestmentsTestFixture(t)
+			suggestionID := f.seedSuggestion(t, validDividendProposalJSON(f.cashAccountID, f.eurCommodityID, f.incomeAccountID))
+			_, err := f.database.ExecContext(context.Background(), `
+				UPDATE investment_provider_events SET event_family = ?
+				WHERE id = (SELECT provider_event_id FROM investment_event_suggestions WHERE id = ?)
+			`, family, suggestionID)
+			require.NoError(t, err)
+			initialTransactions := f.transactionCount(t)
+
+			failed, err := f.investmentService.AcceptSuggestion(context.Background(), f.ownerUserID, 0, "req-basis", suggestionID)
+			require.NoError(t, err)
+			assert.Equal(t, "failed", failed.Status)
+			assert.Contains(t, failed.FailureReason, "basis")
+			assert.Equal(t, initialTransactions, f.transactionCount(t))
+		})
+	}
+}
+
+func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	trade := InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		QuantityValue: exact.New(10), CashAmountValue: 100000, CashAmountScale: 2,
+	}
+	buy, err := f.investmentService.Buy(ctx, trade)
+	require.NoError(t, err)
+	trade.TransactionDate = "2026-03-02"
+	trade.QuantityValue = exact.New(4)
+	trade.CashAmountValue = 50000
+	sell, err := f.investmentService.Sell(ctx, trade)
+	require.NoError(t, err)
+	dividend, err := f.investmentService.Dividend(ctx, DividendInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-03",
+		CommodityID: &f.stockCommodityID, CashAccountID: f.cashAccountID,
+		CashCommodityID: f.eurCommodityID, IncomeAccountID: &f.incomeAccountID,
+		AmountValue: 500, AmountScale: 2,
+	})
+	require.NoError(t, err)
+	reinvestment, err := f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-04",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		IncomeAccountID: &f.incomeAccountID, CashCommodityID: f.eurCommodityID,
+		QuantityValue: exact.New(1), AmountValue: 10000, AmountScale: 2,
+	})
+	require.NoError(t, err)
+	writeOff, err := f.investmentService.WriteOff(ctx, InvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-05",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		QuantityValue: exact.New(1), Reason: "issuer liquidated",
+	})
+	require.NoError(t, err)
+
+	for _, item := range []struct {
+		transactionID int64
+		kind          string
+	}{
+		{buy.Transaction.ID, "buy"},
+		{sell.Transaction.ID, "sell"},
+		{dividend.ID, "dividend"},
+		{reinvestment.Transaction.ID, "reinvested_dividend"},
+		{writeOff.Transaction.ID, "write_off"},
+	} {
+		var kind, eventDate string
+		err := f.database.QueryRowContext(ctx, `
+			SELECT operation_kind, event_date FROM investment_operations
+			WHERE transaction_id = ?
+		`, item.transactionID).Scan(&kind, &eventDate)
+		require.NoError(t, err)
+		assert.Equal(t, item.kind, kind)
+		assert.NotEmpty(t, eventDate)
+	}
+	_, err = f.database.ExecContext(ctx, `UPDATE investment_operations SET operation_kind = 'short_sale' WHERE transaction_id = ?`, buy.Transaction.ID)
+	require.ErrorContains(t, err, "investment operations are immutable")
+	_, err = f.database.ExecContext(ctx, `DELETE FROM investment_operations WHERE transaction_id = ?`, buy.Transaction.ID)
+	require.ErrorContains(t, err, "investment operations are immutable")
+}
+
 func TestAcceptSuggestion_InvalidCashAccountMarksFailedWithoutPosting(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	const unknownAccountID = 999999

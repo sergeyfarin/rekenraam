@@ -222,16 +222,19 @@ type DeleteDraftTransactionInput struct {
 type TransactionInput struct {
 	Status          string
 	TransactionKind string
-	TransactionDate string
-	PayeeID         *int64
-	PayeeName       string
-	Description     string
-	ExternalRefHint string
-	NoteMarkdown    string
-	MetadataJSON    string
-	NeedsReview     bool
-	TagIDs          []int64
-	JournalEntries  []JournalEntryInput
+	// InvestmentOperationKind names the investment-domain command. Generic
+	// transaction requests leave it empty; investment services set it.
+	InvestmentOperationKind string
+	TransactionDate         string
+	PayeeID                 *int64
+	PayeeName               string
+	Description             string
+	ExternalRefHint         string
+	NoteMarkdown            string
+	MetadataJSON            string
+	NeedsReview             bool
+	TagIDs                  []int64
+	JournalEntries          []JournalEntryInput
 }
 
 type JournalEntryInput struct {

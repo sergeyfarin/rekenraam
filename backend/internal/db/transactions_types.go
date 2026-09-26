@@ -130,18 +130,19 @@ type PostingRecord struct {
 }
 
 type TransactionSpec struct {
-	Status          string
-	TransactionKind string
-	TransactionDate string
-	PayeeID         sql.NullInt64
-	PayeeName       sql.NullString
-	Description     string
-	ExternalRefHint string
-	NoteMarkdown    string
-	MetadataJSON    string
-	NeedsReview     bool
-	TagIDs          []int64
-	JournalEntries  []JournalEntrySpec
+	Status                  string
+	TransactionKind         string
+	InvestmentOperationKind string
+	TransactionDate         string
+	PayeeID                 sql.NullInt64
+	PayeeName               sql.NullString
+	Description             string
+	ExternalRefHint         string
+	NoteMarkdown            string
+	MetadataJSON            string
+	NeedsReview             bool
+	TagIDs                  []int64
+	JournalEntries          []JournalEntrySpec
 }
 
 type JournalEntrySpec struct {

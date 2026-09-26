@@ -96,6 +96,12 @@ The development server listens only on localhost. It deliberately does not
 advertise or accept plain-HTTP LAN connections because browsers cannot retain
 Rekenraam's secure authentication cookies on those origins.
 
+The unused v0.1 candidate schema was redesigned on 2026-09-26 (ADR 0013).
+Existing disposable development databases made from the earlier `0001`
+checksum must be reset before starting this build. The reset command and
+database-path guidance are in [docs/developer-workflow.md](docs/developer-workflow.md)
+under *Migrations And Resetting Your Database*.
+
 When the development machine is headless, forward the frontend port from the
 machine where the browser runs:
 

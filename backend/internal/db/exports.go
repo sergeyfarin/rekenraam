@@ -121,6 +121,7 @@ type ExportLotRecord struct {
 	LotID                   int64
 	AccountID               int64
 	CommodityID             int64
+	PositionSide            string
 	OpenedOn                string
 	Status                  string
 	QuantityValue           exact.Coefficient
@@ -133,6 +134,37 @@ type ExportLotRecord struct {
 	RemainingCostBasisScale int
 	CostCommodityID         int64
 	SourceTransactionID     sql.NullInt64
+}
+
+type ExportInvestmentOperationRecord struct {
+	OperationID   int64
+	TransactionID int64
+	Kind          string
+	EventDate     string
+	AuditEventID  int64
+}
+
+func (r *ExportRepository) ExportInvestmentOperations(ctx context.Context, transaction *sql.Tx, bookID int64) ([]ExportInvestmentOperationRecord, error) {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT id, transaction_id, operation_kind, event_date, created_audit_event_id
+		FROM investment_operations WHERE book_id = ? ORDER BY event_date, id
+	`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read export investment operations: %w", err)
+	}
+	defer rows.Close()
+	var operations []ExportInvestmentOperationRecord
+	for rows.Next() {
+		var operation ExportInvestmentOperationRecord
+		if err := rows.Scan(&operation.OperationID, &operation.TransactionID, &operation.Kind, &operation.EventDate, &operation.AuditEventID); err != nil {
+			return nil, fmt.Errorf("scan export investment operation: %w", err)
+		}
+		operations = append(operations, operation)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate export investment operations: %w", err)
+	}
+	return operations, nil
 }
 
 type ExportDisposalDecisionRecord struct {
@@ -773,7 +805,7 @@ func (r *ExportRepository) ExportTags(ctx context.Context, transaction *sql.Tx, 
 func (r *ExportRepository) ExportLots(ctx context.Context, transaction *sql.Tx, bookID int64) ([]ExportLotRecord, error) {
 	rows, err := transaction.QueryContext(ctx, `
 		SELECT
-			id, account_id, commodity_id, opened_on, status,
+			id, account_id, commodity_id, position_side, opened_on, status,
 			quantity_value, quantity_scale,
 			remaining_quantity_value, remaining_quantity_scale,
 			cost_basis_value, cost_basis_scale,
@@ -795,6 +827,7 @@ func (r *ExportRepository) ExportLots(ctx context.Context, transaction *sql.Tx, 
 			&lot.LotID,
 			&lot.AccountID,
 			&lot.CommodityID,
+			&lot.PositionSide,
 			&lot.OpenedOn,
 			&lot.Status,
 			&lot.QuantityValue,

@@ -123,6 +123,20 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 	if err != nil {
 		return TransactionRecord{}, 0, fmt.Errorf("read transaction id: %w", err)
 	}
+	if params.Spec.InvestmentOperationKind != "" {
+		if params.Spec.TransactionKind != "investment" || params.Spec.Status != "posted" {
+			return TransactionRecord{}, 0, fmt.Errorf("investment operation requires a posted investment transaction")
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO investment_operations (
+				book_id, transaction_id, operation_kind, event_date,
+				created_at, created_audit_event_id
+			) VALUES (?, ?, ?, ?, ?, ?)
+		`, params.BookID, transactionID, params.Spec.InvestmentOperationKind,
+			params.Spec.TransactionDate, params.CreatedAt, auditEventID); err != nil {
+			return TransactionRecord{}, 0, fmt.Errorf("insert investment operation: %w", err)
+		}
+	}
 
 	repository := &TransactionRepository{}
 	record, err := repository.insertTransactionVersion(ctx, tx, insertTransactionVersionParams{

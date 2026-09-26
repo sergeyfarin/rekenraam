@@ -72,11 +72,12 @@ strings to the client.
   (goose format: `-- +goose Up` / `-- +goose Down`). Embedded via
   `migrations/embed.go`; they run automatically at startup and in every test
   through `db.Open`.
-- Released migration files are immutable and checksum-enforced. Always add the
-  next sequential migration; never rewrite, rename, renumber, or delete an
-  existing one. Read *Project Lifecycle And Migration Immutability* in
-  `docs/conventions.md` and update the historical-upgrade coverage for schema
-  work.
+- Installed release migration files are immutable and checksum-enforced.
+  ADR 0013 permits an explicitly declared redesign of the unused v0.1
+  candidate baseline before release; update its checksum, fixtures, and reset
+  guidance together. Otherwise add the next sequential migration. Read
+  *Project Lifecycle And Migration Immutability* in `docs/conventions.md`
+  and update historical-upgrade coverage for schema work.
 - Migration numbers collide across branches. The branch merged second renumbers
   its own file; renumbering one already on `main` is a rewrite.
 - IDs are `INTEGER PRIMARY KEY` auto-increment. No UUID keys without an ADR.

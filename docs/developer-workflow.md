@@ -82,10 +82,12 @@ the cost commodity's maximum scale, one scale per position — when a test's
 expected basis or gain looks deeper than the amount that produced it, that is
 the policy, not a rounding slip.
 
-The backend suite enforces released-migration checksums and exercises the
-upgrade from the frozen v0.1 schema to `HEAD`, including schema equivalence and
-sentinel-data preservation. A checksum failure means the old migration must be
-restored and the change moved into the next numbered migration. See
+The backend suite enforces migration checksums and exercises the upgrade from
+the v0.1 candidate schema to `HEAD`, including schema equivalence and
+sentinel-data preservation. A checksum failure normally means the old
+migration must be restored and the change moved into the next numbered
+migration. ADR 0013 permits an explicitly declared pre-release redesign of
+the unused v0.1 baseline, with an updated checksum and fixtures. See
 `docs/upgrades.md` for the operator path.
 
 `COVERAGE=1 ./scripts/test-backend.sh` runs the same suite without `-race`,
@@ -257,9 +259,9 @@ pnpm test:release-preflight
 ## Migrations And Resetting Your Database
 
 The governing rule is **Project Lifecycle And Migration Immutability** in
-`docs/conventions.md`; this section is only how to carry it out. Short version:
-Rekenraam is pre-release, so migrations may still be rewritten and your local
-database is disposable.
+`docs/conventions.md`; this section is only how to carry it out. The unused
+v0.1 candidate baseline may be redesigned under ADR 0013; installed release
+migrations are immutable. Local development databases are disposable.
 
 Adding schema:
 
@@ -303,9 +305,11 @@ run and needs nothing.
   matches a fresh install **and** that every durable figure survived — row
   counts per table, exact coefficients and scales, lifecycle states, lot and
   checkpoint conservation, per-commodity balance, and `foreign_key_check`.
-- **The seed fixtures are frozen.** A seed stands in for a database written by a
-  released version, so regenerating one against a later schema defeats the test
-  it feeds. A new release gets a *new* seed file, built with
+- **Installed-release seed fixtures are frozen.** The unused v0.1 candidate
+  seed may be revised with its baseline under ADR 0013. Once a release is
+  installed, its seed stands in for a database written by that version, so
+  regenerating it against a later schema defeats the test it feeds. A new
+  installed release gets a *new* seed file, built with
   `./scripts/build-release-seed.sh <out.sql>` — which drives the real HTTP API
   (`TestBuildReleaseSeedFixture` in `internal/api`) so the fixture is a book the
   app would actually have written, then shapes the dump. Output is not

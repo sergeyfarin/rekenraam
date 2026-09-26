@@ -1113,11 +1113,15 @@ CREATE TABLE IF NOT EXISTS investment_lots (
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
   updated_at TEXT NOT NULL,
   updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  position_side TEXT NOT NULL DEFAULT 'long' CHECK (position_side IN ('long', 'short'))
 );
 
 CREATE INDEX IF NOT EXISTS investment_lots_position_idx
   ON investment_lots (book_id, account_id, commodity_id, status, opened_on, id);
+
+CREATE INDEX IF NOT EXISTS investment_lots_side_position_idx
+  ON investment_lots (book_id, account_id, commodity_id, position_side, status, opened_on, id);
 
 CREATE TABLE IF NOT EXISTS investment_lot_events (
   id INTEGER PRIMARY KEY,
@@ -1208,6 +1212,49 @@ CREATE TABLE IF NOT EXISTS investment_disposal_allocations (
 
 CREATE INDEX IF NOT EXISTS investment_disposal_decisions_event_idx
   ON investment_disposal_decisions (book_id, event_date, id);
+
+CREATE TABLE IF NOT EXISTS investment_operations (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  transaction_id INTEGER NOT NULL UNIQUE REFERENCES transactions(id) ON DELETE RESTRICT,
+  operation_kind TEXT NOT NULL CHECK (length(trim(operation_kind)) > 0 AND operation_kind = trim(operation_kind)),
+  event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
+  created_at TEXT NOT NULL,
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS investment_operations_book_kind_date_idx
+  ON investment_operations (book_id, operation_kind, event_date, id);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operations_same_book
+BEFORE INSERT ON investment_operations
+WHEN NOT EXISTS (
+  SELECT 1 FROM transactions t
+  JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  WHERE t.id = NEW.transaction_id AND t.book_id = NEW.book_id
+    AND a.book_id = NEW.book_id
+)
+BEGIN
+  SELECT RAISE(ABORT, 'investment operation must reference a transaction and audit event in the same book');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operations_no_update
+BEFORE UPDATE ON investment_operations
+BEGIN
+  SELECT RAISE(ABORT, 'investment operations are immutable');
+END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_operations_no_delete
+BEFORE DELETE ON investment_operations
+BEGIN
+  SELECT RAISE(ABORT, 'investment operations are immutable');
+END;
+-- +goose StatementEnd
 
 CREATE TABLE IF NOT EXISTS investment_provider_events (
   id INTEGER PRIMARY KEY,
@@ -2869,6 +2916,11 @@ DROP TRIGGER IF EXISTS import_rules_targets_same_book_insert;
 DROP INDEX IF EXISTS import_rules_book_order_idx;
 DROP TABLE IF EXISTS import_rules;
 DROP INDEX IF EXISTS investment_disposal_decisions_event_idx;
+DROP TRIGGER IF EXISTS investment_operations_no_delete;
+DROP TRIGGER IF EXISTS investment_operations_no_update;
+DROP TRIGGER IF EXISTS investment_operations_same_book;
+DROP INDEX IF EXISTS investment_operations_book_kind_date_idx;
+DROP TABLE IF EXISTS investment_operations;
 DROP TABLE IF EXISTS investment_disposal_allocations;
 DROP TABLE IF EXISTS investment_disposal_decisions;
 DROP TABLE IF EXISTS investment_position_basis_state;
@@ -2974,6 +3026,7 @@ DROP TABLE IF EXISTS investment_provider_events;
 DROP INDEX IF EXISTS investment_lot_events_lot_idx;
 DROP TABLE IF EXISTS investment_lot_events;
 DROP INDEX IF EXISTS investment_lots_position_idx;
+DROP INDEX IF EXISTS investment_lots_side_position_idx;
 DROP TABLE IF EXISTS investment_lots;
 DROP INDEX IF EXISTS dividend_defaults_lookup_idx;
 DROP TABLE IF EXISTS dividend_defaults;
