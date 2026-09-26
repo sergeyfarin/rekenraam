@@ -11,9 +11,9 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-// A countable commodity — a share, a fund unit, a coin — cannot go below zero.
-// Money can: an overdraft and a credit-card balance are real positions. Units
-// are not, and the difference matters because nothing else in the app notices.
+// A negative countable position needs a named short-sale workflow or a
+// correction. Money can go negative in an ordinary account; unclassified
+// negative shares and coins need a diagnostic.
 //
 // The lot reconciliation check only compares holdings against lots, so it sees
 // only the accounts the investment subledger manages. A crypto wallet has no
@@ -104,6 +104,27 @@ func TestSelfCheckFindsACryptoWalletDrivenNegative(t *testing.T) {
 		}
 		require.NotEqual(t, SelfCheckFailed, other.Status, "%s should not see this", other.CheckID)
 	}
+}
+
+func TestSelfCheckFindsHistoricalNegativeAfterLaterReplenishment(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	wallet, _, move := cryptoFixture(t, f)
+	move("2026-01-02", -500000000, 100000)
+	move("2026-01-03", 500000000, -100000)
+
+	result := commodityPositionResult(t, f)
+	require.Equal(t, SelfCheckFailed, result.Status)
+	require.Equal(t, []int64{wallet}, result.Sample)
+}
+
+func TestSelfCheckAcceptsAnEarlierPurchaseImportedAfterItsSale(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	_, _, move := cryptoFixture(t, f)
+	move("2026-01-02", -500000000, 100000)
+	move("2026-01-01", 500000000, -100000)
+
+	result := commodityPositionResult(t, f)
+	require.Equal(t, SelfCheckPassed, result.Status)
 }
 
 func TestSelfCheckFindsAnInstrumentDrivenNegativeOnAnOrdinaryAccount(t *testing.T) {

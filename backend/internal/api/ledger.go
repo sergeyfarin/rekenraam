@@ -59,16 +59,31 @@ type categoryTotalsResponse struct {
 }
 
 type netWorthResponse struct {
-	AsOf                string                    `json:"as_of"`
-	Status              string                    `json:"status"`
-	Totals              []balanceQuantityResponse `json:"totals"`
-	ExcludedSystemRoles []string                  `json:"excluded_system_roles"`
+	AsOf                string                      `json:"as_of"`
+	Status              string                      `json:"status"`
+	Totals              []balanceQuantityResponse   `json:"totals"`
+	UnclassifiedShorts  []unclassifiedShortResponse `json:"unclassified_shorts"`
+	ExcludedSystemRoles []string                    `json:"excluded_system_roles"`
+}
+
+type unclassifiedShortResponse struct {
+	AccountID   int64 `json:"account_id"`
+	CommodityID int64 `json:"commodity_id"`
+}
+
+func toUnclassifiedShortResponses(positions []app.UnclassifiedShortPosition) []unclassifiedShortResponse {
+	result := make([]unclassifiedShortResponse, 0, len(positions))
+	for _, position := range positions {
+		result = append(result, unclassifiedShortResponse{AccountID: position.AccountID, CommodityID: position.CommodityID})
+	}
+	return result
 }
 
 type netWorthSeriesBucketResponse struct {
-	StartDate string                    `json:"start_date"`
-	EndDate   string                    `json:"end_date"`
-	Totals    []balanceQuantityResponse `json:"totals"`
+	StartDate          string                      `json:"start_date"`
+	EndDate            string                      `json:"end_date"`
+	Totals             []balanceQuantityResponse   `json:"totals"`
+	UnclassifiedShorts []unclassifiedShortResponse `json:"unclassified_shorts"`
 	// Converted is this bucket at its own end date, in the reporting currency.
 	// Absent when a commodity in the bucket had no rate: a net worth missing a
 	// holding is not a smaller net worth.
@@ -157,6 +172,7 @@ func netWorth(logger *slog.Logger, authService *app.AuthService, transactionServ
 			AsOf:                result.AsOf,
 			Status:              result.Status,
 			Totals:              toBalanceQuantityResponses(result.Totals),
+			UnclassifiedShorts:  toUnclassifiedShortResponses(result.UnclassifiedShorts),
 			ExcludedSystemRoles: result.ExcludedSystemRoles,
 		})
 	}
@@ -195,10 +211,11 @@ func netWorthSeries(logger *slog.Logger, authService *app.AuthService, transacti
 		buckets := make([]netWorthSeriesBucketResponse, 0, len(result.Buckets))
 		for _, bucket := range result.Buckets {
 			buckets = append(buckets, netWorthSeriesBucketResponse{
-				StartDate: bucket.StartDate,
-				EndDate:   bucket.EndDate,
-				Totals:    toBalanceQuantityResponses(bucket.Totals),
-				Converted: toBalanceQuantityPointer(bucket.Converted),
+				StartDate:          bucket.StartDate,
+				EndDate:            bucket.EndDate,
+				Totals:             toBalanceQuantityResponses(bucket.Totals),
+				UnclassifiedShorts: toUnclassifiedShortResponses(bucket.UnclassifiedShorts),
+				Converted:          toBalanceQuantityPointer(bucket.Converted),
 			})
 		}
 		writeJSON(w, http.StatusOK, netWorthSeriesResponse{

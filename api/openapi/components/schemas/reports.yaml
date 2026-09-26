@@ -267,6 +267,7 @@ NetWorthSeriesBucket:
     - start_date
     - end_date
     - totals
+    - unclassified_shorts
   properties:
     start_date:
       type: string
@@ -278,14 +279,18 @@ NetWorthSeriesBucket:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    unclassified_shorts:
+      type: array
+      description: Negative countable positions in this bucket without an explicit short-sale workflow. Totals include these positions and require review.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/UnclassifiedShortPosition"
     converted:
       description: >
         This bucket's net worth at its own end date, in the reporting currency.
         A stock is converted on the date it is measured, so each bucket uses its
         own rate rather than one rate for the range. Absent when no reporting
-        currency was asked for, and absent for a bucket whose commodities could
-        not all be converted — a short total would read as a real fall in net
-        worth.
+        currency was asked for, when any commodity could not be converted, or
+        when an unclassified short position makes this bucket unreliable.
       allOf:
         - $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
 

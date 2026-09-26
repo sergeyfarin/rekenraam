@@ -186,6 +186,9 @@
   // stable code speaks for itself and the retry button stands down.
   const netWorthError = $derived(reportErrorState(netWorthQuery.error, m.reports_error_copy()));
   const rows = $derived(netWorthQuery.data ? netWorthRows(netWorthQuery.data) : []);
+  const unclassifiedShortDates = $derived(
+    new Set(netWorthQuery.data?.buckets.filter((bucket) => bucket.unclassified_shorts.length > 0).map((bucket) => bucket.end_date) ?? [])
+  );
   const multiCommodity = $derived(hasMultipleCommodities(rows));
   // Currencies *and* instrument commodities: a report can be filtered to a
   // security, and a commodity that can be selected must be nameable in every
@@ -285,6 +288,7 @@
   // which case that series is one commodity by construction. This is the whole
   // payoff for a multi-currency book: until now it got no chart at all.
   const chartRows = $derived.by(() => {
+    if (unclassifiedShortDates.size > 0) return [];
     const restated = convertedSeries(rows);
     if (restated.length > 0) return restated;
     return multiCommodity ? [] : rows;
@@ -306,6 +310,7 @@
       m.reports_column_period_end(),
       m.reports_column_commodity(),
       m.reports_column_net_worth(),
+      m.reports_position_status(),
       // Without this, a restatement in EUR and a real EUR holding are the same
       // row to a spreadsheet, and summing the column would double-count.
       m.reports_reporting_currency()
@@ -315,6 +320,7 @@
       row.endDate,
       commodityLabel(row.commodity_id),
       exactDecimal(row.normal_quantity_value, row.quantity_scale),
+      unclassifiedShortDates.has(row.endDate) ? m.reports_unclassified_short_status() : '',
       row.converted ? commodityLabel(row.commodity_id) : ''
     ]);
     const range = activeFilters ?? initialFilters;
@@ -509,6 +515,11 @@
           {m.reports_multi_commodity_notice()}
         </p>
       {/if}
+      {#if unclassifiedShortDates.size > 0}
+        <p role="alert" class="mt-4 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
+          {m.reports_unclassified_short_notice()}
+        </p>
+      {/if}
       <ValuationNotice valuation={netWorthQuery.data?.valuation} {commodityLabel} />
 
       <div class="mt-5 overflow-x-auto">
@@ -523,7 +534,12 @@
           <tbody>
             {#each rows as row (`${row.startDate}-${row.endDate}-${row.commodity_id}-${row.converted}`)}
               <tr class={`border-b border-border/70 last:border-b-0 ${row.converted ? 'bg-control/40' : ''}`}>
-                <td class="px-3 py-3 text-foreground">{formatRange(row.startDate, row.endDate)}</td>
+                <td class="px-3 py-3 text-foreground">
+                  {formatRange(row.startDate, row.endDate)}
+                  {#if unclassifiedShortDates.has(row.endDate)}
+                    <span class="ml-1 text-xs font-semibold">({m.reports_unclassified_short_status()})</span>
+                  {/if}
+                </td>
                 <td class="px-3 py-3 font-medium text-foreground">
                   {commodityLabel(row.commodity_id)}
                   {#if row.converted}

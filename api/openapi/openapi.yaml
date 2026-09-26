@@ -654,6 +654,8 @@ components:
       $ref: "./components/schemas/ledger.yaml#/CategoryTotalsResponse"
     NetWorthResponse:
       $ref: "./components/schemas/ledger.yaml#/NetWorthResponse"
+    UnclassifiedShortPosition:
+      $ref: "./components/schemas/ledger.yaml#/UnclassifiedShortPosition"
     NetWorthSeriesBucket:
       $ref: "./components/schemas/reports.yaml#/NetWorthSeriesBucket"
     NetWorthSeriesQuery:

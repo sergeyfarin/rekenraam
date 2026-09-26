@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -93,7 +94,16 @@ type NetWorthResult struct {
 	AsOf                string
 	Status              string
 	Totals              []BalanceQuantity
+	UnclassifiedShorts  []UnclassifiedShortPosition
 	ExcludedSystemRoles []string
+}
+
+// UnclassifiedShortPosition is a negative countable position without an
+// explicit short-sale contract. Ordinary ledger entries may create one while
+// an out-of-order import is being completed.
+type UnclassifiedShortPosition struct {
+	AccountID   int64
+	CommodityID int64
 }
 
 type NetWorthSeriesInput struct {
@@ -108,12 +118,13 @@ type NetWorthSeriesInput struct {
 }
 
 type NetWorthSeriesBucket struct {
-	StartDate string
-	EndDate   string
-	Totals    []BalanceQuantity
+	StartDate          string
+	EndDate            string
+	Totals             []BalanceQuantity
+	UnclassifiedShorts []UnclassifiedShortPosition
 	// Converted is this bucket's net worth in the reporting currency, at the
-	// bucket's end date. Absent when any commodity in the bucket could not be
-	// converted: a net worth missing one holding is not a smaller net worth.
+	// bucket's end date. Absent when a commodity cannot be converted or an
+	// unclassified short makes the bucket unreliable.
 	Converted *BalanceQuantity
 }
 
@@ -231,7 +242,7 @@ func (s *TransactionService) NetWorth(ctx context.Context, input NetWorthInput) 
 	if err != nil {
 		return NetWorthResult{}, err
 	}
-	totals, err := s.netWorthTotals(ctx, asOf, status)
+	bucket, err := s.netWorthTotals(ctx, asOf, status)
 	if err != nil {
 		return NetWorthResult{}, err
 	}
@@ -239,7 +250,8 @@ func (s *TransactionService) NetWorth(ctx context.Context, input NetWorthInput) 
 	return NetWorthResult{
 		AsOf:                asOf,
 		Status:              status,
-		Totals:              totals,
+		Totals:              bucket.totals,
+		UnclassifiedShorts:  bucket.unclassifiedShorts,
 		ExcludedSystemRoles: []string{"commodity_trading"},
 	}, nil
 }
@@ -276,8 +288,8 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 	var rates *RateTable
 	if input.Reporting != nil {
 		seen := make([]int64, 0)
-		for _, totals := range bucketTotals {
-			for _, total := range totals {
+		for _, bucket := range bucketTotals {
+			for _, total := range bucket.totals {
 				seen = append(seen, total.CommodityID)
 			}
 		}
@@ -290,13 +302,14 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 	resultBuckets := make([]NetWorthSeriesBucket, 0, len(bounds))
 	for index, bound := range bounds {
 		bucketResult := NetWorthSeriesBucket{
-			StartDate: bound.startDate,
-			EndDate:   bound.endDate,
-			Totals:    bucketTotals[index],
+			StartDate:          bound.startDate,
+			EndDate:            bound.endDate,
+			Totals:             bucketTotals[index].totals,
+			UnclassifiedShorts: bucketTotals[index].unclassifiedShorts,
 		}
-		if rates != nil {
+		if rates != nil && len(bucketResult.UnclassifiedShorts) == 0 {
 			converted := NewConvertedTotal(rates.Scale())
-			for _, total := range bucketTotals[index] {
+			for _, total := range bucketTotals[index].totals {
 				value, ok := rates.Convert(total.QuantityValue, total.QuantityScale, total.CommodityID, bound.endDate)
 				converted.Add(value, ok)
 			}
@@ -327,21 +340,30 @@ func (s *TransactionService) NetWorthSeries(ctx context.Context, input NetWorthS
 // endpoint does not use it: reading the whole ledger per reporting date is
 // quadratic in the number of buckets, so netWorthSeriesTotals folds one read
 // forward across buckets instead.
-func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, status string) ([]BalanceQuantity, error) {
+type netWorthBucket struct {
+	totals             []BalanceQuantity
+	unclassifiedShorts []UnclassifiedShortPosition
+}
+
+func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, status string) (netWorthBucket, error) {
 	accounts, err := s.repository.LedgerAccountsAsOf(ctx, BookID, asOf)
 	if err != nil {
-		return nil, fmt.Errorf("read net worth accounts: %w", err)
+		return netWorthBucket{}, fmt.Errorf("read net worth accounts: %w", err)
 	}
 	postings, err := s.repository.LedgerPostingsThrough(ctx, BookID, asOf, status)
 	if err != nil {
-		return nil, fmt.Errorf("read net worth postings: %w", err)
+		return netWorthBucket{}, fmt.Errorf("read net worth postings: %w", err)
+	}
+	kinds, err := s.repository.LedgerCommodityKinds(ctx, BookID)
+	if err != nil {
+		return netWorthBucket{}, err
 	}
 
 	running := map[int64]map[int64]*exact.ScaledInt{}
 	for _, posting := range postings {
 		foldPosting(running, posting)
 	}
-	return netWorthBucketTotals(accounts, running, ReportFilters{})
+	return netWorthBucketTotals(accounts, running, kinds, ReportFilters{})
 }
 
 // netWorthSeriesTotals computes every bucket's totals from a single pass over
@@ -358,7 +380,7 @@ func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, st
 // excluded system role, and how an account subtree expands are resolved against
 // the snapshot in effect at each bucket's end. Collapsing early would bake one
 // bucket's classification into every later one.
-func (s *TransactionService) netWorthSeriesTotals(ctx context.Context, bounds []calendarBucketBound, filters ReportFilters) ([][]BalanceQuantity, error) {
+func (s *TransactionService) netWorthSeriesTotals(ctx context.Context, bounds []calendarBucketBound, filters ReportFilters) ([]netWorthBucket, error) {
 	if len(bounds) == 0 {
 		return nil, nil
 	}
@@ -374,12 +396,16 @@ func (s *TransactionService) netWorthSeriesTotals(ctx context.Context, bounds []
 	if err != nil {
 		return nil, fmt.Errorf("read net worth postings: %w", err)
 	}
+	kinds, err := s.repository.LedgerCommodityKinds(ctx, BookID)
+	if err != nil {
+		return nil, err
+	}
 
 	timeline := newLedgerAccountTimeline(versions)
 	running := map[int64]map[int64]*exact.ScaledInt{}
 	next := 0
 
-	bucketTotals := make([][]BalanceQuantity, 0, len(bounds))
+	bucketTotals := make([]netWorthBucket, 0, len(bounds))
 	for _, bound := range bounds {
 		// Postings arrive ordered by entry date and bucket ends ascend, so one
 		// forward cursor covers the whole series.
@@ -387,7 +413,7 @@ func (s *TransactionService) netWorthSeriesTotals(ctx context.Context, bounds []
 			foldPosting(running, postings[next])
 			next++
 		}
-		totals, err := netWorthBucketTotals(timeline.snapshotThrough(bound.endDate), running, filters)
+		totals, err := netWorthBucketTotals(timeline.snapshotThrough(bound.endDate), running, kinds, filters)
 		if err != nil {
 			return nil, err
 		}
@@ -401,12 +427,14 @@ func (s *TransactionService) netWorthSeriesTotals(ctx context.Context, bounds []
 func netWorthBucketTotals(
 	accounts []db.LedgerAccountRecord,
 	running map[int64]map[int64]*exact.ScaledInt,
+	kinds map[int64]string,
 	filters ReportFilters,
-) ([]BalanceQuantity, error) {
+) (netWorthBucket, error) {
 	filterSet := reportFilterSetFrom(accounts, filters)
 	accountMap := ledgerAccountMap(accounts)
 
 	totals := map[int64]*exact.ScaledInt{}
+	shorts := []UnclassifiedShortPosition{}
 	for accountID, balances := range running {
 		account, ok := accountMap[accountID]
 		if !ok || (account.AccountClass != "asset" && account.AccountClass != "liability") {
@@ -419,6 +447,9 @@ func netWorthBucketTotals(
 			if !filterSet.includes(accountID, commodityID) {
 				continue
 			}
+			if kinds[commodityID] != "currency" && amount.Sign() < 0 {
+				shorts = append(shorts, UnclassifiedShortPosition{AccountID: accountID, CommodityID: commodityID})
+			}
 			total := totals[commodityID]
 			if total == nil {
 				total = exact.NewScaledInt()
@@ -427,7 +458,17 @@ func netWorthBucketTotals(
 			total.AddScaled(amount)
 		}
 	}
-	return balanceMapToQuantities(totals, "")
+	quantities, err := balanceMapToQuantities(totals, "")
+	if err != nil {
+		return netWorthBucket{}, err
+	}
+	sort.Slice(shorts, func(i, j int) bool {
+		if shorts[i].AccountID != shorts[j].AccountID {
+			return shorts[i].AccountID < shorts[j].AccountID
+		}
+		return shorts[i].CommodityID < shorts[j].CommodityID
+	})
+	return netWorthBucket{totals: quantities, unclassifiedShorts: shorts}, nil
 }
 
 // foldPosting accumulates one posting into the running per-account balances.

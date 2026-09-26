@@ -49,6 +49,29 @@ type LedgerPostingRecord struct {
 	PayeeName sql.NullString
 }
 
+// LedgerCommodityKinds returns the stable kind of each commodity in this book.
+// Reports use it to distinguish ordinary negative money from countable units.
+func (r *TransactionRepository) LedgerCommodityKinds(ctx context.Context, bookID int64) (map[int64]string, error) {
+	rows, err := r.database.QueryContext(ctx, `SELECT id, kind FROM commodities WHERE book_id = ?`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read ledger commodity kinds: %w", err)
+	}
+	defer rows.Close()
+	kinds := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var kind string
+		if err := rows.Scan(&id, &kind); err != nil {
+			return nil, fmt.Errorf("scan ledger commodity kind: %w", err)
+		}
+		kinds[id] = kind
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate ledger commodity kinds: %w", err)
+	}
+	return kinds, nil
+}
+
 // LedgerAccountVersionRecord is one effective-dated account version. A caller
 // walking a series of ascending dates replays these in order instead of issuing
 // one LedgerAccountsAsOf per date.

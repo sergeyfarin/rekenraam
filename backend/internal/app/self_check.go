@@ -115,8 +115,8 @@ var checkNarratives = map[string]checkNarrative{
 		nextStep:    "Compare the named account's holdings with its lots. A mismatch means gains and cost basis are being computed from a position the ledger does not agree with.",
 	},
 	CheckCommodityPositionSign: {
-		explanation: "An account cannot hold a negative number of units of something countable — a share, a fund unit, a coin. Money goes negative all the time: an overdraft and a credit-card balance are real. Units are not: holding minus four bitcoin is not a position, it is a bookkeeping error. The clearing account the app posts the other half of every commodity movement to is excluded, because being negative is what it is for.",
-		nextStep:    "Look at the named accounts' registers for that commodity. Usually a disposal was entered before the acquisition that covers it, or one was entered twice; a holding account managed by the investment subledger cannot reach this state through the app, but a crypto wallet or an ordinary account holding an instrument can.",
+		explanation: "A negative number of countable units needs an explicit explanation: it may be an out-of-order entry, an error, or a short position. This app has no named short-sale workflow yet, so ordinary negative coin and share positions are unclassified and need review. Negative money is normal. The commodity-trading clearing account is excluded because it carries the other half of each movement.",
+		nextStep:    "Look at the named accounts' dated registers for that commodity. A later acquisition can restore today's balance without correcting an earlier negative position. Usually a disposal was entered before the acquisition that covers it, or one was entered twice.",
 	},
 	CheckCheckpointIntegrity: {
 		explanation: "An active reconciliation checkpoint must still add up to the statement balance it recorded, from postings that are still current.",
@@ -748,34 +748,46 @@ func (s *SelfCheckService) attachmentsCheck() SelfCheckResult {
 // be driven below zero by an ordinary balanced entry — a sale recorded before
 // the purchase that covers it, or a sale recorded twice. Nothing refuses it at
 // the write, because refusing would also refuse a statement imported out of
-// order, and nothing downstream notices: the entry balances, the book balances,
-// and net worth simply reports the impossible position as a negative asset.
+// order. The entry and book still balance, so this dated diagnostic and the
+// net-worth warning must flag the unclassified position.
 func (s *SelfCheckService) commodityPositionSignCheck(ctx context.Context, snapshot *sql.Tx) (SelfCheckResult, error) {
 	type position struct {
 		accountID   int64
 		commodityID int64
 	}
 	balances := map[position]*exact.ScaledInt{}
+	negative := map[position]bool{}
+	touched := map[position]bool{}
+	date := ""
+	checkDate := func() {
+		for key := range touched {
+			if balances[key].Sign() < 0 {
+				negative[key] = true
+			}
+			delete(touched, key)
+		}
+	}
 	if err := s.repository.StreamPostedNonCurrencyPostings(ctx, snapshot, BookID, func(record db.SelfCheckCommodityPositionRecord) error {
+		if date != "" && date != record.EntryDate {
+			checkDate()
+		}
+		date = record.EntryDate
 		key := position{accountID: record.AccountID, commodityID: record.CommodityID}
 		if balances[key] == nil {
 			balances[key] = exact.NewScaledInt()
 		}
 		balances[key].AddCoefficient(record.QuantityValue, record.QuantityScale)
+		touched[key] = true
 		return nil
 	}); err != nil {
 		return SelfCheckResult{}, err
 	}
+	checkDate()
 
-	result := SelfCheckResult{CheckID: CheckCommodityPositionSign, Status: SelfCheckPassed, Summary: "no account holds a negative quantity of a countable commodity"}
-	// The stream is unordered — it is folded into a map, so an ORDER BY would
-	// only cost a sort on a large book. The sample is capped, though, so which
-	// accounts it names is sorted here instead of left to map iteration.
-	keys := make([]position, 0, len(balances))
-	for key, balance := range balances {
-		if balance.Sign() < 0 {
-			keys = append(keys, key)
-		}
+	result := SelfCheckResult{CheckID: CheckCommodityPositionSign, Status: SelfCheckPassed, Summary: "no dated account position holds an unclassified negative quantity of a countable commodity"}
+	keys := make([]position, 0, len(negative))
+	for key := range negative {
+		keys = append(keys, key)
 	}
 	sort.Slice(keys, func(i, j int) bool {
 		if keys[i].accountID != keys[j].accountID {
@@ -789,7 +801,7 @@ func (s *SelfCheckService) commodityPositionSignCheck(ctx context.Context, snaps
 	if len(keys) > 0 {
 		result.Status = SelfCheckFailed
 		result.FindingCount = int64(len(keys))
-		result.Summary = fmt.Sprintf("%d account positions hold a negative quantity of a countable commodity", len(keys))
+		result.Summary = fmt.Sprintf("%d account positions held an unclassified negative quantity of a countable commodity on at least one date", len(keys))
 	}
 	return result, nil
 }

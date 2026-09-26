@@ -15471,7 +15471,15 @@ export interface components {
             as_of: string;
             status: components["schemas"]["TransactionStatus"];
             totals: components["schemas"]["BalanceQuantity"][];
+            /** @description Negative countable positions without an explicit short-sale workflow. Totals include these positions and require review. */
+            unclassified_shorts: components["schemas"]["UnclassifiedShortPosition"][];
             excluded_system_roles: components["schemas"]["SystemAccountRole"][];
+        };
+        UnclassifiedShortPosition: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
         };
         NetWorthSeriesBucket: {
             /** Format: date */
@@ -15479,7 +15487,9 @@ export interface components {
             /** Format: date */
             end_date: string;
             totals: components["schemas"]["BalanceQuantity"][];
-            /** @description This bucket's net worth at its own end date, in the reporting currency. A stock is converted on the date it is measured, so each bucket uses its own rate rather than one rate for the range. Absent when no reporting currency was asked for, and absent for a bucket whose commodities could not all be converted — a short total would read as a real fall in net worth. */
+            /** @description Negative countable positions in this bucket without an explicit short-sale workflow. Totals include these positions and require review. */
+            unclassified_shorts: components["schemas"]["UnclassifiedShortPosition"][];
+            /** @description This bucket's net worth at its own end date, in the reporting currency. A stock is converted on the date it is measured, so each bucket uses its own rate rather than one rate for the range. Absent when no reporting currency was asked for, when any commodity could not be converted, or when an unclassified short position makes this bucket unreliable. */
             converted?: components["schemas"]["BalanceQuantity"];
         };
         NetWorthSeriesQuery: {

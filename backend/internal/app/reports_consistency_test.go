@@ -82,6 +82,30 @@ func requireAmount(t *testing.T, measure []BalanceQuantity, commodityID int64, v
 	require.Zerof(t, got.Cmp(want), "%s: want %s, got %s", what, want.String(), got.String())
 }
 
+func TestNetWorthFlagsDatedUnclassifiedShortUntilCorrected(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	wallet, btc, move := cryptoFixture(t, f)
+	move("2026-01-02", -500000000, 100000)
+	move("2026-01-03", 500000000, -100000)
+
+	negative, err := f.transactionService.NetWorth(context.Background(), NetWorthInput{AsOf: "2026-01-02"})
+	require.NoError(t, err)
+	require.Equal(t, []UnclassifiedShortPosition{{AccountID: wallet, CommodityID: btc}}, negative.UnclassifiedShorts)
+	requireAmount(t, negative.Totals, btc, -500000000, 8, "raw negative position remains visible for diagnosis")
+
+	corrected, err := f.transactionService.NetWorth(context.Background(), NetWorthInput{AsOf: "2026-01-03"})
+	require.NoError(t, err)
+	require.Empty(t, corrected.UnclassifiedShorts)
+
+	series, err := f.transactionService.NetWorthSeries(context.Background(), NetWorthSeriesInput{
+		StartDate: "2026-01-02", EndDate: "2026-01-03", Bucket: "day",
+	})
+	require.NoError(t, err)
+	require.Len(t, series.Buckets, 2)
+	require.Equal(t, negative.UnclassifiedShorts, series.Buckets[0].UnclassifiedShorts)
+	require.Empty(t, series.Buckets[1].UnclassifiedShorts)
+}
+
 // TestTransfersNeverReachSpendingOrIncome. A transfer moves money between
 // accounts the household already owns; nothing was earned or spent. The basis
 // for these reports is income and expense postings, and a transfer has none —

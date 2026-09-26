@@ -152,6 +152,7 @@ NetWorthResponse:
     - as_of
     - status
     - totals
+    - unclassified_shorts
     - excluded_system_roles
   properties:
     as_of:
@@ -163,7 +164,23 @@ NetWorthResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/BalanceQuantity"
+    unclassified_shorts:
+      type: array
+      description: Negative countable positions without an explicit short-sale workflow. Totals include these positions and require review.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/UnclassifiedShortPosition"
     excluded_system_roles:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/SystemAccountRole"
+
+UnclassifiedShortPosition:
+  type: object
+  required: [account_id, commodity_id]
+  properties:
+    account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64

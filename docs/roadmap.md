@@ -607,6 +607,11 @@ display now uses standard currency precision; see
 correction remains verified. The household dry run, investment feature limits
 and frozen baseline gates still remain required.
 
+T-106's dated negative-position detection and net-worth warning shipped
+2026-09-26. Out-of-order imports remain accepted; a genuine short sale needs
+an explicit named workflow (T-108). T-107's investment money JSON precision
+boundary remains open and should be resolved with the R16 contract work.
+
 These are a parallel release-readiness track, not a reason to delay local
 daily-driver work.
 

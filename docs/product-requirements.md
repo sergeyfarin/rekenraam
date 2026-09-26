@@ -332,6 +332,12 @@ Goal: add power-user workflows after the core ledger is stable.
   average cost, and specific lot. A committed disposal preserves the resolved
   method and policy provenance; alternative methods are read-side projections,
   not destructive rematching of the operational lots.
+- Out-of-order imports may temporarily create a negative dated quantity of a
+  countable commodity. Preserve the entry and flag the position in historical
+  self-checks and net-worth reports until it is corrected. A genuine short sale
+  must be named explicitly as a short sale and represented as a short position;
+  an ordinary negative holding must not silently acquire that meaning. The
+  explicit short-sale workflow is future scope.
 - A position's events are entered in order relative to its own disposals: a
   trade dated before a sale that position has already recorded is refused, and
   the refusal says which sale blocks the date. A disposal rewrites the

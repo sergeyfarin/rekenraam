@@ -628,9 +628,9 @@ holding account still cannot reach the state through the app. Both exclusions â€
 the clearing account and currencies â€” are load-bearing, and removing either
 makes the healthy-book control fail.
 
-**Still open, deliberately:** the wrong position is detected, not prevented, and
-a negative crypto balance still values into net worth until someone corrects
-it. Prevention needs the product decision above; tracked as T-106 below.
+**Follow-up:** a current negative position is detected, while dated history and
+net-worth presentation are handled by T-106 below. An explicit short-sale
+workflow remains separate future scope (T-108).
 
 ### Finance follow-ups pending GitHub issue publication
 
@@ -640,20 +640,22 @@ occurred in the restricted command environment; they did not establish that
 the user's GitHub CLI was broken. T-106 and T-107 remain documented here until
 publication as public GitHub issues is approved, then they can be linked here.
 
-### T-106 Negative countable positions can still affect reports `[ ]`
+### T-106 Negative countable positions can still affect reports `[x]`
 
-**P2, follow-up to T-105.** `commodity_position_sign` detects a current negative
-non-currency balance in self-check, but ordinary entries can still create one.
-Until it is corrected, a negative coin or share balance can be valued as an
-asset in net worth. A later offsetting entry can make the current self-check
-pass without proving that earlier dated positions were valid.
-
-Decide how to handle out-of-order imports, corrections, and unsupported shorts
-before adding a write-time rule. Then ensure current and historical reports do
-not present an invalid countable position as an ordinary holding. Test a wallet
-oversell followed by a later replenishment, including its effect on net worth
-and the self-check at each date. T-105's current-state diagnostic remains
-useful regardless of that policy.
+**P2, fixed 2026-09-26; follow-up to T-105.** Out-of-order imports may create a
+temporary negative dated coin or share position, so writes remain allowed.
+`commodity_position_sign` now folds posted non-currency postings in date order
+and checks each date's closing position. A later replenishment cannot hide the
+earlier negative from self-check. Point-in-time and bucketed net-worth responses
+name unclassified negative countable positions by account and commodity. The
+report marks affected periods and CSV rows, and withholds converted totals and
+charts when any bucket contains one; raw quantities remain visible for diagnosis.
+Named regressions `TestSelfCheckFindsHistoricalNegativeAfterLaterReplenishment`,
+`TestSelfCheckAcceptsAnEarlierPurchaseImportedAfterItsSale`, and
+`TestNetWorthFlagsDatedUnclassifiedShortUntilCorrected` cover oversell,
+replenishment, and out-of-order import. The existing healthy-book and currency
+exclusions remain covered. An explicit short sale is distinct and tracked as
+T-108.
 
 ### T-107 Investment money fields still cross JSON as numbers `[ ]`
 
@@ -672,6 +674,15 @@ amount with a coefficient above `2^53`, plus mixed-scale gain and currency
 summary cases. Coordinate this contract change with R16; its current roadmap
 description does not explicitly include the migration. The existing G-09 FX
 display `Number` conversion is a separate, already recorded open item.
+
+### T-108 Explicit short-sale positions need a named workflow `[ ]`
+
+An intentional short sale creates a real negative share position. It must be
+entered and displayed as a short sale, with its own position, cover, proceeds,
+and cost-basis rules. The current ordinary-entry and investment-sale paths do
+not identify that intent. Until a dedicated short-sale contract and workflow
+exist, a negative countable position is reported as unclassified for review;
+it is neither silently accepted as a valid short nor forcibly discarded.
 
 ### T-34 No producer of investment provider events/suggestions `[blocked]`
 
