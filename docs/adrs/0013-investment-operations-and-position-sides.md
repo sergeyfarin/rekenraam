@@ -25,9 +25,12 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
 ## Decision
 
 1. Every investment-domain command has a **named operation kind**. A durable
-   operation links its journal transaction, subledger events, source/provenance,
-   and audit attribution. A trade records gross consideration, charges, and
-   net settlement as separate exact facts, with their currencies and scales.
+   operation links its subledger events, source/provenance, audit attribution,
+   and any posted journal transaction versions it creates. A basis-only
+   adjustment can have no journal posting; a compound action can link more
+   than one posted transaction version. A trade records gross consideration,
+   charges, and net settlement as separate exact facts, with their currencies
+   and scales.
    Operation kinds are stable, non-empty codes, validated by their command;
    the database does not need a new migration for each new code. They are not
    reconstructed from transaction descriptions or negative quantities.
@@ -63,11 +66,14 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
    split changes quantity but conserves total basis; a transfer moves lot
    identity and basis between holding accounts without realizing a gain.
 7. The implementation proceeds in bounded slices: operation/side schema and
-   replay foundation; native correction; short opening and covering with
-   diagnostics and UI; then transfers, basis adjustments, splits, and complex
-   corporate actions. Each slice remains runnable and has an explicit API,
-   export, and self-check behavior. Provider events stay suggestions until the
-   matching domain operation can be posted safely.
+   exact trade economics; replay and native correction; transfers, basis
+   adjustments, and splits; short opening and covering with diagnostics and
+   UI; then complex corporate actions. Exact trade economics precede replay
+   so corrected allocations use explicit proceeds and charges. Transfers and
+   splits precede short trading because they serve existing long-position and
+   broker-migration workflows. Each slice remains runnable and has explicit
+   API, export, and self-check behavior. Provider events stay suggestions
+   until the matching domain operation can be posted safely.
 
 This decision refines ADR 0012. It does not select a jurisdiction's tax rules
 or change the operational long-position cost-basis methods. R18 still owns

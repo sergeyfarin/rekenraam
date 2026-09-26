@@ -48,7 +48,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R14 | Receipts & attachments (capture, OCR, inbox) | ⏸ | `docs/plans/receipts-plan.md` |
 | R14a | Attachment storage + manual attach (after R5) | ⏭ | `docs/plans/receipts-plan.md` |
 | R15 | Connections expansion (IBKR Flex → GoCardless → T-34 producer) | ⏸ | `docs/plans/connections-plan.md` |
-| R16 | Investment lifecycle completeness (write-off, price void, return of capital, manual splits) | ◐ | this file |
+| R16 | Investment lifecycle completeness (correction, transfers, basis actions, splits, short sales) | ◐ | this file; ADR 0013 |
 | R17 | Crypto instrument type + `PriceProvider` registry and quote adapters | ⏭ | this file |
 | R18 | Reproducible investment basis + gains projections | ⏭ | ADR 0012; plan required after R16/R17 |
 
@@ -457,10 +457,12 @@ The proposed implementation sequence and data contract are in
 capability by itself.
 The schema and existing-command operation identity have landed in the unused
 v0.1 candidate baseline. Native replay, side-aware reads/self-checks and the
-short-sale/cover commands remain before T-108 is usable. Transfers and
-corporate actions follow. Return-of-capital and cash-in-lieu suggestions are
-currently refused as dividend income (T-109) until their lot-basis treatment
-ships.
+short-sale/cover commands remain before T-108 is usable. The next execution
+order is the operation/schema and exact-trade foundation, native correction,
+transfers and basis actions including manual splits, then short-sale/cover;
+compound corporate actions follow. Return-of-capital and cash-in-lieu
+suggestions are currently refused as dividend income (T-109) until their
+lot-basis treatment ships.
 
 Decided 2026-08-05 (review §3e). `competitor-comparison.md` claims corporate
 actions as shipped, but there is **no implementation** — not even manual
@@ -475,16 +477,22 @@ split by risk:
    operator-facing surface still belongs to R11) are both shipped. T-38 also
    gained its own reconciliation-impact preview (T-53) so a backdated
    write-off can proceed deliberately, the same as buy, sell, and dividend.
-   What remains in this sub-slice: return-of-capital as basis reduction, and
-   the UI for all three (write-off has a typed API client but no form yet).
-2. **Behind a design note — manual split / reverse-split entry.** Splits
-   mutate historical lots, which is the unbuilt half of T-34 and touches the
-   ledger code both 2026-07 audits certified as correct. Write the
-   lot-mutation design before the code. A migrant's first AAPL split must not
-   require deleting and re-entering lots.
+   The write-off UI and price-void operator surface remain separate follow-ups.
+2. **Foundation and exact trade economics.** Finish the operation, journal-link,
+   component, import-identity, and lot-projection redesign, then record gross,
+   charges, and net settlement separately. ADR 0013 permits the unused
+   pre-release baseline redesign; the linked plan gives the migration gate.
 3. **Investment-native correction/reversal (T-75b).** Build domain commands that
-   change journal and subledger atomically, preserve original events, and retain
-   the generic mutation fence. T-76 disposal provenance is a prerequisite.
+   change journal and subledger atomically, preserve original events, replay
+   effective allocations under each recorded method, and retain the generic
+   mutation fence. T-76 disposal provenance is already present.
+4. **Transfers and basis actions.** Add in-kind broker transfers, return of
+   capital, manual split/reverse-split, and cash in lieu with dated lot effects.
+   These fulfill the earlier manual-split design gate: a migrant's first AAPL
+   split must not require deleting and re-entering lots.
+5. **Short sale/cover (T-108), then compound corporate actions.** Finish
+   side-aware commands and reporting before accepting intentional shorts;
+   then extend the same operation model to mergers and spin-offs.
 
 The investment monetary JSON precision boundary (T-107) was closed ahead of
 the remaining R16 lifecycle work: requests and read models now carry exact
