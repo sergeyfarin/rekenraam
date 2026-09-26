@@ -6,19 +6,26 @@ Delete items when done; promote items when they grow. This file is allowed to
 be edited freely and is never the source of truth for a decision.
 
 Last updated: 2026-09-26 (ADR 0013 and the named investment operation/position
-side foundation landed; native replay, T-75b and T-108 remain open.)
+side foundation landed; the R16 refactor plan sets the remaining order.)
 
 ## Next investment slices
 
+- [ ] Operation/schema and exact-trade foundation: version-pinned journal links,
+  components, separate lot state, and generalized import identity in two
+  validated sub-slices; then gross/charges/net trade economics.
 - [ ] Native position replay and investment correction/reversal (T-75b),
-  preserving journal, lots, elections, prices, reconciliation, and audit links.
+  preserving journal, lots, method-aware allocations, prices, reconciliation,
+  and audit links.
+- [ ] In-kind transfers, return-of-capital basis reduction, manual splits,
+  and cash in lieu, each behind its posting/basis/date specification. Their
+  suggestions remain blocked from dividend-income posting until supported.
 - [ ] T-108 short opening and cover, including side-aware gains, dated net worth,
   self-checks, export, API, and mobile UI. A negative ordinary holding remains
   unclassified rather than silently becoming a short.
-- [ ] Return-of-capital basis reduction, security transfers, splits, and
-  structural corporate actions under ADR 0013. Return-of-capital and cash-in-lieu
-  suggestions remain blocked from dividend-income posting until their basis
-  workflows exist.
+- [ ] Compound corporate actions, one specified and validated kind at a time.
+
+See `docs/plans/investment-operation-refactor-plan.md` for the schema contract,
+delivery gates, and accepted ADR 0013 sequence.
 
 ## Where things stand
 

@@ -148,13 +148,13 @@ period — document this.
 
 | Flex element | Route into Rekenraam |
 |---|---|
-| `<Trade assetCategory="STK/FUND">` buy/sell | `InvestmentService.Buy`/`Sell` via the T212-established commit path: instrument resolution ISIN → symbol → create; holding account via mapping table; cash amount = `abs(netCash)` (commission-inclusive, matching the current folded-fee model). When first-class trade fees land (2026-07-19 audit §7.4), switch to `tradeMoney` + `ibCommission` split — note the dependency, don't block on it |
+| `<Trade assetCategory="STK/FUND">` buy/sell | Resolve instrument ISIN → symbol → create and holding account via mapping table. R15 follows R16's exact-trade slice: preserve `tradeMoney`, `ibCommission`, other charges, and net settlement as distinct facts; route only through the shared investment operation writer. Until that slice ships, keep a row requiring unsupported fee semantics in review rather than flattening charges into basis/proceeds |
 | `<Trade assetCategory="CASH">` (forex) | v1: stage as generic rows for user-mapped exchange entries (`transfer_clearing`); v2: auto-shape the 4-posting FX transfer |
 | `<CashTransaction type="Dividends">` | `InvestmentService.Dividend`; pair same-symbol, same-date `type="Withholding Tax"` rows into the withholding legs |
-| `type="Payment In Lieu Of Dividends"` | Dividend (flagged in memo) |
+| `type="Payment In Lieu Of Dividends"` | Stage as a distinct investment cash activity for review; do not book it as an ordinary dividend merely by changing the memo. Its named operation and posting treatment follow the investment operation plan |
 | `type="Broker Interest Received/Paid"`, `"Other Fees"` | Generic staged cash rows → user-resolved income/expense categories (import rules will help here) |
 | `type="Deposits/Withdrawals"`, `<Transfer>` | Generic staged rows with transfer hints (QIF `[Account]` precedent) |
-| `<CorporateAction>` (splits FS/RS, ticker changes TC, spin-offs SO, mergers TO/TC, delistings) | **Stage, never auto-post.** Write-offs landed 2026-08-06 (T-38), so delistings have a real destination; until the lot-mutation design exists (backlog T-34), the rest of these rows land as `needs_attention` with the action description and a link to manual guidance. This is the honest version of "supported": visible, never silently dropped, never wrongly booked |
+| `<CorporateAction>` (splits FS/RS, ticker changes TC, spin-offs SO, mergers TO/TC, delistings) | **Stage, never auto-post.** Write-offs landed 2026-08-06 (T-38), but each other action still needs its own posting, basis, date, and replay specification under the investment operation plan. Until its command ships, show `needs_attention` with the source description and manual guidance; do not silently drop or misbook it |
 | `<OpenPosition>` | Not imported — used for a post-import **position reconciliation check**: compare IBKR-reported open quantity per instrument against Rekenraam lots, surface mismatches in the batch result. This is the trust feature that catches missed history |
 
 ### Slices and acceptance
@@ -314,8 +314,9 @@ registry shows the adapter pattern):
    candidate (verify EU coverage). Events land as
    `investment_provider_events` → suggestions, which the accept/ignore UI
    and automation rules already handle end to end. Dividend suggestions
-   work today; structural actions stay blocked on the lot-mutation design
-   (T-34's second half) and should stage as informational until then.
+   work today; structural actions stay blocked on their per-kind posting,
+   basis, date, and replay specifications under the investment operation
+   plan, and should stage as informational until their commands ship.
 3. **Benchmarks for R13** (TWR/MWR comparison): an index series via
    Stooq/the chosen quote provider; no new architecture.
 
@@ -341,9 +342,10 @@ R15 itself is then:
 
 1. **IBKR Flex** (investor persona, roadmap already points here, no consent
    treadmill — the gentlest second adapter). Lands after R16, so its
-   corporate-action rows have somewhere real to go: write-off (T-38) and the
-   lot-mutation design exist by then, and IBKR-4 no longer stages into a
-   permanent holding pen.
+   corporate-action rows have a specified review path. Write-off (T-38)
+   is available; each other action remains in review until its per-kind
+   specification and command ship, even if the shared operation schema
+   exists by then.
 2. **GoCardless BAD** (EU+UK banks — biggest manual-entry win, hardest UX
    due to consent renewals; benefits from landing after R5's rules/profile
    work).

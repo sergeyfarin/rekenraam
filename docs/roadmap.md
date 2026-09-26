@@ -48,7 +48,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R14 | Receipts & attachments (capture, OCR, inbox) | ⏸ | `docs/plans/receipts-plan.md` |
 | R14a | Attachment storage + manual attach (after R5) | ⏭ | `docs/plans/receipts-plan.md` |
 | R15 | Connections expansion (IBKR Flex → GoCardless → T-34 producer) | ⏸ | `docs/plans/connections-plan.md` |
-| R16 | Investment lifecycle completeness (correction, transfers, basis actions, splits, short sales) | ◐ | this file; ADR 0013 |
+| R16 | Investment lifecycle completeness (correction, transfers, basis actions, splits, short sales) | ◐ | `docs/plans/investment-operation-refactor-plan.md`; ADR 0013 |
 | R17 | Crypto instrument type + `PriceProvider` registry and quote adapters | ⏭ | this file |
 | R18 | Reproducible investment basis + gains projections | ⏭ | ADR 0012; plan required after R16/R17 |
 
@@ -64,7 +64,7 @@ fence recorded in the relevant section below:
 | §3b R3 backups + trial-balance self-check | Accepted — self-check is read-only; a documented restore path ships with it |
 | §3c Minimal import rules v1 in R5 | Accepted — contains-match, preview-time only, no retroactive apply |
 | §3d R10 forecasting promotion | Accepted — planning loop is **R9 → R10 → R8** |
-| §3e Investment lifecycle completeness | Accepted — new R16; manual splits gated behind a lot-mutation design note |
+| §3e Investment lifecycle completeness | Accepted — R16 framework in `docs/plans/investment-operation-refactor-plan.md`; each structural action still needs its posting, basis, and date specification before implementation |
 | §3f Personal-access tokens | Accepted — scoped, expiring, hashed, revocable; before announcement |
 | §4.1 Crypto-holding expat persona | Accepted — new R17, after R16, with a standing guardrail in `product-requirements.md` |
 
@@ -464,9 +464,10 @@ compound corporate actions follow. Return-of-capital and cash-in-lieu
 suggestions are currently refused as dividend income (T-109) until their
 lot-basis treatment ships.
 
-Decided 2026-08-05 (review §3e). `competitor-comparison.md` claims corporate
-actions as shipped, but there is **no implementation** — not even manual
-entry. This slice makes the moat claim honest. Sequenced after R5, and
+Decided 2026-08-05 (review §3e). The maintained
+`competitor-comparison.md` now marks corporate actions as missing; manual
+splits and mergers still have no implementation. This slice closes that gap
+one specified operation at a time. Sequenced after R5, and
 split by risk:
 
 1. **Now — independent and small, and done.** Zero-proceeds write-off (T-38 —
@@ -607,6 +608,11 @@ The current parity lens is:
   benchmark comparison remain the investment-expectation gap after gains.
 - **Rekenraam's moat:** exact multi-currency double-entry and lot-level
   investments must stay coherent as parity features are added.
+
+R16 currently prioritizes transfer, basis, and split commands before short
+trading because imported holdings need a sound carried-basis path. The
+comparison still records corporate actions as missing until a manual command
+ships; this plan creates no parity gain by itself.
 
 ## Public-release gates
 

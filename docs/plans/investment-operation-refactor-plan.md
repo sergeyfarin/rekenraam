@@ -134,6 +134,9 @@ and `investment_position_basis_state` atomically from the effective event
 history. Add `position_side` to the basis-state key and include it in every
 selection/rebuild. The split costs repository and export work; it is worth
 doing in the unused baseline before replay is added.
+Keep projected remaining basis nullable with an explicit knowledge status;
+an unknown opening never becomes a fabricated zero in either lot state or
+an average-cost pool.
 
 Store all investment monetary/basis coefficients as canonical signed decimal
 TEXT with explicit scales, including lot openings, effects, decisions,
@@ -149,8 +152,8 @@ an idempotency key scoped to book/source/account, raw payload reference or
 snapshot, import batch/row linkage where present, and the mapping version.
 Generalize the existing `import_commit_identities` row identity, rather than
 creating an independent investment dedupe table. It owns one unique source
-row fingerprint scoped to `(book_id, source_kind, source_account_id,
-dedupe_fingerprint)`; child links are unique on `(identity_id, effect_seq)`.
+row fingerprint scoped to the existing `(book_id, dedupe_fingerprint)` key;
+child links are unique on `(identity_id, effect_seq)`.
 Ordered child effects link that row to one or more
 `operation_id`/`transaction_id` pairs. A bank row can still commit one
 ordinary transaction; a basis-only broker row can commit one operation and
@@ -158,6 +161,12 @@ no transaction; one broker fill crossing zero can commit two operations.
 Replace `import_staged_rows.committed_transaction_id` as the sole committed
 result with the same child links. Dedupe, source correction, retry, and all
 child writes commit in one SQLite transaction.
+Do not loosen the unique key by adding `source_kind` or account ID: existing
+QIF/CSV/Trading 212 fingerprint seeds already include source context, and
+same-fingerprint conflicts must retain their present behavior. Cross-format
+economic matching is a separate import-review problem; the current
+source-specific fingerprints do not promise to detect one trade imported
+through both CSV and OFX.
 An importer maps `SHORT` to `short_sale` and `COVER` to `short_cover` only
 when the row's meaning is unambiguous; a negative ordinary holding remains
 an unclassified diagnostic. A source correction links its original source
@@ -203,8 +212,28 @@ zero is reserved for a known zero basis. An unknown original date or basis
 is explicit `unknown`, never silently today or zero. Show that condition in
 positions and block a definitive realized-gain figure until resolved. An
 internal transfer links source and destination lot effects and conserves
-quantity and basis; an external transfer uses `commodity_trading` as the
-opposite security posting, with no fictional sale proceeds.
+quantity and basis with direct opposing security postings between holdings.
+An external transfer needs both a security leg and a **basis-value bridge**
+when carried basis is known. On transfer in, debit the holding and credit
+`commodity_trading` in the security; debit `commodity_trading` and credit a
+new book-boundary equity account (`external_investment_transfer_equity`) by
+the carried basis in its currency. Transfer out reverses those four signs.
+The value bridge is an equity contribution/withdrawal, not cash or a sale;
+`opening_balance` remains available for a separately named initial-opening
+workflow. A transfer wholly inside the book needs neither bridge nor
+external equity. The ordinary long-position transfer slice does not imply
+support for transferring a short obligation before T-108.
+Seed the new equity account under a stable system role and translation key;
+include it in export, restore, reports, and self-check without making its
+English display label part of the accounting contract.
+
+If basis is unknown, post only the balanced security legs and mark the
+position and `commodity_trading` residual **basis unresolved**. Do not
+interpret the residual as gain or permit an optional gain reclassification.
+A later `transfer_basis_resolve` operation supplies sourced carried basis,
+posts the missing value bridge dated to the transfer, and replays affected
+lots and disposals through the reconciliation guard. It appends a fact;
+it does not edit the original transfer or substitute zero basis.
 
 Return of capital reduces each eligible lot's basis only to zero. Allocate
 the cash/basis effect across eligible lots using sourced allocations or an
@@ -222,6 +251,12 @@ For a split or reverse split, post the quantity delta to the holding account
 and its opposite to `commodity_trading` in the same security commodity; no
 cash posting is invented. Conserve aggregate basis, carry a rational ratio,
 and handle fractional cash in lieu as its own linked disposal/cash event.
+For return of capital, debit the receiving cash account and credit
+`commodity_trading` in that cash commodity. A cash-in-lieu disposal uses
+the ordinary sale cash and security balancing legs, with its fractional
+basis allocation recorded separately. Each kind's plan must specify all
+postings, basis effects, date rules, and reconciliation impact before its
+write command is exposed.
 
 The existing QIF export intentionally excludes investment accounts and
 non-currency holdings; the lossless investment export is the CSV bundle.
@@ -253,18 +288,52 @@ holding-account postings without corresponding lot effects.
 
 ### Replay and correction
 
-Build the projection from ordered immutable effects for each affected
+Replay reads **economic intents**, not previously selected disposal lots:
+immutable acquisition and transfer-in openings, split/basis effects,
+operation-level disposal or cover requests (quantity, side, date, selected
+method and its policy provenance), and any explicit specific-lot election.
+Resolve the correction chain before ordering them: a replacement supersedes
+the original intent for current replay, and a pure reversal removes it from
+the effective set. Original and reversing journal postings remain visible,
+but replay must not count both the old and replacement acquisitions.
+Per-lot disposal allocations and remaining-balance rows are replay outputs.
+Original allocation snapshots remain evidence of what the first commit did;
+feeding them back as FIFO/LIFO/average inputs would defeat re-selection.
+Build the projection from these ordered inputs for each affected
 `(book_id, holding_account_id, commodity_id, side, cost_commodity_id)`.
 Use effective date plus durable operation/effect sequence for same-day order.
 On a correction/reversal, append the new operation and corrective journal
-transaction(s), then replay from the first affected event within the same
+transaction(s), then replay from the first affected intent within the same
 SQLite transaction. Keep the committed decision's method, resolution tier,
 profile/account version, and any explicit user election. Distinguish the
 immutable **original allocation snapshot** from the **effective replay
-allocation**: append a revision/effect set linked to the correction and
+allocation**: append a numbered revision/effect set linked to the correction and
 superseding the earlier effective set; never mutate or delete the original
 decision, allocation, or lot event. Current projections use the latest
 effective set while exports retain the full chain.
+
+Use **posted reversal plus posted replacement**, not void plus replacement.
+For each journal-bearing original, a correction command writes inverse
+postings at that original transaction's financial date and replacement
+postings at their proper date, as new transactions under one audit event
+and one correcting operation. A basis-only correction has no invented
+journal rows; it replaces or removes the effective basis intent under the
+same audit and replay rules. Each journal replacement uses the existing
+`correction_of_transaction_id` to name its original transaction; the
+correcting operation and its journal-link roles identify reversals. A pure
+reversal omits the replacement. The original transaction
+and pinned posted version remain posted, so a historical link's posted
+invariant does not depend on which version a mutable transaction currently
+selects. The register shows the original, reversal, and replacement as
+separate auditable posted rows grouped by their correction chain, with an
+expandable explanation; totals include their net effect once. Do not
+expose the generic investment void/unvoid path. Reconciliation guards cover
+both original-date reversal and replacement-date posting. Any trade-implied
+price observation associated with the corrected trade must be superseded or
+voided with provenance in the same SQLite command transaction, not left as
+a current price for a reversed fill. The present post-commit best-effort
+trade-price write must become an atomic, version-linked observation write
+before this correction gate passes.
 
 - `specific_lot`: retain the elected lot IDs and quantities. Reject replay
   with a named dependent-operation conflict if a chosen lot is not eligible
@@ -277,6 +346,22 @@ effective set while exports retain the full chain.
   is an effective revision, not an edit to the original snapshot.
 - `short_cover`: apply the corresponding side-specific method and opening
   proceeds rule; never consume long lots or silently cross zero.
+
+An unknown-basis lot stays quantitatively available but carries an unknown
+basis through its effective state. Under FIFO/LIFO/specific-lot, a disposal
+touching it has unknown disposed basis; under average cost, **one unknown
+lot makes the entire affected pool's basis unknown**, so every disposal
+from that pool has unknown basis until resolution. Gains views return an
+explicit unavailable reason rather than zero. A later basis-resolution
+operation records the sourced basis and triggers the same replay; it does
+not mutate the opening fact. A resolution that makes a dependent specific-
+lot election invalid fails atomically with the dependent operation named.
+
+Realized gains, positions, self-checks, and exports read the current
+effective allocation revision and rebuilt state. They must not silently
+keep using an original allocation that replay has superseded; historical
+views can select an earlier knowledge cutoff only under R18's explicit
+projection contract.
 
 If the corrected history makes a later disposal/cover impossible,
 return a conflict naming that dependent operation, leaving all records and
@@ -299,18 +384,29 @@ next family.
    tests against fresh and seeded candidate databases. Settle the operational
    fee/basis and cross-currency rules here, before shaping the schema. This
    slice does not yet rewrite `0001`.
-2. **Operation and component schema.** Introduce the parent/link/component
-   tables, operation-keyed disposal decisions, side-keyed basis state,
-   fact/projection split, canonical TEXT coefficients, generalized import
-   identity, and direct effect links. Implement ADR 0013's clarified link
-   cardinality. **Revise the unused `0001` baseline** under ADR 0013: declare
-   `BREAKING DEV DATABASE`, update checksum, fixture, upgrade/equivalence
-   tests, and reset disposable developer databases. Preserve present APIs
-   and postings. Route existing commands through the new writer; prove their
-   journal, lots, gains, audit count, checkpoint behavior, and import idempotency remain
-   equivalent for old cases. Version the investment export contract to
-   include new operation/component/link files without losing old facts. No
-   new user-facing operation yet.
+2. **Foundation in two independently validated sub-slices.** Both keep the
+   app runnable; neither opens a new user-facing investment operation.
+
+   - **2a — investment schema and writer.** Introduce the parent/link/date/
+     component tables, operation-keyed disposal decisions, side-keyed basis
+     state, fact/projection split, canonical TEXT coefficients, and direct
+     effect links. Implement ADR 0013's link cardinality. Route existing
+     commands through the new writer while preserving current import
+     identity callbacks. Prove equivalent journal, lots, gains, audit count,
+     checkpoint behavior, and import idempotency for old cases. Version the
+     investment export contract without losing old facts.
+   - **2b — generalized import identity.** Replace the one-transaction
+     result with ordered operation/transaction child links. Keep the current
+     unique `(book_id, dedupe_fingerprint)` admission rule. Test bank CSV,
+     bank QIF, and Trading 212 retries, overlaps, duplicate fingerprints,
+     partial failures, and staged-row results through the actual commit
+     path. No basis-only import is accepted until this slice passes.
+
+   Revise the unused `0001` baseline under ADR 0013 for 2a and again for
+   2b if still pre-release: each rewrite declares `BREAKING DEV DATABASE`,
+   updates checksum, fixture, upgrade/equivalence tests, and resets
+   disposable developer databases. After release, 2b uses a forward
+   migration. Do not combine 2a and 2b merely to save a migration number.
 3. **Exact trade economics.** Add gross, fee/tax components, currencies,
    net settlement, and settlement date to buy/sell input/API and import
    mapping. Move gains from cash-posting inference to explicit per-disposal
@@ -321,13 +417,19 @@ next family.
    correction/reversal, dependency conflicts, and reconciliation preview.
    Exercise a corrected old buy followed by several sells under each basis
    method, including the different allocation rules above, same-day ordering,
-   import replacement, and failure rollback. Exact trade economics precede
+   import replacement, trade-price provenance, and failure rollback. Switch
+   realized gains, positions, and self-checks to the latest effective
+   allocation set and rebuilt state; test a correction where the original
+   and effective FIFO allocations differ. Exact trade economics precede
    this slice so replay has one authoritative source for proceeds and charges;
    this refines ADR 0013's foundation-to-correction sequence.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.
-   Add manual commands before provider auto-acceptance. These address the
+   Before each command, approve a per-kind posting matrix, basis-allocation
+   rule, dated eligibility rule, reconciliation preview, and unknown-basis
+   behavior; the shared schema alone is not that specification. Add manual
+   commands before provider auto-acceptance. These address the
    common broker migration and everyday holding cases in R16 first.
 6. **Short sale and cover (T-108).** Add side-aware lot opening and covering,
    disposal allocation/realized-result logic, portfolio/gains/self-check,
@@ -353,6 +455,20 @@ next family.
 - A two-lot partial sale, later backdated buy, correction, short opening and
   partial cover preserve lot quantity, basis/opening proceeds, and side
   independently; an impossible dependent disposal is rejected atomically.
+- With a buy of 100 and a final net sale of 120, the cost-currency
+  `commodity_trading` residual is -20 under the debit-positive journal
+  convention, corresponding to an operational +20 gain. A known-basis
+  external transfer in of 100 followed by the same sale gives the same -20
+  residual after its equity bridge; transfer out cancels its carried basis
+  from clearing. An unknown-basis transfer leaves gains and optional gain
+  reclassification unavailable until a sourced resolution bridges and
+  replays it.
+- A posted correction retains the original transaction/version, adds a
+  reversal and replacement (or only a reversal), and groups all rows in the
+  register. Its pinned links pass self-check even after later corrections;
+  its postings and dependent lot effects net to the corrected facts.
+- One unknown-basis lot makes average-cost pool gains unavailable; resolving
+  that lot via an audited operation rebuilds the pool and affected decisions.
 - Transfer and split preserve total basis. Return of capital changes basis
   without dividend income, floors each lot at zero, and retains any excess
   for explicit classification; cash in lieu consumes exactly its fractional lot
@@ -364,7 +480,13 @@ next family.
   basis separately from the account-entry date.
 - Every linked component agrees with its posting version under the declared
   sign rule. A restored/replayed database uses the same effective decision
-  revision and keeps each superseded original visible in export.
+  revision for gains, positions, and self-check, and keeps each superseded
+  original visible in export.
+- A source row that yields two operations has one dedupe identity and two
+  ordered effects; an exact duplicate fingerprint across source kinds is
+  still refused by the book-wide unique key. Separate CSV and OFX imports
+  of the same economic event remain a review/matching concern unless their
+  fingerprints actually match.
 - Exports and restore retain the operation, components, links, lot effects,
   policies, source IDs, and correction chain. A newly restored database gives
   the same positions, gains, warnings, and reconciled checkpoints.

@@ -54,10 +54,14 @@ Investment accounting has four explicit layers.
    produced it. For realized gain this would be an explicit method-specific
    reclassification between `commodity_trading` equity and the chosen income or
    expense account, leaving the selected basis of the open position in clearing.
-   This is not a second recognition of gain: a fully closed position's clearing
-   residual already nets to its economic gain or loss, while an open position's
-   residual has not yet been split. A report must never silently manufacture
-   ledger postings.
+   This is not a second recognition of gain: for a fully closed position whose
+   opening basis, net proceeds and charges have corresponding clearing legs in
+   the same cost currency, the clearing residual nets to its operational gain
+   or loss. An open position's residual has not yet been split. An external
+   transfer with unknown carried basis, a fee expensed outside clearing, or an
+   unmatched foreign-currency charge breaks that simple identity; a report
+   must flag or explicitly adjust it before reclassification. A report must
+   never silently manufacture ledger postings.
 
 The operational disposal decision remains durable even when alternative reports
 are available. Every committed disposal snapshots its resolved method, the tier

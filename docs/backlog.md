@@ -711,10 +711,13 @@ fix that can be taken out of order):
   leading free candidate for dividends and splits, but its EU coverage is
   unverified, and `connections-plan.md` records provider verification as a
   *blocking slice-start precondition*, not a task inside the slice.
-- **R16's lot-mutation design note**, for the structural half only. Splits,
-  mergers, spin-offs, ticker changes, and delistings mutate historical lots;
-  `AcceptSuggestion` rejects them today by design. Dividend suggestions need
-  no such note and would work the day a producer exists.
+- **R16's per-kind structural action specification**, for the structural half
+  only. The shared operation/lot design is now in
+  `docs/plans/investment-operation-refactor-plan.md`, but each split, merger,
+  spin-off, ticker change, or delisting still needs its own posting, basis,
+  date, and replay rules before acceptance. `AcceptSuggestion` rejects them
+  today by design. Dividend suggestions need no structural rule and would
+  work the day a producer exists.
 
 Nothing in the app is broken by this: the review UI, accept/ignore, and the
 automation rules all work, they simply have no data. Do not start it early.
@@ -731,9 +734,10 @@ them. The review UI and the accept/ignore/automation-rules endpoints all work
 correctly, but have no data to act on until a producer exists.
 `docs/product-requirements.md` lists "provider events and reviewable
 suggestions" as a real requirement. Needs: a chosen data source (no candidate
-picked yet), a fetch/detection design, and — separately — a lot-mutation
-design for structural corporate actions (split, merger, spin_off,
-ticker_change, delisting, `corporate_action`), which `AcceptSuggestion`
+picked yet), a fetch/detection design, and — separately — a per-kind posting,
+basis, date, and replay specification for structural corporate actions (split,
+merger, spin_off, ticker_change, delisting, `corporate_action`), which
+`AcceptSuggestion`
 currently rejects outright since only the `dividend_income`
 proposed-transaction kind (dividend, distribution, cash_in_lieu,
 return_of_capital) is implemented.
