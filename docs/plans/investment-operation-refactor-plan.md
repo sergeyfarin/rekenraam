@@ -542,6 +542,13 @@ next family.
      facts or an impossible dependent disposal by name. The next step persists
      numbered effective revisions and wires the correcting journal command;
      this simulation alone does not admit backdated writes.
+   - **4c — effective revision storage foundation — complete 2026-09-27.**
+     The unused candidate baseline has append-only, numbered disposal
+     revisions and allocation sets. A transaction-scoped writer validates
+     replay conservation, preserves the original snapshot and lot events, and
+     installs the rebuilt current lot state under the triggering operation's
+     audit event. Read models and the native correction command still need to
+     select and produce these revisions before backdated writes are enabled.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

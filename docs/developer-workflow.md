@@ -303,6 +303,12 @@ Stop the app and reset the same disposable `DATABASE_URL` database and its
 `-wal`/`-shm` sidecars using the command above before restarting. No installed
 v0.1 database exists.
 
+**BREAKING DEV DATABASE, R16 slice 4c:** `0001` now stores append-only
+effective disposal revisions and their allocations. The baseline checksum
+changed. Stop the app and reset the same disposable `DATABASE_URL` database
+and its `-wal`/`-shm` sidecars using the command above before restarting. No
+installed v0.1 database exists.
+
 The final pre-`v0.1.0` consolidation changed the highest schema version from 8
 to 1. Databases and backups made before that consolidation are incompatible in
 both directions: export anything worth keeping before updating, then recreate

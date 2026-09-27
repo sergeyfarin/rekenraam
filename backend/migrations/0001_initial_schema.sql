@@ -1222,6 +1222,38 @@ CREATE TABLE IF NOT EXISTS investment_disposal_allocations (
   UNIQUE (lot_event_id)
 );
 
+-- Revision 1 is the immutable decision and allocation snapshot above. Later
+-- replay results append a numbered effective set; no original event changes.
+CREATE TABLE IF NOT EXISTS investment_disposal_revisions (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  decision_id INTEGER NOT NULL REFERENCES investment_disposal_decisions(id) ON DELETE RESTRICT,
+  revision_seq INTEGER NOT NULL CHECK (revision_seq >= 2),
+  caused_by_operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  supersedes_revision_id INTEGER REFERENCES investment_disposal_revisions(id) ON DELETE RESTRICT,
+  disposed_basis_value TEXT NOT NULL CHECK (length(disposed_basis_value) BETWEEN 1 AND 38),
+  disposed_basis_scale INTEGER NOT NULL CHECK (disposed_basis_scale BETWEEN 0 AND 12),
+  created_at TEXT NOT NULL,
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (decision_id, revision_seq),
+  CHECK ((revision_seq = 2) = (supersedes_revision_id IS NULL))
+);
+
+CREATE TABLE IF NOT EXISTS investment_disposal_revision_allocations (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  revision_id INTEGER NOT NULL REFERENCES investment_disposal_revisions(id) ON DELETE RESTRICT,
+  allocation_seq INTEGER NOT NULL CHECK (allocation_seq > 0),
+  lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38),
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
+  cost_basis_value TEXT NOT NULL CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
+  cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  proceeds_value TEXT NOT NULL CHECK (length(proceeds_value) BETWEEN 1 AND 38),
+  proceeds_scale INTEGER NOT NULL CHECK (proceeds_scale BETWEEN 0 AND 12),
+  UNIQUE (revision_id, allocation_seq)
+);
+
 CREATE INDEX IF NOT EXISTS investment_disposal_decisions_event_idx
   ON investment_disposal_decisions (book_id, event_date, id);
 
@@ -1472,6 +1504,41 @@ END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_revisions_valid
+BEFORE INSERT ON investment_disposal_revisions
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_disposal_decisions d
+  JOIN investment_operations o ON o.id = NEW.caused_by_operation_id
+  JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  WHERE d.id = NEW.decision_id AND d.book_id = NEW.book_id
+    AND o.book_id = NEW.book_id AND a.book_id = NEW.book_id
+    AND o.created_audit_event_id = NEW.created_audit_event_id
+    AND ((NEW.revision_seq = 2 AND NEW.supersedes_revision_id IS NULL)
+      OR EXISTS (
+        SELECT 1 FROM investment_disposal_revisions previous
+        WHERE previous.id = NEW.supersedes_revision_id
+          AND previous.book_id = NEW.book_id AND previous.decision_id = NEW.decision_id
+          AND previous.revision_seq = NEW.revision_seq - 1))
+)
+BEGIN SELECT RAISE(ABORT, 'investment disposal revision chain is invalid'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_revision_allocations_valid
+BEFORE INSERT ON investment_disposal_revision_allocations
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_disposal_revisions r
+  JOIN investment_lots l ON l.id = NEW.lot_id
+  JOIN investment_disposal_decisions d ON d.id = r.decision_id
+  WHERE r.id = NEW.revision_id AND r.book_id = NEW.book_id
+    AND l.book_id = NEW.book_id AND l.account_id = d.account_id
+    AND l.commodity_id = d.commodity_id AND l.cost_commodity_id = d.cost_commodity_id
+    AND l.position_side = d.position_side
+)
+BEGIN SELECT RAISE(ABORT, 'investment disposal revision allocation is outside its position'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_operation_journal_links_no_update
 BEFORE UPDATE ON investment_operation_journal_links
 BEGIN SELECT RAISE(ABORT, 'investment journal links are immutable'); END;
@@ -1570,6 +1637,26 @@ BEGIN SELECT RAISE(ABORT, 'investment disposal allocations are immutable'); END;
 CREATE TRIGGER IF NOT EXISTS investment_disposal_allocations_no_delete
 BEFORE DELETE ON investment_disposal_allocations
 BEGIN SELECT RAISE(ABORT, 'investment disposal allocations are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_revisions_no_update
+BEFORE UPDATE ON investment_disposal_revisions
+BEGIN SELECT RAISE(ABORT, 'investment disposal revisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_revisions_no_delete
+BEFORE DELETE ON investment_disposal_revisions
+BEGIN SELECT RAISE(ABORT, 'investment disposal revisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_revision_allocations_no_update
+BEFORE UPDATE ON investment_disposal_revision_allocations
+BEGIN SELECT RAISE(ABORT, 'investment disposal revision allocations are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_revision_allocations_no_delete
+BEFORE DELETE ON investment_disposal_revision_allocations
+BEGIN SELECT RAISE(ABORT, 'investment disposal revision allocations are immutable'); END;
 -- +goose StatementEnd
 
 CREATE TABLE IF NOT EXISTS investment_provider_events (
@@ -3334,6 +3421,12 @@ DROP TRIGGER IF EXISTS investment_operation_components_no_update;
 DROP TRIGGER IF EXISTS investment_operation_journal_links_no_delete;
 DROP TRIGGER IF EXISTS investment_operation_journal_links_no_update;
 DROP TRIGGER IF EXISTS investment_lot_effects_same_book;
+DROP TRIGGER IF EXISTS investment_disposal_revision_allocations_no_delete;
+DROP TRIGGER IF EXISTS investment_disposal_revision_allocations_no_update;
+DROP TRIGGER IF EXISTS investment_disposal_revisions_no_delete;
+DROP TRIGGER IF EXISTS investment_disposal_revisions_no_update;
+DROP TRIGGER IF EXISTS investment_disposal_revision_allocations_valid;
+DROP TRIGGER IF EXISTS investment_disposal_revisions_valid;
 DROP TRIGGER IF EXISTS investment_disposal_decisions_same_book;
 DROP TRIGGER IF EXISTS investment_lot_facts_same_book;
 DROP TRIGGER IF EXISTS investment_components_same_book;
@@ -3350,6 +3443,8 @@ DROP TRIGGER IF EXISTS investment_operations_no_delete;
 DROP TRIGGER IF EXISTS investment_operations_no_update;
 DROP TRIGGER IF EXISTS investment_operations_same_book;
 DROP INDEX IF EXISTS investment_operations_book_kind_date_idx;
+DROP TABLE IF EXISTS investment_disposal_revision_allocations;
+DROP TABLE IF EXISTS investment_disposal_revisions;
 DROP TABLE IF EXISTS investment_disposal_allocations;
 DROP TABLE IF EXISTS investment_disposal_decisions;
 DROP TABLE IF EXISTS investment_operations;

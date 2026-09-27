@@ -474,9 +474,9 @@ provides net-only fills, so its source gross remains unknown.
 The schema and existing-command operation identity have landed in the unused
 v0.1 candidate baseline. Native replay, side-aware reads/self-checks and the
 short-sale/cover commands remain before T-108 is usable. The next execution
-order is native correction (the immutable intent reader and reversible
-long-position simulation are in place; effective replay revisions and the
-correction command remain),
+order is native correction (immutable intents, reversible long-position
+simulation, and append-only effective revision storage are in place; current
+read models and the correcting command remain),
 transfers and basis actions including manual splits, then short-sale/cover;
 compound corporate actions follow. Return-of-capital and cash-in-lieu
 suggestions are currently refused as dividend income (T-109) until their
