@@ -37,8 +37,9 @@ and net amount fields in [IBKR's feed specification](https://www.interactivebrok
 | Write-off | `H −q`, `T +q` | None | Consume long lots at zero proceeds; loss `−disposed basis` |
 
 `B`, `P`, `D`, and `W` are positive amounts in one currency. These rows
-describe the code as it stands: the buy stores `CashAmountValue` as lot cost;
-the sell's cash postings supply proceeds; dividend withholding uses the cash
+describe the pre-slice-3 compatibility path: the buy stored `CashAmountValue`
+as lot cost and the sell inferred proceeds from cash postings. Slice 3 records
+explicit clearing-based basis and proceeds. Dividend withholding uses the cash
 commodity and can post to an asset, liability, or expense account; and the
 reinvestment command has no withholding component. A later withholding or
 fee on reinvestment needs an explicit extension of the operation, not a

@@ -386,8 +386,6 @@ InvestmentTradeRequest:
     - holding_account_id
     - quantity_value
     - quantity_scale
-    - cash_amount_value
-    - cash_amount_scale
     - cash_commodity_id
   properties:
     transaction_date:
@@ -416,6 +414,25 @@ InvestmentTradeRequest:
     cash_commodity_id:
       type: integer
       format: int64
+    gross_amount_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
+      description: Signed gross consideration; negative for buy, positive for sale. Omit for legacy net-only trades.
+    gross_amount_scale:
+      type: integer
+    net_settlement_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
+      description: Signed net cash settlement in the trade quote currency. Required with gross.
+    net_settlement_scale:
+      type: integer
+    settlement_date:
+      type: string
+      format: date
+    charges:
+      type: array
+      items:
+        $ref: '#/InvestmentTradeChargeRequest'
     memo:
       type: string
     payee_id:
@@ -437,6 +454,37 @@ InvestmentTradeRequest:
         Allows a backdated trade to proceed into a reconciled period,
         invalidating the affected checkpoints. Without it such a trade is
         refused with a 409 CONFLICT.
+
+InvestmentTradeChargeRequest:
+  type: object
+  required: [kind, amount_value, amount_scale, commodity_id]
+  properties:
+    kind:
+      type: string
+      enum: [commission, transaction_tax, other_fee, rebate]
+    amount_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
+      description: Signed amount; fees and taxes are negative, rebates positive.
+    amount_scale:
+      type: integer
+    commodity_id:
+      type: integer
+      format: int64
+    treatment:
+      type: string
+      enum: [clearing_included, separately_expensed]
+    charge_account_id:
+      type: integer
+      format: int64
+    cash_account_id:
+      type: integer
+      format: int64
+    paid_on:
+      type: string
+      format: date
+    source_evidence:
+      type: object
 
 InvestmentWriteOffRequest:
   type: object
@@ -506,6 +554,8 @@ InvestmentLotDisposalResponse:
     - quantity_scale
     - cost_basis_value
     - cost_basis_scale
+    - proceeds_value
+    - proceeds_scale
   properties:
     lot_id:
       type: integer
@@ -520,6 +570,11 @@ InvestmentLotDisposalResponse:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
     cost_basis_scale:
+      type: integer
+    proceeds_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
+    proceeds_scale:
       type: integer
 
 InvestmentTradeResponse:
@@ -550,6 +605,8 @@ DisposalDecisionResponse:
     - quantity_scale
     - disposed_basis_value
     - disposed_basis_scale
+    - proceeds_value
+    - proceeds_scale
     - cost_commodity_id
     - allocations
   properties:
@@ -592,6 +649,11 @@ DisposalDecisionResponse:
       pattern: '^-?(0|[1-9][0-9]{0,37})$'
     disposed_basis_scale:
       type: integer
+    proceeds_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
+    proceeds_scale:
+      type: integer
     cost_commodity_id:
       type: integer
       format: int64
@@ -613,6 +675,11 @@ SellPreviewResponse:
     - realized_gain_scale
     - cash_amount_value
     - cash_amount_scale
+    - gross_amount_scale
+    - net_settlement_value
+    - net_settlement_scale
+    - settlement_date
+    - charges
   properties:
     cost_basis_method:
       $ref: "#/CostBasisMethod"
@@ -634,6 +701,21 @@ SellPreviewResponse:
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
     cash_amount_scale:
       type: integer
+    gross_amount_value:
+      type: string
+    gross_amount_scale:
+      type: integer
+    net_settlement_value:
+      type: string
+    net_settlement_scale:
+      type: integer
+    settlement_date:
+      type: string
+      format: date
+    charges:
+      type: array
+      items:
+        $ref: '#/InvestmentTradeChargeRequest'
 
 DividendRequest:
   type: object
@@ -839,6 +921,7 @@ InvestmentPositionResponse:
     - remaining_cost_basis_value
     - remaining_cost_basis_scale
     - cost_commodity_id
+    - latest_price_approximate
   properties:
     account_id:
       type: integer
@@ -868,6 +951,9 @@ InvestmentPositionResponse:
     latest_price_date:
       type: string
       format: date
+    latest_price_approximate:
+      type: boolean
+      description: True when the selected valuation quote was estimated from net-only trade cash.
 
 InvestmentPositionsResponse:
   type: object
@@ -1166,6 +1252,7 @@ UnrealizedGainEntry:
     - quantity_scale
     - remaining_cost_basis_value
     - remaining_cost_basis_scale
+    - latest_price_approximate
   properties:
     account_id:
       type: integer
@@ -1197,6 +1284,9 @@ UnrealizedGainEntry:
       type: string
       format: date
       description: Omitted when no price observation exists.
+    latest_price_approximate:
+      type: boolean
+      description: True when the selected valuation quote was estimated from net-only trade cash.
     market_value_value:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,18})$'

@@ -3,6 +3,8 @@
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { parseTradeAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
+  import TradeEconomicsFields from '$lib/investments/trade-economics-fields.svelte';
+  import { exactTradeFields, type TradeChargeDraft } from '$lib/investments/trade-economics';
   import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import { forecastQueryKey } from '$lib/api/forecast';
@@ -70,6 +72,10 @@
   let cashAccountID = $state('');
   let quantityStr = $state('');
   let cashAmountStr = $state('');
+  let exactMode = $state(false);
+  let grossAmountStr = $state('');
+  let settlementDate = $state('');
+  let charges = $state<TradeChargeDraft[]>([]);
   let memo = $state('');
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
@@ -157,6 +163,13 @@
     }
     const { quantity, cashAmount } = amounts.values;
 
+    const economics = exactMode ? exactTradeFields({ side: 'buy', gross: grossAmountStr,
+      settlementDate, charges, cashCommodityID, netValue: cashAmount.value, netScale: cashAmount.scale }) : null;
+    if (economics && !economics.ok) {
+      formError = new Error(amountErrorMessage(economics.reason));
+      return;
+    }
+
     const payload: InvestmentTradeRequest = {
       transaction_date: transactionDate,
       commodity_id: selectedInstrument.commodity_id,
@@ -167,6 +180,7 @@
       cash_amount_value: cashAmount.value,
       cash_amount_scale: cashAmount.scale,
       cash_commodity_id: cashCommodityID,
+      ...(economics?.ok ? economics.fields : {}),
       memo: memo.trim() || undefined
     };
 
@@ -353,6 +367,10 @@
       required
     />
   </div>
+
+  <TradeEconomicsFields side="buy" cashCommodityID={cashCommodityID}
+    accounts={accountsQuery.data?.accounts ?? []} currencies={currenciesQuery.data?.currencies ?? []}
+    bind:exactMode bind:gross={grossAmountStr} bind:settlementDate bind:charges />
 
   <!-- Memo -->
   <div>

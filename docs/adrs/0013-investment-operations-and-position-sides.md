@@ -30,7 +30,10 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
    adjustment can have no journal posting; a compound action can link more
    than one posted transaction version. A trade records gross consideration,
    charges, and net settlement as separate exact facts, with their currencies
-   and scales.
+   and scales. A long disposal decision also stores operational proceeds after
+   clearing-included charges, independently of net cash. A charge component
+   stores its kind, treatment, mapped account, policy version and source
+   evidence; later policy edits do not change it.
    Operation kinds are stable, non-empty codes, validated by their command;
    the database does not need a new migration for each new code. They are not
    reconstructed from transaction descriptions or negative quantities.

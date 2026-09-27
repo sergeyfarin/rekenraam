@@ -792,7 +792,7 @@ func (r *PricingRepository) ListLatestPriceObservationsForPairs(ctx context.Cont
 				SELECT id,
 					ROW_NUMBER() OVER (
 						PARTITION BY base_commodity_id, quote_commodity_id
-						ORDER BY valuation_date DESC, recorded_at DESC, id DESC
+						ORDER BY valuation_date DESC, CASE WHEN is_manual = 1 OR quote_type = 'valuation_override' THEN 3 WHEN is_approximate = 0 THEN 2 ELSE 1 END DESC, recorded_at DESC, id DESC
 					) AS row_number
 				FROM price_observations
 				WHERE book_id = ? AND voided_at IS NULL AND (`+strings.Join(clauses, " OR ")+`)

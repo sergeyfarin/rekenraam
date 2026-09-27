@@ -34,24 +34,35 @@ func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params Create
 		return fmt.Errorf("record investment operation date: %w", err)
 	}
 	if params.Spec.InvestmentOperationKind == "buy" || params.Spec.InvestmentOperationKind == "sell" {
-		// Current input has only one date; retain the explicit settlement slot
-		// until slice 3 admits a separately sourced broker settlement date.
+		settlementDate := params.InvestmentSettlementDate
+		if settlementDate == "" {
+			settlementDate = params.Spec.TransactionDate
+		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_operation_dates (operation_id, date_role, event_date)
 			VALUES (?, 'settlement', ?)
-		`, operationID, params.Spec.TransactionDate); err != nil {
+		`, operationID, settlementDate); err != nil {
 			return fmt.Errorf("record trade settlement date: %w", err)
 		}
 	}
 	for i, component := range params.InvestmentComponents {
+		evidenceJSON := component.SourceEvidenceJSON
+		if evidenceJSON == "" {
+			evidenceJSON = "{}"
+		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_operation_components
-				(book_id, operation_id, component_seq, component_kind, commodity_id,
-				 amount_value, amount_scale, amount_date, gross_unknown, created_audit_event_id)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, params.BookID, operationID, i+1, component.Kind, component.CommodityID,
+				(book_id, operation_id, component_seq, component_kind, charge_kind, commodity_id,
+				 amount_value, amount_scale, amount_date, gross_unknown, charge_treatment,
+				 charge_account_id, cash_account_id, resolution_tier, fee_policy_version_id, source_evidence_json,
+				 created_audit_event_id)
+			VALUES (?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, NULLIF(?, ''),
+				 NULLIF(?, 0), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, 0), ?, ?)
+		`, params.BookID, operationID, i+1, component.Kind, component.ChargeKind, component.CommodityID,
 			component.AmountValue, component.AmountScale, component.AmountDate,
-			boolInt(component.GrossUnknown), auditEventID); err != nil {
+			boolInt(component.GrossUnknown), component.ChargeTreatment, component.ChargeAccountID, component.CashAccountID,
+			component.ResolutionTier, component.FeePolicyVersionID,
+			evidenceJSON, auditEventID); err != nil {
 			return fmt.Errorf("record investment source component: %w", err)
 		}
 	}

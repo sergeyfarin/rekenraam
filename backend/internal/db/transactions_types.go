@@ -228,20 +228,28 @@ type CreateTransactionParams struct {
 	// AccountRuleDependencies are the accounts whose versions the posting
 	// checks in Spec were decided against. The write transaction refuses the
 	// spec if any of them has been restructured since (T-100).
-	AccountRuleDependencies []AccountRuleDependency
-	InvestmentComponents    []InvestmentComponentSpec
-	TradeImpliedPrice       *TradeImpliedPriceSpec
+	AccountRuleDependencies  []AccountRuleDependency
+	InvestmentComponents     []InvestmentComponentSpec
+	InvestmentSettlementDate string
+	TradeImpliedPrice        *TradeImpliedPriceSpec
 }
 
 // InvestmentComponentSpec is an exact source fact, signed from the owner's
 // perspective. Legacy trades supply net settlement with unknown gross.
 type InvestmentComponentSpec struct {
-	Kind         string
-	CommodityID  int64
-	AmountValue  string
-	AmountScale  int
-	AmountDate   string
-	GrossUnknown bool
+	Kind               string
+	ChargeKind         string
+	CommodityID        int64
+	AmountValue        string
+	AmountScale        int
+	AmountDate         string
+	GrossUnknown       bool
+	ChargeTreatment    string
+	ChargeAccountID    int64
+	CashAccountID      int64
+	ResolutionTier     string
+	FeePolicyVersionID int64
+	SourceEvidenceJSON string
 }
 
 type TradeImpliedPriceSpec struct {

@@ -252,6 +252,70 @@ type LotDisposalRecord struct {
 	CostBasisValue  int64
 	CostBasisScale  int
 	CostCommodityID int64
+	ProceedsValue   int64
+	ProceedsScale   int
+}
+
+// allocateDisposalProceeds snapshots a position's exact proceeds across its
+// consumed lots. Every non-final share is truncated toward zero; the final
+// lot receives the remainder so the allocations always conserve the decision.
+func allocateDisposalProceeds(disposals []LotDisposalRecord, value int64, scale int) error {
+	if len(disposals) == 0 || scale < 0 || scale > 12 {
+		return fmt.Errorf("%w: proceeds allocation requires lots and a valid money scale", ErrInvalidDisposalParams)
+	}
+	ceiling := scale
+	quantityScale := 0
+	for _, disposal := range disposals {
+		if disposal.CostBasisScale > ceiling {
+			ceiling = disposal.CostBasisScale
+		}
+		if disposal.QuantityScale > quantityScale {
+			quantityScale = disposal.QuantityScale
+		}
+	}
+	// The basis allocator may have chosen the commodity's deepest precision.
+	// Proceeds can be larger than basis, so independently back off to the
+	// deepest scale that still fits int64, never below the source amount's scale.
+	allocationScale := ceiling
+	var proceeds *big.Int
+	for allocationScale >= scale {
+		proceeds = exact.ScaledIntFromInt64(value, scale).TruncatedTo(allocationScale).BigInt()
+		if proceeds.IsInt64() {
+			break
+		}
+		allocationScale--
+	}
+	if allocationScale < scale {
+		return ErrInvestmentBasisRange
+	}
+	quantities := make([]*big.Int, len(disposals))
+	totalQuantity := new(big.Int)
+	for index, disposal := range disposals {
+		quantity := disposal.QuantityValue.BigInt()
+		quantity.Mul(quantity, exact.Pow10(quantityScale-disposal.QuantityScale))
+		if quantity.Sign() <= 0 {
+			return fmt.Errorf("%w: proceeds allocation quantity must be positive", ErrInvalidDisposalParams)
+		}
+		quantities[index] = quantity
+		totalQuantity.Add(totalQuantity, quantity)
+	}
+	remaining := new(big.Int).Set(proceeds)
+	for index := range disposals {
+		share := new(big.Int)
+		if index == len(disposals)-1 {
+			share.Set(remaining)
+		} else {
+			share.Mul(proceeds, quantities[index])
+			share.Quo(share, totalQuantity)
+			remaining.Sub(remaining, share)
+		}
+		if !share.IsInt64() {
+			return ErrInvestmentBasisRange
+		}
+		disposals[index].ProceedsValue = share.Int64()
+		disposals[index].ProceedsScale = allocationScale
+	}
+	return nil
 }
 
 type DisposalDecisionSource struct {
@@ -275,6 +339,8 @@ type DisposalDecisionRecord struct {
 	QuantityScale        int
 	DisposedBasisValue   exact.Coefficient
 	DisposedBasisScale   int
+	ProceedsValue        int64
+	ProceedsScale        int
 	CostBasisMethod      string
 	DisposalDecisionSource
 	CreatedAt    string
@@ -287,6 +353,8 @@ type DisposeLotsParams struct {
 	AccountID       int64
 	CommodityID     int64
 	CostCommodityID int64
+	ProceedsValue   int64
+	ProceedsScale   int
 	TransactionID   int64
 	EventDate       string
 	QuantityValue   exact.Coefficient
@@ -315,6 +383,7 @@ type InvestmentPositionRecord struct {
 	LatestPriceValue        sql.NullInt64
 	LatestPriceScale        sql.NullInt64
 	LatestPriceDate         sql.NullString
+	LatestPriceApproximate  sql.NullInt64
 	// base_quantity fields from price_observations: price is (PriceValue/base_quantity) per unit.
 	// Defaults: base_quantity_value=1, base_quantity_scale=0 (price is per 1 unit).
 	LatestPriceBaseQuantityValue sql.NullInt64
@@ -1327,6 +1396,9 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 	if err != nil {
 		return nil, err
 	}
+	if err := allocateDisposalProceeds(disposals, params.ProceedsValue, params.ProceedsScale); err != nil {
+		return nil, err
+	}
 	// Include future acquisitions too: widening an eligible lot must not make
 	// the current all-lots position unreadable (T-104).
 	if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
@@ -1843,13 +1915,13 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 		INSERT INTO investment_disposal_decisions (
 			book_id, transaction_id, transaction_version_id, operation_id, position_side, account_id, commodity_id,
 			cost_commodity_id, event_date, quantity_value, quantity_scale,
-			disposed_basis_value, disposed_basis_scale, cost_basis_method, resolution_tier,
+			disposed_basis_value, disposed_basis_scale, proceeds_value, proceeds_scale, cost_basis_method, resolution_tier,
 			account_version_id, profile_id, profile_version_id, source_effective_from,
 			source_recorded_at, created_at, created_by_user_id, created_audit_event_id
-		) VALUES (?, ?, ?, ?, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, params.BookID, transaction.ID, transaction.VersionID, operationID, params.AccountID, params.CommodityID,
 		costCommodityID, params.EventDate, params.QuantityValue, params.QuantityScale,
-		disposedBasisValue, disposedBasis.Scale(), params.CostBasisMethod, source.ResolutionTier,
+		disposedBasisValue, disposedBasis.Scale(), params.ProceedsValue, params.ProceedsScale, params.CostBasisMethod, source.ResolutionTier,
 		nullablePositiveInt64(source.AccountVersionID), nullablePositiveInt64(source.ProfileID),
 		nullablePositiveInt64(source.ProfileVersionID), nullableStringValue(sql.NullString{String: source.SourceEffectiveFrom, Valid: source.SourceEffectiveFrom != ""}),
 		nullableStringValue(sql.NullString{String: source.SourceRecordedAt, Valid: source.SourceRecordedAt != ""}), params.CreatedAt, params.ActorUserID, auditEventID)
@@ -1867,11 +1939,12 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_disposal_allocations (
 				book_id, decision_id, lot_event_id, lot_id, allocation_seq,
-				quantity_value, quantity_scale, cost_basis_value, cost_basis_scale
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+				quantity_value, quantity_scale, cost_basis_value, cost_basis_scale,
+				proceeds_value, proceeds_scale
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, params.BookID, decisionID, allocation.EventID, allocation.LotID, index+1,
 			allocation.QuantityValue, allocation.QuantityScale, allocation.CostBasisValue,
-			allocation.CostBasisScale); err != nil {
+			allocation.CostBasisScale, allocation.ProceedsValue, allocation.ProceedsScale); err != nil {
 			return DisposalDecisionRecord{}, fmt.Errorf("insert disposal decision allocation: %w", err)
 		}
 	}
@@ -1880,6 +1953,7 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 		AccountID: params.AccountID, CommodityID: params.CommodityID, CostCommodityID: costCommodityID,
 		EventDate: params.EventDate, QuantityValue: params.QuantityValue, QuantityScale: params.QuantityScale,
 		DisposedBasisValue: disposedBasisValue, DisposedBasisScale: disposedBasis.Scale(),
+		ProceedsValue: params.ProceedsValue, ProceedsScale: params.ProceedsScale,
 		CostBasisMethod: params.CostBasisMethod, DisposalDecisionSource: source,
 		CreatedAt: params.CreatedAt, AuditEventID: auditEventID, Allocations: disposals,
 	}, nil
@@ -1924,7 +1998,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 					AND po.base_commodity_id = lot.commodity_id
 					AND po.quote_commodity_id = lot.cost_commodity_id
 					AND po.voided_at IS NULL
-				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
+				ORDER BY po.valuation_date DESC, CASE WHEN po.is_manual = 1 OR po.quote_type = 'valuation_override' THEN 3 WHEN po.is_approximate = 0 THEN 2 ELSE 1 END DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
 			) AS latest_price_value,
 			(
@@ -1934,7 +2008,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 					AND po.base_commodity_id = lot.commodity_id
 					AND po.quote_commodity_id = lot.cost_commodity_id
 					AND po.voided_at IS NULL
-				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
+				ORDER BY po.valuation_date DESC, CASE WHEN po.is_manual = 1 OR po.quote_type = 'valuation_override' THEN 3 WHEN po.is_approximate = 0 THEN 2 ELSE 1 END DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
 			) AS latest_price_scale,
 			(
@@ -1944,9 +2018,19 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 					AND po.base_commodity_id = lot.commodity_id
 					AND po.quote_commodity_id = lot.cost_commodity_id
 					AND po.voided_at IS NULL
-				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
+				ORDER BY po.valuation_date DESC, CASE WHEN po.is_manual = 1 OR po.quote_type = 'valuation_override' THEN 3 WHEN po.is_approximate = 0 THEN 2 ELSE 1 END DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
 			) AS latest_price_date,
+			(
+				SELECT po.is_approximate
+				FROM price_observations po
+				WHERE po.book_id = lot.book_id
+					AND po.base_commodity_id = lot.commodity_id
+					AND po.quote_commodity_id = lot.cost_commodity_id
+					AND po.voided_at IS NULL
+				ORDER BY po.valuation_date DESC, CASE WHEN po.is_manual = 1 OR po.quote_type = 'valuation_override' THEN 3 WHEN po.is_approximate = 0 THEN 2 ELSE 1 END DESC, po.recorded_at DESC, po.id DESC
+				LIMIT 1
+			) AS latest_price_approximate,
 			(
 				SELECT po.base_quantity_value
 				FROM price_observations po
@@ -1954,7 +2038,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 					AND po.base_commodity_id = lot.commodity_id
 					AND po.quote_commodity_id = lot.cost_commodity_id
 					AND po.voided_at IS NULL
-				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
+				ORDER BY po.valuation_date DESC, CASE WHEN po.is_manual = 1 OR po.quote_type = 'valuation_override' THEN 3 WHEN po.is_approximate = 0 THEN 2 ELSE 1 END DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
 			) AS latest_price_base_quantity_value,
 			(
@@ -1964,7 +2048,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 					AND po.base_commodity_id = lot.commodity_id
 					AND po.quote_commodity_id = lot.cost_commodity_id
 					AND po.voided_at IS NULL
-				ORDER BY po.valuation_date DESC, po.recorded_at DESC, po.id DESC
+				ORDER BY po.valuation_date DESC, CASE WHEN po.is_manual = 1 OR po.quote_type = 'valuation_override' THEN 3 WHEN po.is_approximate = 0 THEN 2 ELSE 1 END DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
 			) AS latest_price_base_quantity_scale
 		FROM investment_lots lot
@@ -1993,7 +2077,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 		var quantityScale int
 		var costValue int64
 		var costScale int
-		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate, &record.LatestPriceBaseQuantityValue, &record.LatestPriceBaseQuantityScale); err != nil {
+		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate, &record.LatestPriceApproximate, &record.LatestPriceBaseQuantityValue, &record.LatestPriceBaseQuantityScale); err != nil {
 			return nil, fmt.Errorf("scan investment position: %w", err)
 		}
 		key := positionKey{record.AccountID, record.CommodityID, record.CostCommodityID}
@@ -2973,17 +3057,11 @@ type realizedGainEventRow struct {
 // with event_kind='disposal'), aggregated at the transaction level so a single sell
 // transaction that disposes multiple lots produces one realized-gain row (manual
 // disposals, which have no transaction_id, each keep their own row). All summation
-// is done in Go with big.Int at aligned scales — disposal events and cash postings
-// can legitimately carry different quantity/cost scales (e.g. imported trades whose
-// raw source amounts had differing decimal-place counts), so SQL SUM/MAX over the
-// TEXT coefficient columns would silently blend incommensurate magnitudes.
-//
-// Cash proceeds are read from the matching sell transaction's postings: any posting
-// whose commodity_id matches the lot's cost_commodity_id and whose account does not
-// have system_role='commodity_trading' (i.e. a real cash account, not the internal
-// clearing account) — summed, since a sale can legitimately have more than one such
-// leg (e.g. a fee posted alongside the proceeds). Realized gain = proceeds -
-// disposed_basis, aligned to the proceeds scale.
+// is done in Go with big.Int at aligned scales — disposal events can carry
+// different quantity/cost scales, so SQL SUM/MAX over TEXT coefficients would
+// blend incommensurate magnitudes. Proceeds come from the matching immutable
+// disposal decision, which excludes separately expensed charges. A standalone
+// manually inserted lot disposal without a decision has zero proceeds.
 func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int64, params RealizedGainsParams) ([]RealizedGainRecord, error) {
 	dateFilter := ""
 	args := []any{bookID}
@@ -3036,8 +3114,29 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		return nil, nil
 	}
 
-	proceeds, err := r.realizedGainCashProceeds(ctx, bookID)
+	// Posted investment decisions snapshot operational proceeds. Cash postings
+	// can include separately expensed charges and are never authoritative.
+	proceeds := map[proceedsKey]*exact.ScaledInt{}
+	decisionRows, err := r.database.QueryContext(ctx, `
+		SELECT transaction_id, cost_commodity_id, proceeds_value, proceeds_scale
+		FROM investment_disposal_decisions WHERE book_id = ?`, bookID)
 	if err != nil {
+		return nil, fmt.Errorf("read realized gain decisions: %w", err)
+	}
+	for decisionRows.Next() {
+		var transactionID, commodityID, amount int64
+		var scale int
+		if err := decisionRows.Scan(&transactionID, &commodityID, &amount, &scale); err != nil {
+			decisionRows.Close()
+			return nil, fmt.Errorf("scan realized gain decision: %w", err)
+		}
+		proceeds[proceedsKey{transactionID: transactionID, costCommodityID: commodityID}] = exact.ScaledIntFromInt64(amount, scale)
+	}
+	if err := decisionRows.Err(); err != nil {
+		decisionRows.Close()
+		return nil, err
+	}
+	if err := decisionRows.Close(); err != nil {
 		return nil, err
 	}
 
@@ -3126,7 +3225,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			record.ProceedsValue = proceedsValue
 			record.ProceedsScale = matchedProceeds.Scale()
 		} else {
-			// No matching transaction or posting found (e.g. manual lot creation).
+			// A manual lot disposal has no trade decision and zero proceeds.
 			record.ProceedsValue = 0
 			record.ProceedsScale = record.DisposedBasisScale
 		}
@@ -3159,65 +3258,6 @@ type proceedsKey struct {
 	costCommodityID int64
 }
 
-// realizedGainCashProceeds sums, per (transaction, cost commodity), the real cash
-// legs of every disposal-bearing sell transaction in the book: postings whose
-// commodity matches the lot's cost commodity and whose account is not the internal
-// commodity_trading clearing account. Deduplicated by posting id because a
-// multi-lot sale joins to the same cash posting once per disposed lot event.
-func (r *InvestmentRepository) realizedGainCashProceeds(ctx context.Context, bookID int64) (map[proceedsKey]*exact.ScaledInt, error) {
-	rows, err := r.database.QueryContext(ctx, `
-		SELECT DISTINCT
-			le2.transaction_id,
-			lot2.cost_commodity_id,
-			cash_pv.id,
-			cash_pv.quantity_value,
-			cash_pv.quantity_scale
-		FROM investment_lot_events le2
-		JOIN investment_lots lot2 ON lot2.id = le2.lot_id
-		JOIN current_transaction_versions tv2 ON tv2.transaction_id = le2.transaction_id
-		JOIN journal_entries je2 ON je2.transaction_version_id = tv2.id
-		JOIN posting_versions cash_pv ON cash_pv.journal_entry_id = je2.id
-		WHERE lot2.book_id = ?
-			AND le2.event_kind = 'disposal'
-			AND le2.transaction_id IS NOT NULL
-			AND cash_pv.commodity_id = lot2.cost_commodity_id
-			AND NOT EXISTS (
-				SELECT 1 FROM accounts a
-				WHERE a.id = cash_pv.account_id AND a.system_role = 'commodity_trading'
-			)
-	`, bookID)
-	if err != nil {
-		return nil, fmt.Errorf("read realized gain cash proceeds: %w", err)
-	}
-	defer rows.Close()
-
-	proceeds := map[proceedsKey]*exact.ScaledInt{}
-	for rows.Next() {
-		var transactionID int64
-		var costCommodityID int64
-		var postingID int64
-		var quantityValue exact.Coefficient
-		var quantityScale int
-		if err := rows.Scan(&transactionID, &costCommodityID, &postingID, &quantityValue, &quantityScale); err != nil {
-			return nil, fmt.Errorf("scan realized gain cash proceeds: %w", err)
-		}
-		if quantityValue.Sign() <= 0 {
-			continue
-		}
-		key := proceedsKey{transactionID: transactionID, costCommodityID: costCommodityID}
-		total := proceeds[key]
-		if total == nil {
-			total = exact.NewScaledInt()
-			proceeds[key] = total
-		}
-		total.Add(quantityValue.BigInt(), quantityScale)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate realized gain cash proceeds: %w", err)
-	}
-	return proceeds, nil
-}
-
 type UnrealizedGainRecord struct {
 	AccountID               int64
 	CommodityID             int64
@@ -3229,6 +3269,7 @@ type UnrealizedGainRecord struct {
 	LatestPriceValue        sql.NullInt64
 	LatestPriceScale        sql.NullInt64
 	LatestPriceDate         sql.NullString
+	LatestPriceApproximate  sql.NullInt64
 	MarketValueValue        *int64
 	MarketValueScale        *int
 	UnrealizedGainValue     *int64
@@ -3287,6 +3328,7 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 			LatestPriceValue:        pos.LatestPriceValue,
 			LatestPriceScale:        pos.LatestPriceScale,
 			LatestPriceDate:         pos.LatestPriceDate,
+			LatestPriceApproximate:  pos.LatestPriceApproximate,
 		}
 		if pos.LatestPriceValue.Valid && pos.LatestPriceScale.Valid {
 			// market_value = quantity × price_value ÷ base_quantity_value,

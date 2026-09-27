@@ -27,7 +27,11 @@ This design follows the distinctions present in
 and [KMyMoney investment activities](https://docs.kde.org/trunk_kf6/en/kmymoney/kmymoney/details.investments.ledger.html).
 Those are input taxonomies, not the app's database enum or accounting policy.
 
-## Why the current shape will not stretch safely
+## Original gaps the slices address
+
+These bullets describe the pre-refactor implementation. Slices 2a–3 have
+closed the operation-link, exact-trade, and proceeds-inference gaps; replay,
+transfers and short positions remain open.
 
 - `investment_operations` has a name, date, and mandatory unique transaction
   link, but no exact trade consideration, charges, source identity, or links
@@ -492,7 +496,7 @@ next family.
    updates checksum, fixture, upgrade/equivalence tests, and resets
    disposable developer databases. After release, 2b uses a forward
    migration. Do not combine 2a and 2b merely to save a migration number.
-3. **Exact trade economics.** Add gross, fee/tax components, currencies,
+3. **Exact trade economics — complete 2026-09-27.** Add gross, fee/tax components, currencies,
    net settlement, and settlement date to buy/sell input/API and import
    mapping. Move gains from cash-posting inference to explicit per-disposal
    economics; preserve write-off as zero proceeds. Show gross, charges, and net in
@@ -509,6 +513,10 @@ next family.
    break for equal-ranked sources and test that an approximate observation
    cannot displace a trusted same-date price merely by arriving later.
    Supersede an estimate when sourced gross for its trade becomes available.
+   The current Trading 212 order-fill payload contains a unit price and net
+   wallet amount but no sourced gross or charge breakdown, so those imports
+   retain `gross_unknown` and an approximate price. Superseding their estimate
+   awaits an investment-native correction with sourced gross in slice 4.
 4. **Replay and investment-native correction (T-75b).** Implement rebuild,
    correction/reversal, dependency conflicts, and reconciliation preview.
    Exercise a corrected old buy followed by several sells under each basis

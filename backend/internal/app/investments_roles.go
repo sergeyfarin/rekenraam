@@ -154,7 +154,11 @@ func (s *InvestmentService) validateTradeRoles(ctx context.Context, input Invest
 	if input.WriteOff {
 		return nil
 	}
-	if _, err := s.accountInRole(ctx, input.CashAccountID, date, settlementRole, dependencies); err != nil {
+	settlementDate := input.TransactionDate
+	if input.SettlementDate != "" {
+		settlementDate = input.SettlementDate
+	}
+	if _, err := s.accountInRole(ctx, input.CashAccountID, settlementDate, settlementRole, dependencies); err != nil {
 		return err
 	}
 	return s.requireCommodityKind(ctx, input.CashCommodityID, date, "settlement commodity", true)

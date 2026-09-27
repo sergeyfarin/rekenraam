@@ -190,7 +190,7 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "dates", []string{"operation_id", "date_role", "event_date"})
 		}},
 		{"investment-operation-components.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "components", []string{"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "components", []string{"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id", "charge_kind", "cash_account_id"})
 		}},
 		{"investment-lot-facts.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "lot-facts", []string{"lot_id", "operation_id", "account_id", "commodity_id", "position_side", "opened_on", "quantity_value", "quantity_scale", "consideration_value", "consideration_scale", "cost_commodity_id", "audit_event_id"})
@@ -561,7 +561,7 @@ func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Wr
 		"cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method",
 		"resolution_tier", "account_version_id", "profile_id", "profile_version_id",
 		"source_effective_from", "source_recorded_at", "created_at", "audit_event_id",
-		"operation_id", "position_side",
+		"operation_id", "position_side", "proceeds_value", "proceeds_scale",
 	})
 	if err != nil {
 		return 0, err
@@ -577,6 +577,7 @@ func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Wr
 			nullableID(decision.ProfileVersionID), decision.SourceEffectiveFrom.String,
 			decision.SourceRecordedAt.String, decision.CreatedAt, strconv.FormatInt(decision.CreatedAuditEventID, 10),
 			strconv.FormatInt(decision.OperationID, 10), decision.PositionSide,
+			strconv.FormatInt(decision.ProceedsValue, 10), strconv.Itoa(decision.ProceedsScale),
 		}); err != nil {
 			return int64(index), fmt.Errorf("write disposal decision row: %w", err)
 		}
@@ -591,6 +592,7 @@ func (s *ExportService) writeDisposalAllocationsCSV(ctx context.Context, out io.
 	}
 	writer, err := newBundleCSV(out, []string{
 		"decision_id", "allocation_seq", "lot_event_id", "lot_id", "quantity", "cost_basis",
+		"proceeds_value", "proceeds_scale",
 	})
 	if err != nil {
 		return 0, err
@@ -601,6 +603,7 @@ func (s *ExportService) writeDisposalAllocationsCSV(ctx context.Context, out io.
 			strconv.FormatInt(allocation.LotEventID, 10), strconv.FormatInt(allocation.LotID, 10),
 			exact.Decimal(allocation.QuantityValue, allocation.QuantityScale),
 			exact.Decimal(exact.New(allocation.CostBasisValue), allocation.CostBasisScale),
+			strconv.FormatInt(allocation.ProceedsValue, 10), strconv.Itoa(allocation.ProceedsScale),
 		}); err != nil {
 			return int64(index), fmt.Errorf("write disposal allocation row: %w", err)
 		}

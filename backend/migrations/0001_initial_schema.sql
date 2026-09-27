@@ -1184,6 +1184,8 @@ CREATE TABLE IF NOT EXISTS investment_disposal_decisions (
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
   disposed_basis_value TEXT NOT NULL CHECK (length(disposed_basis_value) BETWEEN 1 AND 38),
   disposed_basis_scale INTEGER NOT NULL CHECK (disposed_basis_scale BETWEEN 0 AND 12),
+  proceeds_value TEXT NOT NULL DEFAULT '0' CHECK (length(proceeds_value) BETWEEN 1 AND 38),
+  proceeds_scale INTEGER NOT NULL DEFAULT 0 CHECK (proceeds_scale BETWEEN 0 AND 12),
   cost_basis_method TEXT NOT NULL CHECK (cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')),
   resolution_tier TEXT NOT NULL CHECK (resolution_tier IN ('transaction', 'account', 'global', 'fallback')),
   account_version_id INTEGER REFERENCES account_versions(id) ON DELETE RESTRICT,
@@ -1214,6 +1216,8 @@ CREATE TABLE IF NOT EXISTS investment_disposal_allocations (
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
   cost_basis_value TEXT NOT NULL CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
   cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  proceeds_value TEXT NOT NULL CHECK (length(proceeds_value) BETWEEN 1 AND 38),
+  proceeds_scale INTEGER NOT NULL CHECK (proceeds_scale BETWEEN 0 AND 12),
   UNIQUE (decision_id, allocation_seq),
   UNIQUE (lot_event_id)
 );
@@ -1290,6 +1294,7 @@ CREATE TABLE IF NOT EXISTS investment_operation_components (
   operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
   component_seq INTEGER NOT NULL CHECK (component_seq > 0),
   component_kind TEXT NOT NULL CHECK (length(trim(component_kind)) > 0 AND component_kind = trim(component_kind)),
+  charge_kind TEXT CHECK (charge_kind IS NULL OR (length(trim(charge_kind)) > 0 AND charge_kind = trim(charge_kind))),
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   amount_value TEXT NOT NULL CHECK (
     length(amount_value) BETWEEN 1 AND 39 AND (
@@ -1304,12 +1309,14 @@ CREATE TABLE IF NOT EXISTS investment_operation_components (
   gross_unknown INTEGER NOT NULL DEFAULT 0 CHECK (gross_unknown IN (0, 1)),
   charge_treatment TEXT CHECK (charge_treatment IS NULL OR charge_treatment IN ('clearing_included', 'separately_expensed')),
   charge_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
+  cash_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
   resolution_tier TEXT CHECK (resolution_tier IS NULL OR resolution_tier IN ('transaction', 'account', 'global', 'fallback')),
   fee_policy_version_id INTEGER REFERENCES investment_fee_policy_versions(id) ON DELETE RESTRICT,
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
   UNIQUE (operation_id, component_seq),
   CHECK ((component_kind = 'charge') = (charge_treatment IS NOT NULL)),
+  CHECK ((component_kind = 'charge') = (charge_kind IS NOT NULL)),
   CHECK (charge_treatment != 'separately_expensed' OR charge_account_id IS NOT NULL)
 );
 
@@ -1401,6 +1408,8 @@ WHEN NOT EXISTS (
     AND c.book_id = NEW.book_id AND a.book_id = NEW.book_id
     AND (NEW.charge_account_id IS NULL OR EXISTS (
       SELECT 1 FROM accounts charge WHERE charge.id = NEW.charge_account_id AND charge.book_id = NEW.book_id))
+    AND (NEW.cash_account_id IS NULL OR EXISTS (
+      SELECT 1 FROM accounts cash WHERE cash.id = NEW.cash_account_id AND cash.book_id = NEW.book_id))
     AND (NEW.fee_policy_version_id IS NULL OR EXISTS (
       SELECT 1 FROM investment_fee_policy_versions v
       JOIN investment_fee_policies p ON p.id = v.policy_id

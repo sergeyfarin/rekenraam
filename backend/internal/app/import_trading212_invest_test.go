@@ -317,6 +317,13 @@ func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing
 	require.NoError(t, err)
 	require.Len(t, lots, 1)
 	assert.JSONEq(t, transaction.MetadataJSON, lots[0].MetadataJSON)
+	var grossUnknown int
+	require.NoError(t, f.database.QueryRowContext(context.Background(), `
+		SELECT c.gross_unknown
+		FROM investment_operations o
+		JOIN investment_operation_components c ON c.operation_id = o.id AND c.component_kind = 'net_settlement'
+		WHERE o.transaction_id = ?`, transaction.ID).Scan(&grossUnknown))
+	require.Equal(t, 1, grossUnknown, "Trading 212's unit price does not supply a sourced gross in the net currency")
 }
 
 func TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride(t *testing.T) {

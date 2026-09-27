@@ -236,6 +236,9 @@
                           {#if pos.latest_price_date}
                             <span class="ml-1 text-xs text-muted">{formatDate(pos.latest_price_date)}</span>
                           {/if}
+                          {#if pos.latest_price_approximate}
+                            <span class="ml-1 text-xs text-muted">{m.investments_trade_price_approximate()}</span>
+                          {/if}
                         {:else}
                           <span class="text-muted">—</span>
                         {/if}

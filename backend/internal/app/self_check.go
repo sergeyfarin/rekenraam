@@ -352,6 +352,11 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			SELECT e.id FROM investment_lot_events e JOIN investment_operations o ON o.transaction_id = e.transaction_id
 			WHERE e.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
 				WHERE x.lot_event_id = e.id AND x.operation_id = o.id)`},
+		{"posted long disposal missing proceeds decision", `
+			SELECT o.id FROM investment_operations o
+			WHERE o.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
+			AND NOT EXISTS (SELECT 1 FROM investment_disposal_decisions d
+				WHERE d.operation_id = o.id AND d.position_side = 'long')`},
 	}
 	var summaries []string
 	for _, check := range checks {

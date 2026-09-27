@@ -3,6 +3,8 @@
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { parseTradeAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
+  import TradeEconomicsFields from '$lib/investments/trade-economics-fields.svelte';
+  import { exactTradeFields, type TradeChargeDraft } from '$lib/investments/trade-economics';
   import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import { forecastQueryKey } from '$lib/api/forecast';
@@ -78,6 +80,10 @@
   let cashAccountID = $state('');
   let quantityStr = $state('');
   let cashAmountStr = $state('');
+  let exactMode = $state(false);
+  let grossAmountStr = $state('');
+  let settlementDate = $state('');
+  let charges = $state<TradeChargeDraft[]>([]);
   let costBasisMethod = $state<CostBasisMethod>('fifo');
   let memo = $state('');
   let pending = $state(false);
@@ -173,6 +179,11 @@
     const _amt = cashAmountStr;
     const _method = costBasisMethod;
     const _comm = cashCommodityID;
+    const _date = transactionDate;
+    const _exact = exactMode;
+    const _gross = grossAmountStr;
+    const _settlement = settlementDate;
+    const _charges = JSON.stringify(charges);
 
     clearPreview();
     clearTimeout(previewDebounceTimer);
@@ -202,6 +213,13 @@
     }
     const { quantity, cashAmount } = amounts.values;
 
+    const economics = exactMode ? exactTradeFields({ side: 'sell', gross: grossAmountStr,
+      settlementDate, charges, cashCommodityID, netValue: cashAmount.value, netScale: cashAmount.scale }) : null;
+    if (economics && !economics.ok) {
+      if (economics.reason === 'too_large') previewError = new Error(amountErrorMessage(economics.reason));
+      return;
+    }
+
     previewPending = true;
     previewError = undefined;
     preview = null;
@@ -217,6 +235,7 @@
         cash_amount_value: cashAmount.value,
         cash_amount_scale: cashAmount.scale,
         cash_commodity_id: cashCommodityID,
+        ...(economics?.ok ? economics.fields : {}),
         cost_basis_method: costBasisMethod
       });
     } catch (err) {
@@ -241,6 +260,13 @@
     }
     const { quantity, cashAmount } = amounts.values;
 
+    const economics = exactMode ? exactTradeFields({ side: 'sell', gross: grossAmountStr,
+      settlementDate, charges, cashCommodityID, netValue: cashAmount.value, netScale: cashAmount.scale }) : null;
+    if (economics && !economics.ok) {
+      formError = new Error(amountErrorMessage(economics.reason));
+      return;
+    }
+
     const payload: InvestmentTradeRequest = {
       transaction_date: transactionDate,
       commodity_id: selectedInstrument.commodity_id,
@@ -251,6 +277,7 @@
       cash_amount_value: cashAmount.value,
       cash_amount_scale: cashAmount.scale,
       cash_commodity_id: cashCommodityID,
+      ...(economics?.ok ? economics.fields : {}),
       cost_basis_method: costBasisMethod,
       memo: memo.trim() || undefined
     };
@@ -304,6 +331,16 @@
 
   function formatGain(gain: string, scale: number): string {
     return formatScaledValue(gain, scale, locale);
+  }
+
+  function chargeKindLabel(kind: string): string {
+    switch (kind) {
+      case 'commission': return m.investments_trade_commission();
+      case 'transaction_tax': return m.investments_trade_transaction_tax();
+      case 'other_fee': return m.investments_trade_other_fee();
+      case 'rebate': return m.investments_trade_rebate();
+      default: return m.investments_trade_charge();
+    }
   }
 </script>
 
@@ -446,6 +483,10 @@
     />
   </div>
 
+  <TradeEconomicsFields side="sell" cashCommodityID={cashCommodityID}
+    accounts={accountsQuery.data?.accounts ?? []} currencies={currenciesQuery.data?.currencies ?? []}
+    bind:exactMode bind:gross={grossAmountStr} bind:settlementDate bind:charges />
+
   <!-- Cost-basis method -->
   <div>
     <label for="sell-method" class="mb-1 block text-sm font-medium text-foreground">
@@ -488,9 +529,17 @@
       <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
         <span class="text-muted">{m.investments_sell_preview_method()}</span>
         <span class="text-right font-medium text-foreground">{costBasisMethodLabel(preview.cost_basis_method)}</span>
+        {#if preview.gross_amount_value !== undefined}
+          <span class="text-muted">{m.investments_trade_gross()}</span>
+          <span class="text-right font-mono text-foreground">{formatGain(preview.gross_amount_value, preview.gross_amount_scale)} {cashCurrencyCode}</span>
+          {#each preview.charges as charge}
+            <span class="text-muted">{chargeKindLabel(charge.kind)}</span>
+            <span class="text-right font-mono text-foreground">{formatGain(charge.amount_value, charge.amount_scale)}</span>
+          {/each}
+        {/if}
         <span class="text-muted">{m.investments_sell_preview_proceeds()}</span>
         <span class="text-right font-mono text-foreground">
-          {formatGain(preview.cash_amount_value, preview.cash_amount_scale)}
+          {formatGain(preview.net_settlement_value, preview.net_settlement_scale)}
           {#if cashCurrencyCode}<span class="ml-1 text-muted">{cashCurrencyCode}</span>{/if}
         </span>
         <span class="text-muted">{m.investments_sell_preview_gain()}</span>

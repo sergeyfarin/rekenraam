@@ -197,6 +197,10 @@ func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[s
 	if err != nil {
 		return false, 0, nil
 	}
+	// This provider payload supplies a unit price and net wallet value, but no
+	// sourced gross or charge breakdown. Do not multiply price by quantity and
+	// invent a gross: rounding, FX and broker fees could explain a difference.
+	// The shared trade writer retains gross_unknown and an approximate price.
 
 	tradeInput := InvestmentTradeInput{
 		OwnerUserID:            input.OwnerUserID,

@@ -6,7 +6,8 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-09-19 (shared runtime construction/lifecycle extraction
+Last reviewed: 2026-09-27 (R16 exact trade economics shipped; native
+investment correction is next). Earlier: 2026-09-19 (shared runtime construction/lifecycle extraction
 scheduled before the next large backend feature slice; this is independently
 useful architecture work and does not bring native desktop into scope).
 Earlier: 2026-09-10 (R8 budgets and T-76 disposal provenance shipped; T-75b
@@ -465,11 +466,15 @@ state, and atomic trade prices with one audit event. The investment bundle is
 version 2 and preserves the new evidence. Slice 2b now records ordered
 operation/transaction effects per import identity, keeps the book-wide
 fingerprint rule, and exposes those effects in staged-row results and bundle
-exports. Exact trade economics is next.
+exports. Slice 3 now records signed gross, typed charges, net cash and
+settlement dates for manual buy/sell commands. Fee elections are snapshotted;
+disposal decisions store clearing-based proceeds, and gross-derived prices
+outrank approximate net-derived prices on the same date. Trading 212 currently
+provides net-only fills, so its source gross remains unknown.
 The schema and existing-command operation identity have landed in the unused
 v0.1 candidate baseline. Native replay, side-aware reads/self-checks and the
 short-sale/cover commands remain before T-108 is usable. The next execution
-order is exact-trade economics, native correction,
+order is native correction,
 transfers and basis actions including manual splits, then short-sale/cover;
 compound corporate actions follow. Return-of-capital and cash-in-lieu
 suggestions are currently refused as dividend income (T-109) until their

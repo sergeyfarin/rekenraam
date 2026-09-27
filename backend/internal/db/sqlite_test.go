@@ -340,7 +340,7 @@ func captureLedgerState(t *testing.T, database *sql.DB) map[string]string {
 				quantity_value || 'e-' || quantity_scale || '/' || disposed_basis_value || 'e-' || disposed_basis_scale
 			FROM investment_disposal_decisions ORDER BY id`,
 		"disposal_allocations": `SELECT id || '=' || lot_id || '/' || quantity_value || 'e-' || quantity_scale || '/' ||
-				cost_basis_value || 'e-' || cost_basis_scale
+				cost_basis_value || 'e-' || cost_basis_scale || '/' || proceeds_value || 'e-' || proceeds_scale
 			FROM investment_disposal_allocations ORDER BY id`,
 		"checkpoints": `SELECT id || '=' || account_id || '/' || commodity_id || '/' || status || '/' ||
 				statement_date || '/' || statement_account_sequence || '/' ||

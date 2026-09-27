@@ -84,6 +84,19 @@ default changes do not reinterpret prior trades. Ordinary same-currency
 commissions default to inclusion in clearing, preserving the existing
 net-cash trade behavior.
 
+Each posted long disposal snapshots signed cost-currency proceeds in its
+decision and allocates them to consumed lots by exact quantity ratio, assigning
+the rounding remainder to the final lot. The operational gains view reads that amount and allocated basis;
+cash journal legs are not a proxy for proceeds when a trade also posts
+separately expensed charges. A zero-proceeds write-off snapshots zero. A
+net-only trade retains its gross-unknown source marker and net-derived price
+as an approximate valuation quote. For observations dated alike, manual prices
+and valuation overrides rank first, trusted provider and gross-derived prices
+second, and approximate prices third. Recorded time and ID break equal ranks.
+A fee paid separately has its own net cash component, cash account and payment
+date. Its journal legs post on that date. A clearing-included fee still enters
+the trade's operational basis or proceeds; a separately expensed fee does not.
+
 The operational disposal decision remains durable even when alternative reports
 are available. Every committed disposal snapshots its resolved method, the tier
 that supplied it (transaction, account, global, or fallback), the applicable

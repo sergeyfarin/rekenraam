@@ -78,14 +78,14 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				"investment-operations.csv":              {"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id"},
 				"investment-operation-journal-links.csv": {"operation_id", "link_seq", "transaction_version_id", "role"},
 				"investment-operation-dates.csv":         {"operation_id", "date_role", "event_date"},
-				"investment-operation-components.csv":    {"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id"},
+				"investment-operation-components.csv":    {"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id", "charge_kind", "cash_account_id"},
 				"investment-lot-facts.csv":               {"lot_id", "operation_id", "account_id", "commodity_id", "position_side", "opened_on", "quantity_value", "quantity_scale", "consideration_value", "consideration_scale", "cost_commodity_id", "audit_event_id"},
 				"investment-lot-events.csv":              {"lot_event_id", "lot_id", "event_kind", "transaction_id", "event_date", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "cost_basis_method", "metadata_json", "audit_event_id"},
 				"investment-lot-effects.csv":             {"operation_id", "effect_seq", "lot_event_id"},
 				"investment-fee-policies.csv":            {"policy_id", "account_id", "charge_kind", "created_at", "audit_event_id"},
 				"investment-fee-policy-versions.csv":     {"version_id", "policy_id", "version_seq", "effective_from", "treatment", "charge_account_id", "recorded_at", "audit_event_id"},
-				"disposal-decisions.csv":                 {"decision_id", "transaction_id", "transaction_version_id", "account_id", "commodity_id", "cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method", "resolution_tier", "account_version_id", "profile_id", "profile_version_id", "source_effective_from", "source_recorded_at", "created_at", "audit_event_id", "operation_id", "position_side"},
-				"disposal-allocations.csv":               {"decision_id", "allocation_seq", "lot_event_id", "lot_id", "quantity", "cost_basis"},
+				"disposal-decisions.csv":                 {"decision_id", "transaction_id", "transaction_version_id", "account_id", "commodity_id", "cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method", "resolution_tier", "account_version_id", "profile_id", "profile_version_id", "source_effective_from", "source_recorded_at", "created_at", "audit_event_id", "operation_id", "position_side", "proceeds_value", "proceeds_scale"},
+				"disposal-allocations.csv":               {"decision_id", "allocation_seq", "lot_event_id", "lot_id", "quantity", "cost_basis", "proceeds_value", "proceeds_scale"},
 				"prices.csv":                             {"base_commodity_id", "quote_commodity_id", "valuation_date", "price", "base_quantity", "quote_type", "adjustment_basis", "is_manual", "is_derived", "source", "is_approximate", "source_transaction_version_id", "audit_event_id"},
 			} {
 				rows := readInvestmentContractCSV(t, files, file)
@@ -125,6 +125,8 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				require.Equal(t, decisions[1][0], allocations[2][0])
 				require.Equal(t, "1000.00", allocations[1][5])
 				require.Equal(t, "300.00", allocations[2][5])
+				require.Equal(t, "120000", allocations[1][6])
+				require.Equal(t, "30000", allocations[2][6])
 				require.Len(t, readInvestmentContractCSV(t, files, "prices.csv"), 4)
 				prices := readInvestmentContractCSV(t, files, "prices.csv")
 				require.Equal(t, "true", prices[1][10], "net-derived trade price remains usable but approximate")

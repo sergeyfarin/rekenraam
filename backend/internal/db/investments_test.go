@@ -1614,13 +1614,9 @@ func TestListRealizedGainsAggregatesMixedScaleDisposalEvents(t *testing.T) {
 	assert.Equal(t, int64(-2540000000), g.DisposedBasisValue)
 }
 
-func TestListRealizedGainsSumsMultipleCashProceedsLegs(t *testing.T) {
-	// A sell can settle to more than one real cash-account posting in the same
-	// currency (e.g. split settlement) — all such legs must be summed. The old
-	// query picked one arbitrarily via MAX(quantity_value), which compares the
-	// TEXT coefficient lexicographically: "60000" > "200000" as strings even
-	// though 60000 is numerically smaller, so it would have reported the wrong
-	// (and smaller) leg as the total proceeds.
+func TestListRealizedGainsDoesNotInferProceedsFromUndecidedCashLegs(t *testing.T) {
+	// Split cash settlement alone does not say which amounts belong in
+	// operational proceeds. Only a committed disposal decision does.
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
@@ -1670,8 +1666,7 @@ func TestListRealizedGainsSumsMultipleCashProceedsLegs(t *testing.T) {
 	require.Len(t, gains, 1)
 
 	g := gains[0]
-	assert.Equal(t, int64(260000), g.ProceedsValue, "proceeds must be the sum of both cash legs, not an arbitrary one of them")
-	assert.Equal(t, 2, g.ProceedsScale)
+	assert.Zero(t, g.ProceedsValue)
 }
 
 func TestPositionsWithGainsNilWhenNoPrice(t *testing.T) {

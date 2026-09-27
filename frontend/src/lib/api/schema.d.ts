@@ -17147,10 +17147,19 @@ export interface components {
             /** @description Lossless exact integer coefficient normalized to quantity_scale. */
             quantity_value: string;
             quantity_scale: number;
-            cash_amount_value: string;
-            cash_amount_scale: number;
+            cash_amount_value?: string;
+            cash_amount_scale?: number;
             /** Format: int64 */
             cash_commodity_id: number;
+            /** @description Signed gross consideration; negative for buy, positive for sale. Omit for legacy net-only trades. */
+            gross_amount_value?: string;
+            gross_amount_scale?: number;
+            /** @description Signed net cash settlement in the trade quote currency. Required with gross. */
+            net_settlement_value?: string;
+            net_settlement_scale?: number;
+            /** Format: date */
+            settlement_date?: string;
+            charges?: components["schemas"]["InvestmentTradeChargeRequest"][];
             memo?: string;
             /** Format: int64 */
             payee_id?: number;
@@ -17193,6 +17202,8 @@ export interface components {
             quantity_scale: number;
             cost_basis_value: string;
             cost_basis_scale: number;
+            proceeds_value: string;
+            proceeds_scale: number;
         };
         InvestmentTradeResponse: {
             transaction: components["schemas"]["TransactionResponse"];
@@ -17228,6 +17239,8 @@ export interface components {
             quantity_scale: number;
             disposed_basis_value: string;
             disposed_basis_scale: number;
+            proceeds_value: string;
+            proceeds_scale: number;
             /** Format: int64 */
             cost_commodity_id: number;
             /** Format: int64 */
@@ -17244,6 +17257,13 @@ export interface components {
             realized_gain_scale: number;
             cash_amount_value: string;
             cash_amount_scale: number;
+            gross_amount_value?: string;
+            gross_amount_scale: number;
+            net_settlement_value: string;
+            net_settlement_scale: number;
+            /** Format: date */
+            settlement_date: string;
+            charges: components["schemas"]["InvestmentTradeChargeRequest"][];
         };
         DividendRequest: {
             /** Format: date */
@@ -17347,6 +17367,8 @@ export interface components {
             latest_price_scale?: number;
             /** Format: date */
             latest_price_date?: string;
+            /** @description True when the selected valuation quote was estimated from net-only trade cash. */
+            latest_price_approximate: boolean;
         };
         InvestmentPositionsResponse: {
             positions: components["schemas"]["InvestmentPositionResponse"][];
@@ -17502,6 +17524,8 @@ export interface components {
              * @description Omitted when no price observation exists.
              */
             latest_price_date?: string;
+            /** @description True when the selected valuation quote was estimated from net-only trade cash. */
+            latest_price_approximate: boolean;
             /** @description quantity × latest_price. Omitted when valuation_unavailable is present. */
             market_value_value?: string;
             /** @description Scale of market_value_value. Reduced below the computed precision only when redundant trailing zeros would otherwise overflow int64. */
@@ -17545,6 +17569,24 @@ export interface components {
          * @enum {string}
          */
         InstrumentType: "stock" | "etf" | "fund" | "bond" | "option" | "future" | "other";
+        InvestmentTradeChargeRequest: {
+            /** @enum {string} */
+            kind: "commission" | "transaction_tax" | "other_fee" | "rebate";
+            /** @description Signed amount; fees and taxes are negative, rebates positive. */
+            amount_value: string;
+            amount_scale: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** @enum {string} */
+            treatment?: "clearing_included" | "separately_expensed";
+            /** Format: int64 */
+            charge_account_id?: number;
+            /** Format: int64 */
+            cash_account_id?: number;
+            /** Format: date */
+            paid_on?: string;
+            source_evidence?: Record<string, never>;
+        };
     };
     responses: never;
     parameters: {

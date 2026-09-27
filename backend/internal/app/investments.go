@@ -247,24 +247,29 @@ type InvestmentTradeInput struct {
 	CashAmountValue  int64
 	CashAmountScale  int
 	CashCommodityID  int64
-	Memo             string
-	ExternalRefHint  string
-	MetadataJSON     string
-	PayeeID          *int64
-	Status           string
-	LotAllocations   []InvestmentLotAllocationInput
-	ChangeReason     string
-	CostBasisMethod  string
+	// Gross and net are signed owner-perspective source amounts. Nil gross
+	// keeps the existing net-only command, whose gross remains unknown.
+	GrossAmountValue   *int64
+	GrossAmountScale   int
+	NetSettlementValue *int64
+	NetSettlementScale int
+	SettlementDate     string
+	Charges            []InvestmentTradeChargeInput
+	Memo               string
+	ExternalRefHint    string
+	MetadataJSON       string
+	PayeeID            *int64
+	Status             string
+	LotAllocations     []InvestmentLotAllocationInput
+	ChangeReason       string
+	CostBasisMethod    string
 	// ReconciliationOverride allows backdated investment trades to invalidate
 	// affected checkpoints through the normal transaction write guard.
 	ReconciliationOverride bool
 	// WriteOff records a disposal at zero proceeds: a fund closure, a worthless
 	// delisting, any total loss. It is set only by WriteOff() — never by the
 	// sell endpoint — so a mistyped sell amount can never become a write-off.
-	// The trade carries no cash legs at all, which is what makes the existing
-	// realized-gain engine report the whole cost basis as a loss: proceeds are
-	// found by matching cash postings to the disposal, and finding none already
-	// means zero.
+	// The trade carries no cash legs; its disposal decision records zero proceeds.
 	WriteOff bool
 	// OriginType/Operation override the default "browser_api"/"investment.buy"
 	// (or "investment.sell") attribution — set by the Trading 212 import
@@ -273,6 +278,18 @@ type InvestmentTradeInput struct {
 	// action. Empty (every existing caller) keeps the original defaults.
 	OriginType string
 	Operation  string
+}
+
+type InvestmentTradeChargeInput struct {
+	Kind               string
+	AmountValue        int64
+	AmountScale        int
+	CommodityID        int64
+	Treatment          string
+	ChargeAccountID    *int64
+	CashAccountID      *int64
+	PaidOn             string
+	SourceEvidenceJSON string
 }
 
 // InvestmentWriteOffInput records a total loss on a holding. There is no cash
@@ -365,13 +382,19 @@ func validateWriteOffInput(input InvestmentWriteOffInput) (string, error) {
 }
 
 type SellPreviewResult struct {
-	CostBasisMethod   string
-	DisposalDecision  DisposalDecision
-	Allocations       []InvestmentLotDisposal
-	RealizedGain      int64
-	RealizedGainScale int
-	CashAmountValue   int64
-	CashAmountScale   int
+	CostBasisMethod    string
+	DisposalDecision   DisposalDecision
+	Allocations        []InvestmentLotDisposal
+	RealizedGain       int64
+	RealizedGainScale  int
+	CashAmountValue    int64
+	CashAmountScale    int
+	GrossAmountValue   *int64
+	GrossAmountScale   int
+	NetSettlementValue int64
+	NetSettlementScale int
+	SettlementDate     string
+	Charges            []InvestmentTradeChargeInput
 }
 
 type InvestmentLotAllocationInput struct {
@@ -402,6 +425,8 @@ type DisposalDecision struct {
 	QuantityScale        int
 	DisposedBasisValue   exact.Coefficient
 	DisposedBasisScale   int
+	ProceedsValue        int64
+	ProceedsScale        int
 	CostCommodityID      int64
 	AuditEventID         *int64
 	Allocations          []InvestmentLotDisposal
@@ -413,6 +438,8 @@ type InvestmentLotDisposal struct {
 	QuantityScale  int
 	CostBasisValue int64
 	CostBasisScale int
+	ProceedsValue  int64
+	ProceedsScale  int
 }
 
 func previewDisposalDecision(input InvestmentTradeInput, method string, source db.DisposalDecisionSource, disposals []db.LotDisposalRecord) (DisposalDecision, error) {
@@ -447,6 +474,7 @@ func toDisposalDecision(record db.DisposalDecisionRecord) DisposalDecision {
 		SourceEffectiveFrom: record.SourceEffectiveFrom, SourceRecordedAt: record.SourceRecordedAt,
 		QuantityValue: record.QuantityValue, QuantityScale: record.QuantityScale,
 		DisposedBasisValue: record.DisposedBasisValue, DisposedBasisScale: record.DisposedBasisScale,
+		ProceedsValue: record.ProceedsValue, ProceedsScale: record.ProceedsScale,
 		CostCommodityID: record.CostCommodityID, AuditEventID: optionalPositiveID(record.AuditEventID),
 		Allocations: toInvestmentLotDisposals(record.Allocations),
 	}
@@ -541,6 +569,7 @@ type InvestmentPosition struct {
 	LatestPriceValue        *int64
 	LatestPriceScale        *int
 	LatestPriceDate         string
+	LatestPriceApproximate  bool
 }
 
 type InvestmentProviderEvent struct {
@@ -976,7 +1005,8 @@ func (s *InvestmentService) buyWithPostWrite(ctx context.Context, input Investme
 // persisting anything — a preview that guessed at the postings would name the
 // wrong checkpoints, which is worse than naming none.
 type investmentTransactionPlan struct {
-	Create CreateTransactionInput
+	Create         CreateTransactionInput
+	TradeEconomics *tradeEconomics
 	// MetadataJSON is the cleaned metadata the lot and disposal records reuse.
 	MetadataJSON string
 	// Date is the validated transaction date. The dividend paths normalise it,
@@ -995,6 +1025,10 @@ func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeIn
 	}
 	dependencies := newAccountRuleDependencies()
 	if err := s.validateTradeRoles(ctx, input, dependencies); err != nil {
+		return investmentTransactionPlan{}, err
+	}
+	economics, err := s.calculateTradeEconomics(ctx, input, true, dependencies)
+	if err != nil {
 		return investmentTransactionPlan{}, err
 	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
@@ -1017,6 +1051,7 @@ func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeIn
 		status = "posted"
 	}
 	return investmentTransactionPlan{
+		TradeEconomics:          &economics,
 		AccountRuleDependencies: dependencies,
 		MetadataJSON:            metadataJSON,
 		Date:                    input.TransactionDate,
@@ -1037,17 +1072,7 @@ func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeIn
 				Description:             memo,
 				ExternalRefHint:         input.ExternalRefHint,
 				MetadataJSON:            metadataJSON,
-				JournalEntries: []JournalEntryInput{{
-					EntryDate: input.TransactionDate,
-					EntryKind: "investment",
-					Memo:      memo,
-					Postings: []PostingInput{
-						{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-						{AccountID: tradingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
-						{AccountID: tradingAccountID, QuantityValue: exact.New(input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-						{AccountID: input.CashAccountID, QuantityValue: exact.New(-input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-					},
-				}},
+				JournalEntries:          tradeJournalEntries(input, tradingAccountID, memo, economics, true),
 			},
 		},
 	}, nil
@@ -1063,19 +1088,22 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
-	transactionParams.InvestmentComponents = []db.InvestmentComponentSpec{{
-		Kind: "net_settlement", CommodityID: input.CashCommodityID,
-		AmountValue: strconv.FormatInt(-input.CashAmountValue, 10), AmountScale: input.CashAmountScale,
-		AmountDate: input.TransactionDate, GrossUnknown: true,
-	}}
-	if s.pricingService != nil {
+	transactionParams.InvestmentComponents = plan.TradeEconomics.components(input.CashCommodityID)
+	transactionParams.InvestmentSettlementDate = plan.TradeEconomics.SettlementDate
+	if s.pricingService != nil && !plan.TradeEconomics.PriceUnavailable {
 		transactionParams.TradeImpliedPrice, err = tradePriceSpec(input.CommodityID, input.CashCommodityID,
-			input.TransactionDate, input.QuantityValue, input.QuantityScale, input.CashAmountValue, input.CashAmountScale, true)
+			input.TransactionDate, input.QuantityValue, input.QuantityScale,
+			plan.TradeEconomics.PriceValue, plan.TradeEconomics.PriceScale, plan.TradeEconomics.PriceApproximate)
 		if err != nil {
 			return InvestmentTradeResult{}, err
 		}
 	}
 	now := s.now().UTC().Format(time.RFC3339)
+	basis := exact.ScaledIntFromInt64(plan.TradeEconomics.ClearingValue, plan.TradeEconomics.ClearingScale).Negated()
+	basisValue, err := basis.Int64()
+	if err != nil {
+		return InvestmentTradeResult{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
+	}
 	lotParams := db.CreateInvestmentLotParams{
 		BookID:          BookID,
 		AccountID:       input.HoldingAccountID,
@@ -1083,8 +1111,8 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		OpenedOn:        input.TransactionDate,
 		QuantityValue:   input.QuantityValue,
 		QuantityScale:   input.QuantityScale,
-		CostBasisValue:  input.CashAmountValue,
-		CostBasisScale:  input.CashAmountScale,
+		CostBasisValue:  basisValue,
+		CostBasisScale:  basis.Scale(),
 		CostCommodityID: input.CashCommodityID,
 		MetadataJSON:    metadataJSON,
 		CreatedAt:       now,
@@ -1157,7 +1185,7 @@ func (s *InvestmentService) resolveCostBasisMethod(ctx context.Context, holdingA
 	}, nil
 }
 
-func (s *InvestmentService) computeSellDisposals(ctx context.Context, input InvestmentTradeInput, method string) ([]db.LotDisposalRecord, error) {
+func (s *InvestmentService) computeSellDisposals(ctx context.Context, input InvestmentTradeInput, method string, proceedsValue int64, proceedsScale int) ([]db.LotDisposalRecord, error) {
 	allocations := make([]db.LotAllocation, 0, len(input.LotAllocations))
 	for _, a := range input.LotAllocations {
 		allocations = append(allocations, db.LotAllocation{LotID: a.LotID, QuantityValue: a.QuantityValue, QuantityScale: a.QuantityScale})
@@ -1167,6 +1195,8 @@ func (s *InvestmentService) computeSellDisposals(ctx context.Context, input Inve
 		AccountID:       input.HoldingAccountID,
 		CommodityID:     input.CommodityID,
 		CostCommodityID: input.CashCommodityID,
+		ProceedsValue:   proceedsValue,
+		ProceedsScale:   proceedsScale,
 		EventDate:       input.TransactionDate,
 		QuantityValue:   input.QuantityValue,
 		QuantityScale:   input.QuantityScale,
@@ -1182,11 +1212,15 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 	if err := s.validateTradeRoles(ctx, input, nil); err != nil {
 		return SellPreviewResult{}, err
 	}
+	economics, err := s.calculateTradeEconomics(ctx, input, false, newAccountRuleDependencies())
+	if err != nil {
+		return SellPreviewResult{}, err
+	}
 	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
 	if err != nil {
 		return SellPreviewResult{}, err
 	}
-	disposals, err := s.computeSellDisposals(ctx, input, method)
+	disposals, err := s.computeSellDisposals(ctx, input, method, economics.ClearingValue, economics.ClearingScale)
 	if err != nil {
 		if errors.Is(err, db.ErrInsufficientLots) {
 			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
@@ -1207,7 +1241,7 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 	for _, d := range disposals {
 		disposedBasis.AddInt64(d.CostBasisValue, d.CostBasisScale)
 	}
-	cashProceeds := exact.ScaledIntFromInt64(input.CashAmountValue, input.CashAmountScale)
+	cashProceeds := exact.ScaledIntFromInt64(economics.ClearingValue, economics.ClearingScale)
 
 	gain := exact.NewScaledInt()
 	gain.AddScaled(cashProceeds)
@@ -1220,14 +1254,22 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 	if err != nil {
 		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
 	}
+	decision.ProceedsValue = economics.ClearingValue
+	decision.ProceedsScale = economics.ClearingScale
 	return SellPreviewResult{
-		CostBasisMethod:   method,
-		DisposalDecision:  decision,
-		Allocations:       toInvestmentLotDisposals(disposals),
-		RealizedGain:      gainValue,
-		RealizedGainScale: gain.Scale(),
-		CashAmountValue:   input.CashAmountValue,
-		CashAmountScale:   input.CashAmountScale,
+		CostBasisMethod:    method,
+		DisposalDecision:   decision,
+		Allocations:        toInvestmentLotDisposals(disposals),
+		RealizedGain:       gainValue,
+		RealizedGainScale:  gain.Scale(),
+		CashAmountValue:    input.CashAmountValue,
+		CashAmountScale:    input.CashAmountScale,
+		GrossAmountValue:   input.GrossAmountValue,
+		GrossAmountScale:   input.GrossAmountScale,
+		NetSettlementValue: economics.NetValue,
+		NetSettlementScale: economics.NetScale,
+		SettlementDate:     economics.SettlementDate,
+		Charges:            input.Charges,
 	}, nil
 }
 
@@ -1237,9 +1279,8 @@ func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput
 }
 
 // writeOffTrade is the shared disposal engine a write-off runs through: the
-// lots are closed exactly as a sale closes them, and the loss reaches
-// realized gains through the same path, because proceeds of zero against the
-// disposed basis is exactly the whole basis as a loss (T-38).
+// lots are closed exactly as a sale closes them, and the zero-proceeds
+// disposal decision gives the disposed basis as a loss (T-38).
 func (s *InvestmentService) writeOffTrade(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
 	input.WriteOff = true
 	input.CashAccountID = 0
@@ -1296,7 +1337,7 @@ func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input Investmen
 	if err != nil {
 		return SellPreviewResult{}, err
 	}
-	disposals, err := s.computeSellDisposals(ctx, input.asTradeInput(), method)
+	disposals, err := s.computeSellDisposals(ctx, input.asTradeInput(), method, 0, 0)
 	if err != nil {
 		if errors.Is(err, db.ErrInsufficientLots) {
 			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
@@ -1374,6 +1415,14 @@ func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeI
 	if err := s.validateTradeRoles(ctx, input, dependencies); err != nil {
 		return investmentTransactionPlan{}, err
 	}
+	var economics *tradeEconomics
+	if !input.WriteOff {
+		computed, err := s.calculateTradeEconomics(ctx, input, false, dependencies)
+		if err != nil {
+			return investmentTransactionPlan{}, err
+		}
+		economics = &computed
+	}
 	tradingAccountID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -1394,6 +1443,7 @@ func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeI
 		status = "posted"
 	}
 	return investmentTransactionPlan{
+		TradeEconomics:          economics,
 		AccountRuleDependencies: dependencies,
 		MetadataJSON:            metadataJSON,
 		Date:                    input.TransactionDate,
@@ -1414,15 +1464,7 @@ func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeI
 				Description:             memo,
 				ExternalRefHint:         input.ExternalRefHint,
 				MetadataJSON:            metadataJSON,
-				JournalEntries: []JournalEntryInput{{
-					EntryDate: input.TransactionDate,
-					EntryKind: "investment",
-					Memo:      memo,
-					// sellPostings omits the cash legs entirely when
-					// input.WriteOff is set, so a write-off preview and a
-					// write-off write plan the same postings.
-					Postings: sellPostings(input, tradingAccountID, memo),
-				}},
+				JournalEntries:          tradeJournalEntriesForDisposal(input, tradingAccountID, memo, economics),
 			},
 		},
 	}, nil
@@ -1439,14 +1481,12 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		return InvestmentTradeResult{}, err
 	}
 	if !input.WriteOff {
-		transactionParams.InvestmentComponents = []db.InvestmentComponentSpec{{
-			Kind: "net_settlement", CommodityID: input.CashCommodityID,
-			AmountValue: strconv.FormatInt(input.CashAmountValue, 10), AmountScale: input.CashAmountScale,
-			AmountDate: input.TransactionDate, GrossUnknown: true,
-		}}
-		if s.pricingService != nil {
+		transactionParams.InvestmentComponents = plan.TradeEconomics.components(input.CashCommodityID)
+		transactionParams.InvestmentSettlementDate = plan.TradeEconomics.SettlementDate
+		if s.pricingService != nil && !plan.TradeEconomics.PriceUnavailable {
 			transactionParams.TradeImpliedPrice, err = tradePriceSpec(input.CommodityID, input.CashCommodityID,
-				input.TransactionDate, input.QuantityValue, input.QuantityScale, input.CashAmountValue, input.CashAmountScale, true)
+				input.TransactionDate, input.QuantityValue, input.QuantityScale,
+				plan.TradeEconomics.PriceValue, plan.TradeEconomics.PriceScale, plan.TradeEconomics.PriceApproximate)
 			if err != nil {
 				return InvestmentTradeResult{}, err
 			}
@@ -1465,6 +1505,8 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		AccountID:       input.HoldingAccountID,
 		CommodityID:     input.CommodityID,
 		CostCommodityID: input.CashCommodityID,
+		ProceedsValue:   0,
+		ProceedsScale:   0,
 		EventDate:       input.TransactionDate,
 		QuantityValue:   input.QuantityValue,
 		QuantityScale:   input.QuantityScale,
@@ -1479,6 +1521,10 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		Operation:       "investment.lot.dispose",
 		ChangeReason:    disposalChangeReason(input.WriteOff),
 		MetadataJSON:    metadataJSON,
+	}
+	if plan.TradeEconomics != nil {
+		disposalParams.ProceedsValue = plan.TradeEconomics.ClearingValue
+		disposalParams.ProceedsScale = plan.TradeEconomics.ClearingScale
 	}
 	var transactionRecord db.TransactionRecord
 	var disposals []db.LotDisposalRecord
@@ -2252,28 +2298,19 @@ func disposalChangeReason(writeOff bool) string {
 	return "disposed lots from sell transaction"
 }
 
-// sellPostings builds the legs of a disposal.
+// writeOffPostings builds the security legs of a zero-proceeds disposal.
 //
 // A write-off has no cash legs at all rather than zero-valued ones. Two reasons:
 // a zero posting on a cash account is noise a reconciler has to look at and
-// dismiss, and the realized-gain engine derives proceeds by matching cash
-// postings to the disposal — finding none is already how it reports zero
-// proceeds, so the whole cost basis lands as a loss with no special case.
+// dismiss. The disposal decision records zero proceeds explicitly.
 //
 // The commodity legs balance on their own, so the transaction stays balanced
 // per commodity either way.
-func sellPostings(input InvestmentTradeInput, tradingAccountID int64, memo string) []PostingInput {
-	postings := []PostingInput{
+func writeOffPostings(input InvestmentTradeInput, tradingAccountID int64, memo string) []PostingInput {
+	return []PostingInput{
 		{AccountID: input.HoldingAccountID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
 		{AccountID: tradingAccountID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, CommodityID: input.CommodityID, Memo: memo},
 	}
-	if input.WriteOff {
-		return postings
-	}
-	return append(postings,
-		PostingInput{AccountID: input.CashAccountID, QuantityValue: exact.New(input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-		PostingInput{AccountID: tradingAccountID, QuantityValue: exact.New(-input.CashAmountValue), QuantityScale: input.CashAmountScale, CommodityID: input.CashCommodityID, Memo: memo},
-	)
 }
 
 func validateTradeInput(input InvestmentTradeInput) error {
@@ -2303,8 +2340,12 @@ func validateTradeInput(input InvestmentTradeInput) error {
 		// A write-off is zero proceeds by definition. Accepting an amount here
 		// would make the endpoint a second, unlabelled way to sell.
 		return ValidationError{Message: "a write-off cannot carry a cash amount"}
-	case !input.WriteOff && input.CashAmountValue <= 0:
+	case input.WriteOff && (input.GrossAmountValue != nil || input.NetSettlementValue != nil || len(input.Charges) > 0 || input.SettlementDate != ""):
+		return ValidationError{Message: "a write-off cannot carry trade economics"}
+	case !input.WriteOff && input.GrossAmountValue == nil && input.CashAmountValue <= 0:
 		return ValidationError{Message: "cash amount is required"}
+	case !input.WriteOff && input.GrossAmountValue != nil && input.CashAmountValue < 0:
+		return ValidationError{Message: "cash amount cannot be negative"}
 	}
 	method := strings.TrimSpace(input.CostBasisMethod)
 	if method != "" && !validCostBasisMethods[method] {
@@ -2509,6 +2550,7 @@ func toInvestmentPositions(records []db.InvestmentPositionRecord) []InvestmentPo
 			LatestPriceValue:        nullableSQLInt64Ptr(record.LatestPriceValue),
 			LatestPriceScale:        priceScale,
 			LatestPriceDate:         nullableString(record.LatestPriceDate),
+			LatestPriceApproximate:  record.LatestPriceApproximate.Valid && record.LatestPriceApproximate.Int64 == 1,
 		})
 	}
 	return positions
@@ -2517,7 +2559,7 @@ func toInvestmentPositions(records []db.InvestmentPositionRecord) []InvestmentPo
 func toInvestmentLotDisposals(records []db.LotDisposalRecord) []InvestmentLotDisposal {
 	disposals := make([]InvestmentLotDisposal, 0, len(records))
 	for _, record := range records {
-		disposals = append(disposals, InvestmentLotDisposal{LotID: record.LotID, QuantityValue: record.QuantityValue, QuantityScale: record.QuantityScale, CostBasisValue: record.CostBasisValue, CostBasisScale: record.CostBasisScale})
+		disposals = append(disposals, InvestmentLotDisposal{LotID: record.LotID, QuantityValue: record.QuantityValue, QuantityScale: record.QuantityScale, CostBasisValue: record.CostBasisValue, CostBasisScale: record.CostBasisScale, ProceedsValue: record.ProceedsValue, ProceedsScale: record.ProceedsScale})
 	}
 	return disposals
 }
@@ -2663,6 +2705,7 @@ type UnrealizedGainEntry struct {
 	LatestPriceValue        *int64
 	LatestPriceScale        *int
 	LatestPriceDate         string
+	LatestPriceApproximate  bool
 	MarketValueValue        *int64
 	MarketValueScale        *int
 	UnrealizedGainValue     *int64
@@ -2719,6 +2762,7 @@ func (s *InvestmentService) ListUnrealizedGains(ctx context.Context) ([]Unrealiz
 			LatestPriceValue:        nullableSQLInt64Ptr(r.LatestPriceValue),
 			LatestPriceScale:        priceScale,
 			LatestPriceDate:         nullableString(r.LatestPriceDate),
+			LatestPriceApproximate:  r.LatestPriceApproximate.Valid && r.LatestPriceApproximate.Int64 == 1,
 			MarketValueValue:        r.MarketValueValue,
 			MarketValueScale:        r.MarketValueScale,
 			UnrealizedGainValue:     r.UnrealizedGainValue,

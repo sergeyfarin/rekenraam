@@ -137,26 +137,44 @@ type dividendDefaultRequest struct {
 }
 
 type investmentTradeRequest struct {
-	TransactionDate  string                           `json:"transaction_date"`
-	CommodityID      int64                            `json:"commodity_id"`
-	HoldingAccountID int64                            `json:"holding_account_id"`
-	CashAccountID    int64                            `json:"cash_account_id"`
-	QuantityValue    exact.Coefficient                `json:"quantity_value"`
-	QuantityScale    int                              `json:"quantity_scale"`
-	CashAmountValue  moneyCoefficient                 `json:"cash_amount_value"`
-	CashAmountScale  int                              `json:"cash_amount_scale"`
-	CashCommodityID  int64                            `json:"cash_commodity_id"`
-	Memo             string                           `json:"memo"`
-	PayeeID          *int64                           `json:"payee_id"`
-	Status           string                           `json:"status"`
-	LotAllocations   []investmentLotAllocationRequest `json:"lot_allocations"`
-	ChangeReason     string                           `json:"change_reason"`
-	CostBasisMethod  string                           `json:"cost_basis_method"`
+	TransactionDate    string                           `json:"transaction_date"`
+	CommodityID        int64                            `json:"commodity_id"`
+	HoldingAccountID   int64                            `json:"holding_account_id"`
+	CashAccountID      int64                            `json:"cash_account_id"`
+	QuantityValue      exact.Coefficient                `json:"quantity_value"`
+	QuantityScale      int                              `json:"quantity_scale"`
+	CashAmountValue    moneyCoefficient                 `json:"cash_amount_value"`
+	CashAmountScale    int                              `json:"cash_amount_scale"`
+	CashCommodityID    int64                            `json:"cash_commodity_id"`
+	GrossAmountValue   *moneyCoefficient                `json:"gross_amount_value,omitempty"`
+	GrossAmountScale   int                              `json:"gross_amount_scale,omitempty"`
+	NetSettlementValue *moneyCoefficient                `json:"net_settlement_value,omitempty"`
+	NetSettlementScale int                              `json:"net_settlement_scale,omitempty"`
+	SettlementDate     string                           `json:"settlement_date,omitempty"`
+	Charges            []investmentTradeChargeRequest   `json:"charges,omitempty"`
+	Memo               string                           `json:"memo"`
+	PayeeID            *int64                           `json:"payee_id"`
+	Status             string                           `json:"status"`
+	LotAllocations     []investmentLotAllocationRequest `json:"lot_allocations"`
+	ChangeReason       string                           `json:"change_reason"`
+	CostBasisMethod    string                           `json:"cost_basis_method"`
 	// ReconciliationOverride lets a backdated trade proceed into a reconciled
 	// period, invalidating the affected checkpoints. The service has always
 	// honoured it; without it on the wire a buy, sell, or write-off dated
 	// before a checkpoint was simply unreachable (T-53).
 	ReconciliationOverride bool `json:"reconciliation_override"`
+}
+
+type investmentTradeChargeRequest struct {
+	Kind            string           `json:"kind"`
+	AmountValue     moneyCoefficient `json:"amount_value"`
+	AmountScale     int              `json:"amount_scale"`
+	CommodityID     int64            `json:"commodity_id"`
+	Treatment       string           `json:"treatment,omitempty"`
+	ChargeAccountID *int64           `json:"charge_account_id,omitempty"`
+	CashAccountID   *int64           `json:"cash_account_id,omitempty"`
+	PaidOn          string           `json:"paid_on,omitempty"`
+	SourceEvidence  json.RawMessage  `json:"source_evidence,omitempty"`
 }
 
 // investmentWriteOffRequest has no cash account, commodity or amount: a
@@ -180,13 +198,19 @@ type investmentWriteOffRequest struct {
 }
 
 type sellPreviewResponse struct {
-	CostBasisMethod   string                          `json:"cost_basis_method"`
-	DisposalDecision  disposalDecisionResponse        `json:"disposal_decision"`
-	Allocations       []investmentLotDisposalResponse `json:"allocations"`
-	RealizedGain      moneyCoefficient                `json:"realized_gain"`
-	RealizedGainScale int                             `json:"realized_gain_scale"`
-	CashAmountValue   moneyCoefficient                `json:"cash_amount_value"`
-	CashAmountScale   int                             `json:"cash_amount_scale"`
+	CostBasisMethod    string                          `json:"cost_basis_method"`
+	DisposalDecision   disposalDecisionResponse        `json:"disposal_decision"`
+	Allocations        []investmentLotDisposalResponse `json:"allocations"`
+	RealizedGain       moneyCoefficient                `json:"realized_gain"`
+	RealizedGainScale  int                             `json:"realized_gain_scale"`
+	CashAmountValue    moneyCoefficient                `json:"cash_amount_value"`
+	CashAmountScale    int                             `json:"cash_amount_scale"`
+	GrossAmountValue   *moneyCoefficient               `json:"gross_amount_value,omitempty"`
+	GrossAmountScale   int                             `json:"gross_amount_scale"`
+	NetSettlementValue moneyCoefficient                `json:"net_settlement_value"`
+	NetSettlementScale int                             `json:"net_settlement_scale"`
+	SettlementDate     string                          `json:"settlement_date"`
+	Charges            []investmentTradeChargeRequest  `json:"charges"`
 }
 
 type investmentLotAllocationRequest struct {
@@ -217,6 +241,8 @@ type disposalDecisionResponse struct {
 	QuantityScale        int                             `json:"quantity_scale"`
 	DisposedBasisValue   exact.Coefficient               `json:"disposed_basis_value"`
 	DisposedBasisScale   int                             `json:"disposed_basis_scale"`
+	ProceedsValue        moneyCoefficient                `json:"proceeds_value"`
+	ProceedsScale        int                             `json:"proceeds_scale"`
 	CostCommodityID      int64                           `json:"cost_commodity_id"`
 	AuditEventID         *int64                          `json:"audit_event_id,omitempty"`
 	Allocations          []investmentLotDisposalResponse `json:"allocations"`
@@ -228,6 +254,8 @@ type investmentLotDisposalResponse struct {
 	QuantityScale  int               `json:"quantity_scale"`
 	CostBasisValue moneyCoefficient  `json:"cost_basis_value"`
 	CostBasisScale int               `json:"cost_basis_scale"`
+	ProceedsValue  moneyCoefficient  `json:"proceeds_value"`
+	ProceedsScale  int               `json:"proceeds_scale"`
 }
 
 type dividendRequest struct {
@@ -302,6 +330,7 @@ type investmentPositionResponse struct {
 	LatestPriceValue        *moneyCoefficient `json:"latest_price_value,omitempty"`
 	LatestPriceScale        *int              `json:"latest_price_scale,omitempty"`
 	LatestPriceDate         string            `json:"latest_price_date,omitempty"`
+	LatestPriceApproximate  bool              `json:"latest_price_approximate"`
 }
 
 type investmentPositionsResponse struct {
@@ -640,6 +669,9 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 			RealizedGainScale: preview.RealizedGainScale,
 			CashAmountValue:   moneyCoefficient(preview.CashAmountValue),
 			CashAmountScale:   preview.CashAmountScale,
+			GrossAmountValue:  moneyCoefficientPointer(preview.GrossAmountValue), GrossAmountScale: preview.GrossAmountScale,
+			NetSettlementValue: moneyCoefficient(preview.NetSettlementValue), NetSettlementScale: preview.NetSettlementScale,
+			SettlementDate: preview.SettlementDate, Charges: toInvestmentTradeChargeRequests(preview.Charges),
 		})
 	}
 }
@@ -1065,15 +1097,40 @@ func toInvestmentTradeInput(owner app.Owner, r *http.Request, request investment
 	for _, allocation := range request.LotAllocations {
 		allocations = append(allocations, app.InvestmentLotAllocationInput{LotID: allocation.LotID, QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale})
 	}
+	charges := make([]app.InvestmentTradeChargeInput, 0, len(request.Charges))
+	for _, charge := range request.Charges {
+		charges = append(charges, app.InvestmentTradeChargeInput{Kind: charge.Kind, AmountValue: int64(charge.AmountValue),
+			AmountScale: charge.AmountScale, CommodityID: charge.CommodityID, Treatment: charge.Treatment,
+			ChargeAccountID: charge.ChargeAccountID, CashAccountID: charge.CashAccountID, PaidOn: charge.PaidOn,
+			SourceEvidenceJSON: rawJSONText(charge.SourceEvidence)})
+	}
 	return app.InvestmentTradeInput{
 		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 		TransactionDate: request.TransactionDate, CommodityID: request.CommodityID, HoldingAccountID: request.HoldingAccountID,
 		CashAccountID: request.CashAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
 		CashAmountValue: int64(request.CashAmountValue), CashAmountScale: request.CashAmountScale, CashCommodityID: request.CashCommodityID,
+		GrossAmountValue: moneyInt64Pointer(request.GrossAmountValue), GrossAmountScale: request.GrossAmountScale,
+		NetSettlementValue: moneyInt64Pointer(request.NetSettlementValue), NetSettlementScale: request.NetSettlementScale,
+		SettlementDate: request.SettlementDate, Charges: charges,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
 		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
 		ReconciliationOverride: request.ReconciliationOverride,
 	}
+}
+
+func toInvestmentTradeChargeRequests(charges []app.InvestmentTradeChargeInput) []investmentTradeChargeRequest {
+	result := make([]investmentTradeChargeRequest, 0, len(charges))
+	for _, charge := range charges {
+		var evidence json.RawMessage
+		if charge.SourceEvidenceJSON != "" {
+			evidence = json.RawMessage(charge.SourceEvidenceJSON)
+		}
+		result = append(result, investmentTradeChargeRequest{Kind: charge.Kind, AmountValue: moneyCoefficient(charge.AmountValue),
+			AmountScale: charge.AmountScale, CommodityID: charge.CommodityID, Treatment: charge.Treatment,
+			ChargeAccountID: charge.ChargeAccountID, CashAccountID: charge.CashAccountID, PaidOn: charge.PaidOn,
+			SourceEvidence: evidence})
+	}
+	return result
 }
 
 func toDividendInput(owner app.Owner, r *http.Request, request dividendRequest) app.DividendInput {
@@ -1167,6 +1224,7 @@ func toDisposalDecisionResponse(decision app.DisposalDecision) disposalDecisionR
 		SourceEffectiveFrom: decision.SourceEffectiveFrom, SourceRecordedAt: decision.SourceRecordedAt,
 		QuantityValue: decision.QuantityValue, QuantityScale: decision.QuantityScale,
 		DisposedBasisValue: decision.DisposedBasisValue, DisposedBasisScale: decision.DisposedBasisScale,
+		ProceedsValue: moneyCoefficient(decision.ProceedsValue), ProceedsScale: decision.ProceedsScale,
 		CostCommodityID: decision.CostCommodityID, AuditEventID: decision.AuditEventID,
 		Allocations: toInvestmentLotDisposalResponses(decision.Allocations),
 	}
@@ -1175,7 +1233,7 @@ func toDisposalDecisionResponse(decision app.DisposalDecision) disposalDecisionR
 func toInvestmentLotDisposalResponses(disposals []app.InvestmentLotDisposal) []investmentLotDisposalResponse {
 	responses := make([]investmentLotDisposalResponse, 0, len(disposals))
 	for _, disposal := range disposals {
-		responses = append(responses, investmentLotDisposalResponse{LotID: disposal.LotID, QuantityValue: disposal.QuantityValue, QuantityScale: disposal.QuantityScale, CostBasisValue: moneyCoefficient(disposal.CostBasisValue), CostBasisScale: disposal.CostBasisScale})
+		responses = append(responses, investmentLotDisposalResponse{LotID: disposal.LotID, QuantityValue: disposal.QuantityValue, QuantityScale: disposal.QuantityScale, CostBasisValue: moneyCoefficient(disposal.CostBasisValue), CostBasisScale: disposal.CostBasisScale, ProceedsValue: moneyCoefficient(disposal.ProceedsValue), ProceedsScale: disposal.ProceedsScale})
 	}
 	return responses
 }
@@ -1195,7 +1253,7 @@ func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse 
 func toInvestmentPositionResponses(positions []app.InvestmentPosition) []investmentPositionResponse {
 	responses := make([]investmentPositionResponse, 0, len(positions))
 	for _, position := range positions {
-		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: moneyCoefficient(position.RemainingCostBasisValue), RemainingCostBasisScale: position.RemainingCostBasisScale, CostCommodityID: position.CostCommodityID, LatestPriceValue: moneyCoefficientPointer(position.LatestPriceValue), LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate})
+		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: moneyCoefficient(position.RemainingCostBasisValue), RemainingCostBasisScale: position.RemainingCostBasisScale, CostCommodityID: position.CostCommodityID, LatestPriceValue: moneyCoefficientPointer(position.LatestPriceValue), LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate, LatestPriceApproximate: position.LatestPriceApproximate})
 	}
 	return responses
 }
@@ -1273,6 +1331,7 @@ type unrealizedGainResponse struct {
 	LatestPriceValue        *moneyCoefficient `json:"latest_price_value,omitempty"`
 	LatestPriceScale        *int              `json:"latest_price_scale,omitempty"`
 	LatestPriceDate         string            `json:"latest_price_date,omitempty"`
+	LatestPriceApproximate  bool              `json:"latest_price_approximate"`
 	MarketValueValue        *moneyCoefficient `json:"market_value_value,omitempty"`
 	MarketValueScale        *int              `json:"market_value_scale,omitempty"`
 	UnrealizedGainValue     *moneyCoefficient `json:"unrealized_gain_value,omitempty"`
@@ -1348,6 +1407,7 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				LatestPriceValue:        moneyCoefficientPointer(e.LatestPriceValue),
 				LatestPriceScale:        e.LatestPriceScale,
 				LatestPriceDate:         e.LatestPriceDate,
+				LatestPriceApproximate:  e.LatestPriceApproximate,
 				MarketValueValue:        moneyCoefficientPointer(e.MarketValueValue),
 				MarketValueScale:        e.MarketValueScale,
 				UnrealizedGainValue:     moneyCoefficientPointer(e.UnrealizedGainValue),

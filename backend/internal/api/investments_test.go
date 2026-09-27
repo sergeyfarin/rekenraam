@@ -111,6 +111,33 @@ func tradeRequestBody(f investmentAPITestFixture, holdingAccountID, commodityID 
 	}
 }
 
+func TestExactTradeRequestAndPreviewUseSignedGrossChargesAndNet(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "EXACT")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	buyGross, buyNet := moneyCoefficient(-10000), moneyCoefficient(-10200)
+	buy := tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 0)
+	buy.GrossAmountValue, buy.GrossAmountScale = &buyGross, 2
+	buy.NetSettlementValue, buy.NetSettlementScale = &buyNet, 2
+	buy.Charges = []investmentTradeChargeRequest{{Kind: "commission", AmountValue: -200, AmountScale: 2, CommodityID: f.commodityID}}
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", buy, http.StatusCreated)
+	sellGross, sellNet := moneyCoefficient(12000), moneyCoefficient(11800)
+	sell := tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 0)
+	sell.TransactionDate = "2026-03-01"
+	sell.GrossAmountValue, sell.GrossAmountScale = &sellGross, 2
+	sell.NetSettlementValue, sell.NetSettlementScale = &sellNet, 2
+	sell.Charges = buy.Charges
+	res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, "/api/v1/investments/sell/preview", sell, http.StatusOK)
+	var preview sellPreviewResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
+	require.Equal(t, moneyCoefficient(12000), *preview.GrossAmountValue)
+	require.Equal(t, moneyCoefficient(11800), preview.NetSettlementValue)
+	require.Equal(t, moneyCoefficient(11800), preview.DisposalDecision.ProceedsValue)
+	assertMoneyValue(t, 1600, 2, preview.RealizedGain, preview.RealizedGainScale)
+	require.Len(t, preview.Charges, 1)
+}
+
 // --- Lifecycle ---
 
 // assertMoneyValue compares a coefficient/scale pair against an expected
