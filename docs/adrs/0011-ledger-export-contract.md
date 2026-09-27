@@ -161,6 +161,13 @@ The same version adds `import-identities.csv` and
 `import-identity-effects.csv` for committed source fingerprints and their
 ordered operation/transaction links. Import profiles, batches, and staged raw
 rows remain outside this portable ledger archive.
+The same pre-installation schema also carries
+`disposal-revisions.csv` and `disposal-revision-allocations.csv`. Original
+decision and allocation files retain the first committed calculation; the
+highest numbered revision per decision supplies the current effective
+allocation. Every prior revision remains in the archive with its triggering
+operation and audit event, so a restore or external reader can distinguish
+original evidence from the present result.
 
 ### 7. Exports read through a dedicated read-only connection, in one snapshot
 

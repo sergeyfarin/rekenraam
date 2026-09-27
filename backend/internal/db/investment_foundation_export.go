@@ -42,6 +42,16 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 		"import-effects": `SELECT e.identity_id, e.effect_seq, e.operation_id, e.transaction_id
 			FROM import_commit_identity_effects e JOIN import_commit_identities i ON i.id = e.identity_id
 			WHERE i.book_id = ? ORDER BY e.identity_id, e.effect_seq`,
+		"disposal-revisions": `SELECT r.id, r.decision_id, r.revision_seq, r.caused_by_operation_id,
+			r.supersedes_revision_id, r.disposed_basis_value, r.disposed_basis_scale,
+			r.created_at, r.created_audit_event_id
+			FROM investment_disposal_revisions r WHERE r.book_id = ?
+			ORDER BY r.decision_id, r.revision_seq`,
+		"disposal-revision-allocations": `SELECT a.revision_id, a.allocation_seq, a.lot_id,
+			a.quantity_value, a.quantity_scale, a.cost_basis_value, a.cost_basis_scale,
+			a.proceeds_value, a.proceeds_scale
+			FROM investment_disposal_revision_allocations a WHERE a.book_id = ?
+			ORDER BY a.revision_id, a.allocation_seq`,
 	}
 	query, ok := queries[kind]
 	if !ok {

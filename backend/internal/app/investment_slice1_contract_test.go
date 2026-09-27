@@ -86,6 +86,8 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				"investment-fee-policy-versions.csv":     {"version_id", "policy_id", "version_seq", "effective_from", "treatment", "charge_account_id", "recorded_at", "audit_event_id"},
 				"disposal-decisions.csv":                 {"decision_id", "transaction_id", "transaction_version_id", "account_id", "commodity_id", "cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method", "resolution_tier", "account_version_id", "profile_id", "profile_version_id", "source_effective_from", "source_recorded_at", "created_at", "audit_event_id", "operation_id", "position_side", "proceeds_value", "proceeds_scale"},
 				"disposal-allocations.csv":               {"decision_id", "allocation_seq", "lot_event_id", "lot_id", "quantity", "cost_basis", "proceeds_value", "proceeds_scale"},
+				"disposal-revisions.csv":                 {"revision_id", "decision_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "disposed_basis_value", "disposed_basis_scale", "created_at", "audit_event_id"},
+				"disposal-revision-allocations.csv":      {"revision_id", "allocation_seq", "lot_id", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "proceeds_value", "proceeds_scale"},
 				"prices.csv":                             {"base_commodity_id", "quote_commodity_id", "valuation_date", "price", "base_quantity", "quote_type", "adjustment_basis", "is_manual", "is_derived", "source", "is_approximate", "source_transaction_version_id", "audit_event_id"},
 			} {
 				rows := readInvestmentContractCSV(t, files, file)

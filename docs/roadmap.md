@@ -476,7 +476,8 @@ v0.1 candidate baseline. Native replay, side-aware reads/self-checks and the
 short-sale/cover commands remain before T-108 is usable. The next execution
 order is native correction (immutable intents, reversible long-position
 simulation, append-only effective revision storage, and the realized-gains
-reader are in place; self-check, exports, and the correcting command remain),
+and self-check readers plus revision-chain exports are in place; the correcting
+command remains),
 transfers and basis actions including manual splits, then short-sale/cover;
 compound corporate actions follow. Return-of-capital and cash-in-lieu
 suggestions are currently refused as dividend income (T-109) until their

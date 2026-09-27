@@ -556,6 +556,13 @@ next family.
      first in current gains. The original history remains available for audit;
      self-check, exports, correction chains, and the native write command are
      still required before replay is exposed to users.
+   - **4e — effective self-check and export reads — complete 2026-09-27.**
+     Self-check reconciles the current lot projection against original opening
+     and unrevised events plus the latest replay allocation for each revised
+     disposal. The bundle exports both the first committed disposal calculation
+     and every numbered effective revision with its allocations. The original
+     event rows remain immutable history. Correction-chain resolution and the
+     native command still need the same effective selection.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

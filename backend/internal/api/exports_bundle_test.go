@@ -156,7 +156,8 @@ func TestExportBundleChecksumsVerify(t *testing.T) {
 	for _, name := range []string{
 		"README.txt", "ledger.csv", "accounts.csv", "categories.csv", "payees.csv",
 		"commodities.csv", "tags.csv", "lots.csv", "investment-operations.csv", "import-identities.csv", "import-identity-effects.csv", "disposal-decisions.csv",
-		"disposal-allocations.csv", "prices.csv", "trial-balance.csv", "manifest.json",
+		"disposal-allocations.csv", "disposal-revisions.csv", "disposal-revision-allocations.csv",
+		"prices.csv", "trial-balance.csv", "manifest.json",
 	} {
 		assert.Containsf(t, bundle.files, name, "the archive must carry %s", name)
 	}

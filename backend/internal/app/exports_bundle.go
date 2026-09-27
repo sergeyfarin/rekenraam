@@ -215,6 +215,12 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		}},
 		{"disposal-decisions.csv", func(w io.Writer) (int64, error) { return s.writeDisposalDecisionsCSV(ctx, w, snapshot) }},
 		{"disposal-allocations.csv", func(w io.Writer) (int64, error) { return s.writeDisposalAllocationsCSV(ctx, w, snapshot) }},
+		{"disposal-revisions.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "disposal-revisions", []string{"revision_id", "decision_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "disposed_basis_value", "disposed_basis_scale", "created_at", "audit_event_id"})
+		}},
+		{"disposal-revision-allocations.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "disposal-revision-allocations", []string{"revision_id", "allocation_seq", "lot_id", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "proceeds_value", "proceeds_scale"})
+		}},
 		{"prices.csv", func(w io.Writer) (int64, error) { return s.writePricesCSV(ctx, w, snapshot) }},
 		{"trial-balance.csv", func(w io.Writer) (int64, error) {
 			return writeTrialBalanceCSV(w, trialBalance, selection, paths)
@@ -854,6 +860,8 @@ value in this archive was ever a floating-point number.`,
   import-identity-effects.csv  ordered operations and transactions per source row
   disposal-decisions.csv  immutable resolved cost-basis elections
   disposal-allocations.csv  exact lot allocations for those elections
+  disposal-revisions.csv  append-only effective replay calculation chain
+  disposal-revision-allocations.csv  lot allocations for replay revisions
   prices.csv         non-voided price observations
   trial-balance.csv  balances that let you check ledger.csv against the book
   manifest.json      what this export is, what it contains, and its checksums`,
@@ -910,8 +918,10 @@ and projection evidence separately. A net-only trade explicitly marks gross
 unknown. A trade-implied price derived from net cash remains usable for
 valuation and is flagged approximate; its source transaction version and
 shared audit event are in prices.csv.
-disposal-decisions.csv and disposal-allocations.csv preserve why historical lots
-were consumed even after account or global cost-basis defaults change.`,
+disposal-decisions.csv and disposal-allocations.csv preserve the first posted
+calculation even after defaults or dated history change. The highest
+revision_seq per decision in disposal-revisions.csv and its allocation rows
+are the current effective calculation; earlier revisions remain audit history.`,
 	}
 
 	if filter.From != "" || filter.To != "" || len(filter.AccountIDs) > 0 || len(filter.CommodityIDs) > 0 {

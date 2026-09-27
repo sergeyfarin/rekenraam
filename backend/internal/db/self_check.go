@@ -236,23 +236,73 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		FROM investment_lot_events le
 		JOIN investment_lots l ON l.id = le.lot_id
 		WHERE le.book_id = ?
+			AND NOT EXISTS (
+				SELECT 1 FROM investment_disposal_allocations original
+				JOIN investment_disposal_revisions revision ON revision.decision_id = original.decision_id
+				WHERE original.lot_event_id = le.id
+			)
 		ORDER BY le.lot_id, le.event_date, le.id
 	`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read self-check lot events: %w", err)
 	}
-	defer rows.Close()
 	var events []SelfCheckLotEventRecord
 	for rows.Next() {
 		var event SelfCheckLotEventRecord
 		if err := rows.Scan(&event.LotID, &event.AccountID, &event.CommodityID, &event.CostCommodityID,
 			&event.QuantityValue, &event.QuantityScale, &event.CostBasisValue, &event.CostBasisScale); err != nil {
+			rows.Close()
 			return nil, fmt.Errorf("scan self-check lot event: %w", err)
 		}
 		events = append(events, event)
 	}
 	if err := rows.Err(); err != nil {
+		rows.Close()
 		return nil, fmt.Errorf("iterate self-check lot events: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close self-check lot events: %w", err)
+	}
+	// Replayed disposal events remain in history. Reconcile the current lot
+	// projection against the latest effective allocation set instead.
+	revised, err := transaction.QueryContext(ctx, `
+		SELECT allocation.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
+			allocation.quantity_value, allocation.quantity_scale,
+			allocation.cost_basis_value, allocation.cost_basis_scale
+		FROM investment_disposal_revisions revision
+		JOIN investment_disposal_revision_allocations allocation ON allocation.revision_id = revision.id
+		JOIN investment_lots l ON l.id = allocation.lot_id
+		WHERE revision.book_id = ? AND revision.revision_seq = (
+			SELECT MAX(latest.revision_seq) FROM investment_disposal_revisions latest
+			WHERE latest.decision_id = revision.decision_id)
+		ORDER BY revision.decision_id, allocation.allocation_seq`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read effective self-check allocations: %w", err)
+	}
+	for revised.Next() {
+		var event SelfCheckLotEventRecord
+		var quantity exact.Coefficient
+		var basis int64
+		if err := revised.Scan(&event.LotID, &event.AccountID, &event.CommodityID,
+			&event.CostCommodityID, &quantity, &event.QuantityScale,
+			&basis, &event.CostBasisScale); err != nil {
+			revised.Close()
+			return nil, fmt.Errorf("scan effective self-check allocation: %w", err)
+		}
+		if basis < 0 || quantity.Sign() <= 0 {
+			revised.Close()
+			return nil, fmt.Errorf("invalid effective self-check allocation for lot %d", event.LotID)
+		}
+		event.QuantityValue = quantity.Negated()
+		event.CostBasisValue = -basis
+		events = append(events, event)
+	}
+	if err := revised.Err(); err != nil {
+		revised.Close()
+		return nil, fmt.Errorf("iterate effective self-check allocations: %w", err)
+	}
+	if err := revised.Close(); err != nil {
+		return nil, fmt.Errorf("close effective self-check allocations: %w", err)
 	}
 	return events, nil
 }
