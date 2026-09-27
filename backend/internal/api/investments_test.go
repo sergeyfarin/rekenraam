@@ -152,6 +152,14 @@ func TestReverseManualSaleAPI(t *testing.T) {
 	var sold investmentTradeResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&sold))
 	path := "/api/v1/investments/transactions/" + strconv.FormatInt(sold.Transaction.ID, 10) + "/reverse-sale"
+	chainPath := "/api/v1/investments/transactions/" + strconv.FormatInt(sold.Transaction.ID, 10) + "/correction-chain"
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,
+		"/api/v1/investments/transactions/999999/correction-chain", nil, http.StatusNotFound)
+	chainRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, chainPath, nil, http.StatusOK)
+	var chain investmentCorrectionChainResponse
+	require.NoError(t, json.NewDecoder(chainRes.Body).Decode(&chain))
+	require.Len(t, chain.Operations, 1)
+	require.True(t, chain.CanReverseManualSale)
 	request := investmentSaleReversalRequest{Reason: "broker canceled fill"}
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
@@ -160,10 +168,16 @@ func TestReverseManualSaleAPI(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&reversed))
 	require.Equal(t, sold.Transaction.ID, reversed.CorrectedTransactionID)
 	require.Equal(t, "posted", reversed.Transaction.Status)
+	chainRes = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, chainPath, nil, http.StatusOK)
+	require.NoError(t, json.NewDecoder(chainRes.Body).Decode(&chain))
+	require.Len(t, chain.Operations, 2)
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.False(t, chain.CanReverseManualSale)
 	var remaining int
 	require.NoError(t, database.QueryRow(`SELECT count(*) FROM investment_lots WHERE book_id = 1 AND remaining_quantity_value = '5'`).Scan(&remaining))
 	require.Equal(t, 1, remaining)
-	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
+	conflict := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
+	require.Contains(t, conflict.Body.String(), "INVESTMENT_SALE_ALREADY_CORRECTED")
 }
 
 // --- Lifecycle ---

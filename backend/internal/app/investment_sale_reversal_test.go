@@ -42,6 +42,11 @@ func TestReverseManualSaleReplaysLaterSaleAndKeepsOriginalHistory(t *testing.T) 
 	})
 	require.NoError(t, err)
 	operationID := saleOperationIDForTest(t, f, firstSale.Transaction.ID)
+	beforeChain, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, firstSale.Transaction.ID)
+	require.NoError(t, err)
+	require.Len(t, beforeChain.Operations, 1)
+	require.True(t, beforeChain.CanReverseManualSale)
+	require.Equal(t, firstSale.Transaction.ID, *beforeChain.EffectiveTransactionID)
 	reversal, err := f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, OperationID: operationID,
 		Reason: "broker canceled this fill",
@@ -72,6 +77,19 @@ func TestReverseManualSaleReplaysLaterSaleAndKeepsOriginalHistory(t *testing.T) 
 	require.NoError(t, f.database.QueryRow(`SELECT voided_audit_event_id FROM price_observations
 		WHERE source_transaction_version_id = ?`, firstSale.Transaction.VersionID).Scan(&retiredAuditID))
 	require.Equal(t, auditID, retiredAuditID, "price retirement must share the command audit event")
+	chain, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, firstSale.Transaction.ID)
+	require.NoError(t, err)
+	require.Equal(t, operationID, chain.RootOperationID)
+	require.Len(t, chain.Operations, 2)
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.False(t, chain.CanReverseManualSale)
+	require.Equal(t, "reverse", chain.Operations[1].CorrectionMode)
+	require.Equal(t, "broker canceled this fill", chain.Operations[1].CorrectionReason)
+	require.False(t, chain.Operations[0].Effective)
+	require.False(t, chain.Operations[1].Effective)
+	fromReversal, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, reversal.ID)
+	require.NoError(t, err)
+	require.Equal(t, chain, fromReversal)
 	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
 	require.NoError(t, err)
 	require.Len(t, lots, 1)
@@ -156,6 +174,11 @@ func TestReverseImportedSaleRequiresSourceAwareCorrection(t *testing.T) {
 		QuantityValue: exact.New(2), CashAmountValue: 24000, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
+	chain, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, sale.Transaction.ID)
+	require.NoError(t, err)
+	require.Len(t, chain.Operations, 1)
+	require.True(t, chain.Operations[0].Imported)
+	require.False(t, chain.CanReverseManualSale)
 	_, err = f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: sale.Transaction.ID, Reason: "source removed fill",
 	})

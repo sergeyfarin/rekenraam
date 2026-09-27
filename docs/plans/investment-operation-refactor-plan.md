@@ -591,6 +591,13 @@ next family.
      until source identity correction is part of the same command. Buy
      correction, sale replacement, short positions, and UI entry remain later
      slices; backdated writes stay fenced.
+   - **4i — correction-chain read model — complete 2026-09-27.** A single
+     authenticated read by transaction ID returns the immutable root and each
+     successor, the effective end (or none after a terminal reversal), source
+     provenance and the reversal eligibility hint. It serves transaction
+     details without per-operation requests and keeps corrected posted
+     journals visible as history. The write command still rechecks eligibility
+     in its own transaction. UI presentation follows separately.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

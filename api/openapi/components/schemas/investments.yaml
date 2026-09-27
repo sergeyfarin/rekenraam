@@ -622,6 +622,60 @@ InvestmentSaleReversalResponse:
       type: integer
       format: int64
 
+InvestmentCorrectionChainResponse:
+  type: object
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, operations]
+  properties:
+    root_operation_id:
+      type: integer
+      format: int64
+    effective_transaction_id:
+      type: [integer, 'null']
+      format: int64
+      description: Null when the chain ends in a pure reversal.
+    can_reverse_manual_sale:
+      type: boolean
+      description: Whether the effective operation is a posted manual long sale eligible for the native reversal command.
+    operations:
+      type: array
+      minItems: 1
+      items:
+        $ref: '#/InvestmentCorrectionNodeResponse'
+
+InvestmentCorrectionNodeResponse:
+  type: object
+  required: [operation_id, operation_kind, event_date, created_at, audit_event_id, imported, effective]
+  properties:
+    operation_id:
+      type: integer
+      format: int64
+    transaction_id:
+      type: integer
+      format: int64
+    operation_kind:
+      type: string
+    event_date:
+      type: string
+      format: date
+    correction_of_operation_id:
+      type: integer
+      format: int64
+    correction_mode:
+      type: string
+      enum: [replace, reverse]
+    correction_reason:
+      type: string
+    created_at:
+      type: string
+      format: date-time
+    audit_event_id:
+      type: integer
+      format: int64
+    imported:
+      type: boolean
+    effective:
+      type: boolean
+
 DisposalDecisionResponse:
   type: object
   required:

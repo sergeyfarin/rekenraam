@@ -175,6 +175,27 @@ type investmentSaleReversalResponse struct {
 	CorrectedTransactionID int64               `json:"corrected_transaction_id"`
 }
 
+type investmentCorrectionNodeResponse struct {
+	OperationID             int64  `json:"operation_id"`
+	TransactionID           *int64 `json:"transaction_id,omitempty"`
+	OperationKind           string `json:"operation_kind"`
+	EventDate               string `json:"event_date"`
+	CorrectionOfOperationID *int64 `json:"correction_of_operation_id,omitempty"`
+	CorrectionMode          string `json:"correction_mode,omitempty"`
+	CorrectionReason        string `json:"correction_reason,omitempty"`
+	CreatedAt               string `json:"created_at"`
+	AuditEventID            int64  `json:"audit_event_id"`
+	Imported                bool   `json:"imported"`
+	Effective               bool   `json:"effective"`
+}
+
+type investmentCorrectionChainResponse struct {
+	RootOperationID        int64                              `json:"root_operation_id"`
+	EffectiveTransactionID *int64                             `json:"effective_transaction_id"`
+	CanReverseManualSale   bool                               `json:"can_reverse_manual_sale"`
+	Operations             []investmentCorrectionNodeResponse `json:"operations"`
+}
+
 type investmentTradeChargeRequest struct {
 	Kind            string           `json:"kind"`
 	AmountValue     moneyCoefficient `json:"amount_value"`
@@ -654,6 +675,38 @@ func sellInvestment(logger *slog.Logger, authService *app.AuthService, investmen
 	return investmentTradeMutation(logger, authService, investmentService, options, "sell")
 }
 
+func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		chain, err := investmentService.CorrectionChain(r.Context(), owner.ID, transactionID)
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "read investment correction chain", err)
+			return
+		}
+		operations := make([]investmentCorrectionNodeResponse, 0, len(chain.Operations))
+		for _, node := range chain.Operations {
+			operations = append(operations, investmentCorrectionNodeResponse{
+				OperationID: node.OperationID, TransactionID: node.TransactionID,
+				OperationKind: node.OperationKind, EventDate: node.EventDate,
+				CorrectionOfOperationID: node.CorrectionOfOperationID, CorrectionMode: node.CorrectionMode,
+				CorrectionReason: node.CorrectionReason, CreatedAt: node.CreatedAt,
+				AuditEventID: node.AuditEventID, Imported: node.Imported, Effective: node.Effective,
+			})
+		}
+		writeJSON(w, http.StatusOK, investmentCorrectionChainResponse{
+			RootOperationID: chain.RootOperationID, EffectiveTransactionID: chain.EffectiveTransactionID,
+			CanReverseManualSale: chain.CanReverseManualSale, Operations: operations,
+		})
+	}
+}
+
 func reverseInvestmentSale(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
@@ -1118,6 +1171,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "insufficient investment lots")
 	case errors.Is(err, app.ErrInvestmentSaleNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment sale operation not found")
+	case errors.Is(err, app.ErrInvestmentOperationNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment operation not found")
 	case errors.Is(err, app.ErrInvestmentSaleAlreadyCorrected):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_ALREADY_CORRECTED", err.Error())
 	case errors.Is(err, app.ErrInvestmentImportedSale):

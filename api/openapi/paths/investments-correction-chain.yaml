@@ -1,0 +1,38 @@
+get:
+  summary: Read an investment transaction's correction chain
+  description: >-
+    Returns the root operation and every immutable successor in correction
+    order. Historical transactions remain posted even when their position
+    effects have been superseded. A terminal pure reversal has no effective
+    transaction. The eligibility flag is a display hint; the write command
+    rechecks eligibility atomically.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+  responses:
+    "200":
+      description: Correction chain, including a one-operation uncorrected chain
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentCorrectionChainResponse"
+    "400":
+      description: Invalid transaction ID
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Transaction has no investment operation in this book
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
