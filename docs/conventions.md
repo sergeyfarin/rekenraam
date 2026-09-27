@@ -510,9 +510,10 @@ has actual installations, its migration files are immutable.
 - Long-lived architectural constraints belong in `docs/early-architecture-decisions.md`.
 - Active sequencing belongs in `docs/roadmap.md`; durable phase boundaries
   belong in `docs/product-requirements.md`.
-- Shipped scope belongs in `docs/implemented.md`; live technical debt belongs in
-  `docs/backlog.md`. Completed plans and dated reviews are historical references,
-  not competing trackers.
+- Shipped scope belongs in `docs/implemented.md`; live actionable defects and
+  debt belong in GitHub Issues. `docs/backlog.md` maps local IDs to issues but
+  does not duplicate status or priority. Completed plans and dated reviews are
+  historical references, not competing trackers.
 - When roadmap priorities change, cross-check `docs/competitor-comparison.md` and
   record intentional parity gaps or gains in the roadmap's parity section.
 - **An acceptance decision is recorded in the plan it governs, in the same

@@ -1,5 +1,11 @@
 # GitHub work-tracking migration audit — 2026-09-27
 
+**Status:** Migration completed on 2026-09-27. The 14 open local IDs map to
+GitHub Issues [#99–#112](https://github.com/sergeyfarin/rekenraam/issues),
+seven roadmap slices are [#113–#119](https://github.com/sergeyfarin/rekenraam/issues),
+and [#120](https://github.com/sergeyfarin/rekenraam/issues/120) is the roadmap
+index. `docs/backlog.md` now keeps only the ID-to-issue links.
+
 This dated snapshot records the triage before moving live work from
 `docs/backlog.md` to GitHub Issues. The repository had no GitHub issues when
 checked. Keep the local live tracker until issue publication and link

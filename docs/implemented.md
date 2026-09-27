@@ -10,7 +10,9 @@ single answer to "what is done."
 - **Short-horizon working queue:** `docs/todo.md`.
 - **Source of truth for product intent and phase boundaries:**
   `docs/product-requirements.md`.
-- **Technical debt and polish:** `docs/backlog.md`.
+- **Technical debt and polish:**
+  [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues), with local
+  IDs mapped in `docs/backlog.md`.
 - **Documentation map:** `docs/README.md`.
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.

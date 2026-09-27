@@ -1,23 +1,24 @@
 # Documentation map
 
 This folder is organized around one question: **"where do I look, and where
-does a new document go?"** Four current-state files answer "what is happening";
-everything else is reference material sorted by kind.
+does a new document go?"** The current-state files and GitHub Issues answer
+"what is happening"; everything else is reference material sorted by kind.
 
-## Current state — the four working files
+## Current state
 
 | File | Answers | Update discipline |
 |---|---|---|
 | [roadmap.md](roadmap.md) | What are we building next, in what order? | Only when priorities genuinely change; governed by `product-requirements.md` |
-| [todo.md](todo.md) | What is the short-horizon working queue right now? | Freely; items are deleted when done or promoted to roadmap/backlog |
-| [backlog.md](backlog.md) | What known defects and technical debt are tracked? | Add with an ID (`T-nn`, security `S-nn`, test-coverage gaps keep their review's `G-nn`); move resolved items to a dated record in `reviews/` |
+| [todo.md](todo.md) | What is the short-horizon working queue right now? | Keep concise issue links; remove items when completed or reprioritized |
+| [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues) | Which actionable defects, debt, and roadmap slices are open? | Keep state, priorities, discussion, and PR links there; use local IDs (`T-nn`, `S-nn`, `G-nn`) where needed |
+| [backlog.md](backlog.md) | Which GitHub issue owns an existing local ID? | Keep a compact ID-to-issue index; do not maintain a second live status list |
 | [implemented.md](implemented.md) | What ships today, backend vs UI? | Reconcile with the codebase when a slice lands |
 
 The boundary between them: **roadmap** holds ordered product initiatives,
-**backlog** is the registry of known problems, **todo** is the distilled
-"next actions" view that references both (it never carries detail of its
-own), and **implemented** is the capability ledger. A piece of work should
-have exactly one home.
+**GitHub Issues** holds actionable work, **backlog** maps local IDs to those
+issues, **todo** is the distilled "next actions" view with issue links, and
+**implemented** is the capability ledger. A piece of work should have exactly
+one live tracking home.
 
 ## Governance (root)
 
@@ -57,7 +58,7 @@ followed by transfers, basis actions and named short sales. See the
 R10 forecasting are complete.
 
 The [2026-09-27 work-tracking audit](reviews/github-work-tracking-audit-2026-09-27.md)
-rechecks open IDs and priorities ahead of their migration to GitHub Issues.
+records the open-ID triage used for the migration to GitHub Issues.
 The [pre-migration backlog snapshot](reviews/open-backlog-before-github-2026-09-27.md)
 preserves their acceptance context.
 

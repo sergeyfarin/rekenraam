@@ -81,7 +81,8 @@ changing a populated installation. Local password recovery commands are in the
 Start with the [documentation map](docs/README.md). The
 [roadmap](docs/roadmap.md) gives the work order,
 [todo](docs/todo.md) lists immediate next steps,
-[backlog](docs/backlog.md) tracks open defects and debt, and
+[GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues) tracks open
+work, [backlog](docs/backlog.md) maps legacy IDs to those issues, and
 [implemented](docs/implemented.md) records what ships.
 Product and architecture decisions live in the
 [requirements](docs/product-requirements.md),

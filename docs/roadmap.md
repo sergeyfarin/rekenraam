@@ -3,8 +3,12 @@
 This is the one active, forward-looking plan for Rekenraam. It answers
 **what to build next**, in order. It is governed by
 `docs/product-requirements.md`; shipped scope is recorded in
-`docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
-short-horizon working queue is `docs/todo.md`.
+`docs/implemented.md`; actionable work is in
+[GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues), with local
+IDs mapped in `docs/backlog.md`; the short-horizon queue is `docs/todo.md`.
+The [GitHub roadmap index](https://github.com/sergeyfarin/rekenraam/issues/120)
+links current slices to their actionable tickets; this file remains the
+ordered product plan.
 
 Last reviewed: 2026-09-27. The current order is runtime extraction, R16,
 R11 price management, R17 quotes and crypto, R18 gains projections, then R13
@@ -227,7 +231,7 @@ them in a migration demo, close G-08 (locale-aware amount input), T-87
 (owner-local default dates), and T-80 (catalog parity and native review).
 These are independently shippable correctness and communication fixes; they do
 not require waiting for R16 or R11. The actionable tickets live in GitHub
-Issues once migrated; `docs/backlog.md` retains the ID mapping.
+Issues; `docs/backlog.md` retains the ID mapping.
 
 ### R17 — crypto instrument type
 

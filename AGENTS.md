@@ -25,7 +25,8 @@ For current execution state, read these (governed by the sources above):
 
 - `docs/roadmap.md` — prioritized next work and competitor gap analysis.
 - `docs/implemented.md` — what already ships (the feature ledger).
-- `docs/backlog.md` — technical debt and code-quality items.
+- `docs/backlog.md` — local ID index for open GitHub Issues; issue status and
+  priority live on GitHub.
 
 If a change introduces a durable new rule, update the relevant document in the same change.
 

@@ -1,5 +1,9 @@
 # Open backlog before GitHub issue migration — 2026-09-27
 
+**Status:** The migration completed on 2026-09-27. Current status and priority
+are in [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues), with
+the local ID mapping in [docs/backlog.md](../backlog.md).
+
 This is a fixed snapshot of the actionable issue descriptions after the
 2026-09-27 recheck. `docs/backlog.md` remains live until the issues are
 published and linked. Once migration completes, use the GitHub issues for

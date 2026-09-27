@@ -51,4 +51,5 @@ These tools don't read `.claude/skills/` on their own. Two options:
   change — skills that drift from `docs/conventions.md` are worse than none.
   The docs govern; skills summarize and point.
 - When a new bug class ships, add it to the `validate-and-ship` review
-  checklist (and `docs/backlog.md`) so it is checked forever after.
+  checklist and file any remaining work in GitHub Issues so it is checked
+  forever after. Map a local ID in `docs/backlog.md` when repo references need it.

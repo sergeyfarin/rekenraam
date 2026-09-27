@@ -137,7 +137,7 @@ full relevant suite.
 | What changed | Update |
 |---|---|
 | Feature shipped / status changed | `docs/implemented.md` (feature ledger) and `docs/roadmap.md` status line |
-| Tech debt found or paid | `docs/backlog.md` — numbered item (T-NN), exact file/line, and when closing: what fixed it + which test proves it |
+| Tech debt found or paid | GitHub Issue with a local ID (`T-NN`), exact file/line, and, when closing, the fix and validating test; map IDs used in the repo in `docs/backlog.md` |
 | Durable product behavior/scope | `docs/product-requirements.md` |
 | Repo-wide rule/convention | `docs/conventions.md` |
 | Long-lived tradeoff decision | new ADR in `docs/adrs/` (ADRs supersede everything once accepted) |
