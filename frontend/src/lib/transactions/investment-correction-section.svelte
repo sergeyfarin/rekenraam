@@ -1,0 +1,218 @@
+<script lang="ts">
+  import { createQuery } from '@tanstack/svelte-query';
+  import { parseISO } from 'date-fns';
+  import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
+  import { m } from '$lib/paraglide/messages.js';
+  import { getLocale } from '$lib/paraglide/runtime.js';
+  import APIFormError from '$lib/components/api-form-error.svelte';
+  import {
+    getInvestmentCorrectionChain,
+    investmentCorrectionChainQueryKey,
+    previewSaleReversalReconciliation,
+    reverseManualSale,
+    type ReconciliationImpactResponse
+  } from '$lib/api/investments';
+
+  let {
+    transactionID,
+    csrfToken,
+    onRefresh
+  }: {
+    transactionID: number;
+    csrfToken?: string;
+    onRefresh?: () => void;
+  } = $props();
+
+  const chainQuery = createQuery(() => ({
+    queryKey: [...investmentCorrectionChainQueryKey, transactionID],
+    queryFn: () => getInvestmentCorrectionChain(transactionID),
+    enabled: transactionID > 0
+  }));
+
+  let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
+  let reason = $state('');
+  let pending = $state(false);
+  let actionError = $state<unknown>(undefined);
+  let impacts = $state<ReconciliationImpactResponse['affected_checkpoints']>([]);
+  let reasonInputElement: HTMLInputElement | undefined = $state();
+  let confirmButtonElement: HTMLButtonElement | undefined = $state();
+
+  $effect(() => {
+    if (modal === 'reason') reasonInputElement?.focus();
+    if (modal === 'reconciliation') confirmButtonElement?.focus();
+  });
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape' && modal !== 'closed' && !pending) closeModal();
+  }
+
+  const locale = $derived(getLocale());
+  const dateFormatter = $derived(new Intl.DateTimeFormat(locale, {
+    year: 'numeric', month: 'short', day: 'numeric'
+  }));
+
+  function formatDate(value: string): string {
+    return dateFormatter.format(parseISO(value));
+  }
+
+  function closeModal() {
+    modal = 'closed';
+    actionError = undefined;
+    impacts = [];
+  }
+
+  async function submitReason() {
+    if (!csrfToken || !reason.trim()) return;
+    pending = true;
+    actionError = undefined;
+    try {
+      const preview = await previewSaleReversalReconciliation(transactionID, { reason: reason.trim() });
+      if (preview.affected_checkpoints.length > 0) {
+        impacts = preview.affected_checkpoints;
+        modal = 'reconciliation';
+      } else {
+        await reverseManualSale(transactionID, { reason: reason.trim() }, csrfToken);
+        closeModal();
+        onRefresh?.();
+      }
+    } catch (error) {
+      actionError = error;
+      modal = 'reason';
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function confirmReconciliation() {
+    if (!csrfToken || !reason.trim()) return;
+    pending = true;
+    actionError = undefined;
+    try {
+      await reverseManualSale(transactionID, {
+        reason: reason.trim(), reconciliation_override: true
+      }, csrfToken);
+      closeModal();
+      onRefresh?.();
+    } catch (error) {
+      actionError = error;
+    } finally {
+      pending = false;
+    }
+  }
+</script>
+
+<svelte:window onkeydown={handleKeydown} />
+
+<section class="space-y-3 border-t border-border pt-4" aria-labelledby="investment-correction-heading">
+  <h3 id="investment-correction-heading" class="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+    {m.transactions_investment_history_title()}
+  </h3>
+
+  {#if chainQuery.isPending}
+    <p class="text-sm text-muted" role="status">{m.transactions_investment_history_loading()}</p>
+  {:else if chainQuery.isError}
+    <div class="space-y-2">
+      <APIFormError error={chainQuery.error} />
+      <button type="button" class="text-sm font-semibold text-accent" onclick={() => chainQuery.refetch()}>
+        {m.transactions_retry()}
+      </button>
+    </div>
+  {:else if chainQuery.data && chainQuery.data.operations.length > 0}
+    <ol class="space-y-2">
+      {#each chainQuery.data.operations as node, index (node.operation_id)}
+        <li class="rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2 text-sm">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="font-medium text-foreground">
+              {#if index === 0}
+                {m.transactions_investment_history_original()}
+              {:else if node.correction_mode === 'reverse'}
+                {m.transactions_investment_history_reversal()}
+              {:else}
+                {m.transactions_investment_history_replacement()}
+              {/if}
+              {#if node.transaction_id} · #{node.transaction_id}{/if}
+            </span>
+            <span class="text-xs text-muted">
+              {#if node.effective}
+                {m.transactions_investment_history_current()}
+              {:else if node.correction_mode === 'reverse' || chainQuery.data.operations.at(-1)?.correction_mode === 'reverse'}
+                {m.transactions_investment_history_reversed()}
+              {:else}
+                {m.transactions_investment_history_superseded()}
+              {/if}
+            </span>
+          </div>
+          <p class="mt-1 text-xs text-muted">{formatDate(node.event_date)}</p>
+          {#if node.correction_reason}
+            <p class="mt-1 text-xs text-foreground">{node.correction_reason}</p>
+          {/if}
+        </li>
+      {/each}
+    </ol>
+    {#if chainQuery.data.operations.some((node) => node.imported)}
+      <p class="text-xs text-muted">{m.transactions_investment_history_imported()}</p>
+    {/if}
+    {#if chainQuery.data.can_reverse_manual_sale && chainQuery.data.effective_transaction_id === transactionID}
+      <button
+        type="button"
+        class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+        disabled={!csrfToken || pending}
+        onclick={() => { reason = ''; actionError = undefined; modal = 'reason'; }}
+      >
+        {m.transactions_investment_reverse_action()}
+      </button>
+    {/if}
+  {:else}
+    <p class="text-sm text-muted">{m.transactions_investment_history_empty()}</p>
+  {/if}
+</section>
+
+{#if modal !== 'closed'}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 py-6 backdrop-blur-sm">
+    <div class="w-full max-w-lg rounded-[var(--radius-panel)] border border-border bg-surface shadow-[var(--shadow-panel)]"
+      role="alertdialog" aria-modal="true" aria-labelledby="investment-reversal-title">
+      <div class="border-b border-border px-4 py-3">
+        <h3 id="investment-reversal-title" class="text-sm font-semibold text-foreground">
+          {modal === 'reason' ? m.transactions_investment_reverse_title() : m.transactions_reconciliation_warning_title()}
+        </h3>
+        <p class="mt-1 text-xs leading-5 text-muted">
+          {modal === 'reason' ? m.transactions_investment_reverse_copy() : m.transactions_reconciliation_warning_copy()}
+        </p>
+      </div>
+
+      {#if modal === 'reason'}
+        <div class="px-4 py-3">
+          <label for="investment-reversal-reason" class="block text-xs font-semibold uppercase tracking-[0.12em] text-muted">
+            {m.transactions_investment_reverse_reason()}
+          </label>
+          <input id="investment-reversal-reason" type="text" bind:this={reasonInputElement} bind:value={reason} maxlength="500" required
+            class="mt-1.5 h-10 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground outline-none focus:border-accent" />
+        </div>
+      {:else}
+        <ul class="divide-y divide-border px-4 py-3 text-sm">
+          {#each impacts as checkpoint (checkpoint.checkpoint_id)}
+            <li class="flex gap-2 py-2 text-foreground">
+              <AlertTriangle size={16} class="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+              {m.transactions_reconciliation_checkpoint_label({
+                account: checkpoint.account_label,
+                commodity: checkpoint.commodity_code,
+                date: checkpoint.statement_date
+              })}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      <div class="px-4 pb-2"><APIFormError error={actionError} /></div>
+      <div class="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3">
+        <button type="button" class="min-h-10 rounded-[var(--radius-control)] border border-border bg-control px-4 text-sm font-semibold text-foreground"
+          disabled={pending} onclick={closeModal}>{m.transactions_reconciliation_cancel()}</button>
+        <button type="button" bind:this={confirmButtonElement} class="min-h-10 rounded-[var(--radius-control)] bg-warning px-4 text-sm font-semibold text-warning-foreground disabled:opacity-60"
+          disabled={pending || (modal === 'reason' && !reason.trim())}
+          onclick={modal === 'reason' ? submitReason : confirmReconciliation}>
+          {modal === 'reason' ? m.transactions_investment_reverse_confirm() : m.transactions_reconciliation_confirm()}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

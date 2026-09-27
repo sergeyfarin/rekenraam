@@ -31,6 +31,9 @@ export type InvestmentAutomationRulesResponse = components['schemas']['Investmen
 export type InvestmentAutomationRulesRequest = components['schemas']['InvestmentAutomationRulesRequest'];
 export type InvestmentAutomationRuleRequest = components['schemas']['InvestmentAutomationRuleRequest'];
 export type ReconciliationImpactResponse = components['schemas']['ReconciliationImpactResponse'];
+export type InvestmentCorrectionChainResponse = components['schemas']['InvestmentCorrectionChainResponse'];
+export type InvestmentSaleReversalRequest = components['schemas']['InvestmentSaleReversalRequest'];
+export type InvestmentSaleReversalResponse = components['schemas']['InvestmentSaleReversalResponse'];
 
 export const investmentPositionsQueryKey = ['api', 'investments', 'positions'] as const;
 export const investmentLotsQueryKey = ['api', 'investments', 'lots'] as const;
@@ -38,6 +41,7 @@ export const investmentInstrumentsQueryKey = ['api', 'investments', 'instruments
 export const investmentGainsQueryKey = ['api', 'investments', 'gains'] as const;
 export const investmentEventSuggestionsQueryKey = ['api', 'investments', 'event-suggestions'] as const;
 export const investmentAutomationRulesQueryKey = ['api', 'investments', 'automation-rules'] as const;
+export const investmentCorrectionChainQueryKey = ['api', 'investments', 'correction-chain'] as const;
 
 export function investmentPositionsQueryOptions() {
   return {
@@ -231,6 +235,55 @@ export async function recordSell(
       throw error;
     }
 
+    throw toNetworkError(error);
+  }
+}
+
+export async function getInvestmentCorrectionChain(transactionID: number): Promise<InvestmentCorrectionChainResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET(
+      '/api/v1/investments/transactions/{transaction_id}/correction-chain',
+      { params: { path: { transaction_id: transactionID } } }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewSaleReversalReconciliation(
+  transactionID: number,
+  input: InvestmentSaleReversalRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-sale/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseManualSale(
+  transactionID: number,
+  input: InvestmentSaleReversalRequest,
+  csrfToken: string
+): Promise<InvestmentSaleReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-sale',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
     throw toNetworkError(error);
   }
 }

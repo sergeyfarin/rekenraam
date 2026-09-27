@@ -598,6 +598,15 @@ next family.
      details without per-operation requests and keeps corrected posted
      journals visible as history. The write command still rechecks eligibility
      in its own transaction. UI presentation follows separately.
+   - **4j — transaction-detail correction history and sale reversal — complete
+     2026-09-27.** Investment transaction details load one correction-chain
+     read, show original and successor entries with effective state, source and
+     reason, and offer the native reversal only for an eligible manual sale.
+     The action requires a reason, previews reconciliation checkpoints, and
+     requires explicit override after showing affected statements. Loading,
+     empty, error, and success states are provided on mobile and desktop.
+     Imported sales remain visible without an unsafe action. Replacement and
+     buy correction are the next write slices.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

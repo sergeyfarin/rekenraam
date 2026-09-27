@@ -608,7 +608,7 @@ InvestmentSaleReversalRequest:
       description: Why the posted manual long sale is being reversed.
     reconciliation_override:
       type: boolean
-      default: false
+      description: Omit or set false to keep affected reconciliation checkpoints active.
 
 InvestmentSaleReversalResponse:
   type: object

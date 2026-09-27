@@ -23,8 +23,9 @@ Last reconciled: 2026-09-27.
   correction-aware current reads are already complete (slices 4a–4g).
   Manual long-sale pure reversal is complete in slice 4h, including its API,
   replay, price retirement and reconciliation preview. Slice 4i adds the
-  correction-chain read API; transaction detail presentation is next, then replacement and
-  buy correction; imported fills still require source-aware identity handling.
+  correction-chain read API; slice 4j presents the history and manual reversal
+  in transaction detail. Next are replacement and buy correction; imported
+  fills still require source-aware identity handling.
 
 ## Then, within R16
 

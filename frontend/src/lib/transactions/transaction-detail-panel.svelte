@@ -4,6 +4,7 @@
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
   import APIFormError from '$lib/components/api-form-error.svelte';
+  import InvestmentCorrectionSection from './investment-correction-section.svelte';
   import StatusBadge from '$lib/components/status-badge.svelte';
   import {
     voidTransaction,
@@ -468,6 +469,10 @@
       <p class={labelClass}>{m.transactions_detail_ref()}</p>
       <p class="mt-1 text-sm text-muted font-mono">{transaction.external_ref_hint}</p>
     </div>
+  {/if}
+
+  {#if isInvestment}
+    <InvestmentCorrectionSection transactionID={transaction.id} {csrfToken} {onRefresh} />
   {/if}
 
   <!-- Action buttons -->

@@ -17461,8 +17461,8 @@ export interface components {
         InvestmentSaleReversalRequest: {
             /** @description Why the posted manual long sale is being reversed. */
             reason: string;
-            /** @default false */
-            reconciliation_override: boolean;
+            /** @description Omit or set false to keep affected reconciliation checkpoints active. */
+            reconciliation_override?: boolean;
         };
         InvestmentSaleReversalResponse: {
             transaction: components["schemas"]["TransactionResponse"];
