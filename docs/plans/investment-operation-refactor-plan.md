@@ -534,6 +534,14 @@ next family.
      allocations remain replay outputs. This is a read-only foundation;
      backdated writes and native correction remain fenced until the rebuild
      and effective revision writer land.
+   - **4b — reversible long-position simulation — complete 2026-09-27.** A
+     SQLite savepoint resets the current lot projection from immutable opening
+     facts, replays decisions through the existing FIFO/LIFO/average/specific
+     disposal rules, captures resulting lot state and allocations, and rolls
+     back the simulated writes. It rejects a position with lots lacking source
+     facts or an impossible dependent disposal by name. The next step persists
+     numbered effective revisions and wires the correcting journal command;
+     this simulation alone does not admit backdated writes.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

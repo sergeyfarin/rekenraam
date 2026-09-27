@@ -1260,7 +1260,7 @@ func disposeLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams) ([
 	if err != nil {
 		return nil, err
 	}
-	return disposeLotsWithAuditTx(ctx, tx, params, auditEventID)
+	return disposeLotsWithAuditTx(ctx, tx, params, auditEventID, false)
 }
 
 // isDisposalCalendarDate reports whether a disposal's event date is a real
@@ -1345,7 +1345,7 @@ func requirePositionEventInOrderTx(ctx context.Context, tx *sql.Tx, bookID int64
 	return fmt.Errorf("%w: %s dated %s is before this position's disposal on %s", ErrOutOfOrderPositionEvent, what, eventDate, latest)
 }
 
-func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64) ([]LotDisposalRecord, error) {
+func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64, replaySimulation bool) ([]LotDisposalRecord, error) {
 	method := params.CostBasisMethod
 	if method == "" {
 		method = "fifo"
@@ -1363,8 +1363,10 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 	}
 	// A disposal reads the projection a previous disposal left behind, so none
 	// may already sit after this date (T-95).
-	if err := requirePositionEventInOrderTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.EventDate, "a disposal"); err != nil {
-		return nil, err
+	if !replaySimulation {
+		if err := requirePositionEventInOrderTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.EventDate, "a disposal"); err != nil {
+			return nil, err
+		}
 	}
 	costCommodityID, err := resolveDisposalCostCommodityTx(ctx, tx, params)
 	if err != nil {
@@ -1869,7 +1871,7 @@ func (r *InvestmentRepository) createTransactionAndDisposeLots(ctx context.Conte
 	transaction, outcome, err := executeInvestmentWriteTx(ctx, r.database, transactionParams,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (result, error) {
 			disposalParams.TransactionID = transaction.ID
-			disposals, err := disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID)
+			disposals, err := disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID, false)
 			if err != nil {
 				return result{}, err
 			}

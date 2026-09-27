@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,18 +12,7 @@ import (
 
 func TestInvestmentReplayIntentsReadImmutableSources(t *testing.T) {
 	ctx := context.Background()
-	database := openTestDatabase(t)
-	require.NoError(t, Migrate(ctx, database))
-	seed, err := os.ReadFile(filepath.Join("testdata", "v01_seed.sql"))
-	require.NoError(t, err)
-	load, err := database.BeginTx(ctx, nil)
-	require.NoError(t, err)
-	_, err = load.ExecContext(ctx, `PRAGMA defer_foreign_keys = ON`)
-	require.NoError(t, err)
-	_, err = load.ExecContext(ctx, string(seed))
-	require.NoError(t, err)
-	require.NoError(t, load.Commit())
-
+	database := seedReplayTestBook(t)
 	repo := NewInvestmentRepository(database)
 	intents, err := repo.ListInvestmentReplayIntents(ctx, 1, 15, 2, 1, "long")
 	require.NoError(t, err)
@@ -37,6 +27,23 @@ func TestInvestmentReplayIntentsReadImmutableSources(t *testing.T) {
 	require.Equal(t, "fallback", intents[2].DecisionSource.ResolutionTier)
 	require.Equal(t, "150000", intents[2].AmountValue.String())
 	require.Empty(t, intents[2].SpecificLots, "FIFO must be reselected on replay")
+}
+
+func seedReplayTestBook(t *testing.T) *sql.DB {
+	t.Helper()
+	ctx := context.Background()
+	database := openTestDatabase(t)
+	require.NoError(t, Migrate(ctx, database))
+	seed, err := os.ReadFile(filepath.Join("testdata", "v01_seed.sql"))
+	require.NoError(t, err)
+	load, err := database.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	_, err = load.ExecContext(ctx, `PRAGMA defer_foreign_keys = ON`)
+	require.NoError(t, err)
+	_, err = load.ExecContext(ctx, string(seed))
+	require.NoError(t, err)
+	require.NoError(t, load.Commit())
+	return database
 }
 
 func TestInvestmentReplayIntentsOrderSameDayByOperationAndEffect(t *testing.T) {

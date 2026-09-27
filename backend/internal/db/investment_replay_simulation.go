@@ -1,0 +1,199 @@
+package db
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"slices"
+
+	"rekenraam/backend/internal/exact"
+)
+
+// InvestmentReplayProjection is a proposed effective position state. It is
+// computed inside a savepoint and returned after that savepoint is rolled
+// back; simulated lot-event IDs are never exposed as durable records.
+type InvestmentReplayProjection struct {
+	Lots         []InvestmentReplayLotState
+	Disposals    []InvestmentReplayDisposal
+	MethodFamily string
+}
+
+type InvestmentReplayLotState struct {
+	LotID                   int64
+	Status                  string
+	RemainingQuantityValue  exact.Coefficient
+	RemainingQuantityScale  int
+	RemainingCostBasisValue int64
+	RemainingCostBasisScale int
+}
+
+type InvestmentReplayDisposal struct {
+	DecisionID  int64
+	Allocations []InvestmentReplayAllocation
+}
+
+type InvestmentReplayAllocation struct {
+	LotID          int64
+	QuantityValue  exact.Coefficient
+	QuantityScale  int
+	CostBasisValue int64
+	CostBasisScale int
+	ProceedsValue  int64
+	ProceedsScale  int
+}
+
+// simulateInvestmentReplayTx reuses the posted disposal algorithm against a
+// temporary projection. Original lot events and decisions remain untouched.
+// The caller may later persist the returned state and allocation revision in
+// its own write transaction, after dependency and reconciliation checks.
+func simulateInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, intents []InvestmentReplayIntent) (InvestmentReplayProjection, error) {
+	if _, err := tx.ExecContext(ctx, `SAVEPOINT investment_replay_simulation`); err != nil {
+		return InvestmentReplayProjection{}, fmt.Errorf("start investment replay simulation: %w", err)
+	}
+	projection, simulationErr := runInvestmentReplayTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, intents)
+	_, rollbackErr := tx.ExecContext(ctx, `ROLLBACK TO investment_replay_simulation`)
+	if rollbackErr != nil {
+		abortErr := tx.Rollback()
+		return InvestmentReplayProjection{}, errors.Join(simulationErr,
+			fmt.Errorf("restore projection after investment replay: %w", rollbackErr), abortErr)
+	}
+	_, releaseErr := tx.ExecContext(ctx, `RELEASE investment_replay_simulation`)
+	if releaseErr != nil {
+		abortErr := tx.Rollback()
+		return InvestmentReplayProjection{}, errors.Join(simulationErr,
+			fmt.Errorf("release investment replay savepoint: %w", releaseErr), abortErr)
+	}
+	if simulationErr != nil {
+		return InvestmentReplayProjection{}, simulationErr
+	}
+	return projection, nil
+}
+
+func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, intents []InvestmentReplayIntent) (InvestmentReplayProjection, error) {
+	if bookID <= 0 || accountID <= 0 || commodityID <= 0 || costCommodityID <= 0 {
+		return InvestmentReplayProjection{}, fmt.Errorf("%w: replay position key is incomplete", ErrInvalidDisposalParams)
+	}
+	var unmodeledLotID int64
+	err := tx.QueryRowContext(ctx, `
+		SELECT l.id FROM investment_lots l
+		LEFT JOIN investment_lot_facts f ON f.lot_id = l.id
+		WHERE l.book_id = ? AND l.account_id = ? AND l.commodity_id = ?
+			AND l.cost_commodity_id = ? AND l.position_side = 'long' AND f.lot_id IS NULL
+		LIMIT 1`, bookID, accountID, commodityID, costCommodityID).Scan(&unmodeledLotID)
+	if err == nil {
+		return InvestmentReplayProjection{}, fmt.Errorf("%w: lot %d lacks an immutable opening fact", ErrInvalidDisposalParams, unmodeledLotID)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return InvestmentReplayProjection{}, fmt.Errorf("check replay opening coverage: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE investment_lots SET status = 'closed', remaining_quantity_value = '0',
+			remaining_quantity_scale = quantity_scale, remaining_cost_basis_value = '0',
+			remaining_cost_basis_scale = cost_basis_scale
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
+			AND cost_commodity_id = ? AND position_side = 'long'
+	`, bookID, accountID, commodityID, costCommodityID); err != nil {
+		return InvestmentReplayProjection{}, fmt.Errorf("reset replay lot projection: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM investment_position_basis_state
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
+			AND cost_commodity_id = ? AND position_side = 'long'`,
+		bookID, accountID, commodityID, costCommodityID); err != nil {
+		return InvestmentReplayProjection{}, fmt.Errorf("reset replay basis-method state: %w", err)
+	}
+	projection := InvestmentReplayProjection{}
+	ordered := slices.Clone(intents)
+	sortInvestmentReplayIntents(ordered)
+	for _, intent := range ordered {
+		switch intent.Kind {
+		case "opening":
+			basis, err := exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale).Int64()
+			if err != nil || basis < 0 || intent.QuantityValue.Sign() <= 0 {
+				return InvestmentReplayProjection{}, fmt.Errorf("%w: replay opening lot %d has invalid quantity or basis", ErrInvestmentBasisRange, intent.LotID)
+			}
+			result, err := tx.ExecContext(ctx, `
+				UPDATE investment_lots SET status = 'open',
+					remaining_quantity_value = ?, remaining_quantity_scale = ?,
+					remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?
+				WHERE id = ? AND book_id = ? AND account_id = ? AND commodity_id = ?
+					AND cost_commodity_id = ? AND position_side = 'long' AND opened_on = ?
+			`, intent.QuantityValue, intent.QuantityScale, basis, intent.AmountScale,
+				intent.LotID, bookID, accountID, commodityID, costCommodityID, intent.EventDate)
+			if err != nil {
+				return InvestmentReplayProjection{}, fmt.Errorf("activate replay opening lot %d: %w", intent.LotID, err)
+			}
+			changed, err := result.RowsAffected()
+			if err != nil || changed != 1 {
+				return InvestmentReplayProjection{}, fmt.Errorf("%w: replay opening lot %d does not match this position and date", ErrInvalidDisposalParams, intent.LotID)
+			}
+			if err := requirePositionBasisRangeTx(ctx, tx, bookID, accountID, commodityID, costCommodityID); err != nil {
+				return InvestmentReplayProjection{}, fmt.Errorf("replay opening lot %d: %w", intent.LotID, err)
+			}
+		case "disposal":
+			params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
+				CommodityID: commodityID, CostCommodityID: costCommodityID,
+				ProceedsScale: intent.AmountScale,
+				TransactionID: intent.TransactionID, EventDate: intent.EventDate,
+				QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
+				CostBasisMethod: intent.CostBasisMethod, Allocations: intent.SpecificLots,
+				CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID,
+				MetadataJSON: "{}"}
+			if !intent.AmountValue.BigInt().IsInt64() {
+				return InvestmentReplayProjection{}, ErrInvestmentBasisRange
+			}
+			params.ProceedsValue = intent.AmountValue.BigInt().Int64()
+			allocations, err := disposeLotsWithAuditTx(ctx, tx, params, intent.AuditEventID, true)
+			if err != nil {
+				return InvestmentReplayProjection{}, fmt.Errorf("replay dependent operation %d decision %d: %w", intent.OperationID, intent.DecisionID, err)
+			}
+			disposal := InvestmentReplayDisposal{DecisionID: intent.DecisionID}
+			for _, allocation := range allocations {
+				disposal.Allocations = append(disposal.Allocations, InvestmentReplayAllocation{
+					LotID: allocation.LotID, QuantityValue: allocation.QuantityValue,
+					QuantityScale: allocation.QuantityScale, CostBasisValue: allocation.CostBasisValue,
+					CostBasisScale: allocation.CostBasisScale, ProceedsValue: allocation.ProceedsValue,
+					ProceedsScale: allocation.ProceedsScale,
+				})
+			}
+			projection.Disposals = append(projection.Disposals, disposal)
+		default:
+			return InvestmentReplayProjection{}, fmt.Errorf("%w: replay intent kind %q is unsupported", ErrInvalidDisposalParams, intent.Kind)
+		}
+	}
+	err = tx.QueryRowContext(ctx, `SELECT method_family FROM investment_position_basis_state
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
+			AND cost_commodity_id = ? AND position_side = 'long'`,
+		bookID, accountID, commodityID, costCommodityID).Scan(&projection.MethodFamily)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return InvestmentReplayProjection{}, fmt.Errorf("read replay method-family state: %w", err)
+	}
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, status, remaining_quantity_value, remaining_quantity_scale,
+			remaining_cost_basis_value, remaining_cost_basis_scale
+		FROM investment_lots
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
+			AND cost_commodity_id = ? AND position_side = 'long'
+		ORDER BY id`, bookID, accountID, commodityID, costCommodityID)
+	if err != nil {
+		return InvestmentReplayProjection{}, fmt.Errorf("read replay lot projection: %w", err)
+	}
+	for rows.Next() {
+		var lot InvestmentReplayLotState
+		if err := rows.Scan(&lot.LotID, &lot.Status, &lot.RemainingQuantityValue,
+			&lot.RemainingQuantityScale, &lot.RemainingCostBasisValue,
+			&lot.RemainingCostBasisScale); err != nil {
+			rows.Close()
+			return InvestmentReplayProjection{}, fmt.Errorf("scan replay lot projection: %w", err)
+		}
+		projection.Lots = append(projection.Lots, lot)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return InvestmentReplayProjection{}, fmt.Errorf("iterate replay lot projection: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return InvestmentReplayProjection{}, fmt.Errorf("close replay lot projection: %w", err)
+	}
+	return projection, nil
+}

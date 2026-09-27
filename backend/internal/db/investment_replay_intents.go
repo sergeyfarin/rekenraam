@@ -28,6 +28,10 @@ type InvestmentReplayIntent struct {
 	CostBasisMethod string
 	DecisionSource  DisposalDecisionSource
 	SpecificLots    []LotAllocation
+	TransactionID   int64
+	AuditEventID    int64
+	CreatedByUserID int64
+	CreatedAt       string
 }
 
 func (r *InvestmentRepository) ListInvestmentReplayIntents(ctx context.Context, bookID, accountID, commodityID, costCommodityID int64, side string) ([]InvestmentReplayIntent, error) {
@@ -95,7 +99,8 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			d.quantity_value, d.quantity_scale, d.proceeds_value, d.proceeds_scale,
 			d.cost_basis_method, d.resolution_tier, d.account_version_id,
 			d.profile_id, d.profile_version_id, d.source_effective_from,
-			d.source_recorded_at,
+			d.source_recorded_at, d.transaction_id, d.created_audit_event_id,
+			d.created_by_user_id, d.created_at,
 			(SELECT MIN(x.effect_seq) FROM investment_disposal_allocations a
 			 JOIN investment_operation_lot_effects x ON x.lot_event_id = a.lot_event_id
 			 WHERE a.decision_id = d.id AND x.operation_id = d.operation_id)
@@ -114,7 +119,9 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		if err := disposals.Scan(&intent.DecisionID, &intent.OperationID, &intent.OperationKind, &intent.EventDate,
 			&intent.QuantityValue, &intent.QuantityScale, &intent.AmountValue, &intent.AmountScale,
 			&intent.CostBasisMethod, &intent.DecisionSource.ResolutionTier, &accountVersionID,
-			&profileID, &profileVersionID, &effectiveFrom, &recordedAt, &seq); err != nil {
+			&profileID, &profileVersionID, &effectiveFrom, &recordedAt,
+			&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID,
+			&intent.CreatedAt, &seq); err != nil {
 			disposals.Close()
 			return nil, fmt.Errorf("scan replay disposal: %w", err)
 		}
