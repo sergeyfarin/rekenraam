@@ -6,8 +6,10 @@ This is the one active, forward-looking plan for Rekenraam. It answers
 `docs/implemented.md`; live technical debt is in `docs/backlog.md`; the
 short-horizon working queue is `docs/todo.md`.
 
-Last reviewed: 2026-09-27. Runtime extraction precedes the remaining R16
-correction command. Prior roadmap detail is retained in the
+Last reviewed: 2026-09-27. The current order is runtime extraction, R16,
+R11 price management, R17 quotes and crypto, R18 gains projections, then R13
+returns analytics. Cross-border input and date correctness run in parallel.
+Prior roadmap detail is retained in the
 [completed roadmap record](reviews/completed-roadmap-2026-09-27.md).
 
 ## Slice index
@@ -30,10 +32,10 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R8 | Budgets | ✅ | `docs/plans/budgets-plan.md` |
 | R9 | Recurring transactions | ✅ | `docs/plans/recurring-transactions-plan.md` |
 | R10 | Projected balances / forecasting | ✅ | `docs/plans/projected-balances-plan.md` |
-| R11 | Pricing/FX management UI | ⏸ | this file |
+| R11 | Pricing/FX management UI | ⏭ | this file |
 | R12 | Investments UI + gains reporting | ✅ | `docs/plans/investments-plan.md` |
 | R12a | Investment journal/subledger integrity correction | ✅ | `docs/plans/investment-integrity-plan.md`, ADR 0012 |
-| R13 | Investment return analytics (TWR/MWR) | ⏸ | this file |
+| R13 | Investment return analytics (TWR/MWR) | ⏭ | this file |
 | R14 | Receipts & attachments (capture, OCR, inbox) | ⏸ | `docs/plans/receipts-plan.md` |
 | R14a | Attachment storage + manual attach (after R5) | ⏭ | `docs/plans/receipts-plan.md` |
 | R15 | Connections expansion (IBKR Flex → GoCardless → T-34 producer) | ⏸ | `docs/plans/connections-plan.md` |
@@ -208,22 +210,42 @@ The investment monetary JSON precision boundary (T-107) was closed ahead of
 the remaining R16 lifecycle work: requests and read models now carry exact
 decimal coefficient strings while the backend keeps its int64 admission range.
 
+### R11 — price and FX management UI, promoted after R16
+
+Give the existing price/FX repository and price-void operation an operator
+surface before R17 adds more quote providers. The screen must show observation
+source, as-of date, trust/approximation and age; permit manual entry,
+correction/void with a dependency preview; and explain when no usable price
+exists. Keep historical source observations auditable. Write the detailed
+acceptance plan when R11 becomes current. This is a valuation-trust gate, not a
+new automatic provider or a change to ledger postings.
+
+### Parallel trust work for cross-border entry
+
+Before presenting the five drafted non-English catalogs as complete or using
+them in a migration demo, close G-08 (locale-aware amount input), T-87
+(owner-local default dates), and T-80 (catalog parity and native review).
+These are independently shippable correctness and communication fixes; they do
+not require waiting for R16 or R11. The actionable tickets live in GitHub
+Issues once migrated; `docs/backlog.md` retains the ID mapping.
+
 ### R17 — crypto instrument type
 
 Decided 2026-08-05 (review §4.1): widen the persona to crypto-holding
-expats, sequenced after R16. The audits found the lot engine is
+expats, sequenced after R16 and the R11 operator surface. The audits found the lot engine is
 commodity-kind-agnostic and already handles scale-24 crypto commodities end
 to end via the API, so the work is an instrument type and a UI entry point.
-Nobody self-hosted offers crypto with real cost-basis accounting.
+Do not claim that this combination is unique without a separate market-wide
+verification.
 
 **R17 also owns the `PriceProvider` registry** (moved here from R15 on
 2026-08-05). Crypto needs prices, so the registry gets built either way —
 building it once, here, avoids two slices both claiming it. Mirror the
-existing FX registry and land three adapters against it: **Yahoo Finance**
-(keyless, broadest EU coverage, the zero-setup default, labeled unofficial),
-**CoinGecko** (BYO key, crypto), and one BYO-key equity provider (Twelve
-Data or Alpha Vantage — pick on measured EU-exchange coverage, which is the
-persona's actual requirement). Scheduled refresh reuses the pricing worker
+existing FX registry and evaluate three candidate adapters: **Yahoo Finance**
+(keyless and labeled unofficial), **CoinGecko** (crypto), and one BYO-key equity
+provider (Twelve Data or Alpha Vantage). Verify current API terms, EU-exchange
+coverage, rate limits and key requirements before implementation. Scheduled
+refresh reuses the pricing worker
 and refresh-run bookkeeping wholesale. This also closes the unrealized-gains
 staleness gap the 2026-07-19 audit flagged (§4), well before R15.
 
@@ -254,6 +276,16 @@ movement is presented without price-refresh flip-flop. I-04 is narrowed by ADR
 0012: reports never silently post gains; if formal realized-gain, revaluation, or
 tax-liability entries are wanted, scope an explicit linked accounting workflow
 and decide separately whether it belongs in R18.
+
+### R13 — investment returns and allocation analytics
+
+Follow R18's reproducible valuation and basis projections. Plan explicit
+TTWROR/TWR and money-weighted/IRR equations, external-flow classification,
+portfolio versus security scope, missing-price behavior, FX policy, benchmark
+selection, and period reproducibility before implementing charts. Use
+[Portfolio Performance's documented methods](https://help.portfolio-performance.info/en/concepts/performance/time-weighted/)
+as a comparison, not an implicit formula choice. Keep the figures read-only;
+reports do not create postings.
 
 ## Deliberately later
 
@@ -286,17 +318,14 @@ These are valuable, but they are not allowed to displace the current plan:
   conflicts and platform differences must be visible, commands must remain
   discoverable and have mouse/touch equivalents, and no shortcut may bypass
   reconciliation guards, confirmations, or audit history.
-- R11 pricing/FX management UI.
-- R13 investment return analytics (TWR/MWR, allocation, benchmark comparison).
 - R14 receipts & attachments: durable attachment storage (resolves the open
   attachment product decision), receipt capture with in-browser OCR, and a
   match-or-draft inbox using the reserved draft-producer workflow —
   `docs/plans/receipts-plan.md`. **R14a ships after R5**, not alongside R3
   (decided 2026-08-05): it is not an announcement gate, so it does not go
   between two slices that are. R3 carries the attachments hook instead.
-- Reproducible investment reporting projections (R18), report snapshots,
-  multi-user, and household features. Core reporting-currency conversion is
-  already shipped; it is not part of this deferred list.
+- Report snapshots, multi-user, and household features. Core
+  reporting-currency conversion is already shipped.
 
 ## Competitor and parity check
 
@@ -305,23 +334,14 @@ Keep `docs/competitor-comparison.md` as the maintained parity matrix and
 each roadmap initiative complete, update the comparison's implication section
 and record either the parity gained or the deliberate gap retained.
 
-The current parity lens is:
-
-- **Money/Quicken/Monarch:** reports, imports, exports, budgets, and recurring
-  transactions determine whether the app feels like an everyday replacement.
-- **Firefly III:** reusable import profiles and user-defined import rules drive
-  import-heavy retention; bank coverage itself is not a promise.
-- **PocketSmith:** per-currency cashflow forecasting is the differentiator to
-  protect in R10, not an optional conversion afterthought.
-- **Ghostfolio and Portfolio Performance:** returns analytics, allocation, and
-  benchmark comparison remain the investment-expectation gap after gains.
-- **Rekenraam's moat:** exact multi-currency double-entry and lot-level
-  investments must stay coherent as parity features are added.
-
-R16 currently prioritizes transfer, basis, and split commands before short
-trading because imported holdings need a sound carried-basis path. The
-comparison still records corporate actions as missing until a manual command
-ships; this plan creates no parity gain by itself.
+The 2026-09-27 primary-source recheck in
+`docs/competitor-comparison.md` supports the following order: complete R16's
+correction, transfer, basis and split workflows; provide the R11 price/FX
+operator surface; add the R17 quote registry and crypto entry; then build
+R18 reproducible gains and R13 returns. G-08 locale input and T-87 owner-local
+date defaults are parallel correctness work. This ordering is a product
+inference from verified competitor workflows and the present code boundary,
+not a claim of feature uniqueness.
 
 ## Public-release gates
 
@@ -362,12 +382,14 @@ the latest review above now governs the code release gate; the non-code gates
 also still stand.
 Public-announcement work below is a separate, later gate.
 
-### Before making the repository public
+### Public repository hygiene
 
-1. Scan the complete Git history for secrets and remove scanner bait or real
-   secrets before anyone clones it.
-2. Keep AGPL-3.0, `SECURITY.md`, dependency scanning, and vulnerability scanning
-   current; enable GitHub secret/push protection when available.
+The repository is already public (verified 2026-09-27). `LICENSE`,
+`SECURITY.md`, Dependabot and the `govulncheck` workflow exist. Verify the
+complete Git history for secrets and confirm the repository's GitHub secret
+scanning and push-protection settings; the current checkout alone cannot
+establish those remote settings. Maintain the disclosure and dependency
+scanning paths before an announcement.
 
 ### Before public announcement or marketplace listings
 
@@ -386,13 +408,17 @@ Public-announcement work below is a separate, later gate.
    is European — so the demo the launch rests on must not corrupt dates and
    amounts for exactly the target audience. A correctness-branded finance app
    does not get a second first impression.
-3. **Personal-access tokens shipped** (added 2026-08-05, review §3f). The
+3. **Cross-border entry trust — open.** Close G-08's locale-aware amount input
+   and T-87's owner-local default dates before a multilingual migration demo.
+   Fill T-80's 65 missing message keys per non-English locale and arrange
+   native review before describing those catalogs as complete.
+4. **Personal-access tokens — open** (added 2026-08-05, review §3f). The
    typed OpenAPI surface is the foundation for an ecosystem, but session
    cookie + CSRF header auth means no script, tool, or community client can
    call it. Announcement is the moment of maximum developer attention.
    Required shape: hashed at rest, scoped, expiring by default, revocable,
    and emitting authentication events.
-4. ◐ Produce signed release binaries with reproducibility notes.
+5. ◐ Produce signed release binaries with reproducibility notes.
    **Reproducibility done 2026-09-12** (T-92): the build is `-trimpath` +
    `CGO_ENABLED=0`, so it is static, carries none of the builder's paths, and
    two builds of a commit hash identically — see `docs/developer-workflow.md`
@@ -400,7 +426,7 @@ Public-announcement work below is a separate, later gate.
    a signing identity (Sigstore keyless via GitHub OIDC, or a held key) and a
    release workflow, neither of which exists yet — there is no release job in
    `.github/workflows/`, only `ci.yml` and `govulncheck.yml`.
-5. Prepare adoption assets: seeded demo, README screenshots, and a short
+6. Prepare adoption assets: seeded demo, README screenshots, and a short
    migration walkthrough — courting the plain-text-accounting audience
    explicitly by leading with the correctness architecture (append-only
    versions, exact decimals, trial balance).

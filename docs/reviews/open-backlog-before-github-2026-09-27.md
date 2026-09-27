@@ -1,3 +1,10 @@
+# Open backlog before GitHub issue migration — 2026-09-27
+
+This is a fixed snapshot of the actionable issue descriptions after the
+2026-09-27 recheck. `docs/backlog.md` remains live until the issues are
+published and linked. Once migration completes, use the GitHub issues for
+current status; this file preserves the source acceptance context.
+
 # Technical Backlog
 
 This is the active defect and technical-debt registry. Some entries are
@@ -22,7 +29,7 @@ frozen history (`docs/reviews/resolved-backlog-2026-07.md`, `docs/design/`)
 keeps T-42–T-47 with its original meaning (the genesis-date fixes and the
 frontend decimal-comma bugs, all closed). The other branch's same-numbered
 items are renumbered **T-48–T-53** in this file and the
-[resolved record](reviews/resolved-backlog-2026-09-27.md): T-42→T-48 (TS7), T-43→T-49 (gofmt),
+[resolved record](resolved-backlog-2026-09-27.md): T-42→T-48 (TS7), T-43→T-49 (gofmt),
 T-44→T-50 (payee resolution), T-45→T-51 (net-worth perf), T-46→T-52 (CSP),
 T-47→T-53 (investment reconciliation override).
 

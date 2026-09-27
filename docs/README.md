@@ -29,7 +29,8 @@ have exactly one home.
 ## Durable references (root)
 
 - [competitor-comparison.md](competitor-comparison.md) — maintained parity
-  matrix and positioning. Dated deep dives live in `reviews/`.
+  comparison, rechecked against primary product sources on 2026-09-27. Dated
+  deep dives live in `reviews/`.
 - [developer-workflow.md](developer-workflow.md) — commands, environments,
   commit conventions.
 - [deployment-security.md](deployment-security.md) — operator-facing
@@ -54,6 +55,11 @@ followed by transfers, basis actions and named short sales. See the
 [short-horizon queue](todo.md) for immediate steps and
 [implemented](implemented.md) for the exact shipped boundary. R8 budgets and
 R10 forecasting are complete.
+
+The [2026-09-27 work-tracking audit](reviews/github-work-tracking-audit-2026-09-27.md)
+rechecks open IDs and priorities ahead of their migration to GitHub Issues.
+The [pre-migration backlog snapshot](reviews/open-backlog-before-github-2026-09-27.md)
+preserves their acceptance context.
 
 Latest strategic review:
 [2026-09-09 product direction, AI and privacy](reviews/product-direction-ai-privacy-2026-09-09.md).

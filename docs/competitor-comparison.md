@@ -1,228 +1,53 @@
-# Competitor Comparison
+# Competitor comparison
 
-Durable reference for how Rekenraam positions against commercial and
-open-source personal finance software. The roadmap
-(`docs/roadmap.md`) links here instead of carrying its own gap table; update
-this file when the landscape shifts. Point-in-time deep dives:
-`docs/reviews/competitive-analysis-2026-07.md`. Last full revision: 2026-07-07;
-Rekenraam's code/status column reconciled 2026-08-31 (R3, R5, reporting currency,
-R12a, and completed R9). External product features, prices, and positioning
-claims remain the July research snapshot, **not newly verified market facts**,
-except for the explicitly cited Actual corrections below (2026-09-09).
-Verify the other cells separately before using them for purchasing or launch
-claims.
+Reviewed 2026-09-27 against the vendors' own documentation and the current
+[Rekenraam feature ledger](implemented.md). This is a decision aid, not a claim
+that an unlisted feature is absent. It compares workflows relevant to a
+single-user, self-hosted, multi-currency finance app. Prices, popularity,
+security quality, and features behind particular paid tiers were not assessed.
+The earlier broad survey remains in
+[the July research record](reviews/competitive-analysis-2026-07.md).
 
-The [2026-09-09 direction review](reviews/product-direction-ai-privacy-2026-09-09.md)
-challenges the broad uniqueness claims and adds current AI/MCP and privacy
-competition. Feature combinations, migration waves and willingness-to-pay claims
-below remain hypotheses unless supported by specific evidence; the review does
-not change accepted product scope.
+## Verified comparison
 
-## Positioning
+| Product | Documented strengths relevant here | Boundary or implication for Rekenraam |
+|---|---|---|
+| **Rekenraam** | Exact multi-commodity ledger, reconciliation, CSV/QIF export and import, budgets, recurring drafts, per-currency forecasts, operational investment lots/gains and Trading 212 import. | Investment-native correction, transfers, basis actions, named short sales, price management UI, and reproducible gains projections remain open. See [implemented](implemented.md) and [roadmap](roadmap.md). |
+| **GnuCash** | Its [investment guide](https://www.gnucash.org/docs/v5/C/gnucash-guide/chapter_invest.html) documents lots, dividends, return of capital, splits and mergers, and a price database. | Sets the accounting and transaction-type bar for R16. The guide is for a desktop application; this comparison does not equate its lot methods or tax results with Rekenraam's. |
+| **Quicken Classic** | Its [investment action list](https://info.quicken.com/win/tell-me-about-the-investment-transaction-list-s-ac) names transfers, return of capital, splits, short sales and covers; its [placeholder guide](https://www.quicken.com/support/resolving-placeholders-and-usd0-00-cost-basis-in-quicken-for-mac/) explains missing-basis recovery. | A migration target needs basis-preserving transfers, correction and explicit unknown-basis handling before it can promise comparable investment history. Quicken's [short-cover help](https://info.quicken.com/win/how-do-i-cover-a-short-sale) reinforces naming shorts separately from ordinary sells. |
+| **Portfolio Performance** | Its [security menu](https://help.portfolio-performance.info/en/reference/view/securities/context-menu/) documents security transfers and a split wizard; its [performance manual](https://help.portfolio-performance.info/en/reference/view/reports/performance/dashboard/) documents TTWROR and IRR. | R16's split/transfer gap and later R13 returns gap are concrete. Its default split path retroactively adjusts earlier transactions and quotes; Rekenraam's immutable-source design calls for a dated operation and separate adjusted views. |
+| **Ghostfolio** | The project's [README](https://github.com/ghostfolio/ghostfolio/blob/main/README.md) documents self-hosting, activity import/export, multi-account holdings, portfolio charts, ROAI periods and a mobile-first PWA. | Portfolio analytics and mobile presentation are relevant R13 benchmarks. Its documented activity/API scope does not establish equivalent ledger or basis semantics, so no absence claim is made here. |
+| **Actual Budget** | Its [rules](https://actualbudget.org/docs/budgeting/rules/) can transform imports, its [schedules](https://actualbudget.org/docs/tour/schedules/) support automatic or reviewed entry, and its [import guide](https://actualbudget.org/docs/transactions/importing/) lists CSV/QIF/OFX/QFX/CAMT. Its [multi-currency guide](https://actualbudget.org/docs/budgeting/multi-currency/) says native support is still absent and describes an experimental workaround. | Rekenraam's exact multi-currency model is a meaningful difference. Actual's broader import formats and rules are a later usability benchmark; its documented schedules reinforce a clear review-before-post workflow. |
+| **Firefly III** | Its [rules](https://docs.firefly-iii.org/how-to/firefly-iii/features/rules/), [data importer](https://docs.firefly-iii.org/how-to/data-importer/import/csv/) and [budgets](https://docs.firefly-iii.org/how-to/firefly-iii/finances/budgets/) cover mature routine transaction management. | Keep R6 import depth and rules on the later list. This review did not verify comparable security-lot accounting, so it makes no claim about its presence or absence. |
+| **PocketSmith** | Its [multi-currency guide](https://pocketsmith.helpkit.so/multi-currency/6a6X8SseDBfyRznV6vJTS3/multi-currency-an-overview/6a6X8SseDAA5o85oTGHWtJ) and [investment-account guide](https://learn.pocketsmith.com/net-worth-assets--debts/6a6X8SseDAohQfjgQVP5mj/managing-investment-accounts/6a6X8SseDCNBiAKmvJS9uG) document cross-currency planning and alternative ways to represent investments. | Rekenraam's R10 forecast is already a differentiated, exact per-currency base. No lot-level parity or pricing claim is inferred from these guides. |
+| **Monarch Money** | Its [manual holdings guide](https://help.monarchmoney.com/hc/en-us/articles/10032888165140-Manual-investment-holdings) documents market-priced holdings and purchased cost; its [CSV import guide](https://help.monarchmoney.com/hc/en-us/articles/4409682789908-Import-data-manually-from-banks-or-other-finance-apps) limits that import to bank and card transactions and says imports cannot be undone. Its [manual transaction guide](https://help.monarchmoney.com/hc/en-us/articles/360058441811-Manual-transactions) says it lacks reconciliation. | Shows that a polished general finance app can have a different investment and trust boundary. Rekenraam should emphasize auditable import, reconciliation and investment history in migration examples without asserting feature-wide superiority. |
 
-> The self-hosted Quicken Premier / PocketSmith for people whose money lives
-> in more than one country — exact double-entry ledger, lot-level
-> investments, real multi-currency.
+## Priority decisions from this review
 
-The July review's positioning hypothesis was that no product combined all three of:
-(1) a correct double-entry multi-currency ledger, (2) lot-level investment
-cost basis with dividends and gains, (3) self-hosted web deployment. Users in
-Rekenraam's target persona today run "Firefly III + Ghostfolio + a
-spreadsheet."
+1. **Complete R16 before more investment producers.** The competing investment
+   workflows name correction, transfer, return of capital and splits as normal
+   operations. Rekenraam currently cannot safely amend an old trade or carry
+   basis between brokers. Preserve the accepted R16 order: correction, then
+   transfers and basis actions, then named short sales and compound actions.
+2. **Promote R11 price management UI after R16 and before R17.** Rekenraam has
+   price storage and voiding, but no complete operator surface. A user needs to
+   inspect provenance, correct a quote and see valuation coverage before
+   additional quote adapters make price history denser. R17 still owns the
+   shared `PriceProvider` registry and crypto instrument entry.
+3. **Keep R18 gains projections after R17; keep R13 returns after R18.** R18
+   needs a named quote/source and staleness policy. R13's TTWROR/IRR and
+   allocation views need trustworthy operation history, dated valuation and
+   transfer classification. Portfolio Performance and Ghostfolio provide a
+   concrete UX benchmark; Rekenraam should specify its own equations and
+   avoid promising tax compliance.
+4. **Treat locale input and owner-local dates as trust work.** G-08, T-80 and
+   T-87 affect the cross-border persona directly. Finish parsing and date
+   defaults before calling the five drafted translations complete or using
+   them in a migration demo.
+5. **Keep R6 and broader feeds later.** Actual and Firefly III document
+   richer import automation, but Rekenraam already has usable CSV/QIF entry.
+   No official source in this review justifies moving broader integrations
+   ahead of the unresolved investment and valuation lifecycle.
 
-## Migration waves (where new users come from)
-
-- **Microsoft Money** (discontinued 2009) — users still limp along on
-  sunset builds; QIF import (shipped, R4) is their path in.
-- **Mint** (Intuit, shut down March 2024, folded into Credit Karma with no
-  budgets) — the largest single displacement event in the category;
-  its users scattered to Monarch, YNAB, Actual, Copilot. Still arriving.
-- **Quicken subscription fatigue** — Classic went subscription in 2018;
-  each price rise produces a migration wave of exactly the
-  investment-literate users Rekenraam serves.
-- **Maybe Finance** (open-sourced 2024, company shut down June 2025) —
-  demand for a general OSS finance app persists; the community fork (Sure)
-  inherited the repo but not the momentum.
-
-## Feature matrix — open source / self-hosted
-
-✅ = solid, 🟦 = partial/backend-only, ⬜ = missing.
-
-| Capability | Rekenraam | GnuCash | Firefly III | Actual | Ghostfolio | Portfolio Perf. | Money Mgr Ex | Beancount/hledger |
-|---|---|---|---|---|---|---|---|---|
-| Double-entry ledger | ✅ | ✅ | ✅ | ⬜ (envelope) | ⬜ | partial | partial | ✅ |
-| Multi-currency accounts | ✅ | ✅ | ✅ | no native support; workaround | display only | ✅ | ✅ | ✅ |
-| Reconciliation workflow | ✅ | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | 🟦 (assert) |
-| Core reports UI | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (Fava) |
-| CSV import + profiles | ✅ (R5) | ✅ | ✅ (importer) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| QIF/OFX import | ✅ QIF | ✅ | partial | ✅ | ⬜ | partial | ✅ | via tools |
-| Import rules engine | ✅ (literal contains, preview-time only) | partial | ✅ (strongest) | ✅ | ⬜ | ⬜ | partial | ✅ (code) |
-| Budgets | ⬜ (R8) | ✅ | ✅ | ✅ (core) | ⬜ | ⬜ | ✅ | 🟦 |
-| Recurring/scheduled txns | ✅ (templates, draft generation and review) | ✅ | ✅ | ✅ | ⬜ | ⬜ | ✅ | ⬜ |
-| Cashflow forecasting | ✅ (recorded + recurring, exact multi-currency) | partial | partial | ⬜ | ⬜ | ⬜ | ⬜ | 🟦 |
-| Investment lots & cost basis | ✅ (4 methods) | ✅ | ⬜ | ⬜ | ⬜ | basic FIFO/avg | partial | ✅ |
-| Dividends (incl. withholding, reinvest) | ✅ | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ |
-| Corporate actions (splits/mergers/delist) | ⬜ (T-34; splits/mergers have no manual entry either — only a worthless-holding write-off, backend-only, ships today) | ✅ | ⬜ | ⬜ | partial | ✅ | partial | ✅ (manual) |
-| Realized/unrealized gains | 🟦 (operational view; reproducible basis reports R18) | ✅ | ⬜ | ⬜ | ⬜ | ✅ | partial | ✅ |
-| Returns analytics (TWR/MWR) | ⬜ (R13) | ⬜ | ⬜ | ⬜ | ✅ | ✅ (strongest) | ⬜ | via tools |
-| Price/FX history + refresh | 🟦 (R11; backend incl. voiding, no UI) | ✅ | ✅ | ⬜ | ✅ | ✅ | partial | ✅ |
-| Broker/bank online feeds | ✅ T212 (BYO-key) | partial | via importer | SimpleFIN / GoCardless / Pluggy | partial | partial | ⬜ | via tools |
-| Self-hosted web UI | ✅ | ⬜ desktop | ✅ | ✅ | ✅ | ⬜ desktop | 🟦 | ✅ (Fava) |
-| Single-binary deploy | ✅ | n/a | ⬜ (2–3 containers) | ✅ | ⬜ (3 containers) | n/a | n/a | ✅ |
-| Typed public API | ✅ OpenAPI | ⬜ | ✅ | partial | ✅ | ⬜ | ⬜ | ⬜ |
-
-**Actual corrections verified 2026-09-09:** its official documentation includes
-[reconciliation](https://actualbudget.org/docs/accounts/reconciliation/),
-[QIF/OFX and other file imports plus bank-sync adapters](https://actualbudget.org/docs/transactions/importing/),
-and an [experimental multi-currency workaround, with no native support](https://actualbudget.org/docs/budgeting/multi-currency/).
-Presence does not establish equivalence with Rekenraam's accounting semantics.
-Only these Actual cells were refreshed; this is not a full matrix re-audit.
-
-## Feature matrix — commercial
-
-| Capability | Rekenraam | Quicken Classic | Simplifi | Mint (†2024) | Monarch | YNAB | PocketSmith | Lunch Money |
-|---|---|---|---|---|---|---|---|---|
-| Price | free, self-hosted | ~$60–120/yr | ~$48/yr | free (ads) | ~$100/yr | ~$110/yr | tiered ~$0–265/yr | ~$100/yr |
-| Data ownership | ✅ local SQLite | partial (local file + cloud sync) | ⬜ cloud | ⬜ cloud | ⬜ cloud | ⬜ cloud | ⬜ cloud | ⬜ cloud |
-| Double-entry correctness | ✅ | partial | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| Bank sync coverage | BYO-key adapters only | ✅ US-centric | ✅ US | ✅ US/CA | ✅ US-centric | ✅ US | ✅ intl | ✅ (Plaid + intl) |
-| Multi-currency | ✅ exact | clunky, US-centric | ⬜ | ⬜ | weak | limited | ✅ (best commercial) | ✅ |
-| Reconciliation | ✅ | ✅ | ⬜ | ⬜ | ⬜ | partial | partial | ⬜ |
-| Budgets | ⬜ (R8) | ✅ | ✅ | ✅ | ✅ | ✅ (core) | ✅ | ✅ |
-| Forecasting | ✅ (core; learned spending planned) | ✅ | partial | ⬜ | partial | partial | ✅ (30-yr calendar) | ⬜ |
-| Investment lots & gains | ✅ | ✅ (Premier; only mainstream tool with full lot detail) | ⬜ | ⬜ | ⬜ (no lot detail) | ⬜ | partial | ⬜ |
-| Dividends | ✅ | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | partial | ⬜ |
-| Corporate actions (splits/mergers) | ⬜ (T-34) | ✅ | ⬜ | ⬜ | ⬜ | ⬜ | partial | ⬜ |
-| API for users | ✅ OpenAPI | ⬜ | ⬜ | ⬜ | ⬜ | ✅ | ✅ | ✅ (dev-friendly) |
-| Longevity risk | AGPL, forkable | Quicken Inc. | Quicken Inc. | dead | VC-backed | stable | indie, stable | solo dev |
-
-Notes on commercial players not in the matrix: **Empower Personal
-Dashboard** (free US investment dashboard, advisory upsell, no ledger),
-**Tiller** (spreadsheet automation, $79/yr), **Kubera** (net-worth/alt-asset
-tracking for HNW/expat users, no ledger), **Banktivity** (Mac-only, decent
-multi-currency), **Copilot** (iOS-first Mint successor, US).
-
-## Per-competitor read
-
-### Commercial
-
-- **Quicken Classic (Deluxe/Premier)** — the feature ceiling: lots,
-  reconcile, reports, forecasting, loans. Aging desktop codebase,
-  subscription, cloud-sync trust issues, poor multi-currency. *Rekenraam is
-  explicitly a successor candidate; QIF import + reconcile demo targets its
-  users.*
-- **Quicken Simplifi** — Quicken's cloud-lite product; no lots, no
-  reconcile. Not a feature competitor; proof Quicken Inc. is moving
-  down-market, leaving Premier users stranded long-term.
-- **Mint (dead)** — defined the free bank-sync-first category, monetized by
-  ads/upsell, died when that model did. Lessons: bank-sync-first without
-  ownership is fragile; its shutdown remains the category's largest source
-  of migrating users.
-- **Monarch Money** — the Mint successor category leader. Polished,
-  multi-user, connection-first; no lot-level gains, weak multi-currency,
-  ~$100/yr, VC-backed. *Its gap is exactly Rekenraam's strength.*
-- **YNAB** — envelope budgeting with religious following; limited currency,
-  no investments. Actual Budget already serves its self-hosted refugees.
-- **PocketSmith** — closest commercial analog to Rekenraam's niche:
-  real multi-currency, international bank feeds, calendar cashflow
-  forecasting to 30 years, premium-priced tiers. *Proof the
-  expat/multi-currency segment pays. Its forecasting is the bar for R10.*
-- **Lunch Money** — indie web app popular with developers and expats
-  (multi-currency, crypto, open API). Cloud-only, solo-dev longevity risk,
-  no investments depth. *Competes for the same self-reliant persona;
-  Rekenraam's answer is ownership + investments.*
-
-### Open source
-
-- **GnuCash** — the correctness benchmark (full double-entry, lots,
-  business features) but desktop-era UX, no web/mobile, XML/SQL files.
-  *Rekenraam should match its accounting rigor with a modern web UX.*
-- **Firefly III** — the default self-hosted all-rounder; strongest at
-  rule-based import automation and its ecosystem (data importer, mobile
-  apps). Weak investments by design ("not for investment tracking"),
-  heavier deployment. *Its rules engine is the stickiest feature to match
-  (roadmap R7); its investment gap is the wedge.*
-- **Actual Budget** — best-in-class envelope budgeting, local-first sync,
-  huge community. Not a ledger/investments competitor; sets the bar for
-  onboarding speed (working budget in 15 minutes).
-- **Ghostfolio** — default OSS portfolio tracker (8k+ stars); clean UX,
-  broad asset classes, but **no cost basis, no taxes, no ledger** by
-  design, and needs Postgres+Redis. *Its returns analytics (TWR, allocation)
-  define user expectations Rekenraam R13 must meet; its demo instance is a
-  proven adoption asset.*
-- **Portfolio Performance** — free Java desktop, dominant among DACH retail
-  investors; strongest performance attribution (TWR/MWR), basic FIFO/avg
-  cost basis, no country-specific tax reports, no self-host/web story.
-  *The analytics benchmark; its rebalancing view is the model for a future
-  "trade planner" (see roadmap "Beyond").*
-- **Money Manager Ex / KMyMoney / HomeBank** — desktop Money/Quicken clones;
-  feature-broad, shallow investments, aging UX. Source of migrating users
-  more than competition.
-- **Beancount / hledger / Ledger (+ Fava)** — plain-text accounting:
-  arbitrary precision, real multi-currency, lots, unmatched auditability —
-  for people who write code. *Rekenraam's exact-precision ledger brings
-  that correctness to users who want a UI instead of a text editor.*
-- **Sure (Maybe fork)** — community-run general finance app on the
-  abandoned Maybe codebase; energetic, unproven stewardship.
-- **ezBookkeeping** — lightweight Go+SQLite bookkeeping (closest
-  architectural cousin); simple cash ledger, no investments, no
-  reconciliation depth.
-
-## What the comparison implies (kept in sync with roadmap)
-
-1. **Reports UI (R2) — closed 2026-08-19.** This was the perceived-completeness
-   gap; every comparison review leads with dashboards. `/app/reports` now ships
-   net worth over time, spending by category or payee, and cashflow, each with
-   URL-addressable filters, CSV export, a print layout, and chart summaries
-   alongside accessible tables. Parity and differentiation as delivered:
-
-   - **Money / Quicken / Monarch parity** — visible net worth, spending,
-     cashflow, and export-ready reports: **met**.
-   - **Firefly III parity** — category and payee insight without compromising
-     ledger semantics: **met**, and arguably exceeded: spending is built from
-     category postings rather than an inferred bank-statement classification,
-     so a transfer cannot be counted as spending by construction, and every row
-     drills through to exactly the transactions it was summed from.
-   - **PocketSmith differentiation groundwork** — exact per-currency cashflow:
-     **met**. Cashflow reports per commodity with no fabricated base-currency
-     number, and `net_movement = operating_net + transfer_net` holds as an
-     identity, which is the property R10 forecasting will need.
-   - **Ghostfolio / Portfolio Performance gap retained, deliberately** —
-     returns, allocation, and benchmarks stay R13. R2 makes no accidental
-     partial promise about them.
-
-   **Reporting currency shipped 2026-08-26.** Users can request a combined
-   figure using `observed_on_or_before`, with coverage/provenance metadata and
-   unchanged per-commodity totals. Incomplete conversions are omitted rather
-   than presented as complete.
-2. **CSV import and minimal rules (R5) — shipped 2026-08-29.** Saved mapping
-   profiles, grouped payee resolution, and ordered literal contains rules feed
-   the staged preview/commit pipeline. Rules are preview-time only; broader
-   matching and retroactive application are not claimed. Recurring templates
-   and generation followed in R9 slices 1–5. The localized review/discard UI
-   now ships, so scheduled generation is active; entries remain drafts until
-   explicitly posted. R9 acceptance closed 2026-08-31; R10's deterministic
-   recorded-plus-recurring core was accepted 2026-09-07.
-3. **Returns analytics (TWR/MWR, allocation, benchmark)** — expected by
-   Ghostfolio/Portfolio Performance users; Rekenraam has better underlying
-   data (exact lots + FX). Roadmap R13.
-4. **Multi-currency cashflow forecasting** — PocketSmith's moat; no OSS
-   equivalent; the niche-defining feature for R10. The execution plan is
-   `docs/plans/projected-balances-plan.md`, followed by the local, opt-in spending
-   models in `docs/plans/forecast-learning-plan.md` (daily/weekly, monthly and
-   annual seasonal patterns). The exact core forecast ships; learned forecasting
-   remains unimplemented.
-5. **BYO-key feed adapters** — Trading 212 ships. R15 is planned as IBKR
-   Flex → GoCardless → the investment-event producer; no second provider is
-   implemented. Quotes belong to R17. Other adapters remain research options,
-   not promised coverage.
-6. **Jurisdiction-aware capital-gains reporting** — a proposed long-term
-   differentiator, not an established market gap or moat. Global uniqueness
-   and customer demand have not been demonstrated. ADR 0012 fixes the journal/subledger/
-   reporting boundary, R12a repairs the inputs, and R18 plans named read-side
-   projections after R16/R17. Realized versus unrealized answer different
-   questions, jurisdictions differ in treatment, and unrealized figures move
-   with every price refresh; the product must express purpose without claiming
-   to be a tax-compliance engine. See `roadmap.md` R18.
-7. **Adoption assets** — public demo instance with seeded data (Ghostfolio's
-   playbook), README screenshots, migration screencast.
+These priorities are reflected in the [roadmap](roadmap.md). Recheck source
+pages before making market-wide uniqueness or release-parity claims.
