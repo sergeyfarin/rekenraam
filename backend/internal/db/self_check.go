@@ -237,6 +237,11 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		JOIN investment_lots l ON l.id = le.lot_id
 		WHERE le.book_id = ?
 			AND NOT EXISTS (
+				SELECT 1 FROM investment_operation_lot_effects effect
+				JOIN investment_operations successor ON successor.correction_of_operation_id = effect.operation_id
+				WHERE effect.lot_event_id = le.id
+			)
+			AND NOT EXISTS (
 				SELECT 1 FROM investment_disposal_allocations original
 				JOIN investment_disposal_revisions revision ON revision.decision_id = original.decision_id
 				WHERE original.lot_event_id = le.id
@@ -270,11 +275,14 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 			allocation.quantity_value, allocation.quantity_scale,
 			allocation.cost_basis_value, allocation.cost_basis_scale
 		FROM investment_disposal_revisions revision
+		JOIN investment_disposal_decisions decision ON decision.id = revision.decision_id
 		JOIN investment_disposal_revision_allocations allocation ON allocation.revision_id = revision.id
 		JOIN investment_lots l ON l.id = allocation.lot_id
 		WHERE revision.book_id = ? AND revision.revision_seq = (
 			SELECT MAX(latest.revision_seq) FROM investment_disposal_revisions latest
 			WHERE latest.decision_id = revision.decision_id)
+			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+				WHERE successor.correction_of_operation_id = decision.operation_id)
 		ORDER BY revision.decision_id, allocation.allocation_seq`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read effective self-check allocations: %w", err)

@@ -572,6 +572,12 @@ next family.
      the bundle exports each operation's correction identity. The
      native write command, replay revision installation, reconciliation preview
      and correction-chain register remain fenced until implemented together.
+   - **4g — correction-aware current reads — complete 2026-09-27.** Realized
+     gains and lot self-check select the same effective operation chain as
+     replay. They omit original disposal events and effective revisions of a
+     superseded sale while leaving the source rows and bundle history intact.
+     The write command still must install the rebuilt lot projection and
+     balanced correcting journals atomically before corrections are exposed.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

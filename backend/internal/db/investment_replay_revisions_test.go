@@ -146,6 +146,52 @@ func TestRealizedGainsUseLatestEffectiveReplayRevision(t *testing.T) {
 	require.Len(t, allocations, 4)
 }
 
+func TestCorrectedSaleIsAbsentFromCurrentGainsAndLotEffects(t *testing.T) {
+	for _, revised := range []bool{false, true} {
+		name := "original_allocation"
+		if revised {
+			name = "effective_revision"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			database := seedReplayTestBook(t)
+			if revised {
+				tx, err := database.BeginTx(ctx, nil)
+				require.NoError(t, err)
+				intents, err := investmentReplayIntentsQuery(ctx, tx, 1, 15, 2, 1, "long")
+				require.NoError(t, err)
+				projection, err := simulateInvestmentReplayTx(ctx, tx, 1, 15, 2, 1, intents)
+				require.NoError(t, err)
+				require.NoError(t, persistInvestmentReplayProjectionTx(ctx, tx, 1, 15, 2, 1,
+					3, 31, 1, "2026-09-27T10:00:00Z", intents, projection))
+				require.NoError(t, tx.Commit())
+			}
+			_, err := database.ExecContext(ctx, `INSERT INTO investment_operations
+				(book_id, operation_kind, event_date, created_at, created_audit_event_id,
+				 correction_of_operation_id, correction_mode, correction_reason)
+				VALUES (1, 'reversal', '2026-04-02', '2026-09-27T11:00:00Z', 31,
+				 3, 'reverse', 'broker canceled sale')`)
+			require.NoError(t, err)
+			gains, err := NewInvestmentRepository(database).ListRealizedGains(ctx, 1, RealizedGainsParams{})
+			require.NoError(t, err)
+			require.Empty(t, gains, "superseded sale must not contribute current gain")
+			snapshot, err := database.BeginTx(ctx, nil)
+			require.NoError(t, err)
+			defer rollbackTx(ctx, snapshot)
+			events, err := NewSelfCheckRepository(database, database).SelfCheckLotEvents(ctx, snapshot, 1)
+			require.NoError(t, err)
+			require.Len(t, events, 2, "only effective openings contribute current lot effects")
+			for _, event := range events {
+				require.True(t, event.QuantityValue.Sign() > 0)
+			}
+			var historicalDisposals int
+			require.NoError(t, snapshot.QueryRow(`SELECT count(*) FROM investment_lot_events
+				WHERE event_kind = 'disposal'`).Scan(&historicalDisposals))
+			require.Equal(t, 2, historicalDisposals, "historical lot evidence remains stored")
+		})
+	}
+}
+
 func TestSelfCheckLotEventsUseEffectiveDisposalAfterReplay(t *testing.T) {
 	ctx := context.Background()
 	database := seedReplayTestBook(t)

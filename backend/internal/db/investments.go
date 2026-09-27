@@ -3102,6 +3102,11 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		WHERE lot.book_id = ?
 			AND le.event_kind = 'disposal'
 			AND NOT EXISTS (
+				SELECT 1 FROM investment_operation_lot_effects effect
+				JOIN investment_operations successor ON successor.correction_of_operation_id = effect.operation_id
+				WHERE effect.lot_event_id = le.id
+			)
+			AND NOT EXISTS (
 				SELECT 1 FROM investment_disposal_allocations original
 				JOIN investment_disposal_revisions revision ON revision.decision_id = original.decision_id
 				WHERE original.lot_event_id = le.id
@@ -3135,13 +3140,17 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			d.cost_commodity_id, allocation.quantity_value, allocation.quantity_scale,
 			allocation.cost_basis_value, allocation.cost_basis_scale
 		FROM investment_disposal_decisions d
+		JOIN investment_operations operation ON operation.id = d.operation_id
 		JOIN investment_disposal_revisions revision ON revision.decision_id = d.id
 			AND revision.revision_seq = (
 				SELECT MAX(latest.revision_seq) FROM investment_disposal_revisions latest
 				WHERE latest.decision_id = d.id)
 		JOIN investment_disposal_revision_allocations allocation
 			ON allocation.revision_id = revision.id
-		WHERE d.book_id = ? `+revisedDateFilter+`
+		WHERE d.book_id = ?
+			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+				WHERE successor.correction_of_operation_id = operation.id)
+			`+revisedDateFilter+`
 		ORDER BY d.id, allocation.allocation_seq`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read effective realized gain allocations: %w", err)
@@ -3175,8 +3184,12 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	// can include separately expensed charges and are never authoritative.
 	proceeds := map[proceedsKey]*exact.ScaledInt{}
 	decisionRows, err := tx.QueryContext(ctx, `
-		SELECT transaction_id, cost_commodity_id, proceeds_value, proceeds_scale
-		FROM investment_disposal_decisions WHERE book_id = ?`, bookID)
+		SELECT d.transaction_id, d.cost_commodity_id, d.proceeds_value, d.proceeds_scale
+		FROM investment_disposal_decisions d
+		JOIN investment_operations operation ON operation.id = d.operation_id
+		WHERE d.book_id = ?
+			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+				WHERE successor.correction_of_operation_id = operation.id)`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read realized gain decisions: %w", err)
 	}

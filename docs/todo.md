@@ -20,7 +20,7 @@ Last reconciled: 2026-09-27.
   basis method, including failure rollback and original versus effective
   allocations. The immutable intent reader, reversible replay simulation,
   revision storage, gains and self-check readers, revision-chain export, and
-  immutable correction-chain selection are already complete (slices 4a–4f).
+  correction-aware current reads are already complete (slices 4a–4g).
 
 ## Then, within R16
 
