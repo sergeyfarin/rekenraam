@@ -549,6 +549,13 @@ next family.
      installs the rebuilt current lot state under the triggering operation's
      audit event. Read models and the native correction command still need to
      select and produce these revisions before backdated writes are enabled.
+   - **4d — effective realized-gains reader — complete 2026-09-27.** The
+     realized-gains repository reads one SQLite snapshot, selects the latest
+     numbered allocation set for a revised disposal, and retains the original
+     lot events only for unrevised disposals. A second revision replaces the
+     first in current gains. The original history remains available for audit;
+     self-check, exports, correction chains, and the native write command are
+     still required before replay is exposed to users.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

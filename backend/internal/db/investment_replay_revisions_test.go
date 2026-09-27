@@ -87,3 +87,48 @@ func TestInvestmentReplayRevisionRejectsCrossPositionAllocation(t *testing.T) {
 	require.NoError(t, tx.QueryRow(`SELECT count(*) FROM investment_disposal_revisions`).Scan(&count))
 	require.Zero(t, count)
 }
+
+func TestRealizedGainsUseLatestEffectiveReplayRevision(t *testing.T) {
+	ctx := context.Background()
+	database := seedReplayTestBook(t)
+	repo := NewInvestmentRepository(database)
+	assertGain := func(basis, gain int64) {
+		t.Helper()
+		rows, err := repo.ListRealizedGains(ctx, 1, RealizedGainsParams{})
+		require.NoError(t, err)
+		require.Len(t, rows, 1, "a replayed sale must appear once")
+		require.Zero(t, exact.ScaledIntFromInt64(rows[0].DisposedBasisValue, rows[0].DisposedBasisScale).Cmp(exact.ScaledIntFromInt64(-basis, 0)))
+		require.Zero(t, exact.ScaledIntFromInt64(rows[0].RealizedGainValue, rows[0].RealizedGainScale).Cmp(exact.ScaledIntFromInt64(gain, 0)))
+		require.Zero(t, exact.ScaledIntFromInt64(rows[0].ProceedsValue, rows[0].ProceedsScale).Cmp(exact.ScaledIntFromInt64(1500, 0)))
+	}
+	assertGain(1300, 200)
+	for _, basis := range []struct {
+		opening int64
+		want    int64
+		gain    int64
+	}{
+		{120000, 1500, 0},
+		{110000, 1400, 100},
+	} {
+		tx, err := database.BeginTx(ctx, nil)
+		require.NoError(t, err)
+		intents, err := investmentReplayIntentsQuery(ctx, tx, 1, 15, 2, 1, "long")
+		require.NoError(t, err)
+		intents[0].AmountValue = exact.New(basis.opening)
+		projection, err := simulateInvestmentReplayTx(ctx, tx, 1, 15, 2, 1, intents)
+		require.NoError(t, err)
+		require.NoError(t, persistInvestmentReplayProjectionTx(ctx, tx, 1, 15, 2, 1,
+			3, 31, 1, "2026-09-27T10:00:00Z", intents, projection))
+		require.NoError(t, tx.Commit())
+		assertGain(basis.want, basis.gain)
+	}
+	var revisionSeq int
+	var previousID int64
+	require.NoError(t, database.QueryRow(`SELECT revision_seq, supersedes_revision_id
+		FROM investment_disposal_revisions ORDER BY revision_seq DESC LIMIT 1`).Scan(&revisionSeq, &previousID))
+	require.Equal(t, 3, revisionSeq)
+	require.Positive(t, previousID)
+	filtered, err := repo.ListRealizedGains(ctx, 1, RealizedGainsParams{From: "2026-04-03"})
+	require.NoError(t, err)
+	require.Empty(t, filtered)
+}

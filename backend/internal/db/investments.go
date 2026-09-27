@@ -3062,21 +3062,30 @@ type realizedGainEventRow struct {
 // is done in Go with big.Int at aligned scales — disposal events can carry
 // different quantity/cost scales, so SQL SUM/MAX over TEXT coefficients would
 // blend incommensurate magnitudes. Proceeds come from the matching immutable
-// disposal decision, which excludes separately expensed charges. A standalone
+// disposal decision, which excludes separately expensed charges. Revised
+// allocations replace original lot events in the current view. A standalone
 // manually inserted lot disposal without a decision has zero proceeds.
 func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int64, params RealizedGainsParams) ([]RealizedGainRecord, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin realized gains snapshot: %w", err)
+	}
+	defer rollbackTx(ctx, tx)
 	dateFilter := ""
+	revisedDateFilter := ""
 	args := []any{bookID}
 	if params.From != "" {
 		dateFilter += " AND le.event_date >= ?"
+		revisedDateFilter += " AND d.event_date >= ?"
 		args = append(args, params.From)
 	}
 	if params.To != "" {
 		dateFilter += " AND le.event_date <= ?"
+		revisedDateFilter += " AND d.event_date <= ?"
 		args = append(args, params.To)
 	}
 
-	rows, err := r.database.QueryContext(ctx, `
+	rows, err := tx.QueryContext(ctx, `
 		SELECT
 			le.id,
 			le.transaction_id,
@@ -3092,6 +3101,11 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		JOIN investment_lots lot ON lot.id = le.lot_id
 		WHERE lot.book_id = ?
 			AND le.event_kind = 'disposal'
+			AND NOT EXISTS (
+				SELECT 1 FROM investment_disposal_allocations original
+				JOIN investment_disposal_revisions revision ON revision.decision_id = original.decision_id
+				WHERE original.lot_event_id = le.id
+			)
 			`+dateFilter+`
 	`, args...)
 	if err != nil {
@@ -3112,6 +3126,47 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate realized gain events: %w", err)
 	}
+	// A replay revision has no new posted lot events. Feed its effective
+	// allocations into the same exact grouping calculation as event-shaped rows.
+	revisedRows, err := tx.QueryContext(ctx, `
+		SELECT (SELECT MIN(original.lot_event_id) FROM investment_disposal_allocations original
+				WHERE original.decision_id = d.id),
+			d.transaction_id, d.event_date, d.account_id, d.commodity_id,
+			d.cost_commodity_id, allocation.quantity_value, allocation.quantity_scale,
+			allocation.cost_basis_value, allocation.cost_basis_scale
+		FROM investment_disposal_decisions d
+		JOIN investment_disposal_revisions revision ON revision.decision_id = d.id
+			AND revision.revision_seq = (
+				SELECT MAX(latest.revision_seq) FROM investment_disposal_revisions latest
+				WHERE latest.decision_id = d.id)
+		JOIN investment_disposal_revision_allocations allocation
+			ON allocation.revision_id = revision.id
+		WHERE d.book_id = ? `+revisedDateFilter+`
+		ORDER BY d.id, allocation.allocation_seq`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read effective realized gain allocations: %w", err)
+	}
+	for revisedRows.Next() {
+		var e realizedGainEventRow
+		var quantity exact.Coefficient
+		var basis int64
+		if err := revisedRows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID,
+			&e.commodityID, &e.costCommodityID, &quantity, &e.quantityScale,
+			&basis, &e.costBasisScale); err != nil {
+			revisedRows.Close()
+			return nil, fmt.Errorf("scan effective realized gain allocation: %w", err)
+		}
+		e.quantityValue = quantity.Negated()
+		e.costBasisValue = -basis
+		events = append(events, e)
+	}
+	if err := revisedRows.Err(); err != nil {
+		revisedRows.Close()
+		return nil, fmt.Errorf("iterate effective realized gain allocations: %w", err)
+	}
+	if err := revisedRows.Close(); err != nil {
+		return nil, fmt.Errorf("close effective realized gain allocations: %w", err)
+	}
 	if len(events) == 0 {
 		return nil, nil
 	}
@@ -3119,7 +3174,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	// Posted investment decisions snapshot operational proceeds. Cash postings
 	// can include separately expensed charges and are never authoritative.
 	proceeds := map[proceedsKey]*exact.ScaledInt{}
-	decisionRows, err := r.database.QueryContext(ctx, `
+	decisionRows, err := tx.QueryContext(ctx, `
 		SELECT transaction_id, cost_commodity_id, proceeds_value, proceeds_scale
 		FROM investment_disposal_decisions WHERE book_id = ?`, bookID)
 	if err != nil {
@@ -3251,6 +3306,9 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		record.RealizedGainValue = gainValue
 		record.RealizedGainScale = gain.Scale()
 		records = append(records, record)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("close realized gains snapshot: %w", err)
 	}
 	return records, nil
 }
