@@ -219,10 +219,10 @@ INSERT INTO cost_basis_profiles VALUES(1,1,'Seed Average Cost','average_cost',0,
 INSERT INTO cost_basis_profile_versions VALUES(1,1,1,1,'Seed Average Cost','average_cost',0,'active','','{}','2026-09-13T11:34:58Z',1,'saved cost basis profile',35);
 INSERT INTO investment_lots VALUES(1,1,15,2,'2026-02-02',7,'closed','10',0,'0',2,100000,2,0,2,1,'{}','2026-09-13T11:34:58Z',1,27,'2026-09-13T11:34:58Z',1,31,'long');
 INSERT INTO investment_lots VALUES(2,1,15,2,'2026-03-02',8,'open','5',0,'250',2,60000,2,30000,2,1,'{}','2026-09-13T11:34:58Z',1,29,'2026-09-13T11:34:58Z',1,31,'long');
-INSERT INTO investment_operations VALUES(1,1,7,'buy','2026-02-02','2026-09-13T11:34:58Z',27);
-INSERT INTO investment_operations VALUES(2,1,8,'buy','2026-03-02','2026-09-13T11:34:58Z',29);
-INSERT INTO investment_operations VALUES(3,1,9,'sell','2026-04-02','2026-09-13T11:34:58Z',31);
-INSERT INTO investment_operations VALUES(4,1,10,'dividend','2026-05-02','2026-09-13T11:34:58Z',33);
+INSERT INTO investment_operations (id,book_id,transaction_id,operation_kind,event_date,created_at,created_audit_event_id) VALUES(1,1,7,'buy','2026-02-02','2026-09-13T11:34:58Z',27);
+INSERT INTO investment_operations (id,book_id,transaction_id,operation_kind,event_date,created_at,created_audit_event_id) VALUES(2,1,8,'buy','2026-03-02','2026-09-13T11:34:58Z',29);
+INSERT INTO investment_operations (id,book_id,transaction_id,operation_kind,event_date,created_at,created_audit_event_id) VALUES(3,1,9,'sell','2026-04-02','2026-09-13T11:34:58Z',31);
+INSERT INTO investment_operations (id,book_id,transaction_id,operation_kind,event_date,created_at,created_audit_event_id) VALUES(4,1,10,'dividend','2026-05-02','2026-09-13T11:34:58Z',33);
 INSERT INTO investment_operation_journal_links VALUES(1,1,1,11,1,'primary');
 INSERT INTO investment_operation_journal_links VALUES(2,1,2,12,1,'primary');
 INSERT INTO investment_operation_journal_links VALUES(3,1,3,13,1,'primary');

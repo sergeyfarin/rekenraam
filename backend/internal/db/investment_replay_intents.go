@@ -10,8 +10,9 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-// InvestmentReplayIntent is an immutable economic input to a future position
-// rebuild. In particular, a disposal carries its elected method and any
+// InvestmentReplayIntent is an immutable economic input from the effective
+// end of a correction chain. Superseded facts remain stored for audit but are
+// excluded from current replay. A disposal carries its elected method and any
 // explicit specific-lot choice, never the lots selected by FIFO/LIFO/average.
 type InvestmentReplayIntent struct {
 	OperationID     int64
@@ -65,6 +66,9 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		FROM investment_lot_facts f JOIN investment_operations o ON o.id = f.operation_id
 		WHERE f.book_id = ? AND f.account_id = ? AND f.commodity_id = ?
 			AND f.cost_commodity_id = ? AND f.position_side = ?
+			AND o.correction_mode IS NOT 'reverse'
+			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+				WHERE successor.correction_of_operation_id = o.id)
 	`, bookID, accountID, commodityID, costCommodityID, side)
 	if err != nil {
 		return nil, fmt.Errorf("read replay openings: %w", err)
@@ -107,6 +111,9 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		FROM investment_disposal_decisions d JOIN investment_operations o ON o.id = d.operation_id
 		WHERE d.book_id = ? AND d.account_id = ? AND d.commodity_id = ?
 			AND d.cost_commodity_id = ? AND d.position_side = ?
+			AND o.correction_mode IS NOT 'reverse'
+			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+				WHERE successor.correction_of_operation_id = o.id)
 	`, bookID, accountID, commodityID, costCommodityID, side)
 	if err != nil {
 		return nil, fmt.Errorf("read replay disposals: %w", err)
@@ -150,8 +157,12 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		SELECT a.decision_id, a.lot_id, a.quantity_value, a.quantity_scale
 		FROM investment_disposal_allocations a
 		JOIN investment_disposal_decisions d ON d.id = a.decision_id
+		JOIN investment_operations o ON o.id = d.operation_id
 		WHERE d.book_id = ? AND d.account_id = ? AND d.commodity_id = ?
 			AND d.cost_commodity_id = ? AND d.position_side = ? AND d.cost_basis_method = 'specific_lot'
+			AND o.correction_mode IS NOT 'reverse'
+			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+				WHERE successor.correction_of_operation_id = o.id)
 		ORDER BY a.decision_id, a.allocation_seq
 	`, bookID, accountID, commodityID, costCommodityID, side)
 	if err != nil {

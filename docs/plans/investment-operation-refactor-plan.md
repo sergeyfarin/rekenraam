@@ -561,8 +561,17 @@ next family.
      and unrevised events plus the latest replay allocation for each revised
      disposal. The bundle exports both the first committed disposal calculation
      and every numbered effective revision with its allocations. The original
-     event rows remain immutable history. Correction-chain resolution and the
-     native command still need the same effective selection.
+     event rows remain immutable history. The native command still needs the
+     same effective selection.
+   - **4f — immutable correction-chain identity — complete 2026-09-27.** The
+     unused candidate baseline gives an investment operation one earlier
+     same-book predecessor, one immutable `replace` or `reverse` mode and a
+     required reason; a predecessor can have only one successor. Pure reversals
+     are terminal. The long-position intent reader omits superseded and
+     reversed operations while retaining their immutable source facts, and
+     the bundle exports each operation's correction identity. The
+     native write command, replay revision installation, reconciliation preview
+     and correction-chain register remain fenced until implemented together.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

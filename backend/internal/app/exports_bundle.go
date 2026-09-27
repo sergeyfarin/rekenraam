@@ -520,6 +520,7 @@ func (s *ExportService) writeInvestmentOperationsCSV(ctx context.Context, out io
 	}
 	writer, err := newBundleCSV(out, []string{
 		"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id",
+		"correction_of_operation_id", "correction_mode", "correction_reason",
 	})
 	if err != nil {
 		return 0, err
@@ -532,6 +533,9 @@ func (s *ExportService) writeInvestmentOperationsCSV(ctx context.Context, out io
 			operation.Kind,
 			operation.EventDate,
 			strconv.FormatInt(operation.AuditEventID, 10),
+			nullableID(operation.CorrectionOfOperationID),
+			nullableString(operation.CorrectionMode),
+			nullableString(operation.CorrectionReason),
 		}); err != nil {
 			return count, fmt.Errorf("write investment operation row: %w", err)
 		}

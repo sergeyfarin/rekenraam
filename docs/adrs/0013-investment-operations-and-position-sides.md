@@ -69,6 +69,12 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
    checking dependent disposals, cost-basis elections, reconciliation, import
    identity, prices, and audit history in one SQLite transaction. Backdating
    behind a previous disposal or cover remains refused until replay exists.
+   A correcting operation names exactly one earlier operation in the same
+   book, an immutable reason, and either `replace` or `reverse`. Each operation
+   has at most one direct successor, so a chain has one effective end. A pure
+   reversal is terminal and contributes no replay intent. Replay excludes
+   intents belonging to any operation with a correcting successor, preserving
+   those original intents for audit while selecting only the effective end.
 6. Cash corporate actions are typed. Return of capital changes lot basis;
    cash in lieu needs its own lot allocation or disposal relationship. Neither
    is accepted as ordinary dividend income solely because cash arrived. A

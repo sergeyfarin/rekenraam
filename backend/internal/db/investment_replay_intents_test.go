@@ -29,6 +29,54 @@ func TestInvestmentReplayIntentsReadImmutableSources(t *testing.T) {
 	require.Empty(t, intents[2].SpecificLots, "FIFO must be reselected on replay")
 }
 
+func TestInvestmentReplayIntentsExcludeReversedOperation(t *testing.T) {
+	ctx := context.Background()
+	database := seedReplayTestBook(t)
+	_, err := database.ExecContext(ctx, `
+		INSERT INTO investment_operations
+			(book_id, operation_kind, event_date, created_at, created_audit_event_id,
+			 correction_of_operation_id, correction_mode, correction_reason)
+		VALUES (1, 'reversal', '2026-04-02', '2026-09-14T00:00:00Z', 31,
+			3, 'reverse', 'duplicate broker sale')`)
+	require.NoError(t, err)
+
+	intents, err := NewInvestmentRepository(database).ListInvestmentReplayIntents(ctx, 1, 15, 2, 1, "long")
+	require.NoError(t, err)
+	require.Len(t, intents, 2)
+	require.Equal(t, []int64{1, 2}, []int64{intents[0].OperationID, intents[1].OperationID})
+	snapshot, err := database.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer snapshot.Rollback()
+	operations, err := NewExportRepository(database).ExportInvestmentOperations(ctx, snapshot, 1)
+	require.NoError(t, err)
+	var reversal *ExportInvestmentOperationRecord
+	for index := range operations {
+		if operations[index].CorrectionOfOperationID.Valid {
+			reversal = &operations[index]
+		}
+	}
+	require.NotNil(t, reversal)
+	require.Equal(t, int64(3), reversal.CorrectionOfOperationID.Int64)
+	require.Equal(t, "reverse", reversal.CorrectionMode.String)
+	require.Equal(t, "duplicate broker sale", reversal.CorrectionReason.String)
+	require.NoError(t, snapshot.Commit())
+
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO investment_operations
+			(book_id, operation_kind, event_date, created_at, created_audit_event_id,
+			 correction_of_operation_id, correction_mode, correction_reason)
+		VALUES (1, 'reversal', '2026-04-02', '2026-09-14T00:00:00Z', 31,
+			3, 'reverse', 'second reversal')`)
+	require.Error(t, err, "one predecessor cannot fork into two correction chains")
+	_, err = database.ExecContext(ctx, `
+		INSERT INTO investment_operations
+			(book_id, operation_kind, event_date, created_at, created_audit_event_id,
+			 correction_of_operation_id, correction_mode, correction_reason)
+		VALUES (1, 'reversal', '2026-04-02', '2026-09-14T00:00:00Z', 31,
+			5, 'reverse', 'reverse a reversal')`)
+	require.Error(t, err, "a pure reversal cannot be corrected again")
+}
+
 func seedReplayTestBook(t *testing.T) *sql.DB {
 	t.Helper()
 	ctx := context.Background()

@@ -75,7 +75,7 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 			}
 			for file, header := range map[string][]string{
 				"lots.csv":                               {"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status", "quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis", "cost_commodity_id", "source_transaction_id"},
-				"investment-operations.csv":              {"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id"},
+				"investment-operations.csv":              {"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id", "correction_of_operation_id", "correction_mode", "correction_reason"},
 				"investment-operation-journal-links.csv": {"operation_id", "link_seq", "transaction_version_id", "role"},
 				"investment-operation-dates.csv":         {"operation_id", "date_role", "event_date"},
 				"investment-operation-components.csv":    {"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id", "charge_kind", "cash_account_id"},

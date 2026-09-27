@@ -137,16 +137,20 @@ type ExportLotRecord struct {
 }
 
 type ExportInvestmentOperationRecord struct {
-	OperationID   int64
-	TransactionID sql.NullInt64
-	Kind          string
-	EventDate     string
-	AuditEventID  int64
+	OperationID             int64
+	TransactionID           sql.NullInt64
+	Kind                    string
+	EventDate               string
+	AuditEventID            int64
+	CorrectionOfOperationID sql.NullInt64
+	CorrectionMode          sql.NullString
+	CorrectionReason        sql.NullString
 }
 
 func (r *ExportRepository) ExportInvestmentOperations(ctx context.Context, transaction *sql.Tx, bookID int64) ([]ExportInvestmentOperationRecord, error) {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT id, transaction_id, operation_kind, event_date, created_audit_event_id
+		SELECT id, transaction_id, operation_kind, event_date, created_audit_event_id,
+			correction_of_operation_id, correction_mode, correction_reason
 		FROM investment_operations WHERE book_id = ? ORDER BY event_date, id
 	`, bookID)
 	if err != nil {
@@ -156,7 +160,9 @@ func (r *ExportRepository) ExportInvestmentOperations(ctx context.Context, trans
 	var operations []ExportInvestmentOperationRecord
 	for rows.Next() {
 		var operation ExportInvestmentOperationRecord
-		if err := rows.Scan(&operation.OperationID, &operation.TransactionID, &operation.Kind, &operation.EventDate, &operation.AuditEventID); err != nil {
+		if err := rows.Scan(&operation.OperationID, &operation.TransactionID, &operation.Kind,
+			&operation.EventDate, &operation.AuditEventID, &operation.CorrectionOfOperationID,
+			&operation.CorrectionMode, &operation.CorrectionReason); err != nil {
 			return nil, fmt.Errorf("scan export investment operation: %w", err)
 		}
 		operations = append(operations, operation)

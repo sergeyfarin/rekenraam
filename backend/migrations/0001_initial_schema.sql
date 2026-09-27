@@ -1264,7 +1264,19 @@ CREATE TABLE IF NOT EXISTS investment_operations (
   operation_kind TEXT NOT NULL CHECK (length(trim(operation_kind)) > 0 AND operation_kind = trim(operation_kind)),
   event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
   created_at TEXT NOT NULL,
-  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  correction_of_operation_id INTEGER UNIQUE REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  correction_mode TEXT CHECK (correction_mode IN ('replace', 'reverse')),
+  correction_reason TEXT,
+  CHECK (
+    (correction_of_operation_id IS NULL AND correction_mode IS NULL AND correction_reason IS NULL)
+    OR (correction_of_operation_id IS NOT NULL AND correction_mode IS NOT NULL
+      AND correction_reason IS NOT NULL AND length(trim(correction_reason)) > 0
+      AND correction_of_operation_id < id)
+  ),
+  CHECK (correction_mode IS NULL OR
+    (correction_mode = 'reverse' AND operation_kind = 'reversal') OR
+    (correction_mode = 'replace' AND operation_kind <> 'reversal'))
 );
 
 CREATE INDEX IF NOT EXISTS investment_operations_book_kind_date_idx
@@ -1277,8 +1289,13 @@ WHEN NOT EXISTS (SELECT 1 FROM audit_events a WHERE a.id = NEW.created_audit_eve
   OR (NEW.transaction_id IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM transactions t WHERE t.id = NEW.transaction_id AND t.book_id = NEW.book_id
   ))
+  OR (NEW.correction_of_operation_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM investment_operations original
+    WHERE original.id = NEW.correction_of_operation_id AND original.book_id = NEW.book_id
+      AND original.correction_mode IS NOT 'reverse'
+  ))
 BEGIN
-  SELECT RAISE(ABORT, 'investment operation must reference a transaction and audit event in the same book');
+  SELECT RAISE(ABORT, 'investment operation must reference a transaction, audit event and correctable predecessor in the same book');
 END;
 -- +goose StatementEnd
 

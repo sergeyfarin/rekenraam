@@ -8,14 +8,9 @@ tracks actionable work; the [backlog](backlog.md) maps local IDs, and
 
 Last reconciled: 2026-09-27.
 
-## Current: runtime maintenance and R16 correction
+## Current: R16 correction
 
-- [ ] Extract the application runtime
-  ([#113](https://github.com/sergeyfarin/rekenraam/issues/113)) in the next
-  suitable backend maintenance window, before the correction command. Scope
-  and acceptance are in the
-  [roadmap](roadmap.md#current-plan).
-- [ ] Finish slice 4: resolve correction chains and add the investment-native
+- [ ] Finish slice 4: add the investment-native
   correction/reversal command
   ([T-75b #99](https://github.com/sergeyfarin/rekenraam/issues/99)). A posted
   reversal and replacement must update journal, effective lots and gains,
@@ -24,8 +19,8 @@ Last reconciled: 2026-09-27.
 - [ ] Validate a corrected old buy followed by dependent sells under each cost
   basis method, including failure rollback and original versus effective
   allocations. The immutable intent reader, reversible replay simulation,
-  revision storage, gains and self-check readers, and revision-chain export are
-  already complete (slices 4a–4e).
+  revision storage, gains and self-check readers, revision-chain export, and
+  immutable correction-chain selection are already complete (slices 4a–4f).
 
 ## Then, within R16
 
