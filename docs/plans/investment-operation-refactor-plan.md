@@ -527,6 +527,13 @@ next family.
    and effective FIFO allocations differ. Exact trade economics precede
    this slice so replay has one authoritative source for proceeds and charges;
    this refines ADR 0013's foundation-to-correction sequence.
+   - **4a — immutable intent reader — complete 2026-09-27.** The long-position
+     reader takes opening terms from lot facts and disposal terms from decisions,
+     retains method/provenance and specific-lot elections, and orders them by
+     financial date, operation ID and effect sequence. FIFO/LIFO/average
+     allocations remain replay outputs. This is a read-only foundation;
+     backdated writes and native correction remain fenced until the rebuild
+     and effective revision writer land.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.
