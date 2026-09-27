@@ -109,7 +109,27 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 	if err != nil {
 		return TransactionRecord{}, 0, err
 	}
+	record, err := insertTransactionWithAuditEventTx(ctx, tx, params, auditEventID)
+	if err != nil {
+		return TransactionRecord{}, 0, err
+	}
+	return record, auditEventID, nil
+}
 
+// insertTransactionWithAuditEventTx records one posted journal beneath an
+// audit event already created by the enclosing command. Compound investment
+// corrections use it for their inverse and replacement journals so the user
+// action remains one auditable operation. Its caller must hold the book write
+// transaction and recheck account-rule dependencies for this journal.
+func insertTransactionWithAuditEventTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams, auditEventID int64) (TransactionRecord, error) {
+	var auditInBook int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM audit_events WHERE id = ? AND book_id = ?`,
+		auditEventID, params.BookID).Scan(&auditInBook); err != nil {
+		return TransactionRecord{}, fmt.Errorf("verify shared transaction audit: %w", err)
+	}
+	if auditInBook != 1 {
+		return TransactionRecord{}, fmt.Errorf("shared transaction audit event is outside the book")
+	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO transactions (
 			book_id,
@@ -122,15 +142,15 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 		VALUES (?, ?, ?, ?, NULLIF(?, ''), ?)
 	`, params.BookID, nullableInt64Value(params.CorrectionOfTransactionID), params.CreatedAt, params.ActorUserID, params.RequestID, auditEventID)
 	if err != nil {
-		return TransactionRecord{}, 0, fmt.Errorf("insert transaction: %w", err)
+		return TransactionRecord{}, fmt.Errorf("insert transaction: %w", err)
 	}
 	transactionID, err := result.LastInsertId()
 	if err != nil {
-		return TransactionRecord{}, 0, fmt.Errorf("read transaction id: %w", err)
+		return TransactionRecord{}, fmt.Errorf("read transaction id: %w", err)
 	}
 	if params.Spec.InvestmentOperationKind != "" {
 		if params.Spec.TransactionKind != "investment" || params.Spec.Status != "posted" {
-			return TransactionRecord{}, 0, fmt.Errorf("investment operation requires a posted investment transaction")
+			return TransactionRecord{}, fmt.Errorf("investment operation requires a posted investment transaction")
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_operations (
@@ -142,7 +162,7 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 			params.Spec.TransactionDate, params.CreatedAt, auditEventID,
 			params.InvestmentCorrectionOfOperationID, params.InvestmentCorrectionMode,
 			params.InvestmentCorrectionReason); err != nil {
-			return TransactionRecord{}, 0, fmt.Errorf("insert investment operation: %w", err)
+			return TransactionRecord{}, fmt.Errorf("insert investment operation: %w", err)
 		}
 	}
 
@@ -160,15 +180,15 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 		RequestID:          params.RequestID,
 	})
 	if err != nil {
-		return TransactionRecord{}, 0, err
+		return TransactionRecord{}, err
 	}
 	if params.Spec.InvestmentOperationKind != "" {
 		if err := recordInvestmentFoundationTx(ctx, tx, params, record, auditEventID); err != nil {
-			return TransactionRecord{}, 0, err
+			return TransactionRecord{}, err
 		}
 	}
 
-	return record, auditEventID, nil
+	return record, nil
 }
 
 // requireAccountRuleDependenciesTx refuses a write whose posting checks were

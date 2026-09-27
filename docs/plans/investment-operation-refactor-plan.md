@@ -607,6 +607,13 @@ next family.
      empty, error, and success states are provided on mobile and desktop.
      Imported sales remain visible without an unsafe action. Replacement and
      buy correction are the next write slices.
+   - **4k — compound correction writer seam — complete 2026-09-28.** The
+     existing transaction writer can insert multiple posted journals under a
+     single verified same-book audit event, and ordinary sale entry and native
+     replacement can prepare identical journal economics and disposal
+     elections. Existing writes retain their one-audit behavior. The next
+     slice uses this seam for an inverse plus a replacement journal; this
+     foundation alone does not expose replacement.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

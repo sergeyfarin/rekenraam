@@ -1471,14 +1471,47 @@ func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeI
 }
 
 func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
-	plan, err := s.sellPlan(ctx, input)
+	transactionParams, disposalParams, err := s.prepareSellWrite(ctx, input)
 	if err != nil {
 		return InvestmentTradeResult{}, err
+	}
+	var transactionRecord db.TransactionRecord
+	var disposals []db.LotDisposalRecord
+	var decision db.DisposalDecisionRecord
+	if postWrite == nil {
+		transactionRecord, disposals, decision, err = s.repository.CreateTransactionAndDisposeLotsWithDecision(ctx, transactionParams, disposalParams)
+	} else {
+		transactionRecord, disposals, decision, err = s.repository.CreateTransactionAndDisposeLotsWithDecisionAndPostWrite(ctx, transactionParams, disposalParams, postWrite)
+	}
+	if err != nil {
+		if errors.Is(err, db.ErrInsufficientLots) {
+			return InvestmentTradeResult{}, ErrInvestmentLotsInsufficient
+		}
+		if errors.Is(err, db.ErrInvalidDisposalParams) || errors.Is(err, db.ErrInvestmentBasisRange) {
+			return InvestmentTradeResult{}, ValidationError{Message: err.Error()}
+		}
+		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
+			return InvestmentTradeResult{}, err
+		}
+		return InvestmentTradeResult{}, fmt.Errorf("dispose sell lots: %w", err)
+	}
+	transaction := toTransaction(transactionRecord)
+	committedDecision := toDisposalDecision(decision)
+	return InvestmentTradeResult{Transaction: transaction, Allocations: toInvestmentLotDisposals(disposals), DisposalDecision: &committedDecision}, nil
+}
+
+// prepareSellWrite freezes the exact journal and disposal election before a
+// write. Ordinary sale entry and native replacement must use identical source
+// economics, account dependencies, fee snapshots, and cost-basis provenance.
+func (s *InvestmentService) prepareSellWrite(ctx context.Context, input InvestmentTradeInput) (db.CreateTransactionParams, db.DisposeLotsParams, error) {
+	plan, err := s.sellPlan(ctx, input)
+	if err != nil {
+		return db.CreateTransactionParams{}, db.DisposeLotsParams{}, err
 	}
 	metadataJSON := plan.MetadataJSON
 	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create, plan.AccountRuleDependencies)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return db.CreateTransactionParams{}, db.DisposeLotsParams{}, err
 	}
 	if !input.WriteOff {
 		transactionParams.InvestmentComponents = plan.TradeEconomics.components(input.CashCommodityID)
@@ -1488,13 +1521,13 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 				input.TransactionDate, input.QuantityValue, input.QuantityScale,
 				plan.TradeEconomics.PriceValue, plan.TradeEconomics.PriceScale, plan.TradeEconomics.PriceApproximate)
 			if err != nil {
-				return InvestmentTradeResult{}, err
+				return db.CreateTransactionParams{}, db.DisposeLotsParams{}, err
 			}
 		}
 	}
 	method, source, err := s.resolveCostBasisMethod(ctx, input.HoldingAccountID, input.CostBasisMethod)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return db.CreateTransactionParams{}, db.DisposeLotsParams{}, err
 	}
 	allocations := make([]db.LotAllocation, 0, len(input.LotAllocations))
 	for _, allocation := range input.LotAllocations {
@@ -1526,29 +1559,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		disposalParams.ProceedsValue = plan.TradeEconomics.ClearingValue
 		disposalParams.ProceedsScale = plan.TradeEconomics.ClearingScale
 	}
-	var transactionRecord db.TransactionRecord
-	var disposals []db.LotDisposalRecord
-	var decision db.DisposalDecisionRecord
-	if postWrite == nil {
-		transactionRecord, disposals, decision, err = s.repository.CreateTransactionAndDisposeLotsWithDecision(ctx, transactionParams, disposalParams)
-	} else {
-		transactionRecord, disposals, decision, err = s.repository.CreateTransactionAndDisposeLotsWithDecisionAndPostWrite(ctx, transactionParams, disposalParams, postWrite)
-	}
-	if err != nil {
-		if errors.Is(err, db.ErrInsufficientLots) {
-			return InvestmentTradeResult{}, ErrInvestmentLotsInsufficient
-		}
-		if errors.Is(err, db.ErrInvalidDisposalParams) || errors.Is(err, db.ErrInvestmentBasisRange) {
-			return InvestmentTradeResult{}, ValidationError{Message: err.Error()}
-		}
-		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
-			return InvestmentTradeResult{}, err
-		}
-		return InvestmentTradeResult{}, fmt.Errorf("dispose sell lots: %w", err)
-	}
-	transaction := toTransaction(transactionRecord)
-	committedDecision := toDisposalDecision(decision)
-	return InvestmentTradeResult{Transaction: transaction, Allocations: toInvestmentLotDisposals(disposals), DisposalDecision: &committedDecision}, nil
+	return transactionParams, disposalParams, nil
 }
 
 func (s *InvestmentService) Dividend(ctx context.Context, input DividendInput) (Transaction, error) {
