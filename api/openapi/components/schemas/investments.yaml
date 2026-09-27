@@ -596,6 +596,32 @@ InvestmentTradeResponse:
     disposal_decision:
       $ref: "#/DisposalDecisionResponse"
 
+InvestmentSaleReversalRequest:
+  type: object
+  additionalProperties: false
+  required:
+    - reason
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted manual long sale is being reversed.
+    reconciliation_override:
+      type: boolean
+      default: false
+
+InvestmentSaleReversalResponse:
+  type: object
+  required:
+    - transaction
+    - corrected_transaction_id
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    corrected_transaction_id:
+      type: integer
+      format: int64
+
 DisposalDecisionResponse:
   type: object
   required:

@@ -232,6 +232,12 @@ type CreateTransactionParams struct {
 	InvestmentComponents     []InvestmentComponentSpec
 	InvestmentSettlementDate string
 	TradeImpliedPrice        *TradeImpliedPriceSpec
+	// InvestmentCorrectionOfOperationID is set only by an investment-native
+	// correction command. The operation link must be inserted with the posted
+	// journal, so immutable operation rows are never updated afterward.
+	InvestmentCorrectionOfOperationID int64
+	InvestmentCorrectionMode          string
+	InvestmentCorrectionReason        string
 }
 
 // InvestmentComponentSpec is an exact source fact, signed from the owner's

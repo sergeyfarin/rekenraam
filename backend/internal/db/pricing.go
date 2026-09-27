@@ -599,7 +599,20 @@ func (r *PricingRepository) VoidPriceObservation(ctx context.Context, params Voi
 	if err != nil {
 		return nil, err
 	}
+	records, err := voidPriceObservationWithAuditTx(ctx, tx, params, auditEventID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit void price observation: %w", err)
+	}
+	committed = true
+	return records, nil
+}
 
+// voidPriceObservationWithAuditTx lets a larger financial command retire its
+// trade price and derived observations under the command's one audit event.
+func voidPriceObservationWithAuditTx(ctx context.Context, tx *sql.Tx, params VoidPriceObservationParams, auditEventID int64) ([]PriceObservationRecord, error) {
 	voidedIDs := []int64{params.ObservationID}
 	frontier := []int64{params.ObservationID}
 	seen := map[int64]bool{params.ObservationID: true}
@@ -651,10 +664,6 @@ func (r *PricingRepository) VoidPriceObservation(ctx context.Context, params Voi
 		records = append(records, record)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit void price observation: %w", err)
-	}
-	committed = true
 	return records, nil
 }
 

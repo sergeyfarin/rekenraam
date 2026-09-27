@@ -1,0 +1,61 @@
+post:
+  summary: Reverse a posted manual long sale
+  description: >-
+    Posts a balanced inverse transaction, retires the source trade price and
+    dependent prices, and replays the long position in one database transaction.
+    The original sale remains posted audit history. Imported fills require a
+    source-aware correction and cannot use this command. Reversal is terminal;
+    an already corrected sale cannot be reversed again.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+      description: Posted sale transaction ID.
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalRequest"
+  responses:
+    "201":
+      description: Sale reversed and dependent position replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted manual long sale not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected, imported, changed, impossible replay, or reconciliation override required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

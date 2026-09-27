@@ -135,10 +135,13 @@ func createTransactionWithAuditTx(ctx context.Context, tx *sql.Tx, params Create
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_operations (
 				book_id, transaction_id, operation_kind, event_date,
-				created_at, created_audit_event_id
-			) VALUES (?, ?, ?, ?, ?, ?)
+				created_at, created_audit_event_id, correction_of_operation_id,
+				correction_mode, correction_reason
+			) VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''))
 		`, params.BookID, transactionID, params.Spec.InvestmentOperationKind,
-			params.Spec.TransactionDate, params.CreatedAt, auditEventID); err != nil {
+			params.Spec.TransactionDate, params.CreatedAt, auditEventID,
+			params.InvestmentCorrectionOfOperationID, params.InvestmentCorrectionMode,
+			params.InvestmentCorrectionReason); err != nil {
 			return TransactionRecord{}, 0, fmt.Errorf("insert investment operation: %w", err)
 		}
 	}

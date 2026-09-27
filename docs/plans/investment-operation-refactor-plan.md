@@ -578,6 +578,19 @@ next family.
      superseded sale while leaving the source rows and bundle history intact.
      The write command still must install the rebuilt lot projection and
      balanced correcting journals atomically before corrections are exposed.
+   - **4h — manual long-sale pure reversal — complete 2026-09-27.** The native
+     command takes a posted manual sale transaction ID and required reason,
+     posts its exact inverse as a new transaction, records a terminal operation
+     correction link, replays dependent long-position decisions, retires the
+     source trade price and its derived observations, and applies the
+     reconciliation boundary inside one SQLite transaction and one audit
+     event. The original sale and its journal remain posted history. A
+     reconciliation-only transaction version is eligible when its dated
+     economic postings still match the source version. The endpoint includes
+     a read-only reconciliation-impact preview. Imported fills are refused
+     until source identity correction is part of the same command. Buy
+     correction, sale replacement, short positions, and UI entry remain later
+     slices; backdated writes stay fenced.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

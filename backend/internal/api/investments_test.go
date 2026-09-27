@@ -138,6 +138,34 @@ func TestExactTradeRequestAndPreviewUseSignedGrossChargesAndNet(t *testing.T) {
 	require.Len(t, preview.Charges, 1)
 }
 
+func TestReverseManualSaleAPI(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "REV")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 50000), http.StatusCreated)
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "2", 24000)
+	sale.TransactionDate = "2026-03-01"
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/sell", sale, http.StatusCreated)
+	var sold investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&sold))
+	path := "/api/v1/investments/transactions/" + strconv.FormatInt(sold.Transaction.ID, 10) + "/reverse-sale"
+	request := investmentSaleReversalRequest{Reason: "broker canceled fill"}
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
+	var reversed investmentSaleReversalResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&reversed))
+	require.Equal(t, sold.Transaction.ID, reversed.CorrectedTransactionID)
+	require.Equal(t, "posted", reversed.Transaction.Status)
+	var remaining int
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM investment_lots WHERE book_id = 1 AND remaining_quantity_value = '5'`).Scan(&remaining))
+	require.Equal(t, 1, remaining)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
+}
+
 // --- Lifecycle ---
 
 // assertMoneyValue compares a coefficient/scale pair against an expected

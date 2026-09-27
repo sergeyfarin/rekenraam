@@ -21,6 +21,9 @@ Last reconciled: 2026-09-27.
   allocations. The immutable intent reader, reversible replay simulation,
   revision storage, gains and self-check readers, revision-chain export, and
   correction-aware current reads are already complete (slices 4a–4g).
+  Manual long-sale pure reversal is complete in slice 4h, including its API,
+  replay, price retirement and reconciliation preview. Next is replacement and
+  buy correction; imported fills still require source-aware identity handling.
 
 ## Then, within R16
 
