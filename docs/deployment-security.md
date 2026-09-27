@@ -149,7 +149,8 @@ openssl rand -base64 32
 Keep it in the service environment or a secret manager, outside Git, and back
 it up with the SQLite database. Losing it leaves ledger data intact but makes
 stored provider credentials and any MFA enrolment unreadable — recover with a
-recovery code, or with the `recover-owner` command from the host; see the root README for the
+recovery code, or with the `recover-owner` command from the host; see the
+[developer workflow](developer-workflow.md#local-owner-recovery) for the
 backup-first recovery procedure. Do not change it casually: no in-place key
 rotation command exists yet.
 

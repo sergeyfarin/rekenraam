@@ -15,17 +15,15 @@ single answer to "what is done."
 
 Status legend: ✅ shipped · 🟡 backend only (no UI) · 🟦 partial · ⬜ not started.
 
-The final pre-`v0.1.0` consolidation folded the complete schema through the
-2026-09-10 disposal-provenance work into
-`backend/migrations/0001_initial_schema.sql`. The release-candidate freeze now
-makes that baseline checksum-enforced and immutable; later changes use
-sequential forward migrations and are tested from the v0.1 schema to `HEAD`.
+The unused `v0.1.0` candidate baseline is in
+`backend/migrations/0001_initial_schema.sql`. Its checksum is enforced, but
+ADR 0013 permits an explicitly declared redesign before any installed release;
+each rewrite updates the checksum, fixtures and upgrade/equivalence tests.
+After the first installed release, schema changes use forward migrations.
 
-Last documentation reconciliation: 2026-09-09 (see
-`docs/reviews/r10-learning-acceptance-review-2026-09-09.md`). The investment boundary review
-reclassified average cost, investment transaction lifecycle coupling, disposal
-provenance, and gains reproducibility honestly below. R12a closed 2026-08-30;
-ADR 0012 governs the durable split.
+Last documentation reconciliation: 2026-09-27 (R16 foundation, exact trade
+economics and correction sub-slices 4a–4e). R12a closed 2026-08-30; ADR 0012
+governs the journal/subledger boundary and ADR 0013 the R16 operation model.
 
 ## Foundation (Phase 0) — ✅ Complete
 
@@ -81,7 +79,7 @@ ADR 0012 governs the durable split.
 | Capability | Status | Notes |
 |---|---|---|
 | `internal/secretbox` (AES-256-GCM, random nonce, base64 wire format) | ✅ | `backend/internal/secretbox/secretbox.go`; pure stdlib, 11-test suite. |
-| `REKENRAAM_SECRET_KEY` config (base64 32-byte key, optional boot) | ✅ | `internal/config/config.go`; absent = nil (boots); invalid = hard error; loss/rotation recovery documented in `README.md` and `docs/developer-workflow.md`. |
+| `REKENRAAM_SECRET_KEY` config (base64 32-byte key, optional boot) | ✅ | `internal/config/config.go`; absent = nil (boots); invalid = hard error; loss/rotation recovery documented in `docs/deployment-security.md` and `docs/developer-workflow.md`. |
 | `SESSION_LIFETIME_HOURS` config | ✅ | `internal/config/config.go`; default `720`, must be a positive integer number of hours; controls login-created session expiry. |
 | Beta schema baseline (`0001_initial_schema.sql`) | ✅ | `import_connections` table + `connection_id` FK on `import_batches`. |
 | `ImportConnectionRepository` (CRUD) | ✅ | `internal/db/import_connections.go`; conditional key rotation on update. |
@@ -198,7 +196,7 @@ ADR 0012 governs the durable split.
 | Settings → Data screen | ✅ | `/app/settings/data` in six locales. **Export**: format (archive / flat CSV / QIF) with what each one is for, a date range where the format accepts one, the QIF date layout, a preview line stating what the file will hold before it is offered, and the named list of what an export leaves behind. A QIF selection naming an account QIF cannot write shows those accounts and needs an explicit confirmation before the download unlocks. **Backups**: last and next run, folder, the `REKENRAAM_SECRET_KEY` notice, the policy form, back-up-now (queued, never claimed as done), and history with per-run failures and retry. **Health check**: run it, and read each check's verdict with what it means — plus what to do, for the ones that failed. |
 | Acceptance-mapped browser subset (T-61) | ✅ | `scripts/test-e2e-acceptance.sh` runs the cases tagged `[acceptance]`, which map onto a plan's validation matrix rather than being split by cost like the smoke and preflight suites. Thirteen members as of 2026-08-28: R3's two Data-screen cases, R3a's eight core-workflow accessibility journeys, the two report journeys (R2's multi-currency one and the reporting currency's), and R5's CSV profile/payee-resolution journey. The tag is the membership list — nothing enumerates it a second time, so a case joins by being tagged. The run reports 15, not 13: the `bootstrap` project dependency pulls `auth.spec.ts`'s two cases in first, because every other spec needs an owner account to exist. |
 | Commodity symbol spacing (T-62) | ✅ | `joinCommodityAmount` states the rule once — separate when the label ends in a letter or digit, do not when it is punctuation — and the three call sites that ran `AAPL2.000` together now use it. Tested including non-Latin labels. |
-| Acceptance review | ✅ | Closed 2026-08-24 in `docs/plans/data-portability-plan.md`: every commitment verified, every deferred item answered with a reason, and the four planning claims that testing disproved corrected in place. It found the attachments hook missing from the backup documentation — present in the manifest, the self-check, and the restore output, absent from `README.md` — now fixed. |
+| Acceptance review | ✅ | Closed 2026-08-24 in `docs/plans/data-portability-plan.md`: every commitment verified, every deferred item answered with a reason, and the four planning claims that testing disproved corrected in place. The backup documentation now covers the future attachments hook in `docs/deployment-security.md`. |
 
 ## Accessibility (R3a) — ✅ Core-workflow regression coverage
 

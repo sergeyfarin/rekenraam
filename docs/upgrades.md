@@ -38,9 +38,21 @@ no `backup` subcommand to reach for instead.
 5. Record the release currently running and read the target release notes. Each
    release note must state the highest included migration.
 
-If the Data screen cannot be reached, take the operator backup documented under
-*Backup And Restore* in `README.md` (`VACUUM INTO` against a stopped app)
-instead. Do not copy a live WAL-mode database file.
+If the Data screen cannot be reached, stop the app and create a compact
+SQLite-aware operator backup. Replace the example paths with your actual
+`DATABASE_URL` path and a new backup path on separate storage:
+
+```sh
+umask 077
+sqlite3 data/rekenraam.sqlite "VACUUM INTO '/mnt/backup/rekenraam-pre-upgrade.sqlite'"
+sqlite3 /mnt/backup/rekenraam-pre-upgrade.sqlite "PRAGMA integrity_check"
+sqlite3 /mnt/backup/rekenraam-pre-upgrade.sqlite "PRAGMA foreign_key_check"
+chmod 600 /mnt/backup/rekenraam-pre-upgrade.sqlite
+```
+
+The integrity check must print `ok`; the foreign-key check must return no rows.
+Keep the original `REKENRAAM_SECRET_KEY` separately. Do not copy a live
+WAL-mode database file.
 
 ## Upgrade
 

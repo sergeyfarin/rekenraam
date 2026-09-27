@@ -55,11 +55,11 @@ inbox.
 - Limits: configurable max file size (default ~10 MB), allowlisted types
   (JPEG/PNG/WebP/HEIC?/PDF). HEIC likely needs client-side conversion —
   decide during R14a.
-- **Backup story extension (required, same slice):** documented procedure
-  becomes SQLite `VACUUM INTO` **plus** attachments-dir copy; the
-  trial-balance/self-check proposal gains an attachments integrity pass
-  (every DB row's file exists and hashes match). README backup section
-  updated.
+- **Backup story extension (required, same slice):** extend the existing
+  SQLite online-backup workflow with an attachments-directory copy; the
+  self-check gains an attachments integrity pass (every DB row's file exists
+  and hashes match). Update `docs/deployment-security.md` and
+  `docs/upgrades.md` with the combined backup and restore procedure.
 - Access control: existing session auth; files served only through an
   authenticated endpoint, never as static paths.
 - Encryption at rest: deferred with the same reasoning as SQLite encryption

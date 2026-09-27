@@ -18,8 +18,9 @@ Open http://localhost:1888. Dev SQLite lives at `backend/var/dev.sqlite`
 `APP_ENV` (`development`|`production`, defaults production),
 `REKENRAAM_SECRET_KEY` (base64 32 bytes; required for import connections),
 `TRUST_PROXY_HEADERS` + `TRUSTED_PROXY_CIDRS`, `OPEN_EXCHANGE_RATES_APP_ID`.
-Owner password reset: `recover-owner` command (see README § Local Owner
-Recovery) — it backs up and revokes sessions; never edit the users table.
+Owner password reset: `recover-owner` command (see
+`docs/developer-workflow.md` § Local Owner Recovery) — it backs up and revokes
+sessions; never edit the users table.
 
 ## Validation matrix (narrowest first — this is the contract; CI runs the same scripts)
 

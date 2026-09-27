@@ -96,7 +96,7 @@ What exists:
   the target already exists.
 - `db.VerifySQLiteBackup` (same file) — opens the copy read-only and runs
   `PRAGMA integrity_check` **and** `PRAGMA foreign_key_check`, matching the
-  documented operator procedure in `README.md`. (Revisions 2-4 said the second
+  documented operator procedure in `docs/upgrades.md`. (Revisions 2-4 said the second
   was missing. It is not, and slice 4 corrected the claim rather than adding a
   duplicate.)
 - Both are reachable from exactly one place: `RecoveryService.PrepareBackup`
@@ -686,7 +686,7 @@ intact; those two are not.
 
 This slice therefore ships:
 
-- **An operator workflow**, in `README.md` and `docs/deployment-security.md`:
+- **An operator workflow**, in `docs/upgrades.md` and `docs/deployment-security.md`:
   where the key comes from, that it must be retained in a password manager or
   secret store **separate from the backup directory**, that rotating it
   invalidates sealed data unless the app re-seals first, and what to do when it
@@ -737,7 +737,7 @@ mode is a *set* of files, and every step below treats it as one.
   6. Prints the attachments-directory step (a documented no-op until R14a) and
      the secret-key requirement, and declares success only after the final
      `fsync` returns.
-- `README.md` and `docs/deployment-security.md` are rewritten around these
+- `docs/upgrades.md` and `docs/deployment-security.md` are rewritten around these
   commands, keeping the manual `sqlite3` procedure as the fallback.
 - **A restore drill runs automatically**: a Go test that seeds a book, takes a
   scheduled-path backup, restores it into a fresh location, and asserts the

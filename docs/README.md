@@ -10,7 +10,7 @@ everything else is reference material sorted by kind.
 |---|---|---|
 | [roadmap.md](roadmap.md) | What are we building next, in what order? | Only when priorities genuinely change; governed by `product-requirements.md` |
 | [todo.md](todo.md) | What is the short-horizon working queue right now? | Freely; items are deleted when done or promoted to roadmap/backlog |
-| [backlog.md](backlog.md) | What known defects and technical debt are tracked? | Add with an ID (`T-nn`, security `S-nn`, test-coverage gaps keep their review's `G-nn`); move resolved items to `reviews/resolved-backlog-2026-07.md` |
+| [backlog.md](backlog.md) | What known defects and technical debt are tracked? | Add with an ID (`T-nn`, security `S-nn`, test-coverage gaps keep their review's `G-nn`); move resolved items to a dated record in `reviews/` |
 | [implemented.md](implemented.md) | What ships today, backend vs UI? | Reconcile with the codebase when a slice lands |
 
 The boundary between them: **roadmap** holds ordered product initiatives,
@@ -45,13 +45,15 @@ have exactly one home.
 
 ## Current execution plan
 
-[R10 projected balances](plans/projected-balances-plan.md) is complete: see the
-[core acceptance review](reviews/r10-core-acceptance-review-2026-09-07.md) and
-[learned-spending acceptance review](reviews/r10-learning-acceptance-review-2026-09-09.md).
-The [lightweight learning extension](plans/forecast-learning-plan.md) ships
-opt-in local models across daily/weekly, monthly and annual patterns with
-explicit quality and hardware gates. R8 budget planning is now the current
-execution target; its plan is the next artifact to write.
+R16 investment lifecycle completeness is the current initiative. Its
+[operation plan](plans/investment-operation-refactor-plan.md) and
+[slice 1 economics contract](plans/investment-operation-slice-1-contract.md)
+govern the work. The schema and exact trade economics are shipped; correction
+foundations 4a–4e are complete. The native correction/reversal command is next,
+followed by transfers, basis actions and named short sales. See the
+[short-horizon queue](todo.md) for immediate steps and
+[implemented](implemented.md) for the exact shipped boundary. R8 budgets and
+R10 forecasting are complete.
 
 Latest strategic review:
 [2026-09-09 product direction, AI and privacy](reviews/product-direction-ai-privacy-2026-09-09.md).
@@ -87,9 +89,9 @@ of scope until an accepted ADR changes the product decision.
   per-step implementation trackers (replaced by `implemented.md`) and
   reviews of the pre-Go experimental stacks. Never cite these as current.
 
-Latest cross-document code reconciliation:
+Earlier cross-document code reconciliation:
 [2026-08-31 documentation review](reviews/documentation-code-review-2026-08-31.md).
-It records corrected status claims, evidence, and open code gaps T-79/T-80.
+It records findings at that date; T-79 has since closed and T-80 remains open.
 
 ## Rules of thumb
 
