@@ -30,12 +30,14 @@ type fxCoverageWorkPayload struct {
 	CurrencyID int64  `json:"currency_id,omitempty"`
 }
 
-func (s *PricingService) StartBackgroundWorker(ctx context.Context, logger *slog.Logger) {
+func (s *PricingService) StartBackgroundWorker(ctx context.Context, logger *slog.Logger) <-chan struct{} {
+	done := make(chan struct{})
 	if logger == nil {
 		logger = slog.Default()
 	}
 	workerID := uuid.NewString()
 	go func() {
+		defer close(done)
 		s.runDueFXCoverage(ctx, logger, workerID)
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -48,6 +50,7 @@ func (s *PricingService) StartBackgroundWorker(ctx context.Context, logger *slog
 			}
 		}
 	}()
+	return done
 }
 
 func (s *PricingService) runDueFXCoverage(ctx context.Context, logger *slog.Logger, workerID string) {

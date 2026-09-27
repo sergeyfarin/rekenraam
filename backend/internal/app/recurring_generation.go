@@ -182,11 +182,13 @@ func (s *RecurringService) materializeOccurrenceAttempt(ctx context.Context, inp
 
 // StartScheduler checks due occurrences at startup and once per minute.
 // Generated drafts are reachable through the dedicated recurring review UI.
-func (s *RecurringService) StartScheduler(ctx context.Context, logger *slog.Logger) {
+func (s *RecurringService) StartScheduler(ctx context.Context, logger *slog.Logger) <-chan struct{} {
+	done := make(chan struct{})
 	if logger == nil {
 		logger = slog.Default()
 	}
 	go func() {
+		defer close(done)
 		s.scheduleRecurringIfDue(ctx, logger)
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -199,6 +201,7 @@ func (s *RecurringService) StartScheduler(ctx context.Context, logger *slog.Logg
 			}
 		}
 	}()
+	return done
 }
 
 func (s *RecurringService) scheduleRecurringIfDue(ctx context.Context, logger *slog.Logger) {

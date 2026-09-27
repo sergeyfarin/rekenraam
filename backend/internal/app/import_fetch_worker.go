@@ -234,15 +234,18 @@ func (s *ImportService) startTrading212Fetch(ctx context.Context, params trading
 // StartBackgroundWorker starts the Trading 212 fetch worker loop, mirroring
 // PricingService.StartBackgroundWorker (pricing_worker.go). No-ops if the
 // service was constructed without online-import dependencies.
-func (s *ImportService) StartBackgroundWorker(ctx context.Context, logger *slog.Logger) {
+func (s *ImportService) StartBackgroundWorker(ctx context.Context, logger *slog.Logger) <-chan struct{} {
+	done := make(chan struct{})
 	if s.backgroundWork == nil || s.connectionService == nil {
-		return
+		close(done)
+		return done
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
 	workerID := uuid.NewString()
 	go func() {
+		defer close(done)
 		s.runDueTrading212Fetches(ctx, logger, workerID)
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -255,6 +258,7 @@ func (s *ImportService) StartBackgroundWorker(ctx context.Context, logger *slog.
 			}
 		}
 	}()
+	return done
 }
 
 func (s *ImportService) runDueTrading212Fetches(ctx context.Context, logger *slog.Logger, workerID string) {

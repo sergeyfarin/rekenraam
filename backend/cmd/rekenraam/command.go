@@ -13,13 +13,10 @@ import (
 
 	"golang.org/x/term"
 
-	"rekenraam/backend/internal/api"
 	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/appruntime"
 	"rekenraam/backend/internal/config"
 	"rekenraam/backend/internal/db"
-	"rekenraam/backend/internal/lockfile"
-	"rekenraam/backend/internal/marketdata"
-	"rekenraam/backend/internal/web"
 )
 
 func run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
@@ -49,150 +46,29 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer, 
 	}
 }
 
-func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
+func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) (exitCode int) {
 	if cfg.GeneratedSetupToken {
 		logger.Warn("generated one-time setup token; set SETUP_TOKEN before the next restart if setup is not completed", slog.String("setup_token", cfg.SetupToken))
 	}
 
-	// Held for the life of this process: it is what lets `restore` prove the
-	// server is stopped instead of guessing from an idle connection or a
-	// missing -wal file.
-	databasePath, err := db.ResolveSQLiteFilePath(cfg.DatabaseURL)
+	runtime, err := appruntime.Open(ctx, cfg, logger)
 	if err != nil {
-		logger.Error("resolve database path", slog.Any("err", err))
+		logger.Error("start application runtime", slog.Any("err", err))
 		return 1
 	}
-	processLock, err := lockfile.Acquire(databasePath)
-	if err != nil {
-		logger.Error("acquire database lock", slog.Any("err", err))
-		return 1
-	}
-	defer processLock.Close()
-
-	database, err := db.Open(ctx, cfg.DatabaseURL)
-	if err != nil {
-		logger.Error("open database", slog.Any("err", err))
-		return 1
-	}
-	defer database.Close()
-
-	if err := db.Migrate(ctx, database); err != nil {
-		logger.Error("run migrations", slog.Any("err", err))
-		return 1
-	}
-	if err := db.EnforceSQLiteFilePermissions(cfg.DatabaseURL); err != nil {
-		logger.Error("secure sqlite files", slog.Any("err", err))
-		return 1
-	}
-
-	setupRepository := db.NewSetupRepository(database)
-	setupService := app.NewSetupService(setupRepository)
-	authRepository := db.NewAuthRepository(database)
-	authService := app.NewAuthServiceWithSessionLifetime(authRepository, logger, cfg.SessionLifetime)
-	// The same key that seals connection credentials seals the MFA shared
-	// secret (S-06). Absent, MFA enrollment refuses rather than storing it in
-	// the clear.
-	authService.SetSecretKey(cfg.SecretKey)
-	settingsService := app.NewSettingsService(db.NewSettingsRepository(database))
-	bookRepository := db.NewBookRepository(database)
-	bookService := app.NewBookService(bookRepository, setupService)
-	commodityRepository := db.NewCommodityRepository(database)
-	currencyService := app.NewCurrencyService(commodityRepository, setupService)
-	institutionRepository := db.NewInstitutionRepository(database)
-	institutionService := app.NewInstitutionService(institutionRepository)
-	accountRepository := db.NewAccountRepository(database)
-	accountService := app.NewAccountService(accountRepository, institutionRepository, setupService)
-	tagService := app.NewTagService(db.NewTagRepository(database))
-	categoryService := app.NewCategoryService(db.NewCategoryRepository(database), setupService)
-	payeeRepository := db.NewPayeeRepository(database)
-	payeeService := app.NewPayeeService(payeeRepository, accountRepository)
-	transactionService := app.NewTransactionService(db.NewTransactionRepository(database), payeeRepository, accountRepository, commodityRepository)
-	pricingService := app.NewPricingService(db.NewPricingRepository(database), marketdata.DefaultRegistry(cfg.OpenExchangeRatesAppID))
-	// Reports can be denominated in a reporting currency, which needs rates.
-	transactionService.SetPricingRepository(db.NewPricingRepository(database))
-	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
-	importConnectionService := app.NewImportConnectionService(db.NewImportConnectionRepository(database), accountService, cfg.SecretKey, app.NewTrading212Prober(nil))
-	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, importConnectionService, db.NewBackgroundWorkRepository(database), investmentService)
-	// Exports read through their own read-only pool: the main pool is one
-	// connection, and a long export holding it would stall every request. WAL
-	// readers are concurrent with the single writer, so this costs no write
-	// throughput (ADR 0011).
-	readOnlyDatabase, err := db.OpenReadOnly(ctx, cfg.DatabaseURL)
-	if err != nil {
-		logger.Error("open read-only database", slog.Any("err", err))
-		return 1
-	}
-	defer readOnlyDatabase.Close()
-	exportService := app.NewExportService(db.NewExportRepository(readOnlyDatabase))
-	forecastService := app.NewForecastService(db.NewForecastRepository(readOnlyDatabase))
-	budgetService := app.NewBudgetService(db.NewBudgetRepository(database), settingsService)
-	// The backup copies from the read-only pool too: a nightly copy of a large
-	// book must not hold the single write connection (ADR 0011, ADR 0004).
-	backupService := app.NewBackupService(
-		db.NewBackupRepository(database),
-		db.NewBackgroundWorkRepository(database),
-		readOnlyDatabase,
-		cfg.DatabaseURL,
-		cfg.BackupDir,
-	)
-	pricingService.StartScheduler(ctx, logger)
-	authService.StartSessionCleanup(ctx, logger)
-	pricingService.StartBackgroundWorker(ctx, logger)
-	importService.StartBackgroundWorker(ctx, logger)
-	importService.StartScheduler(ctx, logger)
-	selfCheckService := app.NewSelfCheckService(db.NewSelfCheckRepository(database, readOnlyDatabase))
-	// A self-check run cannot outlive the process that started it, so any
-	// `running` row still here at startup belongs to a process that crashed
-	// before it could finish — the case T-71's in-process error handling
-	// cannot reach. Recover it now, before anything can start a new run.
-	if recovered, err := selfCheckService.RecoverInterruptedRuns(ctx); err != nil {
-		logger.Error("recover interrupted self-check runs", slog.Any("err", err))
-	} else if recovered > 0 {
-		logger.Warn("recovered self-check run interrupted by a previous crash", slog.Int64("count", recovered))
-	}
-	backupService.SetSelfCheck(selfCheckService)
-	backupService.StartBackgroundWorker(ctx, logger)
-	backupService.StartScheduler(ctx, logger)
-	recurringService := app.NewRecurringService(db.NewRecurringRepository(database), transactionService, settingsService)
-	recurringService.StartScheduler(ctx, logger)
-	handler := api.NewHandler(logger, web.Handler(), api.Services{
-		Setup:            setupService,
-		Auth:             authService,
-		Settings:         settingsService,
-		Book:             bookService,
-		Currency:         currencyService,
-		Institution:      institutionService,
-		Account:          accountService,
-		Tag:              tagService,
-		Category:         categoryService,
-		Payee:            payeeService,
-		Transaction:      transactionService,
-		Recurring:        recurringService,
-		Pricing:          pricingService,
-		Investment:       investmentService,
-		Import:           importService,
-		ImportConnection: importConnectionService,
-		Export:           exportService,
-		Backup:           backupService,
-		SelfCheck:        selfCheckService,
-		Forecast:         forecastService,
-		Budget:           budgetService,
-	}, api.HandlerOptions{
-		TrustProxyHeaders: cfg.TrustProxyHeaders,
-		TrustedProxyCIDRs: cfg.TrustedProxyCIDRs,
-		SetupToken:        cfg.SetupToken,
-	})
-	server := newHTTPServer(cfg.HTTPAddr, handler)
-
-	logger.Info("server starting",
-		slog.String("addr", cfg.HTTPAddr),
-		slog.String("app_env", cfg.AppEnv),
-	)
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- server.ListenAndServe()
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := runtime.Close(shutdownCtx); err != nil {
+			logger.Error("close application runtime", slog.Any("err", err))
+			exitCode = 1
+		}
 	}()
+
+	server := newHTTPServer(cfg.HTTPAddr, runtime.Handler())
+	logger.Info("server starting", slog.String("addr", cfg.HTTPAddr), slog.String("app_env", cfg.AppEnv))
+	errCh := make(chan error, 1)
+	go func() { errCh <- server.ListenAndServe() }()
 
 	select {
 	case err := <-errCh:
@@ -204,18 +80,15 @@ func runServe(ctx context.Context, cfg config.Config, logger *slog.Logger) int {
 		logger.Info("server shutting down")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			logger.Error("shutdown http server", slog.Any("err", err))
 			return 1
 		}
-
 		if err := <-errCh; err != nil && err != http.ErrServerClosed {
 			logger.Error("serve http", slog.Any("err", err))
 			return 1
 		}
 	}
-
 	return 0
 }
 

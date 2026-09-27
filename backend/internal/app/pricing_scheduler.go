@@ -9,11 +9,13 @@ import (
 	"rekenraam/backend/internal/db"
 )
 
-func (s *PricingService) StartScheduler(ctx context.Context, logger *slog.Logger) {
+func (s *PricingService) StartScheduler(ctx context.Context, logger *slog.Logger) <-chan struct{} {
+	done := make(chan struct{})
 	if logger == nil {
 		logger = slog.Default()
 	}
 	go func() {
+		defer close(done)
 		s.runScheduledRefreshIfDue(ctx, logger)
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -26,6 +28,7 @@ func (s *PricingService) StartScheduler(ctx context.Context, logger *slog.Logger
 			}
 		}
 	}()
+	return done
 }
 
 func (s *PricingService) runScheduledRefreshIfDue(ctx context.Context, logger *slog.Logger) {

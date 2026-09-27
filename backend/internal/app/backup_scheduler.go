@@ -16,14 +16,17 @@ import (
 // person, and a person means their own 03:15. The stored local time plus the
 // owner's IANA zone is the DST-correct way to keep it; runs are recorded in
 // UTC.
-func (s *BackupService) StartScheduler(ctx context.Context, logger *slog.Logger) {
+func (s *BackupService) StartScheduler(ctx context.Context, logger *slog.Logger) <-chan struct{} {
+	done := make(chan struct{})
 	if s.repository == nil || s.backgroundWork == nil {
-		return
+		close(done)
+		return done
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
 	go func() {
+		defer close(done)
 		s.scheduleBackupIfDue(ctx, logger)
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -36,6 +39,7 @@ func (s *BackupService) StartScheduler(ctx context.Context, logger *slog.Logger)
 			}
 		}
 	}()
+	return done
 }
 
 func (s *BackupService) scheduleBackupIfDue(ctx context.Context, logger *slog.Logger) {

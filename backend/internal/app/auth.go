@@ -521,7 +521,8 @@ func (s *AuthService) CleanupExpiredAndRevokedSessions(ctx context.Context) (int
 	return deleted, nil
 }
 
-func (s *AuthService) StartSessionCleanup(ctx context.Context, logger *slog.Logger) {
+func (s *AuthService) StartSessionCleanup(ctx context.Context, logger *slog.Logger) <-chan struct{} {
+	done := make(chan struct{})
 	if logger == nil {
 		logger = s.logger
 	}
@@ -530,6 +531,7 @@ func (s *AuthService) StartSessionCleanup(ctx context.Context, logger *slog.Logg
 	}
 
 	go func() {
+		defer close(done)
 		s.cleanupExpiredAndRevokedSessions(ctx, logger)
 
 		ticker := time.NewTicker(24 * time.Hour)
@@ -544,6 +546,7 @@ func (s *AuthService) StartSessionCleanup(ctx context.Context, logger *slog.Logg
 			}
 		}
 	}()
+	return done
 }
 
 func (s *AuthService) cleanupExpiredAndRevokedSessions(ctx context.Context, logger *slog.Logger) {

@@ -32,14 +32,17 @@ func SetAutoRefreshIntervalForTest(d time.Duration) (restore func()) {
 // them via the existing RefreshImportConnection path (Slice 3) — no new
 // fetch logic, just deciding when to call it. No-ops if the service was
 // constructed without online-import dependencies.
-func (s *ImportService) StartScheduler(ctx context.Context, logger *slog.Logger) {
+func (s *ImportService) StartScheduler(ctx context.Context, logger *slog.Logger) <-chan struct{} {
+	done := make(chan struct{})
 	if s.backgroundWork == nil || s.connectionService == nil {
-		return
+		close(done)
+		return done
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
 	go func() {
+		defer close(done)
 		s.runDueTrading212AutoRefreshes(ctx, logger)
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -52,6 +55,7 @@ func (s *ImportService) StartScheduler(ctx context.Context, logger *slog.Logger)
 			}
 		}
 	}()
+	return done
 }
 
 func (s *ImportService) runDueTrading212AutoRefreshes(ctx context.Context, logger *slog.Logger) {

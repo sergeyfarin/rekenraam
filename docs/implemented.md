@@ -23,8 +23,8 @@ ADR 0013 permits an explicitly declared redesign before any installed release;
 each rewrite updates the checksum, fixtures and upgrade/equivalence tests.
 After the first installed release, schema changes use forward migrations.
 
-Last documentation reconciliation: 2026-09-27 (R16 foundation, exact trade
-economics and correction sub-slices 4a–4e). R12a closed 2026-08-30; ADR 0012
+Last documentation reconciliation: 2026-09-27 (R16 runtime extraction,
+foundation, exact trade economics and correction sub-slices 4a–4e). R12a closed 2026-08-30; ADR 0012
 governs the journal/subledger boundary and ADR 0013 the R16 operation model.
 
 ## Foundation (Phase 0) — ✅ Complete
@@ -33,6 +33,7 @@ governs the journal/subledger boundary and ADR 0013 the R16 operation model.
 |---|---|---|
 | SQLite migrations + schema version | ✅ | The unused v0.1 candidate baseline in `backend/migrations/0001_initial_schema.sql` is checksum-enforced, auto-run before serving, and covered by a baseline-to-HEAD schema/data-preservation test. ADR 0013 permits this pre-release redesign; installed-release migrations remain immutable. Migration numbers remain sequential and independent of release numbers. |
 | Connection PRAGMAs (WAL, FK, busy timeout) | ✅ | `db/sqlite.go`; single-connection contract documented. |
+| Reusable application runtime | ✅ | `internal/appruntime` owns the database lock, read/write pools, migrations, services, worker lifecycle and existing API/static handler. The `serve` command owns the listener and signals. Shutdown cancels and joins workers before closing pools and the lock; failed startup releases acquired resources. The deployed shape remains one Go binary. |
 | Browser first-run setup (owner → book → currencies → system accounts → categories) | ✅ | Persisted `setup_steps`, derived install state. |
 | Auth: Argon2id, sessions, CSRF, origin checks | ✅ | `app/auth.go`, `api/auth.go`; rehash-on-login, dual-scope throttling. |
 | Lockout-safe login throttle (approved devices) | 🟡 | `login_trusted_devices` + `GET`/`DELETE /api/v1/auth/trusted-devices`, S-04 — backend only, no UI. A device that completes a successful login (or first-run setup) gets an HttpOnly approval cookie; its attempts then spend a device-scoped throttle budget instead of the shared username/IP budgets, so an attacker cannot lock the publicly-known owner username out. The cookie is a throttle-scope selector, **never a credential** — it authenticates nothing, and the device keeps the same 5-in-15 budget so a stolen cookie buys no extra guesses. Hash-at-rest, 180-day sliding expiry, revocable. |

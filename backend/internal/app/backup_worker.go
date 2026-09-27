@@ -20,15 +20,18 @@ type backupWorkPayload struct {
 	RunID int64 `json:"run_id"`
 }
 
-func (s *BackupService) StartBackgroundWorker(ctx context.Context, logger *slog.Logger) {
+func (s *BackupService) StartBackgroundWorker(ctx context.Context, logger *slog.Logger) <-chan struct{} {
+	done := make(chan struct{})
 	if s.backgroundWork == nil || s.readOnly == nil {
-		return
+		close(done)
+		return done
 	}
 	if logger == nil {
 		logger = slog.Default()
 	}
 	workerID := uuid.NewString()
 	go func() {
+		defer close(done)
 		s.runDueBackups(ctx, logger, workerID)
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -41,6 +44,7 @@ func (s *BackupService) StartBackgroundWorker(ctx context.Context, logger *slog.
 			}
 		}
 	}()
+	return done
 }
 
 func (s *BackupService) runDueBackups(ctx context.Context, logger *slog.Logger, workerID string) {

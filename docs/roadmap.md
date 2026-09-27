@@ -10,7 +10,7 @@ The [GitHub roadmap index](https://github.com/sergeyfarin/rekenraam/issues/120)
 links current slices to their actionable tickets; this file remains the
 ordered product plan.
 
-Last reviewed: 2026-09-27. The current order is runtime extraction, R16,
+Last reviewed: 2026-09-27. The current order is R16,
 R11 price management, R17 quotes and crypto, R18 gains projections, then R13
 returns analytics. Cross-border input and date correctness run in parallel.
 Prior roadmap detail is retained in the
@@ -102,41 +102,7 @@ Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
 
-### Next architecture maintenance — extract the reusable application runtime
-
-Do this in the next suitable backend maintenance window, before another
-large R16 or R17 backend slice. It is deliberately
-scheduled early even though native desktop remains out of scope and may never
-ship: `backend/cmd/rekenraam/command.go` currently combines application
-construction, worker startup, HTTP listener ownership, and shutdown in one
-`runServe` function. Separating those responsibilities makes startup failure,
-resource ownership, lifecycle tests, and future non-server hosts easier to
-reason about in the web product itself.
-
-Scope fence:
-
-1. Extract a Wails-independent package inside the existing `backend` Go module
-   that opens and locks SQLite, runs migrations, constructs repositories and
-   services, starts background workers/schedulers, and exposes the existing
-   `http.Handler`.
-2. Return an explicitly owned runtime with bounded, idempotent shutdown. Partial
-   startup failure must close every database, lock, worker, and other resource
-   already acquired.
-3. Leave the server command responsible for configuration/CLI selection, the
-   configured TCP listener, OS signal handling, and translating startup or
-   shutdown failure into logs and an exit code.
-4. Preserve all routes, middleware order, configuration semantics, database
-   behavior, worker schedules, and web deployment behavior. Do not add Wails,
-   desktop build assets, alternate authentication, or a second API transport in
-   this item.
-5. Add focused construction, partial-failure cleanup, cancellation, and repeated
-   close tests, then run the normal backend, integrated-build, and browser smoke
-   validation appropriate to a composition-root change.
-
-The point-in-time desktop analysis and later-framework discussion live in
-`docs/reviews/desktop-application-feasibility-2026-09-19.md`. That review is a
-possible future consumer of this boundary, not the justification required for
-the work and not a commitment to a desktop release.
+The reusable application runtime (R16 [#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is next.
 
 ### Completed initiatives through R10
 
@@ -171,7 +137,7 @@ provides net-only fills, so its source gross remains unknown.
 The schema and existing-command operation identity have landed in the unused
 v0.1 candidate baseline. Full native replay, side-aware reads/self-checks and the
 short-sale/cover commands remain before T-108 is usable. The next execution
-order is runtime extraction, then native correction. Immutable intents,
+order is native correction. Immutable intents,
 reversible long-position simulation, append-only effective revision storage,
 and realized-gains, self-check, and export readers are in place; the correcting
 command remains. Transfers and basis actions, including manual splits, follow;
