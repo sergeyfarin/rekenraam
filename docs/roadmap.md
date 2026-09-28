@@ -148,9 +148,12 @@ Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and
 cash-in-lieu suggestions are currently refused as dividend income (T-109) until
 their lot-basis treatment ships.
-The [slice 5 contract](plans/investment-operation-slice-5-contract.md) now
-fixes the per-kind posting, dated basis, replay and reconciliation rules;
-the write commands still need implementation.
+The [slice 5 contract](plans/investment-operation-slice-5-contract.md) fixes
+the per-kind posting, dated basis, replay and reconciliation rules. A
+known-basis external inbound transfer now has an API command, reconciliation
+preview, typed lot source, export and self-check. Its entry screen and the
+internal/outbound, unknown-basis, return-of-capital, split and cash-in-lieu
+commands remain.
 
 Decided 2026-08-05 (review §3e). The maintained
 `competitor-comparison.md` now marks corporate actions as missing; manual

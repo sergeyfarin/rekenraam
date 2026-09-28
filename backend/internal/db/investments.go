@@ -1286,7 +1286,7 @@ var validCostBasisMethods = map[string]bool{
 // acquisitionEventKinds are the lot events that only add to a position. Every
 // other kind — disposals, splits, manual adjustments — reads the position's
 // current projection and rewrites it, which is what makes ordering matter.
-var acquisitionEventKinds = []string{"acquisition", "reinvested_dividend"}
+var acquisitionEventKinds = []string{"acquisition", "reinvested_dividend", "transfer_in"}
 
 // latestPositionRewriteDateTx returns the most recent date on which something
 // rewrote a position's projection. An empty string means nothing has.

@@ -352,6 +352,21 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			SELECT e.id FROM investment_lot_events e JOIN investment_operations o ON o.transaction_id = e.transaction_id
 			WHERE e.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
 				WHERE x.lot_event_id = e.id AND x.operation_id = o.id)`},
+		{"external transfer missing typed source or matching lot", `
+			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
+			AND o.operation_kind = 'external_transfer_in'
+			AND NOT EXISTS (
+				SELECT 1 FROM investment_transfer_facts f
+				JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
+				JOIN investment_lots l ON l.id = x.destination_lot_id
+				WHERE f.operation_id = o.id AND f.transfer_kind = 'external_in'
+				AND f.effective_on = o.event_date AND f.destination_account_id = l.account_id
+				AND f.commodity_id = l.commodity_id AND l.source_transaction_id = o.transaction_id
+				AND x.basis_knowledge = 'known' AND x.quantity_value = l.quantity_value
+				AND x.quantity_scale = l.quantity_scale
+				AND x.carried_basis_value = l.cost_basis_value
+				AND x.carried_basis_scale = l.cost_basis_scale
+				AND x.cost_commodity_id = l.cost_commodity_id)`},
 		{"posted long disposal missing proceeds decision", `
 			SELECT o.id FROM investment_operations o
 			WHERE o.book_id = ? AND o.operation_kind IN ('sell', 'write_off')

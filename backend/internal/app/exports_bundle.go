@@ -201,6 +201,12 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		{"investment-lot-effects.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "lot-effects", []string{"operation_id", "effect_seq", "lot_event_id"})
 		}},
+		{"investment-transfer-facts.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-facts", []string{"operation_id", "transfer_kind", "effective_on", "commodity_id", "source_account_id", "destination_account_id", "source_evidence_json", "audit_event_id"})
+		}},
+		{"investment-transfer-lot-links.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-lot-links", []string{"operation_id", "link_seq", "source_lot_id", "destination_lot_id", "quantity_value", "quantity_scale", "basis_knowledge", "carried_basis_value", "carried_basis_scale", "cost_commodity_id", "original_date_knowledge", "original_acquired_on", "source_evidence_json"})
+		}},
 		{"investment-fee-policies.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "fee-policies", []string{"policy_id", "account_id", "charge_kind", "created_at", "audit_event_id"})
 		}},
@@ -858,6 +864,8 @@ value in this archive was ever a floating-point number.`,
   investment-lot-facts.csv  immutable lot-opening source facts
   investment-lot-events.csv  immutable acquisition and disposal events
   investment-lot-effects.csv  direct operation-to-event links
+  investment-transfer-facts.csv  typed in-kind transfer sources and account endpoints
+  investment-transfer-lot-links.csv  sourced lot lineage, dates, and basis knowledge
   investment-fee-policies.csv  book and account charge policy identities
   investment-fee-policy-versions.csv  dated, immutable charge policy versions
   import-identities.csv  committed source-row fingerprints and provenance

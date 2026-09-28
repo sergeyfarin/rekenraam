@@ -277,6 +277,10 @@ paths:
     $ref: "./paths/investments-buy.yaml"
   /api/v1/investments/sell:
     $ref: "./paths/investments-sell.yaml"
+  /api/v1/investments/transfers/external/in:
+    $ref: "./paths/investments-external-transfer-in.yaml"
+  /api/v1/investments/transfers/external/in/reconciliation-impact:
+    $ref: "./paths/investments-external-transfer-in-impact.yaml"
   /api/v1/investments/transactions/{transaction_id}/correction-chain:
     $ref: "./paths/investments-correction-chain.yaml"
   /api/v1/investments/transactions/{transaction_id}/trade-correction-context:
@@ -928,6 +932,10 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentLotDisposalResponse"
     InvestmentTradeResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentTradeResponse"
+    ExternalTransferInRequest:
+      $ref: "./components/schemas/investments.yaml#/ExternalTransferInRequest"
+    ExternalTransferInResponse:
+      $ref: "./components/schemas/investments.yaml#/ExternalTransferInResponse"
     InvestmentSaleReversalRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReversalRequest"
     InvestmentSaleReversalResponse:

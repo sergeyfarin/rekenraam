@@ -65,7 +65,7 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			(SELECT x.effect_seq FROM investment_operation_lot_effects x
 			 JOIN investment_lot_events e ON e.id = x.lot_event_id
 			 WHERE x.operation_id = f.operation_id AND e.lot_id = f.lot_id
-			   AND e.event_kind IN ('acquisition', 'reinvested_dividend')
+			   AND e.event_kind IN ('acquisition', 'reinvested_dividend', 'transfer_in')
 			 ORDER BY x.effect_seq LIMIT 1)
 		FROM investment_lot_facts f JOIN investment_operations o ON o.id = f.operation_id
 		WHERE f.book_id = ? AND f.account_id = ? AND f.commodity_id = ?

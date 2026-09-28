@@ -1259,10 +1259,14 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	}
 	assert.Equal(t, map[string]int{
 		"index":   103,
-		"table":   94,
-		"trigger": 91,
+		"table":   96,
+		"trigger": 97,
 		"view":    6,
 	}, objectCounts, "the consolidated baseline must retain every schema object")
+	assert.Equal(t, "table", objects["investment_transfer_facts"])
+	assert.Equal(t, "table", objects["investment_transfer_lot_links"])
+	assert.Equal(t, "trigger", objects["investment_transfer_facts_valid"])
+	assert.Equal(t, "trigger", objects["investment_transfer_lot_links_valid"])
 
 	// A sample across every area of the schema. The exact object counts above
 	// catch omissions; these names make a failure identify the missing feature.

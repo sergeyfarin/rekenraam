@@ -48,9 +48,10 @@ Last reconciled: 2026-09-28.
   (return of capital, manual splits, cash in lieu), one validated operation at a time.
   The [slice 5 contract](plans/investment-operation-slice-5-contract.md)
   fixes posting, allocation, date, reconciliation and unknown-basis behavior.
-  Next: typed transfer facts and the first known-basis external transfer-in
-  command. Keep basis-affecting provider suggestions in review until their
-  operation exists.
+  Typed transfer facts and the first known-basis external transfer-in API
+  command are complete. Next: its mobile entry screen, then internal and
+  outbound transfers with dated carried-basis replay. Keep basis-affecting
+  provider suggestions in review until their operation exists.
 - [ ] Add [named short sale and cover T-108](https://github.com/sergeyfarin/rekenraam/issues/103)
   with side-aware gains, dated positions, self-check, export, API, and mobile
   entry. An ordinary negative

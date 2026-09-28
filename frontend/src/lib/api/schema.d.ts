@@ -12901,6 +12901,163 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/transfers/external/in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a known-basis external in-kind transfer into a holding account */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExternalTransferInRequest"];
+                };
+            };
+            responses: {
+                /** @description Balanced transfer and lot recorded atomically */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExternalTransferInResponse"];
+                    };
+                };
+                /** @description Invalid transfer facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Reconciliation override required or dated event conflicts with later disposal */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transfers/external/in/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation impact of a known-basis external in-kind transfer
+         * @description Authenticated read-only preview; no CSRF token or write occurs.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExternalTransferInRequest"];
+                };
+            };
+            responses: {
+                /** @description Affected checkpoints and postings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid transfer facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/transactions/{transaction_id}/correction-chain": {
         parameters: {
             query?: never;
@@ -17871,6 +18028,40 @@ export interface components {
             lot_id?: number;
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
             disposal_decision?: components["schemas"]["DisposalDecisionResponse"];
+        };
+        ExternalTransferInRequest: {
+            /**
+             * Format: date
+             * @description Account-entry and transfer effective date.
+             */
+            effective_on: string;
+            /** Format: int64 */
+            holding_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            /** @description Known carried basis; zero is an explicit known-zero basis. Unknown basis is not yet accepted. */
+            carried_basis_value: string;
+            carried_basis_scale: number;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            /**
+             * Format: date
+             * @description Optional sourced original acquisition date. Omission is stored as unknown.
+             */
+            original_acquired_on?: string;
+            source_evidence?: {
+                [key: string]: unknown;
+            };
+            memo?: string;
+            change_reason?: string;
+            reconciliation_override?: boolean;
+        };
+        ExternalTransferInResponse: {
+            transaction: components["schemas"]["TransactionResponse"];
+            /** Format: int64 */
+            lot_id: number;
         };
         InvestmentSaleReversalRequest: {
             /** @description Why the posted manual long sale is being reversed. */

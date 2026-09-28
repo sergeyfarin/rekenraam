@@ -166,6 +166,27 @@ type investmentTradeRequest struct {
 	ReconciliationOverride bool `json:"reconciliation_override"`
 }
 
+type externalTransferInRequest struct {
+	EffectiveOn            string            `json:"effective_on"`
+	HoldingAccountID       int64             `json:"holding_account_id"`
+	CommodityID            int64             `json:"commodity_id"`
+	QuantityValue          exact.Coefficient `json:"quantity_value"`
+	QuantityScale          int               `json:"quantity_scale"`
+	CarriedBasisValue      *moneyCoefficient `json:"carried_basis_value"`
+	CarriedBasisScale      int               `json:"carried_basis_scale"`
+	CostCommodityID        int64             `json:"cost_commodity_id"`
+	OriginalAcquiredOn     string            `json:"original_acquired_on"`
+	SourceEvidence         json.RawMessage   `json:"source_evidence,omitempty"`
+	Memo                   string            `json:"memo"`
+	ChangeReason           string            `json:"change_reason"`
+	ReconciliationOverride bool              `json:"reconciliation_override"`
+}
+
+type externalTransferInResponse struct {
+	Transaction transactionResponse `json:"transaction"`
+	LotID       int64               `json:"lot_id"`
+}
+
 type investmentSaleReversalRequest struct {
 	Reason                 string `json:"reason"`
 	ReconciliationOverride bool   `json:"reconciliation_override"`
@@ -797,6 +818,75 @@ func buyInvestment(logger *slog.Logger, authService *app.AuthService, investment
 
 func sellInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
 	return investmentTradeMutation(logger, authService, investmentService, options, "sell")
+}
+
+func externalTransferInInput(owner app.Owner, r *http.Request, request externalTransferInRequest) (app.ExternalTransferInInput, error) {
+	if request.CarriedBasisValue == nil {
+		return app.ExternalTransferInInput{}, app.ValidationError{Message: "known carried basis is required"}
+	}
+	evidence := rawJSONText(request.SourceEvidence)
+	if evidence == "null" {
+		evidence = ""
+	}
+	return app.ExternalTransferInInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		EffectiveOn: request.EffectiveOn, HoldingAccountID: request.HoldingAccountID,
+		CommodityID: request.CommodityID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
+		CarriedBasisValue: int64(*request.CarriedBasisValue), CarriedBasisScale: request.CarriedBasisScale,
+		CostCommodityID: request.CostCommodityID, OriginalAcquiredOn: request.OriginalAcquiredOn,
+		SourceEvidenceJSON: evidence, Memo: request.Memo,
+		ChangeReason: request.ChangeReason, ReconciliationOverride: request.ReconciliationOverride,
+	}, nil
+}
+
+func externalTransferIn(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		var request externalTransferInRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		input, err := externalTransferInInput(owner, r, request)
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "external investment transfer", err)
+			return
+		}
+		result, err := investmentService.ExternalTransferIn(r.Context(), input)
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "external investment transfer", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, externalTransferInResponse{Transaction: toTransactionResponse(result.Transaction), LotID: *result.LotID})
+	}))
+}
+
+func externalTransferInReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request externalTransferInRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		input, err := externalTransferInInput(owner, r, request)
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "external investment transfer impact", err)
+			return
+		}
+		impact, err := investmentService.PreviewExternalTransferInReconciliationImpact(r.Context(), input)
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "external investment transfer impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
 }
 
 func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {

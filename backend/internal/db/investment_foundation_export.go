@@ -31,6 +31,15 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 		"lot-effects": `SELECT e.operation_id, e.effect_seq, e.lot_event_id
 			FROM investment_operation_lot_effects e JOIN investment_operations o ON o.id = e.operation_id
 			WHERE o.book_id = ? ORDER BY e.operation_id, e.effect_seq`,
+		"transfer-facts": `SELECT f.operation_id, f.transfer_kind, f.effective_on, f.commodity_id,
+			f.source_account_id, f.destination_account_id, f.source_evidence_json, f.created_audit_event_id
+			FROM investment_transfer_facts f WHERE f.book_id = ? ORDER BY f.operation_id`,
+		"transfer-lot-links": `SELECT l.operation_id, l.link_seq, l.source_lot_id, l.destination_lot_id,
+			l.quantity_value, l.quantity_scale, l.basis_knowledge, l.carried_basis_value,
+			l.carried_basis_scale, l.cost_commodity_id, l.original_date_knowledge,
+			l.original_acquired_on, l.source_evidence_json
+			FROM investment_transfer_lot_links l JOIN investment_transfer_facts f ON f.operation_id = l.operation_id
+			WHERE f.book_id = ? ORDER BY l.operation_id, l.link_seq`,
 		"fee-policies": `SELECT p.id, p.account_id, p.charge_kind, p.created_at, p.created_audit_event_id
 			FROM investment_fee_policies p WHERE p.book_id = ? ORDER BY p.id`,
 		"fee-policy-versions": `SELECT v.id, v.policy_id, v.version_seq, v.effective_from,

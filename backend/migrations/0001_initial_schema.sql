@@ -1132,7 +1132,7 @@ CREATE TABLE IF NOT EXISTS investment_lot_events (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
-  event_kind TEXT NOT NULL CHECK (event_kind IN ('acquisition', 'disposal', 'split_adjustment', 'reinvested_dividend', 'manual_adjustment')),
+  event_kind TEXT NOT NULL CHECK (event_kind IN ('acquisition', 'disposal', 'split_adjustment', 'reinvested_dividend', 'manual_adjustment', 'transfer_in')),
   transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
   event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
@@ -1429,6 +1429,114 @@ CREATE TABLE IF NOT EXISTS investment_operation_lot_effects (
   effect_seq INTEGER NOT NULL CHECK (effect_seq > 0),
   PRIMARY KEY (operation_id, effect_seq)
 );
+
+-- Typed source evidence for transfers. The present known-basis inbound writer
+-- uses one destination link. Later transfer commands may link several source
+-- and destination lots; an unknown amount is NULL, never a fabricated zero.
+CREATE TABLE IF NOT EXISTS investment_transfer_facts (
+  operation_id INTEGER PRIMARY KEY REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  transfer_kind TEXT NOT NULL CHECK (transfer_kind IN ('external_in', 'external_out', 'internal')),
+  effective_on TEXT NOT NULL CHECK (effective_on GLOB '????-??-??'),
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  source_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
+  destination_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
+  source_evidence_json TEXT NOT NULL DEFAULT '{}',
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  CHECK ((transfer_kind = 'external_in' AND source_account_id IS NULL AND destination_account_id IS NOT NULL)
+    OR (transfer_kind = 'external_out' AND source_account_id IS NOT NULL AND destination_account_id IS NULL)
+    OR (transfer_kind = 'internal' AND source_account_id IS NOT NULL AND destination_account_id IS NOT NULL
+      AND source_account_id <> destination_account_id))
+);
+
+CREATE TABLE IF NOT EXISTS investment_transfer_lot_links (
+  operation_id INTEGER NOT NULL REFERENCES investment_transfer_facts(operation_id) ON DELETE RESTRICT,
+  link_seq INTEGER NOT NULL CHECK (link_seq > 0),
+  source_lot_id INTEGER REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  destination_lot_id INTEGER REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38
+    AND quantity_value NOT GLOB '*[^0-9]*' AND substr(quantity_value, 1, 1) BETWEEN '1' AND '9'),
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
+  basis_knowledge TEXT NOT NULL CHECK (basis_knowledge IN ('known', 'unknown')),
+  carried_basis_value TEXT CHECK (carried_basis_value IS NULL OR
+    (length(carried_basis_value) BETWEEN 1 AND 38 AND carried_basis_value NOT GLOB '*[^0-9]*'
+      AND (carried_basis_value = '0' OR substr(carried_basis_value, 1, 1) BETWEEN '1' AND '9'))),
+  carried_basis_scale INTEGER CHECK (carried_basis_scale IS NULL OR carried_basis_scale BETWEEN 0 AND 12),
+  cost_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
+  original_date_knowledge TEXT NOT NULL CHECK (original_date_knowledge IN ('known', 'unknown')),
+  original_acquired_on TEXT CHECK (original_acquired_on IS NULL OR original_acquired_on GLOB '????-??-??'),
+  source_evidence_json TEXT NOT NULL DEFAULT '{}',
+  PRIMARY KEY (operation_id, link_seq),
+  UNIQUE (destination_lot_id),
+  CHECK ((basis_knowledge = 'known') =
+    (carried_basis_value IS NOT NULL AND carried_basis_scale IS NOT NULL AND cost_commodity_id IS NOT NULL)),
+  CHECK ((original_date_knowledge = 'known') = (original_acquired_on IS NOT NULL)),
+  CHECK (source_lot_id IS NOT NULL OR destination_lot_id IS NOT NULL)
+);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_transfer_facts_valid
+BEFORE INSERT ON investment_transfer_facts
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_operations o JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  JOIN commodities c ON c.id = NEW.commodity_id
+  WHERE o.id = NEW.operation_id AND o.book_id = NEW.book_id AND o.event_date = NEW.effective_on
+    AND a.book_id = NEW.book_id AND a.id = o.created_audit_event_id AND c.book_id = NEW.book_id
+    AND ((NEW.transfer_kind = 'external_in' AND o.operation_kind = 'external_transfer_in')
+      OR (NEW.transfer_kind = 'external_out' AND o.operation_kind = 'external_transfer_out')
+      OR (NEW.transfer_kind = 'internal' AND o.operation_kind = 'internal_transfer'))
+    AND (NEW.source_account_id IS NULL OR EXISTS (
+      SELECT 1 FROM accounts s WHERE s.id = NEW.source_account_id AND s.book_id = NEW.book_id))
+    AND (NEW.destination_account_id IS NULL OR EXISTS (
+      SELECT 1 FROM accounts d WHERE d.id = NEW.destination_account_id AND d.book_id = NEW.book_id))
+)
+BEGIN SELECT RAISE(ABORT, 'investment transfer fact is outside its operation or book'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_transfer_lot_links_valid
+BEFORE INSERT ON investment_transfer_lot_links
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_transfer_facts f
+  WHERE f.operation_id = NEW.operation_id
+    AND (NEW.source_lot_id IS NULL OR EXISTS (
+      SELECT 1 FROM investment_lots s WHERE s.id = NEW.source_lot_id
+        AND s.book_id = f.book_id AND s.account_id = f.source_account_id
+        AND s.commodity_id = f.commodity_id))
+    AND (NEW.destination_lot_id IS NULL OR EXISTS (
+      SELECT 1 FROM investment_lots d WHERE d.id = NEW.destination_lot_id
+        AND d.book_id = f.book_id AND d.account_id = f.destination_account_id
+        AND d.commodity_id = f.commodity_id))
+    AND (NEW.cost_commodity_id IS NULL OR EXISTS (
+      SELECT 1 FROM commodities c WHERE c.id = NEW.cost_commodity_id AND c.book_id = f.book_id))
+    AND (NEW.original_acquired_on IS NULL OR NEW.original_acquired_on <= f.effective_on)
+    AND ((f.transfer_kind = 'external_in' AND NEW.source_lot_id IS NULL AND NEW.destination_lot_id IS NOT NULL)
+      OR (f.transfer_kind = 'external_out' AND NEW.source_lot_id IS NOT NULL AND NEW.destination_lot_id IS NULL)
+      OR (f.transfer_kind = 'internal' AND NEW.source_lot_id IS NOT NULL AND NEW.destination_lot_id IS NOT NULL))
+)
+BEGIN SELECT RAISE(ABORT, 'investment transfer lot link is outside its transfer'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_transfer_facts_no_update
+BEFORE UPDATE ON investment_transfer_facts
+BEGIN SELECT RAISE(ABORT, 'investment transfer facts are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_transfer_facts_no_delete
+BEFORE DELETE ON investment_transfer_facts
+BEGIN SELECT RAISE(ABORT, 'investment transfer facts are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_transfer_lot_links_no_update
+BEFORE UPDATE ON investment_transfer_lot_links
+BEGIN SELECT RAISE(ABORT, 'investment transfer lot links are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_transfer_lot_links_no_delete
+BEFORE DELETE ON investment_transfer_lot_links
+BEGIN SELECT RAISE(ABORT, 'investment transfer lot links are immutable'); END;
+-- +goose StatementEnd
 
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_operation_links_valid
@@ -3431,6 +3539,12 @@ DROP TRIGGER IF EXISTS investment_operation_dates_no_delete;
 DROP TRIGGER IF EXISTS investment_operation_dates_no_update;
 DROP TRIGGER IF EXISTS investment_operation_lot_effects_no_delete;
 DROP TRIGGER IF EXISTS investment_operation_lot_effects_no_update;
+DROP TRIGGER IF EXISTS investment_transfer_lot_links_no_delete;
+DROP TRIGGER IF EXISTS investment_transfer_lot_links_no_update;
+DROP TRIGGER IF EXISTS investment_transfer_facts_no_delete;
+DROP TRIGGER IF EXISTS investment_transfer_facts_no_update;
+DROP TRIGGER IF EXISTS investment_transfer_lot_links_valid;
+DROP TRIGGER IF EXISTS investment_transfer_facts_valid;
 DROP TRIGGER IF EXISTS investment_lot_facts_no_delete;
 DROP TRIGGER IF EXISTS investment_lot_facts_no_update;
 DROP TRIGGER IF EXISTS investment_operation_components_no_delete;
@@ -3448,6 +3562,8 @@ DROP TRIGGER IF EXISTS investment_disposal_decisions_same_book;
 DROP TRIGGER IF EXISTS investment_lot_facts_same_book;
 DROP TRIGGER IF EXISTS investment_components_same_book;
 DROP TRIGGER IF EXISTS investment_operation_links_valid;
+DROP TABLE IF EXISTS investment_transfer_lot_links;
+DROP TABLE IF EXISTS investment_transfer_facts;
 DROP TABLE IF EXISTS investment_operation_lot_effects;
 DROP TABLE IF EXISTS investment_lot_facts;
 DROP TABLE IF EXISTS investment_operation_components;

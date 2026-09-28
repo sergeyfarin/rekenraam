@@ -153,6 +153,8 @@ source components, lot-opening facts, lot events and effects, and versioned fee
 policies as separate CSV files. `prices.csv` appends approximate, source
 transaction version, and audit identifiers. `disposal-decisions.csv` appends
 operation ID and position side so each election stays tied to its operation.
+Slice 5 adds separate transfer fact and lot-link CSV files; known carried
+basis and an explicitly unknown original acquisition date remain distinguishable.
 The original posting-level
 `ledger.csv` contract and QIF archive version remain unchanged. The added
 investment files retain their stored coefficients and scales so an unknown

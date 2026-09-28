@@ -596,6 +596,71 @@ InvestmentTradeResponse:
     disposal_decision:
       $ref: "#/DisposalDecisionResponse"
 
+ExternalTransferInRequest:
+  type: object
+  additionalProperties: false
+  required:
+    - effective_on
+    - holding_account_id
+    - commodity_id
+    - quantity_value
+    - quantity_scale
+    - carried_basis_value
+    - carried_basis_scale
+    - cost_commodity_id
+  properties:
+    effective_on:
+      type: string
+      format: date
+      description: Account-entry and transfer effective date.
+    holding_account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: string
+      pattern: '^[1-9][0-9]{0,37}$'
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
+    carried_basis_value:
+      type: string
+      pattern: '^(0|[1-9][0-9]{0,18})$'
+      description: Known carried basis; zero is an explicit known-zero basis. Unknown basis is not yet accepted.
+    carried_basis_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    cost_commodity_id:
+      type: integer
+      format: int64
+    original_acquired_on:
+      type: string
+      format: date
+      description: Optional sourced original acquisition date. Omission is stored as unknown.
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    change_reason:
+      type: string
+    reconciliation_override:
+      type: boolean
+
+ExternalTransferInResponse:
+  type: object
+  required: [transaction, lot_id]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    lot_id:
+      type: integer
+      format: int64
+
 InvestmentSaleReversalRequest:
   type: object
   additionalProperties: false

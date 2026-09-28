@@ -99,6 +99,73 @@ func createHoldingAccountForSession(t *testing.T, handler http.Handler, f invest
 	return response
 }
 
+func TestExternalTransferInAPIRequiresKnownBasisAndPostsOneLot(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "XFER")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	path := "/api/v1/investments/transfers/external/in"
+	request := externalTransferInRequest{
+		EffectiveOn: "2026-05-01", HoldingAccountID: holding.ID, CommodityID: instrument.CommodityID,
+		QuantityValue: exact.New(2), CarriedBasisScale: 2, CostCommodityID: f.commodityID,
+		OriginalAcquiredOn: "2020-01-01", SourceEvidence: json.RawMessage(`{"statement":"42"}`),
+	}
+	missing := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusBadRequest)
+	assert.Contains(t, missing.Body.String(), "known carried basis is required")
+	zero := moneyCoefficient(0)
+	request.CarriedBasisValue = &zero
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
+	result := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
+	var response externalTransferInResponse
+	require.NoError(t, json.NewDecoder(result.Body).Decode(&response))
+	assert.Positive(t, response.LotID)
+	assert.Equal(t, "posted", response.Transaction.Status)
+	var count int
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM investment_transfer_lot_links WHERE destination_lot_id = ? AND carried_basis_value = '0'`, response.LotID).Scan(&count))
+	assert.Equal(t, 1, count)
+}
+
+func TestExternalTransferInPreviewNamesCheckpointAndWriteRequiresOverride(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "XFR2")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	buy := tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 10000)
+	buy.TransactionDate = "2026-01-01"
+	response := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", buy, http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&bought))
+	posting := postingByAccount(t, bought.Transaction, holding.ID)
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken,
+		holding.ID, instrument.CommodityID, posting, "2026-02-01")
+	checkpointID := activeCheckpointID(t, handler, f.sessionCookie, holding.ID)
+
+	basis := moneyCoefficient(2500)
+	request := externalTransferInRequest{
+		EffectiveOn: "2026-01-15", HoldingAccountID: holding.ID, CommodityID: instrument.CommodityID,
+		QuantityValue: exact.New(1), CarriedBasisValue: &basis, CarriedBasisScale: 2,
+		CostCommodityID: f.commodityID,
+	}
+	path := "/api/v1/investments/transfers/external/in"
+	preview := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path+"/reconciliation-impact", request, http.StatusOK)
+	var impact reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(preview.Body).Decode(&impact))
+	require.Len(t, impact.AffectedCheckpoints, 1)
+	assert.Equal(t, checkpointID, impact.AffectedCheckpoints[0].CheckpointID)
+	refused := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path, request, http.StatusConflict)
+	assert.Contains(t, refused.Body.String(), "reconciliation override")
+	request.ReconciliationOverride = true
+	created := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path, request, http.StatusCreated)
+	var transfer externalTransferInResponse
+	require.NoError(t, json.NewDecoder(created.Body).Decode(&transfer))
+	assert.Contains(t, transfer.Transaction.InvalidatedCheckpointIDs, checkpointID)
+}
+
 func tradeRequestBody(f investmentAPITestFixture, holdingAccountID, commodityID int64, quantity string, cashValue int64) investmentTradeRequest {
 	qty, err := exact.Parse(quantity)
 	if err != nil {

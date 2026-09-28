@@ -26,6 +26,8 @@ func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params Create
 	dateRole := "trade"
 	if params.Spec.InvestmentOperationKind == "dividend" || params.Spec.InvestmentOperationKind == "reinvested_dividend" {
 		dateRole = "payment"
+	} else if params.Spec.InvestmentOperationKind == "external_transfer_in" {
+		dateRole = "effective"
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_operation_dates (operation_id, date_role, event_date)

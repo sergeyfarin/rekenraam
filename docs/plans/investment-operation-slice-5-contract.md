@@ -2,7 +2,8 @@
 
 Status: accepted implementation contract, 2026-09-28. ADR 0012 and ADR 0013
 govern. This document fixes the journal, lot, date, and reconciliation rules
-that each slice 5 command must satisfy. It does not claim a command has shipped.
+that each slice 5 command must satisfy. The known-basis external inbound API
+command shipped in slice 5b; the remaining commands are unimplemented.
 
 ## Common rules
 
@@ -150,10 +151,14 @@ that allocation rather than rewriting the 8.00 EUR receipt.
 
 ## Delivery gates
 
-1. Add typed transfer source/destination, original-date knowledge, nullable
-   basis knowledge, split ratio/eligibility, and basis-action links to the
-   schema. Expand replay intents and self-check before allowing writes that
-   use them. Export the immutable source and every effective revision.
+1. Add each command's typed source and lot links before exposing that command.
+   Slice 5b added transfer endpoints, original-date knowledge, nullable
+   **source** basis knowledge, a known-basis inbound lot, replay opening,
+   self-check and export. The current lot projection still requires a
+   non-NULL basis, so unknown-basis transfers remain refused. Before those
+   writes, make the projection basis nullable and preserve the status through
+   gains, export and replay. Split ratio/eligibility and basis-action links
+   are likewise prerequisites for their respective commands.
 2. Ship manual known-basis external inbound transfer, then explicit-lot
    internal transfer, outbound transfer and unknown-basis resolution. Prove
    bridge change/refusal and reconciliation behavior with named tests.

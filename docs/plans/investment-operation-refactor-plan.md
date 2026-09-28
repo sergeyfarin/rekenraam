@@ -29,9 +29,10 @@ Those are input taxonomies, not the app's database enum or accounting policy.
 
 ## Original gaps the slices address
 
-These bullets describe the pre-refactor implementation. Slices 2a–3 have
-closed the operation-link, exact-trade, and proceeds-inference gaps; replay,
-transfers and short positions remain open.
+These bullets describe the pre-refactor implementation. Slices 2a–4u closed
+the operation-link, exact-trade, proceeds-inference, and manual correction
+gaps. Slice 5b added known-basis external inbound transfers; general dated
+admission, the other transfer and basis actions, and short positions remain.
 
 - `investment_operations` has a name, date, and mandatory unique transaction
   link, but no exact trade consideration, charges, source identity, or links
