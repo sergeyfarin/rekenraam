@@ -33,9 +33,10 @@ Last reconciled: 2026-09-27.
   makes manual buy correction available in transaction detail. Slice 4q
   prepares exact pre-sale lots and effective specific-lot choices for the
   sale correction form. Slice 4r adds that prefilled sale correction form,
-  exact specific-lot picker and reconciliation preview. Next are older
-  dependent-sale replacement and source-aware identity handling for imported
-  fills.
+  exact specific-lot picker and reconciliation preview. Slice 4s exposes
+  historical pre-sale lots for older effective manual sales without opening
+  their write path. Next are older dependent-sale replacement and source-aware
+  identity handling for imported fills.
 
 ## Then, within R16
 

@@ -687,6 +687,14 @@ next family.
      explicit checkpoint override when affected, and refreshes investment
      reads after the write. Older dependent-sale replacement, imported source
      identity correction and backdated admission remain.
+   - **4s — historical pre-sale context — complete 2026-09-28.** The correction
+     read now finds an older effective manual sale within the ordered position
+     intents and replays only the prefix before it. It reports those historical
+     available lots and effective specific-lot elections even when later
+     activity has consumed them. The existing latest-sale write eligibility
+     stays false for that older sale. Replay is rolled back and creates no
+     durable audit or lot event. This supplies the historical allocation
+     context needed by the dependent-sale replacement command.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

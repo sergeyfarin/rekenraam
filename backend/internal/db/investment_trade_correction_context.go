@@ -181,20 +181,30 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 		if err != nil {
 			return InvestmentTradeCorrectionContext{}, err
 		}
-		if len(intents) > 0 && intents[len(intents)-1].OperationID == record.OperationID && intents[len(intents)-1].Kind == "disposal" {
-			record.CanReplaceSale = true
-			for _, choice := range intents[len(intents)-1].SpecificLots {
+		saleIndex := -1
+		for index, intent := range intents {
+			if intent.OperationID == record.OperationID && intent.Kind == "disposal" {
+				saleIndex = index
+				break
+			}
+		}
+		if saleIndex >= 0 {
+			// The current writer still requires the latest intent. Historical
+			// pre-sale lots are useful to the later dependent-sale writer and
+			// must never be inferred from today's remaining projection.
+			record.CanReplaceSale = saleIndex == len(intents)-1
+			for _, choice := range intents[saleIndex].SpecificLots {
 				record.EffectiveElectedLots = append(record.EffectiveElectedLots, InvestmentTradeCorrectionLotChoice{
 					LotID: choice.LotID, QuantityValue: choice.QuantityValue.String(), QuantityScale: choice.QuantityScale,
 				})
 			}
 			projection, err := simulateInvestmentReplayTx(ctx, tx, bookID,
-				record.HoldingAccountID, record.CommodityID, record.CostCommodityID, intents[:len(intents)-1])
+				record.HoldingAccountID, record.CommodityID, record.CostCommodityID, intents[:saleIndex])
 			if err != nil {
 				return InvestmentTradeCorrectionContext{}, fmt.Errorf("read pre-sale available lots: %w", err)
 			}
 			openedOn := make(map[int64]string)
-			for _, intent := range intents[:len(intents)-1] {
+			for _, intent := range intents[:saleIndex] {
 				if intent.Kind == "opening" {
 					openedOn[intent.LotID] = intent.EventDate
 				}
