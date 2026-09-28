@@ -143,7 +143,8 @@ and realized-gains, self-check, and export readers support manual long-sale
 reversal, latest-sale replacement and old-buy replacement. Transaction detail
 offers sale reversal and prefilled buy and latest-sale replacement. The sale
 form uses pre-sale available lots for specific-lot correction. Older dependent
-sale replacement, import source identity and backdated admission remain.
+sale replacement, import source identity and backdated admission remain. The
+older-sale replay dependency simulation is ready; the audited write remains.
 Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and
 cash-in-lieu suggestions are currently refused as dividend income (T-109) until

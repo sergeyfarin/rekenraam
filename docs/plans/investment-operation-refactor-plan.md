@@ -694,7 +694,15 @@ next family.
      activity has consumed them. The existing latest-sale write eligibility
      stays false for that older sale. Replay is rolled back and creates no
      durable audit or lot event. This supplies the historical allocation
-     context needed by the dependent-sale replacement command.
+   context needed by the dependent-sale replacement command.
+   - **4t — dependent-sale replacement simulation — complete 2026-09-28.**
+     A repository check substitutes corrected quantity, proceeds, basis
+     method and explicit lot choices into the older sale's original replay
+     slot, then simulates every later position intent in a rolled-back
+     savepoint. It identifies a later disposal that the corrected sale makes
+     impossible and leaves journals, audit events, decisions and lot events
+     untouched. The eventual write must repeat the check inside its own
+     transaction before persisting the new decision and effective revisions.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

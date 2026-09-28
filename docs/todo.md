@@ -35,8 +35,10 @@ Last reconciled: 2026-09-27.
   sale correction form. Slice 4r adds that prefilled sale correction form,
   exact specific-lot picker and reconciliation preview. Slice 4s exposes
   historical pre-sale lots for older effective manual sales without opening
-  their write path. Next are older dependent-sale replacement and source-aware
-  identity handling for imported fills.
+  their write path. Slice 4t simulates a proposed older sale through all later
+  position intents without writes, naming an impossible dependent sale. Next
+  are the atomic older-sale replacement write and source-aware identity
+  handling for imported fills.
 
 ## Then, within R16
 
