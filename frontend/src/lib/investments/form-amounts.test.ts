@@ -3,8 +3,39 @@ import {
   parseDividendAmounts,
   parseMagnitude,
   parseMoneyMagnitude,
-  parseTradeAmounts
+  parseTradeAmounts,
+  parseTransferInAmounts
 } from './form-amounts';
+
+describe('parseTransferInAmounts', () => {
+  it('requires an explicit basis while accepting a sourced zero basis', () => {
+    expect(parseTransferInAmounts({ quantityStr: '2.5', carriedBasisStr: '0' })).toEqual({
+      ok: true,
+      values: { quantity: { value: '25', scale: 1 }, carriedBasis: { value: '0', scale: 0 } }
+    });
+    expect(parseTransferInAmounts({ quantityStr: '2.5', carriedBasisStr: '' })).toEqual({
+      ok: false, field: 'carried_basis', reason: 'invalid'
+    });
+  });
+
+  it('rejects a zero or over-precise quantity', () => {
+    expect(parseTransferInAmounts({ quantityStr: '0', carriedBasisStr: '1' })).toEqual({
+      ok: false, field: 'quantity', reason: 'invalid'
+    });
+    expect(parseTransferInAmounts({ quantityStr: '0.001', carriedBasisStr: '1', quantityMaxScale: 2 })).toEqual({
+      ok: false, field: 'quantity', reason: 'invalid'
+    });
+  });
+
+  it('rejects a negative basis and a coefficient beyond the backend range', () => {
+    expect(parseTransferInAmounts({ quantityStr: '1', carriedBasisStr: '-1' })).toEqual({
+      ok: false, field: 'carried_basis', reason: 'negative'
+    });
+    expect(parseTransferInAmounts({ quantityStr: '1', carriedBasisStr: '9223372036854775808' })).toEqual({
+      ok: false, field: 'carried_basis', reason: 'too_large'
+    });
+  });
+});
 
 /**
  * These tests exist because consolidating the investment forms onto

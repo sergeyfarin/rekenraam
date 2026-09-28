@@ -77,6 +77,7 @@ export function parseMoneyMagnitude(input: string, options: { maxScale?: number 
 export type BuyField = 'quantity' | 'cash_amount';
 export type SellField = 'quantity' | 'cash_amount';
 export type DividendField = 'amount' | 'withholding' | 'quantity';
+export type TransferInField = 'quantity' | 'carried_basis';
 
 export type FormResult<TField, TValues> =
   | { ok: true; values: TValues }
@@ -108,6 +109,20 @@ export function parseTradeAmounts(input: {
     return { ok: false, field: 'cash_amount', reason: cashAmount.reason };
   }
   return { ok: true, values: { quantity: quantity.field, cashAmount: cashAmount.field } };
+}
+
+/** A transfer needs a positive quantity and an explicitly entered, known basis. */
+export function parseTransferInAmounts(input: {
+  quantityStr: string;
+  carriedBasisStr: string;
+  quantityMaxScale?: number;
+}): FormResult<TransferInField, { quantity: ScaledAmount; carriedBasis: MoneyField }> {
+  const quantity = parseMagnitude(input.quantityStr, { maxScale: input.quantityMaxScale });
+  if (!quantity.ok) return { ok: false, field: 'quantity', reason: quantity.reason };
+  if (quantity.field.value === '0') return { ok: false, field: 'quantity', reason: 'invalid' };
+  const carriedBasis = parseMoneyMagnitude(input.carriedBasisStr, { maxScale: 12 });
+  if (!carriedBasis.ok) return { ok: false, field: 'carried_basis', reason: carriedBasis.reason };
+  return { ok: true, values: { quantity: quantity.field, carriedBasis: carriedBasis.field } };
 }
 
 export interface DividendAmounts {

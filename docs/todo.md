@@ -49,7 +49,7 @@ Last reconciled: 2026-09-28.
   The [slice 5 contract](plans/investment-operation-slice-5-contract.md)
   fixes posting, allocation, date, reconciliation and unknown-basis behavior.
   Typed transfer facts and the first known-basis external transfer-in API
-  command are complete. Next: its mobile entry screen, then internal and
+  command and mobile entry screen are complete. Next: internal and
   outbound transfers with dated carried-basis replay. Keep basis-affecting
   provider suggestions in review until their operation exists.
 - [ ] Add [named short sale and cover T-108](https://github.com/sergeyfarin/rekenraam/issues/103)

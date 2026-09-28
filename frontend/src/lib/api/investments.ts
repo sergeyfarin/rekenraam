@@ -15,6 +15,8 @@ export type DividendDefaultsResponse = components['schemas']['DividendDefaultsRe
 export type SellPreviewResponse = components['schemas']['SellPreviewResponse'];
 export type InvestmentTradeResponse = components['schemas']['InvestmentTradeResponse'];
 export type InvestmentTradeRequest = components['schemas']['InvestmentTradeRequest'];
+export type ExternalTransferInRequest = components['schemas']['ExternalTransferInRequest'];
+export type ExternalTransferInResponse = components['schemas']['ExternalTransferInResponse'];
 export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
 export type ReinvestedDividendRequest = components['schemas']['ReinvestedDividendRequest'];
@@ -194,6 +196,39 @@ export async function recordBuy(
       throw error;
     }
 
+    throw toNetworkError(error);
+  }
+}
+
+export async function externalTransferInReconciliationImpact(
+  input: ExternalTransferInRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transfers/external/in/reconciliation-impact',
+      { body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordExternalTransferIn(
+  input: ExternalTransferInRequest,
+  csrfToken: string
+): Promise<ExternalTransferInResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/transfers/external/in', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
     throw toNetworkError(error);
   }
 }

@@ -151,7 +151,7 @@ their lot-basis treatment ships.
 The [slice 5 contract](plans/investment-operation-slice-5-contract.md) fixes
 the per-kind posting, dated basis, replay and reconciliation rules. A
 known-basis external inbound transfer now has an API command, reconciliation
-preview, typed lot source, export and self-check. Its entry screen and the
+preview, mobile entry screen, typed lot source, export and self-check. The
 internal/outbound, unknown-basis, return-of-capital, split and cash-in-lieu
 commands remain.
 
