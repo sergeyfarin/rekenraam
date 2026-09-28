@@ -720,9 +720,9 @@ next family.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.
-   Before each command, approve a per-kind posting matrix, basis-allocation
-   rule, dated eligibility rule, reconciliation preview, and unknown-basis
-   behavior; the shared schema alone is not that specification. Add manual
+   The per-kind posting matrices, basis-allocation rules, dated eligibility,
+   reconciliation guards, and unknown-basis behavior are fixed in
+   [the slice 5 contract](investment-operation-slice-5-contract.md). Add manual
    commands before provider auto-acceptance. These address the
    common broker migration and everyday holding cases in R16 first. When
    these commands ship, test a changed transfer-out bridge adjustment and

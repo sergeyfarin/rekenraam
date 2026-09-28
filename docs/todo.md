@@ -6,7 +6,7 @@ R16 acceptance criteria. [GitHub Issues](https://github.com/sergeyfarin/rekenraa
 tracks actionable work; the [backlog](backlog.md) maps local IDs, and
 [implemented](implemented.md) records shipped behavior.
 
-Last reconciled: 2026-09-27.
+Last reconciled: 2026-09-28.
 
 ## Current: R16 correction
 
@@ -46,8 +46,11 @@ Last reconciled: 2026-09-27.
 - [ ] Specify and deliver
   [in-kind transfers and basis actions](https://github.com/sergeyfarin/rekenraam/issues/114)
   (return of capital, manual splits, cash in lieu), one validated operation at a time.
-  Keep basis-affecting provider suggestions in review until their operation
-  exists.
+  The [slice 5 contract](plans/investment-operation-slice-5-contract.md)
+  fixes posting, allocation, date, reconciliation and unknown-basis behavior.
+  Next: typed transfer facts and the first known-basis external transfer-in
+  command. Keep basis-affecting provider suggestions in review until their
+  operation exists.
 - [ ] Add [named short sale and cover T-108](https://github.com/sergeyfarin/rekenraam/issues/103)
   with side-aware gains, dated positions, self-check, export, API, and mobile
   entry. An ordinary negative
