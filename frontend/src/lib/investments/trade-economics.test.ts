@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { correctionTradeDraft, exactTradeFields, newTradeCharge } from './trade-economics';
+import { correctionLotDrafts, correctionTradeDraft, exactTradeFields, newTradeCharge,
+  parseCorrectionLotChoices } from './trade-economics';
 import type { InvestmentTradeCorrectionContextResponse } from '$lib/api/investments';
 
 it('prefills a correction from exact signed source amounts and recorded fee treatment', () => {
@@ -21,6 +22,27 @@ it('prefills a correction from exact signed source amounts and recorded fee trea
   expect(draft.gross).toBe('100.00');
   expect(draft.charges).toMatchObject([{ amount: '2.00', treatment: 'clearing_included',
     separatePayment: true, cashAccountID: '7' }]);
+});
+
+it('uses effective lots and sums fractional correction elections exactly', () => {
+  const source = {
+    effective_elected_lots: [{ lot_id: 9, quantity_value: '125', quantity_scale: 2 }],
+    available_lots: [
+      { lot_id: 9, opened_on: '2026-01-01', quantity_value: '2', quantity_scale: 0 },
+      { lot_id: 10, opened_on: '2026-01-02', quantity_value: '50', quantity_scale: 2 }
+    ]
+  } as InvestmentTradeCorrectionContextResponse;
+  expect(correctionLotDrafts(source)).toEqual([{ lotID: '9', quantity: '1.25' }]);
+  const valid = parseCorrectionLotChoices([{ lotID: '9', quantity: '1.25' },
+    { lotID: '10', quantity: '0.5' }], source.available_lots, { value: '175', scale: 2 });
+  expect(valid).toEqual({ ok: true, allocations: [
+    { lot_id: 9, quantity_value: '125', quantity_scale: 2 },
+    { lot_id: 10, quantity_value: '5', quantity_scale: 1 }
+  ] });
+  expect(parseCorrectionLotChoices([{ lotID: '9', quantity: '2.01' }], source.available_lots,
+    { value: '201', scale: 2 })).toEqual({ ok: false, reason: 'exceeds_available' });
+  expect(parseCorrectionLotChoices([{ lotID: '9', quantity: '1.25' }], source.available_lots,
+    { value: '175', scale: 2 })).toEqual({ ok: false, reason: 'mismatch' });
 });
 
 describe('exactTradeFields', () => {

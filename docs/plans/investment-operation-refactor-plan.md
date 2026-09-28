@@ -674,8 +674,19 @@ next family.
      intents supplies exact available lots immediately before that sale,
      plus its specific-lot election mapped to effective acquisition lots.
      Historical source lot choices remain separate and immutable. This
-     prepares a correction picker without using today's remaining balance,
-     which already includes the sale being replaced.
+   prepares a correction picker without using today's remaining balance,
+   which already includes the sale being replaced.
+   - **4r — transaction-detail manual sale correction — complete 2026-09-28.**
+     An eligible latest manual long sale offers a prefilled correction form in
+     transaction detail. It preserves exact recorded amounts and fee elections,
+     requires a reason, and keeps the original date, holding, instrument and
+     cost currency fixed. Specific-lot replacement starts from the effective
+     prior election and lists lots available immediately before the sale;
+     the form checks each allocation and the exact total without floating
+     point. It uses the native replacement reconciliation preview, requires an
+     explicit checkpoint override when affected, and refreshes investment
+     reads after the write. Older dependent-sale replacement, imported source
+     identity correction and backdated admission remain.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

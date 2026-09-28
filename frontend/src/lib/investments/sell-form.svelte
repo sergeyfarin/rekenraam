@@ -1,26 +1,34 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { untrack } from 'svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { parseTradeAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
   import TradeEconomicsFields from '$lib/investments/trade-economics-fields.svelte';
-  import { exactTradeFields, type TradeChargeDraft } from '$lib/investments/trade-economics';
+  import {
+    correctionLotDrafts, correctionTradeDraft, exactTradeFields, parseCorrectionLotChoices,
+    type CorrectionLotDraft, type TradeChargeDraft
+  } from '$lib/investments/trade-economics';
   import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import { forecastQueryKey } from '$lib/api/forecast';
   import {
     investmentPositionsQueryKey,
     investmentLotsQueryKey,
+    investmentGainsQueryKey,
     investmentInstrumentsQueryKey,
     searchInvestmentInstruments,
     previewSell,
     recordSell,
     sellReconciliationImpact,
+    previewSaleReplacementReconciliation,
+    replaceManualSale,
     type InvestmentInstrumentResponse,
     type InvestmentTradeRequest,
     type ReconciliationImpactResponse,
     type SellPreviewResponse,
-    type CostBasisMethod
+    type CostBasisMethod,
+    type InvestmentTradeCorrectionContextResponse
   } from '$lib/api/investments';
   import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
   import { formatScaledValue, costBasisMethodLabel } from '$lib/investments/investment-labels';
@@ -30,12 +38,17 @@
   let {
     csrfToken,
     onSaved,
-    onCancel
+    onCancel,
+    correction
   }: {
     csrfToken: string;
     onSaved: () => void;
     onCancel: () => void;
+    correction?: InvestmentTradeCorrectionContextResponse;
   } = $props();
+
+  const initialCorrection = untrack(() => correction);
+  const correctionDraft = initialCorrection ? correctionTradeDraft(initialCorrection) : null;
 
   const locale = getLocale();
   const queryClient = useQueryClient();
@@ -75,25 +88,33 @@
   }
 
   // Form fields
-  let transactionDate = $state(todayISO());
-  let holdingAccountID = $state('');
-  let cashAccountID = $state('');
-  let quantityStr = $state('');
-  let cashAmountStr = $state('');
-  let exactMode = $state(false);
-  let grossAmountStr = $state('');
-  let settlementDate = $state('');
-  let charges = $state<TradeChargeDraft[]>([]);
-  let costBasisMethod = $state<CostBasisMethod>('fifo');
-  let memo = $state('');
+  let transactionDate = $state(initialCorrection?.event_date ?? todayISO());
+  let holdingAccountID = $state(String(initialCorrection?.holding_account_id ?? ''));
+  let cashAccountID = $state(String(initialCorrection?.cash_account_id ?? ''));
+  let quantityStr = $state(correctionDraft?.quantity ?? '');
+  let cashAmountStr = $state(correctionDraft?.net ?? '');
+  let exactMode = $state(correctionDraft?.exactMode ?? false);
+  let grossAmountStr = $state(correctionDraft?.gross ?? '');
+  let settlementDate = $state(correctionDraft?.settlementDate ?? '');
+  let charges = $state<TradeChargeDraft[]>(correctionDraft?.charges ?? []);
+  let costBasisMethod = $state<CostBasisMethod>((initialCorrection?.cost_basis_method as CostBasisMethod) || 'fifo');
+  let lotChoices = $state<CorrectionLotDraft[]>(initialCorrection ? correctionLotDrafts(initialCorrection) : []);
+  let memo = $state(initialCorrection?.memo ?? '');
+  let reason = $state('');
+  let reasonInputElement = $state<HTMLInputElement | undefined>();
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
+
+  $effect(() => {
+    if (correction) reasonInputElement?.focus();
+  });
 
   // See buy-form: a backdated sell must be able to proceed deliberately rather
   // than being refused with no way forward (T-53).
   let reconciliationModal = $state<{
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
     payload: InvestmentTradeRequest;
+    reason: string;
   } | null>(null);
 
   // Sell preview state
@@ -125,6 +146,7 @@
         a.account_class === 'asset' &&
         a.status === 'active' &&
         a.allows_postings &&
+        (!correction || a.default_commodity_id === correction.cost_commodity_id) &&
         a.account_kind !== 'security_holding' &&
         a.account_kind !== 'fund_holding'
     )
@@ -159,7 +181,7 @@
   }
 
   const previewReady = $derived(
-    !!selectedInstrument &&
+    (!!correction || !!selectedInstrument) &&
     holdingAccountID !== '' &&
     cashAccountID !== '' &&
     !!cashCommodityID &&
@@ -167,10 +189,11 @@
     cashAmountStr.trim() !== ''
   );
 
-  const canSubmit = $derived(previewReady && preview !== null && !previewPending);
+  const canSubmit = $derived(previewReady && (!!correction || (preview !== null && !previewPending)));
 
   // Trigger preview debounced when inputs change
   $effect(() => {
+    if (correction) return;
     // Track all reactive deps
     const _inst = selectedInstrument?.commodity_id;
     const _hold = holdingAccountID;
@@ -247,7 +270,12 @@
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
-    if (!canSubmit || !selectedInstrument || !cashCommodityID) return;
+    if (!canSubmit || (!correction && !selectedInstrument) || !cashCommodityID) return;
+    if (correction && !reason.trim()) return;
+    if (correction && charges.some((charge) => !charge.treatment)) {
+      formError = new Error(m.transactions_investment_replace_charge_treatment());
+      return;
+    }
 
     // Same wire contract as the preview above — the two must agree exactly.
     // Unlike the preview this reports every rejection: the user has committed
@@ -260,6 +288,17 @@
     }
     const { quantity, cashAmount } = amounts.values;
 
+    const selectedLots = correction && costBasisMethod === 'specific_lot'
+      ? parseCorrectionLotChoices(lotChoices, correction.available_lots, quantity) : null;
+    if (selectedLots && !selectedLots.ok) {
+      formError = new Error(selectedLots.reason === 'exceeds_available'
+        ? m.transactions_investment_replace_lot_exceeds()
+        : selectedLots.reason === 'mismatch'
+          ? m.transactions_investment_replace_lot_mismatch()
+          : m.transactions_investment_replace_lot_invalid());
+      return;
+    }
+
     const economics = exactMode ? exactTradeFields({ side: 'sell', gross: grossAmountStr,
       settlementDate, charges, cashCommodityID, netValue: cashAmount.value, netScale: cashAmount.scale }) : null;
     if (economics && !economics.ok) {
@@ -269,7 +308,7 @@
 
     const payload: InvestmentTradeRequest = {
       transaction_date: transactionDate,
-      commodity_id: selectedInstrument.commodity_id,
+      commodity_id: correction?.commodity_id ?? selectedInstrument!.commodity_id,
       holding_account_id: Number(holdingAccountID),
       cash_account_id: Number(cashAccountID),
       quantity_value: quantity.value,
@@ -279,21 +318,30 @@
       cash_commodity_id: cashCommodityID,
       ...(economics?.ok ? economics.fields : {}),
       cost_basis_method: costBasisMethod,
-      memo: memo.trim() || undefined
+      lot_allocations: selectedLots?.ok ? selectedLots.allocations : undefined,
+      memo: memo.trim() || undefined,
+      payee_id: correction?.payee_id
     };
 
     pending = true;
     formError = undefined;
 
     try {
-      const impact = await sellReconciliationImpact(payload);
+      const correctionReason = reason.trim();
+      const impact = correction
+        ? await previewSaleReplacementReconciliation(correction.transaction_id, {
+          reason: correctionReason,
+          replacement: { ...payload, cost_basis_method: payload.cost_basis_method!,
+            charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) }
+        })
+        : await sellReconciliationImpact(payload);
       if (impact.affected_checkpoints.length > 0) {
         // Hand the decision to the user rather than overriding for them.
-        reconciliationModal = { impacts: impact.affected_checkpoints, payload };
+        reconciliationModal = { impacts: impact.affected_checkpoints, payload, reason: correctionReason };
         return;
       }
 
-      await submitSell(payload, false);
+      await submitSell(payload, false, correctionReason);
     } catch (err) {
       formError = err;
     } finally {
@@ -303,13 +351,13 @@
 
   async function confirmOverride() {
     if (!reconciliationModal) return;
-    const { payload } = reconciliationModal;
+    const { payload, reason: correctionReason } = reconciliationModal;
     reconciliationModal = null;
     pending = true;
     formError = undefined;
 
     try {
-      await submitSell(payload, true);
+      await submitSell(payload, true, correctionReason);
     } catch (err) {
       formError = err;
     } finally {
@@ -317,17 +365,35 @@
     }
   }
 
-  async function submitSell(payload: InvestmentTradeRequest, override: boolean) {
-    await recordSell(override ? { ...payload, reconciliation_override: true } : payload, csrfToken);
+  async function submitSell(payload: InvestmentTradeRequest, override: boolean, correctionReason: string) {
+    if (correction) {
+      await replaceManualSale(correction.transaction_id, {
+        reason: correctionReason, reconciliation_override: override,
+        replacement: { ...payload, cost_basis_method: payload.cost_basis_method!,
+          charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) }
+      }, csrfToken);
+    } else {
+      await recordSell(override ? { ...payload, reconciliation_override: true } : payload, csrfToken);
+    }
 
     await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
     await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
+    await queryClient.invalidateQueries({ queryKey: investmentGainsQueryKey });
     await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
     onSaved();
   }
 
-  // specific_lot excluded until lot-allocation picker UI is added (requires per-lot selection UI)
-  const COST_BASIS_METHODS: CostBasisMethod[] = ['fifo', 'lifo', 'average_cost'];
+  const COST_BASIS_METHODS: CostBasisMethod[] = initialCorrection
+    ? ['fifo', 'lifo', 'average_cost', 'specific_lot'] : ['fifo', 'lifo', 'average_cost'];
+
+  function replacementMethodLabel(method: CostBasisMethod): string {
+    switch (method) {
+      case 'fifo': return m.transactions_investment_replace_method_fifo();
+      case 'lifo': return m.transactions_investment_replace_method_lifo();
+      case 'average_cost': return m.transactions_investment_replace_method_average();
+      case 'specific_lot': return m.transactions_investment_replace_method_specific();
+    }
+  }
 
   function formatGain(gain: string, scale: number): string {
     return formatScaledValue(gain, scale, locale);
@@ -354,7 +420,12 @@
 {/if}
 
 <form onsubmit={handleSubmit} class="space-y-4">
-  <h2 class="text-base font-semibold text-foreground">{m.investments_sell_title()}</h2>
+  <h2 class="text-base font-semibold text-foreground">
+    {correction ? m.transactions_investment_replace_sale_title() : m.investments_sell_title()}
+  </h2>
+  {#if correction}
+    <p class="text-sm text-muted">{m.transactions_investment_replace_sale_copy()}</p>
+  {/if}
 
   <!-- Date -->
   <div>
@@ -365,12 +436,16 @@
       id="sell-date"
       type="date"
       bind:value={transactionDate}
+      disabled={!!correction}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
       required
     />
   </div>
 
   <!-- Instrument autocomplete -->
+  {#if correction}
+    <p class="text-sm text-foreground">{m.investments_form_instrument()}: <strong>{correction.commodity_code}</strong></p>
+  {:else}
   <div class="relative">
     <label for="sell-instrument" class="mb-1 block text-sm font-medium text-foreground">
       {m.investments_form_instrument()}
@@ -411,6 +486,7 @@
       </div>
     {/if}
   </div>
+  {/if}
 
   <!-- Holding account -->
   <div>
@@ -420,6 +496,7 @@
     <select
       id="sell-holding-account"
       bind:value={holdingAccountID}
+      disabled={!!correction}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
       required
     >
@@ -429,6 +506,17 @@
       {/each}
     </select>
   </div>
+
+  {#if correction}
+    <div>
+      <label for="sell-correction-reason" class="mb-1 block text-sm font-medium text-foreground">
+        {m.transactions_investment_replace_reason()}
+      </label>
+      <input id="sell-correction-reason" type="text" bind:this={reasonInputElement} bind:value={reason}
+        maxlength="500" required
+        class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
+    </div>
+  {/if}
 
   <!-- Quantity -->
   <div>
@@ -498,10 +586,44 @@
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
     >
       {#each COST_BASIS_METHODS as method (method)}
-        <option value={method}>{costBasisMethodLabel(method)}</option>
+        <option value={method}>{correction ? replacementMethodLabel(method) : costBasisMethodLabel(method)}</option>
       {/each}
     </select>
   </div>
+
+  {#if correction && costBasisMethod === 'specific_lot'}
+    <fieldset class="space-y-3 rounded-(--radius-control) border border-border p-3">
+      <legend class="px-1 text-sm font-medium text-foreground">{m.transactions_investment_replace_lots_title()}</legend>
+      <p class="text-xs text-muted">{m.transactions_investment_replace_lots_copy()}</p>
+      {#each lotChoices as choice, index (index)}
+        <div class="grid grid-cols-1 gap-2 rounded-(--radius-control) border border-border p-2 sm:grid-cols-[minmax(0,1fr)_8rem_auto]">
+          <label class="text-xs text-muted">{m.transactions_investment_replace_lot()}
+            <select bind:value={choice.lotID} required
+              class="mt-1 w-full rounded-(--radius-control) border border-border bg-control px-2 py-2 text-sm text-foreground">
+              <option value="">{m.transactions_investment_replace_lot_select()}</option>
+              {#each correction.available_lots as lot (lot.lot_id)}
+                <option value={String(lot.lot_id)}>
+                  #{lot.lot_id} · {lot.opened_on} · {formatScaledValue(lot.quantity_value, lot.quantity_scale, locale)}
+                </option>
+              {/each}
+            </select>
+          </label>
+          <label class="text-xs text-muted">{m.investments_form_quantity()}
+            <input type="text" inputmode="decimal" bind:value={choice.quantity} required
+              class="mt-1 w-full rounded-(--radius-control) border border-border bg-control px-2 py-2 text-sm font-mono text-foreground" />
+          </label>
+          <button type="button" onclick={() => (lotChoices = lotChoices.filter((_, current) => current !== index))}
+            class="self-end rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
+            {m.transactions_investment_replace_lot_remove()}
+          </button>
+        </div>
+      {/each}
+      <button type="button" onclick={() => (lotChoices = [...lotChoices, { lotID: '', quantity: '' }])}
+        class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
+        {m.transactions_investment_replace_lot_add()}
+      </button>
+    </fieldset>
+  {/if}
 
   <!-- Memo -->
   <div>
@@ -517,7 +639,11 @@
   </div>
 
   <!-- Sell preview panel -->
-  {#if previewPending}
+  {#if correction}
+    <p class="rounded-(--radius-control) border border-border bg-control px-3 py-2 text-xs text-muted">
+      {m.transactions_investment_replace_sale_gain_copy()}
+    </p>
+  {:else if previewPending}
     <div class="rounded-(--radius-panel) border border-border bg-surface p-3 text-sm text-muted">
       {m.investments_sell_preview_loading()}
     </div>
@@ -583,10 +709,10 @@
     </button>
     <button
       type="submit"
-      disabled={!canSubmit || pending}
+      disabled={!canSubmit || pending || (!!correction && !reason.trim())}
       class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
     >
-      {pending ? m.investments_sell_pending() : m.investments_sell_submit()}
+      {pending ? m.investments_sell_pending() : correction ? m.transactions_investment_replace_submit() : m.investments_sell_submit()}
     </button>
   </div>
 </form>

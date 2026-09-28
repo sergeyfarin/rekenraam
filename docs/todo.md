@@ -26,15 +26,16 @@ Last reconciled: 2026-09-27.
   correction-chain read API; slice 4j presents the history and manual reversal
   in transaction detail. Slice 4k prepares one-audit compound journals and a
   shared sale plan. Slice 4l adds API-only replacement of the latest manual
-  long sale with a compound audited write and reconciliation preview. Next are
-  sale replacement UI and dependent sale replacement. Slice 4m prepared the buy
+  long sale with a compound audited write and reconciliation preview. Slice 4m prepared the buy
   writer and same-day replay order; slice 4n corrects a manual old buy
   through dependent sells under all four cost-basis methods, and slice 4o
   exposes immutable trade source facts for correction form prefill. Slice 4p
   makes manual buy correction available in transaction detail. Slice 4q
   prepares exact pre-sale lots and effective specific-lot choices for the
-  sale correction form. Imported
-  fills still require source-aware identity handling.
+  sale correction form. Slice 4r adds that prefilled sale correction form,
+  exact specific-lot picker and reconciliation preview. Next are older
+  dependent-sale replacement and source-aware identity handling for imported
+  fills.
 
 ## Then, within R16
 

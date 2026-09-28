@@ -1,5 +1,5 @@
 import type { InvestmentTradeRequest } from '$lib/api/investments';
-import { parseMoneyMagnitude, type AmountFieldError } from '$lib/investments/form-amounts';
+import { parseMagnitude, parseMoneyMagnitude, type AmountFieldError } from '$lib/investments/form-amounts';
 import { formatLedgerAmount } from '$lib/money/amount';
 import type { InvestmentTradeCorrectionContextResponse } from '$lib/api/investments';
 
@@ -43,6 +43,49 @@ export function correctionTradeDraft(source: InvestmentTradeCorrectionContextRes
       separatePayment: charge.cash_account_id !== undefined
     }))
   };
+}
+
+export type CorrectionLotDraft = { lotID: string; quantity: string };
+
+export function correctionLotDrafts(source: InvestmentTradeCorrectionContextResponse): CorrectionLotDraft[] {
+  return source.effective_elected_lots.map((choice) => ({
+    lotID: String(choice.lot_id), quantity: formatLedgerAmount(choice.quantity_value, choice.quantity_scale)
+  }));
+}
+
+export function parseCorrectionLotChoices(
+  drafts: CorrectionLotDraft[],
+  available: InvestmentTradeCorrectionContextResponse['available_lots'],
+  total: { value: string; scale: number }
+): { ok: true; allocations: NonNullable<InvestmentTradeRequest['lot_allocations']> } |
+   { ok: false; reason: 'invalid' | 'mismatch' | 'exceeds_available' } {
+  if (drafts.length === 0) return { ok: false, reason: 'invalid' };
+  const availableByID = new Map(available.map((lot) => [lot.lot_id, lot]));
+  const seen = new Set<number>();
+  const allocations: NonNullable<InvestmentTradeRequest['lot_allocations']> = [];
+  const parsed: { value: string; scale: number }[] = [];
+  for (const draft of drafts) {
+    const lotID = Number(draft.lotID);
+    const lot = availableByID.get(lotID);
+    const quantity = parseMagnitude(draft.quantity);
+    if (!Number.isSafeInteger(lotID) || !lot || seen.has(lotID) || !quantity.ok || quantity.field.value === '0') {
+      return { ok: false, reason: 'invalid' };
+    }
+    const scale = Math.max(quantity.field.scale, lot.quantity_scale);
+    const selected = BigInt(quantity.field.value) * 10n ** BigInt(scale - quantity.field.scale);
+    const maximum = BigInt(lot.quantity_value) * 10n ** BigInt(scale - lot.quantity_scale);
+    if (selected > maximum) return { ok: false, reason: 'exceeds_available' };
+    seen.add(lotID);
+    parsed.push(quantity.field);
+    allocations.push({ lot_id: lotID, quantity_value: quantity.field.value,
+      quantity_scale: quantity.field.scale });
+  }
+  const scale = Math.max(total.scale, ...parsed.map((quantity) => quantity.scale));
+  const selectedTotal = parsed.reduce((sum, quantity) => sum +
+    BigInt(quantity.value) * 10n ** BigInt(scale - quantity.scale), 0n);
+  const expectedTotal = BigInt(total.value) * 10n ** BigInt(scale - total.scale);
+  if (selectedTotal !== expectedTotal) return { ok: false, reason: 'mismatch' };
+  return { ok: true, allocations };
 }
 
 export function exactTradeFields(input: {

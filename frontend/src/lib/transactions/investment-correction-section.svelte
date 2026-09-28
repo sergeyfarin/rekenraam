@@ -6,6 +6,7 @@
   import { getLocale } from '$lib/paraglide/runtime.js';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import BuyForm from '$lib/investments/buy-form.svelte';
+  import SellForm from '$lib/investments/sell-form.svelte';
   import {
     getInvestmentCorrectionChain,
     getInvestmentTradeCorrectionContext,
@@ -31,11 +32,11 @@
     enabled: transactionID > 0
   }));
 
-  let replacementOpen = $state(false);
+  let replacementKind = $state<'buy' | 'sell' | null>(null);
   const replacementQuery = createQuery(() => ({
     queryKey: [...investmentCorrectionChainQueryKey, 'source', transactionID],
     queryFn: () => getInvestmentTradeCorrectionContext(transactionID),
-    enabled: replacementOpen && transactionID > 0
+    enabled: replacementKind !== null && transactionID > 0
   }));
 
   let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
@@ -53,7 +54,7 @@
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape' && modal !== 'closed' && !pending) closeModal();
-    else if (event.key === 'Escape' && replacementOpen) replacementOpen = false;
+    else if (event.key === 'Escape' && replacementKind !== null) replacementKind = null;
   }
 
   const locale = $derived(getLocale());
@@ -111,7 +112,7 @@
   }
 
   function replacementSaved() {
-    replacementOpen = false;
+    replacementKind = null;
     void chainQuery.refetch();
     onRefresh?.();
   }
@@ -183,8 +184,17 @@
       <button type="button"
         class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
         disabled={!csrfToken}
-        onclick={() => { replacementOpen = true; }}>
+        onclick={() => { replacementKind = 'buy'; }}>
         {m.transactions_investment_replace_buy_action()}
+      </button>
+    {/if}
+    {#if chainQuery.data.effective_transaction_id === transactionID &&
+      chainQuery.data.operations.some((node) => node.transaction_id === transactionID && node.operation_kind === 'sell' && node.effective && !node.imported)}
+      <button type="button"
+        class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+        disabled={!csrfToken}
+        onclick={() => { replacementKind = 'sell'; }}>
+        {m.transactions_investment_replace_sale_action()}
       </button>
     {/if}
   {:else}
@@ -192,24 +202,27 @@
   {/if}
 </section>
 
-{#if replacementOpen}
+{#if replacementKind !== null}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
     role="presentation">
     <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
-      role="dialog" aria-modal="true" aria-label={m.transactions_investment_replace_buy_title()}>
+      role="dialog" aria-modal="true" aria-label={replacementKind === 'buy'
+        ? m.transactions_investment_replace_buy_title() : m.transactions_investment_replace_sale_title()}>
       {#if replacementQuery.isPending}
         <p class="text-sm text-muted" role="status">{m.transactions_investment_replace_loading()}</p>
       {:else if replacementQuery.isError}
         <APIFormError error={replacementQuery.error} />
         <button type="button" class="mt-2 text-sm font-semibold text-accent" onclick={() => replacementQuery.refetch()}>{m.transactions_retry()}</button>
-      {:else if replacementQuery.data?.operation_kind === 'buy' && !replacementQuery.data.imported && !replacementQuery.data.already_corrected && csrfToken}
-        <BuyForm {csrfToken} correction={replacementQuery.data} onSaved={replacementSaved} onCancel={() => (replacementOpen = false)} />
+      {:else if replacementQuery.data?.operation_kind === 'buy' && replacementKind === 'buy' && !replacementQuery.data.imported && !replacementQuery.data.already_corrected && csrfToken}
+        <BuyForm {csrfToken} correction={replacementQuery.data} onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+      {:else if replacementQuery.data?.operation_kind === 'sell' && replacementKind === 'sell' && replacementQuery.data.can_replace_sale && !replacementQuery.data.imported && !replacementQuery.data.already_corrected && csrfToken}
+        <SellForm {csrfToken} correction={replacementQuery.data} onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
       {:else}
         <p class="text-sm text-muted">{m.transactions_investment_replace_unavailable()}</p>
       {/if}
-      {#if replacementQuery.isPending || replacementQuery.isError || replacementQuery.data?.operation_kind !== 'buy' || replacementQuery.data.imported || replacementQuery.data.already_corrected || !csrfToken}
+      {#if replacementQuery.isPending || replacementQuery.isError || replacementQuery.data?.operation_kind !== replacementKind || replacementQuery.data.imported || replacementQuery.data.already_corrected || (replacementKind === 'sell' && !replacementQuery.data.can_replace_sale) || !csrfToken}
         <button type="button" class="mt-4 min-h-10 rounded-[var(--radius-control)] border border-border bg-control px-4 text-sm font-semibold text-foreground"
-          onclick={() => (replacementOpen = false)}>{m.investments_form_cancel()}</button>
+          onclick={() => (replacementKind = null)}>{m.investments_form_cancel()}</button>
       {/if}
     </div>
   </div>

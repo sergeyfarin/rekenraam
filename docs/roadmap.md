@@ -102,7 +102,7 @@ Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
 
-The reusable application runtime (R16 [#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: manual long-sale reversal and correction-chain history are available in transaction detail, while the API can atomically replace the latest manual long sale or an old manual buy with dependent-sale replay. UI entry, dependent sale replacement, import identity handling and backdated admission remain.
+The reusable application runtime (R16 [#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers manual long-sale reversal and prefilled correction of a buy or latest sale. The API also replaces an old manual buy with dependent-sale replay. Older dependent-sale replacement, import identity handling and backdated admission remain.
 
 ### Completed initiatives through R10
 
@@ -141,10 +141,10 @@ order is native correction. Immutable intents,
 reversible long-position simulation, append-only effective revision storage,
 and realized-gains, self-check, and export readers support manual long-sale
 reversal, latest-sale replacement and old-buy replacement. Transaction detail
-offers sale reversal and prefilled buy replacement. Pre-sale lot context for
-the sale replacement picker is ready. Sale replacement UI, older
-dependent-sale replacement, import source identity and backdated admission
-remain. Transfers and basis actions, including manual splits, follow;
+offers sale reversal and prefilled buy and latest-sale replacement. The sale
+form uses pre-sale available lots for specific-lot correction. Older dependent
+sale replacement, import source identity and backdated admission remain.
+Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and
 cash-in-lieu suggestions are currently refused as dividend income (T-109) until
 their lot-basis treatment ships.
