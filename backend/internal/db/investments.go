@@ -361,15 +361,18 @@ type DisposeLotsParams struct {
 	QuantityScale   int
 	Allocations     []LotAllocation
 	CostBasisMethod string
-	DecisionSource  DisposalDecisionSource
-	CreatedAt       string
-	ActorUserID     int64
-	AuthSessionID   int64
-	RequestID       string
-	OriginType      string
-	Operation       string
-	ChangeReason    string
-	MetadataJSON    string
+	// EventKind is transfer_out only for an explicit in-kind movement. Empty
+	// preserves the ordinary disposal event used by trades and replay.
+	EventKind      string
+	DecisionSource DisposalDecisionSource
+	CreatedAt      string
+	ActorUserID    int64
+	AuthSessionID  int64
+	RequestID      string
+	OriginType     string
+	Operation      string
+	ChangeReason   string
+	MetadataJSON   string
 }
 
 type InvestmentPositionRecord struct {
@@ -1314,10 +1317,10 @@ func latestPositionRewriteDateTx(ctx context.Context, tx *sql.Tx, bookID int64, 
 //
 // A lot's cost_basis_value is immutable acquisition evidence, but the
 // projection every method reads — remaining quantity and remaining basis — is
-// not: a disposal rewrites it from whatever the previous events left behind.
+// not: a disposal or transfer-out rewrites it from previous events.
 // Average cost redistributes pooled basis across the surviving lots, and
 // FIFO/LIFO consume specific ones. So the projection is only meaningful as of
-// the last disposal applied to it, and an event dated earlier reads a position
+// the last depletion applied to it, and an event dated earlier reads a position
 // that has already moved past it. The reported case: buy 10 in January for
 // 100, buy 10 in June for 300, sell 5 in July at average cost — after which
 // January's surviving 5 shares carry 100 of pooled basis — then enter a sale
@@ -1325,17 +1328,16 @@ func latestPositionRewriteDateTx(ctx context.Context, tx *sql.Tx, bookID int64, 
 // lot, and takes basis that only exists because of a June purchase and a July
 // sale.
 //
-// A backdated event is refused only against *disposals*, not against later
+// A backdated event is refused against *depletions*, not against later
 // acquisitions, because acquisitions alone leave the projection intact: the
 // opened_on filters already keep a later purchase out of an earlier sale's
 // pool, and its own remaining basis is still exactly what was paid. Selling in
 // March after entering a June purchase therefore still works, and so does
 // entering the June purchase afterwards.
 //
-// Replaying a position under a corrected history is a real feature, with
-// elections and journal entries to preserve, and it is not this. Until it
-// exists, the honest answer is to refuse the event rather than to quietly
-// compute it against the wrong state. The comparison is inclusive, so same-day
+// Corrections use explicit position replay; ordinary event entry cannot
+// silently recompute a previously posted depletion. The comparison is
+// inclusive, so same-day
 // events stay legal in the order they are entered: buying and selling on one
 // day, or two sales on one day, both still work.
 func requirePositionEventInOrderTx(ctx context.Context, tx *sql.Tx, bookID int64, accountID int64, commodityID int64, eventDate string, what string) error {
@@ -1346,7 +1348,7 @@ func requirePositionEventInOrderTx(ctx context.Context, tx *sql.Tx, bookID int64
 	if latest == "" || eventDate >= latest {
 		return nil
 	}
-	return fmt.Errorf("%w: %s dated %s is before this position's disposal on %s", ErrOutOfOrderPositionEvent, what, eventDate, latest)
+	return fmt.Errorf("%w: %s dated %s is before this position's later depletion on %s", ErrOutOfOrderPositionEvent, what, eventDate, latest)
 }
 
 func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64, replaySimulation bool) ([]LotDisposalRecord, error) {
@@ -2884,6 +2886,13 @@ func positionBasisAllocationScaleTx(ctx context.Context, tx *sql.Tx, params Disp
 }
 
 func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lotID int64, quantityValue exact.Coefficient, quantityScale int, auditEventID int64, allocationScale int) (LotDisposalRecord, error) {
+	eventKind := params.EventKind
+	if eventKind == "" {
+		eventKind = "disposal"
+	}
+	if eventKind != "disposal" && eventKind != "transfer_out" {
+		return LotDisposalRecord{}, fmt.Errorf("%w: unsupported lot depletion event %q", ErrInvalidDisposalParams, eventKind)
+	}
 	lot, err := investmentLotByIDTx(ctx, tx, params.BookID, lotID)
 	if err != nil {
 		return LotDisposalRecord{}, err
@@ -2957,8 +2966,8 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 			cost_basis_value, cost_basis_scale, cost_basis_method, metadata_json,
 			created_at, created_by_user_id, created_audit_event_id
 		)
-		VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, params.BookID, lotID, nullablePositiveInt64(params.TransactionID), params.EventDate,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?)
+	`, params.BookID, lotID, eventKind, nullablePositiveInt64(params.TransactionID), params.EventDate,
 		quantityValue.Negated(), quantityScale, -costBasisValue, allocationScale,
 		params.CostBasisMethod, params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
 	if err != nil {

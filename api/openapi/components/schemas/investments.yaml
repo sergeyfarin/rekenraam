@@ -661,6 +661,55 @@ ExternalTransferInResponse:
       type: integer
       format: int64
 
+InternalTransferRequest:
+  type: object
+  additionalProperties: false
+  required: [effective_on, source_account_id, destination_account_id, commodity_id, cost_commodity_id, lot_allocations]
+  properties:
+    effective_on:
+      type: string
+      format: date
+      description: Account-entry and transfer effective date.
+    source_account_id:
+      type: integer
+      format: int64
+    destination_account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    cost_commodity_id:
+      type: integer
+      format: int64
+      description: All selected source lots must carry basis in this currency.
+    lot_allocations:
+      type: array
+      minItems: 1
+      items:
+        $ref: "../schemas/investments.yaml#/InvestmentLotAllocationRequest"
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    change_reason:
+      type: string
+    reconciliation_override:
+      type: boolean
+
+InternalTransferResponse:
+  type: object
+  required: [transaction, destination_lot_ids]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    destination_lot_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+
 InvestmentSaleReversalRequest:
   type: object
   additionalProperties: false

@@ -202,10 +202,10 @@ func TestBackdatedSaleIsRefusedOnceALaterSaleHasPooledTheBasis(t *testing.T) {
 	earlier.CostBasisMethod = "average_cost"
 
 	_, err = f.investmentService.PreviewSell(ctx, earlier)
-	require.EqualError(t, err, "investment events must be entered in chronological order: a disposal dated 2026-03-01 is before this position's disposal on 2026-07-01")
+	require.EqualError(t, err, "investment events must be entered in chronological order: a disposal dated 2026-03-01 is before this position's later depletion on 2026-07-01")
 
 	_, err = f.investmentService.Sell(ctx, earlier)
-	require.EqualError(t, err, "investment events must be entered in chronological order: a disposal dated 2026-03-01 is before this position's disposal on 2026-07-01")
+	require.EqualError(t, err, "investment events must be entered in chronological order: a disposal dated 2026-03-01 is before this position's later depletion on 2026-07-01")
 
 	// The refusal left the position exactly as the July sale did.
 	positions, err := f.investmentService.Positions(ctx)
@@ -247,7 +247,7 @@ func TestBackdatedPurchaseIsRefusedAfterASale(t *testing.T) {
 		CashAccountID: f.cashAccountID, QuantityValue: exact.New(10),
 		CashAmountValue: 30000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
 	})
-	require.EqualError(t, err, "investment events must be entered in chronological order: an acquisition dated 2026-03-01 is before this position's disposal on 2026-07-01")
+	require.EqualError(t, err, "investment events must be entered in chronological order: an acquisition dated 2026-03-01 is before this position's later depletion on 2026-07-01")
 
 	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
 	require.NoError(t, err)

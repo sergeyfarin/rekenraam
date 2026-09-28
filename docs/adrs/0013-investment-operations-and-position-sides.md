@@ -101,6 +101,12 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
    use the same guarded adjustment. Unknown-basis transfers out post only
    security legs until a sourced resolution posts the full bridge; a
    correction that would make a known outbound basis unknown is refused.
+   For the first internal-transfer command, source-lot quantities and carried
+   basis are immutable links to destination lots. Replay includes transfer
+   depletion. If a correction would change a linked carried basis or remove
+   its source lot, it refuses with a named dependency until cross-account
+   transfer revisions can replay destination lots and dependent disposals
+   atomically.
 7. The implementation proceeds in bounded slices: operation/side schema and
    exact trade economics; replay and native correction; transfers, basis
    adjustments, and splits; short opening and covering with diagnostics and

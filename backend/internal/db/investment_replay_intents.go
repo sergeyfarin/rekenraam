@@ -23,8 +23,8 @@ type InvestmentReplayIntent struct {
 	OperationKind    string
 	EffectSeq        int
 	EventDate        string
-	Kind             string // opening or disposal
-	LotID            int64  // opening only
+	Kind             string // opening, disposal or transfer_out
+	LotID            int64  // opening or transfer_out
 	DecisionID       int64  // disposal only
 	QuantityValue    exact.Coefficient
 	QuantityScale    int
@@ -155,6 +155,55 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	}
 	if err := disposals.Close(); err != nil {
 		return nil, fmt.Errorf("close replay disposals: %w", err)
+	}
+	transfers, err := reader.QueryContext(ctx, `
+		SELECT f.operation_id, o.operation_kind, f.effective_on, x.source_lot_id,
+			x.quantity_value, x.quantity_scale, x.carried_basis_value, x.carried_basis_scale,
+			o.transaction_id, e.created_audit_event_id, e.created_by_user_id, e.created_at,
+			effect.effect_seq
+		FROM investment_transfer_facts f
+		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
+		JOIN investment_operations o ON o.id = f.operation_id
+		JOIN investment_lot_events e ON e.transaction_id = o.transaction_id
+			AND e.lot_id = x.source_lot_id AND e.event_kind = 'transfer_out'
+		JOIN investment_operation_lot_effects effect ON effect.operation_id = f.operation_id
+			AND effect.lot_event_id = e.id
+		WHERE f.book_id = ? AND f.source_account_id = ? AND f.commodity_id = ?
+			AND f.transfer_kind = 'internal' AND x.cost_commodity_id = ?
+			AND o.correction_mode IS NOT 'reverse'
+			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+				WHERE successor.correction_of_operation_id = o.id)
+		ORDER BY f.operation_id, x.link_seq
+	`, bookID, accountID, commodityID, costCommodityID)
+	if err != nil {
+		return nil, fmt.Errorf("read replay transfer depletions: %w", err)
+	}
+	for transfers.Next() {
+		var intent InvestmentReplayIntent
+		var basis sql.NullString
+		var basisScale sql.NullInt64
+		if err := transfers.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
+			&intent.LotID, &intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale,
+			&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID,
+			&intent.CreatedAt, &intent.EffectSeq); err != nil {
+			transfers.Close()
+			return nil, fmt.Errorf("scan replay transfer depletion: %w", err)
+		}
+		if !basis.Valid || !basisScale.Valid || intent.EffectSeq <= 0 {
+			transfers.Close()
+			return nil, fmt.Errorf("%w: transfer operation %d lacks known basis or an effect", ErrInvalidDisposalParams, intent.OperationID)
+		}
+		intent.AmountValue = exact.Coefficient(basis.String)
+		intent.AmountScale = int(basisScale.Int64)
+		intent.Kind = "transfer_out"
+		intents = append(intents, intent)
+	}
+	if err := transfers.Err(); err != nil {
+		transfers.Close()
+		return nil, fmt.Errorf("iterate replay transfer depletions: %w", err)
+	}
+	if err := transfers.Close(); err != nil {
+		return nil, fmt.Errorf("close replay transfer depletions: %w", err)
 	}
 
 	selected, err := reader.QueryContext(ctx, `

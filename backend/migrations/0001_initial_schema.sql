@@ -1132,7 +1132,7 @@ CREATE TABLE IF NOT EXISTS investment_lot_events (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
-  event_kind TEXT NOT NULL CHECK (event_kind IN ('acquisition', 'disposal', 'split_adjustment', 'reinvested_dividend', 'manual_adjustment', 'transfer_in')),
+  event_kind TEXT NOT NULL CHECK (event_kind IN ('acquisition', 'disposal', 'split_adjustment', 'reinvested_dividend', 'manual_adjustment', 'transfer_in', 'transfer_out')),
   transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
   event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
@@ -1467,6 +1467,7 @@ CREATE TABLE IF NOT EXISTS investment_transfer_lot_links (
   original_acquired_on TEXT CHECK (original_acquired_on IS NULL OR original_acquired_on GLOB '????-??-??'),
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   PRIMARY KEY (operation_id, link_seq),
+  UNIQUE (operation_id, source_lot_id),
   UNIQUE (destination_lot_id),
   CHECK ((basis_knowledge = 'known') =
     (carried_basis_value IS NOT NULL AND carried_basis_scale IS NOT NULL AND cost_commodity_id IS NOT NULL)),

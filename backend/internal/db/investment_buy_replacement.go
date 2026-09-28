@@ -7,7 +7,7 @@ import (
 	"fmt"
 )
 
-var ErrInvestmentCorrectionDependency = errors.New("investment correction cannot satisfy a dependent disposal")
+var ErrInvestmentCorrectionDependency = errors.New("investment correction cannot satisfy a dependent operation")
 
 // BuyOperationRecord pins the posted source buy and its one immutable opening
 // lot. A correction must recheck it inside the write transaction.

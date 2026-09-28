@@ -3,7 +3,8 @@
 Status: accepted implementation contract, 2026-09-28. ADR 0012 and ADR 0013
 govern. This document fixes the journal, lot, date, and reconciliation rules
 that each slice 5 command must satisfy. The known-basis external inbound API
-command shipped in slice 5b; the remaining commands are unimplemented.
+command shipped in slice 5b, its entry screen in 5c, and the explicit-lot
+internal transfer API in 5d. The remaining commands are unimplemented.
 
 ## Common rules
 
@@ -56,6 +57,11 @@ The source and destination of an internal transfer must be different active
 holding accounts in the same book, with the same security and cost currency.
 Select exact source-lot quantities. The first command uses explicit lot
 selection so it does not silently choose a cost-basis policy for a non-sale.
+The first internal command snapshots known carried basis per source lot. Replay
+of later sales includes its source depletion. A correction that would change
+that linked basis or make its source lot unavailable refuses with the named
+transfer until cross-account transfer revisions can update the destination
+and its dependent disposals atomically.
 For a partial lot, carry its proportional remaining basis at the position's
 allocation scale; truncate non-final allocations toward zero and assign the
 exact remainder to the final selected portion. A full-lot movement carries

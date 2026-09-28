@@ -126,6 +126,62 @@ func TestExternalTransferInAPIRequiresKnownBasisAndPostsOneLot(t *testing.T) {
 	assert.Equal(t, 1, count)
 }
 
+func TestInternalTransferAPIRequiresCSRFAndPreviewsBothAccounts(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "IXFER")
+	source := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	destination := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	path := "/api/v1/investments/transfers/internal"
+	buySource := tradeRequestBody(f, source.ID, instrument.CommodityID, "2", 20000)
+	buySource.TransactionDate = "2026-01-01"
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", buySource, http.StatusCreated)
+	var boughtSource investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&boughtSource))
+	require.NotNil(t, boughtSource.LotID)
+	buyDest := tradeRequestBody(f, destination.ID, instrument.CommodityID, "1", 10000)
+	buyDest.TransactionDate = "2026-01-01"
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", buyDest, http.StatusCreated)
+	var boughtDest investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&boughtDest))
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, source.ID,
+		instrument.CommodityID, postingByAccount(t, boughtSource.Transaction, source.ID), "2026-03-01")
+	reconcilePostingForSession(t, handler, f.sessionCookie, f.csrfToken, destination.ID,
+		instrument.CommodityID, postingByAccount(t, boughtDest.Transaction, destination.ID), "2026-03-01")
+	request := internalTransferRequest{
+		EffectiveOn: "2026-02-01", SourceAccountID: source.ID,
+		DestinationAccountID: destination.ID, CommodityID: instrument.CommodityID,
+		CostCommodityID: f.commodityID,
+		LotAllocations: []investmentLotAllocationRequest{{LotID: *boughtSource.LotID,
+			QuantityValue: exact.New(1), QuantityScale: 0}},
+		SourceEvidence: json.RawMessage(`{"statement":"42"}`),
+	}
+	preview := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path+"/reconciliation-impact", request, http.StatusOK)
+	var impact reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(preview.Body).Decode(&impact))
+	require.Len(t, impact.AffectedCheckpoints, 2)
+	refused := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path, request, http.StatusConflict)
+	assert.Contains(t, refused.Body.String(), "reconciliation override")
+	request.ReconciliationOverride = true
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
+	posted := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path, request, http.StatusCreated)
+	var transfer internalTransferResponse
+	require.NoError(t, json.NewDecoder(posted.Body).Decode(&transfer))
+	require.Len(t, transfer.DestinationLotIDs, 1)
+	require.Len(t, transfer.Transaction.JournalEntries, 1)
+	require.Len(t, transfer.Transaction.JournalEntries[0].Postings, 2)
+	var linkCount int
+	require.NoError(t, database.QueryRow(`SELECT COUNT(*) FROM investment_transfer_lot_links
+		WHERE source_lot_id = ? AND destination_lot_id = ?`, *boughtSource.LotID,
+		transfer.DestinationLotIDs[0]).Scan(&linkCount))
+	assert.Equal(t, 1, linkCount)
+}
+
 func TestExternalTransferInPreviewNamesCheckpointAndWriteRequiresOverride(t *testing.T) {
 	handler, _ := newSetupTestHandler(t)
 	f := bootstrapInvestmentAPITest(t, handler)

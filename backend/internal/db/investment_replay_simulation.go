@@ -174,6 +174,28 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 				})
 			}
 			projection.Disposals = append(projection.Disposals, disposal)
+		case "transfer_out":
+			params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
+				CommodityID: commodityID, CostCommodityID: costCommodityID,
+				TransactionID: intent.TransactionID, EventDate: intent.EventDate,
+				EventKind: "transfer_out", MetadataJSON: "{}",
+				CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID}
+			allocationScale, err := positionBasisAllocationScaleTx(ctx, tx, params)
+			if err != nil {
+				return InvestmentReplayProjection{}, err
+			}
+			moved, err := disposeLotTx(ctx, tx, params, intent.LotID,
+				intent.QuantityValue, intent.QuantityScale, intent.AuditEventID, allocationScale)
+			if err != nil {
+				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
+					OperationID: intent.OperationID, Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
+			}
+			if exact.ScaledIntFromInt64(moved.CostBasisValue, moved.CostBasisScale).Cmp(
+				exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale)) != 0 {
+				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
+					OperationID: intent.OperationID,
+					Cause:       fmt.Errorf("%w: transfer carried basis changed", ErrInvestmentCorrectionDependency)}
+			}
 		default:
 			return InvestmentReplayProjection{}, fmt.Errorf("%w: replay intent kind %q is unsupported", ErrInvalidDisposalParams, intent.Kind)
 		}

@@ -367,6 +367,36 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				AND x.carried_basis_value = l.cost_basis_value
 				AND x.carried_basis_scale = l.cost_basis_scale
 				AND x.cost_commodity_id = l.cost_commodity_id)`},
+		{"internal transfer missing linked source and destination effects", `
+			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
+			AND o.operation_kind = 'internal_transfer'
+			AND (NOT EXISTS (SELECT 1 FROM investment_transfer_facts f
+				JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
+				WHERE f.operation_id = o.id AND f.transfer_kind = 'internal')
+			OR EXISTS (SELECT 1 FROM investment_transfer_lot_links x
+				JOIN investment_transfer_facts f ON f.operation_id = x.operation_id
+				WHERE f.operation_id = o.id AND NOT EXISTS (
+					SELECT 1 FROM investment_lots source JOIN investment_lots destination
+						ON destination.id = x.destination_lot_id
+					JOIN investment_lot_events source_event ON source_event.lot_id = source.id
+						AND source_event.transaction_id = o.transaction_id AND source_event.event_kind = 'transfer_out'
+					JOIN investment_lot_events destination_event ON destination_event.lot_id = destination.id
+						AND destination_event.transaction_id = o.transaction_id AND destination_event.event_kind = 'transfer_in'
+					WHERE source.id = x.source_lot_id AND source.book_id = f.book_id
+						AND source.account_id = f.source_account_id AND destination.account_id = f.destination_account_id
+						AND source.commodity_id = f.commodity_id AND destination.commodity_id = f.commodity_id
+						AND destination.source_transaction_id = o.transaction_id
+						AND x.quantity_value = destination.quantity_value AND x.quantity_scale = destination.quantity_scale
+						AND x.carried_basis_value = destination.cost_basis_value
+						AND x.carried_basis_scale = destination.cost_basis_scale
+						AND x.cost_commodity_id = source.cost_commodity_id
+						AND x.cost_commodity_id = destination.cost_commodity_id
+						AND source_event.quantity_value = '-' || x.quantity_value
+						AND source_event.quantity_scale = x.quantity_scale
+						AND source_event.cost_basis_scale = x.carried_basis_scale
+						AND (source_event.cost_basis_value = '-' || x.carried_basis_value
+							OR (source_event.cost_basis_value = '0' AND x.carried_basis_value = '0'))
+				)))`},
 		{"posted long disposal missing proceeds decision", `
 			SELECT o.id FROM investment_operations o
 			WHERE o.book_id = ? AND o.operation_kind IN ('sell', 'write_off')

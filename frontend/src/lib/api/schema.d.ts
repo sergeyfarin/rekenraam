@@ -13058,6 +13058,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/transfers/internal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transfer selected investment lots between holding accounts
+         * @description Moves positive explicit long-lot quantities with their carried basis, without cash or gain.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InternalTransferRequest"];
+                };
+            };
+            responses: {
+                /** @description Balanced transfer and linked destination lots recorded atomically */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InternalTransferResponse"];
+                    };
+                };
+                /** @description Invalid transfer facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Reconciliation override required or dated lot dependency conflicts */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transfers/internal/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation impact of an internal investment transfer
+         * @description Authenticated read-only preview; no CSRF token or write occurs.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InternalTransferRequest"];
+                };
+            };
+            responses: {
+                /** @description Affected checkpoints and postings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid transfer facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/transactions/{transaction_id}/correction-chain": {
         parameters: {
             query?: never;
@@ -18062,6 +18222,35 @@ export interface components {
             transaction: components["schemas"]["TransactionResponse"];
             /** Format: int64 */
             lot_id: number;
+        };
+        InternalTransferRequest: {
+            /**
+             * Format: date
+             * @description Account-entry and transfer effective date.
+             */
+            effective_on: string;
+            /** Format: int64 */
+            source_account_id: number;
+            /** Format: int64 */
+            destination_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /**
+             * Format: int64
+             * @description All selected source lots must carry basis in this currency.
+             */
+            cost_commodity_id: number;
+            lot_allocations: components["schemas"]["InvestmentLotAllocationRequest"][];
+            source_evidence?: {
+                [key: string]: unknown;
+            };
+            memo?: string;
+            change_reason?: string;
+            reconciliation_override?: boolean;
+        };
+        InternalTransferResponse: {
+            transaction: components["schemas"]["TransactionResponse"];
+            destination_lot_ids: number[];
         };
         InvestmentSaleReversalRequest: {
             /** @description Why the posted manual long sale is being reversed. */
