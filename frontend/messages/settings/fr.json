@@ -144,6 +144,7 @@
   "api_error_investment_sale_already_corrected": "Cette vente a déjà été corrigée. Ouvrez l’historique des corrections pour voir la dernière écriture.",
   "api_error_investment_imported_sale": "Cette vente importée doit être corrigée depuis sa source.",
   "api_error_investment_sale_changed": "Cette vente a changé pendant votre vérification. Rouvrez la transaction et réessayez.",
+  "api_error_investment_sale_not_latest": "Une opération ultérieure concerne cette position. Cette vente ne peut pas encore être remplacée.",
   "api_error_transaction_draft_not_user_creatable": "Seul un processus automatique peut créer des brouillons. Enregistrez les écritures manuelles directement dans le grand livre.",
   "api_error_transaction_version_stale": "Cette écriture a été modifiée dans un autre onglet ou une autre fenêtre pendant votre saisie. Rechargez-la et refaites votre modification.",
   "api_error_posting_account_version_stale": "Un compte utilisé par cette écriture a été modifié pendant votre saisie. Rechargez-la et ressaisissez-la.",

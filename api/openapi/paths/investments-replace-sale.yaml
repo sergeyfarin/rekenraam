@@ -1,0 +1,59 @@
+post:
+  summary: Replace the latest posted manual long sale
+  description: >-
+    Posts an inverse and corrected sale, rebuilds the position, retires the
+    original trade price, and updates reconciliation under one audit event.
+    The sale must be the latest position operation. The original remains
+    posted history. Imported sales require source-aware correction.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReplacementRequest"
+  responses:
+    "201":
+      description: Sale replaced and long position rebuilt
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReplacementResponse"
+    "400":
+      description: Invalid replacement or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted manual long sale not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Sale corrected, imported, changed, followed by another position operation, or reconciliation override required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

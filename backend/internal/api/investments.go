@@ -175,6 +175,18 @@ type investmentSaleReversalResponse struct {
 	CorrectedTransactionID int64               `json:"corrected_transaction_id"`
 }
 
+type investmentSaleReplacementRequest struct {
+	Reason                 string                 `json:"reason"`
+	ReconciliationOverride bool                   `json:"reconciliation_override"`
+	Replacement            investmentTradeRequest `json:"replacement"`
+}
+
+type investmentSaleReplacementResponse struct {
+	InverseTransaction     transactionResponse     `json:"inverse_transaction"`
+	Replacement            investmentTradeResponse `json:"replacement"`
+	CorrectedTransactionID int64                   `json:"corrected_transaction_id"`
+}
+
 type investmentCorrectionNodeResponse struct {
 	OperationID             int64  `json:"operation_id"`
 	TransactionID           *int64 `json:"transaction_id,omitempty"`
@@ -761,6 +773,66 @@ func reverseInvestmentSaleReconciliationImpact(logger *slog.Logger, authService 
 	}
 }
 
+func replaceInvestmentSale(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.ReplaceLatestSale(r.Context(), app.ReplaceInvestmentSaleInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
+			RequestID: RequestIDFromContext(r.Context()), TransactionID: transactionID,
+			Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
+			Replacement: toInvestmentTradeInput(owner, r, request.Replacement),
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "replace investment sale", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSaleReplacementResponse{
+			InverseTransaction:     toTransactionResponse(result.Inverse),
+			Replacement:            toInvestmentTradeResponse(result.Replacement),
+			CorrectedTransactionID: transactionID,
+		})
+	}))
+}
+
+func replaceInvestmentSaleReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReplaceLatestSaleReconciliationImpact(r.Context(), app.ReplaceInvestmentSaleInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+			Replacement: toInvestmentTradeInput(owner, r, request.Replacement),
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview sale replacement reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
 func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedOwner(w, r, logger, authService)
@@ -1179,6 +1251,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_IMPORTED_SALE", err.Error())
 	case errors.Is(err, app.ErrInvestmentSaleChanged):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_CHANGED", err.Error())
+	case errors.Is(err, app.ErrInvestmentSaleNotLatest):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_NOT_LATEST", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
 	// Every investment trade goes through the transaction write guard, so a

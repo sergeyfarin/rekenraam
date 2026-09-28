@@ -144,6 +144,7 @@
   "api_error_investment_sale_already_corrected": "Esta venta ya se ha corregido. Abra el historial de correcciones para ver el último asiento.",
   "api_error_investment_imported_sale": "Esta venta importada debe corregirse desde su origen.",
   "api_error_investment_sale_changed": "Esta venta cambió mientras la revisaba. Vuelva a abrir la transacción e inténtelo de nuevo.",
+  "api_error_investment_sale_not_latest": "Hay una operación posterior en esta posición. Esta venta aún no se puede reemplazar.",
   "api_error_transaction_draft_not_user_creatable": "Solo un proceso automático puede crear borradores. Guarda los asientos manuales directamente en el libro mayor.",
   "api_error_transaction_version_stale": "Este asiento cambió en otra pestaña o ventana mientras lo editaba. Vuelva a cargarlo y realice el cambio de nuevo.",
   "api_error_posting_account_version_stale": "Una cuenta usada por este asiento cambió mientras lo introducía. Vuelva a cargarlo e introdúzcalo de nuevo.",

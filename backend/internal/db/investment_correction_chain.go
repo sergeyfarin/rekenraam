@@ -28,6 +28,12 @@ func (r *InvestmentRepository) CorrectionChainByTransactionID(ctx context.Contex
 	rows, err := r.database.QueryContext(ctx, `WITH RECURSIVE ancestors(id, parent_id) AS (
 		SELECT id, correction_of_operation_id FROM investment_operations
 		WHERE book_id = ? AND transaction_id = ?
+		UNION
+		SELECT operation.id, operation.correction_of_operation_id
+		FROM investment_operation_journal_links link
+		JOIN investment_operations operation ON operation.id = link.operation_id
+		JOIN transaction_versions version ON version.id = link.transaction_version_id
+		WHERE operation.book_id = ? AND version.transaction_id = ?
 		UNION ALL
 		SELECT parent.id, parent.correction_of_operation_id
 		FROM investment_operations parent JOIN ancestors a ON parent.id = a.parent_id
@@ -52,7 +58,7 @@ func (r *InvestmentRepository) CorrectionChainByTransactionID(ctx context.Contex
 	JOIN audit_events audit ON audit.id = operation.created_audit_event_id
 	LEFT JOIN transactions transaction_record ON transaction_record.id = operation.transaction_id
 	LEFT JOIN current_transaction_versions current ON current.transaction_id = operation.transaction_id
-	ORDER BY chain.chain_seq`, bookID, transactionID, bookID, bookID)
+		ORDER BY chain.chain_seq`, bookID, transactionID, bookID, transactionID, bookID, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read investment correction chain: %w", err)
 	}

@@ -180,6 +180,42 @@ func TestReverseManualSaleAPI(t *testing.T) {
 	require.Contains(t, conflict.Body.String(), "INVESTMENT_SALE_ALREADY_CORRECTED")
 }
 
+func TestReplaceLatestManualSaleAPI(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "REPL")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 50000), http.StatusCreated)
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "2", 24000)
+	sale.TransactionDate = "2026-03-01"
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/sell", sale, http.StatusCreated)
+	var sold investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&sold))
+	path := "/api/v1/investments/transactions/" + strconv.FormatInt(sold.Transaction.ID, 10) + "/replace-sale"
+	replacement := tradeRequestBody(f, holding.ID, instrument.CommodityID, "3", 39000)
+	replacement.TransactionDate = sale.TransactionDate
+	request := investmentSaleReplacementRequest{Reason: "corrected fill", Replacement: replacement}
+	preview := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path+"/reconciliation-impact", request, http.StatusOK)
+	var impact reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(preview.Body).Decode(&impact))
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
+	var corrected investmentSaleReplacementResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&corrected))
+	require.Equal(t, sold.Transaction.ID, corrected.CorrectedTransactionID)
+	require.Equal(t, "posted", corrected.InverseTransaction.Status)
+	require.Equal(t, "posted", corrected.Replacement.Transaction.Status)
+	var remaining int
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM investment_lots
+		WHERE book_id = 1 AND remaining_quantity_value = '2'`).Scan(&remaining))
+	require.Equal(t, 1, remaining)
+	conflict := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
+	require.Contains(t, conflict.Body.String(), "INVESTMENT_SALE_ALREADY_CORRECTED")
+}
+
 // --- Lifecycle ---
 
 // assertMoneyValue compares a coefficient/scale pair against an expected

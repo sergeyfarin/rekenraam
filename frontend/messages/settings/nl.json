@@ -144,6 +144,7 @@
   "api_error_investment_sale_already_corrected": "Deze verkoop is al gecorrigeerd. Open de correctiegeschiedenis om de laatste boeking te zien.",
   "api_error_investment_imported_sale": "Deze geïmporteerde verkoop moet via de bron worden gecorrigeerd.",
   "api_error_investment_sale_changed": "Deze verkoop is gewijzigd terwijl u hem bekeek. Open de transactie opnieuw en probeer het nog eens.",
+  "api_error_investment_sale_not_latest": "Na deze verkoop is nog een transactie voor deze positie geboekt. De verkoop kan nog niet worden vervangen.",
   "api_error_transaction_draft_not_user_creatable": "Conceptboekingen kunnen alleen door een automatische workflow worden aangemaakt. Sla handmatige boekingen direct op in het grootboek.",
   "api_error_transaction_version_stale": "Deze boeking is in een ander tabblad of venster gewijzigd terwijl u hem bewerkte. Laad hem opnieuw en pas hem nogmaals aan.",
   "api_error_posting_account_version_stale": "Een rekening in deze boeking is gewijzigd terwijl u hem invoerde. Laad hem opnieuw en voer hem nogmaals in.",

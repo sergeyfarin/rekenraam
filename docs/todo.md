@@ -25,7 +25,9 @@ Last reconciled: 2026-09-27.
   replay, price retirement and reconciliation preview. Slice 4i adds the
   correction-chain read API; slice 4j presents the history and manual reversal
   in transaction detail. Slice 4k prepares one-audit compound journals and a
-  shared sale plan. Next are replacement and buy correction; imported
+  shared sale plan. Slice 4l adds API-only replacement of the latest manual
+  long sale with a compound audited write and reconciliation preview. Next are
+  UI entry, dependent sale replacement, and buy correction; imported
   fills still require source-aware identity handling.
 
 ## Then, within R16

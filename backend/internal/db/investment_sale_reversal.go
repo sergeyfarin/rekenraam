@@ -103,42 +103,9 @@ func (r *InvestmentRepository) ReverseSale(ctx context.Context, params CreateTra
 			rollbackTx(ctx, tx)
 		}
 	}()
-	current, err := saleOperationByIDQuery(ctx, tx, params.BookID, expected.OperationID)
+	current, err := checkSaleOperationForCorrectionTx(ctx, tx, params.BookID, expected)
 	if err != nil {
 		return TransactionRecord{}, err
-	}
-	if current.AlreadyCorrected {
-		return TransactionRecord{}, ErrInvestmentOperationAlreadyCorrected
-	}
-	if current.Imported {
-		return TransactionRecord{}, ErrInvestmentImportedCorrection
-	}
-	if current != expected {
-		return TransactionRecord{}, ErrInvestmentSaleChanged
-	}
-	var currentVersionID int64
-	var status string
-	var transactionKind string
-	var transactionDate string
-	var deletedAt sql.NullString
-	if err := tx.QueryRowContext(ctx, `
-		SELECT v.id, v.status, v.transaction_kind, v.transaction_date, t.deleted_at
-		FROM transactions t JOIN current_transaction_versions v ON v.transaction_id = t.id
-		WHERE t.book_id = ? AND t.id = ?
-	`, params.BookID, current.TransactionID).Scan(&currentVersionID, &status, &transactionKind, &transactionDate, &deletedAt); err != nil {
-		return TransactionRecord{}, fmt.Errorf("check sale transaction version: %w", err)
-	}
-	if currentVersionID != current.CurrentVersionID || status != "posted" || transactionKind != "investment" || transactionDate != current.EventDate || deletedAt.Valid {
-		return TransactionRecord{}, ErrInvestmentSaleChanged
-	}
-	if currentVersionID != current.TransactionVersionID {
-		unchanged, err := saleJournalEconomicsUnchangedTx(ctx, tx, current.TransactionVersionID, currentVersionID)
-		if err != nil {
-			return TransactionRecord{}, err
-		}
-		if !unchanged {
-			return TransactionRecord{}, ErrInvestmentSaleChanged
-		}
 	}
 	transaction, auditEventID, err := createTransactionWithAuditTx(ctx, tx, params)
 	if err != nil {
@@ -176,6 +143,47 @@ func (r *InvestmentRepository) ReverseSale(ctx context.Context, params CreateTra
 	}
 	committed = true
 	return transaction, nil
+}
+
+func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected SaleOperationRecord) (SaleOperationRecord, error) {
+	current, err := saleOperationByIDQuery(ctx, tx, bookID, expected.OperationID)
+	if err != nil {
+		return SaleOperationRecord{}, err
+	}
+	if current.AlreadyCorrected {
+		return SaleOperationRecord{}, ErrInvestmentOperationAlreadyCorrected
+	}
+	if current.Imported {
+		return SaleOperationRecord{}, ErrInvestmentImportedCorrection
+	}
+	if current != expected {
+		return SaleOperationRecord{}, ErrInvestmentSaleChanged
+	}
+	var currentVersionID int64
+	var status string
+	var transactionKind string
+	var transactionDate string
+	var deletedAt sql.NullString
+	if err := tx.QueryRowContext(ctx, `
+		SELECT v.id, v.status, v.transaction_kind, v.transaction_date, t.deleted_at
+		FROM transactions t JOIN current_transaction_versions v ON v.transaction_id = t.id
+		WHERE t.book_id = ? AND t.id = ?
+	`, bookID, current.TransactionID).Scan(&currentVersionID, &status, &transactionKind, &transactionDate, &deletedAt); err != nil {
+		return SaleOperationRecord{}, fmt.Errorf("check sale transaction version: %w", err)
+	}
+	if currentVersionID != current.CurrentVersionID || status != "posted" || transactionKind != "investment" || transactionDate != current.EventDate || deletedAt.Valid {
+		return SaleOperationRecord{}, ErrInvestmentSaleChanged
+	}
+	if currentVersionID != current.TransactionVersionID {
+		unchanged, err := saleJournalEconomicsUnchangedTx(ctx, tx, current.TransactionVersionID, currentVersionID)
+		if err != nil {
+			return SaleOperationRecord{}, err
+		}
+		if !unchanged {
+			return SaleOperationRecord{}, ErrInvestmentSaleChanged
+		}
+	}
+	return current, nil
 }
 
 // Reconciliation may create a new transaction version while leaving a sale's

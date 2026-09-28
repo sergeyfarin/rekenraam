@@ -20,6 +20,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   INVESTMENT_SALE_ALREADY_CORRECTED: () => m.api_error_investment_sale_already_corrected(),
   INVESTMENT_IMPORTED_SALE: () => m.api_error_investment_imported_sale(),
   INVESTMENT_SALE_CHANGED: () => m.api_error_investment_sale_changed(),
+  INVESTMENT_SALE_NOT_LATEST: () => m.api_error_investment_sale_not_latest(),
   TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   TRANSACTION_VERSION_STALE: () => m.api_error_transaction_version_stale(),
   POSTING_ACCOUNT_VERSION_STALE: () => m.api_error_posting_account_version_stale(),

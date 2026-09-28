@@ -614,6 +614,20 @@ next family.
      elections. Existing writes retain their one-audit behavior. The next
      slice uses this seam for an inverse plus a replacement journal; this
      foundation alone does not expose replacement.
+   - **4l — latest manual long-sale replacement — complete 2026-09-28.** A
+     posted manual sale may be replaced when it is the last lot-affecting
+     intent for its exact long position. The native command keeps its date,
+     holding, instrument and cost currency, but accepts corrected quantity,
+     proceeds, fees and other sale fields. One SQLite transaction posts the
+     old sale's inverse and the replacement journal beneath one audit event,
+     links both journals to one replacement operation, rebuilds the position
+     without the old disposal, records the replacement's elected disposal,
+     retires the old trade price, and guards both journals at reconciliation
+     checkpoints. The preview returns distinct affected checkpoints. A later
+     buy or sale, an imported source, and an already corrected sale are
+     refused before any partial write. Older dependent-sale replacement, buy
+     correction, import source identity correction, and UI entry remain
+     follow-up slices; backdated writes remain fenced.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

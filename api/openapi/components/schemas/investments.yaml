@@ -622,6 +622,33 @@ InvestmentSaleReversalResponse:
       type: integer
       format: int64
 
+InvestmentSaleReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, replacement]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted manual long sale is being corrected.
+    reconciliation_override:
+      type: boolean
+      description: Omit or set false to preserve affected reconciliation checkpoints.
+    replacement:
+      $ref: "#/InvestmentTradeRequest"
+
+InvestmentSaleReplacementResponse:
+  type: object
+  required: [inverse_transaction, replacement, corrected_transaction_id]
+  properties:
+    inverse_transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    replacement:
+      $ref: "#/InvestmentTradeResponse"
+    corrected_transaction_id:
+      type: integer
+      format: int64
+
 InvestmentCorrectionChainResponse:
   type: object
   required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, operations]
