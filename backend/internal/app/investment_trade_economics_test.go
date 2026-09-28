@@ -81,6 +81,63 @@ func TestExactTradeEconomicsFeeTreatmentAndGrossPrice(t *testing.T) {
 	}
 }
 
+func negativeProceedsSale(f *investmentsTestFixture, date string) InvestmentTradeInput {
+	return InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: date,
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		CostBasisMethod: "fifo",
+		QuantityValue:   exact.New(1), GrossAmountValue: tradeMoney(50), GrossAmountScale: 2,
+		NetSettlementValue: tradeMoney(-50), NetSettlementScale: 2,
+		Charges: []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -100,
+			AmountScale: 2, CommodityID: f.eurCommodityID, Treatment: "clearing_included"}},
+	}
+}
+
+func TestNegativeSaleProceedsSurviveLaterReplayAndReplacement(t *testing.T) {
+	t.Run("later sale replays after earlier reversal", func(t *testing.T) {
+		f := newInvestmentsTestFixture(t)
+		ctx := context.Background()
+		buyOn(t, f, "2026-01-01", 2, 2000)
+		older, err := f.investmentService.Sell(ctx, sellInput(f, "2026-02-01", 1))
+		require.NoError(t, err)
+		later, err := f.investmentService.Sell(ctx, negativeProceedsSale(f, "2026-03-01"))
+		require.NoError(t, err)
+		require.EqualValues(t, -50, later.DisposalDecision.ProceedsValue)
+		_, err = f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{
+			OwnerUserID: f.ownerUserID, TransactionID: older.Transaction.ID, Reason: "duplicate sale",
+		})
+		require.NoError(t, err)
+		var revisedProceeds string
+		var revisedScale int
+		require.NoError(t, f.database.QueryRow(`SELECT a.proceeds_value, a.proceeds_scale
+			FROM investment_disposal_revision_allocations a
+			JOIN investment_disposal_revisions r ON r.id = a.revision_id
+			JOIN investment_disposal_decisions d ON d.id = r.decision_id
+			WHERE d.transaction_id = ? ORDER BY r.revision_seq DESC LIMIT 1`,
+			later.Transaction.ID).Scan(&revisedProceeds, &revisedScale))
+		require.Zero(t, exact.ScaledIntFromCoefficient(exact.Coefficient(revisedProceeds), revisedScale).Cmp(
+			exact.ScaledIntFromInt64(-50, 2)))
+	})
+	t.Run("sale replacement keeps negative proceeds", func(t *testing.T) {
+		f := newInvestmentsTestFixture(t)
+		ctx := context.Background()
+		buyOn(t, f, "2026-01-01", 1, 1000)
+		original, err := f.investmentService.Sell(ctx, sellInput(f, "2026-02-01", 1))
+		require.NoError(t, err)
+		replaced, err := f.investmentService.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+			OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
+			Reason:      "minimum commission exceeded gross proceeds",
+			Replacement: negativeProceedsSale(f, "2026-02-01"),
+		})
+		require.NoError(t, err)
+		require.EqualValues(t, -50, replaced.Replacement.DisposalDecision.ProceedsValue)
+		check, err := selfCheckOver(t, f.database).RunSelfCheck(ctx, "manual")
+		require.NoError(t, err)
+		require.Equal(t, SelfCheckPassed, check.Status)
+	})
+}
+
 func TestManualAndGrossPricesOutrankLaterApproximateTradeOnSameDate(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()

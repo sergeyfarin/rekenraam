@@ -57,7 +57,7 @@ func proposedSaleReplayIntents(intents []InvestmentReplayIntent, operationID int
 	proposed DisposeLotsParams,
 ) ([]InvestmentReplayIntent, error) {
 	if operationID <= 0 || proposed.QuantityValue.Sign() <= 0 || proposed.QuantityScale < 0 ||
-		proposed.ProceedsValue < 0 || proposed.ProceedsScale < 0 ||
+		proposed.ProceedsScale < 0 ||
 		proposed.CostBasisMethod == "" {
 		return nil, fmt.Errorf("%w: replacement disposal is incomplete", ErrInvalidDisposalParams)
 	}

@@ -201,7 +201,7 @@ func insertHistoricalSaleDisposalsTx(ctx context.Context, tx *sql.Tx, params Dis
 	disposals := make([]LotDisposalRecord, 0, len(allocations))
 	for _, allocation := range allocations {
 		if allocation.LotID <= 0 || allocation.QuantityValue.Sign() <= 0 ||
-			allocation.CostBasisValue < 0 || allocation.ProceedsValue < 0 {
+			allocation.CostBasisValue < 0 {
 			return nil, fmt.Errorf("%w: historical sale allocation is invalid", ErrInvalidDisposalParams)
 		}
 		result, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_events

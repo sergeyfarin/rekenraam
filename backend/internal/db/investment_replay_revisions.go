@@ -61,7 +61,7 @@ func persistInvestmentReplayProjectionTx(ctx context.Context, tx *sql.Tx, bookID
 		quantity, basis, proceeds := exact.NewScaledInt(), exact.NewScaledInt(), exact.NewScaledInt()
 		for _, allocation := range disposal.Allocations {
 			if !lotIDs[allocation.LotID] || allocation.QuantityValue.Sign() <= 0 ||
-				allocation.CostBasisValue < 0 || allocation.ProceedsValue < 0 {
+				allocation.CostBasisValue < 0 {
 				return fmt.Errorf("%w: replay allocation is invalid", ErrInvalidDisposalParams)
 			}
 			quantity.AddCoefficient(allocation.QuantityValue, allocation.QuantityScale)
