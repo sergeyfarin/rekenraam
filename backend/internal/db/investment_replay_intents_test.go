@@ -18,6 +18,7 @@ func TestInvestmentReplayIntentsReadImmutableSources(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, intents, 3)
 	require.Equal(t, []int64{1, 2, 3}, []int64{intents[0].OperationID, intents[1].OperationID, intents[2].OperationID})
+	require.Equal(t, []int64{1, 2, 3}, []int64{intents[0].OrderOperationID, intents[1].OrderOperationID, intents[2].OrderOperationID})
 	require.Equal(t, "opening", intents[0].Kind)
 	require.Equal(t, "10", intents[0].QuantityValue.String())
 	require.Equal(t, "5", intents[1].QuantityValue.String(), "read the opening, not the 2.5 shares left in its projection")
@@ -105,4 +106,27 @@ func TestInvestmentReplayIntentsOrderSameDayByOperationAndEffect(t *testing.T) {
 	require.Equal(t, []int64{1, 2, 2, 3}, []int64{intents[0].OperationID, intents[1].OperationID, intents[2].OperationID, intents[3].OperationID})
 	require.Equal(t, 1, intents[1].EffectSeq)
 	require.Equal(t, 2, intents[2].EffectSeq)
+}
+
+func TestInvestmentReplayReplacementKeepsRootSameDaySlot(t *testing.T) {
+	ctx := context.Background()
+	database := seedReplayTestBook(t)
+	result, err := database.ExecContext(ctx, `INSERT INTO investment_operations
+		(book_id, operation_kind, event_date, created_at, created_audit_event_id,
+		 correction_of_operation_id, correction_mode, correction_reason)
+		VALUES (1, 'buy', '2026-04-02', '2026-09-28T00:00:00Z', 31,
+			1, 'replace', 'correct original buy')`)
+	require.NoError(t, err)
+	replacementID, err := result.LastInsertId()
+	require.NoError(t, err)
+	orderIDs, err := investmentReplayOrderOperationIDsQuery(ctx, database, 1)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, orderIDs[replacementID])
+	intents := []InvestmentReplayIntent{
+		{OperationID: 3, OrderOperationID: orderIDs[3], EffectSeq: 1, EventDate: "2026-04-02"},
+		{OperationID: replacementID, OrderOperationID: orderIDs[replacementID], EffectSeq: 1, EventDate: "2026-04-02"},
+	}
+	sortInvestmentReplayIntents(intents)
+	require.Equal(t, replacementID, intents[0].OperationID, "corrected buy must precede a later same-day sale")
+	require.EqualValues(t, 3, intents[1].OperationID)
 }

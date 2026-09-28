@@ -27,7 +27,8 @@ Last reconciled: 2026-09-27.
   in transaction detail. Slice 4k prepares one-audit compound journals and a
   shared sale plan. Slice 4l adds API-only replacement of the latest manual
   long sale with a compound audited write and reconciliation preview. Next are
-  UI entry, dependent sale replacement, and buy correction; imported
+  UI entry, dependent sale replacement, and buy correction; slice 4m has
+  prepared the buy writer and same-day replay order. Imported
   fills still require source-aware identity handling.
 
 ## Then, within R16

@@ -15,24 +15,28 @@ import (
 // excluded from current replay. A disposal carries its elected method and any
 // explicit specific-lot choice, never the lots selected by FIFO/LIFO/average.
 type InvestmentReplayIntent struct {
-	OperationID     int64
-	OperationKind   string
-	EffectSeq       int
-	EventDate       string
-	Kind            string // opening or disposal
-	LotID           int64  // opening only
-	DecisionID      int64  // disposal only
-	QuantityValue   exact.Coefficient
-	QuantityScale   int
-	AmountValue     exact.Coefficient // opening consideration or disposal proceeds
-	AmountScale     int
-	CostBasisMethod string
-	DecisionSource  DisposalDecisionSource
-	SpecificLots    []LotAllocation
-	TransactionID   int64
-	AuditEventID    int64
-	CreatedByUserID int64
-	CreatedAt       string
+	OperationID int64
+	// OrderOperationID is the root operation's original same-day slot. A
+	// replacement inherits that slot so a later same-day sale still follows
+	// the corrected acquisition when replay sorts the effective intents.
+	OrderOperationID int64
+	OperationKind    string
+	EffectSeq        int
+	EventDate        string
+	Kind             string // opening or disposal
+	LotID            int64  // opening only
+	DecisionID       int64  // disposal only
+	QuantityValue    exact.Coefficient
+	QuantityScale    int
+	AmountValue      exact.Coefficient // opening consideration or disposal proceeds
+	AmountScale      int
+	CostBasisMethod  string
+	DecisionSource   DisposalDecisionSource
+	SpecificLots     []LotAllocation
+	TransactionID    int64
+	AuditEventID     int64
+	CreatedByUserID  int64
+	CreatedAt        string
 }
 
 func (r *InvestmentRepository) ListInvestmentReplayIntents(ctx context.Context, bookID, accountID, commodityID, costCommodityID int64, side string) ([]InvestmentReplayIntent, error) {
@@ -193,6 +197,17 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			}
 		}
 	}
+	orderIDs, err := investmentReplayOrderOperationIDsQuery(ctx, reader, bookID)
+	if err != nil {
+		return nil, err
+	}
+	for index := range intents {
+		orderID, ok := orderIDs[intents[index].OperationID]
+		if !ok {
+			return nil, fmt.Errorf("replay operation %d has no correction root", intents[index].OperationID)
+		}
+		intents[index].OrderOperationID = orderID
+	}
 	sortInvestmentReplayIntents(intents)
 	return intents, nil
 }
@@ -202,9 +217,44 @@ func sortInvestmentReplayIntents(intents []InvestmentReplayIntent) {
 		if order := cmp.Compare(a.EventDate, b.EventDate); order != 0 {
 			return order
 		}
-		if order := cmp.Compare(a.OperationID, b.OperationID); order != 0 {
+		orderID := func(intent InvestmentReplayIntent) int64 {
+			if intent.OrderOperationID > 0 {
+				return intent.OrderOperationID
+			}
+			return intent.OperationID
+		}
+		if order := cmp.Compare(orderID(a), orderID(b)); order != 0 {
 			return order
 		}
 		return cmp.Compare(a.EffectSeq, b.EffectSeq)
 	})
+}
+
+func investmentReplayOrderOperationIDsQuery(ctx context.Context, reader queryer, bookID int64) (map[int64]int64, error) {
+	rows, err := reader.QueryContext(ctx, `WITH RECURSIVE roots(operation_id, root_id) AS (
+		SELECT id, id FROM investment_operations
+		WHERE book_id = ? AND correction_of_operation_id IS NULL
+		UNION ALL
+		SELECT child.id, roots.root_id
+		FROM investment_operations child
+		JOIN roots ON roots.operation_id = child.correction_of_operation_id
+		WHERE child.book_id = ?
+	)
+	SELECT operation_id, root_id FROM roots`, bookID, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read investment replay correction roots: %w", err)
+	}
+	defer rows.Close()
+	orderIDs := make(map[int64]int64)
+	for rows.Next() {
+		var operationID, rootID int64
+		if err := rows.Scan(&operationID, &rootID); err != nil {
+			return nil, fmt.Errorf("scan investment replay correction root: %w", err)
+		}
+		orderIDs[operationID] = rootID
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate investment replay correction roots: %w", err)
+	}
+	return orderIDs, nil
 }

@@ -75,6 +75,10 @@ general journal and ADR 0012's four-layer boundary remain the foundation.
    reversal is terminal and contributes no replay intent. Replay excludes
    intents belonging to any operation with a correcting successor, preserving
    those original intents for audit while selecting only the effective end.
+   A replacement inherits the root operation's same-day order slot during
+   replay. Its new database ID does not move an old acquisition after a sale
+   that originally followed it on the same date; effect sequence still orders
+   events within the effective operation.
 6. Cash corporate actions are typed. Return of capital changes lot basis;
    cash in lieu needs its own lot allocation or disposal relationship. Neither
    is accepted as ordinary dividend income solely because cash arrived. A

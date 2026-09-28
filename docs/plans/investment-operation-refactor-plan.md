@@ -630,6 +630,13 @@ next family.
      refused before any partial write. Older dependent-sale replacement, buy
      correction, import source identity correction, and UI entry remain
      follow-up slices; backdated writes remain fenced.
+   - **4m — old-buy correction preparation — complete 2026-09-28.** Normal
+     buy entry and native replacement prepare the same exact journal and
+     lot-opening terms. Replay now sorts a replacement by its correction
+     root's original same-day operation slot, so a corrected old buy remains
+     before a later sale recorded on that date. This is a deterministic
+     replay rule only; the native buy correction command and backdated
+     admission remain fenced until dependency, rollback and journal tests pass.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

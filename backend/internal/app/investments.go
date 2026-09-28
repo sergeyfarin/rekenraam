@@ -1079,14 +1079,38 @@ func (s *InvestmentService) buyPlan(ctx context.Context, input InvestmentTradeIn
 }
 
 func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
-	plan, err := s.buyPlan(ctx, input)
+	transactionParams, lotParams, err := s.prepareBuyWrite(ctx, input)
 	if err != nil {
 		return InvestmentTradeResult{}, err
+	}
+	var transactionRecord db.TransactionRecord
+	var lot db.InvestmentLotRecord
+	if postWrite == nil {
+		transactionRecord, lot, err = s.repository.CreateTransactionAndLot(ctx, transactionParams, lotParams)
+	} else {
+		transactionRecord, lot, err = s.repository.CreateTransactionAndLotWithPostWrite(ctx, transactionParams, lotParams, postWrite)
+	}
+	if err != nil {
+		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
+			return InvestmentTradeResult{}, err
+		}
+		return InvestmentTradeResult{}, fmt.Errorf("create buy transaction and lot: %w", mapTransactionDBError(err))
+	}
+	transaction := toTransaction(transactionRecord)
+	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
+}
+
+// prepareBuyWrite freezes the same exact journal and lot-opening facts for
+// normal entry and a native buy replacement before either begins its write.
+func (s *InvestmentService) prepareBuyWrite(ctx context.Context, input InvestmentTradeInput) (db.CreateTransactionParams, db.CreateInvestmentLotParams, error) {
+	plan, err := s.buyPlan(ctx, input)
+	if err != nil {
+		return db.CreateTransactionParams{}, db.CreateInvestmentLotParams{}, err
 	}
 	metadataJSON := plan.MetadataJSON
 	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create, plan.AccountRuleDependencies)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return db.CreateTransactionParams{}, db.CreateInvestmentLotParams{}, err
 	}
 	transactionParams.InvestmentComponents = plan.TradeEconomics.components(input.CashCommodityID)
 	transactionParams.InvestmentSettlementDate = plan.TradeEconomics.SettlementDate
@@ -1095,14 +1119,14 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 			input.TransactionDate, input.QuantityValue, input.QuantityScale,
 			plan.TradeEconomics.PriceValue, plan.TradeEconomics.PriceScale, plan.TradeEconomics.PriceApproximate)
 		if err != nil {
-			return InvestmentTradeResult{}, err
+			return db.CreateTransactionParams{}, db.CreateInvestmentLotParams{}, err
 		}
 	}
 	now := s.now().UTC().Format(time.RFC3339)
 	basis := exact.ScaledIntFromInt64(plan.TradeEconomics.ClearingValue, plan.TradeEconomics.ClearingScale).Negated()
 	basisValue, err := basis.Int64()
 	if err != nil {
-		return InvestmentTradeResult{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
+		return db.CreateTransactionParams{}, db.CreateInvestmentLotParams{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
 	}
 	lotParams := db.CreateInvestmentLotParams{
 		BookID:          BookID,
@@ -1124,21 +1148,7 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		ChangeReason:    "created lot from buy transaction",
 		EventKind:       "acquisition",
 	}
-	var transactionRecord db.TransactionRecord
-	var lot db.InvestmentLotRecord
-	if postWrite == nil {
-		transactionRecord, lot, err = s.repository.CreateTransactionAndLot(ctx, transactionParams, lotParams)
-	} else {
-		transactionRecord, lot, err = s.repository.CreateTransactionAndLotWithPostWrite(ctx, transactionParams, lotParams, postWrite)
-	}
-	if err != nil {
-		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
-			return InvestmentTradeResult{}, err
-		}
-		return InvestmentTradeResult{}, fmt.Errorf("create buy transaction and lot: %w", mapTransactionDBError(err))
-	}
-	transaction := toTransaction(transactionRecord)
-	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
+	return transactionParams, lotParams, nil
 }
 
 func tradePriceSpec(baseID, quoteID int64, date string, quantity exact.Coefficient, quantityScale int, cash int64, cashScale int, approximate bool) (*db.TradeImpliedPriceSpec, error) {
