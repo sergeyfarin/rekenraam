@@ -668,6 +668,14 @@ next family.
      lots, gains and history after the native replacement. The form uses the
      existing mobile buy entry fields and the shared exact amount parser.
      Sale replacement UI and older dependent-sale replacement follow.
+   - **4q — pre-sale lot context for sale correction — complete 2026-09-28.**
+     The correction read model reports whether a manual long sale is the
+     latest effective position intent. A rolled-back replay of all preceding
+     intents supplies exact available lots immediately before that sale,
+     plus its specific-lot election mapped to effective acquisition lots.
+     Historical source lot choices remain separate and immutable. This
+     prepares a correction picker without using today's remaining balance,
+     which already includes the sale being replaced.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

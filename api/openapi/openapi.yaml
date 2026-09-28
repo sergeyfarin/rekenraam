@@ -952,6 +952,8 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentTradeCorrectionChargeResponse"
     InvestmentTradeCorrectionLotChoiceResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentTradeCorrectionLotChoiceResponse"
+    InvestmentTradeCorrectionAvailableLotResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTradeCorrectionAvailableLotResponse"
     InvestmentCorrectionNodeResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionNodeResponse"
     DisposalDecisionResponse:

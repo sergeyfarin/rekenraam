@@ -193,6 +193,14 @@ func TestReplaceLatestManualSaleAPI(t *testing.T) {
 		"/api/v1/investments/sell", sale, http.StatusCreated)
 	var sold investmentTradeResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&sold))
+	contextResult := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,
+		"/api/v1/investments/transactions/"+strconv.FormatInt(sold.Transaction.ID, 10)+"/trade-correction-context",
+		nil, http.StatusOK)
+	var source investmentTradeCorrectionContextResponse
+	require.NoError(t, json.NewDecoder(contextResult.Body).Decode(&source))
+	require.True(t, source.CanReplaceSale)
+	require.Len(t, source.AvailableLots, 1)
+	require.Equal(t, "5", source.AvailableLots[0].QuantityValue)
 	path := "/api/v1/investments/transactions/" + strconv.FormatInt(sold.Transaction.ID, 10) + "/replace-sale"
 	replacement := tradeRequestBody(f, holding.ID, instrument.CommodityID, "3", 39000)
 	replacement.TransactionDate = sale.TransactionDate

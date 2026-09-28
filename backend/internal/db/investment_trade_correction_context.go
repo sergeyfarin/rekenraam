@@ -11,29 +11,39 @@ import (
 // preparing a full buy or sale replacement. A command always rechecks the
 // source under its write transaction; this read is never an authorization.
 type InvestmentTradeCorrectionContext struct {
-	OperationID      int64
-	TransactionID    int64
-	OperationKind    string
-	EventDate        string
-	HoldingAccountID int64
-	CommodityID      int64
-	CommodityCode    string
-	CostCommodityID  int64
-	QuantityValue    string
-	QuantityScale    int
-	CostBasisMethod  string
-	CashAccountID    int64
-	NetValue         string
-	NetScale         int
-	SettlementDate   string
-	Memo             string
-	PayeeID          *int64
-	GrossValue       *string
-	GrossScale       *int
-	Imported         bool
-	AlreadyCorrected bool
-	Charges          []InvestmentTradeCorrectionCharge
-	ElectedLots      []InvestmentTradeCorrectionLotChoice
+	OperationID          int64
+	TransactionID        int64
+	OperationKind        string
+	EventDate            string
+	HoldingAccountID     int64
+	CommodityID          int64
+	CommodityCode        string
+	CostCommodityID      int64
+	QuantityValue        string
+	QuantityScale        int
+	CostBasisMethod      string
+	CashAccountID        int64
+	NetValue             string
+	NetScale             int
+	SettlementDate       string
+	Memo                 string
+	PayeeID              *int64
+	GrossValue           *string
+	GrossScale           *int
+	Imported             bool
+	AlreadyCorrected     bool
+	Charges              []InvestmentTradeCorrectionCharge
+	ElectedLots          []InvestmentTradeCorrectionLotChoice
+	CanReplaceSale       bool
+	AvailableLots        []InvestmentTradeCorrectionAvailableLot
+	EffectiveElectedLots []InvestmentTradeCorrectionLotChoice
+}
+
+type InvestmentTradeCorrectionAvailableLot struct {
+	LotID         int64
+	OpenedOn      string
+	QuantityValue string
+	QuantityScale int
 }
 
 type InvestmentTradeCorrectionLotChoice struct {
@@ -54,7 +64,7 @@ type InvestmentTradeCorrectionCharge struct {
 }
 
 func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookID, transactionID int64) (InvestmentTradeCorrectionContext, error) {
-	tx, err := r.database.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return InvestmentTradeCorrectionContext{}, fmt.Errorf("begin investment trade correction snapshot: %w", err)
 	}
@@ -163,6 +173,40 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 		}
 		if err := lotRows.Close(); err != nil {
 			return InvestmentTradeCorrectionContext{}, fmt.Errorf("close correction elected lots: %w", err)
+		}
+	}
+	if record.OperationKind == "sell" && !record.Imported && !record.AlreadyCorrected {
+		intents, err := investmentReplayIntentsQuery(ctx, tx, bookID,
+			record.HoldingAccountID, record.CommodityID, record.CostCommodityID, "long")
+		if err != nil {
+			return InvestmentTradeCorrectionContext{}, err
+		}
+		if len(intents) > 0 && intents[len(intents)-1].OperationID == record.OperationID && intents[len(intents)-1].Kind == "disposal" {
+			record.CanReplaceSale = true
+			for _, choice := range intents[len(intents)-1].SpecificLots {
+				record.EffectiveElectedLots = append(record.EffectiveElectedLots, InvestmentTradeCorrectionLotChoice{
+					LotID: choice.LotID, QuantityValue: choice.QuantityValue.String(), QuantityScale: choice.QuantityScale,
+				})
+			}
+			projection, err := simulateInvestmentReplayTx(ctx, tx, bookID,
+				record.HoldingAccountID, record.CommodityID, record.CostCommodityID, intents[:len(intents)-1])
+			if err != nil {
+				return InvestmentTradeCorrectionContext{}, fmt.Errorf("read pre-sale available lots: %w", err)
+			}
+			openedOn := make(map[int64]string)
+			for _, intent := range intents[:len(intents)-1] {
+				if intent.Kind == "opening" {
+					openedOn[intent.LotID] = intent.EventDate
+				}
+			}
+			for _, lot := range projection.Lots {
+				if lot.RemainingQuantityValue.Sign() > 0 && openedOn[lot.LotID] != "" {
+					record.AvailableLots = append(record.AvailableLots, InvestmentTradeCorrectionAvailableLot{
+						LotID: lot.LotID, OpenedOn: openedOn[lot.LotID],
+						QuantityValue: lot.RemainingQuantityValue.String(), QuantityScale: lot.RemainingQuantityScale,
+					})
+				}
+			}
 		}
 	}
 	if err := tx.Commit(); err != nil {

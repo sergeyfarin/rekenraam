@@ -141,7 +141,8 @@ order is native correction. Immutable intents,
 reversible long-position simulation, append-only effective revision storage,
 and realized-gains, self-check, and export readers support manual long-sale
 reversal, latest-sale replacement and old-buy replacement. Transaction detail
-offers sale reversal and prefilled buy replacement. Sale replacement UI, older
+offers sale reversal and prefilled buy replacement. Pre-sale lot context for
+the sale replacement picker is ready. Sale replacement UI, older
 dependent-sale replacement, import source identity and backdated admission
 remain. Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and

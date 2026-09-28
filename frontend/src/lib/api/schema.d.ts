@@ -17975,6 +17975,12 @@ export interface components {
             charges: components["schemas"]["InvestmentTradeCorrectionChargeResponse"][];
             /** @description Original explicit specific-lot choices; empty for other methods. */
             elected_lots: components["schemas"]["InvestmentTradeCorrectionLotChoiceResponse"][];
+            /** @description Display hint for a current manual sale with no later position intent. The write rechecks it. */
+            can_replace_sale: boolean;
+            /** @description Effective long lots and quantities immediately before an eligible sale, from a rolled-back replay. */
+            available_lots: components["schemas"]["InvestmentTradeCorrectionAvailableLotResponse"][];
+            /** @description Specific-lot elections mapped to effective acquisitions after earlier corrections. */
+            effective_elected_lots: components["schemas"]["InvestmentTradeCorrectionLotChoiceResponse"][];
         };
         InvestmentTradeCorrectionChargeResponse: {
             kind: string;
@@ -17994,6 +18000,14 @@ export interface components {
         InvestmentTradeCorrectionLotChoiceResponse: {
             /** Format: int64 */
             lot_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+        };
+        InvestmentTradeCorrectionAvailableLotResponse: {
+            /** Format: int64 */
+            lot_id: number;
+            /** Format: date */
+            opened_on: string;
             quantity_value: string;
             quantity_scale: number;
         };

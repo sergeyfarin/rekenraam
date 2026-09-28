@@ -31,7 +31,9 @@ Last reconciled: 2026-09-27.
   writer and same-day replay order; slice 4n corrects a manual old buy
   through dependent sells under all four cost-basis methods, and slice 4o
   exposes immutable trade source facts for correction form prefill. Slice 4p
-  makes manual buy correction available in transaction detail. Imported
+  makes manual buy correction available in transaction detail. Slice 4q
+  prepares exact pre-sale lots and effective specific-lot choices for the
+  sale correction form. Imported
   fills still require source-aware identity handling.
 
 ## Then, within R16

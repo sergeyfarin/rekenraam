@@ -238,30 +238,40 @@ type investmentTradeCorrectionLotChoiceResponse struct {
 	QuantityScale int    `json:"quantity_scale"`
 }
 
+type investmentTradeCorrectionAvailableLotResponse struct {
+	LotID         int64  `json:"lot_id"`
+	OpenedOn      string `json:"opened_on"`
+	QuantityValue string `json:"quantity_value"`
+	QuantityScale int    `json:"quantity_scale"`
+}
+
 type investmentTradeCorrectionContextResponse struct {
-	OperationID      int64                                        `json:"operation_id"`
-	TransactionID    int64                                        `json:"transaction_id"`
-	OperationKind    string                                       `json:"operation_kind"`
-	EventDate        string                                       `json:"event_date"`
-	HoldingAccountID int64                                        `json:"holding_account_id"`
-	CommodityID      int64                                        `json:"commodity_id"`
-	CommodityCode    string                                       `json:"commodity_code"`
-	CostCommodityID  int64                                        `json:"cost_commodity_id"`
-	QuantityValue    string                                       `json:"quantity_value"`
-	QuantityScale    int                                          `json:"quantity_scale"`
-	CostBasisMethod  string                                       `json:"cost_basis_method"`
-	CashAccountID    int64                                        `json:"cash_account_id"`
-	NetValue         string                                       `json:"net_value"`
-	NetScale         int                                          `json:"net_scale"`
-	SettlementDate   string                                       `json:"settlement_date"`
-	Memo             string                                       `json:"memo"`
-	PayeeID          *int64                                       `json:"payee_id,omitempty"`
-	GrossValue       *string                                      `json:"gross_value,omitempty"`
-	GrossScale       *int                                         `json:"gross_scale,omitempty"`
-	Imported         bool                                         `json:"imported"`
-	AlreadyCorrected bool                                         `json:"already_corrected"`
-	Charges          []investmentTradeCorrectionChargeResponse    `json:"charges"`
-	ElectedLots      []investmentTradeCorrectionLotChoiceResponse `json:"elected_lots"`
+	OperationID          int64                                           `json:"operation_id"`
+	TransactionID        int64                                           `json:"transaction_id"`
+	OperationKind        string                                          `json:"operation_kind"`
+	EventDate            string                                          `json:"event_date"`
+	HoldingAccountID     int64                                           `json:"holding_account_id"`
+	CommodityID          int64                                           `json:"commodity_id"`
+	CommodityCode        string                                          `json:"commodity_code"`
+	CostCommodityID      int64                                           `json:"cost_commodity_id"`
+	QuantityValue        string                                          `json:"quantity_value"`
+	QuantityScale        int                                             `json:"quantity_scale"`
+	CostBasisMethod      string                                          `json:"cost_basis_method"`
+	CashAccountID        int64                                           `json:"cash_account_id"`
+	NetValue             string                                          `json:"net_value"`
+	NetScale             int                                             `json:"net_scale"`
+	SettlementDate       string                                          `json:"settlement_date"`
+	Memo                 string                                          `json:"memo"`
+	PayeeID              *int64                                          `json:"payee_id,omitempty"`
+	GrossValue           *string                                         `json:"gross_value,omitempty"`
+	GrossScale           *int                                            `json:"gross_scale,omitempty"`
+	Imported             bool                                            `json:"imported"`
+	AlreadyCorrected     bool                                            `json:"already_corrected"`
+	Charges              []investmentTradeCorrectionChargeResponse       `json:"charges"`
+	ElectedLots          []investmentTradeCorrectionLotChoiceResponse    `json:"elected_lots"`
+	CanReplaceSale       bool                                            `json:"can_replace_sale"`
+	AvailableLots        []investmentTradeCorrectionAvailableLotResponse `json:"available_lots"`
+	EffectiveElectedLots []investmentTradeCorrectionLotChoiceResponse    `json:"effective_elected_lots"`
 }
 
 func toInvestmentTradeCorrectionContextResponse(record db.InvestmentTradeCorrectionContext) investmentTradeCorrectionContextResponse {
@@ -280,6 +290,19 @@ func toInvestmentTradeCorrectionContextResponse(record db.InvestmentTradeCorrect
 			LotID: choice.LotID, QuantityValue: choice.QuantityValue, QuantityScale: choice.QuantityScale,
 		})
 	}
+	effectiveElectedLots := make([]investmentTradeCorrectionLotChoiceResponse, 0, len(record.EffectiveElectedLots))
+	for _, choice := range record.EffectiveElectedLots {
+		effectiveElectedLots = append(effectiveElectedLots, investmentTradeCorrectionLotChoiceResponse{
+			LotID: choice.LotID, QuantityValue: choice.QuantityValue, QuantityScale: choice.QuantityScale,
+		})
+	}
+	availableLots := make([]investmentTradeCorrectionAvailableLotResponse, 0, len(record.AvailableLots))
+	for _, lot := range record.AvailableLots {
+		availableLots = append(availableLots, investmentTradeCorrectionAvailableLotResponse{
+			LotID: lot.LotID, OpenedOn: lot.OpenedOn, QuantityValue: lot.QuantityValue,
+			QuantityScale: lot.QuantityScale,
+		})
+	}
 	return investmentTradeCorrectionContextResponse{
 		OperationID: record.OperationID, TransactionID: record.TransactionID,
 		OperationKind: record.OperationKind, EventDate: record.EventDate,
@@ -292,6 +315,8 @@ func toInvestmentTradeCorrectionContextResponse(record db.InvestmentTradeCorrect
 		GrossScale: record.GrossScale, Memo: record.Memo, PayeeID: record.PayeeID,
 		Imported:         record.Imported,
 		AlreadyCorrected: record.AlreadyCorrected, Charges: charges, ElectedLots: electedLots,
+		CanReplaceSale: record.CanReplaceSale, AvailableLots: availableLots,
+		EffectiveElectedLots: effectiveElectedLots,
 	}
 }
 

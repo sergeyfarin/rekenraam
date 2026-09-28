@@ -745,7 +745,8 @@ InvestmentTradeCorrectionContextResponse:
   required: [operation_id, transaction_id, operation_kind, event_date, holding_account_id,
     commodity_id, commodity_code, cost_commodity_id, quantity_value, quantity_scale,
     cost_basis_method, cash_account_id, net_value, net_scale, settlement_date, memo,
-    imported, already_corrected, charges, elected_lots]
+    imported, already_corrected, charges, elected_lots, can_replace_sale,
+    available_lots, effective_elected_lots]
   properties:
     operation_id: { type: integer, format: int64 }
     transaction_id: { type: integer, format: int64 }
@@ -777,6 +778,28 @@ InvestmentTradeCorrectionContextResponse:
       description: Original explicit specific-lot choices; empty for other methods.
       items:
         $ref: '#/InvestmentTradeCorrectionLotChoiceResponse'
+    can_replace_sale:
+      type: boolean
+      description: Display hint for a current manual sale with no later position intent. The write rechecks it.
+    available_lots:
+      type: array
+      description: Effective long lots and quantities immediately before an eligible sale, from a rolled-back replay.
+      items:
+        $ref: '#/InvestmentTradeCorrectionAvailableLotResponse'
+    effective_elected_lots:
+      type: array
+      description: Specific-lot elections mapped to effective acquisitions after earlier corrections.
+      items:
+        $ref: '#/InvestmentTradeCorrectionLotChoiceResponse'
+
+InvestmentTradeCorrectionAvailableLotResponse:
+  type: object
+  required: [lot_id, opened_on, quantity_value, quantity_scale]
+  properties:
+    lot_id: { type: integer, format: int64 }
+    opened_on: { type: string, format: date }
+    quantity_value: { type: string }
+    quantity_scale: { type: integer }
 
 InvestmentTradeCorrectionLotChoiceResponse:
   type: object
