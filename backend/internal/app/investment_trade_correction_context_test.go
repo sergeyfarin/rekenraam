@@ -17,7 +17,7 @@ func TestTradeCorrectionContextReadsImmutableSourceFacts(t *testing.T) {
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
 		QuantityValue: exact.New(10), GrossAmountValue: tradeMoney(-100000), GrossAmountScale: 2,
 		NetSettlementValue: tradeMoney(-100200), NetSettlementScale: 2,
-		SettlementDate: "2026-01-03", Charges: []InvestmentTradeChargeInput{{
+		SettlementDate: "2026-01-03", Memo: "original broker fill", Charges: []InvestmentTradeChargeInput{{
 			Kind: "commission", AmountValue: -200, AmountScale: 2,
 			CommodityID: f.eurCommodityID, Treatment: "clearing_included",
 		}},
@@ -31,6 +31,7 @@ func TestTradeCorrectionContextReadsImmutableSourceFacts(t *testing.T) {
 	require.Equal(t, "10", before.QuantityValue)
 	require.Equal(t, "-100200", before.NetValue)
 	require.Equal(t, "2026-01-03", before.SettlementDate)
+	require.Equal(t, "original broker fill", before.Memo)
 	require.Equal(t, "-100000", *before.GrossValue)
 	require.Len(t, before.Charges, 1)
 	require.Equal(t, "clearing_included", before.Charges[0].Treatment)

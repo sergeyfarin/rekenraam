@@ -1,5 +1,7 @@
 import type { InvestmentTradeRequest } from '$lib/api/investments';
 import { parseMoneyMagnitude, type AmountFieldError } from '$lib/investments/form-amounts';
+import { formatLedgerAmount } from '$lib/money/amount';
+import type { InvestmentTradeCorrectionContextResponse } from '$lib/api/investments';
 
 export type TradeChargeDraft = {
   kind: 'commission' | 'transaction_tax' | 'other_fee' | 'rebate';
@@ -15,6 +17,32 @@ export type TradeChargeDraft = {
 export function newTradeCharge(commodityID?: number): TradeChargeDraft {
   return { kind: 'commission', amount: '', commodityID: String(commodityID ?? ''), treatment: '',
     chargeAccountID: '', cashAccountID: '', paidOn: '', separatePayment: false };
+}
+
+// A correction starts from recorded source facts. Preserve coefficient and
+// scale exactly in editable decimal inputs; number conversion would lose
+// precision and could silently change a historical trade.
+export function correctionTradeDraft(source: InvestmentTradeCorrectionContextResponse) {
+  const magnitude = (value: string, scale: number) =>
+    formatLedgerAmount(value.startsWith('-') ? value.slice(1) : value, scale);
+  return {
+    quantity: formatLedgerAmount(source.quantity_value, source.quantity_scale),
+    net: magnitude(source.net_value, source.net_scale),
+    exactMode: source.gross_value !== undefined,
+    gross: source.gross_value !== undefined && source.gross_scale !== undefined
+      ? magnitude(source.gross_value, source.gross_scale) : '',
+    settlementDate: source.settlement_date,
+    charges: source.charges.map((charge): TradeChargeDraft => ({
+      kind: charge.kind as TradeChargeDraft['kind'],
+      amount: magnitude(charge.amount_value, charge.amount_scale),
+      commodityID: String(charge.commodity_id),
+      treatment: charge.treatment,
+      chargeAccountID: String(charge.charge_account_id ?? ''),
+      cashAccountID: String(charge.cash_account_id ?? ''),
+      paidOn: charge.paid_on,
+      separatePayment: charge.cash_account_id !== undefined
+    }))
+  };
 }
 
 export function exactTradeFields(input: {

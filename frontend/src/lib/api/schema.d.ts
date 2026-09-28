@@ -17893,7 +17893,10 @@ export interface components {
         /** @description Full corrected sale. The cost-basis election and each charge treatment must be explicit so changed defaults cannot alter corrected economics. */
         InvestmentSaleReplacementTradeRequest: components["schemas"]["InvestmentTradeRequest"] & {
             cost_basis_method: components["schemas"]["CostBasisMethod"];
-            charges?: (components["schemas"]["InvestmentTradeChargeRequest"] & Record<string, never>)[];
+            charges?: (components["schemas"]["InvestmentTradeChargeRequest"] & {
+                /** @enum {string} */
+                treatment: "clearing_included" | "separately_expensed";
+            })[];
         };
         InvestmentSaleReplacementResponse: {
             inverse_transaction: components["schemas"]["TransactionResponse"];
@@ -17910,7 +17913,10 @@ export interface components {
         };
         /** @description Full corrected buy. Every charge treatment must be explicit so changed defaults cannot alter corrected economics. */
         InvestmentBuyReplacementTradeRequest: components["schemas"]["InvestmentTradeRequest"] & {
-            charges?: (components["schemas"]["InvestmentTradeChargeRequest"] & Record<string, never>)[];
+            charges?: (components["schemas"]["InvestmentTradeChargeRequest"] & {
+                /** @enum {string} */
+                treatment: "clearing_included" | "separately_expensed";
+            })[];
         };
         InvestmentBuyReplacementResponse: {
             inverse_transaction: components["schemas"]["TransactionResponse"];
@@ -17958,6 +17964,9 @@ export interface components {
             net_scale: number;
             /** Format: date */
             settlement_date: string;
+            memo: string;
+            /** Format: int64 */
+            payee_id?: number;
             /** @description Signed gross source amount when known. */
             gross_value?: string;
             gross_scale?: number;

@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { exactTradeFields, newTradeCharge } from './trade-economics';
+import { correctionTradeDraft, exactTradeFields, newTradeCharge } from './trade-economics';
+import type { InvestmentTradeCorrectionContextResponse } from '$lib/api/investments';
+
+it('prefills a correction from exact signed source amounts and recorded fee treatment', () => {
+  const source: InvestmentTradeCorrectionContextResponse = {
+    operation_id: 1, transaction_id: 2, operation_kind: 'buy', event_date: '2026-01-01',
+    holding_account_id: 3, commodity_id: 4, commodity_code: 'ABC', cost_commodity_id: 5,
+    quantity_value: '123456789012345678901', quantity_scale: 8, cost_basis_method: '',
+    cash_account_id: 6, net_value: '-10200', net_scale: 2, settlement_date: '2026-01-03',
+    gross_value: '-10000', gross_scale: 2, memo: '', imported: false,
+    already_corrected: false, elected_lots: [],
+    charges: [{ kind: 'commission', amount_value: '-200', amount_scale: 2,
+      commodity_id: 5, treatment: 'clearing_included', paid_on: '2026-01-04',
+      cash_account_id: 7 }]
+  };
+  const draft = correctionTradeDraft(source);
+  expect(draft.quantity).toBe('1234567890123.45678901');
+  expect(draft.net).toBe('102.00');
+  expect(draft.gross).toBe('100.00');
+  expect(draft.charges).toMatchObject([{ amount: '2.00', treatment: 'clearing_included',
+    separatePayment: true, cashAccountID: '7' }]);
+});
 
 describe('exactTradeFields', () => {
   it('sends signed gross, net and fee coefficients without a floating point conversion', () => {

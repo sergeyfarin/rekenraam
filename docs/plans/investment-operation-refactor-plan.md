@@ -659,6 +659,15 @@ next family.
      eligibility and rechecks it atomically.
      Typed clients prepare the buy and sale replacement writes and their
      reconciliation previews. Transaction-detail correction forms follow.
+   - **4p — transaction-detail manual buy correction — complete 2026-09-28.**
+     The effective manual long buy offers a correction form in transaction
+     detail. It pre-fills exact original quantity, net settlement, optional
+     gross and snapshotted charges from 4o, keeps date, holding, instrument
+     and cost currency fixed, requires a reason and explicit fee treatments,
+     previews affected reconciliation checkpoints, and refreshes positions,
+     lots, gains and history after the native replacement. The form uses the
+     existing mobile buy entry fields and the shared exact amount parser.
+     Sale replacement UI and older dependent-sale replacement follow.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

@@ -26,6 +26,8 @@ type InvestmentTradeCorrectionContext struct {
 	NetValue         string
 	NetScale         int
 	SettlementDate   string
+	Memo             string
+	PayeeID          *int64
 	GrossValue       *string
 	GrossScale       *int
 	Imported         bool
@@ -60,6 +62,7 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 	var record InvestmentTradeCorrectionContext
 	var grossValue sql.NullString
 	var grossScale sql.NullInt64
+	var payeeID sql.NullInt64
 	var imported, corrected int
 	err = tx.QueryRowContext(ctx, `
 		SELECT o.id, o.transaction_id, o.operation_kind, o.event_date,
@@ -68,12 +71,14 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			COALESCE(f.quantity_value, d.quantity_value),
 			COALESCE(f.quantity_scale, d.quantity_scale), COALESCE(d.cost_basis_method, ''),
 			net.cash_account_id, net.amount_value, net.amount_scale, net.amount_date,
+			version.description, version.payee_id,
 			gross.amount_value, gross.amount_scale,
 			(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
 				WHERE effect.operation_id = o.id)),
 			EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id)
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
+		JOIN current_transaction_versions version ON version.transaction_id = o.transaction_id
 		JOIN investment_operation_components net ON net.operation_id = o.id AND net.component_kind = 'net_settlement'
 			AND net.component_seq = (SELECT MIN(component_seq) FROM investment_operation_components
 				WHERE operation_id = o.id AND component_kind = 'net_settlement')
@@ -89,7 +94,8 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 		&record.CommodityID, &record.CommodityCode, &record.CostCommodityID,
 		&record.QuantityValue, &record.QuantityScale, &record.CostBasisMethod,
 		&record.CashAccountID, &record.NetValue, &record.NetScale,
-		&record.SettlementDate, &grossValue, &grossScale, &imported, &corrected)
+		&record.SettlementDate, &record.Memo, &payeeID,
+		&grossValue, &grossScale, &imported, &corrected)
 	if errors.Is(err, sql.ErrNoRows) {
 		return InvestmentTradeCorrectionContext{}, ErrNotFound
 	}
@@ -99,6 +105,9 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 	if grossValue.Valid && grossScale.Valid {
 		value, scale := grossValue.String, int(grossScale.Int64)
 		record.GrossValue, record.GrossScale = &value, &scale
+	}
+	if payeeID.Valid {
+		record.PayeeID = &payeeID.Int64
 	}
 	record.Imported, record.AlreadyCorrected = imported != 0, corrected != 0
 	rows, err := tx.QueryContext(ctx, `SELECT charge_kind, amount_value, amount_scale,

@@ -1,22 +1,27 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { untrack } from 'svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { parseTradeAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
   import TradeEconomicsFields from '$lib/investments/trade-economics-fields.svelte';
-  import { exactTradeFields, type TradeChargeDraft } from '$lib/investments/trade-economics';
+  import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '$lib/investments/trade-economics';
   import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import { forecastQueryKey } from '$lib/api/forecast';
   import {
     investmentPositionsQueryKey,
     investmentLotsQueryKey,
+    investmentGainsQueryKey,
     investmentInstrumentsQueryKey,
     searchInvestmentInstruments,
     recordBuy,
     buyReconciliationImpact,
+    previewBuyReplacementReconciliation,
+    replaceManualBuy,
     type InvestmentInstrumentResponse,
     type InvestmentTradeRequest,
+    type InvestmentTradeCorrectionContextResponse,
     type ReconciliationImpactResponse
   } from '$lib/api/investments';
   import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
@@ -24,12 +29,17 @@
   let {
     csrfToken,
     onSaved,
-    onCancel
+    onCancel,
+    correction
   }: {
     csrfToken: string;
     onSaved: () => void;
     onCancel: () => void;
+    correction?: InvestmentTradeCorrectionContextResponse;
   } = $props();
+
+  const initialCorrection = untrack(() => correction);
+  const correctionDraft = initialCorrection ? correctionTradeDraft(initialCorrection) : null;
 
   const queryClient = useQueryClient();
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
@@ -67,18 +77,24 @@
   }
 
   // Form fields
-  let transactionDate = $state(todayISO());
-  let holdingAccountID = $state('');
-  let cashAccountID = $state('');
-  let quantityStr = $state('');
-  let cashAmountStr = $state('');
-  let exactMode = $state(false);
-  let grossAmountStr = $state('');
-  let settlementDate = $state('');
-  let charges = $state<TradeChargeDraft[]>([]);
-  let memo = $state('');
+  let transactionDate = $state(initialCorrection?.event_date ?? todayISO());
+  let holdingAccountID = $state(String(initialCorrection?.holding_account_id ?? ''));
+  let cashAccountID = $state(String(initialCorrection?.cash_account_id ?? ''));
+  let quantityStr = $state(correctionDraft?.quantity ?? '');
+  let cashAmountStr = $state(correctionDraft?.net ?? '');
+  let exactMode = $state(correctionDraft?.exactMode ?? false);
+  let grossAmountStr = $state(correctionDraft?.gross ?? '');
+  let settlementDate = $state(correctionDraft?.settlementDate ?? '');
+  let charges = $state<TradeChargeDraft[]>(correctionDraft?.charges ?? []);
+  let memo = $state(initialCorrection?.memo ?? '');
+  let reason = $state('');
+  let reasonInputElement = $state<HTMLInputElement | undefined>();
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
+
+  $effect(() => {
+    if (correction) reasonInputElement?.focus();
+  });
 
   // A backdated buy can land inside a reconciled period. Rather than letting
   // the server refuse it with no way forward, preview the impact and let the
@@ -86,6 +102,7 @@
   let reconciliationModal = $state<{
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
     payload: InvestmentTradeRequest;
+    reason: string;
   } | null>(null);
 
   function todayISO(): string {
@@ -108,6 +125,7 @@
         a.account_class === 'asset' &&
         a.status === 'active' &&
         a.allows_postings &&
+        (!correction || a.default_commodity_id === correction.cost_commodity_id) &&
         a.account_kind !== 'security_holding' &&
         a.account_kind !== 'fund_holding'
     )
@@ -142,7 +160,7 @@
   }
 
   const canSubmit = $derived(
-    !!selectedInstrument &&
+    (!!correction || !!selectedInstrument) &&
     holdingAccountID !== '' &&
     cashAccountID !== '' &&
     !!cashCommodityID &&
@@ -152,7 +170,12 @@
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
-    if (!canSubmit || !selectedInstrument || !cashCommodityID) return;
+    if (!canSubmit || (!correction && !selectedInstrument) || !cashCommodityID) return;
+    if (correction && !reason.trim()) return;
+    if (correction && charges.some((charge) => !charge.treatment)) {
+      formError = new Error(m.transactions_investment_replace_charge_treatment());
+      return;
+    }
 
     // Both coefficients cross JSON as strings. The quantity allows 38 digits;
     // the cash coefficient keeps its backend int64 range.
@@ -172,7 +195,7 @@
 
     const payload: InvestmentTradeRequest = {
       transaction_date: transactionDate,
-      commodity_id: selectedInstrument.commodity_id,
+      commodity_id: correction?.commodity_id ?? selectedInstrument!.commodity_id,
       holding_account_id: Number(holdingAccountID),
       cash_account_id: Number(cashAccountID),
       quantity_value: quantity.value,
@@ -181,21 +204,26 @@
       cash_amount_scale: cashAmount.scale,
       cash_commodity_id: cashCommodityID,
       ...(economics?.ok ? economics.fields : {}),
-      memo: memo.trim() || undefined
+      memo: memo.trim() || undefined,
+      payee_id: correction?.payee_id
     };
 
     pending = true;
     formError = undefined;
 
     try {
-      const impact = await buyReconciliationImpact(payload);
+      const correctionReason = reason.trim();
+      const impact = correction
+        ? await previewBuyReplacementReconciliation(correction.transaction_id, { reason: correctionReason,
+            replacement: { ...payload, charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) } })
+        : await buyReconciliationImpact(payload);
       if (impact.affected_checkpoints.length > 0) {
         // Hand the decision to the user rather than overriding for them.
-        reconciliationModal = { impacts: impact.affected_checkpoints, payload };
+        reconciliationModal = { impacts: impact.affected_checkpoints, payload, reason: correctionReason };
         return;
       }
 
-      await submitBuy(payload, false);
+      await submitBuy(payload, false, correctionReason);
     } catch (err) {
       formError = err;
     } finally {
@@ -205,13 +233,13 @@
 
   async function confirmOverride() {
     if (!reconciliationModal) return;
-    const { payload } = reconciliationModal;
+    const { payload, reason: correctionReason } = reconciliationModal;
     reconciliationModal = null;
     pending = true;
     formError = undefined;
 
     try {
-      await submitBuy(payload, true);
+      await submitBuy(payload, true, correctionReason);
     } catch (err) {
       formError = err;
     } finally {
@@ -219,11 +247,20 @@
     }
   }
 
-  async function submitBuy(payload: InvestmentTradeRequest, override: boolean) {
-    await recordBuy(override ? { ...payload, reconciliation_override: true } : payload, csrfToken);
+  async function submitBuy(payload: InvestmentTradeRequest, override: boolean, correctionReason: string) {
+    if (correction) {
+      await replaceManualBuy(correction.transaction_id, {
+        reason: correctionReason,
+        replacement: { ...payload, charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) },
+        reconciliation_override: override
+      }, csrfToken);
+    } else {
+      await recordBuy(override ? { ...payload, reconciliation_override: true } : payload, csrfToken);
+    }
 
     await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
     await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
+    await queryClient.invalidateQueries({ queryKey: investmentGainsQueryKey });
     await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
     onSaved();
   }
@@ -239,7 +276,12 @@
 {/if}
 
 <form onsubmit={handleSubmit} class="space-y-4">
-  <h2 class="text-base font-semibold text-foreground">{m.investments_buy_title()}</h2>
+  <h2 class="text-base font-semibold text-foreground">
+    {correction ? m.transactions_investment_replace_buy_title() : m.investments_buy_title()}
+  </h2>
+  {#if correction}
+    <p class="text-sm text-muted">{m.transactions_investment_replace_buy_copy()}</p>
+  {/if}
 
   <!-- Date -->
   <div>
@@ -250,12 +292,16 @@
       id="buy-date"
       type="date"
       bind:value={transactionDate}
+      disabled={!!correction}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
       required
     />
   </div>
 
   <!-- Instrument autocomplete -->
+  {#if correction}
+    <p class="text-sm text-foreground">{m.investments_form_instrument()}: <strong>{correction.commodity_code}</strong></p>
+  {:else}
   <div class="relative">
     <label for="buy-instrument" class="mb-1 block text-sm font-medium text-foreground">
       {m.investments_form_instrument()}
@@ -296,6 +342,7 @@
       </div>
     {/if}
   </div>
+  {/if}
 
   <!-- Holding account -->
   <div>
@@ -305,6 +352,7 @@
     <select
       id="buy-holding-account"
       bind:value={holdingAccountID}
+      disabled={!!correction}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
       required
     >
@@ -314,6 +362,16 @@
       {/each}
     </select>
   </div>
+
+  {#if correction}
+    <div>
+      <label for="buy-correction-reason" class="mb-1 block text-sm font-medium text-foreground">
+        {m.transactions_investment_replace_reason()}
+      </label>
+      <input id="buy-correction-reason" type="text" bind:this={reasonInputElement} bind:value={reason} maxlength="500" required
+        class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
+    </div>
+  {/if}
 
   <!-- Quantity -->
   <div>
@@ -397,10 +455,10 @@
     </button>
     <button
       type="submit"
-      disabled={!canSubmit || pending}
+      disabled={!canSubmit || pending || (!!correction && !reason.trim())}
       class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
     >
-      {pending ? m.investments_buy_pending() : m.investments_buy_submit()}
+      {pending ? m.investments_buy_pending() : correction ? m.transactions_investment_replace_submit() : m.investments_buy_submit()}
     </button>
   </div>
 </form>

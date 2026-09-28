@@ -140,9 +140,10 @@ short-sale/cover commands remain before T-108 is usable. The next execution
 order is native correction. Immutable intents,
 reversible long-position simulation, append-only effective revision storage,
 and realized-gains, self-check, and export readers support manual long-sale
-reversal, latest-sale replacement and old-buy replacement. Correction entry in
-transaction detail, older dependent-sale replacement, import source identity
-and backdated admission remain. Transfers and basis actions, including manual splits, follow;
+reversal, latest-sale replacement and old-buy replacement. Transaction detail
+offers sale reversal and prefilled buy replacement. Sale replacement UI, older
+dependent-sale replacement, import source identity and backdated admission
+remain. Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and
 cash-in-lieu suggestions are currently refused as dividend income (T-109) until
 their lot-basis treatment ships.

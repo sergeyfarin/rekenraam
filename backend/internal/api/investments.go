@@ -254,6 +254,8 @@ type investmentTradeCorrectionContextResponse struct {
 	NetValue         string                                       `json:"net_value"`
 	NetScale         int                                          `json:"net_scale"`
 	SettlementDate   string                                       `json:"settlement_date"`
+	Memo             string                                       `json:"memo"`
+	PayeeID          *int64                                       `json:"payee_id,omitempty"`
 	GrossValue       *string                                      `json:"gross_value,omitempty"`
 	GrossScale       *int                                         `json:"gross_scale,omitempty"`
 	Imported         bool                                         `json:"imported"`
@@ -287,7 +289,8 @@ func toInvestmentTradeCorrectionContextResponse(record db.InvestmentTradeCorrect
 		CostBasisMethod: record.CostBasisMethod, CashAccountID: record.CashAccountID,
 		NetValue: record.NetValue, NetScale: record.NetScale,
 		SettlementDate: record.SettlementDate, GrossValue: record.GrossValue,
-		GrossScale: record.GrossScale, Imported: record.Imported,
+		GrossScale: record.GrossScale, Memo: record.Memo, PayeeID: record.PayeeID,
+		Imported:         record.Imported,
 		AlreadyCorrected: record.AlreadyCorrected, Charges: charges, ElectedLots: electedLots,
 	}
 }

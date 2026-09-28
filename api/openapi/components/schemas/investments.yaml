@@ -655,6 +655,10 @@ InvestmentSaleReplacementTradeRequest:
               - $ref: "#/InvestmentTradeChargeRequest"
               - type: object
                 required: [treatment]
+                properties:
+                  treatment:
+                    type: string
+                    enum: [clearing_included, separately_expensed]
 
 InvestmentSaleReplacementResponse:
   type: object
@@ -698,6 +702,10 @@ InvestmentBuyReplacementTradeRequest:
               - $ref: "#/InvestmentTradeChargeRequest"
               - type: object
                 required: [treatment]
+                properties:
+                  treatment:
+                    type: string
+                    enum: [clearing_included, separately_expensed]
 
 InvestmentBuyReplacementResponse:
   type: object
@@ -736,7 +744,7 @@ InvestmentTradeCorrectionContextResponse:
   description: Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility.
   required: [operation_id, transaction_id, operation_kind, event_date, holding_account_id,
     commodity_id, commodity_code, cost_commodity_id, quantity_value, quantity_scale,
-    cost_basis_method, cash_account_id, net_value, net_scale, settlement_date,
+    cost_basis_method, cash_account_id, net_value, net_scale, settlement_date, memo,
     imported, already_corrected, charges, elected_lots]
   properties:
     operation_id: { type: integer, format: int64 }
@@ -754,6 +762,8 @@ InvestmentTradeCorrectionContextResponse:
     net_value: { type: string, description: Signed owner-perspective primary settlement. }
     net_scale: { type: integer }
     settlement_date: { type: string, format: date }
+    memo: { type: string }
+    payee_id: { type: integer, format: int64 }
     gross_value: { type: string, description: Signed gross source amount when known. }
     gross_scale: { type: integer }
     imported: { type: boolean }
