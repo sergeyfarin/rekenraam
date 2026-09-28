@@ -34,6 +34,11 @@ export type ReconciliationImpactResponse = components['schemas']['Reconciliation
 export type InvestmentCorrectionChainResponse = components['schemas']['InvestmentCorrectionChainResponse'];
 export type InvestmentSaleReversalRequest = components['schemas']['InvestmentSaleReversalRequest'];
 export type InvestmentSaleReversalResponse = components['schemas']['InvestmentSaleReversalResponse'];
+export type InvestmentTradeCorrectionContextResponse = components['schemas']['InvestmentTradeCorrectionContextResponse'];
+export type InvestmentBuyReplacementRequest = components['schemas']['InvestmentBuyReplacementRequest'];
+export type InvestmentBuyReplacementResponse = components['schemas']['InvestmentBuyReplacementResponse'];
+export type InvestmentSaleReplacementRequest = components['schemas']['InvestmentSaleReplacementRequest'];
+export type InvestmentSaleReplacementResponse = components['schemas']['InvestmentSaleReplacementResponse'];
 
 export const investmentPositionsQueryKey = ['api', 'investments', 'positions'] as const;
 export const investmentLotsQueryKey = ['api', 'investments', 'lots'] as const;
@@ -244,6 +249,76 @@ export async function getInvestmentCorrectionChain(transactionID: number): Promi
     const { data, error, response } = await apiClient.GET(
       '/api/v1/investments/transactions/{transaction_id}/correction-chain',
       { params: { path: { transaction_id: transactionID } } }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function getInvestmentTradeCorrectionContext(transactionID: number): Promise<InvestmentTradeCorrectionContextResponse> {
+  try {
+    const { data, error, response } = await apiClient.GET(
+      '/api/v1/investments/transactions/{transaction_id}/trade-correction-context',
+      { params: { path: { transaction_id: transactionID } } }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewBuyReplacementReconciliation(transactionID: number, input: InvestmentBuyReplacementRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-buy/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceManualBuy(transactionID: number, input: InvestmentBuyReplacementRequest, csrfToken: string): Promise<InvestmentBuyReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-buy',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewSaleReplacementReconciliation(transactionID: number, input: InvestmentSaleReplacementRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-sale/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceManualSale(transactionID: number, input: InvestmentSaleReplacementRequest, csrfToken: string): Promise<InvestmentSaleReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-sale',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
     );
     if (data !== undefined) return data;
     throw toAPIClientError(response, error);

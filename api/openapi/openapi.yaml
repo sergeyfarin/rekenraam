@@ -279,6 +279,8 @@ paths:
     $ref: "./paths/investments-sell.yaml"
   /api/v1/investments/transactions/{transaction_id}/correction-chain:
     $ref: "./paths/investments-correction-chain.yaml"
+  /api/v1/investments/transactions/{transaction_id}/trade-correction-context:
+    $ref: "./paths/investments-trade-correction-context.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-sale:
     $ref: "./paths/investments-reverse-sale.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-sale/reconciliation-impact:
@@ -944,6 +946,12 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentBuyReplacementResponse"
     InvestmentCorrectionChainResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionChainResponse"
+    InvestmentTradeCorrectionContextResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTradeCorrectionContextResponse"
+    InvestmentTradeCorrectionChargeResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTradeCorrectionChargeResponse"
+    InvestmentTradeCorrectionLotChoiceResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTradeCorrectionLotChoiceResponse"
     InvestmentCorrectionNodeResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionNodeResponse"
     DisposalDecisionResponse:

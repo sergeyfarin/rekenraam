@@ -12969,6 +12969,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/transactions/{transaction_id}/trade-correction-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read recorded source facts for a buy or sale replacement
+         * @description Returns an immutable source snapshot to prefill a full correction form. Imported or already corrected trades are still readable as history; the replacement command rechecks eligibility and all inputs atomically.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recorded source facts for one buy or sale operation */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentTradeCorrectionContextResponse"];
+                    };
+                };
+                /** @description Invalid transaction ID */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No buy or sale operation for this transaction */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/transactions/{transaction_id}/reverse-sale": {
         parameters: {
             query?: never;
@@ -17861,6 +17929,64 @@ export interface components {
             /** @description Whether the effective operation is a posted manual long sale eligible for the native reversal command. */
             can_reverse_manual_sale: boolean;
             operations: components["schemas"]["InvestmentCorrectionNodeResponse"][];
+        };
+        /** @description Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility. */
+        InvestmentTradeCorrectionContextResponse: {
+            /** Format: int64 */
+            operation_id: number;
+            /** Format: int64 */
+            transaction_id: number;
+            /** @enum {string} */
+            operation_kind: "buy" | "sell";
+            /** Format: date */
+            event_date: string;
+            /** Format: int64 */
+            holding_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            commodity_code: string;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            /** @description Empty for buys. */
+            cost_basis_method: string;
+            /** Format: int64 */
+            cash_account_id: number;
+            /** @description Signed owner-perspective primary settlement. */
+            net_value: string;
+            net_scale: number;
+            /** Format: date */
+            settlement_date: string;
+            /** @description Signed gross source amount when known. */
+            gross_value?: string;
+            gross_scale?: number;
+            imported: boolean;
+            already_corrected: boolean;
+            charges: components["schemas"]["InvestmentTradeCorrectionChargeResponse"][];
+            /** @description Original explicit specific-lot choices; empty for other methods. */
+            elected_lots: components["schemas"]["InvestmentTradeCorrectionLotChoiceResponse"][];
+        };
+        InvestmentTradeCorrectionChargeResponse: {
+            kind: string;
+            amount_value: string;
+            amount_scale: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** @enum {string} */
+            treatment: "clearing_included" | "separately_expensed";
+            /** Format: int64 */
+            charge_account_id?: number;
+            /** Format: int64 */
+            cash_account_id?: number;
+            /** Format: date */
+            paid_on: string;
+        };
+        InvestmentTradeCorrectionLotChoiceResponse: {
+            /** Format: int64 */
+            lot_id: number;
+            quantity_value: string;
+            quantity_scale: number;
         };
         InvestmentCorrectionNodeResponse: {
             /** Format: int64 */

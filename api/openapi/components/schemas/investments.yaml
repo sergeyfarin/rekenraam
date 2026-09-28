@@ -731,6 +731,64 @@ InvestmentCorrectionChainResponse:
       items:
         $ref: '#/InvestmentCorrectionNodeResponse'
 
+InvestmentTradeCorrectionContextResponse:
+  type: object
+  description: Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility.
+  required: [operation_id, transaction_id, operation_kind, event_date, holding_account_id,
+    commodity_id, commodity_code, cost_commodity_id, quantity_value, quantity_scale,
+    cost_basis_method, cash_account_id, net_value, net_scale, settlement_date,
+    imported, already_corrected, charges, elected_lots]
+  properties:
+    operation_id: { type: integer, format: int64 }
+    transaction_id: { type: integer, format: int64 }
+    operation_kind: { type: string, enum: [buy, sell] }
+    event_date: { type: string, format: date }
+    holding_account_id: { type: integer, format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    commodity_code: { type: string }
+    cost_commodity_id: { type: integer, format: int64 }
+    quantity_value: { type: string }
+    quantity_scale: { type: integer }
+    cost_basis_method: { type: string, description: Empty for buys. }
+    cash_account_id: { type: integer, format: int64 }
+    net_value: { type: string, description: Signed owner-perspective primary settlement. }
+    net_scale: { type: integer }
+    settlement_date: { type: string, format: date }
+    gross_value: { type: string, description: Signed gross source amount when known. }
+    gross_scale: { type: integer }
+    imported: { type: boolean }
+    already_corrected: { type: boolean }
+    charges:
+      type: array
+      items:
+        $ref: '#/InvestmentTradeCorrectionChargeResponse'
+    elected_lots:
+      type: array
+      description: Original explicit specific-lot choices; empty for other methods.
+      items:
+        $ref: '#/InvestmentTradeCorrectionLotChoiceResponse'
+
+InvestmentTradeCorrectionLotChoiceResponse:
+  type: object
+  required: [lot_id, quantity_value, quantity_scale]
+  properties:
+    lot_id: { type: integer, format: int64 }
+    quantity_value: { type: string }
+    quantity_scale: { type: integer }
+
+InvestmentTradeCorrectionChargeResponse:
+  type: object
+  required: [kind, amount_value, amount_scale, commodity_id, treatment, paid_on]
+  properties:
+    kind: { type: string }
+    amount_value: { type: string }
+    amount_scale: { type: integer }
+    commodity_id: { type: integer, format: int64 }
+    treatment: { type: string, enum: [clearing_included, separately_expensed] }
+    charge_account_id: { type: integer, format: int64 }
+    cash_account_id: { type: integer, format: int64 }
+    paid_on: { type: string, format: date }
+
 InvestmentCorrectionNodeResponse:
   type: object
   required: [operation_id, operation_kind, event_date, created_at, audit_event_id, imported, effective]

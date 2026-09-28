@@ -28,8 +28,9 @@ Last reconciled: 2026-09-27.
   shared sale plan. Slice 4l adds API-only replacement of the latest manual
   long sale with a compound audited write and reconciliation preview. Next are
   UI entry and dependent sale replacement; slice 4m prepared the buy writer
-  and same-day replay order, and slice 4n now corrects a manual old buy
-  through dependent sells under all four cost-basis methods. Imported
+  and same-day replay order, slice 4n now corrects a manual old buy
+  through dependent sells under all four cost-basis methods, and slice 4o
+  exposes immutable trade source facts for correction form prefill. Imported
   fills still require source-aware identity handling.
 
 ## Then, within R16

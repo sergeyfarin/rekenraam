@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
 
@@ -218,6 +219,77 @@ type investmentCorrectionChainResponse struct {
 	EffectiveTransactionID *int64                             `json:"effective_transaction_id"`
 	CanReverseManualSale   bool                               `json:"can_reverse_manual_sale"`
 	Operations             []investmentCorrectionNodeResponse `json:"operations"`
+}
+
+type investmentTradeCorrectionChargeResponse struct {
+	Kind            string `json:"kind"`
+	AmountValue     string `json:"amount_value"`
+	AmountScale     int    `json:"amount_scale"`
+	CommodityID     int64  `json:"commodity_id"`
+	Treatment       string `json:"treatment"`
+	ChargeAccountID *int64 `json:"charge_account_id,omitempty"`
+	CashAccountID   *int64 `json:"cash_account_id,omitempty"`
+	PaidOn          string `json:"paid_on"`
+}
+
+type investmentTradeCorrectionLotChoiceResponse struct {
+	LotID         int64  `json:"lot_id"`
+	QuantityValue string `json:"quantity_value"`
+	QuantityScale int    `json:"quantity_scale"`
+}
+
+type investmentTradeCorrectionContextResponse struct {
+	OperationID      int64                                        `json:"operation_id"`
+	TransactionID    int64                                        `json:"transaction_id"`
+	OperationKind    string                                       `json:"operation_kind"`
+	EventDate        string                                       `json:"event_date"`
+	HoldingAccountID int64                                        `json:"holding_account_id"`
+	CommodityID      int64                                        `json:"commodity_id"`
+	CommodityCode    string                                       `json:"commodity_code"`
+	CostCommodityID  int64                                        `json:"cost_commodity_id"`
+	QuantityValue    string                                       `json:"quantity_value"`
+	QuantityScale    int                                          `json:"quantity_scale"`
+	CostBasisMethod  string                                       `json:"cost_basis_method"`
+	CashAccountID    int64                                        `json:"cash_account_id"`
+	NetValue         string                                       `json:"net_value"`
+	NetScale         int                                          `json:"net_scale"`
+	SettlementDate   string                                       `json:"settlement_date"`
+	GrossValue       *string                                      `json:"gross_value,omitempty"`
+	GrossScale       *int                                         `json:"gross_scale,omitempty"`
+	Imported         bool                                         `json:"imported"`
+	AlreadyCorrected bool                                         `json:"already_corrected"`
+	Charges          []investmentTradeCorrectionChargeResponse    `json:"charges"`
+	ElectedLots      []investmentTradeCorrectionLotChoiceResponse `json:"elected_lots"`
+}
+
+func toInvestmentTradeCorrectionContextResponse(record db.InvestmentTradeCorrectionContext) investmentTradeCorrectionContextResponse {
+	charges := make([]investmentTradeCorrectionChargeResponse, 0, len(record.Charges))
+	for _, charge := range record.Charges {
+		charges = append(charges, investmentTradeCorrectionChargeResponse{
+			Kind: charge.Kind, AmountValue: charge.AmountValue, AmountScale: charge.AmountScale,
+			CommodityID: charge.CommodityID, Treatment: charge.Treatment,
+			ChargeAccountID: charge.ChargeAccountID, CashAccountID: charge.CashAccountID,
+			PaidOn: charge.PaidOn,
+		})
+	}
+	electedLots := make([]investmentTradeCorrectionLotChoiceResponse, 0, len(record.ElectedLots))
+	for _, choice := range record.ElectedLots {
+		electedLots = append(electedLots, investmentTradeCorrectionLotChoiceResponse{
+			LotID: choice.LotID, QuantityValue: choice.QuantityValue, QuantityScale: choice.QuantityScale,
+		})
+	}
+	return investmentTradeCorrectionContextResponse{
+		OperationID: record.OperationID, TransactionID: record.TransactionID,
+		OperationKind: record.OperationKind, EventDate: record.EventDate,
+		HoldingAccountID: record.HoldingAccountID, CommodityID: record.CommodityID,
+		CommodityCode: record.CommodityCode, CostCommodityID: record.CostCommodityID,
+		QuantityValue: record.QuantityValue, QuantityScale: record.QuantityScale,
+		CostBasisMethod: record.CostBasisMethod, CashAccountID: record.CashAccountID,
+		NetValue: record.NetValue, NetScale: record.NetScale,
+		SettlementDate: record.SettlementDate, GrossValue: record.GrossValue,
+		GrossScale: record.GrossScale, Imported: record.Imported,
+		AlreadyCorrected: record.AlreadyCorrected, Charges: charges, ElectedLots: electedLots,
+	}
 }
 
 type investmentTradeChargeRequest struct {
@@ -728,6 +800,25 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			RootOperationID: chain.RootOperationID, EffectiveTransactionID: chain.EffectiveTransactionID,
 			CanReverseManualSale: chain.CanReverseManualSale, Operations: operations,
 		})
+	}
+}
+
+func investmentTradeCorrectionContext(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		context, err := investmentService.TradeCorrectionContext(r.Context(), owner.ID, transactionID)
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "read investment trade correction context", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toInvestmentTradeCorrectionContextResponse(context))
 	}
 }
 

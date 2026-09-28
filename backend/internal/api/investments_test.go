@@ -227,6 +227,19 @@ func TestReplaceOldManualBuyAPI(t *testing.T) {
 		"/api/v1/investments/buy", buy, http.StatusCreated)
 	var bought investmentTradeResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&bought))
+	contextPath := "/api/v1/investments/transactions/" + strconv.FormatInt(bought.Transaction.ID, 10) + "/trade-correction-context"
+	doInvestmentRequest(t, handler, nil, "", http.MethodGet, contextPath, nil, http.StatusUnauthorized)
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,
+		"/api/v1/investments/transactions/999999/trade-correction-context", nil, http.StatusNotFound)
+	contextResult := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,
+		contextPath, nil, http.StatusOK)
+	var source investmentTradeCorrectionContextResponse
+	require.NoError(t, json.NewDecoder(contextResult.Body).Decode(&source))
+	require.Equal(t, "buy", source.OperationKind)
+	require.Equal(t, "-50000", source.NetValue)
+	require.Equal(t, "5", source.QuantityValue)
+	require.Empty(t, source.Charges)
+	require.False(t, source.AlreadyCorrected)
 	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "2", 24000)
 	sale.TransactionDate = "2026-03-01"
 	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
@@ -250,6 +263,10 @@ func TestReplaceOldManualBuyAPI(t *testing.T) {
 	require.NoError(t, database.QueryRow(`SELECT count(*) FROM investment_lots
 		WHERE book_id = 1 AND account_id = ? AND remaining_quantity_value = '3'`, holding.ID).Scan(&activeLotCount))
 	require.Equal(t, 1, activeLotCount)
+	contextResult = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,
+		contextPath, nil, http.StatusOK)
+	require.NoError(t, json.NewDecoder(contextResult.Body).Decode(&source))
+	require.True(t, source.AlreadyCorrected)
 	conflict := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
 		path, request, http.StatusConflict)
 	require.Contains(t, conflict.Body.String(), "INVESTMENT_BUY_ALREADY_CORRECTED")

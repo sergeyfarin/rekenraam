@@ -1,0 +1,36 @@
+get:
+  summary: Read recorded source facts for a buy or sale replacement
+  description: >-
+    Returns an immutable source snapshot to prefill a full correction form.
+    Imported or already corrected trades are still readable as history; the
+    replacement command rechecks eligibility and all inputs atomically.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+  responses:
+    "200":
+      description: Recorded source facts for one buy or sale operation
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentTradeCorrectionContextResponse"
+    "400":
+      description: Invalid transaction ID
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: No buy or sale operation for this transaction
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

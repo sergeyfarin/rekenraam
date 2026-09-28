@@ -650,6 +650,15 @@ next family.
      untouched. Imported buys stay fenced until source identity correction
      is part of the same command. UI entry, later-sale replacement and
      backdated admission remain follow-up work.
+   - **4o — correction source-fact read model — complete 2026-09-28.** A
+     single transaction-scoped read returns the original buy or sale's dated
+     position, exact quantity, primary signed settlement, optional sourced
+     gross, typed charge amounts and snapshotted treatments, settlement date,
+     disposal method and original specific-lot election. The API includes
+     import and already-corrected hints; only the write command decides
+     eligibility and rechecks it atomically.
+     Typed clients prepare the buy and sale replacement writes and their
+     reconciliation previews. Transaction-detail correction forms follow.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.
