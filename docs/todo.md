@@ -16,7 +16,7 @@ Last reconciled: 2026-09-27.
   reversal and replacement must update journal, effective lots and gains,
   prices, audit links, and reconciliation impact together. Keep backdated
   writes fenced until the dependency and rollback tests pass.
-- [ ] Validate a corrected old buy followed by dependent sells under each cost
+- [x] Validate a corrected old buy followed by dependent sells under each cost
   basis method, including failure rollback and original versus effective
   allocations. The immutable intent reader, reversible replay simulation,
   revision storage, gains and self-check readers, revision-chain export, and
@@ -27,8 +27,9 @@ Last reconciled: 2026-09-27.
   in transaction detail. Slice 4k prepares one-audit compound journals and a
   shared sale plan. Slice 4l adds API-only replacement of the latest manual
   long sale with a compound audited write and reconciliation preview. Next are
-  UI entry, dependent sale replacement, and buy correction; slice 4m has
-  prepared the buy writer and same-day replay order. Imported
+  UI entry and dependent sale replacement; slice 4m prepared the buy writer
+  and same-day replay order, and slice 4n now corrects a manual old buy
+  through dependent sells under all four cost-basis methods. Imported
   fills still require source-aware identity handling.
 
 ## Then, within R16

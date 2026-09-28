@@ -159,6 +159,15 @@ func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID i
 	if current != expected {
 		return SaleOperationRecord{}, ErrInvestmentSaleChanged
 	}
+	if err := checkInvestmentSourceJournalTx(ctx, tx, bookID, current.TransactionID,
+		current.EventDate, current.TransactionVersionID, current.CurrentVersionID); err != nil {
+		return SaleOperationRecord{}, err
+	}
+	return current, nil
+}
+
+func checkInvestmentSourceJournalTx(ctx context.Context, tx *sql.Tx, bookID, transactionID int64,
+	eventDate string, sourceVersionID, expectedCurrentVersionID int64) error {
 	var currentVersionID int64
 	var status string
 	var transactionKind string
@@ -168,22 +177,22 @@ func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID i
 		SELECT v.id, v.status, v.transaction_kind, v.transaction_date, t.deleted_at
 		FROM transactions t JOIN current_transaction_versions v ON v.transaction_id = t.id
 		WHERE t.book_id = ? AND t.id = ?
-	`, bookID, current.TransactionID).Scan(&currentVersionID, &status, &transactionKind, &transactionDate, &deletedAt); err != nil {
-		return SaleOperationRecord{}, fmt.Errorf("check sale transaction version: %w", err)
+	`, bookID, transactionID).Scan(&currentVersionID, &status, &transactionKind, &transactionDate, &deletedAt); err != nil {
+		return fmt.Errorf("check investment source transaction version: %w", err)
 	}
-	if currentVersionID != current.CurrentVersionID || status != "posted" || transactionKind != "investment" || transactionDate != current.EventDate || deletedAt.Valid {
-		return SaleOperationRecord{}, ErrInvestmentSaleChanged
+	if currentVersionID != expectedCurrentVersionID || status != "posted" || transactionKind != "investment" || transactionDate != eventDate || deletedAt.Valid {
+		return ErrInvestmentSaleChanged
 	}
-	if currentVersionID != current.TransactionVersionID {
-		unchanged, err := saleJournalEconomicsUnchangedTx(ctx, tx, current.TransactionVersionID, currentVersionID)
+	if currentVersionID != sourceVersionID {
+		unchanged, err := saleJournalEconomicsUnchangedTx(ctx, tx, sourceVersionID, currentVersionID)
 		if err != nil {
-			return SaleOperationRecord{}, err
+			return err
 		}
 		if !unchanged {
-			return SaleOperationRecord{}, ErrInvestmentSaleChanged
+			return ErrInvestmentSaleChanged
 		}
 	}
-	return current, nil
+	return nil
 }
 
 // Reconciliation may create a new transaction version while leaving a sale's

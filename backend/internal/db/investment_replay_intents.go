@@ -158,10 +158,12 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	}
 
 	selected, err := reader.QueryContext(ctx, `
-		SELECT a.decision_id, a.lot_id, a.quantity_value, a.quantity_scale
+		SELECT a.decision_id, a.lot_id, a.quantity_value, a.quantity_scale,
+			source.operation_id
 		FROM investment_disposal_allocations a
 		JOIN investment_disposal_decisions d ON d.id = a.decision_id
 		JOIN investment_operations o ON o.id = d.operation_id
+		JOIN investment_lot_facts source ON source.lot_id = a.lot_id
 		WHERE d.book_id = ? AND d.account_id = ? AND d.commodity_id = ?
 			AND d.cost_commodity_id = ? AND d.position_side = ? AND d.cost_basis_method = 'specific_lot'
 			AND o.correction_mode IS NOT 'reverse'
@@ -172,11 +174,17 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	if err != nil {
 		return nil, fmt.Errorf("read replay specific-lot choices: %w", err)
 	}
-	choices := make(map[int64][]LotAllocation)
+	type specificChoice struct {
+		Allocation        LotAllocation
+		SourceOperationID int64
+	}
+	choices := make(map[int64][]specificChoice)
 	for selected.Next() {
 		var decisionID int64
-		var choice LotAllocation
-		if err := selected.Scan(&decisionID, &choice.LotID, &choice.QuantityValue, &choice.QuantityScale); err != nil {
+		var choice specificChoice
+		if err := selected.Scan(&decisionID, &choice.Allocation.LotID,
+			&choice.Allocation.QuantityValue, &choice.Allocation.QuantityScale,
+			&choice.SourceOperationID); err != nil {
 			selected.Close()
 			return nil, fmt.Errorf("scan replay specific-lot choice: %w", err)
 		}
@@ -189,14 +197,6 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	if err := selected.Close(); err != nil {
 		return nil, fmt.Errorf("close replay specific-lot choices: %w", err)
 	}
-	for index := range intents {
-		if intents[index].Kind == "disposal" && intents[index].CostBasisMethod == "specific_lot" {
-			intents[index].SpecificLots = choices[intents[index].DecisionID]
-			if len(intents[index].SpecificLots) == 0 {
-				return nil, fmt.Errorf("replay specific-lot decision %d has no elected lots", intents[index].DecisionID)
-			}
-		}
-	}
 	orderIDs, err := investmentReplayOrderOperationIDsQuery(ctx, reader, bookID)
 	if err != nil {
 		return nil, err
@@ -207,6 +207,40 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			return nil, fmt.Errorf("replay operation %d has no correction root", intents[index].OperationID)
 		}
 		intents[index].OrderOperationID = orderID
+	}
+	// A specific-lot election names the acquisition the user chose. A
+	// correction gives that acquisition a new lot row, so its effective replay
+	// choice follows the opening's correction root while the original election
+	// and allocation retain their source lot ID.
+	effectiveLotByRoot := make(map[int64]int64)
+	for _, intent := range intents {
+		if intent.Kind != "opening" {
+			continue
+		}
+		if previous, exists := effectiveLotByRoot[intent.OrderOperationID]; exists && previous != intent.LotID {
+			effectiveLotByRoot[intent.OrderOperationID] = 0
+		} else if !exists {
+			effectiveLotByRoot[intent.OrderOperationID] = intent.LotID
+		}
+	}
+	for index := range intents {
+		if intents[index].Kind != "disposal" || intents[index].CostBasisMethod != "specific_lot" {
+			continue
+		}
+		for _, choice := range choices[intents[index].DecisionID] {
+			rootID, ok := orderIDs[choice.SourceOperationID]
+			if !ok {
+				return nil, fmt.Errorf("replay specific-lot source operation %d has no correction root", choice.SourceOperationID)
+			}
+			allocation := choice.Allocation
+			if effectiveLotID := effectiveLotByRoot[rootID]; effectiveLotID > 0 {
+				allocation.LotID = effectiveLotID
+			}
+			intents[index].SpecificLots = append(intents[index].SpecificLots, allocation)
+		}
+		if len(intents[index].SpecificLots) == 0 {
+			return nil, fmt.Errorf("replay specific-lot decision %d has no elected lots", intents[index].DecisionID)
+		}
 	}
 	sortInvestmentReplayIntents(intents)
 	return intents, nil

@@ -43,6 +43,21 @@ type InvestmentReplayAllocation struct {
 	ProceedsScale  int
 }
 
+// InvestmentReplayDependencyError identifies the later decision that a
+// corrected opening can no longer satisfy. Callers surface this as a named
+// conflict while the enclosing write rolls back every attempted effect.
+type InvestmentReplayDependencyError struct {
+	OperationID int64
+	DecisionID  int64
+	Cause       error
+}
+
+func (e *InvestmentReplayDependencyError) Error() string {
+	return fmt.Sprintf("replay dependent operation %d decision %d: %v", e.OperationID, e.DecisionID, e.Cause)
+}
+
+func (e *InvestmentReplayDependencyError) Unwrap() error { return e.Cause }
+
 // simulateInvestmentReplayTx reuses the posted disposal algorithm against a
 // temporary projection. Original lot events and decisions remain untouched.
 // The caller may later persist the returned state and allocation revision in
@@ -145,7 +160,9 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 			params.ProceedsValue = intent.AmountValue.BigInt().Int64()
 			allocations, err := disposeLotsWithAuditTx(ctx, tx, params, intent.AuditEventID, true)
 			if err != nil {
-				return InvestmentReplayProjection{}, fmt.Errorf("replay dependent operation %d decision %d: %w", intent.OperationID, intent.DecisionID, err)
+				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
+					OperationID: intent.OperationID, DecisionID: intent.DecisionID, Cause: err,
+				}
 			}
 			disposal := InvestmentReplayDisposal{DecisionID: intent.DecisionID}
 			for _, allocation := range allocations {

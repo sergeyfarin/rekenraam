@@ -637,6 +637,19 @@ next family.
      before a later sale recorded on that date. This is a deterministic
      replay rule only; the native buy correction command and backdated
      admission remain fenced until dependency, rollback and journal tests pass.
+   - **4n — manual long-buy replacement with dependent-sale replay — complete
+     2026-09-28.** A posted manual buy may be replaced with a full corrected
+     buy at the same date, holding, instrument and cost currency. Under one
+     audit event and SQLite transaction, post an inverse and replacement
+     journal, create the replacement lot and immutable source facts, replay
+     every dependent long disposal using its recorded method and effective
+     specific-lot lineage, append allocation revisions, retire the old trade
+     price, and enforce reconciliation boundaries for both journals. The
+     preview returns distinct checkpoints. An impossible later disposal
+     rejects the whole command, leaving old journal, lots, gains and price
+     untouched. Imported buys stay fenced until source identity correction
+     is part of the same command. UI entry, later-sale replacement and
+     backdated admission remain follow-up work.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

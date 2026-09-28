@@ -1084,7 +1084,7 @@ func createLotTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotPara
 	if err != nil {
 		return InvestmentLotRecord{}, err
 	}
-	return createLotWithAuditTx(ctx, tx, params, auditEventID)
+	return createLotWithAuditTx(ctx, tx, params, auditEventID, false)
 }
 
 // rescaleQuantity re-expresses a coefficient at a higher scale. Only widening
@@ -1101,12 +1101,14 @@ func rescaleQuantity(value exact.Coefficient, from int, to int) (exact.Coefficie
 	return exact.FromBig(widened)
 }
 
-func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotParams, auditEventID int64) (InvestmentLotRecord, error) {
+func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotParams, auditEventID int64, replayAdmission bool) (InvestmentLotRecord, error) {
 	// A lot the position should have owned when it was last disposed of cannot
 	// be added afterwards: the disposal took its basis from a pool this lot was
 	// not in, and nothing recomputes that (T-95).
-	if err := requirePositionEventInOrderTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.OpenedOn, "an acquisition"); err != nil {
-		return InvestmentLotRecord{}, err
+	if !replayAdmission {
+		if err := requirePositionEventInOrderTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.OpenedOn, "an acquisition"); err != nil {
+			return InvestmentLotRecord{}, err
+		}
 	}
 	// A lot's projection starts at the scale its acquisition was recorded at and
 	// widens only when a disposal actually needs finer precision (T-97). It is
@@ -1171,8 +1173,10 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 			return InvestmentLotRecord{}, err
 		}
 	}
-	if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
-		return InvestmentLotRecord{}, err
+	if !replayAdmission {
+		if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
+			return InvestmentLotRecord{}, err
+		}
 	}
 	record, err := investmentLotByIDTx(ctx, tx, params.BookID, lotID)
 	if err != nil {
@@ -1838,7 +1842,7 @@ func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, tran
 	return executeInvestmentWriteTx(ctx, r.database, transactionParams,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (InvestmentLotRecord, error) {
 			lotParams.SourceTransactionID = transaction.ID
-			return createLotWithAuditTx(ctx, tx, lotParams, auditEventID)
+			return createLotWithAuditTx(ctx, tx, lotParams, auditEventID, false)
 		}, postWrite)
 }
 

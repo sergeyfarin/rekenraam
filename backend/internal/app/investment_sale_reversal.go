@@ -92,8 +92,18 @@ func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseIn
 	if original.VersionID != operation.CurrentVersionID || original.Status != "posted" || original.TransactionKind != "investment" || original.DeletedAt != "" || original.TransactionDate != operation.EventDate {
 		return db.SaleOperationRecord{}, CreateTransactionInput{}, ErrInvestmentSaleChanged
 	}
-	spec := transactionInputFromTransaction(original)
+	spec := invertedInvestmentTransactionSpec(original)
 	spec.InvestmentOperationKind = "reversal"
+	return operation, CreateTransactionInput{
+		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
+		RequestID: input.RequestID, OriginType: defaultString(input.OriginType, "browser_api"),
+		Operation: "investment.sale.reverse", CorrectionOfTransactionID: &operation.TransactionID,
+		Spec: spec, ChangeReason: reason, ReconciliationOverride: input.ReconciliationOverride,
+	}, nil
+}
+
+func invertedInvestmentTransactionSpec(original Transaction) TransactionInput {
+	spec := transactionInputFromTransaction(original)
 	spec.ExternalRefHint = ""
 	for entryIndex := range spec.JournalEntries {
 		for postingIndex := range spec.JournalEntries[entryIndex].Postings {
@@ -101,12 +111,7 @@ func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseIn
 			posting.QuantityValue = posting.QuantityValue.Negated()
 		}
 	}
-	return operation, CreateTransactionInput{
-		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
-		RequestID: input.RequestID, OriginType: defaultString(input.OriginType, "browser_api"),
-		Operation: "investment.sale.reverse", CorrectionOfTransactionID: &operation.TransactionID,
-		Spec: spec, ChangeReason: reason, ReconciliationOverride: input.ReconciliationOverride,
-	}, nil
+	return spec
 }
 
 func mapReverseSaleError(err error) error {

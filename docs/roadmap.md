@@ -102,7 +102,7 @@ Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
 
-The reusable application runtime (R16 [#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: manual long-sale reversal and correction-chain history are available in transaction detail, and the API can atomically replace the latest manual long sale. UI entry, dependent replacements, buy correction, and import identity handling remain.
+The reusable application runtime (R16 [#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: manual long-sale reversal and correction-chain history are available in transaction detail, while the API can atomically replace the latest manual long sale or an old manual buy with dependent-sale replay. UI entry, dependent sale replacement, import identity handling and backdated admission remain.
 
 ### Completed initiatives through R10
 

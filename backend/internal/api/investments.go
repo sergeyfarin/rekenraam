@@ -187,6 +187,18 @@ type investmentSaleReplacementResponse struct {
 	CorrectedTransactionID int64                   `json:"corrected_transaction_id"`
 }
 
+type investmentBuyReplacementRequest struct {
+	Reason                 string                 `json:"reason"`
+	ReconciliationOverride bool                   `json:"reconciliation_override"`
+	Replacement            investmentTradeRequest `json:"replacement"`
+}
+
+type investmentBuyReplacementResponse struct {
+	InverseTransaction     transactionResponse     `json:"inverse_transaction"`
+	Replacement            investmentTradeResponse `json:"replacement"`
+	CorrectedTransactionID int64                   `json:"corrected_transaction_id"`
+}
+
 type investmentCorrectionNodeResponse struct {
 	OperationID             int64  `json:"operation_id"`
 	TransactionID           *int64 `json:"transaction_id,omitempty"`
@@ -833,6 +845,66 @@ func replaceInvestmentSaleReconciliationImpact(logger *slog.Logger, authService 
 	}
 }
 
+func replaceInvestmentBuy(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentBuyReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.ReplaceBuy(r.Context(), app.ReplaceInvestmentBuyInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
+			RequestID: RequestIDFromContext(r.Context()), TransactionID: transactionID,
+			Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
+			Replacement: toInvestmentTradeInput(owner, r, request.Replacement),
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "replace investment buy", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentBuyReplacementResponse{
+			InverseTransaction:     toTransactionResponse(result.Inverse),
+			Replacement:            toInvestmentTradeResponse(result.Replacement),
+			CorrectedTransactionID: transactionID,
+		})
+	}))
+}
+
+func replaceInvestmentBuyReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentBuyReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReplaceBuyReconciliationImpact(r.Context(), app.ReplaceInvestmentBuyInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+			Replacement: toInvestmentTradeInput(owner, r, request.Replacement),
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview buy replacement reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
 func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedOwner(w, r, logger, authService)
@@ -1253,6 +1325,16 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentSaleNotLatest):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_NOT_LATEST", err.Error())
+	case errors.Is(err, app.ErrInvestmentBuyNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment buy operation not found")
+	case errors.Is(err, app.ErrInvestmentBuyAlreadyCorrected):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_BUY_ALREADY_CORRECTED", err.Error())
+	case errors.Is(err, app.ErrInvestmentImportedBuy):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_IMPORTED_BUY", err.Error())
+	case errors.Is(err, app.ErrInvestmentBuyChanged):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_BUY_CHANGED", err.Error())
+	case errors.Is(err, app.ErrInvestmentBuyDependency):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_BUY_DEPENDENCY", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
 	// Every investment trade goes through the transaction write guard, so a

@@ -119,6 +119,10 @@ func (s *InvestmentService) ReplaceLatestSaleReconciliationImpact(ctx context.Co
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
+	return mergeInvestmentCorrectionImpacts(inverseImpact, replacementImpact), nil
+}
+
+func mergeInvestmentCorrectionImpacts(inverseImpact, replacementImpact ReconciliationImpact) ReconciliationImpact {
 	seen := make(map[int64]bool)
 	for _, checkpoint := range inverseImpact.AffectedCheckpoints {
 		seen[checkpoint.CheckpointID] = true
@@ -129,7 +133,7 @@ func (s *InvestmentService) ReplaceLatestSaleReconciliationImpact(ctx context.Co
 			seen[checkpoint.CheckpointID] = true
 		}
 	}
-	return inverseImpact, nil
+	return inverseImpact
 }
 
 func validateSaleReplacementPosition(replacement InvestmentTradeInput, operation db.SaleOperationRecord) error {
