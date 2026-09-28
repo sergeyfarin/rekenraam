@@ -193,6 +193,10 @@ func TestReplaceLatestManualSaleAPI(t *testing.T) {
 		"/api/v1/investments/sell", sale, http.StatusCreated)
 	var sold investmentTradeResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&sold))
+	laterSale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 13000)
+	laterSale.TransactionDate = "2026-04-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/sell", laterSale, http.StatusCreated)
 	contextResult := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,
 		"/api/v1/investments/transactions/"+strconv.FormatInt(sold.Transaction.ID, 10)+"/trade-correction-context",
 		nil, http.StatusOK)
@@ -206,6 +210,11 @@ func TestReplaceLatestManualSaleAPI(t *testing.T) {
 	replacement.TransactionDate = sale.TransactionDate
 	replacement.CostBasisMethod = "fifo"
 	request := investmentSaleReplacementRequest{Reason: "corrected fill", Replacement: replacement}
+	impossible := request
+	impossible.Replacement.QuantityValue = "5"
+	conflictingPreview := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path+"/reconciliation-impact", impossible, http.StatusConflict)
+	require.Contains(t, conflictingPreview.Body.String(), "INVESTMENT_SALE_DEPENDENCY")
 	preview := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
 		path+"/reconciliation-impact", request, http.StatusOK)
 	var impact reconciliationImpactResponse
@@ -219,7 +228,7 @@ func TestReplaceLatestManualSaleAPI(t *testing.T) {
 	require.Equal(t, "posted", corrected.Replacement.Transaction.Status)
 	var remaining int
 	require.NoError(t, database.QueryRow(`SELECT count(*) FROM investment_lots
-		WHERE book_id = 1 AND remaining_quantity_value = '2'`).Scan(&remaining))
+		WHERE book_id = 1 AND remaining_quantity_value = '1'`).Scan(&remaining))
 	require.Equal(t, 1, remaining)
 	conflict := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
 	require.Contains(t, conflict.Body.String(), "INVESTMENT_SALE_ALREADY_CORRECTED")

@@ -144,7 +144,7 @@
   "api_error_investment_sale_already_corrected": "Dieser Verkauf wurde bereits korrigiert. Öffnen Sie den Korrekturverlauf, um die neueste Buchung zu sehen.",
   "api_error_investment_imported_sale": "Dieser importierte Verkauf muss über seine Quelle korrigiert werden.",
   "api_error_investment_sale_changed": "Dieser Verkauf wurde während Ihrer Prüfung geändert. Öffnen Sie die Transaktion erneut und versuchen Sie es noch einmal.",
-  "api_error_investment_sale_not_latest": "Nach diesem Verkauf wurde eine weitere Buchung für die Position erfasst. Der Verkauf kann noch nicht ersetzt werden.",
+  "api_error_investment_sale_dependency": "Nach dem korrigierten Verkauf bleiben zu wenige Anteile für einen späteren Verkauf.",
   "api_error_investment_buy_already_corrected": "Dieser Kauf wurde bereits korrigiert. Die letzte Buchung steht im Korrekturverlauf.",
   "api_error_investment_imported_buy": "Dieser importierte Kauf muss über seine Quelle korrigiert werden.",
   "api_error_investment_buy_changed": "Dieser Kauf wurde während Ihrer Prüfung geändert. Öffnen Sie die Transaktion erneut und versuchen Sie es noch einmal.",

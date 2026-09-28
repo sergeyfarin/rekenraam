@@ -115,7 +115,7 @@ func TestTradeCorrectionContextIncludesSaleElection(t *testing.T) {
 	require.Equal(t, *replaced.Replacement.LotID, context.AvailableLots[0].LotID)
 }
 
-func TestTradeCorrectionContextPreservesOlderSalePrefixWithoutOfferingWrite(t *testing.T) {
+func TestTradeCorrectionContextPreservesOlderSalePrefixForReplacement(t *testing.T) {
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -158,7 +158,7 @@ func TestTradeCorrectionContextPreservesOlderSalePrefixWithoutOfferingWrite(t *t
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&auditBefore))
 	context, err := f.investmentService.TradeCorrectionContext(ctx, f.ownerUserID, sold.Transaction.ID)
 	require.NoError(t, err)
-	require.False(t, context.CanReplaceSale)
+	require.True(t, context.CanReplaceSale)
 	require.Len(t, context.AvailableLots, 1)
 	require.Equal(t, *replaced.Replacement.LotID, context.AvailableLots[0].LotID)
 	require.Equal(t, "10", context.AvailableLots[0].QuantityValue)

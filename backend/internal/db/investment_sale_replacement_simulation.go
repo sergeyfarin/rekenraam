@@ -10,8 +10,8 @@ import (
 
 // SimulateSaleReplacement checks a proposed corrected sale at the original
 // operation's chronological slot. Later sales are replayed against that new
-// quantity and election. The savepoint and outer transaction are rolled back;
-// the command must repeat this check inside its write transaction.
+// quantity and election. The savepoint restores all simulated writes before
+// the snapshot closes; the command repeats this check in its write transaction.
 func (r *InvestmentRepository) SimulateSaleReplacement(ctx context.Context,
 	expected SaleOperationRecord, proposed DisposeLotsParams,
 ) (InvestmentReplayProjection, error) {

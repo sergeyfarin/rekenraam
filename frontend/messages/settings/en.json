@@ -144,7 +144,7 @@
   "api_error_investment_sale_already_corrected": "This sale has already been corrected. Open its correction history to see the latest entry.",
   "api_error_investment_imported_sale": "This imported sale must be corrected through its source.",
   "api_error_investment_sale_changed": "This sale changed while you were reviewing it. Reopen the transaction and try again.",
-  "api_error_investment_sale_not_latest": "This sale has a later position transaction and cannot be replaced yet.",
+  "api_error_investment_sale_dependency": "The corrected sale leaves too few shares for a later sale.",
   "api_error_investment_buy_already_corrected": "This buy has already been corrected. Open its correction history to see the latest entry.",
   "api_error_investment_imported_buy": "This imported buy must be corrected through its source.",
   "api_error_investment_buy_changed": "This buy changed while you were reviewing it. Reopen the transaction and try again.",

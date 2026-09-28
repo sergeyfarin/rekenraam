@@ -919,7 +919,7 @@ func replaceInvestmentSale(logger *slog.Logger, authService *app.AuthService, in
 			writeDecodeError(w, err)
 			return
 		}
-		result, err := investmentService.ReplaceLatestSale(r.Context(), app.ReplaceInvestmentSaleInput{
+		result, err := investmentService.ReplaceSale(r.Context(), app.ReplaceInvestmentSaleInput{
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
 			RequestID: RequestIDFromContext(r.Context()), TransactionID: transactionID,
 			Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
@@ -952,7 +952,7 @@ func replaceInvestmentSaleReconciliationImpact(logger *slog.Logger, authService 
 			writeDecodeError(w, err)
 			return
 		}
-		impact, err := investmentService.ReplaceLatestSaleReconciliationImpact(r.Context(), app.ReplaceInvestmentSaleInput{
+		impact, err := investmentService.ReplaceSaleReconciliationImpact(r.Context(), app.ReplaceInvestmentSaleInput{
 			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
 			Replacement: toInvestmentTradeInput(owner, r, request.Replacement),
 		})
@@ -1442,8 +1442,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_IMPORTED_SALE", err.Error())
 	case errors.Is(err, app.ErrInvestmentSaleChanged):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_CHANGED", err.Error())
-	case errors.Is(err, app.ErrInvestmentSaleNotLatest):
-		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_NOT_LATEST", err.Error())
+	case errors.Is(err, app.ErrInvestmentSaleDependency):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_DEPENDENCY", err.Error())
 	case errors.Is(err, app.ErrInvestmentBuyNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment buy operation not found")
 	case errors.Is(err, app.ErrInvestmentBuyAlreadyCorrected):

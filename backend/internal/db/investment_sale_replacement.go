@@ -2,16 +2,15 @@ package db
 
 import (
 	"context"
-	"errors"
+	"database/sql"
 	"fmt"
 )
 
-var ErrInvestmentSaleNotLatest = errors.New("investment sale has a later position operation")
-
-// ReplaceLatestSale commits an inverse journal, a corrected sale, its fresh
+// ReplaceSale commits an inverse journal, a corrected sale, its fresh
 // disposal decision, and the resulting lot projection as one audited command.
-// Later position intents are fenced until replacement can replay them too.
-func (r *InvestmentRepository) ReplaceLatestSale(ctx context.Context, expected SaleOperationRecord,
+// An older sale is evaluated at its original order slot and later decisions
+// receive effective revisions in the same write transaction.
+func (r *InvestmentRepository) ReplaceSale(ctx context.Context, expected SaleOperationRecord,
 	inverseParams, replacementParams CreateTransactionParams, disposalParams DisposeLotsParams,
 ) (TransactionRecord, TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
 	var noInverse, noReplacement TransactionRecord
@@ -56,9 +55,27 @@ func (r *InvestmentRepository) ReplaceLatestSale(ctx context.Context, expected S
 	if err != nil {
 		return noInverse, noReplacement, nil, noDecision, err
 	}
-	if len(intents) == 0 || intents[len(intents)-1].OperationID != current.OperationID {
-		return noInverse, noReplacement, nil, noDecision, ErrInvestmentSaleNotLatest
+	saleIndex := -1
+	for index, intent := range intents {
+		if intent.OperationID == current.OperationID && intent.Kind == "disposal" {
+			saleIndex = index
+			break
+		}
 	}
+	if saleIndex < 0 {
+		return noInverse, noReplacement, nil, noDecision, ErrNotFound
+	}
+	latestRewriteDate, err := latestPositionRewriteDateTx(ctx, tx, inverseParams.BookID,
+		current.AccountID, current.CommodityID)
+	if err != nil {
+		return noInverse, noReplacement, nil, noDecision, err
+	}
+	// A later sale that was subsequently reversed is absent from effective
+	// intents but its immutable dated event still makes the ordinary disposal
+	// guard reject a backdated insert. Use chronological replay in that case.
+	olderSale := saleIndex < len(intents)-1 || latestRewriteDate > current.EventDate
+	sourceIntents := intents
+	sourceDecisionID := intents[saleIndex].DecisionID
 	if _, err := readBookForUpdate(ctx, tx, inverseParams.BookID); err != nil {
 		return noInverse, noReplacement, nil, noDecision, err
 	}
@@ -93,6 +110,41 @@ func (r *InvestmentRepository) ReplaceLatestSale(ctx context.Context, expected S
 		VALUES (?, ?, ?, 2, 'reversal')`, replacementParams.BookID, operationID, inverse.VersionID); err != nil {
 		return noInverse, noReplacement, nil, noDecision, fmt.Errorf("link replacement inverse: %w", err)
 	}
+	disposalParams.TransactionID = replacement.ID
+	disposalParams.CreatedAt = replacementParams.CreatedAt
+	var disposals []LotDisposalRecord
+	var decision DisposalDecisionRecord
+	if olderSale {
+		proposedIntents, err := proposedSaleReplayIntents(sourceIntents, current.OperationID, disposalParams)
+		if err != nil {
+			return noInverse, noReplacement, nil, noDecision, err
+		}
+		proposed, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
+			current.AccountID, current.CommodityID, current.CostCommodityID, proposedIntents)
+		if err != nil {
+			return noInverse, noReplacement, nil, noDecision, err
+		}
+		var historical *InvestmentReplayDisposal
+		for index := range proposed.Disposals {
+			if proposed.Disposals[index].DecisionID == sourceDecisionID {
+				historical = &proposed.Disposals[index]
+				break
+			}
+		}
+		if historical == nil {
+			return noInverse, noReplacement, nil, noDecision,
+				fmt.Errorf("%w: corrected sale has no simulated allocation", ErrInvalidDisposalParams)
+		}
+		disposals, err = insertHistoricalSaleDisposalsTx(ctx, tx, disposalParams,
+			historical.Allocations, auditEventID)
+		if err != nil {
+			return noInverse, noReplacement, nil, noDecision, err
+		}
+		decision, err = createDisposalDecisionTx(ctx, tx, replacement, disposalParams, disposals, auditEventID)
+		if err != nil {
+			return noInverse, noReplacement, nil, noDecision, err
+		}
+	}
 	intents, err = investmentReplayIntentsQuery(ctx, tx, replacementParams.BookID,
 		current.AccountID, current.CommodityID, current.CostCommodityID, "long")
 	if err != nil {
@@ -109,15 +161,15 @@ func (r *InvestmentRepository) ReplaceLatestSale(ctx context.Context, expected S
 		intents, projection); err != nil {
 		return noInverse, noReplacement, nil, noDecision, err
 	}
-	disposalParams.TransactionID = replacement.ID
-	disposalParams.CreatedAt = replacementParams.CreatedAt
-	disposals, err := disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID, false)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	decision, err := createDisposalDecisionTx(ctx, tx, replacement, disposalParams, disposals, auditEventID)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
+	if !olderSale {
+		disposals, err = disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID, false)
+		if err != nil {
+			return noInverse, noReplacement, nil, noDecision, err
+		}
+		decision, err = createDisposalDecisionTx(ctx, tx, replacement, disposalParams, disposals, auditEventID)
+		if err != nil {
+			return noInverse, noReplacement, nil, noDecision, err
+		}
 	}
 	if err := voidTradePricesForVersionTx(ctx, tx, inverseParams, current.TransactionVersionID, auditEventID); err != nil {
 		return noInverse, noReplacement, nil, noDecision, err
@@ -135,4 +187,47 @@ func (r *InvestmentRepository) ReplaceLatestSale(ctx context.Context, expected S
 	}
 	committed = true
 	return inverse, replacement, disposals, decision, nil
+}
+
+// These events are immutable evidence of the corrected sale at its historical
+// date. The current lot projection comes from full chronological replay, so
+// inserting the evidence must not mutate the present-day lot balances.
+func insertHistoricalSaleDisposalsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams,
+	allocations []InvestmentReplayAllocation, auditEventID int64,
+) ([]LotDisposalRecord, error) {
+	if len(allocations) == 0 || params.TransactionID <= 0 || auditEventID <= 0 {
+		return nil, fmt.Errorf("%w: historical sale allocation is incomplete", ErrInvalidDisposalParams)
+	}
+	disposals := make([]LotDisposalRecord, 0, len(allocations))
+	for _, allocation := range allocations {
+		if allocation.LotID <= 0 || allocation.QuantityValue.Sign() <= 0 ||
+			allocation.CostBasisValue < 0 || allocation.ProceedsValue < 0 {
+			return nil, fmt.Errorf("%w: historical sale allocation is invalid", ErrInvalidDisposalParams)
+		}
+		result, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_events
+			(book_id, lot_id, event_kind, transaction_id, event_date, quantity_value,
+			 quantity_scale, cost_basis_value, cost_basis_scale, cost_basis_method,
+			 metadata_json, created_at, created_by_user_id, created_audit_event_id)
+			VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			params.BookID, allocation.LotID, params.TransactionID, params.EventDate,
+			allocation.QuantityValue.Negated(), allocation.QuantityScale,
+			-allocation.CostBasisValue, allocation.CostBasisScale,
+			params.CostBasisMethod, params.MetadataJSON, params.CreatedAt,
+			params.ActorUserID, auditEventID)
+		if err != nil {
+			return nil, fmt.Errorf("insert historical sale lot event: %w", err)
+		}
+		eventID, err := result.LastInsertId()
+		if err != nil {
+			return nil, fmt.Errorf("read historical sale lot event id: %w", err)
+		}
+		disposals = append(disposals, LotDisposalRecord{
+			EventID: eventID, LotID: allocation.LotID,
+			QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale,
+			CostBasisValue: allocation.CostBasisValue, CostBasisScale: allocation.CostBasisScale,
+			ProceedsValue: allocation.ProceedsValue, ProceedsScale: allocation.ProceedsScale,
+			CostCommodityID: params.CostCommodityID,
+		})
+	}
+	return disposals, nil
 }

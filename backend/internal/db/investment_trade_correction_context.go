@@ -189,10 +189,9 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			}
 		}
 		if saleIndex >= 0 {
-			// The current writer still requires the latest intent. Historical
-			// pre-sale lots are useful to the later dependent-sale writer and
-			// must never be inferred from today's remaining projection.
-			record.CanReplaceSale = saleIndex == len(intents)-1
+			// The write rechecks the source and dependent replay atomically.
+			// Historical lots must not be inferred from today's projection.
+			record.CanReplaceSale = true
 			for _, choice := range intents[saleIndex].SpecificLots {
 				record.EffectiveElectedLots = append(record.EffectiveElectedLots, InvestmentTradeCorrectionLotChoice{
 					LotID: choice.LotID, QuantityValue: choice.QuantityValue.String(), QuantityScale: choice.QuantityScale,

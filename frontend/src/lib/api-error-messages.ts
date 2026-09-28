@@ -20,7 +20,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   INVESTMENT_SALE_ALREADY_CORRECTED: () => m.api_error_investment_sale_already_corrected(),
   INVESTMENT_IMPORTED_SALE: () => m.api_error_investment_imported_sale(),
   INVESTMENT_SALE_CHANGED: () => m.api_error_investment_sale_changed(),
-  INVESTMENT_SALE_NOT_LATEST: () => m.api_error_investment_sale_not_latest(),
+  INVESTMENT_SALE_DEPENDENCY: () => m.api_error_investment_sale_dependency(),
   INVESTMENT_BUY_ALREADY_CORRECTED: () => m.api_error_investment_buy_already_corrected(),
   INVESTMENT_IMPORTED_BUY: () => m.api_error_investment_imported_buy(),
   INVESTMENT_BUY_CHANGED: () => m.api_error_investment_buy_changed(),

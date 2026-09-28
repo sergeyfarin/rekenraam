@@ -36,9 +36,10 @@ Last reconciled: 2026-09-27.
   exact specific-lot picker and reconciliation preview. Slice 4s exposes
   historical pre-sale lots for older effective manual sales without opening
   their write path. Slice 4t simulates a proposed older sale through all later
-  position intents without writes, naming an impossible dependent sale. Next
-  are the atomic older-sale replacement write and source-aware identity
-  handling for imported fills.
+  position intents without writes, naming an impossible dependent sale. Slice
+  4u posts the corrected older sale with its dependent allocation revisions
+  atomically and opens its existing transaction-detail form. Next are
+  source-aware identity handling for imported fills and backdated admission.
 
 ## Then, within R16
 

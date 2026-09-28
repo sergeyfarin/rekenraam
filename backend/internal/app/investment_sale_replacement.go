@@ -8,7 +8,19 @@ import (
 	"rekenraam/backend/internal/db"
 )
 
-var ErrInvestmentSaleNotLatest = errors.New("investment sale has a later position operation")
+var ErrInvestmentSaleDependency = errors.New("corrected investment sale cannot satisfy a dependent disposal")
+
+type InvestmentSaleDependencyError struct {
+	OperationID int64
+	DecisionID  int64
+}
+
+func (e InvestmentSaleDependencyError) Error() string {
+	return fmt.Sprintf("%s: later operation %d decision %d",
+		ErrInvestmentSaleDependency, e.OperationID, e.DecisionID)
+}
+
+func (e InvestmentSaleDependencyError) Unwrap() error { return ErrInvestmentSaleDependency }
 
 type ReplaceInvestmentSaleInput struct {
 	OwnerUserID            int64
@@ -25,12 +37,9 @@ type ReplaceInvestmentSaleResult struct {
 	Replacement InvestmentTradeResult
 }
 
-// ReplaceLatestSale is the first bounded replacement path. The original sale
-// must be the position's latest lot-affecting intent, so its replacement can
-// be disposed through the existing guarded engine after restoring the prior
-// effective lot projection. A later dependency needs full chronological replay
-// of a newly created disposal and remains a separate slice.
-func (s *InvestmentService) ReplaceLatestSale(ctx context.Context, input ReplaceInvestmentSaleInput) (ReplaceInvestmentSaleResult, error) {
+// ReplaceSale corrects an effective manual long sale and replays dependent
+// long-position decisions under one audited repository transaction.
+func (s *InvestmentService) ReplaceSale(ctx context.Context, input ReplaceInvestmentSaleInput) (ReplaceInvestmentSaleResult, error) {
 	operation, inversePlan, err := s.reverseSalePlan(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 		RequestID: input.RequestID, TransactionID: input.TransactionID,
@@ -69,9 +78,9 @@ func (s *InvestmentService) ReplaceLatestSale(ctx context.Context, input Replace
 	replacementParams.InvestmentCorrectionMode = "replace"
 	replacementParams.InvestmentCorrectionReason = inversePlan.ChangeReason
 	replacementParams.CreatedAt = inverseParams.CreatedAt
-	inverse, replacementRecord, disposals, decision, err := s.repository.ReplaceLatestSale(ctx, operation, inverseParams, replacementParams, disposalParams)
+	inverse, replacementRecord, disposals, decision, err := s.repository.ReplaceSale(ctx, operation, inverseParams, replacementParams, disposalParams)
 	if err != nil {
-		return ReplaceInvestmentSaleResult{}, mapReplaceSaleError(err)
+		return ReplaceInvestmentSaleResult{}, mapReplaceSaleError(err, operation.OperationID)
 	}
 	committedDecision := toDisposalDecision(decision)
 	return ReplaceInvestmentSaleResult{
@@ -81,7 +90,7 @@ func (s *InvestmentService) ReplaceLatestSale(ctx context.Context, input Replace
 	}, nil
 }
 
-func (s *InvestmentService) ReplaceLatestSaleReconciliationImpact(ctx context.Context, input ReplaceInvestmentSaleInput) (ReconciliationImpact, error) {
+func (s *InvestmentService) ReplaceSaleReconciliationImpact(ctx context.Context, input ReplaceInvestmentSaleInput) (ReconciliationImpact, error) {
 	operation, inversePlan, err := s.reverseSalePlan(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: input.OwnerUserID, TransactionID: input.TransactionID, Reason: input.Reason,
 	})
@@ -94,17 +103,19 @@ func (s *InvestmentService) ReplaceLatestSaleReconciliationImpact(ctx context.Co
 	if err := validateSaleReplacementElections(input.Replacement); err != nil {
 		return ReconciliationImpact{}, err
 	}
-	intents, err := s.repository.ListInvestmentReplayIntents(ctx, BookID,
-		operation.AccountID, operation.CommodityID, operation.CostCommodityID, "long")
-	if err != nil {
-		return ReconciliationImpact{}, fmt.Errorf("check replacement position order: %w", err)
-	}
-	if len(intents) == 0 || intents[len(intents)-1].OperationID != operation.OperationID {
-		return ReconciliationImpact{}, ErrInvestmentSaleNotLatest
-	}
 	replacement := input.Replacement
 	replacement.OwnerUserID = input.OwnerUserID
 	replacement.WriteOff = false
+	// Preparation uses the guarded transaction writer. Preview collects the
+	// checkpoint impact below, so allow preparation without making a write.
+	replacement.ReconciliationOverride = true
+	_, disposal, err := s.prepareSellWrite(ctx, replacement)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	if _, err := s.repository.SimulateSaleReplacement(ctx, operation, disposal); err != nil {
+		return ReconciliationImpact{}, mapReplaceSaleError(err, operation.OperationID)
+	}
 	plan, err := s.sellPlan(ctx, replacement)
 	if err != nil {
 		return ReconciliationImpact{}, err
@@ -158,9 +169,13 @@ func validateSaleReplacementElections(replacement InvestmentTradeInput) error {
 	return nil
 }
 
-func mapReplaceSaleError(err error) error {
-	if errors.Is(err, db.ErrInvestmentSaleNotLatest) {
-		return ErrInvestmentSaleNotLatest
+func mapReplaceSaleError(err error, sourceOperationID int64) error {
+	var dependency *db.InvestmentReplayDependencyError
+	if errors.As(err, &dependency) {
+		if dependency.OperationID == sourceOperationID {
+			return ErrInvestmentLotsInsufficient
+		}
+		return InvestmentSaleDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
 	}
 	if errors.Is(err, db.ErrInsufficientLots) {
 		return ErrInvestmentLotsInsufficient

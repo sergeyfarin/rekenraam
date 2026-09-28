@@ -780,10 +780,10 @@ InvestmentTradeCorrectionContextResponse:
         $ref: '#/InvestmentTradeCorrectionLotChoiceResponse'
     can_replace_sale:
       type: boolean
-      description: Display hint for a current manual sale with no later position intent. The write rechecks it.
+      description: Display hint for an effective manual sale eligible for correction. The write rechecks its source and dependent replay.
     available_lots:
       type: array
-      description: Effective long lots and quantities immediately before an uncorrected manual sale, including an older sale, from a rolled-back replay. The can_replace_sale hint still gates the current write.
+      description: Effective long lots and quantities immediately before an uncorrected manual sale, including an older sale, from a rolled-back replay.
       items:
         $ref: '#/InvestmentTradeCorrectionAvailableLotResponse'
     effective_elected_lots:

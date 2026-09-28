@@ -703,6 +703,20 @@ next family.
      impossible and leaves journals, audit events, decisions and lot events
      untouched. The eventual write must repeat the check inside its own
      transaction before persisting the new decision and effective revisions.
+   - **4u — older manual long-sale replacement — complete 2026-09-28.**
+     The sale replacement command now accepts an effective manual long sale
+     with later position activity. Inside one audited transaction it posts the
+     inverse and corrected journals, simulates the corrected sale in its
+     original replay slot, records its immutable historical disposal evidence,
+     and appends effective revisions for the corrected and dependent sales.
+     An impossible later disposal names its operation and decision and rolls
+     back every effect. The reconciliation preview runs the same dependency
+     simulation; a checkpoint still needs explicit override before the
+     command invalidates it. Transaction detail uses the existing sale form
+     and historical pre-sale lots. FIFO, LIFO, average and specific-lot
+     replacements, corrected acquisition lineage, dependency refusal,
+     reconciliation and self-check have targeted coverage. Imported source
+     identity correction and general backdated admission remain.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

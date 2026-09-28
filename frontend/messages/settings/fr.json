@@ -144,7 +144,7 @@
   "api_error_investment_sale_already_corrected": "Cette vente a déjà été corrigée. Ouvrez l’historique des corrections pour voir la dernière écriture.",
   "api_error_investment_imported_sale": "Cette vente importée doit être corrigée depuis sa source.",
   "api_error_investment_sale_changed": "Cette vente a changé pendant votre vérification. Rouvrez la transaction et réessayez.",
-  "api_error_investment_sale_not_latest": "Une opération ultérieure concerne cette position. Cette vente ne peut pas encore être remplacée.",
+  "api_error_investment_sale_dependency": "La vente corrigée laisse trop peu de titres pour une vente ultérieure.",
   "api_error_investment_buy_already_corrected": "Cet achat a déjà été corrigé. Consultez son historique pour voir la dernière opération.",
   "api_error_investment_imported_buy": "Cet achat importé doit être corrigé à partir de sa source.",
   "api_error_investment_buy_changed": "Cet achat a changé pendant votre vérification. Rouvrez la transaction et réessayez.",
