@@ -33,7 +33,7 @@ func TestReplaceLatestManualSalePostsOneAuditedCompoundCorrection(t *testing.T) 
 			TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
 			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(3),
-			CashAmountValue: 39000, CashAmountScale: 2,
+			CashAmountValue: 39000, CashAmountScale: 2, CostBasisMethod: "fifo",
 		},
 	})
 	require.NoError(t, err)
@@ -98,7 +98,7 @@ func TestReplaceLatestManualSaleCanUseSharesRestoredByItsOwnInverse(t *testing.T
 			TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
 			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(8),
-			CashAmountValue: 96000, CashAmountScale: 2,
+			CashAmountValue: 96000, CashAmountScale: 2, CostBasisMethod: "fifo",
 		},
 	})
 	require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestReplaceOlderManualSaleRefusesLaterPositionIntentWithoutPartialWrite(t *
 			TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
 			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(3),
-			CashAmountValue: 39000, CashAmountScale: 2,
+			CashAmountValue: 39000, CashAmountScale: 2, CostBasisMethod: "fifo",
 		},
 	})
 	require.ErrorIs(t, err, ErrInvestmentSaleNotLatest)
@@ -176,7 +176,7 @@ func TestReplaceLatestManualSaleRequiresReconciliationOverrideAtomically(t *test
 			TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
 			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(3),
-			CashAmountValue: 39000, CashAmountScale: 2,
+			CashAmountValue: 39000, CashAmountScale: 2, CostBasisMethod: "fifo",
 		},
 	}
 	impact, err := f.investmentService.ReplaceLatestSaleReconciliationImpact(ctx, input)
@@ -226,7 +226,7 @@ func TestReplaceLatestManualSaleRollsBackImpossibleQuantity(t *testing.T) {
 			TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
 			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(11),
-			CashAmountValue: 132000, CashAmountScale: 2,
+			CashAmountValue: 132000, CashAmountScale: 2, CostBasisMethod: "fifo",
 		},
 	})
 	require.ErrorIs(t, err, ErrInvestmentLotsInsufficient)
@@ -239,4 +239,55 @@ func TestReplaceLatestManualSaleRollsBackImpossibleQuantity(t *testing.T) {
 	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
 	require.NoError(t, err)
 	require.Equal(t, "6", lots[0].RemainingQuantityValue.String())
+}
+
+func TestReplaceManualSaleRequiresExplicitEconomicElections(t *testing.T) {
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		QuantityValue: exact.New(10), CashAmountValue: 100000, CashAmountScale: 2,
+	})
+	require.NoError(t, err)
+	sale, err := f.investmentService.Sell(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		QuantityValue: exact.New(4), CashAmountValue: 48000, CashAmountScale: 2,
+	})
+	require.NoError(t, err)
+	base := InvestmentTradeInput{
+		TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
+		HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(3),
+		CashAmountValue: 39000, CashAmountScale: 2,
+	}
+	for _, test := range []struct {
+		name string
+		edit func(*InvestmentTradeInput)
+		want string
+	}{
+		{name: "missing_cost_basis_method", edit: func(*InvestmentTradeInput) {}, want: "cost-basis method is required"},
+		{name: "missing_charge_treatment", edit: func(trade *InvestmentTradeInput) {
+			trade.CostBasisMethod = "fifo"
+			trade.Charges = []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -200, AmountScale: 2, CommodityID: f.eurCommodityID}}
+		}, want: "charge 1 treatment is required"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			replacement := base
+			test.edit(&replacement)
+			input := ReplaceInvestmentSaleInput{OwnerUserID: f.ownerUserID,
+				TransactionID: sale.Transaction.ID, Reason: "correct fill", Replacement: replacement}
+			_, err := f.investmentService.ReplaceLatestSaleReconciliationImpact(ctx, input)
+			require.ErrorContains(t, err, test.want)
+			_, err = f.investmentService.ReplaceLatestSale(ctx, input)
+			require.ErrorContains(t, err, test.want)
+		})
+	}
+	var corrections int
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_operations
+		WHERE correction_of_operation_id IS NOT NULL`).Scan(&corrections))
+	require.Zero(t, corrections)
 }

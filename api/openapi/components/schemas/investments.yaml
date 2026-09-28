@@ -635,7 +635,26 @@ InvestmentSaleReplacementRequest:
       type: boolean
       description: Omit or set false to preserve affected reconciliation checkpoints.
     replacement:
-      $ref: "#/InvestmentTradeRequest"
+      $ref: "#/InvestmentSaleReplacementTradeRequest"
+
+InvestmentSaleReplacementTradeRequest:
+  description: >-
+    Full corrected sale. The cost-basis election and each charge treatment
+    must be explicit so changed defaults cannot alter corrected economics.
+  allOf:
+    - $ref: "#/InvestmentTradeRequest"
+    - type: object
+      required: [cost_basis_method]
+      properties:
+        cost_basis_method:
+          $ref: "#/CostBasisMethod"
+        charges:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/InvestmentTradeChargeRequest"
+              - type: object
+                required: [treatment]
 
 InvestmentSaleReplacementResponse:
   type: object

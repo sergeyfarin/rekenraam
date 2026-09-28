@@ -618,7 +618,9 @@ next family.
      posted manual sale may be replaced when it is the last lot-affecting
      intent for its exact long position. The native command keeps its date,
      holding, instrument and cost currency, but accepts corrected quantity,
-     proceeds, fees and other sale fields. One SQLite transaction posts the
+     proceeds, fees and other sale fields. The replacement requires an
+     explicit cost-basis method and treatment for each charge, so current
+     defaults cannot silently change the correction. One SQLite transaction posts the
      old sale's inverse and the replacement journal beneath one audit event,
      links both journals to one replacement operation, rebuilds the position
      without the old disposal, records the replacement's elected disposal,

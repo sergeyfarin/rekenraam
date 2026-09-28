@@ -17647,7 +17647,12 @@ export interface components {
             reason: string;
             /** @description Omit or set false to preserve affected reconciliation checkpoints. */
             reconciliation_override?: boolean;
-            replacement: components["schemas"]["InvestmentTradeRequest"];
+            replacement: components["schemas"]["InvestmentSaleReplacementTradeRequest"];
+        };
+        /** @description Full corrected sale. The cost-basis election and each charge treatment must be explicit so changed defaults cannot alter corrected economics. */
+        InvestmentSaleReplacementTradeRequest: components["schemas"]["InvestmentTradeRequest"] & {
+            cost_basis_method: components["schemas"]["CostBasisMethod"];
+            charges?: (components["schemas"]["InvestmentTradeChargeRequest"] & Record<string, never>)[];
         };
         InvestmentSaleReplacementResponse: {
             inverse_transaction: components["schemas"]["TransactionResponse"];

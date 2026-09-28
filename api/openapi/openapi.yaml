@@ -928,6 +928,8 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReversalResponse"
     InvestmentSaleReplacementRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReplacementRequest"
+    InvestmentSaleReplacementTradeRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentSaleReplacementTradeRequest"
     InvestmentSaleReplacementResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReplacementResponse"
     InvestmentCorrectionChainResponse:

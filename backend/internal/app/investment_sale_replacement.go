@@ -43,6 +43,9 @@ func (s *InvestmentService) ReplaceLatestSale(ctx context.Context, input Replace
 	if err := validateSaleReplacementPosition(replacement, operation); err != nil {
 		return ReplaceInvestmentSaleResult{}, err
 	}
+	if err := validateSaleReplacementElections(replacement); err != nil {
+		return ReplaceInvestmentSaleResult{}, err
+	}
 	replacement.OwnerUserID = input.OwnerUserID
 	replacement.AuthSessionID = input.AuthSessionID
 	replacement.RequestID = input.RequestID
@@ -86,6 +89,9 @@ func (s *InvestmentService) ReplaceLatestSaleReconciliationImpact(ctx context.Co
 		return ReconciliationImpact{}, err
 	}
 	if err := validateSaleReplacementPosition(input.Replacement, operation); err != nil {
+		return ReconciliationImpact{}, err
+	}
+	if err := validateSaleReplacementElections(input.Replacement); err != nil {
 		return ReconciliationImpact{}, err
 	}
 	intents, err := s.repository.ListInvestmentReplayIntents(ctx, BookID,
@@ -132,6 +138,18 @@ func validateSaleReplacementPosition(replacement InvestmentTradeInput, operation
 		replacement.CommodityID != operation.CommodityID ||
 		replacement.CashCommodityID != operation.CostCommodityID {
 		return ValidationError{Message: "replacement must keep the sale date, holding account, instrument and cost currency"}
+	}
+	return nil
+}
+
+func validateSaleReplacementElections(replacement InvestmentTradeInput) error {
+	if replacement.CostBasisMethod == "" {
+		return ValidationError{Message: "replacement cost-basis method is required"}
+	}
+	for index, charge := range replacement.Charges {
+		if charge.Treatment == "" {
+			return ValidationError{Message: fmt.Sprintf("replacement charge %d treatment is required", index+1)}
+		}
 	}
 	return nil
 }

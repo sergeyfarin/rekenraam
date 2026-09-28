@@ -196,6 +196,7 @@ func TestReplaceLatestManualSaleAPI(t *testing.T) {
 	path := "/api/v1/investments/transactions/" + strconv.FormatInt(sold.Transaction.ID, 10) + "/replace-sale"
 	replacement := tradeRequestBody(f, holding.ID, instrument.CommodityID, "3", 39000)
 	replacement.TransactionDate = sale.TransactionDate
+	replacement.CostBasisMethod = "fifo"
 	request := investmentSaleReplacementRequest{Reason: "corrected fill", Replacement: replacement}
 	preview := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
 		path+"/reconciliation-impact", request, http.StatusOK)
