@@ -71,6 +71,10 @@ and their quantity and basis sums must agree exactly. The destination lot's
 account-entry date is the transfer date, while its original acquisition
 date and source lineage are retained independently. An internal transfer has
 no cash, gain, clearing, or equity posting.
+For FIFO and LIFO, the original acquisition date controls priority when known;
+otherwise the account-entry `opened_on` date does. `opened_on` alone controls
+dated eligibility, so a lot cannot be consumed before it entered the book.
+The same ordering applies in replay.
 
 External inbound basis is a sourced fact: accept a known nonnegative value
 including known zero, or record unknown with a NULL coefficient. An outbound

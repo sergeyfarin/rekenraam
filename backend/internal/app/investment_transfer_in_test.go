@@ -140,6 +140,76 @@ func TestExternalTransferInKnownBasisPostsBookBridgeAndReplaysAsOpening(t *testi
 	assert.Equal(t, SelfCheckPassed, resultFor(t, run, CheckInvestmentFoundation).Status)
 }
 
+func TestTransferOriginalAcquisitionDateOrdersFIFOAndLIFO(t *testing.T) {
+	for _, method := range []string{"fifo", "lifo"} {
+		for _, moveAgain := range []bool{false, true} {
+			name := method + "_external"
+			if moveAgain {
+				name = method + "_internal"
+			}
+			t.Run(name, func(t *testing.T) {
+				f := newInvestmentsTestFixture(t)
+				seedExternalTransferEquity(t, f.database)
+				ctx := context.Background()
+				holdingID := f.holdingAccountID
+				if moveAgain {
+					holdingID = seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+				}
+				bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
+					OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+					HoldingAccountID: holdingID, CommodityID: f.stockCommodityID,
+					CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+					QuantityValue: exact.New(1), CashAmountValue: 1000, CashAmountScale: 2,
+				})
+				require.NoError(t, err)
+				inbound := knownTransferInput(f)
+				inbound.QuantityValue = exact.New(1)
+				inbound.OriginalAcquiredOn = "2015-01-01"
+				transferred, err := f.investmentService.ExternalTransferIn(ctx, inbound)
+				require.NoError(t, err)
+				transferredLotID := *transferred.LotID
+				if moveAgain {
+					moved, err := f.investmentService.InternalTransfer(ctx,
+						internalTransferFromLot(f, holdingID, transferredLotID, exact.New(1), 0))
+					require.NoError(t, err)
+					transferredLotID = moved.DestinationLotIDs[0]
+				}
+				sale := sellInput(f, "2026-07-01", 1)
+				sale.HoldingAccountID = holdingID
+				sale.CostBasisMethod = method
+				sold, err := f.investmentService.Sell(ctx, sale)
+				require.NoError(t, err)
+				require.Len(t, sold.Allocations, 1)
+				want := transferredLotID
+				if method == "lifo" {
+					want = *bought.LotID
+				}
+				assert.Equal(t, want, sold.Allocations[0].LotID)
+				if method == "fifo" && !moveAgain {
+					_, err = f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+						OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID,
+						Reason: "correct source statement", Replacement: InvestmentTradeInput{
+							TransactionDate: "2026-01-01", HoldingAccountID: holdingID,
+							CommodityID: f.stockCommodityID, CashAccountID: f.cashAccountID,
+							CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(1),
+							CashAmountValue: 1100, CashAmountScale: 2,
+						},
+					})
+					require.NoError(t, err)
+					var replayLotID int64
+					require.NoError(t, f.database.QueryRow(`SELECT a.lot_id
+						FROM investment_disposal_revision_allocations a
+						JOIN investment_disposal_revisions r ON r.id = a.revision_id
+						JOIN investment_disposal_decisions d ON d.id = r.decision_id
+						WHERE d.transaction_id = ? ORDER BY r.revision_seq DESC LIMIT 1`,
+						sold.Transaction.ID).Scan(&replayLotID))
+					assert.Equal(t, transferredLotID, replayLotID)
+				}
+			})
+		}
+	}
+}
+
 func TestExternalTransferInKnownZeroBasisAndUnknownOriginalDate(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	seedExternalTransferEquity(t, f.database)

@@ -1543,15 +1543,19 @@ func disposeSpecificLotsTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPa
 }
 
 func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64, method string, allocationScale int) ([]LotDisposalRecord, error) {
-	orderClause := "ORDER BY opened_on, id"
+	// opened_on controls eligibility in this book. A transferred lot can carry
+	// an older, sourced acquisition date, which controls FIFO/LIFO priority.
+	// Unknown original dates fall back to the date the lot entered this book.
+	orderClause := "ORDER BY COALESCE(link.original_acquired_on, lot.opened_on), lot.opened_on, lot.id"
 	if method == "lifo" {
-		orderClause = "ORDER BY opened_on DESC, id DESC"
+		orderClause = "ORDER BY COALESCE(link.original_acquired_on, lot.opened_on) DESC, lot.opened_on DESC, lot.id DESC"
 	}
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, remaining_quantity_value, remaining_quantity_scale
-		FROM investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND status = 'open'
-			AND opened_on <= ?
+		SELECT lot.id, lot.remaining_quantity_value, lot.remaining_quantity_scale
+		FROM investment_lots lot
+		LEFT JOIN investment_transfer_lot_links link ON link.destination_lot_id = lot.id
+		WHERE lot.book_id = ? AND lot.account_id = ? AND lot.commodity_id = ?
+			AND lot.cost_commodity_id = ? AND lot.status = 'open' AND lot.opened_on <= ?
 		`+orderClause, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate)
 	if err != nil {
 		return nil, fmt.Errorf("read %s lots: %w", method, err)
