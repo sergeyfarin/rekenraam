@@ -17,6 +17,8 @@ export type InvestmentTradeResponse = components['schemas']['InvestmentTradeResp
 export type InvestmentTradeRequest = components['schemas']['InvestmentTradeRequest'];
 export type ExternalTransferInRequest = components['schemas']['ExternalTransferInRequest'];
 export type ExternalTransferInResponse = components['schemas']['ExternalTransferInResponse'];
+export type InternalTransferRequest = components['schemas']['InternalTransferRequest'];
+export type InternalTransferResponse = components['schemas']['InternalTransferResponse'];
 export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
 export type ReinvestedDividendRequest = components['schemas']['ReinvestedDividendRequest'];
@@ -222,6 +224,39 @@ export async function recordExternalTransferIn(
 ): Promise<ExternalTransferInResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/transfers/external/in', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function internalTransferReconciliationImpact(
+  input: InternalTransferRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transfers/internal/reconciliation-impact',
+      { body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordInternalTransfer(
+  input: InternalTransferRequest,
+  csrfToken: string
+): Promise<InternalTransferResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/transfers/internal', {
       params: { header: { 'X-CSRF-Token': csrfToken } },
       body: input
     });

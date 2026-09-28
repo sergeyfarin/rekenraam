@@ -3,8 +3,9 @@
 Status: accepted implementation contract, 2026-09-28. ADR 0012 and ADR 0013
 govern. This document fixes the journal, lot, date, and reconciliation rules
 that each slice 5 command must satisfy. The known-basis external inbound API
-command shipped in slice 5b, its entry screen in 5c, and the explicit-lot
-internal transfer API in 5d. The remaining commands are unimplemented.
+command shipped in slice 5b, its entry screen in 5c, the explicit-lot
+internal transfer API in 5d, and its entry screen in 5e. The remaining
+commands are unimplemented.
 
 ## Common rules
 

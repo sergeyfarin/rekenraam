@@ -154,6 +154,14 @@ function rescale(value: bigint, from: number, to: number): bigint {
 	return value * 10n ** BigInt(to - from);
 }
 
+/** Compare exact amounts with potentially different scales. */
+export function compareScaledAmounts(left: ScaledAmount, right: ScaledAmount): -1 | 0 | 1 {
+	const scale = Math.max(left.scale, right.scale);
+	const a = rescale(BigInt(left.value), left.scale, scale);
+	const b = rescale(BigInt(right.value), right.scale, scale);
+	return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /** One leg of a split, as the editor holds it before submission. */
 export interface AmountLeg {
 	commodityID: string;
