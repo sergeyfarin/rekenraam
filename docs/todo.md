@@ -6,7 +6,7 @@ R16 acceptance criteria. [GitHub Issues](https://github.com/sergeyfarin/rekenraa
 tracks actionable work; the [backlog](backlog.md) maps local IDs, and
 [implemented](implemented.md) records shipped behavior.
 
-Last reconciled: 2026-09-28.
+Last reconciled: 2026-09-29.
 
 ## Current: R16 correction
 
@@ -16,30 +16,17 @@ Last reconciled: 2026-09-28.
   reversal and replacement must update journal, effective lots and gains,
   prices, audit links, and reconciliation impact together. Keep backdated
   writes fenced until the dependency and rollback tests pass.
-- [x] Validate a corrected old buy followed by dependent sells under each cost
-  basis method, including failure rollback and original versus effective
-  allocations. The immutable intent reader, reversible replay simulation,
-  revision storage, gains and self-check readers, revision-chain export, and
-  correction-aware current reads are already complete (slices 4a–4g).
-  Manual long-sale pure reversal is complete in slice 4h, including its API,
-  replay, price retirement and reconciliation preview. Slice 4i adds the
-  correction-chain read API; slice 4j presents the history and manual reversal
-  in transaction detail. Slice 4k prepares one-audit compound journals and a
-  shared sale plan. Slice 4l adds API-only replacement of the latest manual
-  long sale with a compound audited write and reconciliation preview. Slice 4m prepared the buy
-  writer and same-day replay order; slice 4n corrects a manual old buy
-  through dependent sells under all four cost-basis methods, and slice 4o
-  exposes immutable trade source facts for correction form prefill. Slice 4p
-  makes manual buy correction available in transaction detail. Slice 4q
-  prepares exact pre-sale lots and effective specific-lot choices for the
-  sale correction form. Slice 4r adds that prefilled sale correction form,
-  exact specific-lot picker and reconciliation preview. Slice 4s exposes
-  historical pre-sale lots for older effective manual sales without opening
-  their write path. Slice 4t simulates a proposed older sale through all later
-  position intents without writes, naming an impossible dependent sale. Slice
-  4u posts the corrected older sale with its dependent allocation revisions
-  atomically and opens its existing transaction-detail form. Next are
-  source-aware identity handling for imported fills and backdated admission.
+- [x] Validate old manual buy and sale corrections through dependent disposals
+  under all four methods, with rollback and effective allocation revisions.
+  See the [feature ledger](implemented.md)
+  and [slice 4 plan](plans/investment-operation-refactor-plan.md) for the
+  shipped sub-slices. Imported source corrections, backdated admission, buy
+  reversal, and other operation corrections remain open.
+- [ ] Close the reopened slice 2a integrity gates: link component cash facts
+  to posting versions, reconcile decision proceeds with clearing in self-check,
+  migrate operation reads to journal links, separate lot projection state,
+  and share correction transaction orchestration. The disposal-decision key
+  now supports `(operation_id, decision_seq)`.
 
 ## Then, within R16
 
@@ -53,7 +40,8 @@ Last reconciled: 2026-09-28.
   now moves explicitly selected long lots between holding accounts with
   carried basis, reconciliation review and a mobile entry screen. Next:
   pooled-basis allocation for internal transfers from open average-cost
-  positions, outbound transfers and cross-account carried-basis replay. Keep basis-affecting
+  positions, outbound transfers and cross-account carried-basis replay after
+  the correction and integrity gates. Keep basis-affecting
   provider suggestions in review until their operation exists.
 - [ ] Add [named short sale and cover T-108](https://github.com/sergeyfarin/rekenraam/issues/103)
   with side-aware gains, dated positions, self-check, export, API, and mobile

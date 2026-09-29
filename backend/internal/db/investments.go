@@ -329,6 +329,7 @@ type DisposalDecisionSource struct {
 
 type DisposalDecisionRecord struct {
 	ID                   int64
+	DecisionSeq          int
 	TransactionID        int64
 	TransactionVersionID int64
 	AccountID            int64
@@ -1925,12 +1926,12 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_disposal_decisions (
-			book_id, transaction_id, transaction_version_id, operation_id, position_side, account_id, commodity_id,
+			book_id, transaction_id, transaction_version_id, operation_id, decision_seq, position_side, account_id, commodity_id,
 			cost_commodity_id, event_date, quantity_value, quantity_scale,
 			disposed_basis_value, disposed_basis_scale, proceeds_value, proceeds_scale, cost_basis_method, resolution_tier,
 			account_version_id, profile_id, profile_version_id, source_effective_from,
 			source_recorded_at, created_at, created_by_user_id, created_audit_event_id
-		) VALUES (?, ?, ?, ?, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, 1, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, params.BookID, transaction.ID, transaction.VersionID, operationID, params.AccountID, params.CommodityID,
 		costCommodityID, params.EventDate, params.QuantityValue, params.QuantityScale,
 		disposedBasisValue, disposedBasis.Scale(), params.ProceedsValue, params.ProceedsScale, params.CostBasisMethod, source.ResolutionTier,
@@ -1961,7 +1962,7 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 		}
 	}
 	return DisposalDecisionRecord{
-		ID: decisionID, TransactionID: transaction.ID, TransactionVersionID: transaction.VersionID,
+		ID: decisionID, DecisionSeq: 1, TransactionID: transaction.ID, TransactionVersionID: transaction.VersionID,
 		AccountID: params.AccountID, CommodityID: params.CommodityID, CostCommodityID: costCommodityID,
 		EventDate: params.EventDate, QuantityValue: params.QuantityValue, QuantityScale: params.QuantityScale,
 		DisposedBasisValue: disposedBasisValue, DisposedBasisScale: disposedBasis.Scale(),

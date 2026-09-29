@@ -102,7 +102,7 @@ Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
 
-The reusable application runtime (R16 [#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers manual long-sale reversal and prefilled correction of a buy or sale. Both old buys and old sales replay dependent allocations in one audited transaction. Import identity handling and backdated admission remain.
+The reusable application runtime ([#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers manual long-sale reversal and prefilled correction of a buy or sale. Both old buys and old sales replay dependent allocations in one audited transaction. Import identity handling, backdated admission, buy reversal, and other operation corrections remain. The 2026-09-29 review reopened slice 2a journal/subledger integrity and writer gates; complete those before further transfer and basis-action commands.
 
 ### Completed initiatives through R10
 

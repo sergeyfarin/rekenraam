@@ -9,7 +9,7 @@ description: "Use when editing requirements, ADRs, workflow docs, agent instruct
 - Requirements belong in `docs/product-requirements.md`.
 - Architecture constraints belong in `docs/early-architecture-decisions.md`.
 - Sequencing belongs in `docs/product-requirements.md`.
-- Archive requirement review belongs in `docs/archive-requirements-review.md`.
+- Archive requirement review belongs in `docs/archive/requirements-review.md`.
 - Accepted decisions belong in `docs/adrs/`.
 - Developer process and commands belong in `README.md` and `docs/developer-workflow.md`.
 - Repo-wide agent guidance belongs in `AGENTS.md` and `.github/copilot-instructions.md`; task-shaped agent skill guides belong in `.claude/skills/`.

@@ -86,7 +86,7 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				"investment-transfer-lot-links.csv":      {"operation_id", "link_seq", "source_lot_id", "destination_lot_id", "quantity_value", "quantity_scale", "basis_knowledge", "carried_basis_value", "carried_basis_scale", "cost_commodity_id", "original_date_knowledge", "original_acquired_on", "source_evidence_json"},
 				"investment-fee-policies.csv":            {"policy_id", "account_id", "charge_kind", "created_at", "audit_event_id"},
 				"investment-fee-policy-versions.csv":     {"version_id", "policy_id", "version_seq", "effective_from", "treatment", "charge_account_id", "recorded_at", "audit_event_id"},
-				"disposal-decisions.csv":                 {"decision_id", "transaction_id", "transaction_version_id", "account_id", "commodity_id", "cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method", "resolution_tier", "account_version_id", "profile_id", "profile_version_id", "source_effective_from", "source_recorded_at", "created_at", "audit_event_id", "operation_id", "position_side", "proceeds_value", "proceeds_scale"},
+				"disposal-decisions.csv":                 {"decision_id", "decision_seq", "transaction_id", "transaction_version_id", "account_id", "commodity_id", "cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method", "resolution_tier", "account_version_id", "profile_id", "profile_version_id", "source_effective_from", "source_recorded_at", "created_at", "audit_event_id", "operation_id", "position_side", "proceeds_value", "proceeds_scale"},
 				"disposal-allocations.csv":               {"decision_id", "allocation_seq", "lot_event_id", "lot_id", "quantity", "cost_basis", "proceeds_value", "proceeds_scale"},
 				"disposal-revisions.csv":                 {"revision_id", "decision_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "disposed_basis_value", "disposed_basis_scale", "created_at", "audit_event_id"},
 				"disposal-revision-allocations.csv":      {"revision_id", "allocation_seq", "lot_id", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "proceeds_value", "proceeds_scale"},
@@ -115,13 +115,14 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 
 				decisions := readInvestmentContractCSV(t, files, "disposal-decisions.csv")
 				require.Len(t, decisions, 2)
-				require.Equal(t, "12.50", decisions[1][7])
-				require.Equal(t, "1300.00", decisions[1][8])
-				require.Equal(t, "fifo", decisions[1][9])
-				require.Equal(t, "fallback", decisions[1][10])
-				require.Equal(t, operations[3][0], decisions[1][18], "disposal decision links its operation")
-				require.Equal(t, "long", decisions[1][19])
-				require.NotEmpty(t, decisions[1][2], "the export must retain the posted transaction version")
+				require.Equal(t, "1", decisions[1][1])
+				require.Equal(t, "12.50", decisions[1][8])
+				require.Equal(t, "1300.00", decisions[1][9])
+				require.Equal(t, "fifo", decisions[1][10])
+				require.Equal(t, "fallback", decisions[1][11])
+				require.Equal(t, operations[3][0], decisions[1][19], "disposal decision links its operation")
+				require.Equal(t, "long", decisions[1][20])
+				require.NotEmpty(t, decisions[1][3], "the export must retain the posted transaction version")
 
 				allocations := readInvestmentContractCSV(t, files, "disposal-allocations.csv")
 				require.Len(t, allocations, 3)

@@ -175,6 +175,7 @@ func (r *ExportRepository) ExportInvestmentOperations(ctx context.Context, trans
 
 type ExportDisposalDecisionRecord struct {
 	DecisionID           int64
+	DecisionSeq          int
 	TransactionID        int64
 	TransactionVersionID int64
 	AccountID            int64
@@ -869,7 +870,7 @@ func (r *ExportRepository) ExportLots(ctx context.Context, transaction *sql.Tx, 
 
 func (r *ExportRepository) ExportDisposalDecisions(ctx context.Context, transaction *sql.Tx, bookID int64) ([]ExportDisposalDecisionRecord, error) {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT id, transaction_id, transaction_version_id, account_id, commodity_id,
+		SELECT id, decision_seq, transaction_id, transaction_version_id, account_id, commodity_id,
 			cost_commodity_id, event_date, quantity_value, quantity_scale,
 			disposed_basis_value, disposed_basis_scale, cost_basis_method, resolution_tier,
 			account_version_id, profile_id, profile_version_id, source_effective_from,
@@ -886,7 +887,7 @@ func (r *ExportRepository) ExportDisposalDecisions(ctx context.Context, transact
 	var records []ExportDisposalDecisionRecord
 	for rows.Next() {
 		var record ExportDisposalDecisionRecord
-		if err := rows.Scan(&record.DecisionID, &record.TransactionID, &record.TransactionVersionID,
+		if err := rows.Scan(&record.DecisionID, &record.DecisionSeq, &record.TransactionID, &record.TransactionVersionID,
 			&record.AccountID, &record.CommodityID, &record.CostCommodityID, &record.EventDate,
 			&record.QuantityValue, &record.QuantityScale, &record.DisposedBasisValue,
 			&record.DisposedBasisScale, &record.CostBasisMethod, &record.ResolutionTier,

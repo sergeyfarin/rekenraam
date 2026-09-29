@@ -573,7 +573,7 @@ func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Wr
 		return 0, err
 	}
 	writer, err := newBundleCSV(out, []string{
-		"decision_id", "transaction_id", "transaction_version_id", "account_id", "commodity_id",
+		"decision_id", "decision_seq", "transaction_id", "transaction_version_id", "account_id", "commodity_id",
 		"cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method",
 		"resolution_tier", "account_version_id", "profile_id", "profile_version_id",
 		"source_effective_from", "source_recorded_at", "created_at", "audit_event_id",
@@ -584,7 +584,7 @@ func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Wr
 	}
 	for index, decision := range decisions {
 		if err := writer.Write([]string{
-			strconv.FormatInt(decision.DecisionID, 10), strconv.FormatInt(decision.TransactionID, 10),
+			strconv.FormatInt(decision.DecisionID, 10), strconv.Itoa(decision.DecisionSeq), strconv.FormatInt(decision.TransactionID, 10),
 			strconv.FormatInt(decision.TransactionVersionID, 10), strconv.FormatInt(decision.AccountID, 10),
 			strconv.FormatInt(decision.CommodityID, 10), strconv.FormatInt(decision.CostCommodityID, 10),
 			decision.EventDate, exact.Decimal(decision.QuantityValue, decision.QuantityScale),

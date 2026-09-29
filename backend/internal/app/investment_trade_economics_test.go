@@ -138,6 +138,29 @@ func TestNegativeSaleProceedsSurviveLaterReplayAndReplacement(t *testing.T) {
 	})
 }
 
+func TestDisposalDecisionSequenceAllowsSharedJournalProvenance(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	buyOn(t, f, "2026-01-01", 2, 2000)
+	sold, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-02-01", 1))
+	require.NoError(t, err)
+	cloneDecision := `INSERT INTO investment_disposal_decisions
+		(book_id, transaction_id, transaction_version_id, operation_id, decision_seq,
+		 position_side, account_id, commodity_id, cost_commodity_id, event_date,
+		 quantity_value, quantity_scale, disposed_basis_value, disposed_basis_scale,
+		 proceeds_value, proceeds_scale, cost_basis_method, resolution_tier,
+		 created_at, created_by_user_id, created_audit_event_id)
+		SELECT book_id, transaction_id, transaction_version_id, operation_id, ?,
+		 position_side, account_id, commodity_id, cost_commodity_id, event_date,
+		 quantity_value, quantity_scale, disposed_basis_value, disposed_basis_scale,
+		 proceeds_value, proceeds_scale, cost_basis_method, resolution_tier,
+		 created_at, created_by_user_id, created_audit_event_id
+		FROM investment_disposal_decisions WHERE transaction_id = ? AND decision_seq = 1`
+	_, err = f.database.Exec(cloneDecision, 2, sold.Transaction.ID)
+	require.NoError(t, err, "a compound operation can have another decision under the same journal version")
+	_, err = f.database.Exec(cloneDecision, 2, sold.Transaction.ID)
+	require.Error(t, err, "the operation and decision sequence still identify one decision")
+}
+
 func TestManualAndGrossPricesOutrankLaterApproximateTradeOnSameDate(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()

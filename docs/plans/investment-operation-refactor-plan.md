@@ -1,9 +1,23 @@
 # Investment operation and subledger refactor plan
 
-Status: proposed implementation plan, 2026-09-26. No behavior described below
-is shipped merely because it appears here. ADR 0012 and ADR 0013 govern; this
-plan makes their next slices concrete. R16 owns the near-term work, T-75b owns
-native correction, and T-108 owns short sales and covers.
+Status: active implementation plan, reviewed 2026-09-29. Completed slices are
+marked below; no behavior is shipped merely because it appears here. ADR 0012
+and ADR 0013 govern. R16 owns the near-term work, T-75b owns native
+correction, and T-108 owns short sales and covers.
+
+The 2026-09-29 review found that calling 2a and all of slice 4 complete was
+premature. The operation header's nullable unique `transaction_id` remains a
+compatibility link used by existing reads beside `investment_operation_journal_links`;
+compound and basis-only actions must migrate those reads to the link table.
+Current lot projection columns remain on `investment_lots` instead of a
+separate `investment_lot_state` table. Trade components are not yet linked to
+posting versions or checked against their journal postings, and decision
+proceeds are not yet reconciled to the clearing leg by self-check. Those are
+open data-contract gates, not accepted changes to ADR 0013. The reviewed
+baseline now keys disposal decisions by `(operation_id, decision_seq)`; current
+single-disposal writers emit sequence 1. Correction writers also still have
+separate transaction orchestration. Complete these integrity and correction
+gates before adding outbound transfers or basis actions.
 
 ## Outcome and boundaries
 
@@ -29,10 +43,12 @@ Those are input taxonomies, not the app's database enum or accounting policy.
 
 ## Original gaps the slices address
 
-These bullets describe the pre-refactor implementation. Slices 2a–4u closed
-the operation-link, exact-trade, proceeds-inference, and manual correction
-gaps. Slice 5b added known-basis external inbound transfers; general dated
-admission, the other transfer and basis actions, and short positions remain.
+These bullets describe the pre-refactor implementation. Slices 2a–4u added
+operation links, exact trade economics, explicit proceeds and manual
+buy/sale correction, but the integrity and correction gates listed above
+remain open. Slice 5b added known-basis external inbound transfers; general
+dated admission, the other transfer and basis actions, and short positions
+remain.
 
 - `investment_operations` has a name, date, and mandatory unique transaction
   link, but no exact trade consideration, charges, source identity, or links
@@ -462,7 +478,7 @@ next family.
 2. **Foundation in two independently validated sub-slices.** Both keep the
    app runnable; neither opens a new user-facing investment operation.
 
-   - **2a — investment schema and writer — complete 2026-09-26.** Introduce the parent/link/date/
+   - **2a — investment schema and writer — partial, integrity gates reopened 2026-09-29.** Introduce the parent/link/date/
      component tables, operation-keyed disposal decisions, side-keyed basis
      state, fact/projection split, canonical TEXT coefficients, and direct
      effect links. Add and seed `external_investment_transfer_equity` in the
@@ -528,6 +544,9 @@ next family.
    and effective FIFO allocations differ. Exact trade economics precede
    this slice so replay has one authoritative source for proceeds and charges;
    this refines ADR 0013's foundation-to-correction sequence.
+   The named sub-slices below are complete individually, while imported-trade
+   correction, backdated acquisition admission, buy reversal, broader
+   operation corrections, and shared correction orchestration remain open.
    - **4a — immutable intent reader — complete 2026-09-27.** The long-position
      reader takes opening terms from lot facts and disposal terms from decisions,
      retains method/provenance and specific-lot elections, and orders them by
