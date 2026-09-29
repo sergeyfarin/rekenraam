@@ -1438,3 +1438,19 @@ func TestSellInvestment_BackdatedBehindASaleReportsItsOwnCode(t *testing.T) {
 		assert.Contains(t, body.Error.Message, "2026-07-01", "the message names the disposal that blocks it")
 	}
 }
+
+func TestBuyInvestment_BackdatedBehindSaleReplaysPosition(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "BUYBACK")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 60000)
+	sale.TransactionDate = "2026-07-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sale, http.StatusCreated)
+	backdated := tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 300000)
+	backdated.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", backdated, http.StatusCreated)
+}

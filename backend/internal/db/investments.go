@@ -1849,7 +1849,36 @@ func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, tran
 	return executeInvestmentWriteTx(ctx, r.database, transactionParams,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (InvestmentLotRecord, error) {
 			lotParams.SourceTransactionID = transaction.ID
-			return createLotWithAuditTx(ctx, tx, lotParams, auditEventID, false)
+			latest, err := latestPositionRewriteDateTx(ctx, tx, lotParams.BookID, lotParams.AccountID, lotParams.CommodityID)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			replayAdmission := latest != "" && lotParams.OpenedOn < latest
+			lot, err := createLotWithAuditTx(ctx, tx, lotParams, auditEventID, replayAdmission)
+			if err != nil || !replayAdmission {
+				return lot, err
+			}
+			operationID, err := investmentOperationIDTx(ctx, tx, lotParams.BookID, transaction.ID)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			intents, err := investmentReplayIntentsQuery(ctx, tx, lotParams.BookID,
+				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID, "long")
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			projection, err := simulateInvestmentReplayTx(ctx, tx, lotParams.BookID,
+				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID, intents)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			if err := persistInvestmentReplayProjectionTx(ctx, tx, lotParams.BookID,
+				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID,
+				operationID, auditEventID, transactionParams.ActorUserID, transactionParams.CreatedAt,
+				intents, projection); err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			return investmentLotByIDTx(ctx, tx, lotParams.BookID, lot.ID)
 		}, postWrite)
 }
 

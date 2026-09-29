@@ -14,7 +14,7 @@ var (
 	ErrInvestmentBuyAlreadyCorrected = errors.New("investment buy already corrected")
 	ErrInvestmentImportedBuy         = errors.New("imported buy requires source correction")
 	ErrInvestmentBuyChanged          = errors.New("investment buy changed")
-	ErrInvestmentBuyDependency       = errors.New("corrected buy cannot satisfy a later dependent operation")
+	ErrInvestmentBuyDependency       = errors.New("investment buy cannot satisfy a later dependent operation")
 )
 
 type ReplaceInvestmentBuyInput struct {
@@ -39,9 +39,9 @@ type InvestmentBuyDependencyError struct {
 
 func (e InvestmentBuyDependencyError) Error() string {
 	if e.DecisionID == 0 {
-		return fmt.Sprintf("corrected buy cannot satisfy later transfer operation %d", e.OperationID)
+		return fmt.Sprintf("investment buy cannot satisfy later transfer operation %d", e.OperationID)
 	}
-	return fmt.Sprintf("corrected buy cannot satisfy later operation %d disposal decision %d", e.OperationID, e.DecisionID)
+	return fmt.Sprintf("investment buy cannot satisfy later operation %d disposal decision %d", e.OperationID, e.DecisionID)
 }
 
 func (e InvestmentBuyDependencyError) Unwrap() error { return ErrInvestmentBuyDependency }

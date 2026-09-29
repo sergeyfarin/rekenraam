@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -232,26 +234,96 @@ func TestBackdatedWriteOffIsRefusedAfterASale(t *testing.T) {
 	require.ErrorContains(t, err, "chronological order")
 }
 
-func TestBackdatedPurchaseIsRefusedAfterASale(t *testing.T) {
+func TestBackdatedPurchaseReplaysLaterAverageCostSale(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
-	_, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 5))
+	sale := sellInput(f, "2026-07-01", 10)
+	sale.CostBasisMethod = "average_cost"
+	_, err := f.investmentService.Sell(ctx, sale)
 	require.NoError(t, err)
 
-	// The July sale priced a pool this lot was not in, and nothing recomputes
-	// it, so the lot cannot be slipped in behind the sale.
-	_, err = f.investmentService.Buy(ctx, InvestmentTradeInput{
+	backdated, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, QuantityValue: exact.New(10),
 		CashAmountValue: 30000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
 	})
-	require.EqualError(t, err, "investment events must be entered in chronological order: an acquisition dated 2026-03-01 is before this position's later depletion on 2026-07-01")
+	require.NoError(t, err)
+	require.NotNil(t, backdated.LotID)
 
 	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
 	require.NoError(t, err)
-	require.Len(t, lots, 1, "the refused purchase created no lot")
+	require.Len(t, lots, 2)
+	gains, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
+	require.NoError(t, err)
+	require.Len(t, gains, 1)
+	assertMoneyValue(t, -20000, 2, gains[0].DisposedBasisValue, gains[0].DisposedBasisScale, "later average-cost sale includes the admitted lot")
+	check, err := selfCheckOver(t, f.database).RunSelfCheck(ctx, "manual")
+	require.NoError(t, err)
+	require.Equal(t, SelfCheckPassed, check.Status)
+}
+
+func TestBackdatedPurchasePreservesRecordedDisposalMethods(t *testing.T) {
+	for _, test := range []struct {
+		method string
+		basis  int64
+	}{
+		{method: "fifo", basis: -5000},
+		{method: "lifo", basis: -15000},
+		{method: "specific_lot", basis: -5000},
+	} {
+		t.Run(test.method, func(t *testing.T) {
+			f := newInvestmentsTestFixture(t)
+			ctx := context.Background()
+			original := buyOn(t, f, "2026-01-01", 10, 10000)
+			sale := sellInput(f, "2026-07-01", 5)
+			sale.CostBasisMethod = test.method
+			if test.method == "specific_lot" {
+				sale.LotAllocations = []InvestmentLotAllocationInput{{LotID: *original.LotID, QuantityValue: exact.New(5)}}
+			}
+			_, err := f.investmentService.Sell(ctx, sale)
+			require.NoError(t, err)
+			buyOn(t, f, "2026-03-01", 10, 30000)
+			gains, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
+			require.NoError(t, err)
+			require.Len(t, gains, 1)
+			assertMoneyValue(t, test.basis, 2, gains[0].DisposedBasisValue, gains[0].DisposedBasisScale, "replayed sale basis")
+			check, err := selfCheckOver(t, f.database).RunSelfCheck(ctx, "manual")
+			require.NoError(t, err)
+			require.Equal(t, SelfCheckPassed, check.Status)
+		})
+	}
+}
+
+func TestBackdatedPurchaseRollsBackReplayWhenImportIdentityFails(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 10, 10000)
+	sale := sellInput(f, "2026-07-01", 5)
+	sale.CostBasisMethod = "lifo"
+	_, err := f.investmentService.Sell(ctx, sale)
+	require.NoError(t, err)
+	beforeTransactions := f.transactionCount(t)
+	var beforeAudits int
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&beforeAudits))
+
+	markerError := errors.New("import identity failed")
+	_, err = f.investmentService.buyWithPostWrite(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, QuantityValue: exact.New(10),
+		CashAmountValue: 30000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	}, func(*sql.Tx, int64) error { return markerError })
+	require.ErrorIs(t, err, markerError)
+	require.Equal(t, beforeTransactions, f.transactionCount(t))
+	var audits, lots, revisions int
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&audits))
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_lots`).Scan(&lots))
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_disposal_revisions`).Scan(&revisions))
+	require.Equal(t, beforeAudits, audits)
+	require.Equal(t, 1, lots)
+	require.Equal(t, 0, revisions)
 }
 
 func TestBackdatedSaleStillWorksWhenOnlyPurchasesFollowIt(t *testing.T) {

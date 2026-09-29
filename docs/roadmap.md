@@ -102,7 +102,7 @@ Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
 
-The reusable application runtime ([#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers manual long-sale reversal and prefilled correction of a buy or sale. Both old buys and old sales replay dependent allocations in one audited transaction. Import identity handling, backdated admission, buy reversal, and other operation corrections remain. The 2026-09-29 review reopened slice 2a journal/subledger integrity and writer gates; complete those before further transfer and basis-action commands.
+The reusable application runtime ([#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers manual long-sale reversal and prefilled correction of a buy or sale. Both old buys and old sales replay dependent allocations in one audited transaction. New backdated long buys use the same replay and atomic writer. Import source identity correction, buy reversal, and other operation corrections remain. The 2026-09-29 review reopened slice 2a journal/subledger integrity and writer gates; complete those before further transfer and basis-action commands.
 
 ### Completed initiatives through R10
 
@@ -143,7 +143,8 @@ and realized-gains, self-check, and export readers support manual long-sale
 reversal, old-sale replacement and old-buy replacement. Transaction detail
 offers sale reversal and prefilled buy and sale replacement. The sale form uses
 pre-sale available lots for specific-lot correction, and old sales replay
-dependent disposals. Import source identity and backdated admission remain.
+dependent disposals. New backdated long buys replay dependent sales; import
+source identity and other backdated operation families remain.
 The reopened [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
 now links journal-backed trade components to their exact posting lines and
 checks both missing links and unlinked trade cash, expense or charge-clearing legs. It must

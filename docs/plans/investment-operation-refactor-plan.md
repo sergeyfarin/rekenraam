@@ -560,7 +560,7 @@ next family.
    this slice so replay has one authoritative source for proceeds and charges;
    this refines ADR 0013's foundation-to-correction sequence.
    The named sub-slices below are complete individually, while imported-trade
-   correction, backdated acquisition admission, buy reversal, broader
+   correction, buy reversal, broader
    operation corrections, and shared correction orchestration remain open.
    - **4a — immutable intent reader — complete 2026-09-27.** The long-position
      reader takes opening terms from lot facts and disposal terms from decisions,
@@ -751,7 +751,16 @@ next family.
      and historical pre-sale lots. FIFO, LIFO, average and specific-lot
      replacements, corrected acquisition lineage, dependency refusal,
      reconciliation and self-check have targeted coverage. Imported source
-     identity correction and general backdated admission remain.
+     identity correction remains.
+   - **4v — backdated long-buy admission — complete 2026-09-29.** The shared
+     buy writer admits an acquisition before a later depletion by replaying
+     the effective long-position intents inside the same SQLite transaction
+     as the journal, lot, audit event, reconciliation guard and optional import
+     identity. It appends effective disposal revisions and installs the lot
+     projection only after the dependency simulation succeeds. FIFO, LIFO,
+     average-cost and specific-lot choices retain their recorded meaning;
+     dependent transfers still reject a changed carried basis. Imported
+     source correction remains a separate identity-aware command.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

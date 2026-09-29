@@ -1091,6 +1091,10 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		transactionRecord, lot, err = s.repository.CreateTransactionAndLotWithPostWrite(ctx, transactionParams, lotParams, postWrite)
 	}
 	if err != nil {
+		var dependency *db.InvestmentReplayDependencyError
+		if errors.As(err, &dependency) {
+			return InvestmentTradeResult{}, InvestmentBuyDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
+		}
 		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
 			return InvestmentTradeResult{}, err
 		}
