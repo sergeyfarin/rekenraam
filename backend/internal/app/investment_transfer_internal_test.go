@@ -171,6 +171,56 @@ func TestInternalTransferRefusesLotBasisFromOpenAverageCostPool(t *testing.T) {
 	assert.Zero(t, count)
 }
 
+func TestInternalTransferRefusesAverageCostDefaultBeforeFirstSale(t *testing.T) {
+	for _, tier := range []string{"account", "global"} {
+		t.Run(tier, func(t *testing.T) {
+			f := newInvestmentsTestFixture(t)
+			ctx := context.Background()
+			destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+			buyOn(t, f, "2026-01-01", 1, 1000)
+			later := buyOn(t, f, "2026-01-02", 1, 2000)
+			if tier == "account" {
+				setHoldingCostBasisMethod(t, f, "average_cost")
+			} else {
+				_, err := f.investmentService.SaveCostBasisProfile(ctx, CostBasisProfileInput{
+					OwnerUserID: f.ownerUserID, Name: "Book average cost", Method: "average_cost", IsDefault: true, Status: "active",
+				})
+				require.NoError(t, err)
+			}
+			input := internalTransferFromLot(f, destinationID, *later.LotID, exact.New(1), 0)
+			before := f.transactionCount(t)
+			_, err := f.investmentService.PreviewInternalTransferReconciliationImpact(ctx, input)
+			require.ErrorContains(t, err, "requires pooled basis allocation")
+			_, err = f.investmentService.InternalTransfer(ctx, input)
+			require.ErrorContains(t, err, "requires pooled basis allocation")
+			require.Equal(t, before, f.transactionCount(t))
+			var transfers int
+			require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_transfer_facts`).Scan(&transfers))
+			require.Zero(t, transfers)
+		})
+	}
+}
+
+func TestInternalTransferLocksIndividualLotMethodBeforeFirstSale(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+	buyOn(t, f, "2026-01-01", 1, 1000)
+	later := buyOn(t, f, "2026-01-02", 1, 2000)
+	_, err := f.investmentService.InternalTransfer(ctx,
+		internalTransferFromLot(f, destinationID, *later.LotID, exact.New(1), 0))
+	require.NoError(t, err)
+	var family string
+	require.NoError(t, f.database.QueryRow(`SELECT method_family FROM investment_position_basis_state
+		WHERE account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'`,
+		f.holdingAccountID, f.stockCommodityID, f.eurCommodityID).Scan(&family))
+	require.Equal(t, "individual_lot", family)
+	sale := sellInput(f, "2026-07-01", 1)
+	sale.CostBasisMethod = "average_cost"
+	_, err = f.investmentService.Sell(ctx, sale)
+	require.ErrorContains(t, err, "cannot switch into or out of average_cost")
+}
+
 func TestBuyCorrectionRefusesChangedBasisOfLinkedInternalTransfer(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")

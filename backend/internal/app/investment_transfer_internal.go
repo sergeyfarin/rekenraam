@@ -75,6 +75,10 @@ func (s *InvestmentService) internalTransferPlan(ctx context.Context, input Inte
 	if err := s.requireCommodityKind(ctx, input.CostCommodityID, date, "basis commodity", true); err != nil {
 		return investmentTransactionPlan{}, db.CreateInternalTransferParams{}, err
 	}
+	method, _, err := s.resolveCostBasisMethod(ctx, input.SourceAccountID, "")
+	if err != nil {
+		return investmentTransactionPlan{}, db.CreateInternalTransferParams{}, err
+	}
 	memo, err := cleanOptionalText(input.Memo, "memo", investmentTextMaxBytes)
 	if err != nil {
 		return investmentTransactionPlan{}, db.CreateInternalTransferParams{}, err
@@ -108,6 +112,7 @@ func (s *InvestmentService) internalTransferPlan(ctx context.Context, input Inte
 		DestinationAccountID: input.DestinationAccountID, CommodityID: input.CommodityID,
 		CostCommodityID: input.CostCommodityID, EffectiveOn: date,
 		Allocations: allocations, SourceEvidenceJSON: evidence,
+		SourceCostBasisMethod: method,
 	}
 	return plan, transfer, nil
 }

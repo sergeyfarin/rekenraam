@@ -158,9 +158,10 @@ known-basis external inbound transfer now has an API command, reconciliation
 preview, mobile entry screen, typed lot source, export and self-check. An
 internal transfer now moves selected long lots with conserved carried basis,
 typed lineage, reconciliation preview, self-check and a mobile entry screen.
-Selected-lot transfer from an open average-cost pool is refused until pooled
-basis allocation is implemented. Outbound and unknown-basis transfers, return
-of capital, split and cash in lieu remain.
+Selected-lot transfer under an average-cost source policy or open average-cost
+lock is refused until pooled basis allocation is implemented; a permitted
+lot-specific move locks the source position to individual-lot basis. Outbound
+and unknown-basis transfers, return of capital, split and cash in lieu remain.
 
 Decided 2026-08-05 (review §3e). The maintained
 `competitor-comparison.md` now marks corporate actions as missing; manual
