@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import { parseISO } from 'date-fns';
+  import { getLocale } from '$lib/paraglide/runtime.js';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Upload from '@lucide/svelte/icons/upload';
   import CheckCircle from '@lucide/svelte/icons/circle-check';
@@ -27,6 +29,8 @@
     patchImportBatch,
     commitImportBatch,
     correctTrading212Buy,
+    previewTrading212BuyCorrectionReconciliation,
+    type ReconciliationImpactResponse,
     discardImportBatch,
     parseNormalized,
     parseResolution,
@@ -123,6 +127,7 @@
   let sourceCorrectionRowID = $state<number | null>(null);
   let sourceCorrectionReason = $state('');
   let sourceCorrectionOverride = $state(false);
+  let sourceCorrectionImpact = $state<ReconciliationImpactResponse | null>(null);
   let sourceCorrectionPending = $state(false);
   let sourceCorrectionError = $state<unknown>(undefined);
   let sourceCorrectionSuccessID = $state<number | null>(null);
@@ -133,6 +138,14 @@
   let discarding = $state(false);
   let discardError = $state<unknown>(undefined);
   let showDiscardConfirm = $state(false);
+
+  const sourceCorrectionDateFormatter = $derived(new Intl.DateTimeFormat(getLocale(), {
+    year: 'numeric', month: 'short', day: 'numeric'
+  }));
+
+  function formatDate(value: string): string {
+    return sourceCorrectionDateFormatter.format(parseISO(value));
+  }
 
   // ── Queries ────────────────────────────────────────────────────────
   const sessionQuery = createQuery(() => authSessionQueryOptions());
@@ -520,12 +533,20 @@
     sourceCorrectionPending = true;
     sourceCorrectionError = undefined;
     try {
+      if (!sourceCorrectionImpact) {
+        sourceCorrectionImpact = await previewTrading212BuyCorrectionReconciliation(batchId, rowId, {
+          reason: sourceCorrectionReason.trim()
+        });
+        return;
+      }
+      if (sourceCorrectionImpact.affected_checkpoints.length > 0 && !sourceCorrectionOverride) return;
       const result = await correctTrading212Buy(batchId, rowId, {
         reason: sourceCorrectionReason.trim(),
         reconciliation_override: sourceCorrectionOverride
       }, csrfToken);
       sourceCorrectionSuccessID = result.replacement.transaction.id;
       sourceCorrectionRowID = null;
+      sourceCorrectionImpact = null;
       sourceCorrectionReason = '';
       if (previewData) {
         previewData = {
@@ -543,6 +564,8 @@
         // The correction is committed; keep its success link and local row state.
       }
     } catch (err) {
+      sourceCorrectionImpact = null;
+      sourceCorrectionOverride = false;
       sourceCorrectionError = err;
     } finally {
       sourceCorrectionPending = false;
@@ -610,6 +633,7 @@
       selectedFile = null;
       showDiscardConfirm = false;
       sourceCorrectionRowID = null;
+      sourceCorrectionImpact = null;
       sourceCorrectionSuccessID = null;
       sourceCorrectionError = undefined;
     } catch (err) {
@@ -626,6 +650,7 @@
     selectedFile = null;
     commitResult = null;
     sourceCorrectionRowID = null;
+    sourceCorrectionImpact = null;
     sourceCorrectionReason = '';
     sourceCorrectionOverride = false;
     sourceCorrectionSuccessID = null;
@@ -1420,6 +1445,9 @@
                       onclick={() => {
                         sourceCorrectionRowID = sourceCorrectionRowID === row.id ? null : row.id;
                         sourceCorrectionError = undefined;
+                        sourceCorrectionReason = '';
+                        sourceCorrectionImpact = null;
+                        sourceCorrectionOverride = false;
                       }}
                     >{m.import_preview_correct_buy()}</button>
                   {/if}
@@ -1521,19 +1549,37 @@
                         type="text"
                         required
                         bind:value={sourceCorrectionReason}
+                        disabled={sourceCorrectionPending}
+                        oninput={() => { sourceCorrectionImpact = null; sourceCorrectionOverride = false; }}
                         class="w-full rounded-(--radius-control) border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground"
                       />
-                      <label class="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" bind:checked={sourceCorrectionOverride} class="h-4 w-4 rounded border-border" />
-                        {m.import_commit_reconciliation_override()}
-                      </label>
-                      <p class="text-sm text-muted">{m.import_commit_reconciliation_override_hint()}</p>
+                      {#if sourceCorrectionImpact}
+                        {#if sourceCorrectionImpact.affected_checkpoints.length > 0}
+                          <p class="text-sm font-medium text-foreground">{m.import_preview_correct_buy_impact()}</p>
+                          <ul class="space-y-2 text-sm text-foreground">
+                            {#each sourceCorrectionImpact.affected_checkpoints as checkpoint (checkpoint.checkpoint_id)}
+                              <li>{m.transactions_reconciliation_checkpoint_label({
+                                account: checkpoint.account_label,
+                                commodity: checkpoint.commodity_code,
+                                date: formatDate(checkpoint.statement_date)
+                              })}</li>
+                            {/each}
+                          </ul>
+                          <label class="flex items-center gap-2 text-sm text-foreground">
+                            <input type="checkbox" bind:checked={sourceCorrectionOverride} disabled={sourceCorrectionPending} class="h-4 w-4 rounded border-border" />
+                            {m.import_commit_reconciliation_override()}
+                          </label>
+                          <p class="text-sm text-muted">{m.import_commit_reconciliation_override_hint()}</p>
+                        {:else}
+                          <p class="text-sm text-muted">{m.import_preview_correct_buy_no_impact()}</p>
+                        {/if}
+                      {/if}
                       <APIFormError error={sourceCorrectionError} id="source-correction-error" />
                       <button
                         type="submit"
-                        disabled={sourceCorrectionPending || !csrfToken || !sourceCorrectionReason.trim()}
+                        disabled={sourceCorrectionPending || !csrfToken || !sourceCorrectionReason.trim() || (sourceCorrectionImpact !== null && sourceCorrectionImpact.affected_checkpoints.length > 0 && !sourceCorrectionOverride)}
                         class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                      >{sourceCorrectionPending ? m.import_preview_correct_buy_pending() : m.import_preview_correct_buy_submit()}</button>
+                      >{sourceCorrectionPending ? (sourceCorrectionImpact ? m.import_preview_correct_buy_pending() : m.import_preview_correct_buy_preview_pending()) : sourceCorrectionImpact ? m.import_preview_correct_buy_submit() : m.import_preview_correct_buy_preview()}</button>
                     </form>
                   </td>
                 </tr>

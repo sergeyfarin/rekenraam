@@ -836,7 +836,21 @@ next family.
      whose identity effect remains on the original operation.
      A freshly staged provider revision can deliberately restore an earlier
      payload; an old staged row cannot be reused for that reversion. Source
-     reconciliation-impact preview and sale/cancellation commands remain open.
+     reconciliation-impact preview arrives in 4ad; sale/cancellation commands
+     remain open.
+   - **4ad — source buy reconciliation preview — complete 2026-09-29.** The
+     read-only `POST /api/v1/imports/{batch_id}/rows/{row_id}/correct-buy/reconciliation-impact`
+     endpoint uses the same staged provider quantity/net settlement and source
+     eligibility checks as the correction command. It returns distinct
+     affected checkpoints for the inverse and replacement journals without
+     accepting the revision, posting journals, changing lots, or invalidating
+     checkpoints. Import review previews first, names the affected account,
+     currency, and statement date, and requires explicit override before
+     applying an affected correction. Changing the reason or selected row, or a failed command,
+     clears the preview and override. The command rechecks eligibility and
+     reconciliation at commit time; the preview does not reserve the staged
+     source or guarantee dependent replay can succeed. Database query failures
+     remain errors rather than being disguised as source eligibility conflicts.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

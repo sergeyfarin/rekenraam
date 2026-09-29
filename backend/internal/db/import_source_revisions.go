@@ -28,40 +28,9 @@ func (r *ImportRepository) CommitSourceRevisionInTx(ctx context.Context, tx *sql
 		params.CreatedAuditEventID <= 0 || params.CreatedAt == "" {
 		return fmt.Errorf("%w: incomplete source revision", ErrImportSourceRevisionConflict)
 	}
-	var originalTransactionID int64
-	var stagedStatus string
-	var sourceChanged int
-	err := tx.QueryRowContext(ctx, `
-		SELECT COALESCE(effect.transaction_id, 0), staged.commit_status,
-			EXISTS(SELECT 1 FROM import_staged_rows latest
-				WHERE latest.committed_identity_id = identity_row.id
-					AND latest.commit_status = 'committed'
-					AND latest.id = (SELECT MAX(accepted.id) FROM import_staged_rows accepted
-						WHERE accepted.committed_identity_id = identity_row.id AND accepted.commit_status = 'committed')
-					AND staged.id > latest.id
-					AND (json_remove(latest.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id') <>
-						json_remove(staged.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
-						OR latest.normalized_json <> staged.normalized_json))
-		FROM import_commit_identities identity_row
-		JOIN import_commit_identity_effects effect ON effect.identity_id = identity_row.id
-		JOIN import_staged_rows staged ON staged.book_id = identity_row.book_id
-			AND staged.dedupe_fingerprint = identity_row.dedupe_fingerprint
-		JOIN import_batches batch ON batch.id = staged.batch_id AND batch.book_id = identity_row.book_id
-		WHERE identity_row.id = ? AND identity_row.book_id = ?
-			AND identity_row.source_kind = 'trading212'
-			AND batch.source_kind = identity_row.source_kind
-			AND batch.status IN ('previewing', 'partially_committed', 'committed', 'failed')
-			AND effect.operation_id = ? AND staged.id = ?
-			AND json_extract(staged.raw_json, '$.kind') = 'trading212_order_fill'
-	`, params.IdentityID, params.BookID, params.SourceOperationID, params.StagedRowID).
-		Scan(&originalTransactionID, &stagedStatus, &sourceChanged)
-	if errors.Is(err, sql.ErrNoRows) ||
-		(stagedStatus != "pending" && stagedStatus != "skipped") ||
-		sourceChanged == 0 || originalTransactionID <= 0 {
-		return ErrImportSourceRevisionConflict
-	}
+	originalTransactionID, err := checkSourceRevision(ctx, tx, params)
 	if err != nil {
-		return fmt.Errorf("check source revision identity: %w", err)
+		return err
 	}
 	var descendant int
 	err = tx.QueryRowContext(ctx, `WITH RECURSIVE ancestors(id, parent_id) AS (
@@ -97,4 +66,51 @@ func (r *ImportRepository) CommitSourceRevisionInTx(ctx context.Context, tx *sql
 		return fmt.Errorf("record import source revision: %w", err)
 	}
 	return nil
+}
+
+// CheckSourceRevision shares the writer's current staged-row and batch guards
+// with read-only previews. The writer repeats them under its transaction.
+func (r *ImportRepository) CheckSourceRevision(ctx context.Context, params CommitImportSourceRevisionParams) error {
+	_, err := checkSourceRevision(ctx, r.database, params)
+	return err
+}
+
+func checkSourceRevision(ctx context.Context, queryer rowQueryer, params CommitImportSourceRevisionParams) (int64, error) {
+	var originalTransactionID int64
+	var stagedStatus string
+	var sourceChanged int
+	err := queryer.QueryRowContext(ctx, `
+		SELECT COALESCE(effect.transaction_id, 0), staged.commit_status,
+			EXISTS(SELECT 1 FROM import_staged_rows latest
+				WHERE latest.committed_identity_id = identity_row.id
+					AND latest.commit_status = 'committed'
+					AND latest.id = (SELECT MAX(accepted.id) FROM import_staged_rows accepted
+						WHERE accepted.committed_identity_id = identity_row.id AND accepted.commit_status = 'committed')
+					AND staged.id > latest.id
+					AND (json_remove(latest.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id') <>
+						json_remove(staged.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
+						OR latest.normalized_json <> staged.normalized_json))
+		FROM import_commit_identities identity_row
+		JOIN import_commit_identity_effects effect ON effect.identity_id = identity_row.id
+		JOIN import_staged_rows staged ON staged.book_id = identity_row.book_id
+			AND staged.dedupe_fingerprint = identity_row.dedupe_fingerprint
+		JOIN import_batches batch ON batch.id = staged.batch_id AND batch.book_id = identity_row.book_id
+		WHERE identity_row.id = ? AND identity_row.book_id = ?
+			AND identity_row.source_kind = 'trading212'
+			AND batch.source_kind = identity_row.source_kind
+			AND batch.status IN ('previewing', 'partially_committed', 'committed', 'failed')
+			AND effect.operation_id = ? AND staged.id = ?
+			AND json_extract(staged.raw_json, '$.kind') = 'trading212_order_fill'
+	`, params.IdentityID, params.BookID, params.SourceOperationID, params.StagedRowID).
+		Scan(&originalTransactionID, &stagedStatus, &sourceChanged)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrImportSourceRevisionConflict
+	}
+	if err != nil {
+		return 0, fmt.Errorf("check source revision identity: %w", err)
+	}
+	if (stagedStatus != "pending" && stagedStatus != "skipped") || sourceChanged == 0 || originalTransactionID <= 0 {
+		return 0, ErrImportSourceRevisionConflict
+	}
+	return originalTransactionID, nil
 }

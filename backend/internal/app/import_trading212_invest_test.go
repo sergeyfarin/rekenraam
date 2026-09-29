@@ -598,6 +598,11 @@ func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
 	changed := fill
 	changed.Quantity, changed.NetValue = "3", "-450.00"
 	changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+	impact, err := f.importService.Trading212BuyCorrectionReconciliationImpact(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID, Reason: "broker revised fill",
+	})
+	require.NoError(t, err)
+	require.Empty(t, impact.AffectedCheckpoints)
 	result, err := f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
 		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
 		Reason: "broker revised fill",
@@ -621,6 +626,10 @@ func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
 	_, err = f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
 		OwnerUserID: f.ownerUserID, BatchID: staleBatch, RowID: staleRowID,
 		Reason: "attempt older staged revision",
+	})
+	require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
+	_, err = f.importService.Trading212BuyCorrectionReconciliationImpact(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: staleBatch, RowID: staleRowID, Reason: "preview older staged revision",
 	})
 	require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
 	staleRow, err := f.importRepo.ImportStagedRowByID(ctx, staleRowID)
@@ -721,6 +730,33 @@ func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
 		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
 		Reason: "broker revised reconciled fill",
 	}
+	stagedBefore, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	var lotBefore string
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT remaining_quantity_value || ':' || remaining_quantity_scale || ':' || remaining_cost_basis_value || ':' || remaining_cost_basis_scale FROM investment_lots`).Scan(&lotBefore))
+	before := map[string]int{}
+	for _, table := range []string{"audit_events", "transactions", "investment_operations", "investment_lot_facts", "investment_lot_events", "investment_disposal_revisions", "import_source_revisions"} {
+		var count int
+		require.NoError(t, f.database.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&count))
+		before[table] = count
+	}
+	impact, err := f.importService.Trading212BuyCorrectionReconciliationImpact(ctx, input)
+	require.NoError(t, err)
+	require.Len(t, impact.AffectedCheckpoints, 1)
+	require.Equal(t, checkpointID, impact.AffectedCheckpoints[0].CheckpointID)
+	for table, count := range before {
+		var after int
+		require.NoError(t, f.database.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&after))
+		require.Equal(t, count, after, "preview must not write %s", table)
+	}
+	stagedAfter, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	require.Equal(t, stagedBefore, stagedAfter)
+	var lotAfter, checkpointStatus string
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT remaining_quantity_value || ':' || remaining_quantity_scale || ':' || remaining_cost_basis_value || ':' || remaining_cost_basis_scale FROM investment_lots`).Scan(&lotAfter))
+	require.Equal(t, lotBefore, lotAfter)
+	require.NoError(t, f.database.QueryRowContext(ctx, "SELECT status FROM reconciliation_checkpoints WHERE id = ?", checkpointID).Scan(&checkpointStatus))
+	require.Equal(t, "active", checkpointStatus)
 	_, err = f.importService.CorrectTrading212Buy(ctx, input)
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	staged, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
@@ -730,6 +766,8 @@ func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
 	result, err := f.importService.CorrectTrading212Buy(ctx, input)
 	require.NoError(t, err)
 	require.Contains(t, append(result.Inverse.InvalidatedCheckpointIDs, result.Replacement.Transaction.InvalidatedCheckpointIDs...), checkpointID)
+	_, err = f.importService.Trading212BuyCorrectionReconciliationImpact(ctx, input)
+	require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
 }
 
 func TestCorrectTrading212BuyRejectsCancellationSignedPayload(t *testing.T) {

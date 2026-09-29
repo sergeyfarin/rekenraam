@@ -230,6 +230,20 @@ export async function commitImportBatch(
   });
 }
 
+export type ReconciliationImpactResponse = components['schemas']['ReconciliationImpactResponse'];
+
+export async function previewTrading212BuyCorrectionReconciliation(
+  batchId: number,
+  rowId: number,
+  request: CorrectTrading212BuyRequest
+): Promise<ReconciliationImpactResponse> {
+  return apiFetch<ReconciliationImpactResponse>(`/api/v1/imports/${batchId}/rows/${rowId}/correct-buy/reconciliation-impact`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  });
+}
+
 export async function correctTrading212Buy(
   batchId: number,
   rowId: number,

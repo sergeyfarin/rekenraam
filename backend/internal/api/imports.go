@@ -671,6 +671,43 @@ func commitImportBatch(logger *slog.Logger, authService *app.AuthService, import
 	}))
 }
 
+func trading212BuyCorrectionReconciliationImpact(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		batchID, ok := readImportBatchID(w, r)
+		if !ok {
+			return
+		}
+		rowID, ok := readPathInt64(w, r, "row_id", "row id")
+		if !ok {
+			return
+		}
+		var request correctTrading212BuyRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := importService.Trading212BuyCorrectionReconciliationImpact(r.Context(), app.CorrectTrading212BuyInput{
+			OwnerUserID: owner.ID, BatchID: batchID, RowID: rowID, Reason: request.Reason,
+		})
+		if err != nil {
+			switch {
+			case errors.Is(err, app.ErrImportBatchNotFound):
+				writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import batch not found")
+			case errors.Is(err, app.ErrImportSourceCorrectionConflict):
+				writeAPIError(w, http.StatusConflict, "CONFLICT", "source buy revision is no longer eligible")
+			default:
+				writeInvestmentServiceError(w, r, logger, "preview Trading 212 buy source correction", err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
 func correctTrading212Buy(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
