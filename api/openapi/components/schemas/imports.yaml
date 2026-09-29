@@ -175,6 +175,10 @@ ImportStagedRowResponse:
     source_changed:
       type: boolean
       description: A staged Trading 212 order fill differs from the immutable committed source snapshot for the same fill identity. Commit skips it pending correction review.
+    source_transaction_id:
+      type: integer
+      format: int64
+      description: Original posted transaction linked to the committed Trading 212 identity, when available.
     resolution:
       type: string
       description: JSON string matching ImportResolution.

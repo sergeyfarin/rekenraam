@@ -1527,6 +1527,10 @@ func toImportStagedRow(rec db.ImportStagedRowRecord) ImportStagedRow {
 	if rec.CommitError.Valid {
 		commitError = rec.CommitError.String
 	}
+	var sourceTransactionID *int64
+	if rec.SourceTransactionID.Valid {
+		sourceTransactionID = &rec.SourceTransactionID.Int64
+	}
 	effects := make([]ImportCommitEffect, 0, len(rec.CommitEffects))
 	for _, effect := range rec.CommitEffects {
 		converted := ImportCommitEffect{EffectSeq: effect.EffectSeq}
@@ -1550,6 +1554,7 @@ func toImportStagedRow(rec db.ImportStagedRowRecord) ImportStagedRow {
 		NormalizedJSON:         rec.NormalizedJSON,
 		DedupeStatus:           rec.DedupeStatus,
 		SourceChanged:          rec.SourceChanged,
+		SourceTransactionID:    sourceTransactionID,
 		ResolutionJSON:         rec.ResolutionJSON,
 		CommitStatus:           rec.CommitStatus,
 		CommittedIdentityID:    identityID,

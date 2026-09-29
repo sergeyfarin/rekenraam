@@ -56,6 +56,7 @@ type ImportStagedRowRecord struct {
 	NormalizedJSON         string
 	DedupeStatus           string
 	SourceChanged          bool
+	SourceTransactionID    sql.NullInt64
 	ResolutionJSON         string
 	CommitStatus           string
 	CommittedIdentityID    sql.NullInt64
@@ -1160,7 +1161,14 @@ const importStagedRowSelect = `s.id, s.batch_id, s.book_id, s.row_index, s.dedup
 			AND json_extract(s.raw_json, '$.kind') = 'trading212_order_fill'
 			AND (json_remove(original.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
 				<> json_remove(s.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
-				OR original.normalized_json <> s.normalized_json))`
+				OR original.normalized_json <> s.normalized_json)),
+	(SELECT effect.transaction_id FROM import_commit_identities identity_row
+		JOIN import_commit_identity_effects effect ON effect.identity_id = identity_row.id
+		WHERE identity_row.book_id = s.book_id
+			AND identity_row.dedupe_fingerprint = s.dedupe_fingerprint
+			AND identity_row.source_kind = 'trading212'
+			AND effect.transaction_id IS NOT NULL
+		ORDER BY effect.effect_seq LIMIT 1)`
 
 // ListImportStagedRows is the paginated API path; limit is clamped to 500 / default 200.
 func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params ListImportStagedRowsParams) ([]ImportStagedRowRecord, error) {
@@ -1303,7 +1311,7 @@ func scanImportStagedRow(row importStagedRowScanner) (ImportStagedRowRecord, err
 		&rec.ID, &rec.BatchID, &rec.BookID, &rec.RowIndex, &rec.DedupeFingerprint,
 		&rec.RawJSON, &rec.NormalizedJSON, &rec.DedupeStatus, &rec.ResolutionJSON,
 		&rec.CommitStatus, &rec.CommittedIdentityID, &rec.CommittedTransactionID, &rec.CommitError,
-		&sourceChanged,
+		&sourceChanged, &rec.SourceTransactionID,
 	); err != nil {
 		return ImportStagedRowRecord{}, fmt.Errorf("scan staged row: %w", err)
 	}

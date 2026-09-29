@@ -154,6 +154,8 @@
   "import_preview_dedupe_duplicate": "Al geïmporteerd",
   "import_preview_dedupe_needs_attention": "Dubbel controleren",
   "import_preview_source_changed": "Brontransactie gewijzigd — controle nodig; import slaat deze over",
+  "import_preview_open_original": "Open oorspronkelijke transactie",
+  "transactions_linked_loading": "Transactie openen…",
   "import_preview_dedupe_excluded": "Uitgesloten",
   "import_preview_account_label": "Doelrekening",
   "import_preview_account_placeholder": "Kies een rekening…",

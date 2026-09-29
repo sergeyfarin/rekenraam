@@ -1317,6 +1317,14 @@
                   >
                     {row.source_changed ? m.import_preview_source_changed() : dedupeStatusLabel(row.dedupe_status)}
                   </span>
+                  {#if row.source_changed && row.source_transaction_id}
+                    <a
+                      href={`/app/transactions?transaction_id=${row.source_transaction_id}`}
+                      class="mt-1 block text-xs font-semibold text-foreground underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+                    >
+                      {m.import_preview_open_original()}
+                    </a>
+                  {/if}
                 </td>
                 <td class="px-4 py-2.5">
                   {#if !isBlocked}

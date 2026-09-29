@@ -17641,6 +17641,11 @@ export interface components {
             dedupe_status: components["schemas"]["ImportDedupeStatus"];
             /** @description A staged Trading 212 order fill differs from the immutable committed source snapshot for the same fill identity. Commit skips it pending correction review. */
             source_changed: boolean;
+            /**
+             * Format: int64
+             * @description Original posted transaction linked to the committed Trading 212 identity, when available.
+             */
+            source_transaction_id?: number;
             /** @description JSON string matching ImportResolution. */
             resolution: string;
             commit_status: components["schemas"]["ImportCommitStatus"];

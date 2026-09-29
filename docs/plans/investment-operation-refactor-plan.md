@@ -798,6 +798,11 @@ next family.
      holding IDs are excluded from the comparison. This closes silent
      changed-fill deduplication; an atomic source-revision correction command
      remains open.
+   - **4aa — source transaction review link — complete 2026-09-29.** The
+     import batch read returns the committed original transaction for a
+     Trading 212 fill identity. A changed-source row links directly to that
+     transaction's detail panel and correction chain; a page reload preserves
+     the link. The source-revision write command remains open.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

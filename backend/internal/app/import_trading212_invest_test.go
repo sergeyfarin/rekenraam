@@ -457,6 +457,8 @@ func TestChangedTrading212FillIsHeldForSourceCorrection(t *testing.T) {
 	require.Len(t, changedRows, 1)
 	require.Equal(t, "needs_attention", changedRows[0].DedupeStatus)
 	require.True(t, changedRows[0].SourceChanged)
+	require.True(t, changedRows[0].SourceTransactionID.Valid)
+	require.Equal(t, originalRows[0].CommittedTransactionID.Int64, changedRows[0].SourceTransactionID.Int64)
 	preview, err := f.importService.PreviewCommit(ctx, PreviewCommitInput{OwnerUserID: f.ownerUserID, BatchID: changedBatch})
 	require.NoError(t, err)
 	require.Equal(t, 1, preview.DuplicateCount)
