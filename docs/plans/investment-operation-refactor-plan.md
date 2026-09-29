@@ -11,9 +11,11 @@ compatibility link used by existing reads beside `investment_operation_journal_l
 compound and basis-only actions must migrate those reads to the link table.
 Current lot projection columns remain on `investment_lots` instead of a
 separate `investment_lot_state` table. Trade components are not yet linked to
-posting versions or checked against their journal postings, and decision
-proceeds are not yet reconciled to the clearing leg by self-check. Those are
-open data-contract gates, not accepted changes to ADR 0013. The reviewed
+posting versions or checked against their journal postings. Self-check now
+compares single-disposal sell/write-off proceeds with their cost-currency
+clearing postings using exact arithmetic; component attribution and compound
+disposal coverage remain open data-contract gates, not accepted changes to
+ADR 0013. The reviewed
 baseline now keys disposal decisions by `(operation_id, decision_seq)`; current
 single-disposal writers emit sequence 1. Correction writers also still have
 separate transaction orchestration. Complete these integrity and correction

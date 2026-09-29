@@ -45,6 +45,55 @@ type SelfCheckPostingRecord struct {
 	QuantityScale    int
 }
 
+// SelfCheckDisposalClearingRecord keeps decision proceeds and each matching
+// commodity-trading posting as coefficients. The caller compares them with
+// exact arithmetic; SQLite must not sum money coefficients.
+type SelfCheckDisposalClearingRecord struct {
+	DecisionID    int64
+	ProceedsValue exact.Coefficient
+	ProceedsScale int
+	PostingValue  sql.NullString
+	PostingScale  sql.NullInt64
+}
+
+// StreamDisposalClearing covers the currently supported one-decision sell and
+// write-off commands. Compound operations need component-to-posting links to
+// attribute shared clearing legs to individual decisions.
+func (r *SelfCheckRepository) StreamDisposalClearing(ctx context.Context, transaction *sql.Tx, bookID int64, visit func(SelfCheckDisposalClearingRecord) error) error {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT d.id, d.proceeds_value, d.proceeds_scale,
+			pv.quantity_value, pv.quantity_scale
+		FROM investment_disposal_decisions d
+		JOIN investment_operations o ON o.id = d.operation_id
+		LEFT JOIN posting_versions pv ON pv.transaction_version_id = d.transaction_version_id
+			AND pv.commodity_id = d.cost_commodity_id
+			AND pv.account_id IN (SELECT id FROM accounts
+				WHERE book_id = d.book_id AND system_role = 'commodity_trading')
+		WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
+			AND (SELECT COUNT(*) FROM investment_disposal_decisions sibling
+				WHERE sibling.operation_id = d.operation_id) = 1
+		ORDER BY d.id, pv.id
+	`, bookID)
+	if err != nil {
+		return fmt.Errorf("read disposal clearing: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var record SelfCheckDisposalClearingRecord
+		if err := rows.Scan(&record.DecisionID, &record.ProceedsValue, &record.ProceedsScale,
+			&record.PostingValue, &record.PostingScale); err != nil {
+			return fmt.Errorf("scan disposal clearing: %w", err)
+		}
+		if err := visit(record); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate disposal clearing: %w", err)
+	}
+	return nil
+}
+
 // StreamPostedPostings visits every posting of the current version of every
 // posted, non-deleted transaction. Coefficients come back as strings; every
 // total built from them is folded in Go.

@@ -77,6 +77,7 @@ func TestExactTradeEconomicsFeeTreatmentAndGrossPrice(t *testing.T) {
 			require.Len(t, gains, 1)
 			assertMoneyValue(t, test.proceeds, 2, gains[0].ProceedsValue, gains[0].ProceedsScale)
 			assertMoneyValue(t, test.gain, 2, gains[0].RealizedGainValue, gains[0].RealizedGainScale)
+			require.Equal(t, SelfCheckPassed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
 		})
 	}
 }
@@ -159,6 +160,47 @@ func TestDisposalDecisionSequenceAllowsSharedJournalProvenance(t *testing.T) {
 	require.NoError(t, err, "a compound operation can have another decision under the same journal version")
 	_, err = f.database.Exec(cloneDecision, 2, sold.Transaction.ID)
 	require.Error(t, err, "the operation and decision sequence still identify one decision")
+}
+
+func TestSelfCheckDetectsDisposalProceedsClearingMismatch(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-01", 2, 2000)
+	sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-02-01", 1))
+	require.NoError(t, err)
+	check := resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation)
+	require.Equal(t, SelfCheckPassed, check.Status)
+
+	// Keep the cash entry balanced while changing its clearing value. A plain
+	// journal-balance check cannot find the resulting gains divergence. Disable
+	// the append-only guard only in this disposable test database to model a
+	// damaged restore or manual SQL repair.
+	_, err = f.database.ExecContext(ctx, `DROP TRIGGER posting_versions_no_update`)
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `
+		UPDATE posting_versions SET quantity_value = '999999'
+		WHERE transaction_version_id = ? AND commodity_id = ?
+		AND account_id = (SELECT id FROM accounts WHERE book_id = 1 AND system_role = 'commodity_trading')
+	`, sold.Transaction.VersionID, f.eurCommodityID)
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `
+		UPDATE posting_versions SET quantity_value = '-999999'
+		WHERE transaction_version_id = ? AND account_id = ? AND commodity_id = ?
+	`, sold.Transaction.VersionID, f.cashAccountID, f.eurCommodityID)
+	require.NoError(t, err)
+	run := mustRunInvestmentSelfCheck(t, f)
+	require.Equal(t, SelfCheckPassed, resultFor(t, run, CheckEntryBalance).Status)
+	check = resultFor(t, run, CheckInvestmentFoundation)
+	require.Equal(t, SelfCheckFailed, check.Status)
+	require.Contains(t, check.Summary, "disposal proceeds disagree with posted clearing")
+	require.Contains(t, check.Sample, *sold.DisposalDecision.ID)
+}
+
+func mustRunInvestmentSelfCheck(t *testing.T, f *investmentsTestFixture) SelfCheckRun {
+	t.Helper()
+	run, err := selfCheckOver(t, f.database).RunSelfCheck(context.Background(), "manual")
+	require.NoError(t, err)
+	return run
 }
 
 func TestManualAndGrossPricesOutrankLaterApproximateTradeOnSameDate(t *testing.T) {

@@ -128,8 +128,8 @@ var checkNarratives = map[string]checkNarrative{
 		nextStep:    "The app refuses to create these, so a non-zero count means rows arrived from outside it — a backfill, a manual repair, or a restored and patched database. Exports have been quietly falling back to each account's earliest version for these rows.",
 	},
 	CheckInvestmentFoundation: {
-		explanation: "Named investment operations must link their posted versions, source lots and effects. A completed setup also needs its external investment transfer equity account and commission default.",
-		nextStep:    "Review the named operation or lot and the setup accounts. Preserve the original rows before correcting any missing source or link.",
+		explanation: "Named investment operations must link their posted versions, source lots and effects. Single-disposal sales and write-offs must agree with their posted cost-currency clearing. A completed setup also needs its external investment transfer equity account and commission default.",
+		nextStep:    "Review the named operation, disposal decision, journal or lot and the setup accounts. Preserve the original rows before correcting any mismatch or missing link.",
 	},
 	CheckSQLiteIntegrity: {
 		explanation: "The database file itself must pass SQLite's integrity_check and foreign_key_check.",
@@ -321,7 +321,7 @@ func (s *SelfCheckService) executeChecks(ctx context.Context) ([]SelfCheckResult
 }
 
 func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapshot *sql.Tx) (SelfCheckResult, error) {
-	result := SelfCheckResult{CheckID: CheckInvestmentFoundation, Status: SelfCheckPassed, Summary: "investment operations, source facts, and setup defaults are linked"}
+	result := SelfCheckResult{CheckID: CheckInvestmentFoundation, Status: SelfCheckPassed, Summary: "investment operations, source facts, proceeds, and setup defaults agree with their journals"}
 	checks := []struct {
 		label string
 		query string
@@ -416,6 +416,43 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		result.FindingCount += anomaly.Count
 		result.Sample = append(result.Sample, anomaly.Sample...)
 		summaries = append(summaries, fmt.Sprintf("%d %s", anomaly.Count, check.label))
+	}
+	var decisionID int64
+	var proceeds, clearing *exact.ScaledInt
+	var proceedsMismatch int64
+	finishDecision := func() {
+		if decisionID == 0 || proceeds.Cmp(clearing.Negated()) == 0 {
+			return
+		}
+		proceedsMismatch++
+		if len(result.Sample) < db.SelfCheckSampleLimit {
+			result.Sample = append(result.Sample, decisionID)
+		}
+	}
+	err := s.repository.StreamDisposalClearing(ctx, snapshot, BookID, func(record db.SelfCheckDisposalClearingRecord) error {
+		if record.DecisionID != decisionID {
+			finishDecision()
+			decisionID = record.DecisionID
+			proceeds = exact.ScaledIntFromCoefficient(record.ProceedsValue, record.ProceedsScale)
+			clearing = exact.NewScaledInt()
+		}
+		if record.PostingValue.Valid {
+			posting, err := exact.Parse(record.PostingValue.String)
+			if err != nil {
+				return fmt.Errorf("parse disposal clearing posting for decision %d: %w", decisionID, err)
+			}
+			clearing.AddCoefficient(posting, int(record.PostingScale.Int64))
+		}
+		return nil
+	})
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	finishDecision()
+	if proceedsMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += proceedsMismatch
+		summaries = append(summaries, fmt.Sprintf("%d disposal proceeds disagree with posted clearing", proceedsMismatch))
 	}
 	if result.Status == SelfCheckFailed {
 		if len(result.Sample) > db.SelfCheckSampleLimit {
