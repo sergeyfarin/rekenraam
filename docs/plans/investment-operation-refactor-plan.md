@@ -19,8 +19,10 @@ separate `investment_lot_state` table. Trade net-settlement and separately
 posted fee components now link to the exact journal posting line keys chosen by
 their command, including when another leg has identical account, currency,
 date and amount. Self-check compares their account, commodity, date, signed
-exact amount and operation version, and finds trade cash, expense or charge-clearing postings
-without a source component. Gross and fees included within net clearing have
+exact amount and operation version, and finds trade cash, expense or
+charge-clearing postings without a source component in each trade's primary
+journal. An inverse journal linked as a correction reversal has no new source
+components. Gross and fees included within net clearing have
 no individual posting link. Every currently shipped operation kind requires a
 posted journal link; a future basis-only kind needs an explicit exemption.
 Self-check also

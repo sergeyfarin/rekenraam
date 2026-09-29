@@ -353,6 +353,7 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		{"trade has a cash, expense or charge-clearing posting without a source component", `
 			SELECT DISTINCT o.id FROM investment_operations o
 			JOIN investment_operation_journal_links l ON l.operation_id = o.id AND l.book_id = o.book_id
+				AND l.role = 'primary'
 			JOIN posting_versions pv ON pv.transaction_version_id = l.transaction_version_id
 			JOIN posting_lines pl ON pl.id = pv.posting_line_id
 			JOIN accounts a ON a.id = pv.account_id AND a.book_id = o.book_id
