@@ -29,3 +29,29 @@ func investmentOperationHasImportedLineageQuery(ctx context.Context, reader sale
 	}
 	return imported != 0, nil
 }
+
+// A correction descendant can use the original committed source identity.
+// The effect stays bound to the immutable imported operation.
+func investmentOperationHasCommittedSourceQuery(ctx context.Context, reader saleOperationReader, bookID, operationID int64) (bool, error) {
+	var linked int
+	err := reader.QueryRowContext(ctx, `WITH RECURSIVE ancestors(id, parent_id) AS (
+		SELECT id, correction_of_operation_id FROM investment_operations
+		WHERE book_id = ? AND id = ?
+		UNION ALL
+		SELECT parent.id, parent.correction_of_operation_id
+		FROM investment_operations parent JOIN ancestors ancestor ON parent.id = ancestor.parent_id
+		WHERE parent.book_id = ?
+	)
+	SELECT EXISTS(SELECT 1 FROM ancestors ancestor
+		JOIN import_commit_identity_effects effect ON effect.operation_id = ancestor.id
+		JOIN import_commit_identities identity_row ON identity_row.id = effect.identity_id
+		WHERE identity_row.book_id = ?)`, bookID, operationID, bookID, bookID).Scan(&linked)
+	if err != nil {
+		return false, fmt.Errorf("read committed investment source lineage: %w", err)
+	}
+	return linked != 0, nil
+}
+
+func (r *InvestmentRepository) HasCommittedImportSource(ctx context.Context, bookID, operationID int64) (bool, error) {
+	return investmentOperationHasCommittedSourceQuery(ctx, r.database, bookID, operationID)
+}

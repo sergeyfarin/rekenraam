@@ -70,7 +70,7 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 	return record, nil
 }
 
-func checkBuyOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected BuyOperationRecord, allowImportedReplacement bool) (BuyOperationRecord, error) {
+func checkBuyOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected BuyOperationRecord) (BuyOperationRecord, error) {
 	current, err := buyOperationByTransactionIDQuery(ctx, tx, bookID, expected.TransactionID)
 	if err != nil {
 		return BuyOperationRecord{}, err
@@ -81,9 +81,14 @@ func checkBuyOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID in
 	// An imported fill is correctable only when its committed source row still
 	// identifies this exact operation. The immutable identity continues to
 	// dedupe a retry, while correction_of_operation_id links the replacement.
-	if (current.ImportedLineage && !allowImportedReplacement) ||
-		(current.Imported && (current.SourceIdentityID == 0 || current.SourceEffectSeq == 0)) {
-		return BuyOperationRecord{}, ErrInvestmentImportedCorrection
+	if current.ImportedLineage {
+		linked, err := investmentOperationHasCommittedSourceQuery(ctx, tx, bookID, current.OperationID)
+		if err != nil {
+			return BuyOperationRecord{}, err
+		}
+		if !linked {
+			return BuyOperationRecord{}, ErrInvestmentImportedCorrection
+		}
 	}
 	if current != expected {
 		return BuyOperationRecord{}, ErrInvestmentSaleChanged
@@ -141,7 +146,7 @@ func (r *InvestmentRepository) ReplaceBuy(ctx context.Context, expected BuyOpera
 			rollbackTx(ctx, tx)
 		}
 	}()
-	current, err := checkBuyOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected, true)
+	current, err := checkBuyOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
 	if err != nil {
 		return BuyReplacementRecord{}, err
 	}

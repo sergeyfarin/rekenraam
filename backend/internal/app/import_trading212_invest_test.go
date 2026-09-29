@@ -372,14 +372,57 @@ func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
 	require.True(t, chain.Operations[0].Imported)
 	require.False(t, chain.CanReverseManualBuy)
+	require.True(t, chain.CanReverseBuy)
 	_, err = f.investmentSvc.ReverseBuy(ctx, ReverseInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
 		Reason: "remove source-linked replacement",
 	})
-	require.ErrorIs(t, err, ErrInvestmentImportedBuy)
+	require.NoError(t, err)
+	chain, err = f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.Len(t, chain.Operations, 3)
 	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
 	require.NoError(t, err)
 	require.Len(t, effects, 1, "the immutable source effect still identifies the original fill")
+	require.Equal(t, source.OperationID.Int64, effects[0].OperationID.Int64)
+	duplicateBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	duplicate, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: duplicateBatch})
+	require.NoError(t, err)
+	require.Zero(t, duplicate.CommittedCount)
+}
+
+func TestReverseCommittedImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "reversed-fill", OrderID: "reversed-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	}
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	rows, err := f.importRepo.ListAllImportStagedRows(ctx, batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	source := rows[0].CommitEffects[0]
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.True(t, chain.CanReverseBuy)
+	require.False(t, chain.CanReverseManualBuy)
+	_, err = f.investmentSvc.ReverseBuy(ctx, ReverseInvestmentBuyInput{
+		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64, Reason: "cancel imported fill",
+	})
+	require.NoError(t, err)
+	chain, err = f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.Len(t, chain.Operations, 2)
+	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
+	require.NoError(t, err)
+	require.Len(t, effects, 1)
 	require.Equal(t, source.OperationID.Int64, effects[0].OperationID.Int64)
 	duplicateBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
 	duplicate, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: duplicateBatch})
@@ -420,10 +463,6 @@ func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.Equal(t, rows[0].CommittedIdentityID.Int64, saleContext.SourceIdentityID)
 	require.Equal(t, "trading212", saleContext.SourceKind)
 	require.True(t, saleContext.CanReplaceSale)
-	_, err = f.investmentSvc.ReverseSale(ctx, ReverseInvestmentSaleInput{
-		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64, Reason: "reverse imported source",
-	})
-	require.ErrorIs(t, err, ErrInvestmentImportedSale, "terminal reversal still requires its own source-aware command")
 	instruments, err := f.investmentSvc.ListInstruments(ctx)
 	require.NoError(t, err)
 	require.Len(t, instruments, 1)
@@ -445,11 +484,16 @@ func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
 	require.True(t, chain.Operations[0].Imported)
 	require.False(t, chain.CanReverseManualSale)
+	require.True(t, chain.CanReverseSale)
 	_, err = f.investmentSvc.ReverseSale(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
 		Reason: "remove source-linked replacement",
 	})
-	require.ErrorIs(t, err, ErrInvestmentImportedSale)
+	require.NoError(t, err)
+	chain, err = f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.Len(t, chain.Operations, 3)
 	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
 	require.NoError(t, err)
 	require.Len(t, effects, 1)

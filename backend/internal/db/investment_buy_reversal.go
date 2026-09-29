@@ -28,7 +28,7 @@ func (r *InvestmentRepository) ReverseBuy(ctx context.Context, params CreateTran
 			rollbackTx(ctx, tx)
 		}
 	}()
-	current, err := checkBuyOperationForCorrectionTx(ctx, tx, params.BookID, expected, false)
+	current, err := checkBuyOperationForCorrectionTx(ctx, tx, params.BookID, expected)
 	if err != nil {
 		return TransactionRecord{}, err
 	}
@@ -81,7 +81,7 @@ func (r *InvestmentRepository) SimulateBuyReversal(ctx context.Context, bookID i
 		return fmt.Errorf("begin buy reversal preview: %w", err)
 	}
 	defer rollbackTx(ctx, tx)
-	current, err := checkBuyOperationForCorrectionTx(ctx, tx, bookID, expected, false)
+	current, err := checkBuyOperationForCorrectionTx(ctx, tx, bookID, expected)
 	if err != nil {
 		return err
 	}

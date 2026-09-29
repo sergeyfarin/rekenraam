@@ -560,7 +560,7 @@ next family.
    this slice so replay has one authoritative source for proceeds and charges;
    this refines ADR 0013's foundation-to-correction sequence.
    The named sub-slices below are complete individually, while source-file-driven
-   imported correction, imported reversal, broader
+   imported correction, broader
    operation corrections, and shared correction orchestration remain open.
    - **4a — immutable intent reader — complete 2026-09-27.** The long-position
      reader takes opening terms from lot facts and disposal terms from decisions,
@@ -779,9 +779,17 @@ next family.
      same removal. A later sale may reselect surviving lots under its recorded
      method, but insufficient quantity or a specific-lot election tied to the
      removed buy rejects the entire write. Reconciliation checkpoints require
-     explicit override. Imported buys and their manual replacement descendants
-     remain fenced for terminal reversal; the same lineage guard applies to
-     imported sales.
+     explicit override. A later slice admits terminal reversal of imported
+     buys and sales only when their immutable correction lineage contains a
+     committed source identity.
+   - **4y — source-linked imported fill reversal — complete 2026-09-29.**
+     The buy and sale reversal commands accept an imported fill or its manual
+     replacement descendant when a committed import identity effect links an
+     ancestor operation. The read hint and write transaction both check that
+     lineage. Reversal preserves the original identity, source effect and
+     fingerprint, so a repeated source row remains deduplicated even though
+     the correction chain has no effective transaction. Orphan imported fills
+     stay fenced. Source-file-driven corrections remain separate work.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

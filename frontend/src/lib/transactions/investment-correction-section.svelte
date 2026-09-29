@@ -184,7 +184,7 @@
     {#if chainQuery.data.operations.some((node) => node.imported)}
       <p class="text-xs text-muted">{m.transactions_investment_history_imported()}</p>
     {/if}
-    {#if chainQuery.data.can_reverse_manual_sale && chainQuery.data.effective_transaction_id === transactionID}
+    {#if chainQuery.data.can_reverse_sale && chainQuery.data.effective_transaction_id === transactionID}
       <button
         type="button"
         class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
@@ -194,7 +194,7 @@
         {m.transactions_investment_reverse_action()}
       </button>
     {/if}
-    {#if chainQuery.data.can_reverse_manual_buy && chainQuery.data.effective_transaction_id === transactionID}
+    {#if chainQuery.data.can_reverse_buy && chainQuery.data.effective_transaction_id === transactionID}
       <button
         type="button"
         class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"

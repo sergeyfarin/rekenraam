@@ -1,5 +1,5 @@
 post:
-  summary: Preview a manual long-buy reversal
+  summary: Preview a long-buy reversal
   description: >-
     Simulates dependent long-position replay and returns affected reconciliation
     checkpoints without writing. Pass reconciliation_override=true to the
@@ -35,13 +35,13 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "404":
-      description: Posted manual long buy not found
+      description: Posted long buy not found
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Already corrected, imported, changed, or dependent replay impossible
+      description: Already corrected, unlinked import, changed, or dependent replay impossible
       content:
         application/json:
           schema:

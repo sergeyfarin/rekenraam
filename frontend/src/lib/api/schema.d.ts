@@ -13364,8 +13364,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reverse a posted manual long sale
-         * @description Posts a balanced inverse transaction, retires the source trade price and dependent prices, and replays the long position in one database transaction. The original sale remains posted audit history. Imported fills require a source-aware correction and cannot use this command. Reversal is terminal; an already corrected sale cannot be reversed again.
+         * Reverse a posted long sale
+         * @description Posts a balanced inverse transaction, retires the source trade price and dependent prices, and replays the long position in one database transaction. The original sale remains posted audit history. Imported lineage requires a committed source identity that stays attached to the original fill. Reversal is terminal; an already corrected sale cannot be reversed again.
          */
         post: {
             parameters: {
@@ -13421,7 +13421,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long sale not found */
+                /** @description Posted long sale not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13430,7 +13430,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Already corrected, imported, changed, impossible replay, or reconciliation override required */
+                /** @description Already corrected, unlinked import, changed, impossible replay, or reconciliation override required */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13503,7 +13503,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long sale not found */
+                /** @description Posted long sale not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13512,7 +13512,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Sale already corrected, imported, or changed */
+                /** @description Sale already corrected, unlinked import, or changed */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13539,8 +13539,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reverse a posted manual long buy
-         * @description Posts an exact inverse, retires the source trade price, and replays later long-position decisions in one audited database transaction. The original buy remains posted history. A dependent disposal that cannot be satisfied refuses the command without durable effects. Imported buys require a separate source-aware terminal correction.
+         * Reverse a posted long buy
+         * @description Posts an exact inverse, retires the source trade price, and replays later long-position decisions in one audited database transaction. The original buy remains posted history. A dependent disposal that cannot be satisfied refuses the command without durable effects. Imported lineage requires a committed source identity, which remains attached to the original fill.
          */
         post: {
             parameters: {
@@ -13595,7 +13595,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long buy not found */
+                /** @description Posted long buy not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13604,7 +13604,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Already corrected, imported, changed, dependent operation impossible, or reconciliation override required */
+                /** @description Already corrected, unlinked import, changed, dependent operation impossible, or reconciliation override required */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13631,7 +13631,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Preview a manual long-buy reversal
+         * Preview a long-buy reversal
          * @description Simulates dependent long-position replay and returns affected reconciliation checkpoints without writing. Pass reconciliation_override=true to the reversal command after reviewing those checkpoints.
          */
         post: {
@@ -13676,7 +13676,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long buy not found */
+                /** @description Posted long buy not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13685,7 +13685,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Already corrected, imported, changed, or dependent replay impossible */
+                /** @description Already corrected, unlinked import, changed, or dependent replay impossible */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -18500,6 +18500,10 @@ export interface components {
             can_reverse_manual_sale: boolean;
             /** @description Whether the effective operation is a posted manual long buy eligible for a guarded reversal attempt. Dependent replay may still refuse the command. */
             can_reverse_manual_buy: boolean;
+            /** @description Whether the effective posted long sale can be reversed. Imported lineage requires a committed source identity. */
+            can_reverse_sale: boolean;
+            /** @description Whether the effective posted long buy can attempt reversal. Dependent replay may still refuse the command; imported lineage requires a committed source identity. */
+            can_reverse_buy: boolean;
             operations: components["schemas"]["InvestmentCorrectionNodeResponse"][];
         };
         /** @description Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility. */

@@ -294,6 +294,7 @@ func TestReverseManualSaleAPI(t *testing.T) {
 	require.NoError(t, json.NewDecoder(chainRes.Body).Decode(&chain))
 	require.Len(t, chain.Operations, 1)
 	require.True(t, chain.CanReverseManualSale)
+	require.True(t, chain.CanReverseSale)
 	request := investmentSaleReversalRequest{Reason: "broker canceled fill"}
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
@@ -329,6 +330,7 @@ func TestReverseManualBuyAPI(t *testing.T) {
 	var chain investmentCorrectionChainResponse
 	require.NoError(t, json.NewDecoder(chainRes.Body).Decode(&chain))
 	require.True(t, chain.CanReverseManualBuy)
+	require.True(t, chain.CanReverseBuy)
 	request := investmentSaleReversalRequest{Reason: "duplicate acquisition"}
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
