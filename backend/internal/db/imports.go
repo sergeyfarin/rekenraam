@@ -1557,12 +1557,34 @@ func (r *ImportRepository) CreateCommitIdentityWithEffects(ctx context.Context, 
 		if effect.TransactionID.Valid && !effect.OperationID.Valid {
 			var operationID int64
 			err := tx.QueryRowContext(ctx, `
-				SELECT id FROM investment_operations WHERE book_id = ? AND transaction_id = ?
+				SELECT operation.id FROM investment_operation_journal_links link
+				JOIN investment_operations operation ON operation.id = link.operation_id
+				JOIN transaction_versions version ON version.id = link.transaction_version_id
+				WHERE link.book_id = ? AND operation.book_id = link.book_id
+					AND version.transaction_id = ? AND link.role = 'primary'
 			`, params.BookID, effect.TransactionID.Int64).Scan(&operationID)
 			if err == nil {
 				effect.OperationID = sql.NullInt64{Int64: operationID, Valid: true}
 			} else if !errors.Is(err, sql.ErrNoRows) {
 				return 0, fmt.Errorf("read imported investment operation: %w", err)
+			} else {
+				// Ordinary journals have no operation, and an inverse can have
+				// only a reversal link. A journal-backed investment with no link
+				// at all is corrupt; do not silently admit it as an ordinary effect.
+				var unlinkedInvestment int
+				if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+					SELECT 1 FROM current_transaction_versions current
+					JOIN transactions t ON t.id = current.transaction_id
+					WHERE t.book_id = ? AND t.id = ? AND current.transaction_kind = 'investment'
+						AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links link
+							JOIN transaction_versions version ON version.id = link.transaction_version_id
+							WHERE link.book_id = t.book_id AND version.transaction_id = t.id)
+				)`, params.BookID, effect.TransactionID.Int64).Scan(&unlinkedInvestment); err != nil {
+					return 0, fmt.Errorf("check imported investment journal link: %w", err)
+				}
+				if unlinkedInvestment != 0 {
+					return 0, errors.New("imported investment journal has no operation link")
+				}
 			}
 		}
 		if !effect.OperationID.Valid && !effect.TransactionID.Valid {

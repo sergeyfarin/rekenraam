@@ -152,7 +152,8 @@ checks both missing links and unlinked trade cash, expense or charge-clearing le
 still extend proceeds/journal reconciliation beyond single-disposal commands,
 retire the compatibility transaction link and separate lot state. Correction
 history, trade source facts, and buy/sale correction admission now use journal
-links; export/import consumers and writer bootstrap lookup remain.
+links. Export summaries and import effect inference now also use primary links;
+writer bootstrap lookup and column retirement remain.
 Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and
 cash-in-lieu suggestions are currently refused as dividend income (T-109) until

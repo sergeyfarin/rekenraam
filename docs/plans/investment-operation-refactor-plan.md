@@ -16,8 +16,12 @@ operation kinds and resolves lot/effect and transfer provenance through links;
 Correction history, trade-detail source facts, and buy/sale correction admission
 now derive their transaction from pinned primary journal links; inverse journals
 resolve to the same history. A chain displays the first primary link in sequence
-once per operation. Export/import readers and writer bootstrap lookup still need
-the cutover before the compatibility column can be removed.
+once per operation. Export operation summaries now use that same primary-link
+representative, while the journal-link CSV retains every linked version. Import
+effects infer operation identity through primary links; a linked inverse remains
+a journal-only effect, and an unlinked investment journal is refused. Seeded
+bundle CSV facts remain byte-identical after clearing the compatibility header.
+Writer bootstrap lookup still needs the cutover before the column can be removed.
 Current lot projection columns remain on `investment_lots` instead of a
 separate `investment_lot_state` table. Trade net-settlement and separately
 posted fee components now link to the exact journal posting line keys chosen by
