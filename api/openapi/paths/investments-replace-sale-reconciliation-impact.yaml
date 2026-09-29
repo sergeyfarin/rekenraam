@@ -1,5 +1,5 @@
 post:
-  summary: Preview reconciliation impact of a manual sale replacement
+  summary: Preview reconciliation impact of a long-sale replacement
   description: >-
     Plans both journals and returns their distinct affected checkpoints
     without writing. Pass reconciliation_override=true to the replacement
@@ -35,7 +35,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "404":
-      description: Posted manual long sale not found
+      description: Posted long sale not found
       content:
         application/json:
           schema:

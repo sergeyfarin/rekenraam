@@ -135,7 +135,7 @@ func (s *InvestmentService) buyReplacementPlan(ctx context.Context, input Replac
 	if operation.AlreadyCorrected {
 		return db.BuyOperationRecord{}, CreateTransactionInput{}, ErrInvestmentBuyAlreadyCorrected
 	}
-	if operation.Imported {
+	if operation.Imported && operation.SourceIdentityID == 0 {
 		return db.BuyOperationRecord{}, CreateTransactionInput{}, ErrInvestmentImportedBuy
 	}
 	original, err := s.transactionService.Transaction(ctx, operation.TransactionID)

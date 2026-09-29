@@ -733,7 +733,7 @@
   "transactions_investment_history_current": "Действующая",
   "transactions_investment_history_superseded": "Заменена",
   "transactions_investment_history_reversed": "Отменена",
-  "transactions_investment_history_imported": "Импортированные проводки нужно исправлять через их источник.",
+  "transactions_investment_history_imported": "Исправления импортированных сделок сохраняют связь с исходным источником и историю.",
 "transactions_investment_reverse_action": "Отменить продажу…",
   "transactions_investment_replace_buy_action": "Исправить покупку…",
   "transactions_investment_replace_buy_title": "Исправить эту покупку",

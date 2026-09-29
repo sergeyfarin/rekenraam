@@ -1,5 +1,5 @@
 post:
-  summary: Preview reconciliation impact of a manual buy replacement
+  summary: Preview reconciliation impact of a long-buy replacement
   description: >-
     Plans the inverse and corrected buy journals and returns their distinct
     affected checkpoints without writing. Pass reconciliation_override=true
@@ -35,7 +35,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "404":
-      description: Posted manual long buy not found
+      description: Posted long buy not found
       content:
         application/json:
           schema:

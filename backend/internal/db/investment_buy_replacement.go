@@ -23,6 +23,8 @@ type BuyOperationRecord struct {
 	CostCommodityID      int64
 	AlreadyCorrected     bool
 	Imported             bool
+	SourceIdentityID     int64
+	SourceEffectSeq      int64
 }
 
 func (r *InvestmentRepository) BuyOperationByTransactionID(ctx context.Context, bookID, transactionID int64) (BuyOperationRecord, error) {
@@ -36,7 +38,11 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 		current.id, f.lot_id, o.event_date, f.account_id, f.commodity_id, f.cost_commodity_id,
 		EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id),
 		(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
-			WHERE effect.operation_id = o.id))
+			WHERE effect.operation_id = o.id)),
+		COALESCE((SELECT effect.identity_id FROM import_commit_identity_effects effect
+			WHERE effect.operation_id = o.id), 0),
+		COALESCE((SELECT effect.effect_seq FROM import_commit_identity_effects effect
+			WHERE effect.operation_id = o.id), 0)
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
 		JOIN investment_lot_facts f ON f.operation_id = o.id AND f.position_side = 'long'
@@ -47,7 +53,7 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 		bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.LotID,
 		&record.EventDate, &record.AccountID, &record.CommodityID, &record.CostCommodityID,
-		&corrected, &imported)
+		&corrected, &imported, &record.SourceIdentityID, &record.SourceEffectSeq)
 	if errors.Is(err, sql.ErrNoRows) {
 		return BuyOperationRecord{}, ErrNotFound
 	}
@@ -67,7 +73,10 @@ func checkBuyOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID in
 	if current.AlreadyCorrected {
 		return BuyOperationRecord{}, ErrInvestmentOperationAlreadyCorrected
 	}
-	if current.Imported {
+	// An imported fill is correctable only when its committed source row still
+	// identifies this exact operation. The immutable identity continues to
+	// dedupe a retry, while correction_of_operation_id links the replacement.
+	if current.Imported && (current.SourceIdentityID == 0 || current.SourceEffectSeq == 0) {
 		return BuyOperationRecord{}, ErrInvestmentImportedCorrection
 	}
 	if current != expected {

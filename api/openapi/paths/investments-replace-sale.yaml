@@ -1,10 +1,12 @@
 post:
-  summary: Replace the latest posted manual long sale
+  summary: Replace a posted long sale, including a source-linked imported fill
   description: >-
     Posts an inverse and corrected sale, rebuilds the position, retires the
     original trade price, and updates reconciliation under one audit event.
-    The sale must be the latest position operation. The original remains
-    posted history. Imported sales require source-aware correction.
+    Older dependent sales are replayed. The original remains posted history.
+    An imported sale needs an immutable committed source identity effect
+    pointing to that operation; the original source row and dedupe fingerprint
+    remain unchanged.
   parameters:
     - in: path
       name: transaction_id
@@ -46,13 +48,13 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "404":
-      description: Posted manual long sale not found
+      description: Posted long sale not found
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Sale corrected, imported, changed, followed by another position operation, or reconciliation override required
+      description: Sale corrected, imported without source identity, changed, dependent operation impossible, or reconciliation override required
       content:
         application/json:
           schema:

@@ -733,7 +733,7 @@
   "transactions_investment_history_current": "Aktuell",
   "transactions_investment_history_superseded": "Ersetzt",
   "transactions_investment_history_reversed": "Rückgängig gemacht",
-  "transactions_investment_history_imported": "Importierte Buchungen müssen über ihre Quelle korrigiert werden.",
+  "transactions_investment_history_imported": "Korrekturen importierter Ausführungen behalten die ursprüngliche Quellenverknüpfung und Historie.",
 "transactions_investment_reverse_action": "Verkauf rückgängig machen…",
   "transactions_investment_replace_buy_action": "Kauf korrigieren…",
   "transactions_investment_replace_buy_title": "Diesen Kauf korrigieren",

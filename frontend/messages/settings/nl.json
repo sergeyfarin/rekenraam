@@ -733,7 +733,7 @@
   "transactions_investment_history_current": "Huidig",
   "transactions_investment_history_superseded": "Vervangen",
   "transactions_investment_history_reversed": "Teruggeboekt",
-  "transactions_investment_history_imported": "Geïmporteerde boekingen moeten via hun bron worden gecorrigeerd.",
+  "transactions_investment_history_imported": "Correcties op geïmporteerde transacties behouden de oorspronkelijke bronkoppeling en geschiedenis.",
 "transactions_investment_reverse_action": "Verkoop terugboeken…",
   "transactions_investment_replace_buy_action": "Aankoop corrigeren…",
   "transactions_investment_replace_buy_title": "Deze aankoop corrigeren",

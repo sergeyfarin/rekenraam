@@ -732,7 +732,7 @@
   "transactions_investment_history_current": "Current",
   "transactions_investment_history_superseded": "Superseded",
   "transactions_investment_history_reversed": "Reversed",
-  "transactions_investment_history_imported": "Imported entries require a correction through their source.",
+  "transactions_investment_history_imported": "Corrections to imported fills keep the original source link and history.",
 "transactions_investment_reverse_action": "Reverse sale…",
   "transactions_investment_replace_buy_action": "Correct buy…",
   "transactions_investment_replace_buy_title": "Correct this buy",

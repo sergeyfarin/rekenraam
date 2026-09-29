@@ -733,7 +733,7 @@
   "transactions_investment_history_current": "En vigueur",
   "transactions_investment_history_superseded": "Remplacée",
   "transactions_investment_history_reversed": "Contrepassée",
-  "transactions_investment_history_imported": "Les écritures importées doivent être corrigées depuis leur source.",
+  "transactions_investment_history_imported": "Les corrections des opérations importées conservent le lien vers la source d’origine et l’historique.",
 "transactions_investment_reverse_action": "Contrepasser la vente…",
   "transactions_investment_replace_buy_action": "Corriger l’achat…",
   "transactions_investment_replace_buy_title": "Corriger cet achat",

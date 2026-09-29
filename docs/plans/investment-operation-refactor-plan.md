@@ -559,8 +559,8 @@ next family.
    and effective FIFO allocations differ. Exact trade economics precede
    this slice so replay has one authoritative source for proceeds and charges;
    this refines ADR 0013's foundation-to-correction sequence.
-   The named sub-slices below are complete individually, while imported-trade
-   correction, buy reversal, broader
+   The named sub-slices below are complete individually, while source-file-driven
+   imported correction, imported sale reversal, buy reversal, broader
    operation corrections, and shared correction orchestration remain open.
    - **4a — immutable intent reader — complete 2026-09-27.** The long-position
      reader takes opening terms from lot facts and disposal terms from decisions,
@@ -760,7 +760,17 @@ next family.
      projection only after the dependency simulation succeeds. FIFO, LIFO,
      average-cost and specific-lot choices retain their recorded meaning;
      dependent transfers still reject a changed carried basis. Imported
-     source correction remains a separate identity-aware command.
+     source correction was left to the following slice.
+   - **4w — source-linked imported fill replacement — complete 2026-09-29.**
+     An imported buy or sale can use the native replacement command when its
+     committed identity effect still links the exact source operation. The
+     command rechecks that link inside the write transaction and retains the
+     original identity, fingerprint, source effect, journal and lot facts as
+     history. The correction chain links the replacement to that source
+     operation, and a repeated import of the same fill remains deduplicated.
+     Transaction detail exposes the correction with the recorded source
+     identity and keeps orphan imported operations unavailable. Terminal
+     imported sale reversal and source-file-driven correction are still gated.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

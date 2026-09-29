@@ -13539,8 +13539,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Replace the latest posted manual long sale
-         * @description Posts an inverse and corrected sale, rebuilds the position, retires the original trade price, and updates reconciliation under one audit event. The sale must be the latest position operation. The original remains posted history. Imported sales require source-aware correction.
+         * Replace a posted long sale, including a source-linked imported fill
+         * @description Posts an inverse and corrected sale, rebuilds the position, retires the original trade price, and updates reconciliation under one audit event. Older dependent sales are replayed. The original remains posted history. An imported sale needs an immutable committed source identity effect pointing to that operation; the original source row and dedupe fingerprint remain unchanged.
          */
         post: {
             parameters: {
@@ -13595,7 +13595,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long sale not found */
+                /** @description Posted long sale not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13604,7 +13604,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Sale corrected, imported, changed, followed by another position operation, or reconciliation override required */
+                /** @description Sale corrected, imported without source identity, changed, dependent operation impossible, or reconciliation override required */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13631,7 +13631,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Preview reconciliation impact of a manual sale replacement
+         * Preview reconciliation impact of a long-sale replacement
          * @description Plans both journals and returns their distinct affected checkpoints without writing. Pass reconciliation_override=true to the replacement command after reviewing the listed checkpoints.
          */
         post: {
@@ -13676,7 +13676,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long sale not found */
+                /** @description Posted long sale not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13712,8 +13712,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Replace a posted manual long buy and replay dependent sales
-         * @description Posts an inverse and corrected buy, replays later long disposals using their recorded basis methods, retires the original trade price, and updates reconciliation under one audit event. The original journal and lot facts remain audit history. A replacement keeps the source buy date, holding, instrument, and cost currency. Imported buys require source-aware correction.
+         * Replace a posted long buy, including a source-linked imported fill, and replay dependent sales
+         * @description Posts an inverse and corrected buy, replays later long disposals using their recorded basis methods, retires the original trade price, and updates reconciliation under one audit event. The original journal and lot facts remain audit history. A replacement keeps the source buy date, holding, instrument, and cost currency. An imported buy needs an immutable committed source identity effect pointing to that operation; the original source row and dedupe fingerprint remain unchanged.
          */
         post: {
             parameters: {
@@ -13768,7 +13768,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long buy not found */
+                /** @description Posted long buy not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13777,7 +13777,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Buy already corrected, imported, changed, dependent sale impossible, or reconciliation override required */
+                /** @description Buy already corrected, imported without source identity, changed, dependent sale impossible, or reconciliation override required */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13804,7 +13804,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Preview reconciliation impact of a manual buy replacement
+         * Preview reconciliation impact of a long-buy replacement
          * @description Plans the inverse and corrected buy journals and returns their distinct affected checkpoints without writing. Pass reconciliation_override=true to the replacement command after reviewing those checkpoints.
          */
         post: {
@@ -13849,7 +13849,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long buy not found */
+                /** @description Posted long buy not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -18351,11 +18351,18 @@ export interface components {
             gross_value?: string;
             gross_scale?: number;
             imported: boolean;
+            /**
+             * Format: int64
+             * @description Committed import source identity; zero for manual trades or an imported trade without a source link.
+             */
+            source_identity_id: number;
+            /** @description Stable import source kind; empty when no committed source identity exists. */
+            source_kind: string;
             already_corrected: boolean;
             charges: components["schemas"]["InvestmentTradeCorrectionChargeResponse"][];
             /** @description Original explicit specific-lot choices; empty for other methods. */
             elected_lots: components["schemas"]["InvestmentTradeCorrectionLotChoiceResponse"][];
-            /** @description Display hint for an effective manual sale eligible for correction. The write rechecks its source and dependent replay. */
+            /** @description Display hint for an effective sale eligible for correction, including imported fills with a committed source identity. The write rechecks its source and dependent replay. */
             can_replace_sale: boolean;
             /** @description Effective long lots and quantities immediately before an uncorrected manual sale, including an older sale, from a rolled-back replay. */
             available_lots: components["schemas"]["InvestmentTradeCorrectionAvailableLotResponse"][];

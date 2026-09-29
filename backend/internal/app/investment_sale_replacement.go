@@ -37,14 +37,14 @@ type ReplaceInvestmentSaleResult struct {
 	Replacement InvestmentTradeResult
 }
 
-// ReplaceSale corrects an effective manual long sale and replays dependent
+// ReplaceSale corrects an effective manual or source-linked imported long sale and replays dependent
 // long-position decisions under one audited repository transaction.
 func (s *InvestmentService) ReplaceSale(ctx context.Context, input ReplaceInvestmentSaleInput) (ReplaceInvestmentSaleResult, error) {
 	operation, inversePlan, err := s.reverseSalePlan(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 		RequestID: input.RequestID, TransactionID: input.TransactionID,
 		Reason: input.Reason, ReconciliationOverride: input.ReconciliationOverride,
-	})
+	}, true)
 	if err != nil {
 		return ReplaceInvestmentSaleResult{}, err
 	}
@@ -93,7 +93,7 @@ func (s *InvestmentService) ReplaceSale(ctx context.Context, input ReplaceInvest
 func (s *InvestmentService) ReplaceSaleReconciliationImpact(ctx context.Context, input ReplaceInvestmentSaleInput) (ReconciliationImpact, error) {
 	operation, inversePlan, err := s.reverseSalePlan(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: input.OwnerUserID, TransactionID: input.TransactionID, Reason: input.Reason,
-	})
+	}, true)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}

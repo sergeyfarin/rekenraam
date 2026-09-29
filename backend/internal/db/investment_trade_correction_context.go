@@ -31,6 +31,8 @@ type InvestmentTradeCorrectionContext struct {
 	GrossValue           *string
 	GrossScale           *int
 	Imported             bool
+	SourceIdentityID     int64
+	SourceKind           string
 	AlreadyCorrected     bool
 	Charges              []InvestmentTradeCorrectionCharge
 	ElectedLots          []InvestmentTradeCorrectionLotChoice
@@ -85,6 +87,11 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			gross.amount_value, gross.amount_scale,
 			(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
 				WHERE effect.operation_id = o.id)),
+			COALESCE((SELECT effect.identity_id FROM import_commit_identity_effects effect
+				WHERE effect.operation_id = o.id), 0),
+			COALESCE((SELECT identity.source_kind FROM import_commit_identity_effects effect
+				JOIN import_commit_identities identity ON identity.id = effect.identity_id
+				WHERE effect.operation_id = o.id), ''),
 			EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id)
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
@@ -105,7 +112,8 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 		&record.QuantityValue, &record.QuantityScale, &record.CostBasisMethod,
 		&record.CashAccountID, &record.NetValue, &record.NetScale,
 		&record.SettlementDate, &record.Memo, &payeeID,
-		&grossValue, &grossScale, &imported, &corrected)
+		&grossValue, &grossScale, &imported, &record.SourceIdentityID,
+		&record.SourceKind, &corrected)
 	if errors.Is(err, sql.ErrNoRows) {
 		return InvestmentTradeCorrectionContext{}, ErrNotFound
 	}
@@ -175,7 +183,7 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			return InvestmentTradeCorrectionContext{}, fmt.Errorf("close correction elected lots: %w", err)
 		}
 	}
-	if record.OperationKind == "sell" && !record.Imported && !record.AlreadyCorrected {
+	if record.OperationKind == "sell" && (!record.Imported || record.SourceIdentityID > 0) && !record.AlreadyCorrected {
 		intents, err := investmentReplayIntentsQuery(ctx, tx, bookID,
 			record.HoldingAccountID, record.CommodityID, record.CostCommodityID, "long")
 		if err != nil {

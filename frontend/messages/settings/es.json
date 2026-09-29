@@ -733,7 +733,7 @@
   "transactions_investment_history_current": "Actual",
   "transactions_investment_history_superseded": "Sustituido",
   "transactions_investment_history_reversed": "Revertido",
-  "transactions_investment_history_imported": "Los asientos importados deben corregirse desde su origen.",
+  "transactions_investment_history_imported": "Las correcciones de operaciones importadas conservan el vínculo con la fuente original y el historial.",
 "transactions_investment_reverse_action": "Revertir venta…",
   "transactions_investment_replace_buy_action": "Corregir compra…",
   "transactions_investment_replace_buy_title": "Corregir esta compra",

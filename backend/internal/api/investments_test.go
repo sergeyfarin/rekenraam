@@ -337,6 +337,8 @@ func TestReplaceLatestManualSaleAPI(t *testing.T) {
 	var source investmentTradeCorrectionContextResponse
 	require.NoError(t, json.NewDecoder(contextResult.Body).Decode(&source))
 	require.True(t, source.CanReplaceSale)
+	require.Zero(t, source.SourceIdentityID)
+	require.Empty(t, source.SourceKind)
 	require.Len(t, source.AvailableLots, 1)
 	require.Equal(t, "5", source.AvailableLots[0].QuantityValue)
 	path := "/api/v1/investments/transactions/" + strconv.FormatInt(sold.Transaction.ID, 10) + "/replace-sale"

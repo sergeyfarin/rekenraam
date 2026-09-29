@@ -180,7 +180,7 @@
       </button>
     {/if}
     {#if chainQuery.data.effective_transaction_id === transactionID &&
-      chainQuery.data.operations.some((node) => node.transaction_id === transactionID && node.operation_kind === 'buy' && node.effective && !node.imported)}
+      chainQuery.data.operations.some((node) => node.transaction_id === transactionID && node.operation_kind === 'buy' && node.effective)}
       <button type="button"
         class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
         disabled={!csrfToken}
@@ -189,7 +189,7 @@
       </button>
     {/if}
     {#if chainQuery.data.effective_transaction_id === transactionID &&
-      chainQuery.data.operations.some((node) => node.transaction_id === transactionID && node.operation_kind === 'sell' && node.effective && !node.imported)}
+      chainQuery.data.operations.some((node) => node.transaction_id === transactionID && node.operation_kind === 'sell' && node.effective)}
       <button type="button"
         class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
         disabled={!csrfToken}
@@ -213,14 +213,14 @@
       {:else if replacementQuery.isError}
         <APIFormError error={replacementQuery.error} />
         <button type="button" class="mt-2 text-sm font-semibold text-accent" onclick={() => replacementQuery.refetch()}>{m.transactions_retry()}</button>
-      {:else if replacementQuery.data?.operation_kind === 'buy' && replacementKind === 'buy' && !replacementQuery.data.imported && !replacementQuery.data.already_corrected && csrfToken}
+      {:else if replacementQuery.data?.operation_kind === 'buy' && replacementKind === 'buy' && (!replacementQuery.data.imported || replacementQuery.data.source_identity_id > 0) && !replacementQuery.data.already_corrected && csrfToken}
         <BuyForm {csrfToken} correction={replacementQuery.data} onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
-      {:else if replacementQuery.data?.operation_kind === 'sell' && replacementKind === 'sell' && replacementQuery.data.can_replace_sale && !replacementQuery.data.imported && !replacementQuery.data.already_corrected && csrfToken}
+      {:else if replacementQuery.data?.operation_kind === 'sell' && replacementKind === 'sell' && replacementQuery.data.can_replace_sale && !replacementQuery.data.already_corrected && csrfToken}
         <SellForm {csrfToken} correction={replacementQuery.data} onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
       {:else}
         <p class="text-sm text-muted">{m.transactions_investment_replace_unavailable()}</p>
       {/if}
-      {#if replacementQuery.isPending || replacementQuery.isError || replacementQuery.data?.operation_kind !== replacementKind || replacementQuery.data.imported || replacementQuery.data.already_corrected || (replacementKind === 'sell' && !replacementQuery.data.can_replace_sale) || !csrfToken}
+      {#if replacementQuery.isPending || replacementQuery.isError || replacementQuery.data?.operation_kind !== replacementKind || (replacementQuery.data.imported && replacementQuery.data.source_identity_id === 0) || replacementQuery.data.already_corrected || (replacementKind === 'sell' && !replacementQuery.data.can_replace_sale) || !csrfToken}
         <button type="button" class="mt-4 min-h-10 rounded-[var(--radius-control)] border border-border bg-control px-4 text-sm font-semibold text-foreground"
           onclick={() => (replacementKind = null)}>{m.investments_form_cancel()}</button>
       {/if}

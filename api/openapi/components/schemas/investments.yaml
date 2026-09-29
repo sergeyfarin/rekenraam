@@ -859,7 +859,7 @@ InvestmentTradeCorrectionContextResponse:
   required: [operation_id, transaction_id, operation_kind, event_date, holding_account_id,
     commodity_id, commodity_code, cost_commodity_id, quantity_value, quantity_scale,
     cost_basis_method, cash_account_id, net_value, net_scale, settlement_date, memo,
-    imported, already_corrected, charges, elected_lots, can_replace_sale,
+    imported, source_identity_id, source_kind, already_corrected, charges, elected_lots, can_replace_sale,
     available_lots, effective_elected_lots]
   properties:
     operation_id: { type: integer, format: int64 }
@@ -882,6 +882,8 @@ InvestmentTradeCorrectionContextResponse:
     gross_value: { type: string, description: Signed gross source amount when known. }
     gross_scale: { type: integer }
     imported: { type: boolean }
+    source_identity_id: { type: integer, format: int64, description: Committed import source identity; zero for manual trades or an imported trade without a source link. }
+    source_kind: { type: string, description: Stable import source kind; empty when no committed source identity exists. }
     already_corrected: { type: boolean }
     charges:
       type: array
@@ -894,7 +896,7 @@ InvestmentTradeCorrectionContextResponse:
         $ref: '#/InvestmentTradeCorrectionLotChoiceResponse'
     can_replace_sale:
       type: boolean
-      description: Display hint for an effective manual sale eligible for correction. The write rechecks its source and dependent replay.
+      description: Display hint for an effective sale eligible for correction, including imported fills with a committed source identity. The write rechecks its source and dependent replay.
     available_lots:
       type: array
       description: Effective long lots and quantities immediately before an uncorrected manual sale, including an older sale, from a rolled-back replay.

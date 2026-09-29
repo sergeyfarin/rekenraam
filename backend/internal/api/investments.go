@@ -305,6 +305,8 @@ type investmentTradeCorrectionContextResponse struct {
 	GrossValue           *string                                         `json:"gross_value,omitempty"`
 	GrossScale           *int                                            `json:"gross_scale,omitempty"`
 	Imported             bool                                            `json:"imported"`
+	SourceIdentityID     int64                                           `json:"source_identity_id"`
+	SourceKind           string                                          `json:"source_kind"`
 	AlreadyCorrected     bool                                            `json:"already_corrected"`
 	Charges              []investmentTradeCorrectionChargeResponse       `json:"charges"`
 	ElectedLots          []investmentTradeCorrectionLotChoiceResponse    `json:"elected_lots"`
@@ -353,6 +355,7 @@ func toInvestmentTradeCorrectionContextResponse(record db.InvestmentTradeCorrect
 		SettlementDate: record.SettlementDate, GrossValue: record.GrossValue,
 		GrossScale: record.GrossScale, Memo: record.Memo, PayeeID: record.PayeeID,
 		Imported:         record.Imported,
+		SourceIdentityID: record.SourceIdentityID, SourceKind: record.SourceKind,
 		AlreadyCorrected: record.AlreadyCorrected, Charges: charges, ElectedLots: electedLots,
 		CanReplaceSale: record.CanReplaceSale, AvailableLots: availableLots,
 		EffectiveElectedLots: effectiveElectedLots,

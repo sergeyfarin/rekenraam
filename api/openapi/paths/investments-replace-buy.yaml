@@ -1,12 +1,13 @@
 post:
-  summary: Replace a posted manual long buy and replay dependent sales
+  summary: Replace a posted long buy, including a source-linked imported fill, and replay dependent sales
   description: >-
     Posts an inverse and corrected buy, replays later long disposals using
     their recorded basis methods, retires the original trade price, and updates
     reconciliation under one audit event. The original journal and lot facts
     remain audit history. A replacement keeps the source buy date, holding,
-    instrument, and cost currency. Imported buys require source-aware
-    correction.
+    instrument, and cost currency. An imported buy needs an immutable committed
+    source identity effect pointing to that operation; the original source row
+    and dedupe fingerprint remain unchanged.
   parameters:
     - in: path
       name: transaction_id
@@ -48,13 +49,13 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "404":
-      description: Posted manual long buy not found
+      description: Posted long buy not found
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Buy already corrected, imported, changed, dependent sale impossible, or reconciliation override required
+      description: Buy already corrected, imported without source identity, changed, dependent sale impossible, or reconciliation override required
       content:
         application/json:
           schema:
