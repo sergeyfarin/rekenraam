@@ -792,7 +792,7 @@ next family.
      stay fenced. Source-file-driven corrections remain separate work.
    - **4z — changed-source fill review gate — complete 2026-09-29.** A
      Trading 212 order fill with an already committed stable fingerprint is
-     compared with the original committed source snapshot. Changed provider
+     compared with the latest accepted committed source snapshot. Changed provider
      payload is shown as a distinct review state and skipped at commit even
      if its staged dedupe status is changed. Locally resolved instrument and
      holding IDs are excluded from the comparison. This closes silent
@@ -803,6 +803,17 @@ next family.
      Trading 212 fill identity. A changed-source row links directly to that
      transaction's detail panel and correction chain; a page reload preserves
      the link. The source-revision write command remains open.
+   - **4ab — atomic source revision foundation — complete 2026-09-29.** An
+     append-only `import_source_revisions` record links an accepted staged
+     Trading 212 fill to its original source identity and a descendant
+     investment correction operation. The buy replacement writer has a
+     transaction callback so the inverse journal, replacement lot replay,
+     reconciliation invalidation, staged-row result, and revision record
+     succeed or roll back together. The repository checks the latest accepted
+     payload and rejects an unchanged or already accepted revision. Import
+     preview and staging now compare with the latest accepted source snapshot.
+     This is a backend writer seam; the provider-driven correction command,
+     endpoint, and review action are still open.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

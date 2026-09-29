@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -49,6 +50,12 @@ func (e InvestmentBuyDependencyError) Unwrap() error { return ErrInvestmentBuyDe
 // ReplaceBuy preserves the source journal and opening lot as history, then
 // posts a compound correction and replays every affected long disposal.
 func (s *InvestmentService) ReplaceBuy(ctx context.Context, input ReplaceInvestmentBuyInput) (ReplaceInvestmentBuyResult, error) {
+	return s.replaceBuyWithPostWrite(ctx, input, nil)
+}
+
+func (s *InvestmentService) replaceBuyWithPostWrite(ctx context.Context, input ReplaceInvestmentBuyInput,
+	postWrite func(*sql.Tx, int64, int64) error,
+) (ReplaceInvestmentBuyResult, error) {
 	operation, inversePlan, err := s.buyReplacementPlan(ctx, input)
 	if err != nil {
 		return ReplaceInvestmentBuyResult{}, err
@@ -79,7 +86,7 @@ func (s *InvestmentService) ReplaceBuy(ctx context.Context, input ReplaceInvestm
 	replacementParams.InvestmentCorrectionMode = "replace"
 	replacementParams.InvestmentCorrectionReason = inversePlan.ChangeReason
 	replacementParams.CreatedAt = inverseParams.CreatedAt
-	record, err := s.repository.ReplaceBuy(ctx, operation, inverseParams, replacementParams, lotParams)
+	record, err := s.repository.ReplaceBuyWithPostWrite(ctx, operation, inverseParams, replacementParams, lotParams, postWrite)
 	if err != nil {
 		return ReplaceInvestmentBuyResult{}, mapBuyReplacementError(err)
 	}

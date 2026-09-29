@@ -65,9 +65,8 @@ type ImportStagedRowRecord struct {
 	CommitError            sql.NullString
 }
 
-// The original committed staged row is the immutable provider snapshot for a
-// Trading 212 fill identity. Later rows with the same fingerprint can be
-// compared with it without changing the dedupe identity or its effects.
+// The latest committed staged row is the accepted provider snapshot for a
+// Trading 212 fill identity. The first identity effect remains immutable.
 func (r *ImportRepository) FindCommittedTrading212FillSnapshot(ctx context.Context, bookID int64, fingerprint string) (string, string, bool, error) {
 	var rawJSON, normalizedJSON string
 	err := r.database.QueryRowContext(ctx, `
@@ -78,7 +77,7 @@ func (r *ImportRepository) FindCommittedTrading212FillSnapshot(ctx context.Conte
 			AND identity_row.source_kind = 'trading212'
 			AND original.commit_status = 'committed'
 			AND json_extract(original.raw_json, '$.kind') = 'trading212_order_fill'
-		ORDER BY original.id LIMIT 1
+		ORDER BY original.id DESC LIMIT 1
 	`, bookID, fingerprint).Scan(&rawJSON, &normalizedJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", false, nil
@@ -1159,6 +1158,10 @@ const importStagedRowSelect = `s.id, s.batch_id, s.book_id, s.row_index, s.dedup
 			AND original.commit_status = 'committed'
 			AND json_extract(original.raw_json, '$.kind') = 'trading212_order_fill'
 			AND json_extract(s.raw_json, '$.kind') = 'trading212_order_fill'
+			AND original.id = (SELECT MAX(latest.id) FROM import_staged_rows latest
+				WHERE latest.committed_identity_id = identity_row.id
+					AND latest.commit_status = 'committed'
+					AND json_extract(latest.raw_json, '$.kind') = 'trading212_order_fill')
 			AND (json_remove(original.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
 				<> json_remove(s.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
 				OR original.normalized_json <> s.normalized_json)),

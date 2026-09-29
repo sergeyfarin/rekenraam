@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -486,6 +487,93 @@ func TestChangedTrading212FillIsHeldForSourceCorrection(t *testing.T) {
 	require.Len(t, duplicateRows, 1)
 	require.Equal(t, "duplicate", duplicateRows[0].DedupeStatus)
 	require.False(t, duplicateRows[0].SourceChanged)
+}
+
+func TestTrading212BuySourceRevisionCommitsWithReplacementAndBecomesSnapshot(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "revision-fill", OrderID: "revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	}
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	originalRows, err := f.importRepo.ListAllImportStagedRows(ctx, batchID)
+	require.NoError(t, err)
+	source := originalRows[0].CommitEffects[0]
+	identityID := originalRows[0].CommittedIdentityID.Int64
+	changed := fill
+	changed.Price, changed.NetValue = "151.00", "-302.00"
+	changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+	instruments, err := f.investmentSvc.ListInstruments(ctx)
+	require.NoError(t, err)
+	holdingID, found, err := f.connService.HoldingAccountForCommodity(ctx, conn.ID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	require.True(t, found)
+	input := ReplaceInvestmentBuyInput{
+		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64,
+		Reason: "accept changed provider fill", Replacement: InvestmentTradeInput{
+			TransactionDate: "2026-06-01", CommodityID: instruments[0].CommodityID,
+			HoldingAccountID: holdingID, CashAccountID: f.cashAccountID,
+			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(2),
+			CashAmountValue: 30200, CashAmountScale: 2,
+		},
+	}
+	postWrite := func(tx *sql.Tx, correctionOperationID, auditEventID int64) error {
+		return f.importRepo.CommitSourceRevisionInTx(ctx, tx, db.CommitImportSourceRevisionParams{
+			BookID: BookID, IdentityID: identityID, StagedRowID: changedRowID,
+			SourceOperationID: source.OperationID.Int64, CorrectionOperationID: correctionOperationID,
+			CreatedAuditEventID: auditEventID, CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+	_, err = f.investmentSvc.replaceBuyWithPostWrite(ctx, input, func(tx *sql.Tx, operationID, auditEventID int64) error {
+		if err := postWrite(tx, operationID, auditEventID); err != nil {
+			return err
+		}
+		return errors.New("force rollback after source revision")
+	})
+	require.ErrorContains(t, err, "force rollback")
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Len(t, chain.Operations, 1)
+	staged, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", staged.CommitStatus)
+
+	replaced, err := f.investmentSvc.replaceBuyWithPostWrite(ctx, input, postWrite)
+	require.NoError(t, err)
+	require.Positive(t, replaced.Replacement.Transaction.ID)
+	staged, err = f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	require.Equal(t, "committed", staged.CommitStatus)
+	require.Equal(t, identityID, staged.CommittedIdentityID.Int64)
+	require.Equal(t, source.TransactionID.Int64, staged.CommittedTransactionID.Int64)
+	var revisionCount int
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM import_source_revisions WHERE identity_id = ?`, identityID).Scan(&revisionCount))
+	require.Equal(t, 1, revisionCount)
+	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, identityID)
+	require.NoError(t, err)
+	require.Len(t, effects, 1)
+	require.Equal(t, source.OperationID.Int64, effects[0].OperationID.Int64)
+
+	repeatBatch, _ := f.stageOrderFillRow(t, conn.ID, changed)
+	repeatRows, err := f.importRepo.ListAllImportStagedRows(ctx, repeatBatch)
+	require.NoError(t, err)
+	require.False(t, repeatRows[0].SourceChanged)
+	require.Equal(t, "duplicate", repeatRows[0].DedupeStatus)
+	newer := changed
+	newer.NetValue = "-303.00"
+	newerBatch, _ := f.stageOrderFillRow(t, conn.ID, newer)
+	newerRows, err := f.importRepo.ListAllImportStagedRows(ctx, newerBatch)
+	require.NoError(t, err)
+	require.True(t, newerRows[0].SourceChanged)
+	require.Equal(t, "needs_attention", newerRows[0].DedupeStatus)
+	changedRows, err := f.importRepo.ListAllImportStagedRows(ctx, changedBatch)
+	require.NoError(t, err)
+	require.False(t, changedRows[0].SourceChanged)
 }
 
 func TestTrading212FillSourceComparisonIgnoresLocalResolution(t *testing.T) {
