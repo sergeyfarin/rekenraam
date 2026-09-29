@@ -10,7 +10,7 @@ The [GitHub roadmap index](https://github.com/sergeyfarin/rekenraam/issues/120)
 links current slices to their actionable tickets; this file remains the
 ordered product plan.
 
-Last reviewed: 2026-09-27. The current order is R16,
+Last reviewed: 2026-09-29. The current order is R16,
 R11 price management, R17 quotes and crypto, R18 gains projections, then R13
 returns analytics. Cross-border input and date correctness run in parallel.
 Prior roadmap detail is retained in the
@@ -144,6 +144,9 @@ reversal, old-sale replacement and old-buy replacement. Transaction detail
 offers sale reversal and prefilled buy and sale replacement. The sale form uses
 pre-sale available lots for specific-lot correction, and old sales replay
 dependent disposals. Import source identity and backdated admission remain.
+The reopened [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
+must also link components to postings, reconcile effective proceeds to the
+journal, retire the compatibility transaction link and separate lot state.
 Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and
 cash-in-lieu suggestions are currently refused as dividend income (T-109) until
@@ -154,8 +157,9 @@ known-basis external inbound transfer now has an API command, reconciliation
 preview, mobile entry screen, typed lot source, export and self-check. An
 internal transfer now moves selected long lots with conserved carried basis,
 typed lineage, reconciliation preview, self-check and a mobile entry screen.
-Outbound and unknown-basis transfers, return of capital, split and cash in
-lieu remain.
+Selected-lot transfer from an open average-cost pool is refused until pooled
+basis allocation is implemented. Outbound and unknown-basis transfers, return
+of capital, split and cash in lieu remain.
 
 Decided 2026-08-05 (review §3e). The maintained
 `competitor-comparison.md` now marks corporate actions as missing; manual
@@ -172,16 +176,19 @@ split by risk:
    gained its own reconciliation-impact preview (T-53) so a backdated
    write-off can proceed deliberately, the same as buy, sell, and dividend.
    The write-off UI and price-void operator surface remain separate follow-ups.
-2. **Foundation and exact trade economics — done.** Operation links, source
-   components, import identity, lot facts and projections, and gross/charge/net
-   trade terms are shipped. ADR 0013 governs the unused pre-release baseline
-   redesign.
+2. **Foundation and exact trade economics — partial.** Operation links,
+   source components, import identity, lot-opening facts and gross/charge/net
+   trade terms are shipped. The reopened T-110 integrity gate covers posting
+   links, proceeds/journal reconciliation, authoritative operation journal
+   links and the lot-state projection split. ADR 0013 governs the unused
+   pre-release baseline redesign.
 3. **Investment-native correction/reversal (T-75b).** Build domain commands that
    change journal and subledger atomically, preserve original events, replay
    effective allocations under each recorded method, and retain the generic
    mutation fence. T-76 disposal provenance is already present.
-4. **Transfers and basis actions.** Add in-kind broker transfers, return of
-   capital, manual split/reverse-split, and cash in lieu with dated lot effects.
+4. **Transfers and basis actions, after correction and integrity.** Add in-kind
+   broker transfers, return of capital, manual split/reverse-split, and cash in
+   lieu with dated lot effects.
    These fulfill the earlier manual-split design gate: a migrant's first AAPL
    split must not require deleting and re-entering lots.
 5. **Short sale/cover (T-108), then compound corporate actions.** Finish

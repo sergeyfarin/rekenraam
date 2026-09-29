@@ -22,11 +22,12 @@ Last reconciled: 2026-09-29.
   and [slice 4 plan](plans/investment-operation-refactor-plan.md) for the
   shipped sub-slices. Imported source corrections, backdated admission, buy
   reversal, and other operation corrections remain open.
-- [ ] Close the reopened slice 2a integrity gates: link component cash facts
+- [ ] Close [T-110 #125](https://github.com/sergeyfarin/rekenraam/issues/125),
+  the reopened slice 2a integrity gates: link component cash facts
   to posting versions, reconcile decision proceeds with clearing in self-check,
-  migrate operation reads to journal links, separate lot projection state,
-  and share correction transaction orchestration. The disposal-decision key
-  now supports `(operation_id, decision_seq)`.
+  migrate operation reads to journal links, and separate lot projection state.
+  Share correction transaction orchestration under T-75b. The
+  disposal-decision key now supports `(operation_id, decision_seq)`.
 
 ## Then, within R16
 
