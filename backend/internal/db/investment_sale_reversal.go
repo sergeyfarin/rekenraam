@@ -37,8 +37,11 @@ func (r *InvestmentRepository) SaleOperationByID(ctx context.Context, bookID, op
 
 func (r *InvestmentRepository) SaleOperationByTransactionID(ctx context.Context, bookID, transactionID int64) (SaleOperationRecord, error) {
 	var operationID int64
-	err := r.database.QueryRowContext(ctx, `SELECT id FROM investment_operations
-		WHERE book_id = ? AND transaction_id = ? AND operation_kind = 'sell'`, bookID, transactionID).Scan(&operationID)
+	err := r.database.QueryRowContext(ctx, `SELECT operation.id FROM investment_operations operation
+		JOIN investment_operation_journal_links link ON link.operation_id = operation.id
+			AND link.book_id = operation.book_id AND link.role = 'primary'
+		JOIN transaction_versions version ON version.id = link.transaction_version_id
+		WHERE operation.book_id = ? AND version.transaction_id = ? AND operation.operation_kind = 'sell'`, bookID, transactionID).Scan(&operationID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SaleOperationRecord{}, ErrNotFound
 	}
@@ -56,7 +59,7 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 	var record SaleOperationRecord
 	var corrected, imported int
 	err := reader.QueryRowContext(ctx, `
-		SELECT o.id, o.transaction_id, link.transaction_version_id, current.id, o.event_date,
+		SELECT o.id, linked_version.transaction_id, link.transaction_version_id, current.id, o.event_date,
 			d.account_id, d.commodity_id, d.cost_commodity_id,
 			EXISTS(SELECT 1 FROM investment_operations successor
 				WHERE successor.correction_of_operation_id = o.id),
@@ -69,8 +72,9 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
 		JOIN investment_disposal_decisions d ON d.operation_id = o.id AND d.position_side = 'long'
-		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.role = 'primary'
-		JOIN current_transaction_versions current ON current.transaction_id = o.transaction_id
+		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
+		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
+		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
 		WHERE o.book_id = ? AND o.id = ? AND o.operation_kind = 'sell'
 	`, bookID, operationID).Scan(&record.OperationID, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.EventDate, &record.AccountID,

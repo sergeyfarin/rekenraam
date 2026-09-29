@@ -26,14 +26,11 @@ type InvestmentCorrectionNodeRecord struct {
 
 func (r *InvestmentRepository) CorrectionChainByTransactionID(ctx context.Context, bookID, transactionID int64) ([]InvestmentCorrectionNodeRecord, error) {
 	rows, err := r.database.QueryContext(ctx, `WITH RECURSIVE ancestors(id, parent_id) AS (
-		SELECT id, correction_of_operation_id FROM investment_operations
-		WHERE book_id = ? AND transaction_id = ?
-		UNION
-		SELECT operation.id, operation.correction_of_operation_id
+		SELECT DISTINCT operation.id, operation.correction_of_operation_id
 		FROM investment_operation_journal_links link
 		JOIN investment_operations operation ON operation.id = link.operation_id
 		JOIN transaction_versions version ON version.id = link.transaction_version_id
-		WHERE operation.book_id = ? AND version.transaction_id = ?
+		WHERE operation.book_id = ? AND link.book_id = operation.book_id AND version.transaction_id = ?
 		UNION ALL
 		SELECT parent.id, parent.correction_of_operation_id
 		FROM investment_operations parent JOIN ancestors a ON parent.id = a.parent_id
@@ -46,7 +43,7 @@ func (r *InvestmentRepository) CorrectionChainByTransactionID(ctx context.Contex
 		FROM investment_operations successor JOIN chain ON successor.correction_of_operation_id = chain.id
 		WHERE successor.book_id = ?
 	)
-	SELECT operation.id, operation.transaction_id, operation.operation_kind,
+	SELECT operation.id, linked_version.transaction_id, operation.operation_kind,
 		operation.event_date, operation.correction_of_operation_id,
 		operation.correction_mode, operation.correction_reason,
 		operation.created_at, operation.created_audit_event_id,
@@ -56,9 +53,14 @@ func (r *InvestmentRepository) CorrectionChainByTransactionID(ctx context.Contex
 		current.status, (transaction_record.deleted_at IS NOT NULL)
 	FROM chain JOIN investment_operations operation ON operation.id = chain.id
 	JOIN audit_events audit ON audit.id = operation.created_audit_event_id
-	LEFT JOIN transactions transaction_record ON transaction_record.id = operation.transaction_id
-	LEFT JOIN current_transaction_versions current ON current.transaction_id = operation.transaction_id
-		ORDER BY chain.chain_seq`, bookID, transactionID, bookID, transactionID, bookID, bookID)
+	LEFT JOIN investment_operation_journal_links primary_link ON primary_link.operation_id = operation.id
+		AND primary_link.book_id = operation.book_id AND primary_link.role = 'primary'
+		AND primary_link.link_seq = (SELECT MIN(link_seq) FROM investment_operation_journal_links
+			WHERE operation_id = operation.id AND role = 'primary')
+	LEFT JOIN transaction_versions linked_version ON linked_version.id = primary_link.transaction_version_id
+	LEFT JOIN transactions transaction_record ON transaction_record.id = linked_version.transaction_id
+	LEFT JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
+		ORDER BY chain.chain_seq`, bookID, transactionID, bookID, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read investment correction chain: %w", err)
 	}

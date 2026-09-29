@@ -150,7 +150,9 @@ The reopened [operation integrity gate T-110](https://github.com/sergeyfarin/rek
 now links journal-backed trade components to their exact posting lines and
 checks both missing links and unlinked trade cash, expense or charge-clearing legs. It must
 still extend proceeds/journal reconciliation beyond single-disposal commands,
-retire the compatibility transaction link and separate lot state.
+retire the compatibility transaction link and separate lot state. Correction
+history, trade source facts, and buy/sale correction admission now use journal
+links; export/import consumers and writer bootstrap lookup remain.
 Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and
 cash-in-lieu suggestions are currently refused as dividend income (T-109) until

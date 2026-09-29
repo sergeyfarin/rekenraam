@@ -13,7 +13,11 @@ Transfer depletion replay already reads the immutable operation/lot-effect
 link instead of joining through that compatibility column. Foundation
 self-check now requires posted journal links for all implemented journal-backed
 operation kinds and resolves lot/effect and transfer provenance through links;
-correction/detail/export/import readers still need the same cutover.
+Correction history, trade-detail source facts, and buy/sale correction admission
+now derive their transaction from pinned primary journal links; inverse journals
+resolve to the same history. A chain displays the first primary link in sequence
+once per operation. Export/import readers and writer bootstrap lookup still need
+the cutover before the compatibility column can be removed.
 Current lot projection columns remain on `investment_lots` instead of a
 separate `investment_lot_state` table. Trade net-settlement and separately
 posted fee components now link to the exact journal posting line keys chosen by
