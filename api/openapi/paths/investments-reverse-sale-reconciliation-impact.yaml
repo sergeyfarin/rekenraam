@@ -36,13 +36,13 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "404":
-      description: Posted manual long sale not found
+      description: Posted long sale not found
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Sale already corrected, imported, or changed
+      description: Sale already corrected, unlinked import, or changed
       content:
         application/json:
           schema:

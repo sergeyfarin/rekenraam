@@ -1293,6 +1293,7 @@
               {@const norm = parseNormalized(row)}
               {@const res = getResolution(row.id)}
               {@const isDuplicate = row.dedupe_status === 'duplicate'}
+              {@const isBlocked = isDuplicate || row.source_changed}
               {@const isExcluded = res.exclude || row.dedupe_status === 'excluded'}
               {@const isTransfer = !!norm.transfer_hint}
               <tr
@@ -1310,15 +1311,15 @@
                 </td>
                 <td class="px-4 py-2.5">
                   <span
-                    class:text-warning={row.dedupe_status === 'needs_attention'}
+                    class:text-warning={row.source_changed || row.dedupe_status === 'needs_attention'}
                     class:text-muted={row.dedupe_status === 'duplicate' || row.dedupe_status === 'excluded'}
                     class="text-xs font-medium"
                   >
-                    {dedupeStatusLabel(row.dedupe_status)}
+                    {row.source_changed ? m.import_preview_source_changed() : dedupeStatusLabel(row.dedupe_status)}
                   </span>
                 </td>
                 <td class="px-4 py-2.5">
-                  {#if !isDuplicate}
+                  {#if !isBlocked}
                     <select
                       class="rounded-(--radius-control) border border-border bg-control px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-foreground"
                       value={res.account_id}
@@ -1337,7 +1338,7 @@
                   {/if}
                 </td>
                 <td class="px-4 py-2.5">
-                  {#if !isDuplicate}
+                  {#if !isBlocked}
                     <select
                       class="rounded-(--radius-control) border border-border bg-control px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-foreground"
                       value={res.commodity_id}
@@ -1356,7 +1357,7 @@
                   {/if}
                 </td>
                 <td class="px-4 py-2.5">
-                  {#if !isDuplicate}
+                  {#if !isBlocked}
                     {#if isTransfer}
                       <select
                         class="rounded-(--radius-control) border border-border bg-control px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-foreground"
@@ -1391,7 +1392,7 @@
                   {/if}
                 </td>
                 <td class="px-4 py-2.5">
-                  {#if !isDuplicate}
+                  {#if !isBlocked}
                     <input
                       type="checkbox"
                       checked={!!res.exclude}

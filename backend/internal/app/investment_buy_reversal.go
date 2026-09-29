@@ -16,7 +16,7 @@ type ReverseInvestmentBuyInput struct {
 	ReconciliationOverride bool
 }
 
-// ReverseBuy terminates an effective manual long buy. The inverse journal and
+// ReverseBuy terminates an effective long buy. The inverse journal and
 // replayed lot projection commit together; an impossible later disposal
 // leaves the original buy effective.
 func (s *InvestmentService) ReverseBuy(ctx context.Context, input ReverseInvestmentBuyInput) (Transaction, error) {
@@ -67,7 +67,13 @@ func (s *InvestmentService) reverseBuyPlan(ctx context.Context, input ReverseInv
 		return db.BuyOperationRecord{}, CreateTransactionInput{}, err
 	}
 	if operation.ImportedLineage {
-		return db.BuyOperationRecord{}, CreateTransactionInput{}, ErrInvestmentImportedBuy
+		linked, err := s.repository.HasCommittedImportSource(ctx, BookID, operation.OperationID)
+		if err != nil {
+			return db.BuyOperationRecord{}, CreateTransactionInput{}, err
+		}
+		if !linked {
+			return db.BuyOperationRecord{}, CreateTransactionInput{}, ErrInvestmentImportedBuy
+		}
 	}
 	planned.Operation = "investment.buy.reverse"
 	planned.Spec.InvestmentOperationKind = "reversal"

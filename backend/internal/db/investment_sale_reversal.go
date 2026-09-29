@@ -115,7 +115,7 @@ func (r *InvestmentRepository) ReverseSale(ctx context.Context, params CreateTra
 			rollbackTx(ctx, tx)
 		}
 	}()
-	current, err := checkSaleOperationForCorrectionTx(ctx, tx, params.BookID, expected, false)
+	current, err := checkSaleOperationForCorrectionTx(ctx, tx, params.BookID, expected)
 	if err != nil {
 		return TransactionRecord{}, err
 	}
@@ -157,7 +157,7 @@ func (r *InvestmentRepository) ReverseSale(ctx context.Context, params CreateTra
 	return transaction, nil
 }
 
-func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected SaleOperationRecord, allowImportedReplacement bool) (SaleOperationRecord, error) {
+func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected SaleOperationRecord) (SaleOperationRecord, error) {
 	current, err := saleOperationByIDQuery(ctx, tx, bookID, expected.OperationID)
 	if err != nil {
 		return SaleOperationRecord{}, err
@@ -165,9 +165,14 @@ func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID i
 	if current.AlreadyCorrected {
 		return SaleOperationRecord{}, ErrInvestmentOperationAlreadyCorrected
 	}
-	if (current.ImportedLineage && !allowImportedReplacement) ||
-		(current.Imported && (current.SourceIdentityID == 0 || current.SourceEffectSeq == 0)) {
-		return SaleOperationRecord{}, ErrInvestmentImportedCorrection
+	if current.ImportedLineage {
+		linked, err := investmentOperationHasCommittedSourceQuery(ctx, tx, bookID, current.OperationID)
+		if err != nil {
+			return SaleOperationRecord{}, err
+		}
+		if !linked {
+			return SaleOperationRecord{}, ErrInvestmentImportedCorrection
+		}
 	}
 	if current != expected {
 		return SaleOperationRecord{}, ErrInvestmentSaleChanged

@@ -27,7 +27,7 @@ func (r *InvestmentRepository) SimulateSaleReplacement(ctx context.Context,
 		return InvestmentReplayProjection{}, fmt.Errorf("begin sale replacement simulation: %w", err)
 	}
 	defer rollbackTx(ctx, tx)
-	if _, err := checkSaleOperationForCorrectionTx(ctx, tx, proposed.BookID, expected, true); err != nil {
+	if _, err := checkSaleOperationForCorrectionTx(ctx, tx, proposed.BookID, expected); err != nil {
 		return InvestmentReplayProjection{}, err
 	}
 	intents, err := investmentReplayIntentsQuery(ctx, tx, proposed.BookID,

@@ -1,10 +1,10 @@
 post:
-  summary: Reverse a posted manual long sale
+  summary: Reverse a posted long sale
   description: >-
     Posts a balanced inverse transaction, retires the source trade price and
     dependent prices, and replays the long position in one database transaction.
-    The original sale remains posted audit history. Imported fills require a
-    source-aware correction and cannot use this command. Reversal is terminal;
+    The original sale remains posted audit history. Imported lineage requires
+    a committed source identity that stays attached to the original fill. Reversal is terminal;
     an already corrected sale cannot be reversed again.
   parameters:
     - in: path
@@ -48,13 +48,13 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "404":
-      description: Posted manual long sale not found
+      description: Posted long sale not found
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Already corrected, imported, changed, impossible replay, or reconciliation override required
+      description: Already corrected, unlinked import, changed, impossible replay, or reconciliation override required
       content:
         application/json:
           schema:
