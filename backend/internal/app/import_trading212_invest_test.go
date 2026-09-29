@@ -430,6 +430,73 @@ func TestReverseCommittedImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *test
 	require.Zero(t, duplicate.CommittedCount)
 }
 
+func TestChangedTrading212FillIsHeldForSourceCorrection(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "changed-fill", OrderID: "changed-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	}
+	originalBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	committed, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: originalBatch})
+	require.NoError(t, err)
+	require.Equal(t, 1, committed.CommittedCount)
+	originalRows, err := f.importRepo.ListAllImportStagedRows(ctx, originalBatch)
+	require.NoError(t, err)
+	require.Len(t, originalRows, 1)
+	require.False(t, originalRows[0].SourceChanged)
+
+	changed := fill
+	changed.Price = "151.00"
+	changed.NetValue = "-302.00"
+	changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+	changedRows, err := f.importRepo.ListAllImportStagedRows(ctx, changedBatch)
+	require.NoError(t, err)
+	require.Len(t, changedRows, 1)
+	require.Equal(t, "needs_attention", changedRows[0].DedupeStatus)
+	require.True(t, changedRows[0].SourceChanged)
+	preview, err := f.importService.PreviewCommit(ctx, PreviewCommitInput{OwnerUserID: f.ownerUserID, BatchID: changedBatch})
+	require.NoError(t, err)
+	require.Equal(t, 1, preview.DuplicateCount)
+	require.Zero(t, preview.IncludableCount)
+
+	// Changing the review status cannot post a second operation under the
+	// already committed fingerprint.
+	f.resolveRowGeneric(t, changedBatch, changedRowID, f.cashAccountID)
+	result, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: changedBatch})
+	require.NoError(t, err)
+	require.Zero(t, result.CommittedCount)
+	require.Equal(t, 1, result.SkippedCount)
+	changedRows, err = f.importRepo.ListAllImportStagedRows(ctx, changedBatch)
+	require.NoError(t, err)
+	require.True(t, changedRows[0].SourceChanged)
+	require.Equal(t, "skipped", changedRows[0].CommitStatus)
+	require.Contains(t, changedRows[0].CommitError.String, "source fill changed")
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, originalRows[0].CommittedTransactionID.Int64)
+	require.NoError(t, err)
+	require.Len(t, chain.Operations, 1)
+
+	duplicateBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	duplicateRows, err := f.importRepo.ListAllImportStagedRows(ctx, duplicateBatch)
+	require.NoError(t, err)
+	require.Len(t, duplicateRows, 1)
+	require.Equal(t, "duplicate", duplicateRows[0].DedupeStatus)
+	require.False(t, duplicateRows[0].SourceChanged)
+}
+
+func TestTrading212FillSourceComparisonIgnoresLocalResolution(t *testing.T) {
+	changed, err := trading212FillSourceChanged(
+		`{"kind":"trading212_order_fill","quantity":"2","resolved_commodity_id":"10"}`,
+		`{"kind":"trading212_order_fill","quantity":"2","resolved_commodity_id":"11","resolved_holding_account_id":"20"}`,
+		`{"date":"2026-06-01","amount":"-300.00"}`,
+		`{"date":"2026-06-01","amount":"-300.00"}`,
+	)
+	require.NoError(t, err)
+	require.False(t, changed)
+}
+
 func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	f := newInvestTestFixture(t)
 	ctx := context.Background()

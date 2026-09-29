@@ -790,6 +790,14 @@ next family.
      fingerprint, so a repeated source row remains deduplicated even though
      the correction chain has no effective transaction. Orphan imported fills
      stay fenced. Source-file-driven corrections remain separate work.
+   - **4z — changed-source fill review gate — complete 2026-09-29.** A
+     Trading 212 order fill with an already committed stable fingerprint is
+     compared with the original committed source snapshot. Changed provider
+     payload is shown as a distinct review state and skipped at commit even
+     if its staged dedupe status is changed. Locally resolved instrument and
+     holding IDs are excluded from the comparison. This closes silent
+     changed-fill deduplication; an atomic source-revision correction command
+     remains open.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

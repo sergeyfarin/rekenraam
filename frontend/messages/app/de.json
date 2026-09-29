@@ -153,6 +153,7 @@
   "import_preview_dedupe_new": "Neu",
   "import_preview_dedupe_duplicate": "Bereits importiert",
   "import_preview_dedupe_needs_attention": "Dublette prüfen",
+  "import_preview_source_changed": "Quellausführung geändert — Prüfung erforderlich; Import überspringt sie",
   "import_preview_dedupe_excluded": "Ausgeschlossen",
   "import_preview_account_label": "Zielkonto",
   "import_preview_account_placeholder": "Konto wählen…",

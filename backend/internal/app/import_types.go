@@ -32,6 +32,7 @@ type ImportStagedRow struct {
 	RawJSON                string
 	NormalizedJSON         string
 	DedupeStatus           string
+	SourceChanged          bool
 	ResolutionJSON         string
 	CommitStatus           string
 	CommittedIdentityID    *int64

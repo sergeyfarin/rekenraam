@@ -17639,6 +17639,8 @@ export interface components {
             /** @description JSON string containing source-specific row data. */
             raw: string;
             dedupe_status: components["schemas"]["ImportDedupeStatus"];
+            /** @description A staged Trading 212 order fill differs from the immutable committed source snapshot for the same fill identity. Commit skips it pending correction review. */
+            source_changed: boolean;
             /** @description JSON string matching ImportResolution. */
             resolution: string;
             commit_status: components["schemas"]["ImportCommitStatus"];

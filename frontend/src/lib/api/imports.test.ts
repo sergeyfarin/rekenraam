@@ -31,6 +31,7 @@ function importBatchResponse(rows: { id: number }[], nextCursor: string | null):
       normalized: '{}',
       raw: '{}',
       dedupe_status: 'new',
+      source_changed: false,
       resolution: '{}',
       commit_status: 'pending',
       commit_effects: []

@@ -153,6 +153,7 @@
   "import_preview_dedupe_new": "Новая",
   "import_preview_dedupe_duplicate": "Уже импортирована",
   "import_preview_dedupe_needs_attention": "Проверьте дубликат",
+  "import_preview_source_changed": "Исходная сделка изменилась — требуется проверка; импорт пропустит её",
   "import_preview_dedupe_excluded": "Исключена",
   "import_preview_account_label": "Счёт назначения",
   "import_preview_account_placeholder": "Выберите счёт…",

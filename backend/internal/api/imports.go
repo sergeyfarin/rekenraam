@@ -34,6 +34,7 @@ type importStagedRowResponse struct {
 	NormalizedJSON         string                       `json:"normalized"`
 	RawJSON                string                       `json:"raw"`
 	DedupeStatus           string                       `json:"dedupe_status"`
+	SourceChanged          bool                         `json:"source_changed"`
 	ResolutionJSON         string                       `json:"resolution"`
 	CommitStatus           string                       `json:"commit_status"`
 	CommittedIdentityID    *int64                       `json:"committed_identity_id,omitempty"`
@@ -851,6 +852,7 @@ func toImportStagedRowResponse(row app.ImportStagedRow) importStagedRowResponse 
 		NormalizedJSON:         normalized,
 		RawJSON:                raw,
 		DedupeStatus:           row.DedupeStatus,
+		SourceChanged:          row.SourceChanged,
 		ResolutionJSON:         resolution,
 		CommitStatus:           row.CommitStatus,
 		CommittedIdentityID:    row.CommittedIdentityID,

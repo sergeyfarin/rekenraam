@@ -55,12 +55,37 @@ type ImportStagedRowRecord struct {
 	RawJSON                string
 	NormalizedJSON         string
 	DedupeStatus           string
+	SourceChanged          bool
 	ResolutionJSON         string
 	CommitStatus           string
 	CommittedIdentityID    sql.NullInt64
 	CommittedTransactionID sql.NullInt64
 	CommitEffects          []ImportCommitEffectRecord
 	CommitError            sql.NullString
+}
+
+// The original committed staged row is the immutable provider snapshot for a
+// Trading 212 fill identity. Later rows with the same fingerprint can be
+// compared with it without changing the dedupe identity or its effects.
+func (r *ImportRepository) FindCommittedTrading212FillSnapshot(ctx context.Context, bookID int64, fingerprint string) (string, string, bool, error) {
+	var rawJSON, normalizedJSON string
+	err := r.database.QueryRowContext(ctx, `
+		SELECT original.raw_json, original.normalized_json
+		FROM import_commit_identities identity_row
+		JOIN import_staged_rows original ON original.committed_identity_id = identity_row.id
+		WHERE identity_row.book_id = ? AND identity_row.dedupe_fingerprint = ?
+			AND identity_row.source_kind = 'trading212'
+			AND original.commit_status = 'committed'
+			AND json_extract(original.raw_json, '$.kind') = 'trading212_order_fill'
+		ORDER BY original.id LIMIT 1
+	`, bookID, fingerprint).Scan(&rawJSON, &normalizedJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, fmt.Errorf("read committed Trading 212 fill snapshot: %w", err)
+	}
+	return rawJSON, normalizedJSON, true, nil
 }
 
 type ImportCommitEffectRecord struct {
@@ -1122,6 +1147,21 @@ func (r *ImportRepository) InsertImportStagedRows(ctx context.Context, rows []Cr
 	return nil
 }
 
+const importStagedRowSelect = `s.id, s.batch_id, s.book_id, s.row_index, s.dedupe_fingerprint,
+	s.raw_json, s.normalized_json, s.dedupe_status, s.resolution_json,
+	s.commit_status, s.committed_identity_id, s.committed_transaction_id, s.commit_error,
+	EXISTS(SELECT 1 FROM import_commit_identities identity_row
+		JOIN import_staged_rows original ON original.committed_identity_id = identity_row.id
+		WHERE identity_row.book_id = s.book_id
+			AND identity_row.dedupe_fingerprint = s.dedupe_fingerprint
+			AND identity_row.source_kind = 'trading212'
+			AND original.commit_status = 'committed'
+			AND json_extract(original.raw_json, '$.kind') = 'trading212_order_fill'
+			AND json_extract(s.raw_json, '$.kind') = 'trading212_order_fill'
+			AND (json_remove(original.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
+				<> json_remove(s.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
+				OR original.normalized_json <> s.normalized_json))`
+
 // ListImportStagedRows is the paginated API path; limit is clamped to 500 / default 200.
 func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params ListImportStagedRowsParams) ([]ImportStagedRowRecord, error) {
 	limit := params.Limit
@@ -1133,23 +1173,17 @@ func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params List
 	var err error
 
 	if params.CursorRowIndex > 0 || params.CursorID > 0 {
-		dbRows, err = r.database.QueryContext(ctx, `
-			SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
-			       raw_json, normalized_json, dedupe_status, resolution_json,
-			       commit_status, committed_identity_id, committed_transaction_id, commit_error
-			FROM import_staged_rows
-			WHERE batch_id = ? AND (row_index > ? OR (row_index = ? AND id > ?))
-			ORDER BY row_index ASC, id ASC
+		dbRows, err = r.database.QueryContext(ctx, `SELECT `+importStagedRowSelect+`
+			FROM import_staged_rows s
+			WHERE s.batch_id = ? AND (s.row_index > ? OR (s.row_index = ? AND s.id > ?))
+			ORDER BY s.row_index ASC, s.id ASC
 			LIMIT ?
 		`, params.BatchID, params.CursorRowIndex, params.CursorRowIndex, params.CursorID, limit)
 	} else {
-		dbRows, err = r.database.QueryContext(ctx, `
-			SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
-			       raw_json, normalized_json, dedupe_status, resolution_json,
-			       commit_status, committed_identity_id, committed_transaction_id, commit_error
-			FROM import_staged_rows
-			WHERE batch_id = ?
-			ORDER BY row_index ASC, id ASC
+		dbRows, err = r.database.QueryContext(ctx, `SELECT `+importStagedRowSelect+`
+			FROM import_staged_rows s
+			WHERE s.batch_id = ?
+			ORDER BY s.row_index ASC, s.id ASC
 			LIMIT ?
 		`, params.BatchID, limit)
 	}
@@ -1170,13 +1204,10 @@ func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params List
 // ListAllImportStagedRows returns every row for a batch with no limit.
 // Only for internal service operations (commit, preview) where partial reads would corrupt state.
 func (r *ImportRepository) ListAllImportStagedRows(ctx context.Context, batchID int64) ([]ImportStagedRowRecord, error) {
-	dbRows, err := r.database.QueryContext(ctx, `
-		SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
-		       raw_json, normalized_json, dedupe_status, resolution_json,
-		       commit_status, committed_identity_id, committed_transaction_id, commit_error
-		FROM import_staged_rows
-		WHERE batch_id = ?
-		ORDER BY row_index ASC, id ASC
+	dbRows, err := r.database.QueryContext(ctx, `SELECT `+importStagedRowSelect+`
+		FROM import_staged_rows s
+		WHERE s.batch_id = ?
+		ORDER BY s.row_index ASC, s.id ASC
 	`, batchID)
 	if err != nil {
 		return nil, fmt.Errorf("list all staged rows: %w", err)
@@ -1267,25 +1298,25 @@ type importStagedRowScanner interface {
 
 func scanImportStagedRow(row importStagedRowScanner) (ImportStagedRowRecord, error) {
 	var rec ImportStagedRowRecord
+	var sourceChanged int
 	if err := row.Scan(
 		&rec.ID, &rec.BatchID, &rec.BookID, &rec.RowIndex, &rec.DedupeFingerprint,
 		&rec.RawJSON, &rec.NormalizedJSON, &rec.DedupeStatus, &rec.ResolutionJSON,
 		&rec.CommitStatus, &rec.CommittedIdentityID, &rec.CommittedTransactionID, &rec.CommitError,
+		&sourceChanged,
 	); err != nil {
 		return ImportStagedRowRecord{}, fmt.Errorf("scan staged row: %w", err)
 	}
+	rec.SourceChanged = sourceChanged != 0
 	return rec, nil
 }
 
 // ImportStagedRowByID reloads one staged row for a stale-writer transition
 // check. It deliberately distinguishes a missing row from a committed row.
 func (r *ImportRepository) ImportStagedRowByID(ctx context.Context, rowID int64) (ImportStagedRowRecord, error) {
-	rec, err := scanImportStagedRow(r.database.QueryRowContext(ctx, `
-		SELECT id, batch_id, book_id, row_index, dedupe_fingerprint,
-		       raw_json, normalized_json, dedupe_status, resolution_json,
-		       commit_status, committed_identity_id, committed_transaction_id, commit_error
-		FROM import_staged_rows
-		WHERE id = ?
+	rec, err := scanImportStagedRow(r.database.QueryRowContext(ctx, `SELECT `+importStagedRowSelect+`
+		FROM import_staged_rows s
+		WHERE s.id = ?
 	`, rowID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return ImportStagedRowRecord{}, ErrNotFound

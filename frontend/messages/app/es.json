@@ -153,6 +153,7 @@
   "import_preview_dedupe_new": "Nueva",
   "import_preview_dedupe_duplicate": "Ya importada",
   "import_preview_dedupe_needs_attention": "Revisar duplicado",
+  "import_preview_source_changed": "Operación de origen modificada — requiere revisión; se omitirá al importar",
   "import_preview_dedupe_excluded": "Excluida",
   "import_preview_account_label": "Cuenta de destino",
   "import_preview_account_placeholder": "Selecciona una cuenta…",
