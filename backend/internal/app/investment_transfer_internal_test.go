@@ -225,3 +225,33 @@ func TestInternalTransferDepletionSurvivesLaterSaleReversalReplay(t *testing.T) 
 	assert.Equal(t, "2", sourceQty)
 	assert.Equal(t, "1", destinationQty)
 }
+
+func TestReplayTransferDepletionUsesEffectLinkWithoutLegacyOperationTransactionID(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+	buy := buyOn(t, f, "2026-05-01", 3, 3000)
+	transfer, err := f.investmentService.InternalTransfer(ctx,
+		internalTransferFromLot(f, destinationID, *buy.LotID, exact.New(1), 0))
+	require.NoError(t, err)
+	// Simulate the future schema without the operation header's compatibility
+	// transaction ID. The immutable lot-effect link still identifies its event.
+	_, err = f.database.ExecContext(ctx, `DROP TRIGGER investment_operations_no_update`)
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `UPDATE investment_operations SET transaction_id = NULL
+		WHERE id IN (SELECT operation_id FROM investment_operation_journal_links
+			WHERE transaction_version_id = ?)`, transfer.Transaction.VersionID)
+	require.NoError(t, err)
+	intents, err := f.investmentService.repository.ListInvestmentReplayIntents(ctx,
+		BookID, f.holdingAccountID, f.stockCommodityID, f.eurCommodityID, "long")
+	require.NoError(t, err)
+	var found bool
+	for _, intent := range intents {
+		if intent.Kind == "transfer_out" {
+			found = true
+			require.Equal(t, transfer.Transaction.ID, intent.TransactionID)
+			require.Equal(t, *buy.LotID, intent.LotID)
+		}
+	}
+	require.True(t, found)
+}

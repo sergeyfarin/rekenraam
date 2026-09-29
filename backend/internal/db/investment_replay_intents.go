@@ -159,15 +159,14 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	transfers, err := reader.QueryContext(ctx, `
 		SELECT f.operation_id, o.operation_kind, f.effective_on, x.source_lot_id,
 			x.quantity_value, x.quantity_scale, x.carried_basis_value, x.carried_basis_scale,
-			o.transaction_id, e.created_audit_event_id, e.created_by_user_id, e.created_at,
+			e.transaction_id, e.created_audit_event_id, e.created_by_user_id, e.created_at,
 			effect.effect_seq
 		FROM investment_transfer_facts f
 		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
 		JOIN investment_operations o ON o.id = f.operation_id
-		JOIN investment_lot_events e ON e.transaction_id = o.transaction_id
-			AND e.lot_id = x.source_lot_id AND e.event_kind = 'transfer_out'
 		JOIN investment_operation_lot_effects effect ON effect.operation_id = f.operation_id
-			AND effect.lot_event_id = e.id
+		JOIN investment_lot_events e ON e.id = effect.lot_event_id
+			AND e.lot_id = x.source_lot_id AND e.event_kind = 'transfer_out'
 		WHERE f.book_id = ? AND f.source_account_id = ? AND f.commodity_id = ?
 			AND f.transfer_kind = 'internal' AND x.cost_commodity_id = ?
 			AND o.correction_mode IS NOT 'reverse'

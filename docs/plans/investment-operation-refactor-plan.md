@@ -9,6 +9,8 @@ The 2026-09-29 review found that calling 2a and all of slice 4 complete was
 premature. The operation header's nullable unique `transaction_id` remains a
 compatibility link used by existing reads beside `investment_operation_journal_links`;
 compound and basis-only actions must migrate those reads to the link table.
+Transfer depletion replay already reads the immutable operation/lot-effect
+link instead of joining through that compatibility column.
 Current lot projection columns remain on `investment_lots` instead of a
 separate `investment_lot_state` table. Trade net-settlement and separately
 posted fee components now link to their journal posting versions. Self-check
