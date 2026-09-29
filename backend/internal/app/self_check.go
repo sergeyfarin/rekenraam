@@ -339,18 +339,37 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				JOIN investment_fee_policy_versions v ON v.policy_id = p.id
 				WHERE p.book_id = b.id AND p.account_id IS NULL AND p.charge_kind = 'commission'
 				  AND v.version_seq = 1 AND v.treatment = 'clearing_included')`},
-		{"posted operation missing its version link", `
-			SELECT o.id FROM investment_operations o WHERE o.book_id = ? AND o.transaction_id IS NOT NULL
-			AND (SELECT COUNT(*) FROM investment_operation_journal_links l
-			     JOIN transaction_versions v ON v.id = l.transaction_version_id
-			     WHERE l.operation_id = o.id AND v.transaction_id = o.transaction_id) <> 1`},
+		{"journal-backed operation missing a posted version link", `
+			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
+			AND o.operation_kind IN ('buy', 'sell', 'write_off', 'dividend',
+				'reinvested_dividend', 'external_transfer_in', 'internal_transfer', 'reversal')
+			AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links l
+				JOIN transaction_versions v ON v.id = l.transaction_version_id
+				JOIN transactions t ON t.id = v.transaction_id
+				WHERE l.operation_id = o.id AND l.book_id = o.book_id
+				AND v.book_id = o.book_id AND v.status = 'posted'
+				AND t.book_id = o.book_id AND t.deleted_at IS NULL)`},
+		{"operation journal link is not posted in its book", `
+			SELECT l.id FROM investment_operation_journal_links l
+			JOIN transaction_versions v ON v.id = l.transaction_version_id
+			JOIN transactions t ON t.id = v.transaction_id
+			WHERE l.book_id = ? AND (v.book_id <> l.book_id OR v.status <> 'posted'
+				OR t.book_id <> l.book_id OR t.deleted_at IS NOT NULL)`},
 		{"operation lot missing immutable source facts", `
-			SELECT l.id FROM investment_lots l JOIN investment_operations o ON o.transaction_id = l.source_transaction_id
-			WHERE l.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_lot_facts f
+			SELECT DISTINCT l.id FROM investment_lots l
+			JOIN transaction_versions v ON v.transaction_id = l.source_transaction_id
+			JOIN investment_operation_journal_links link ON link.transaction_version_id = v.id
+			JOIN investment_operations o ON o.id = link.operation_id
+			WHERE l.book_id = ? AND link.book_id = l.book_id
+			AND NOT EXISTS (SELECT 1 FROM investment_lot_facts f
 				WHERE f.lot_id = l.id AND f.operation_id = o.id)`},
 		{"operation lot event missing effect link", `
-			SELECT e.id FROM investment_lot_events e JOIN investment_operations o ON o.transaction_id = e.transaction_id
-			WHERE e.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+			SELECT DISTINCT e.id FROM investment_lot_events e
+			JOIN transaction_versions v ON v.transaction_id = e.transaction_id
+			JOIN investment_operation_journal_links link ON link.transaction_version_id = v.id
+			JOIN investment_operations o ON o.id = link.operation_id
+			WHERE e.book_id = ? AND link.book_id = e.book_id
+			AND NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
 				WHERE x.lot_event_id = e.id AND x.operation_id = o.id)`},
 		{"external transfer missing typed source or matching lot", `
 			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
@@ -361,7 +380,10 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				JOIN investment_lots l ON l.id = x.destination_lot_id
 				WHERE f.operation_id = o.id AND f.transfer_kind = 'external_in'
 				AND f.effective_on = o.event_date AND f.destination_account_id = l.account_id
-				AND f.commodity_id = l.commodity_id AND l.source_transaction_id = o.transaction_id
+				AND f.commodity_id = l.commodity_id
+				AND EXISTS (SELECT 1 FROM investment_operation_journal_links link
+					JOIN transaction_versions v ON v.id = link.transaction_version_id
+					WHERE link.operation_id = o.id AND v.transaction_id = l.source_transaction_id)
 				AND x.basis_knowledge = 'known' AND x.quantity_value = l.quantity_value
 				AND x.quantity_scale = l.quantity_scale
 				AND x.carried_basis_value = l.cost_basis_value
@@ -379,13 +401,22 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 					SELECT 1 FROM investment_lots source JOIN investment_lots destination
 						ON destination.id = x.destination_lot_id
 					JOIN investment_lot_events source_event ON source_event.lot_id = source.id
-						AND source_event.transaction_id = o.transaction_id AND source_event.event_kind = 'transfer_out'
+						AND source_event.event_kind = 'transfer_out'
+					JOIN investment_operation_lot_effects source_effect ON source_effect.lot_event_id = source_event.id
+						AND source_effect.operation_id = o.id
 					JOIN investment_lot_events destination_event ON destination_event.lot_id = destination.id
-						AND destination_event.transaction_id = o.transaction_id AND destination_event.event_kind = 'transfer_in'
+						AND destination_event.event_kind = 'transfer_in'
+					JOIN investment_operation_lot_effects destination_effect ON destination_effect.lot_event_id = destination_event.id
+						AND destination_effect.operation_id = o.id
 					WHERE source.id = x.source_lot_id AND source.book_id = f.book_id
 						AND source.account_id = f.source_account_id AND destination.account_id = f.destination_account_id
 						AND source.commodity_id = f.commodity_id AND destination.commodity_id = f.commodity_id
-						AND destination.source_transaction_id = o.transaction_id
+						AND EXISTS (SELECT 1 FROM investment_operation_journal_links link
+							JOIN transaction_versions v ON v.id = link.transaction_version_id
+							WHERE link.operation_id = o.id
+							AND v.transaction_id = destination.source_transaction_id
+							AND v.transaction_id = source_event.transaction_id
+							AND v.transaction_id = destination_event.transaction_id)
 						AND x.quantity_value = destination.quantity_value AND x.quantity_scale = destination.quantity_scale
 						AND x.carried_basis_value = destination.cost_basis_value
 						AND x.carried_basis_scale = destination.cost_basis_scale

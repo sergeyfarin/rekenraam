@@ -254,4 +254,6 @@ func TestReplayTransferDepletionUsesEffectLinkWithoutLegacyOperationTransactionI
 		}
 	}
 	require.True(t, found)
+	require.Equal(t, SelfCheckPassed,
+		resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
 }

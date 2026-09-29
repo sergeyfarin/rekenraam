@@ -235,6 +235,20 @@ func TestSelfCheckDetectsBalancedCashPostingComponentMismatch(t *testing.T) {
 	require.Contains(t, check.Summary, "source components disagree with posted journal legs")
 }
 
+func TestInvestmentFoundationChecksBuyThroughJournalLinkWithoutCompatibilityID(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	bought := buyOn(t, f, "2026-01-01", 1, 1000)
+	_, err := f.database.ExecContext(ctx, `DROP TRIGGER investment_operations_no_update`)
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `UPDATE investment_operations SET transaction_id = NULL
+		WHERE id IN (SELECT operation_id FROM investment_operation_journal_links
+			WHERE transaction_version_id = ?)`, bought.Transaction.VersionID)
+	require.NoError(t, err)
+	check := resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation)
+	require.Equal(t, SelfCheckPassed, check.Status)
+}
+
 func mustRunInvestmentSelfCheck(t *testing.T, f *investmentsTestFixture) SelfCheckRun {
 	t.Helper()
 	run, err := selfCheckOver(t, f.database).RunSelfCheck(context.Background(), "manual")

@@ -104,7 +104,28 @@ func TestSelfCheckFindsInvestmentOperationWithoutPostedVersionLink(t *testing.T)
 	run := harness.run(t)
 	resultCheck := resultFor(t, run, CheckInvestmentFoundation)
 	assert.Equal(t, SelfCheckFailed, resultCheck.Status)
-	assert.Contains(t, resultCheck.Summary, "posted operation missing its version link")
+	assert.Contains(t, resultCheck.Summary, "journal-backed operation missing a posted version link")
+}
+
+func TestSelfCheckRequiresJournalForKnownOperationWithoutCompatibilityTransaction(t *testing.T) {
+	harness := newSelfCheckHarness(t)
+	ctx := context.Background()
+	result, err := harness.writer.ExecContext(ctx, `
+		INSERT INTO audit_events (book_id, actor_user_id, occurred_at, origin_type, operation)
+		VALUES (1, 1, '2026-08-24T04:00:00Z', 'internal', 'test.unlinked_investment_operation')
+	`)
+	require.NoError(t, err)
+	auditID, err := result.LastInsertId()
+	require.NoError(t, err)
+	_, err = harness.writer.ExecContext(ctx, `
+		INSERT INTO investment_operations
+			(book_id, operation_kind, event_date, created_at, created_audit_event_id)
+		VALUES (1, 'buy', '2026-01-01', '2026-08-24T04:00:00Z', ?)
+	`, auditID)
+	require.NoError(t, err)
+	check := resultFor(t, harness.run(t), CheckInvestmentFoundation)
+	require.Equal(t, SelfCheckFailed, check.Status)
+	require.Contains(t, check.Summary, "journal-backed operation missing a posted version link")
 }
 
 // One deliberate corruption per check, written with raw SQL because every one
