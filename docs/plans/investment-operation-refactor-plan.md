@@ -16,10 +16,14 @@ operation kinds and resolves lot/effect and transfer provenance through links;
 correction/detail/export/import readers still need the same cutover.
 Current lot projection columns remain on `investment_lots` instead of a
 separate `investment_lot_state` table. Trade net-settlement and separately
-posted fee components now link to their journal posting versions. Self-check
-compares their account, commodity, date, signed exact amount and operation
-version. Gross and fees included within net clearing have no individual
-posting link. Self-check also
+posted fee components now link to the exact journal posting line keys chosen by
+their command, including when another leg has identical account, currency,
+date and amount. Self-check compares their account, commodity, date, signed
+exact amount and operation version, and finds trade cash, expense or charge-clearing postings
+without a source component. Gross and fees included within net clearing have
+no individual posting link. Every currently shipped operation kind requires a
+posted journal link; a future basis-only kind needs an explicit exemption.
+Self-check also
 compares single-disposal sell/write-off proceeds with their cost-currency
 clearing postings using exact arithmetic; compound disposal attribution remains
 an open data-contract gate, not an accepted change to ADR 0013. The reviewed

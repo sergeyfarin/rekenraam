@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"rekenraam/backend/internal/db"
@@ -341,14 +342,26 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				  AND v.version_seq = 1 AND v.treatment = 'clearing_included')`},
 		{"journal-backed operation missing a posted version link", `
 			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
-			AND o.operation_kind IN ('buy', 'sell', 'write_off', 'dividend',
-				'reinvested_dividend', 'external_transfer_in', 'internal_transfer', 'reversal')
+			-- All shipped investment operations require a posted journal. A future
+			-- basis-only kind must declare its exemption when that writer ships.
 			AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links l
 				JOIN transaction_versions v ON v.id = l.transaction_version_id
 				JOIN transactions t ON t.id = v.transaction_id
 				WHERE l.operation_id = o.id AND l.book_id = o.book_id
 				AND v.book_id = o.book_id AND v.status = 'posted'
 				AND t.book_id = o.book_id AND t.deleted_at IS NULL)`},
+		{"trade has a cash, expense or charge-clearing posting without a source component", `
+			SELECT DISTINCT o.id FROM investment_operations o
+			JOIN investment_operation_journal_links l ON l.operation_id = o.id AND l.book_id = o.book_id
+			JOIN posting_versions pv ON pv.transaction_version_id = l.transaction_version_id
+			JOIN posting_lines pl ON pl.id = pv.posting_line_id
+			JOIN accounts a ON a.id = pv.account_id AND a.book_id = o.book_id
+			JOIN commodities commodity ON commodity.id = pv.commodity_id AND commodity.book_id = o.book_id
+			WHERE o.book_id = ? AND o.operation_kind IN ('buy', 'sell')
+			AND commodity.kind = 'currency'
+			AND (a.system_role IS NULL OR pl.line_key LIKE 'investment-charge-%')
+			AND NOT EXISTS (SELECT 1 FROM investment_operation_components c
+				WHERE c.operation_id = o.id AND c.posting_version_id = pv.id)`},
 		{"operation journal link is not posted in its book", `
 			SELECT l.id FROM investment_operation_journal_links l
 			JOIN transaction_versions v ON v.id = l.transaction_version_id
@@ -435,6 +448,7 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				WHERE d.operation_id = o.id AND d.position_side = 'long')`},
 	}
 	var summaries []string
+	var sampleReferences []string
 	for _, check := range checks {
 		anomaly, err := s.repository.CountStructuralAnomaly(ctx, snapshot, check.query, BookID)
 		if err != nil {
@@ -445,7 +459,24 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		}
 		result.Status = SelfCheckFailed
 		result.FindingCount += anomaly.Count
-		result.Sample = append(result.Sample, anomaly.Sample...)
+		kind := "operation"
+		switch check.label {
+		case "completed setup missing transfer equity account", "completed setup missing commission default":
+			kind = "book"
+		case "operation journal link is not posted in its book":
+			kind = "journal link"
+		case "operation lot missing immutable source facts":
+			kind = "lot"
+		case "operation lot event missing effect link":
+			kind = "lot event"
+		}
+		for _, id := range anomaly.Sample {
+			if len(result.Sample) >= db.SelfCheckSampleLimit {
+				break
+			}
+			result.Sample = append(result.Sample, id)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("%s #%d", kind, id))
+		}
 		summaries = append(summaries, fmt.Sprintf("%d %s", anomaly.Count, check.label))
 	}
 	var componentMismatch int64
@@ -479,6 +510,7 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			componentMismatch++
 			if len(result.Sample) < db.SelfCheckSampleLimit {
 				result.Sample = append(result.Sample, component.ComponentID)
+				sampleReferences = append(sampleReferences, fmt.Sprintf("component #%d", component.ComponentID))
 			}
 		}
 		return nil
@@ -501,6 +533,7 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		proceedsMismatch++
 		if len(result.Sample) < db.SelfCheckSampleLimit {
 			result.Sample = append(result.Sample, decisionID)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("decision #%d", decisionID))
 		}
 	}
 	err = s.repository.StreamDisposalClearing(ctx, snapshot, BookID, func(record db.SelfCheckDisposalClearingRecord) error {
@@ -533,6 +566,9 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			result.Sample = result.Sample[:db.SelfCheckSampleLimit]
 		}
 		result.Summary = joinSummaries(summaries)
+		if len(sampleReferences) > 0 {
+			result.Summary += "; sample references: " + strings.Join(sampleReferences, ", ")
+		}
 	}
 	return result, nil
 }

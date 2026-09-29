@@ -107,7 +107,7 @@ func TestSelfCheckFindsInvestmentOperationWithoutPostedVersionLink(t *testing.T)
 	assert.Contains(t, resultCheck.Summary, "journal-backed operation missing a posted version link")
 }
 
-func TestSelfCheckRequiresJournalForKnownOperationWithoutCompatibilityTransaction(t *testing.T) {
+func TestSelfCheckRequiresJournalForNewOperationKindWithoutCompatibilityTransaction(t *testing.T) {
 	harness := newSelfCheckHarness(t)
 	ctx := context.Background()
 	result, err := harness.writer.ExecContext(ctx, `
@@ -120,7 +120,7 @@ func TestSelfCheckRequiresJournalForKnownOperationWithoutCompatibilityTransactio
 	_, err = harness.writer.ExecContext(ctx, `
 		INSERT INTO investment_operations
 			(book_id, operation_kind, event_date, created_at, created_audit_event_id)
-		VALUES (1, 'buy', '2026-01-01', '2026-08-24T04:00:00Z', ?)
+		VALUES (1, 'future_investment_kind', '2026-01-01', '2026-08-24T04:00:00Z', ?)
 	`, auditID)
 	require.NoError(t, err)
 	check := resultFor(t, harness.run(t), CheckInvestmentFoundation)

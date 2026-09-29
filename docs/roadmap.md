@@ -145,7 +145,8 @@ offers sale reversal and prefilled buy and sale replacement. The sale form uses
 pre-sale available lots for specific-lot correction, and old sales replay
 dependent disposals. Import source identity and backdated admission remain.
 The reopened [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
-now links journal-backed trade components to postings and checks them. It must
+now links journal-backed trade components to their exact posting lines and
+checks both missing links and unlinked trade cash, expense or charge-clearing legs. It must
 still extend proceeds/journal reconciliation beyond single-disposal commands,
 retire the compatibility transaction link and separate lot state.
 Transfers and basis actions, including manual splits, follow;

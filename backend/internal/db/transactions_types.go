@@ -257,6 +257,7 @@ type InvestmentComponentSpec struct {
 	ResolutionTier     string
 	FeePolicyVersionID int64
 	SourceEvidenceJSON string
+	PostingLineKey     string // Exact journal leg chosen by the command builder.
 }
 
 type TradeImpliedPriceSpec struct {

@@ -121,11 +121,17 @@ func investmentComponentPostingTx(ctx context.Context, tx *sql.Tx, bookID int64,
 	if accountID == 0 {
 		return 0, fmt.Errorf("journal-backed component has no posting account")
 	}
+	if component.PostingLineKey == "" {
+		return 0, fmt.Errorf("journal-backed component has no posting line key")
+	}
 	for _, entry := range transaction.JournalEntries {
 		if entry.EntryDate != component.AmountDate {
 			continue
 		}
 		for _, posting := range entry.Postings {
+			if posting.LineKey != component.PostingLineKey {
+				continue
+			}
 			if used[posting.ID] || posting.AccountID != accountID || posting.CommodityID != component.CommodityID {
 				continue
 			}
