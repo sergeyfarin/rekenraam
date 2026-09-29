@@ -10,18 +10,42 @@ import (
 )
 
 type CreateInternalTransferParams struct {
-	BookID               int64
-	SourceAccountID      int64
-	DestinationAccountID int64
-	CommodityID          int64
-	CostCommodityID      int64
-	EffectiveOn          string
-	Allocations          []LotAllocation
-	SourceEvidenceJSON   string
+	BookID                int64
+	SourceAccountID       int64
+	DestinationAccountID  int64
+	CommodityID           int64
+	CostCommodityID       int64
+	EffectiveOn           string
+	Allocations           []LotAllocation
+	SourceEvidenceJSON    string
+	SourceCostBasisMethod string
 }
 
 type InternalTransferResult struct {
 	DestinationLotIDs []int64
+}
+
+var ErrAverageCostTransferRequiresPoolAllocation = errors.New("internal transfer from an average-cost position requires pooled basis allocation")
+
+func requireInternalTransferBasisMethodTx(ctx context.Context, tx *sql.Tx, transfer CreateInternalTransferParams) error {
+	if !validCostBasisMethods[transfer.SourceCostBasisMethod] {
+		return fmt.Errorf("%w: internal transfer source cost-basis method is required", ErrInvalidDisposalParams)
+	}
+	var family string
+	err := tx.QueryRowContext(ctx, `SELECT method_family FROM investment_position_basis_state
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
+			AND cost_commodity_id = ? AND position_side = 'long'`,
+		transfer.BookID, transfer.SourceAccountID, transfer.CommodityID,
+		transfer.CostCommodityID).Scan(&family)
+	if errors.Is(err, sql.ErrNoRows) {
+		family = ""
+	} else if err != nil {
+		return fmt.Errorf("read internal transfer source basis method: %w", err)
+	}
+	if family == "average_cost" || methodFamily(transfer.SourceCostBasisMethod) == "average_cost" {
+		return ErrAverageCostTransferRequiresPoolAllocation
+	}
+	return nil
 }
 
 // PreviewInternalTransferLots runs the same depletion and destination opening
@@ -39,6 +63,9 @@ func (r *InvestmentRepository) PreviewInternalTransferLots(ctx context.Context, 
 	}
 	if err := requirePositionEventInOrderTx(ctx, tx, transfer.BookID, transfer.DestinationAccountID,
 		transfer.CommodityID, transfer.EffectiveOn, "an internal transfer"); err != nil {
+		return err
+	}
+	if err := requireInternalTransferBasisMethodTx(ctx, tx, transfer); err != nil {
 		return err
 	}
 	params := DisposeLotsParams{BookID: transfer.BookID, AccountID: transfer.SourceAccountID,
@@ -99,6 +126,9 @@ func (r *InvestmentRepository) CreateInternalTransfer(ctx context.Context, journ
 			}
 			if err := requirePositionEventInOrderTx(ctx, tx, transfer.BookID, transfer.DestinationAccountID,
 				transfer.CommodityID, transfer.EffectiveOn, "an internal transfer"); err != nil {
+				return InternalTransferResult{}, err
+			}
+			if err := requireInternalTransferBasisMethodTx(ctx, tx, transfer); err != nil {
 				return InternalTransferResult{}, err
 			}
 			operationID, err := investmentOperationIDTx(ctx, tx, transfer.BookID, transaction.ID)
@@ -178,16 +208,10 @@ func (r *InvestmentRepository) CreateInternalTransfer(ctx context.Context, journ
 				transfer.CommodityID, transfer.CostCommodityID); err != nil {
 				return InternalTransferResult{}, err
 			}
-			// A fully moved position releases its average-cost method-family lock.
-			if _, err := tx.ExecContext(ctx, `DELETE FROM investment_position_basis_state
-				WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
-					AND position_side = 'long' AND NOT EXISTS (
-						SELECT 1 FROM investment_lots l WHERE l.book_id = ? AND l.account_id = ?
-							AND l.commodity_id = ? AND l.cost_commodity_id = ? AND l.position_side = 'long'
-							AND l.status = 'open')`, transfer.BookID, transfer.SourceAccountID,
-				transfer.CommodityID, transfer.CostCommodityID, transfer.BookID,
-				transfer.SourceAccountID, transfer.CommodityID, transfer.CostCommodityID); err != nil {
-				return InternalTransferResult{}, fmt.Errorf("release closed source basis method: %w", err)
+			// A lot-specific move fixes the source position's method family even
+			// before its first sale. A fully moved position releases that lock.
+			if err := updatePositionMethodFamilyTx(ctx, tx, params, transfer.SourceCostBasisMethod, auditEventID); err != nil {
+				return InternalTransferResult{}, fmt.Errorf("save internal transfer source basis method: %w", err)
 			}
 			return result, nil
 		}, nil)

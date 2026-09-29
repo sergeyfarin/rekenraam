@@ -27,6 +27,7 @@ type InvestmentCorrectionChain struct {
 	RootOperationID        int64
 	EffectiveTransactionID *int64
 	CanReverseManualSale   bool
+	CanReverseManualBuy    bool
 	Operations             []InvestmentCorrectionNode
 }
 
@@ -47,6 +48,10 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 	chain := InvestmentCorrectionChain{
 		RootOperationID: records[0].OperationID,
 		Operations:      make([]InvestmentCorrectionNode, 0, len(records)),
+	}
+	importedLineage := false
+	for _, record := range records {
+		importedLineage = importedLineage || record.Imported
 	}
 	for index, record := range records {
 		isLast := index == len(records)-1
@@ -69,9 +74,13 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 			node.CorrectionOfOperationID = &id
 		}
 		chain.Operations = append(chain.Operations, node)
-		if effective && record.OperationKind == "sell" && !record.Imported &&
+		if effective && record.OperationKind == "sell" && !importedLineage &&
 			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {
 			chain.CanReverseManualSale = true
+		}
+		if effective && record.OperationKind == "buy" && !importedLineage &&
+			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {
+			chain.CanReverseManualBuy = true
 		}
 	}
 	return chain, nil

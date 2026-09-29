@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ledgerdb "rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
 
@@ -182,6 +183,16 @@ func TestInternalTransferAPIRequiresCSRFAndPreviewsBothAccounts(t *testing.T) {
 	assert.Equal(t, 1, linkCount)
 }
 
+func TestAverageCostInternalTransferConflictHasSpecificCode(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	writeInvestmentServiceError(recorder, nil, nil, "internal transfer",
+		ledgerdb.ErrAverageCostTransferRequiresPoolAllocation)
+	require.Equal(t, http.StatusConflict, recorder.Code)
+	var response errorResponse
+	require.NoError(t, json.NewDecoder(recorder.Body).Decode(&response))
+	assert.Equal(t, "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED", response.Error.Code)
+}
+
 func TestExternalTransferInPreviewNamesCheckpointAndWriteRequiresOverride(t *testing.T) {
 	handler, _ := newSetupTestHandler(t)
 	f := bootstrapInvestmentAPITest(t, handler)
@@ -303,6 +314,65 @@ func TestReverseManualSaleAPI(t *testing.T) {
 	require.Contains(t, conflict.Body.String(), "INVESTMENT_SALE_ALREADY_CORRECTED")
 }
 
+func TestReverseManualBuyAPI(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "REVB")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 50000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&bought))
+	path := "/api/v1/investments/transactions/" + strconv.FormatInt(bought.Transaction.ID, 10) + "/reverse-buy"
+	chainPath := "/api/v1/investments/transactions/" + strconv.FormatInt(bought.Transaction.ID, 10) + "/correction-chain"
+	chainRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, chainPath, nil, http.StatusOK)
+	var chain investmentCorrectionChainResponse
+	require.NoError(t, json.NewDecoder(chainRes.Body).Decode(&chain))
+	require.True(t, chain.CanReverseManualBuy)
+	request := investmentSaleReversalRequest{Reason: "duplicate acquisition"}
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
+	var reversed investmentSaleReversalResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&reversed))
+	require.Equal(t, bought.Transaction.ID, reversed.CorrectedTransactionID)
+	require.Equal(t, "posted", reversed.Transaction.Status)
+	chainRes = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, chainPath, nil, http.StatusOK)
+	require.NoError(t, json.NewDecoder(chainRes.Body).Decode(&chain))
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.False(t, chain.CanReverseManualBuy)
+	conflict := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
+	require.Contains(t, conflict.Body.String(), "INVESTMENT_BUY_ALREADY_CORRECTED")
+}
+
+func TestReverseManualBuyAPIDependentSaleConflict(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "REVD")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 50000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&bought))
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 12000)
+	sale.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/sell", sale, http.StatusCreated)
+	path := "/api/v1/investments/transactions/" + strconv.FormatInt(bought.Transaction.ID, 10) + "/reverse-buy"
+	request := investmentSaleReversalRequest{Reason: "duplicate acquisition"}
+	for _, endpoint := range []string{path + "/reconciliation-impact", path} {
+		t.Run(endpoint, func(t *testing.T) {
+			csrf := f.csrfToken
+			if endpoint != path {
+				csrf = ""
+			}
+			conflict := doInvestmentRequest(t, handler, f.sessionCookie, csrf, http.MethodPost,
+				endpoint, request, http.StatusConflict)
+			require.Contains(t, conflict.Body.String(), "INVESTMENT_BUY_DEPENDENCY")
+		})
+	}
+}
+
 func TestReplaceLatestManualSaleAPI(t *testing.T) {
 	handler, database := newSetupTestHandler(t)
 	f := bootstrapInvestmentAPITest(t, handler)
@@ -326,6 +396,8 @@ func TestReplaceLatestManualSaleAPI(t *testing.T) {
 	var source investmentTradeCorrectionContextResponse
 	require.NoError(t, json.NewDecoder(contextResult.Body).Decode(&source))
 	require.True(t, source.CanReplaceSale)
+	require.Zero(t, source.SourceIdentityID)
+	require.Empty(t, source.SourceKind)
 	require.Len(t, source.AvailableLots, 1)
 	require.Equal(t, "5", source.AvailableLots[0].QuantityValue)
 	path := "/api/v1/investments/transactions/" + strconv.FormatInt(sold.Transaction.ID, 10) + "/replace-sale"
@@ -1426,4 +1498,20 @@ func TestSellInvestment_BackdatedBehindASaleReportsItsOwnCode(t *testing.T) {
 		assert.Equal(t, "INVESTMENT_EVENT_OUT_OF_ORDER", body.Error.Code)
 		assert.Contains(t, body.Error.Message, "2026-07-01", "the message names the disposal that blocks it")
 	}
+}
+
+func TestBuyInvestment_BackdatedBehindSaleReplaysPosition(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "BUYBACK")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy",
+		tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 100000), http.StatusCreated)
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 60000)
+	sale.TransactionDate = "2026-07-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sale, http.StatusCreated)
+	backdated := tradeRequestBody(f, holding.ID, instrument.CommodityID, "10", 300000)
+	backdated.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", backdated, http.StatusCreated)
 }

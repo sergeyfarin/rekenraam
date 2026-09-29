@@ -10,6 +10,7 @@ it('prefills a correction from exact signed source amounts and recorded fee trea
     quantity_value: '123456789012345678901', quantity_scale: 8, cost_basis_method: '',
     cash_account_id: 6, net_value: '-10200', net_scale: 2, settlement_date: '2026-01-03',
     gross_value: '-10000', gross_scale: 2, memo: '', imported: false,
+    source_identity_id: 0, source_kind: '',
     already_corrected: false, elected_lots: [], effective_elected_lots: [],
     available_lots: [], can_replace_sale: false,
     charges: [{ kind: 'commission', amount_value: '-200', amount_scale: 2,

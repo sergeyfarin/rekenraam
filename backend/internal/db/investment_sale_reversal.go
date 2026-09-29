@@ -26,6 +26,9 @@ type SaleOperationRecord struct {
 	CostCommodityID      int64
 	AlreadyCorrected     bool
 	Imported             bool
+	ImportedLineage      bool
+	SourceIdentityID     int64
+	SourceEffectSeq      int64
 }
 
 func (r *InvestmentRepository) SaleOperationByID(ctx context.Context, bookID, operationID int64) (SaleOperationRecord, error) {
@@ -58,7 +61,11 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 			EXISTS(SELECT 1 FROM investment_operations successor
 				WHERE successor.correction_of_operation_id = o.id),
 			(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
-				WHERE effect.operation_id = o.id))
+				WHERE effect.operation_id = o.id)),
+			COALESCE((SELECT effect.identity_id FROM import_commit_identity_effects effect
+				WHERE effect.operation_id = o.id), 0),
+			COALESCE((SELECT effect.effect_seq FROM import_commit_identity_effects effect
+				WHERE effect.operation_id = o.id), 0)
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
 		JOIN investment_disposal_decisions d ON d.operation_id = o.id AND d.position_side = 'long'
@@ -67,7 +74,8 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 		WHERE o.book_id = ? AND o.id = ? AND o.operation_kind = 'sell'
 	`, bookID, operationID).Scan(&record.OperationID, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.EventDate, &record.AccountID,
-		&record.CommodityID, &record.CostCommodityID, &corrected, &imported)
+		&record.CommodityID, &record.CostCommodityID, &corrected, &imported,
+		&record.SourceIdentityID, &record.SourceEffectSeq)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SaleOperationRecord{}, ErrNotFound
 	}
@@ -76,6 +84,10 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 	}
 	record.AlreadyCorrected = corrected != 0
 	record.Imported = imported != 0
+	record.ImportedLineage, err = investmentOperationHasImportedLineageQuery(ctx, reader, bookID, record.OperationID)
+	if err != nil {
+		return SaleOperationRecord{}, err
+	}
 	return record, nil
 }
 
@@ -103,7 +115,7 @@ func (r *InvestmentRepository) ReverseSale(ctx context.Context, params CreateTra
 			rollbackTx(ctx, tx)
 		}
 	}()
-	current, err := checkSaleOperationForCorrectionTx(ctx, tx, params.BookID, expected)
+	current, err := checkSaleOperationForCorrectionTx(ctx, tx, params.BookID, expected, false)
 	if err != nil {
 		return TransactionRecord{}, err
 	}
@@ -145,7 +157,7 @@ func (r *InvestmentRepository) ReverseSale(ctx context.Context, params CreateTra
 	return transaction, nil
 }
 
-func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected SaleOperationRecord) (SaleOperationRecord, error) {
+func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected SaleOperationRecord, allowImportedReplacement bool) (SaleOperationRecord, error) {
 	current, err := saleOperationByIDQuery(ctx, tx, bookID, expected.OperationID)
 	if err != nil {
 		return SaleOperationRecord{}, err
@@ -153,7 +165,8 @@ func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID i
 	if current.AlreadyCorrected {
 		return SaleOperationRecord{}, ErrInvestmentOperationAlreadyCorrected
 	}
-	if current.Imported {
+	if (current.ImportedLineage && !allowImportedReplacement) ||
+		(current.Imported && (current.SourceIdentityID == 0 || current.SourceEffectSeq == 0)) {
 		return SaleOperationRecord{}, ErrInvestmentImportedCorrection
 	}
 	if current != expected {

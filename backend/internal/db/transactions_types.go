@@ -250,12 +250,14 @@ type InvestmentComponentSpec struct {
 	AmountScale        int
 	AmountDate         string
 	GrossUnknown       bool
+	SeparatelyPaid     bool
 	ChargeTreatment    string
 	ChargeAccountID    int64
 	CashAccountID      int64
 	ResolutionTier     string
 	FeePolicyVersionID int64
 	SourceEvidenceJSON string
+	PostingLineKey     string // Exact journal leg chosen by the command builder.
 }
 
 type TradeImpliedPriceSpec struct {

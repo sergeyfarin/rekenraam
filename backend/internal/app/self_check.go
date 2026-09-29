@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"rekenraam/backend/internal/db"
@@ -128,8 +129,8 @@ var checkNarratives = map[string]checkNarrative{
 		nextStep:    "The app refuses to create these, so a non-zero count means rows arrived from outside it — a backfill, a manual repair, or a restored and patched database. Exports have been quietly falling back to each account's earliest version for these rows.",
 	},
 	CheckInvestmentFoundation: {
-		explanation: "Named investment operations must link their posted versions, source lots and effects. A completed setup also needs its external investment transfer equity account and commission default.",
-		nextStep:    "Review the named operation or lot and the setup accounts. Preserve the original rows before correcting any missing source or link.",
+		explanation: "Named investment operations must link their posted versions, source lots, effects and journal-backed cash components. Single-disposal sales and write-offs must agree with their posted cost-currency clearing. A completed setup also needs its external investment transfer equity account and commission default.",
+		nextStep:    "Review the named operation, disposal decision, journal or lot and the setup accounts. Preserve the original rows before correcting any mismatch or missing link.",
 	},
 	CheckSQLiteIntegrity: {
 		explanation: "The database file itself must pass SQLite's integrity_check and foreign_key_check.",
@@ -321,7 +322,7 @@ func (s *SelfCheckService) executeChecks(ctx context.Context) ([]SelfCheckResult
 }
 
 func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapshot *sql.Tx) (SelfCheckResult, error) {
-	result := SelfCheckResult{CheckID: CheckInvestmentFoundation, Status: SelfCheckPassed, Summary: "investment operations, source facts, and setup defaults are linked"}
+	result := SelfCheckResult{CheckID: CheckInvestmentFoundation, Status: SelfCheckPassed, Summary: "investment operations, source facts, proceeds, and setup defaults agree with their journals"}
 	checks := []struct {
 		label string
 		query string
@@ -339,18 +340,50 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				JOIN investment_fee_policy_versions v ON v.policy_id = p.id
 				WHERE p.book_id = b.id AND p.account_id IS NULL AND p.charge_kind = 'commission'
 				  AND v.version_seq = 1 AND v.treatment = 'clearing_included')`},
-		{"posted operation missing its version link", `
-			SELECT o.id FROM investment_operations o WHERE o.book_id = ? AND o.transaction_id IS NOT NULL
-			AND (SELECT COUNT(*) FROM investment_operation_journal_links l
-			     JOIN transaction_versions v ON v.id = l.transaction_version_id
-			     WHERE l.operation_id = o.id AND v.transaction_id = o.transaction_id) <> 1`},
+		{"journal-backed operation missing a posted version link", `
+			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
+			-- All shipped investment operations require a posted journal. A future
+			-- basis-only kind must declare its exemption when that writer ships.
+			AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links l
+				JOIN transaction_versions v ON v.id = l.transaction_version_id
+				JOIN transactions t ON t.id = v.transaction_id
+				WHERE l.operation_id = o.id AND l.book_id = o.book_id
+				AND v.book_id = o.book_id AND v.status = 'posted'
+				AND t.book_id = o.book_id AND t.deleted_at IS NULL)`},
+		{"trade has a cash, expense or charge-clearing posting without a source component", `
+			SELECT DISTINCT o.id FROM investment_operations o
+			JOIN investment_operation_journal_links l ON l.operation_id = o.id AND l.book_id = o.book_id
+				AND l.role = 'primary'
+			JOIN posting_versions pv ON pv.transaction_version_id = l.transaction_version_id
+			JOIN posting_lines pl ON pl.id = pv.posting_line_id
+			JOIN accounts a ON a.id = pv.account_id AND a.book_id = o.book_id
+			JOIN commodities commodity ON commodity.id = pv.commodity_id AND commodity.book_id = o.book_id
+			WHERE o.book_id = ? AND o.operation_kind IN ('buy', 'sell')
+			AND commodity.kind = 'currency'
+			AND (a.system_role IS NULL OR pl.line_key LIKE 'investment-charge-%')
+			AND NOT EXISTS (SELECT 1 FROM investment_operation_components c
+				WHERE c.operation_id = o.id AND c.posting_version_id = pv.id)`},
+		{"operation journal link is not posted in its book", `
+			SELECT l.id FROM investment_operation_journal_links l
+			JOIN transaction_versions v ON v.id = l.transaction_version_id
+			JOIN transactions t ON t.id = v.transaction_id
+			WHERE l.book_id = ? AND (v.book_id <> l.book_id OR v.status <> 'posted'
+				OR t.book_id <> l.book_id OR t.deleted_at IS NOT NULL)`},
 		{"operation lot missing immutable source facts", `
-			SELECT l.id FROM investment_lots l JOIN investment_operations o ON o.transaction_id = l.source_transaction_id
-			WHERE l.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_lot_facts f
+			SELECT DISTINCT l.id FROM investment_lots l
+			JOIN transaction_versions v ON v.transaction_id = l.source_transaction_id
+			JOIN investment_operation_journal_links link ON link.transaction_version_id = v.id
+			JOIN investment_operations o ON o.id = link.operation_id
+			WHERE l.book_id = ? AND link.book_id = l.book_id
+			AND NOT EXISTS (SELECT 1 FROM investment_lot_facts f
 				WHERE f.lot_id = l.id AND f.operation_id = o.id)`},
 		{"operation lot event missing effect link", `
-			SELECT e.id FROM investment_lot_events e JOIN investment_operations o ON o.transaction_id = e.transaction_id
-			WHERE e.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+			SELECT DISTINCT e.id FROM investment_lot_events e
+			JOIN transaction_versions v ON v.transaction_id = e.transaction_id
+			JOIN investment_operation_journal_links link ON link.transaction_version_id = v.id
+			JOIN investment_operations o ON o.id = link.operation_id
+			WHERE e.book_id = ? AND link.book_id = e.book_id
+			AND NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
 				WHERE x.lot_event_id = e.id AND x.operation_id = o.id)`},
 		{"external transfer missing typed source or matching lot", `
 			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
@@ -361,7 +394,10 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				JOIN investment_lots l ON l.id = x.destination_lot_id
 				WHERE f.operation_id = o.id AND f.transfer_kind = 'external_in'
 				AND f.effective_on = o.event_date AND f.destination_account_id = l.account_id
-				AND f.commodity_id = l.commodity_id AND l.source_transaction_id = o.transaction_id
+				AND f.commodity_id = l.commodity_id
+				AND EXISTS (SELECT 1 FROM investment_operation_journal_links link
+					JOIN transaction_versions v ON v.id = link.transaction_version_id
+					WHERE link.operation_id = o.id AND v.transaction_id = l.source_transaction_id)
 				AND x.basis_knowledge = 'known' AND x.quantity_value = l.quantity_value
 				AND x.quantity_scale = l.quantity_scale
 				AND x.carried_basis_value = l.cost_basis_value
@@ -379,13 +415,22 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 					SELECT 1 FROM investment_lots source JOIN investment_lots destination
 						ON destination.id = x.destination_lot_id
 					JOIN investment_lot_events source_event ON source_event.lot_id = source.id
-						AND source_event.transaction_id = o.transaction_id AND source_event.event_kind = 'transfer_out'
+						AND source_event.event_kind = 'transfer_out'
+					JOIN investment_operation_lot_effects source_effect ON source_effect.lot_event_id = source_event.id
+						AND source_effect.operation_id = o.id
 					JOIN investment_lot_events destination_event ON destination_event.lot_id = destination.id
-						AND destination_event.transaction_id = o.transaction_id AND destination_event.event_kind = 'transfer_in'
+						AND destination_event.event_kind = 'transfer_in'
+					JOIN investment_operation_lot_effects destination_effect ON destination_effect.lot_event_id = destination_event.id
+						AND destination_effect.operation_id = o.id
 					WHERE source.id = x.source_lot_id AND source.book_id = f.book_id
 						AND source.account_id = f.source_account_id AND destination.account_id = f.destination_account_id
 						AND source.commodity_id = f.commodity_id AND destination.commodity_id = f.commodity_id
-						AND destination.source_transaction_id = o.transaction_id
+						AND EXISTS (SELECT 1 FROM investment_operation_journal_links link
+							JOIN transaction_versions v ON v.id = link.transaction_version_id
+							WHERE link.operation_id = o.id
+							AND v.transaction_id = destination.source_transaction_id
+							AND v.transaction_id = source_event.transaction_id
+							AND v.transaction_id = destination_event.transaction_id)
 						AND x.quantity_value = destination.quantity_value AND x.quantity_scale = destination.quantity_scale
 						AND x.carried_basis_value = destination.cost_basis_value
 						AND x.carried_basis_scale = destination.cost_basis_scale
@@ -404,6 +449,7 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				WHERE d.operation_id = o.id AND d.position_side = 'long')`},
 	}
 	var summaries []string
+	var sampleReferences []string
 	for _, check := range checks {
 		anomaly, err := s.repository.CountStructuralAnomaly(ctx, snapshot, check.query, BookID)
 		if err != nil {
@@ -414,14 +460,116 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		}
 		result.Status = SelfCheckFailed
 		result.FindingCount += anomaly.Count
-		result.Sample = append(result.Sample, anomaly.Sample...)
+		kind := "operation"
+		switch check.label {
+		case "completed setup missing transfer equity account", "completed setup missing commission default":
+			kind = "book"
+		case "operation journal link is not posted in its book":
+			kind = "journal link"
+		case "operation lot missing immutable source facts":
+			kind = "lot"
+		case "operation lot event missing effect link":
+			kind = "lot event"
+		}
+		for _, id := range anomaly.Sample {
+			if len(result.Sample) >= db.SelfCheckSampleLimit {
+				break
+			}
+			result.Sample = append(result.Sample, id)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("%s #%d", kind, id))
+		}
 		summaries = append(summaries, fmt.Sprintf("%d %s", anomaly.Count, check.label))
+	}
+	var componentMismatch int64
+	err := s.repository.StreamInvestmentComponents(ctx, snapshot, BookID, func(component db.SelfCheckInvestmentComponentRecord) error {
+		amount := exact.ScaledIntFromCoefficient(component.AmountValue, component.AmountScale)
+		needsPosting := component.ComponentKind == "net_settlement" && amount.Sign() != 0 ||
+			component.ComponentKind == "charge" && (component.SeparatelyPaid || component.ChargeTreatment.String == "separately_expensed")
+		bad := needsPosting != component.PostingID.Valid
+		if needsPosting && component.PostingID.Valid {
+			expected := amount
+			if component.ComponentKind == "charge" {
+				expected = amount.Negated()
+			}
+			posted, parseErr := exact.Parse(component.PostingValue.String)
+			if parseErr != nil {
+				return fmt.Errorf("parse posting for investment component %d: %w", component.ComponentID, parseErr)
+			}
+			bad = component.PostingBookID.Int64 != BookID || !component.VersionLinked ||
+				component.PostingCommodity.Int64 != component.CommodityID ||
+				component.PostingDate.String != component.AmountDate ||
+				expected.Cmp(exact.ScaledIntFromCoefficient(posted, int(component.PostingScale.Int64))) != 0
+			if component.ComponentKind == "net_settlement" {
+				bad = bad || !component.CashAccountID.Valid || component.PostingAccountID.Int64 != component.CashAccountID.Int64
+			} else if component.ChargeTreatment.String == "separately_expensed" {
+				bad = bad || !component.ChargeAccountID.Valid || component.PostingAccountID.Int64 != component.ChargeAccountID.Int64
+			} else {
+				bad = bad || component.PostingRole.String != "commodity_trading"
+			}
+		}
+		if bad {
+			componentMismatch++
+			if len(result.Sample) < db.SelfCheckSampleLimit {
+				result.Sample = append(result.Sample, component.ComponentID)
+				sampleReferences = append(sampleReferences, fmt.Sprintf("component #%d", component.ComponentID))
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	if componentMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += componentMismatch
+		summaries = append(summaries, fmt.Sprintf("%d source components disagree with posted journal legs", componentMismatch))
+	}
+	var decisionID int64
+	var proceeds, clearing *exact.ScaledInt
+	var proceedsMismatch int64
+	finishDecision := func() {
+		if decisionID == 0 || proceeds.Cmp(clearing.Negated()) == 0 {
+			return
+		}
+		proceedsMismatch++
+		if len(result.Sample) < db.SelfCheckSampleLimit {
+			result.Sample = append(result.Sample, decisionID)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("decision #%d", decisionID))
+		}
+	}
+	err = s.repository.StreamDisposalClearing(ctx, snapshot, BookID, func(record db.SelfCheckDisposalClearingRecord) error {
+		if record.DecisionID != decisionID {
+			finishDecision()
+			decisionID = record.DecisionID
+			proceeds = exact.ScaledIntFromCoefficient(record.ProceedsValue, record.ProceedsScale)
+			clearing = exact.NewScaledInt()
+		}
+		if record.PostingValue.Valid {
+			posting, err := exact.Parse(record.PostingValue.String)
+			if err != nil {
+				return fmt.Errorf("parse disposal clearing posting for decision %d: %w", decisionID, err)
+			}
+			clearing.AddCoefficient(posting, int(record.PostingScale.Int64))
+		}
+		return nil
+	})
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	finishDecision()
+	if proceedsMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += proceedsMismatch
+		summaries = append(summaries, fmt.Sprintf("%d disposal proceeds disagree with posted clearing", proceedsMismatch))
 	}
 	if result.Status == SelfCheckFailed {
 		if len(result.Sample) > db.SelfCheckSampleLimit {
 			result.Sample = result.Sample[:db.SelfCheckSampleLimit]
 		}
 		result.Summary = joinSummaries(summaries)
+		if len(sampleReferences) > 0 {
+			result.Summary += "; sample references: " + strings.Join(sampleReferences, ", ")
+		}
 	}
 	return result, nil
 }

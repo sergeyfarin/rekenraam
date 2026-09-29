@@ -23,6 +23,9 @@ type BuyOperationRecord struct {
 	CostCommodityID      int64
 	AlreadyCorrected     bool
 	Imported             bool
+	ImportedLineage      bool
+	SourceIdentityID     int64
+	SourceEffectSeq      int64
 }
 
 func (r *InvestmentRepository) BuyOperationByTransactionID(ctx context.Context, bookID, transactionID int64) (BuyOperationRecord, error) {
@@ -36,7 +39,11 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 		current.id, f.lot_id, o.event_date, f.account_id, f.commodity_id, f.cost_commodity_id,
 		EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id),
 		(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
-			WHERE effect.operation_id = o.id))
+			WHERE effect.operation_id = o.id)),
+		COALESCE((SELECT effect.identity_id FROM import_commit_identity_effects effect
+			WHERE effect.operation_id = o.id), 0),
+		COALESCE((SELECT effect.effect_seq FROM import_commit_identity_effects effect
+			WHERE effect.operation_id = o.id), 0)
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
 		JOIN investment_lot_facts f ON f.operation_id = o.id AND f.position_side = 'long'
@@ -47,7 +54,7 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 		bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.LotID,
 		&record.EventDate, &record.AccountID, &record.CommodityID, &record.CostCommodityID,
-		&corrected, &imported)
+		&corrected, &imported, &record.SourceIdentityID, &record.SourceEffectSeq)
 	if errors.Is(err, sql.ErrNoRows) {
 		return BuyOperationRecord{}, ErrNotFound
 	}
@@ -56,10 +63,14 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 	}
 	record.AlreadyCorrected = corrected != 0
 	record.Imported = imported != 0
+	record.ImportedLineage, err = investmentOperationHasImportedLineageQuery(ctx, reader, bookID, record.OperationID)
+	if err != nil {
+		return BuyOperationRecord{}, err
+	}
 	return record, nil
 }
 
-func checkBuyOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected BuyOperationRecord) (BuyOperationRecord, error) {
+func checkBuyOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected BuyOperationRecord, allowImportedReplacement bool) (BuyOperationRecord, error) {
 	current, err := buyOperationByTransactionIDQuery(ctx, tx, bookID, expected.TransactionID)
 	if err != nil {
 		return BuyOperationRecord{}, err
@@ -67,7 +78,11 @@ func checkBuyOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID in
 	if current.AlreadyCorrected {
 		return BuyOperationRecord{}, ErrInvestmentOperationAlreadyCorrected
 	}
-	if current.Imported {
+	// An imported fill is correctable only when its committed source row still
+	// identifies this exact operation. The immutable identity continues to
+	// dedupe a retry, while correction_of_operation_id links the replacement.
+	if (current.ImportedLineage && !allowImportedReplacement) ||
+		(current.Imported && (current.SourceIdentityID == 0 || current.SourceEffectSeq == 0)) {
 		return BuyOperationRecord{}, ErrInvestmentImportedCorrection
 	}
 	if current != expected {
@@ -126,7 +141,7 @@ func (r *InvestmentRepository) ReplaceBuy(ctx context.Context, expected BuyOpera
 			rollbackTx(ctx, tx)
 		}
 	}()
-	current, err := checkBuyOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
+	current, err := checkBuyOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected, true)
 	if err != nil {
 		return BuyReplacementRecord{}, err
 	}

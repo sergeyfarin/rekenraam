@@ -736,6 +736,29 @@ InvestmentSaleReversalResponse:
       type: integer
       format: int64
 
+InvestmentBuyReversalRequest:
+  type: object
+  additionalProperties: false
+  required: [reason]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted manual long buy is being reversed.
+    reconciliation_override:
+      type: boolean
+      description: Omit or set false to keep affected reconciliation checkpoints active.
+
+InvestmentBuyReversalResponse:
+  type: object
+  required: [transaction, corrected_transaction_id]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    corrected_transaction_id:
+      type: integer
+      format: int64
+
 InvestmentSaleReplacementRequest:
   type: object
   additionalProperties: false
@@ -835,7 +858,7 @@ InvestmentBuyReplacementResponse:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, operations]
   properties:
     root_operation_id:
       type: integer
@@ -847,6 +870,9 @@ InvestmentCorrectionChainResponse:
     can_reverse_manual_sale:
       type: boolean
       description: Whether the effective operation is a posted manual long sale eligible for the native reversal command.
+    can_reverse_manual_buy:
+      type: boolean
+      description: Whether the effective operation is a posted manual long buy eligible for a guarded reversal attempt. Dependent replay may still refuse the command.
     operations:
       type: array
       minItems: 1
@@ -859,7 +885,7 @@ InvestmentTradeCorrectionContextResponse:
   required: [operation_id, transaction_id, operation_kind, event_date, holding_account_id,
     commodity_id, commodity_code, cost_commodity_id, quantity_value, quantity_scale,
     cost_basis_method, cash_account_id, net_value, net_scale, settlement_date, memo,
-    imported, already_corrected, charges, elected_lots, can_replace_sale,
+    imported, source_identity_id, source_kind, already_corrected, charges, elected_lots, can_replace_sale,
     available_lots, effective_elected_lots]
   properties:
     operation_id: { type: integer, format: int64 }
@@ -882,6 +908,8 @@ InvestmentTradeCorrectionContextResponse:
     gross_value: { type: string, description: Signed gross source amount when known. }
     gross_scale: { type: integer }
     imported: { type: boolean }
+    source_identity_id: { type: integer, format: int64, description: Committed import source identity; zero for manual trades or an imported trade without a source link. }
+    source_kind: { type: string, description: Stable import source kind; empty when no committed source identity exists. }
     already_corrected: { type: boolean }
     charges:
       type: array
@@ -894,7 +922,7 @@ InvestmentTradeCorrectionContextResponse:
         $ref: '#/InvestmentTradeCorrectionLotChoiceResponse'
     can_replace_sale:
       type: boolean
-      description: Display hint for an effective manual sale eligible for correction. The write rechecks its source and dependent replay.
+      description: Display hint for an effective sale eligible for correction, including imported fills with a committed source identity. The write rechecks its source and dependent replay.
     available_lots:
       type: array
       description: Effective long lots and quantities immediately before an uncorrected manual sale, including an older sale, from a rolled-back replay.

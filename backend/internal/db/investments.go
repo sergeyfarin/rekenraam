@@ -329,6 +329,7 @@ type DisposalDecisionSource struct {
 
 type DisposalDecisionRecord struct {
 	ID                   int64
+	DecisionSeq          int
 	TransactionID        int64
 	TransactionVersionID int64
 	AccountID            int64
@@ -1848,7 +1849,36 @@ func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, tran
 	return executeInvestmentWriteTx(ctx, r.database, transactionParams,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (InvestmentLotRecord, error) {
 			lotParams.SourceTransactionID = transaction.ID
-			return createLotWithAuditTx(ctx, tx, lotParams, auditEventID, false)
+			latest, err := latestPositionRewriteDateTx(ctx, tx, lotParams.BookID, lotParams.AccountID, lotParams.CommodityID)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			replayAdmission := latest != "" && lotParams.OpenedOn < latest
+			lot, err := createLotWithAuditTx(ctx, tx, lotParams, auditEventID, replayAdmission)
+			if err != nil || !replayAdmission {
+				return lot, err
+			}
+			operationID, err := investmentOperationIDTx(ctx, tx, lotParams.BookID, transaction.ID)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			intents, err := investmentReplayIntentsQuery(ctx, tx, lotParams.BookID,
+				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID, "long")
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			projection, err := simulateInvestmentReplayTx(ctx, tx, lotParams.BookID,
+				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID, intents)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			if err := persistInvestmentReplayProjectionTx(ctx, tx, lotParams.BookID,
+				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID,
+				operationID, auditEventID, transactionParams.ActorUserID, transactionParams.CreatedAt,
+				intents, projection); err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			return investmentLotByIDTx(ctx, tx, lotParams.BookID, lot.ID)
 		}, postWrite)
 }
 
@@ -1925,12 +1955,12 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_disposal_decisions (
-			book_id, transaction_id, transaction_version_id, operation_id, position_side, account_id, commodity_id,
+			book_id, transaction_id, transaction_version_id, operation_id, decision_seq, position_side, account_id, commodity_id,
 			cost_commodity_id, event_date, quantity_value, quantity_scale,
 			disposed_basis_value, disposed_basis_scale, proceeds_value, proceeds_scale, cost_basis_method, resolution_tier,
 			account_version_id, profile_id, profile_version_id, source_effective_from,
 			source_recorded_at, created_at, created_by_user_id, created_audit_event_id
-		) VALUES (?, ?, ?, ?, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, 1, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, params.BookID, transaction.ID, transaction.VersionID, operationID, params.AccountID, params.CommodityID,
 		costCommodityID, params.EventDate, params.QuantityValue, params.QuantityScale,
 		disposedBasisValue, disposedBasis.Scale(), params.ProceedsValue, params.ProceedsScale, params.CostBasisMethod, source.ResolutionTier,
@@ -1961,7 +1991,7 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 		}
 	}
 	return DisposalDecisionRecord{
-		ID: decisionID, TransactionID: transaction.ID, TransactionVersionID: transaction.VersionID,
+		ID: decisionID, DecisionSeq: 1, TransactionID: transaction.ID, TransactionVersionID: transaction.VersionID,
 		AccountID: params.AccountID, CommodityID: params.CommodityID, CostCommodityID: costCommodityID,
 		EventDate: params.EventDate, QuantityValue: params.QuantityValue, QuantityScale: params.QuantityScale,
 		DisposedBasisValue: disposedBasisValue, DisposedBasisScale: disposedBasis.Scale(),

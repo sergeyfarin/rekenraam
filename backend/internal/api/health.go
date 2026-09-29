@@ -202,6 +202,8 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("GET /api/v1/investments/transactions/{transaction_id}/trade-correction-context", investmentTradeCorrectionContext(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-sale", reverseInvestmentSale(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-sale/reconciliation-impact", reverseInvestmentSaleReconciliationImpact(logger, services.Auth, services.Investment))
+	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-buy", reverseInvestmentBuy(logger, services.Auth, services.Investment, options))
+	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-buy/reconciliation-impact", reverseInvestmentBuyReconciliationImpact(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/replace-sale", replaceInvestmentSale(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/replace-sale/reconciliation-impact", replaceInvestmentSaleReconciliationImpact(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/replace-buy", replaceInvestmentBuy(logger, services.Auth, services.Investment, options))

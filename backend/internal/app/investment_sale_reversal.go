@@ -31,7 +31,7 @@ type ReverseInvestmentSaleInput struct {
 // from the effective long-position replay. Imported fills remain fenced until
 // their source identity can be corrected in the same operation.
 func (s *InvestmentService) ReverseSale(ctx context.Context, input ReverseInvestmentSaleInput) (Transaction, error) {
-	operation, planned, err := s.reverseSalePlan(ctx, input)
+	operation, planned, err := s.reverseSalePlan(ctx, input, false)
 	if err != nil {
 		return Transaction{}, err
 	}
@@ -50,7 +50,7 @@ func (s *InvestmentService) ReverseSale(ctx context.Context, input ReverseInvest
 }
 
 func (s *InvestmentService) ReverseSaleReconciliationImpact(ctx context.Context, input ReverseInvestmentSaleInput) (ReconciliationImpact, error) {
-	_, planned, err := s.reverseSalePlan(ctx, input)
+	_, planned, err := s.reverseSalePlan(ctx, input, false)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
@@ -59,7 +59,7 @@ func (s *InvestmentService) ReverseSaleReconciliationImpact(ctx context.Context,
 	})
 }
 
-func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseInvestmentSaleInput) (db.SaleOperationRecord, CreateTransactionInput, error) {
+func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseInvestmentSaleInput, allowImportedReplacement bool) (db.SaleOperationRecord, CreateTransactionInput, error) {
 	if input.OwnerUserID <= 0 || (input.OperationID <= 0 && input.TransactionID <= 0) {
 		return db.SaleOperationRecord{}, CreateTransactionInput{}, ValidationError{Message: "owner and sale id are required"}
 	}
@@ -82,7 +82,8 @@ func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseIn
 	if operation.AlreadyCorrected {
 		return db.SaleOperationRecord{}, CreateTransactionInput{}, ErrInvestmentSaleAlreadyCorrected
 	}
-	if operation.Imported {
+	if (operation.ImportedLineage && !allowImportedReplacement) ||
+		(operation.Imported && operation.SourceIdentityID == 0) {
 		return db.SaleOperationRecord{}, CreateTransactionInput{}, ErrInvestmentImportedSale
 	}
 	original, err := s.transactionService.Transaction(ctx, operation.TransactionID)

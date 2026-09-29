@@ -326,6 +326,140 @@ func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing
 	require.Equal(t, 1, grossUnknown, "Trading 212's unit price does not supply a sourced gross in the net currency")
 }
 
+func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "corrected-fill", OrderID: "corrected-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
+	}
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	committed, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	require.Equal(t, 1, committed.CommittedCount)
+	rows, err := f.importRepo.ListAllImportStagedRows(ctx, batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.True(t, rows[0].CommittedIdentityID.Valid)
+	require.Len(t, rows[0].CommitEffects, 1)
+	source := rows[0].CommitEffects[0]
+	require.True(t, source.OperationID.Valid)
+	require.True(t, source.TransactionID.Valid)
+	buyContext, err := f.investmentSvc.TradeCorrectionContext(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Equal(t, rows[0].CommittedIdentityID.Int64, buyContext.SourceIdentityID)
+	require.Equal(t, "trading212", buyContext.SourceKind)
+	instruments, err := f.investmentSvc.ListInstruments(ctx)
+	require.NoError(t, err)
+	require.Len(t, instruments, 1)
+	holdingID, found, err := f.connService.HoldingAccountForCommodity(ctx, conn.ID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	require.True(t, found)
+	replaced, err := f.investmentSvc.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64,
+		Reason: "correct sourced settlement", Replacement: InvestmentTradeInput{
+			TransactionDate: "2026-06-01", CommodityID: instruments[0].CommodityID,
+			HoldingAccountID: holdingID, CashAccountID: f.cashAccountID,
+			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(2),
+			CashAmountValue: 30100, CashAmountScale: 2,
+		},
+	})
+	require.NoError(t, err)
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
+	require.True(t, chain.Operations[0].Imported)
+	require.False(t, chain.CanReverseManualBuy)
+	_, err = f.investmentSvc.ReverseBuy(ctx, ReverseInvestmentBuyInput{
+		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
+		Reason: "remove source-linked replacement",
+	})
+	require.ErrorIs(t, err, ErrInvestmentImportedBuy)
+	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
+	require.NoError(t, err)
+	require.Len(t, effects, 1, "the immutable source effect still identifies the original fill")
+	require.Equal(t, source.OperationID.Int64, effects[0].OperationID.Int64)
+	duplicateBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	duplicate, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: duplicateBatch})
+	require.NoError(t, err)
+	require.Zero(t, duplicate.CommittedCount)
+}
+
+func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	buyBatch, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillID: "sale-source-buy", OrderID: "sale-source-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	})
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: buyBatch})
+	require.NoError(t, err)
+	fill := trading212OrderFill{
+		FillID: "sale-source-sell", OrderID: "sale-source-sell-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "SELL", Quantity: "1", Price: "170.00", Currency: "EUR",
+		FilledAt: "2026-07-01T10:00:00Z", NetValue: "170.00", NetValueCurrency: "EUR",
+	}
+	saleBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	committed, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: saleBatch})
+	require.NoError(t, err)
+	require.Equal(t, 1, committed.CommittedCount)
+	rows, err := f.importRepo.ListAllImportStagedRows(ctx, saleBatch)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.True(t, rows[0].CommittedIdentityID.Valid)
+	require.Len(t, rows[0].CommitEffects, 1)
+	source := rows[0].CommitEffects[0]
+	require.True(t, source.OperationID.Valid)
+	require.True(t, source.TransactionID.Valid)
+	saleContext, err := f.investmentSvc.TradeCorrectionContext(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Equal(t, rows[0].CommittedIdentityID.Int64, saleContext.SourceIdentityID)
+	require.Equal(t, "trading212", saleContext.SourceKind)
+	require.True(t, saleContext.CanReplaceSale)
+	_, err = f.investmentSvc.ReverseSale(ctx, ReverseInvestmentSaleInput{
+		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64, Reason: "reverse imported source",
+	})
+	require.ErrorIs(t, err, ErrInvestmentImportedSale, "terminal reversal still requires its own source-aware command")
+	instruments, err := f.investmentSvc.ListInstruments(ctx)
+	require.NoError(t, err)
+	require.Len(t, instruments, 1)
+	holdingID, found, err := f.connService.HoldingAccountForCommodity(ctx, conn.ID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	require.True(t, found)
+	replaced, err := f.investmentSvc.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64,
+		Reason: "correct sourced settlement", Replacement: InvestmentTradeInput{
+			TransactionDate: "2026-07-01", CommodityID: instruments[0].CommodityID,
+			HoldingAccountID: holdingID, CashAccountID: f.cashAccountID,
+			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(1),
+			CashAmountValue: 17100, CashAmountScale: 2, CostBasisMethod: "fifo",
+		},
+	})
+	require.NoError(t, err)
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
+	require.True(t, chain.Operations[0].Imported)
+	require.False(t, chain.CanReverseManualSale)
+	_, err = f.investmentSvc.ReverseSale(ctx, ReverseInvestmentSaleInput{
+		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
+		Reason: "remove source-linked replacement",
+	})
+	require.ErrorIs(t, err, ErrInvestmentImportedSale)
+	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
+	require.NoError(t, err)
+	require.Len(t, effects, 1)
+	require.Equal(t, source.OperationID.Int64, effects[0].OperationID.Int64)
+	duplicateBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	duplicate, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: duplicateBatch})
+	require.NoError(t, err)
+	require.Zero(t, duplicate.CommittedCount)
+}
+
 func TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride(t *testing.T) {
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)

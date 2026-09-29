@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
+	"rekenraam/backend/internal/exact"
 )
 
 // recordInvestmentFoundationTx attaches the posted version and immutable
@@ -48,7 +50,13 @@ func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params Create
 			return fmt.Errorf("record trade settlement date: %w", err)
 		}
 	}
+	usedPostings := make(map[int64]bool)
+	var tradingAccountID int64
 	for i, component := range params.InvestmentComponents {
+		postingID, err := investmentComponentPostingTx(ctx, tx, params.BookID, transaction, component, usedPostings, &tradingAccountID)
+		if err != nil {
+			return fmt.Errorf("link investment component %d: %w", i+1, err)
+		}
 		evidenceJSON := component.SourceEvidenceJSON
 		if evidenceJSON == "" {
 			evidenceJSON = "{}"
@@ -56,14 +64,15 @@ func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params Create
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_operation_components
 				(book_id, operation_id, component_seq, component_kind, charge_kind, commodity_id,
-				 amount_value, amount_scale, amount_date, gross_unknown, charge_treatment,
+				 amount_value, amount_scale, amount_date, gross_unknown, separately_paid, posting_version_id, charge_treatment,
 				 charge_account_id, cash_account_id, resolution_tier, fee_policy_version_id, source_evidence_json,
 				 created_audit_event_id)
-			VALUES (?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, NULLIF(?, ''),
+			VALUES (?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?, ?, NULLIF(?, 0), NULLIF(?, ''),
 				 NULLIF(?, 0), NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, 0), ?, ?)
 		`, params.BookID, operationID, i+1, component.Kind, component.ChargeKind, component.CommodityID,
 			component.AmountValue, component.AmountScale, component.AmountDate,
-			boolInt(component.GrossUnknown), component.ChargeTreatment, component.ChargeAccountID, component.CashAccountID,
+			boolInt(component.GrossUnknown), boolInt(component.SeparatelyPaid), postingID,
+			component.ChargeTreatment, component.ChargeAccountID, component.CashAccountID,
 			component.ResolutionTier, component.FeePolicyVersionID,
 			evidenceJSON, auditEventID); err != nil {
 			return fmt.Errorf("record investment source component: %w", err)
@@ -75,6 +84,65 @@ func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params Create
 		}
 	}
 	return nil
+}
+
+func investmentComponentPostingTx(ctx context.Context, tx *sql.Tx, bookID int64, transaction TransactionRecord,
+	component InvestmentComponentSpec, used map[int64]bool, tradingAccountID *int64) (int64, error) {
+	value, err := exact.Parse(component.AmountValue)
+	if err != nil {
+		return 0, fmt.Errorf("parse component amount: %w", err)
+	}
+	accountID := int64(0)
+	expected := exact.ScaledIntFromCoefficient(value, component.AmountScale)
+	switch component.Kind {
+	case "net_settlement":
+		if expected.Sign() == 0 {
+			return 0, nil // Zero settlement has no journal posting.
+		}
+		accountID = component.CashAccountID
+	case "charge":
+		if !component.SeparatelyPaid && component.ChargeTreatment == "clearing_included" {
+			return 0, nil // Included in the net clearing leg, not a separate leg.
+		}
+		expected = expected.Negated() // A charge's journal leg opposes owner cash flow.
+		if component.ChargeTreatment == "separately_expensed" {
+			accountID = component.ChargeAccountID
+		} else {
+			if *tradingAccountID == 0 {
+				if err := tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE book_id = ? AND system_role = 'commodity_trading'`, bookID).Scan(tradingAccountID); err != nil {
+					return 0, fmt.Errorf("read commodity trading account: %w", err)
+				}
+			}
+			accountID = *tradingAccountID
+		}
+	default:
+		return 0, nil // Gross consideration and distributions are source evidence.
+	}
+	if accountID == 0 {
+		return 0, fmt.Errorf("journal-backed component has no posting account")
+	}
+	if component.PostingLineKey == "" {
+		return 0, fmt.Errorf("journal-backed component has no posting line key")
+	}
+	for _, entry := range transaction.JournalEntries {
+		if entry.EntryDate != component.AmountDate {
+			continue
+		}
+		for _, posting := range entry.Postings {
+			if posting.LineKey != component.PostingLineKey {
+				continue
+			}
+			if used[posting.ID] || posting.AccountID != accountID || posting.CommodityID != component.CommodityID {
+				continue
+			}
+			if exact.ScaledIntFromCoefficient(posting.QuantityValue, posting.QuantityScale).Cmp(expected) != 0 {
+				continue
+			}
+			used[posting.ID] = true
+			return posting.ID, nil
+		}
+	}
+	return 0, fmt.Errorf("no matching posted journal leg for %s on %s", component.Kind, component.AmountDate)
 }
 
 func recordTradeImpliedPriceTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams, versionID int64, auditEventID int64, price TradeImpliedPriceSpec) error {

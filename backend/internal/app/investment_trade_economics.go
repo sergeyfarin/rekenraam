@@ -276,12 +276,12 @@ func (s *InvestmentService) resolveTradeCharge(ctx context.Context, trade Invest
 // on their payment dates. Every dated entry balances by commodity.
 func tradeJournalEntries(input InvestmentTradeInput, tradingAccountID int64, memo string, economics tradeEconomics, isBuy bool) []JournalEntryInput {
 	postingsByDate := map[string][]PostingInput{}
-	add := func(date string, accountID, commodityID int64, value int64, scale int) {
+	add := func(date string, accountID, commodityID int64, value int64, scale int, lineKey string) {
 		if value == 0 {
 			return
 		}
 		postingsByDate[date] = append(postingsByDate[date], PostingInput{
-			AccountID: accountID, CommodityID: commodityID, QuantityValue: exact.New(value), QuantityScale: scale, Memo: memo,
+			LineKey: lineKey, AccountID: accountID, CommodityID: commodityID, QuantityValue: exact.New(value), QuantityScale: scale, Memo: memo,
 		})
 	}
 	security := input.QuantityValue
@@ -292,30 +292,32 @@ func tradeJournalEntries(input InvestmentTradeInput, tradingAccountID int64, mem
 		PostingInput{AccountID: input.HoldingAccountID, CommodityID: input.CommodityID, QuantityValue: security, QuantityScale: input.QuantityScale, Memo: memo},
 		PostingInput{AccountID: tradingAccountID, CommodityID: input.CommodityID, QuantityValue: security.Negated(), QuantityScale: input.QuantityScale, Memo: memo},
 	)
-	add(economics.SettlementDate, input.CashAccountID, input.CashCommodityID, economics.NetValue, economics.NetScale)
+	add(economics.SettlementDate, input.CashAccountID, input.CashCommodityID, economics.NetValue, economics.NetScale, "investment-net-settlement")
 	if economics.MainClearingValue != 0 {
 		postingsByDate[economics.SettlementDate] = append(postingsByDate[economics.SettlementDate], PostingInput{
 			AccountID: tradingAccountID, CommodityID: input.CashCommodityID,
 			QuantityValue: exact.New(economics.MainClearingValue).Negated(), QuantityScale: economics.MainClearingScale, Memo: memo,
 		})
 	}
-	for _, charge := range economics.Charges {
+	for index, charge := range economics.Charges {
+		chargeKey := fmt.Sprintf("investment-charge-%d", index)
 		if !charge.SeparatelyPaid {
 			if charge.Treatment == "separately_expensed" {
 				postingsByDate[economics.SettlementDate] = append(postingsByDate[economics.SettlementDate], PostingInput{
-					AccountID: charge.AccountID, CommodityID: input.CashCommodityID,
+					LineKey: chargeKey, AccountID: charge.AccountID, CommodityID: input.CashCommodityID,
 					QuantityValue: exact.New(charge.Input.AmountValue).Negated(), QuantityScale: charge.Input.AmountScale, Memo: memo,
 				})
 			}
 			continue
 		}
-		add(charge.Date, *charge.Input.CashAccountID, charge.Input.CommodityID, charge.Input.AmountValue, charge.Input.AmountScale)
+		add(charge.Date, *charge.Input.CashAccountID, charge.Input.CommodityID, charge.Input.AmountValue, charge.Input.AmountScale,
+			fmt.Sprintf("investment-charge-cash-%d", index))
 		chargeAccountID := charge.AccountID
 		if charge.Treatment == "clearing_included" {
 			chargeAccountID = tradingAccountID
 		}
 		postingsByDate[charge.Date] = append(postingsByDate[charge.Date], PostingInput{
-			AccountID: chargeAccountID, CommodityID: charge.Input.CommodityID,
+			LineKey: chargeKey, AccountID: chargeAccountID, CommodityID: charge.Input.CommodityID,
 			QuantityValue: exact.New(charge.Input.AmountValue).Negated(), QuantityScale: charge.Input.AmountScale, Memo: memo,
 		})
 	}
@@ -350,23 +352,25 @@ func (e tradeEconomics) components(commodityID int64) []db.InvestmentComponentSp
 	components = append(components, db.InvestmentComponentSpec{
 		Kind: "net_settlement", CommodityID: commodityID,
 		AmountValue: fmt.Sprint(e.NetValue), AmountScale: e.NetScale, AmountDate: e.SettlementDate,
-		GrossUnknown: !e.GrossKnown, CashAccountID: e.PrimaryCashAccountID,
+		GrossUnknown: !e.GrossKnown, CashAccountID: e.PrimaryCashAccountID, PostingLineKey: "investment-net-settlement",
 	})
-	for _, charge := range e.Charges {
+	for index, charge := range e.Charges {
 		if charge.SeparatelyPaid {
 			components = append(components, db.InvestmentComponentSpec{
 				Kind: "net_settlement", CommodityID: charge.Input.CommodityID,
 				AmountValue: fmt.Sprint(charge.Input.AmountValue), AmountScale: charge.Input.AmountScale,
 				AmountDate: charge.Date, CashAccountID: *charge.Input.CashAccountID,
+				PostingLineKey: fmt.Sprintf("investment-charge-cash-%d", index),
 			})
 		}
 		components = append(components, db.InvestmentComponentSpec{
 			Kind: "charge", ChargeKind: charge.Input.Kind, CommodityID: charge.Input.CommodityID,
 			AmountValue: fmt.Sprint(charge.Input.AmountValue), AmountScale: charge.Input.AmountScale,
-			AmountDate: charge.Date, ChargeTreatment: charge.Treatment,
+			AmountDate: charge.Date, ChargeTreatment: charge.Treatment, SeparatelyPaid: charge.SeparatelyPaid,
 			ChargeAccountID: charge.AccountID, ResolutionTier: charge.ResolutionTier,
 			CashAccountID:      tradeChargeCashAccountID(charge.Input.CashAccountID),
 			FeePolicyVersionID: charge.PolicyVersionID, SourceEvidenceJSON: charge.EvidenceJSON,
+			PostingLineKey: fmt.Sprintf("investment-charge-%d", index),
 		})
 	}
 	return components

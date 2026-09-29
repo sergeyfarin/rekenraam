@@ -1,9 +1,38 @@
 # Investment operation and subledger refactor plan
 
-Status: proposed implementation plan, 2026-09-26. No behavior described below
-is shipped merely because it appears here. ADR 0012 and ADR 0013 govern; this
-plan makes their next slices concrete. R16 owns the near-term work, T-75b owns
-native correction, and T-108 owns short sales and covers.
+Status: active implementation plan, reviewed 2026-09-29. Completed slices are
+marked below; no behavior is shipped merely because it appears here. ADR 0012
+and ADR 0013 govern. R16 owns the near-term work, T-75b owns native
+correction, and T-108 owns short sales and covers.
+
+The 2026-09-29 review found that calling 2a and all of slice 4 complete was
+premature. The operation header's nullable unique `transaction_id` remains a
+compatibility link used by existing reads beside `investment_operation_journal_links`;
+compound and basis-only actions must migrate those reads to the link table.
+Transfer depletion replay already reads the immutable operation/lot-effect
+link instead of joining through that compatibility column. Foundation
+self-check now requires posted journal links for all implemented journal-backed
+operation kinds and resolves lot/effect and transfer provenance through links;
+correction/detail/export/import readers still need the same cutover.
+Current lot projection columns remain on `investment_lots` instead of a
+separate `investment_lot_state` table. Trade net-settlement and separately
+posted fee components now link to the exact journal posting line keys chosen by
+their command, including when another leg has identical account, currency,
+date and amount. Self-check compares their account, commodity, date, signed
+exact amount and operation version, and finds trade cash, expense or
+charge-clearing postings without a source component in each trade's primary
+journal. An inverse journal linked as a correction reversal has no new source
+components. Gross and fees included within net clearing have
+no individual posting link. Every currently shipped operation kind requires a
+posted journal link; a future basis-only kind needs an explicit exemption.
+Self-check also
+compares single-disposal sell/write-off proceeds with their cost-currency
+clearing postings using exact arithmetic; compound disposal attribution remains
+an open data-contract gate, not an accepted change to ADR 0013. The reviewed
+baseline now keys disposal decisions by `(operation_id, decision_seq)`; current
+single-disposal writers emit sequence 1. Correction writers also still have
+separate transaction orchestration. Complete these integrity and correction
+gates before adding outbound transfers or basis actions.
 
 ## Outcome and boundaries
 
@@ -29,10 +58,12 @@ Those are input taxonomies, not the app's database enum or accounting policy.
 
 ## Original gaps the slices address
 
-These bullets describe the pre-refactor implementation. Slices 2a–4u closed
-the operation-link, exact-trade, proceeds-inference, and manual correction
-gaps. Slice 5b added known-basis external inbound transfers; general dated
-admission, the other transfer and basis actions, and short positions remain.
+These bullets describe the pre-refactor implementation. Slices 2a–4u added
+operation links, exact trade economics, explicit proceeds and manual
+buy/sale correction, but the integrity and correction gates listed above
+remain open. Slice 5b added known-basis external inbound transfers; general
+dated admission, the other transfer and basis actions, and short positions
+remain.
 
 - `investment_operations` has a name, date, and mandatory unique transaction
   link, but no exact trade consideration, charges, source identity, or links
@@ -462,7 +493,7 @@ next family.
 2. **Foundation in two independently validated sub-slices.** Both keep the
    app runnable; neither opens a new user-facing investment operation.
 
-   - **2a — investment schema and writer — complete 2026-09-26.** Introduce the parent/link/date/
+   - **2a — investment schema and writer — partial, integrity gates reopened 2026-09-29.** Introduce the parent/link/date/
      component tables, operation-keyed disposal decisions, side-keyed basis
      state, fact/projection split, canonical TEXT coefficients, and direct
      effect links. Add and seed `external_investment_transfer_equity` in the
@@ -528,6 +559,9 @@ next family.
    and effective FIFO allocations differ. Exact trade economics precede
    this slice so replay has one authoritative source for proceeds and charges;
    this refines ADR 0013's foundation-to-correction sequence.
+   The named sub-slices below are complete individually, while source-file-driven
+   imported correction, imported reversal, broader
+   operation corrections, and shared correction orchestration remain open.
    - **4a — immutable intent reader — complete 2026-09-27.** The long-position
      reader takes opening terms from lot facts and disposal terms from decisions,
      retains method/provenance and specific-lot elections, and orders them by
@@ -717,7 +751,37 @@ next family.
      and historical pre-sale lots. FIFO, LIFO, average and specific-lot
      replacements, corrected acquisition lineage, dependency refusal,
      reconciliation and self-check have targeted coverage. Imported source
-     identity correction and general backdated admission remain.
+     identity correction remains.
+   - **4v — backdated long-buy admission — complete 2026-09-29.** The shared
+     buy writer admits an acquisition before a later depletion by replaying
+     the effective long-position intents inside the same SQLite transaction
+     as the journal, lot, audit event, reconciliation guard and optional import
+     identity. It appends effective disposal revisions and installs the lot
+     projection only after the dependency simulation succeeds. FIFO, LIFO,
+     average-cost and specific-lot choices retain their recorded meaning;
+     dependent transfers still reject a changed carried basis. Imported
+     source correction was left to the following slice.
+   - **4w — source-linked imported fill replacement — complete 2026-09-29.**
+     An imported buy or sale can use the native replacement command when its
+     committed identity effect still links the exact source operation. The
+     command rechecks that link inside the write transaction and retains the
+     original identity, fingerprint, source effect, journal and lot facts as
+     history. The correction chain links the replacement to that source
+     operation, and a repeated import of the same fill remains deduplicated.
+     Transaction detail exposes the correction with the recorded source
+     identity and keeps orphan imported operations unavailable. Terminal
+     imported sale reversal and source-file-driven correction are still gated.
+   - **4x — terminal manual long-buy reversal — complete 2026-09-29.** A
+     reasoned `reverse-buy` command posts the exact inverse journal, links a
+     terminal correction operation, retires the source trade price, and
+     installs effective long-position replay under one audit event and SQLite
+     transaction. The read-only reconciliation preview first simulates the
+     same removal. A later sale may reselect surviving lots under its recorded
+     method, but insufficient quantity or a specific-lot election tied to the
+     removed buy rejects the entire write. Reconciliation checkpoints require
+     explicit override. Imported buys and their manual replacement descendants
+     remain fenced for terminal reversal; the same lineage guard applies to
+     imported sales.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

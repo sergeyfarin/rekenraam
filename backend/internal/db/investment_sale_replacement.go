@@ -46,7 +46,7 @@ func (r *InvestmentRepository) ReplaceSale(ctx context.Context, expected SaleOpe
 			rollbackTx(ctx, tx)
 		}
 	}()
-	current, err := checkSaleOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
+	current, err := checkSaleOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected, true)
 	if err != nil {
 		return noInverse, noReplacement, nil, noDecision, err
 	}

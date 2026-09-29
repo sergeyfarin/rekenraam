@@ -140,6 +140,22 @@ func TestExternalTransferInKnownBasisPostsBookBridgeAndReplaysAsOpening(t *testi
 	assert.Equal(t, SelfCheckPassed, resultFor(t, run, CheckInvestmentFoundation).Status)
 }
 
+func TestExternalTransferFoundationUsesJournalLinkWithoutCompatibilityID(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	seedExternalTransferEquity(t, f.database)
+	ctx := context.Background()
+	transfer, err := f.investmentService.ExternalTransferIn(ctx, knownTransferInput(f))
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `DROP TRIGGER investment_operations_no_update`)
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `UPDATE investment_operations SET transaction_id = NULL
+		WHERE id IN (SELECT operation_id FROM investment_operation_journal_links
+			WHERE transaction_version_id = ?)`, transfer.Transaction.VersionID)
+	require.NoError(t, err)
+	require.Equal(t, SelfCheckPassed,
+		resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
+}
+
 func TestTransferOriginalAcquisitionDateOrdersFIFOAndLIFO(t *testing.T) {
 	for _, method := range []string{"fifo", "lifo"} {
 		for _, moveAgain := range []bool{false, true} {

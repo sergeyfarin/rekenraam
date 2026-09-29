@@ -1,9 +1,9 @@
 post:
-  summary: Preview reconciliation impact of a long-sale replacement
+  summary: Preview a manual long-buy reversal
   description: >-
-    Plans both journals and returns their distinct affected checkpoints
-    without writing. Pass reconciliation_override=true to the replacement
-    command after reviewing the listed checkpoints.
+    Simulates dependent long-position replay and returns affected reconciliation
+    checkpoints without writing. Pass reconciliation_override=true to the
+    reversal command after reviewing those checkpoints.
   parameters:
     - in: path
       name: transaction_id
@@ -14,16 +14,16 @@ post:
     content:
       application/json:
         schema:
-          $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReplacementRequest"
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalRequest"
   responses:
     "200":
-      description: Reconciliation impact computed
+      description: Replay and reconciliation impact computed
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ReconciliationImpactResponse"
     "400":
-      description: Invalid replacement or missing reason
+      description: Invalid request or missing reason
       content:
         application/json:
           schema:
@@ -35,13 +35,13 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "404":
-      description: Posted long sale not found
+      description: Posted manual long buy not found
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Sale corrected, imported, changed, or followed by another position operation
+      description: Already corrected, imported, changed, or dependent replay impossible
       content:
         application/json:
           schema:
