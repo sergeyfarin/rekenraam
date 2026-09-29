@@ -145,6 +145,8 @@ func mapInternalTransferError(err error) error {
 		return err
 	case errors.Is(err, db.ErrInsufficientLots), errors.Is(err, db.ErrNotFound):
 		return ErrInvestmentLotsInsufficient
+	case errors.Is(err, db.ErrAverageCostTransferRequiresPoolAllocation):
+		return err
 	case errors.Is(err, db.ErrInvalidDisposalParams), errors.Is(err, db.ErrInvestmentBasisRange):
 		return ValidationError{Message: err.Error()}
 	default:

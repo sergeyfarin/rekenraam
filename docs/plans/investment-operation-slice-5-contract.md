@@ -75,6 +75,10 @@ For FIFO and LIFO, the original acquisition date controls priority when known;
 otherwise the account-entry `opened_on` date does. `opened_on` alone controls
 dated eligibility, so a lot cannot be consumed before it entered the book.
 The same ordering applies in replay.
+The first selected-lot internal command refuses an open source position whose
+locked method family is `average_cost`: taking the selected lot's individual
+basis would violate the pool rate. Preview and write return the same named
+conflict until a pool-aware transfer allocation and replay are available.
 
 External inbound basis is a sourced fact: accept a known nonnegative value
 including known zero, or record unknown with a NULL coefficient. An outbound

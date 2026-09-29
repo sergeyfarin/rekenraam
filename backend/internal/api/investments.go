@@ -1604,6 +1604,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "dividend default not found")
 	case errors.Is(err, app.ErrInvestmentLotsInsufficient):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "insufficient investment lots")
+	case errors.Is(err, db.ErrAverageCostTransferRequiresPoolAllocation):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED", err.Error())
 	case errors.Is(err, app.ErrInvestmentSaleNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment sale operation not found")
 	case errors.Is(err, app.ErrInvestmentOperationNotFound):

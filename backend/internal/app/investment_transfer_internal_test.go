@@ -148,6 +148,29 @@ func TestInternalTransferRefusesUnavailableSourceWithoutPartialWrite(t *testing.
 	assert.Zero(t, facts)
 }
 
+func TestInternalTransferRefusesLotBasisFromOpenAverageCostPool(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+	buyOn(t, f, "2026-01-01", 2, 2000)
+	sale := sellInput(f, "2026-02-01", 1)
+	sale.CostBasisMethod = "average_cost"
+	_, err := f.investmentService.Sell(ctx, sale)
+	require.NoError(t, err)
+	laterBuy := buyOn(t, f, "2026-03-01", 1, 2000)
+	input := internalTransferFromLot(f, destinationID, *laterBuy.LotID, exact.New(1), 0)
+	before := f.transactionCount(t)
+	_, err = f.investmentService.PreviewInternalTransferReconciliationImpact(ctx, input)
+	require.ErrorContains(t, err, "requires pooled basis allocation")
+	_, err = f.investmentService.InternalTransfer(ctx, input)
+	require.ErrorContains(t, err, "requires pooled basis allocation")
+	assert.Equal(t, before, f.transactionCount(t))
+	var count int
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_transfer_facts
+		WHERE transfer_kind = 'internal'`).Scan(&count))
+	assert.Zero(t, count)
+}
+
 func TestBuyCorrectionRefusesChangedBasisOfLinkedInternalTransfer(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")

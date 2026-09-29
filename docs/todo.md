@@ -52,7 +52,8 @@ Last reconciled: 2026-09-28.
   command and mobile entry screen are complete. The internal transfer API
   now moves explicitly selected long lots between holding accounts with
   carried basis, reconciliation review and a mobile entry screen. Next:
-  outbound transfers and cross-account carried-basis replay. Keep basis-affecting
+  pooled-basis allocation for internal transfers from open average-cost
+  positions, outbound transfers and cross-account carried-basis replay. Keep basis-affecting
   provider suggestions in review until their operation exists.
 - [ ] Add [named short sale and cover T-108](https://github.com/sergeyfarin/rekenraam/issues/103)
   with side-aware gains, dated positions, self-check, export, API, and mobile

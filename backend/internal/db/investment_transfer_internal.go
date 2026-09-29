@@ -24,6 +24,27 @@ type InternalTransferResult struct {
 	DestinationLotIDs []int64
 }
 
+var ErrAverageCostTransferRequiresPoolAllocation = errors.New("internal transfer from an average-cost position requires pooled basis allocation")
+
+func requireInternalTransferBasisMethodTx(ctx context.Context, tx *sql.Tx, transfer CreateInternalTransferParams) error {
+	var family string
+	err := tx.QueryRowContext(ctx, `SELECT method_family FROM investment_position_basis_state
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
+			AND cost_commodity_id = ? AND position_side = 'long'`,
+		transfer.BookID, transfer.SourceAccountID, transfer.CommodityID,
+		transfer.CostCommodityID).Scan(&family)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read internal transfer source basis method: %w", err)
+	}
+	if family == "average_cost" {
+		return ErrAverageCostTransferRequiresPoolAllocation
+	}
+	return nil
+}
+
 // PreviewInternalTransferLots runs the same depletion and destination opening
 // primitives as the writer inside a transaction that is always rolled back.
 // The journal/reconciliation preview is computed separately by the service.
@@ -39,6 +60,9 @@ func (r *InvestmentRepository) PreviewInternalTransferLots(ctx context.Context, 
 	}
 	if err := requirePositionEventInOrderTx(ctx, tx, transfer.BookID, transfer.DestinationAccountID,
 		transfer.CommodityID, transfer.EffectiveOn, "an internal transfer"); err != nil {
+		return err
+	}
+	if err := requireInternalTransferBasisMethodTx(ctx, tx, transfer); err != nil {
 		return err
 	}
 	params := DisposeLotsParams{BookID: transfer.BookID, AccountID: transfer.SourceAccountID,
@@ -99,6 +123,9 @@ func (r *InvestmentRepository) CreateInternalTransfer(ctx context.Context, journ
 			}
 			if err := requirePositionEventInOrderTx(ctx, tx, transfer.BookID, transfer.DestinationAccountID,
 				transfer.CommodityID, transfer.EffectiveOn, "an internal transfer"); err != nil {
+				return InternalTransferResult{}, err
+			}
+			if err := requireInternalTransferBasisMethodTx(ctx, tx, transfer); err != nil {
 				return InternalTransferResult{}, err
 			}
 			operationID, err := investmentOperationIDTx(ctx, tx, transfer.BookID, transaction.ID)

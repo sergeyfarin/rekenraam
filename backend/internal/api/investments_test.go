@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	ledgerdb "rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
 
@@ -180,6 +181,16 @@ func TestInternalTransferAPIRequiresCSRFAndPreviewsBothAccounts(t *testing.T) {
 		WHERE source_lot_id = ? AND destination_lot_id = ?`, *boughtSource.LotID,
 		transfer.DestinationLotIDs[0]).Scan(&linkCount))
 	assert.Equal(t, 1, linkCount)
+}
+
+func TestAverageCostInternalTransferConflictHasSpecificCode(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	writeInvestmentServiceError(recorder, nil, nil, "internal transfer",
+		ledgerdb.ErrAverageCostTransferRequiresPoolAllocation)
+	require.Equal(t, http.StatusConflict, recorder.Code)
+	var response errorResponse
+	require.NoError(t, json.NewDecoder(recorder.Body).Decode(&response))
+	assert.Equal(t, "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED", response.Error.Code)
 }
 
 func TestExternalTransferInPreviewNamesCheckpointAndWriteRequiresOverride(t *testing.T) {
