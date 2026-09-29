@@ -13529,6 +13529,179 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-buy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a posted manual long buy
+         * @description Posts an exact inverse, retires the source trade price, and replays later long-position decisions in one audited database transaction. The original buy remains posted history. A dependent disposal that cannot be satisfied refuses the command without durable effects. Imported buys require a separate source-aware terminal correction.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentBuyReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Buy reversed and dependent position replayed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentBuyReversalResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted manual long buy not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, imported, changed, dependent operation impossible, or reconciliation override required */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-buy/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a manual long-buy reversal
+         * @description Simulates dependent long-position replay and returns affected reconciliation checkpoints without writing. Pass reconciliation_override=true to the reversal command after reviewing those checkpoints.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentBuyReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Replay and reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted manual long buy not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, imported, changed, or dependent replay impossible */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/transactions/{transaction_id}/replace-sale": {
         parameters: {
             query?: never;
@@ -18263,6 +18436,17 @@ export interface components {
             /** Format: int64 */
             corrected_transaction_id: number;
         };
+        InvestmentBuyReversalRequest: {
+            /** @description Why the posted manual long buy is being reversed. */
+            reason: string;
+            /** @description Omit or set false to keep affected reconciliation checkpoints active. */
+            reconciliation_override?: boolean;
+        };
+        InvestmentBuyReversalResponse: {
+            transaction: components["schemas"]["TransactionResponse"];
+            /** Format: int64 */
+            corrected_transaction_id: number;
+        };
         InvestmentSaleReplacementRequest: {
             /** @description Why the posted manual long sale is being corrected. */
             reason: string;
@@ -18314,6 +18498,8 @@ export interface components {
             effective_transaction_id: number | null;
             /** @description Whether the effective operation is a posted manual long sale eligible for the native reversal command. */
             can_reverse_manual_sale: boolean;
+            /** @description Whether the effective operation is a posted manual long buy eligible for a guarded reversal attempt. Dependent replay may still refuse the command. */
+            can_reverse_manual_buy: boolean;
             operations: components["schemas"]["InvestmentCorrectionNodeResponse"][];
         };
         /** @description Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility. */

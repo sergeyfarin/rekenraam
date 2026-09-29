@@ -736,6 +736,29 @@ InvestmentSaleReversalResponse:
       type: integer
       format: int64
 
+InvestmentBuyReversalRequest:
+  type: object
+  additionalProperties: false
+  required: [reason]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted manual long buy is being reversed.
+    reconciliation_override:
+      type: boolean
+      description: Omit or set false to keep affected reconciliation checkpoints active.
+
+InvestmentBuyReversalResponse:
+  type: object
+  required: [transaction, corrected_transaction_id]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    corrected_transaction_id:
+      type: integer
+      format: int64
+
 InvestmentSaleReplacementRequest:
   type: object
   additionalProperties: false
@@ -835,7 +858,7 @@ InvestmentBuyReplacementResponse:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, operations]
   properties:
     root_operation_id:
       type: integer
@@ -847,6 +870,9 @@ InvestmentCorrectionChainResponse:
     can_reverse_manual_sale:
       type: boolean
       description: Whether the effective operation is a posted manual long sale eligible for the native reversal command.
+    can_reverse_manual_buy:
+      type: boolean
+      description: Whether the effective operation is a posted manual long buy eligible for a guarded reversal attempt. Dependent replay may still refuse the command.
     operations:
       type: array
       minItems: 1

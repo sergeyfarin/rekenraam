@@ -82,7 +82,8 @@ func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseIn
 	if operation.AlreadyCorrected {
 		return db.SaleOperationRecord{}, CreateTransactionInput{}, ErrInvestmentSaleAlreadyCorrected
 	}
-	if operation.Imported && (!allowImportedReplacement || operation.SourceIdentityID == 0) {
+	if (operation.ImportedLineage && !allowImportedReplacement) ||
+		(operation.Imported && operation.SourceIdentityID == 0) {
 		return db.SaleOperationRecord{}, CreateTransactionInput{}, ErrInvestmentImportedSale
 	}
 	original, err := s.transactionService.Transaction(ctx, operation.TransactionID)

@@ -38,6 +38,8 @@ export type ReconciliationImpactResponse = components['schemas']['Reconciliation
 export type InvestmentCorrectionChainResponse = components['schemas']['InvestmentCorrectionChainResponse'];
 export type InvestmentSaleReversalRequest = components['schemas']['InvestmentSaleReversalRequest'];
 export type InvestmentSaleReversalResponse = components['schemas']['InvestmentSaleReversalResponse'];
+export type InvestmentBuyReversalRequest = components['schemas']['InvestmentBuyReversalRequest'];
+export type InvestmentBuyReversalResponse = components['schemas']['InvestmentBuyReversalResponse'];
 export type InvestmentTradeCorrectionContextResponse = components['schemas']['InvestmentTradeCorrectionContextResponse'];
 export type InvestmentBuyReplacementRequest = components['schemas']['InvestmentBuyReplacementRequest'];
 export type InvestmentBuyReplacementResponse = components['schemas']['InvestmentBuyReplacementResponse'];
@@ -423,6 +425,41 @@ export async function reverseManualSale(
   try {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/investments/transactions/{transaction_id}/reverse-sale',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewBuyReversalReconciliation(
+  transactionID: number,
+  input: InvestmentBuyReversalRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-buy/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseManualBuy(
+  transactionID: number,
+  input: InvestmentBuyReversalRequest,
+  csrfToken: string
+): Promise<InvestmentBuyReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-buy',
       { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
     );
     if (data !== undefined) return data;

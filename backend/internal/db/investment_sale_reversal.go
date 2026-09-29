@@ -26,6 +26,7 @@ type SaleOperationRecord struct {
 	CostCommodityID      int64
 	AlreadyCorrected     bool
 	Imported             bool
+	ImportedLineage      bool
 	SourceIdentityID     int64
 	SourceEffectSeq      int64
 }
@@ -83,6 +84,10 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 	}
 	record.AlreadyCorrected = corrected != 0
 	record.Imported = imported != 0
+	record.ImportedLineage, err = investmentOperationHasImportedLineageQuery(ctx, reader, bookID, record.OperationID)
+	if err != nil {
+		return SaleOperationRecord{}, err
+	}
 	return record, nil
 }
 
@@ -160,7 +165,8 @@ func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID i
 	if current.AlreadyCorrected {
 		return SaleOperationRecord{}, ErrInvestmentOperationAlreadyCorrected
 	}
-	if current.Imported && (!allowImportedReplacement || current.SourceIdentityID == 0 || current.SourceEffectSeq == 0) {
+	if (current.ImportedLineage && !allowImportedReplacement) ||
+		(current.Imported && (current.SourceIdentityID == 0 || current.SourceEffectSeq == 0)) {
 		return SaleOperationRecord{}, ErrInvestmentImportedCorrection
 	}
 	if current != expected {

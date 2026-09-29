@@ -257,6 +257,7 @@ type investmentCorrectionChainResponse struct {
 	RootOperationID        int64                              `json:"root_operation_id"`
 	EffectiveTransactionID *int64                             `json:"effective_transaction_id"`
 	CanReverseManualSale   bool                               `json:"can_reverse_manual_sale"`
+	CanReverseManualBuy    bool                               `json:"can_reverse_manual_buy"`
 	Operations             []investmentCorrectionNodeResponse `json:"operations"`
 }
 
@@ -1001,7 +1002,8 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 		}
 		writeJSON(w, http.StatusOK, investmentCorrectionChainResponse{
 			RootOperationID: chain.RootOperationID, EffectiveTransactionID: chain.EffectiveTransactionID,
-			CanReverseManualSale: chain.CanReverseManualSale, Operations: operations,
+			CanReverseManualSale: chain.CanReverseManualSale, CanReverseManualBuy: chain.CanReverseManualBuy,
+			Operations: operations,
 		})
 	}
 }
@@ -1073,6 +1075,60 @@ func reverseInvestmentSaleReconciliationImpact(logger *slog.Logger, authService 
 		})
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "preview sale reversal reconciliation impact", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
+func reverseInvestmentBuy(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		transaction, err := investmentService.ReverseBuy(r.Context(), app.ReverseInvestmentBuyInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			TransactionID: transactionID, Reason: request.Reason,
+			ReconciliationOverride: request.ReconciliationOverride,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "reverse investment buy", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSaleReversalResponse{Transaction: toTransactionResponse(transaction), CorrectedTransactionID: transactionID})
+	}))
+}
+
+func reverseInvestmentBuyReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReverseBuyReconciliationImpact(r.Context(), app.ReverseInvestmentBuyInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview buy reversal reconciliation impact", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))

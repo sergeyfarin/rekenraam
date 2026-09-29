@@ -293,6 +293,10 @@ paths:
     $ref: "./paths/investments-reverse-sale.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-sale/reconciliation-impact:
     $ref: "./paths/investments-reverse-sale-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-buy:
+    $ref: "./paths/investments-reverse-buy.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-buy/reconciliation-impact:
+    $ref: "./paths/investments-reverse-buy-reconciliation-impact.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-sale:
     $ref: "./paths/investments-replace-sale.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-sale/reconciliation-impact:
@@ -948,6 +952,10 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReversalRequest"
     InvestmentSaleReversalResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReversalResponse"
+    InvestmentBuyReversalRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentBuyReversalRequest"
+    InvestmentBuyReversalResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentBuyReversalResponse"
     InvestmentSaleReplacementRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReplacementRequest"
     InvestmentSaleReplacementTradeRequest:

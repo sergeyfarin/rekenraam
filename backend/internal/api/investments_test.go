@@ -314,6 +314,65 @@ func TestReverseManualSaleAPI(t *testing.T) {
 	require.Contains(t, conflict.Body.String(), "INVESTMENT_SALE_ALREADY_CORRECTED")
 }
 
+func TestReverseManualBuyAPI(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "REVB")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 50000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&bought))
+	path := "/api/v1/investments/transactions/" + strconv.FormatInt(bought.Transaction.ID, 10) + "/reverse-buy"
+	chainPath := "/api/v1/investments/transactions/" + strconv.FormatInt(bought.Transaction.ID, 10) + "/correction-chain"
+	chainRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, chainPath, nil, http.StatusOK)
+	var chain investmentCorrectionChainResponse
+	require.NoError(t, json.NewDecoder(chainRes.Body).Decode(&chain))
+	require.True(t, chain.CanReverseManualBuy)
+	request := investmentSaleReversalRequest{Reason: "duplicate acquisition"}
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
+	var reversed investmentSaleReversalResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&reversed))
+	require.Equal(t, bought.Transaction.ID, reversed.CorrectedTransactionID)
+	require.Equal(t, "posted", reversed.Transaction.Status)
+	chainRes = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, chainPath, nil, http.StatusOK)
+	require.NoError(t, json.NewDecoder(chainRes.Body).Decode(&chain))
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.False(t, chain.CanReverseManualBuy)
+	conflict := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
+	require.Contains(t, conflict.Body.String(), "INVESTMENT_BUY_ALREADY_CORRECTED")
+}
+
+func TestReverseManualBuyAPIDependentSaleConflict(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "REVD")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 50000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&bought))
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 12000)
+	sale.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/sell", sale, http.StatusCreated)
+	path := "/api/v1/investments/transactions/" + strconv.FormatInt(bought.Transaction.ID, 10) + "/reverse-buy"
+	request := investmentSaleReversalRequest{Reason: "duplicate acquisition"}
+	for _, endpoint := range []string{path + "/reconciliation-impact", path} {
+		t.Run(endpoint, func(t *testing.T) {
+			csrf := f.csrfToken
+			if endpoint != path {
+				csrf = ""
+			}
+			conflict := doInvestmentRequest(t, handler, f.sessionCookie, csrf, http.MethodPost,
+				endpoint, request, http.StatusConflict)
+			require.Contains(t, conflict.Body.String(), "INVESTMENT_BUY_DEPENDENCY")
+		})
+	}
+}
+
 func TestReplaceLatestManualSaleAPI(t *testing.T) {
 	handler, database := newSetupTestHandler(t)
 	f := bootstrapInvestmentAPITest(t, handler)

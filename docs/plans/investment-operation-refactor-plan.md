@@ -560,7 +560,7 @@ next family.
    this slice so replay has one authoritative source for proceeds and charges;
    this refines ADR 0013's foundation-to-correction sequence.
    The named sub-slices below are complete individually, while source-file-driven
-   imported correction, imported sale reversal, buy reversal, broader
+   imported correction, imported reversal, broader
    operation corrections, and shared correction orchestration remain open.
    - **4a — immutable intent reader — complete 2026-09-27.** The long-position
      reader takes opening terms from lot facts and disposal terms from decisions,
@@ -771,6 +771,17 @@ next family.
      Transaction detail exposes the correction with the recorded source
      identity and keeps orphan imported operations unavailable. Terminal
      imported sale reversal and source-file-driven correction are still gated.
+   - **4x — terminal manual long-buy reversal — complete 2026-09-29.** A
+     reasoned `reverse-buy` command posts the exact inverse journal, links a
+     terminal correction operation, retires the source trade price, and
+     installs effective long-position replay under one audit event and SQLite
+     transaction. The read-only reconciliation preview first simulates the
+     same removal. A later sale may reselect surviving lots under its recorded
+     method, but insufficient quantity or a specific-lot election tied to the
+     removed buy rejects the entire write. Reconciliation checkpoints require
+     explicit override. Imported buys and their manual replacement descendants
+     remain fenced for terminal reversal; the same lineage guard applies to
+     imported sales.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

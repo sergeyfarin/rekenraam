@@ -11,7 +11,9 @@
     getInvestmentCorrectionChain,
     getInvestmentTradeCorrectionContext,
     investmentCorrectionChainQueryKey,
+    previewBuyReversalReconciliation,
     previewSaleReversalReconciliation,
+    reverseManualBuy,
     reverseManualSale,
     type ReconciliationImpactResponse
   } from '$lib/api/investments';
@@ -40,6 +42,7 @@
   }));
 
   let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
+  let reversalKind = $state<'buy' | 'sale'>('sale');
   let reason = $state('');
   let pending = $state(false);
   let actionError = $state<unknown>(undefined);
@@ -77,12 +80,18 @@
     pending = true;
     actionError = undefined;
     try {
-      const preview = await previewSaleReversalReconciliation(transactionID, { reason: reason.trim() });
+      const preview = reversalKind === 'buy'
+        ? await previewBuyReversalReconciliation(transactionID, { reason: reason.trim() })
+        : await previewSaleReversalReconciliation(transactionID, { reason: reason.trim() });
       if (preview.affected_checkpoints.length > 0) {
         impacts = preview.affected_checkpoints;
         modal = 'reconciliation';
       } else {
-        await reverseManualSale(transactionID, { reason: reason.trim() }, csrfToken);
+        if (reversalKind === 'buy') {
+          await reverseManualBuy(transactionID, { reason: reason.trim() }, csrfToken);
+        } else {
+          await reverseManualSale(transactionID, { reason: reason.trim() }, csrfToken);
+        }
         closeModal();
         onRefresh?.();
       }
@@ -99,9 +108,15 @@
     pending = true;
     actionError = undefined;
     try {
-      await reverseManualSale(transactionID, {
-        reason: reason.trim(), reconciliation_override: true
-      }, csrfToken);
+      if (reversalKind === 'buy') {
+        await reverseManualBuy(transactionID, {
+          reason: reason.trim(), reconciliation_override: true
+        }, csrfToken);
+      } else {
+        await reverseManualSale(transactionID, {
+          reason: reason.trim(), reconciliation_override: true
+        }, csrfToken);
+      }
       closeModal();
       onRefresh?.();
     } catch (error) {
@@ -174,9 +189,19 @@
         type="button"
         class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
         disabled={!csrfToken || pending}
-        onclick={() => { reason = ''; actionError = undefined; modal = 'reason'; }}
+        onclick={() => { reversalKind = 'sale'; reason = ''; actionError = undefined; modal = 'reason'; }}
       >
         {m.transactions_investment_reverse_action()}
+      </button>
+    {/if}
+    {#if chainQuery.data.can_reverse_manual_buy && chainQuery.data.effective_transaction_id === transactionID}
+      <button
+        type="button"
+        class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+        disabled={!csrfToken || pending}
+        onclick={() => { reversalKind = 'buy'; reason = ''; actionError = undefined; modal = 'reason'; }}
+      >
+        {m.transactions_investment_reverse_buy_action()}
       </button>
     {/if}
     {#if chainQuery.data.effective_transaction_id === transactionID &&
@@ -234,10 +259,14 @@
       role="alertdialog" aria-modal="true" aria-labelledby="investment-reversal-title">
       <div class="border-b border-border px-4 py-3">
         <h3 id="investment-reversal-title" class="text-sm font-semibold text-foreground">
-          {modal === 'reason' ? m.transactions_investment_reverse_title() : m.transactions_reconciliation_warning_title()}
+          {modal === 'reason'
+            ? reversalKind === 'buy' ? m.transactions_investment_reverse_buy_title() : m.transactions_investment_reverse_title()
+            : m.transactions_reconciliation_warning_title()}
         </h3>
         <p class="mt-1 text-xs leading-5 text-muted">
-          {modal === 'reason' ? m.transactions_investment_reverse_copy() : m.transactions_reconciliation_warning_copy()}
+          {modal === 'reason'
+            ? reversalKind === 'buy' ? m.transactions_investment_reverse_buy_copy() : m.transactions_investment_reverse_copy()
+            : m.transactions_reconciliation_warning_copy()}
         </p>
       </div>
 

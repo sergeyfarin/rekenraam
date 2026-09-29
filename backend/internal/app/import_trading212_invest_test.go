@@ -371,6 +371,12 @@ func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
 	require.True(t, chain.Operations[0].Imported)
+	require.False(t, chain.CanReverseManualBuy)
+	_, err = f.investmentSvc.ReverseBuy(ctx, ReverseInvestmentBuyInput{
+		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
+		Reason: "remove source-linked replacement",
+	})
+	require.ErrorIs(t, err, ErrInvestmentImportedBuy)
 	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
 	require.NoError(t, err)
 	require.Len(t, effects, 1, "the immutable source effect still identifies the original fill")
@@ -438,6 +444,12 @@ func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
 	require.True(t, chain.Operations[0].Imported)
+	require.False(t, chain.CanReverseManualSale)
+	_, err = f.investmentSvc.ReverseSale(ctx, ReverseInvestmentSaleInput{
+		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
+		Reason: "remove source-linked replacement",
+	})
+	require.ErrorIs(t, err, ErrInvestmentImportedSale)
 	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
 	require.NoError(t, err)
 	require.Len(t, effects, 1)

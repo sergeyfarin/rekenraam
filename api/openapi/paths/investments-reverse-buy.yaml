@@ -1,0 +1,60 @@
+post:
+  summary: Reverse a posted manual long buy
+  description: >-
+    Posts an exact inverse, retires the source trade price, and replays later
+    long-position decisions in one audited database transaction. The original
+    buy remains posted history. A dependent disposal that cannot be satisfied
+    refuses the command without durable effects. Imported buys require a
+    separate source-aware terminal correction.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalRequest"
+  responses:
+    "201":
+      description: Buy reversed and dependent position replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted manual long buy not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected, imported, changed, dependent operation impossible, or reconciliation override required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
