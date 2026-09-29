@@ -77,6 +77,20 @@ func TestExactTradeEconomicsFeeTreatmentAndGrossPrice(t *testing.T) {
 			require.Len(t, gains, 1)
 			assertMoneyValue(t, test.proceeds, 2, gains[0].ProceedsValue, gains[0].ProceedsScale)
 			assertMoneyValue(t, test.gain, 2, gains[0].RealizedGainValue, gains[0].RealizedGainScale)
+			var netLinks, grossLinks, chargeLinks int
+			require.NoError(t, f.database.QueryRowContext(ctx, `
+				SELECT COUNT(*) FILTER (WHERE component_kind = 'net_settlement' AND posting_version_id IS NOT NULL),
+					COUNT(*) FILTER (WHERE component_kind = 'gross_consideration' AND posting_version_id IS NOT NULL),
+					COUNT(*) FILTER (WHERE component_kind = 'charge' AND posting_version_id IS NOT NULL)
+				FROM investment_operation_components
+			`).Scan(&netLinks, &grossLinks, &chargeLinks))
+			require.Equal(t, 2, netLinks)
+			require.Zero(t, grossLinks)
+			if test.treatment == "separately_expensed" {
+				require.Equal(t, 2, chargeLinks)
+			} else {
+				require.Zero(t, chargeLinks, "fees included in net clearing have no independent posting")
+			}
 			require.Equal(t, SelfCheckPassed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
 		})
 	}
@@ -196,6 +210,31 @@ func TestSelfCheckDetectsDisposalProceedsClearingMismatch(t *testing.T) {
 	require.Contains(t, check.Sample, *sold.DisposalDecision.ID)
 }
 
+func TestSelfCheckDetectsBalancedCashPostingComponentMismatch(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	bought := buyOn(t, f, "2026-01-01", 1, 1000)
+	require.Equal(t, SelfCheckPassed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
+	_, err := f.database.ExecContext(ctx, `DROP TRIGGER posting_versions_no_update`)
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `
+		UPDATE posting_versions SET quantity_value = '-999999'
+		WHERE transaction_version_id = ? AND account_id = ? AND commodity_id = ?
+	`, bought.Transaction.VersionID, f.cashAccountID, f.eurCommodityID)
+	require.NoError(t, err)
+	_, err = f.database.ExecContext(ctx, `
+		UPDATE posting_versions SET quantity_value = '999999'
+		WHERE transaction_version_id = ? AND commodity_id = ?
+		AND account_id = (SELECT id FROM accounts WHERE book_id = 1 AND system_role = 'commodity_trading')
+	`, bought.Transaction.VersionID, f.eurCommodityID)
+	require.NoError(t, err)
+	run := mustRunInvestmentSelfCheck(t, f)
+	require.Equal(t, SelfCheckPassed, resultFor(t, run, CheckEntryBalance).Status)
+	check := resultFor(t, run, CheckInvestmentFoundation)
+	require.Equal(t, SelfCheckFailed, check.Status)
+	require.Contains(t, check.Summary, "source components disagree with posted journal legs")
+}
+
 func mustRunInvestmentSelfCheck(t *testing.T, f *investmentsTestFixture) SelfCheckRun {
 	t.Helper()
 	run, err := selfCheckOver(t, f.database).RunSelfCheck(context.Background(), "manual")
@@ -302,6 +341,14 @@ func TestForeignTradeFeeKeepsCostCurrencyBasisAndPostsOwnCashLegs(t *testing.T) 
 	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT charge_treatment, resolution_tier FROM investment_operation_components WHERE component_kind = 'charge'`).Scan(&treatment, &tier))
 	require.Equal(t, "separately_expensed", treatment)
 	require.Equal(t, "fallback", tier)
+	var separatelyPaid int
+	var postingID int64
+	require.NoError(t, f.database.QueryRowContext(ctx, `
+		SELECT separately_paid, posting_version_id FROM investment_operation_components WHERE component_kind = 'charge'
+	`).Scan(&separatelyPaid, &postingID))
+	require.Equal(t, 1, separatelyPaid)
+	require.Positive(t, postingID)
+	require.Equal(t, SelfCheckPassed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
 }
 
 func TestSeparatelyPaidSameCurrencyCommissionPostsOnPaymentDate(t *testing.T) {

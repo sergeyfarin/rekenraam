@@ -363,7 +363,7 @@ func (e tradeEconomics) components(commodityID int64) []db.InvestmentComponentSp
 		components = append(components, db.InvestmentComponentSpec{
 			Kind: "charge", ChargeKind: charge.Input.Kind, CommodityID: charge.Input.CommodityID,
 			AmountValue: fmt.Sprint(charge.Input.AmountValue), AmountScale: charge.Input.AmountScale,
-			AmountDate: charge.Date, ChargeTreatment: charge.Treatment,
+			AmountDate: charge.Date, ChargeTreatment: charge.Treatment, SeparatelyPaid: charge.SeparatelyPaid,
 			ChargeAccountID: charge.AccountID, ResolutionTier: charge.ResolutionTier,
 			CashAccountID:      tradeChargeCashAccountID(charge.Input.CashAccountID),
 			FeePolicyVersionID: charge.PolicyVersionID, SourceEvidenceJSON: charge.EvidenceJSON,

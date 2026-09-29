@@ -327,6 +327,12 @@ per journal transaction/version. Its checksum changed. Stop the app and reset
 the same disposable `DATABASE_URL` database and sidecars using the command
 above before restarting. No installed v0.1 database exists.
 
+**BREAKING DEV DATABASE, R16 component integrity:** `0001` now records
+whether a charge was paid separately and links journal-backed source components
+to their posting versions. Its checksum changed. Stop the app and reset the
+same disposable `DATABASE_URL` database and sidecars using the command above
+before restarting. No installed v0.1 database exists.
+
 The final pre-`v0.1.0` consolidation changed the highest schema version from 8
 to 1. Databases and backups made before that consolidation are incompatible in
 both directions: export anything worth keeping before updating, then recreate

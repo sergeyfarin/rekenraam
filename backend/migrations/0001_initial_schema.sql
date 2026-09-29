@@ -1356,6 +1356,8 @@ CREATE TABLE IF NOT EXISTS investment_operation_components (
   amount_scale INTEGER NOT NULL CHECK (amount_scale BETWEEN 0 AND 24),
   amount_date TEXT NOT NULL CHECK (amount_date GLOB '????-??-??'),
   gross_unknown INTEGER NOT NULL DEFAULT 0 CHECK (gross_unknown IN (0, 1)),
+  separately_paid INTEGER NOT NULL DEFAULT 0 CHECK (separately_paid IN (0, 1)),
+  posting_version_id INTEGER REFERENCES posting_versions(id) ON DELETE RESTRICT,
   charge_treatment TEXT CHECK (charge_treatment IS NULL OR charge_treatment IN ('clearing_included', 'separately_expensed')),
   charge_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
   cash_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
@@ -1364,8 +1366,10 @@ CREATE TABLE IF NOT EXISTS investment_operation_components (
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
   UNIQUE (operation_id, component_seq),
+  UNIQUE (posting_version_id),
   CHECK ((component_kind = 'charge') = (charge_treatment IS NOT NULL)),
   CHECK ((component_kind = 'charge') = (charge_kind IS NOT NULL)),
+  CHECK (separately_paid = 0 OR component_kind = 'charge'),
   CHECK (charge_treatment != 'separately_expensed' OR charge_account_id IS NOT NULL)
 );
 

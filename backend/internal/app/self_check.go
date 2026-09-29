@@ -128,7 +128,7 @@ var checkNarratives = map[string]checkNarrative{
 		nextStep:    "The app refuses to create these, so a non-zero count means rows arrived from outside it — a backfill, a manual repair, or a restored and patched database. Exports have been quietly falling back to each account's earliest version for these rows.",
 	},
 	CheckInvestmentFoundation: {
-		explanation: "Named investment operations must link their posted versions, source lots and effects. Single-disposal sales and write-offs must agree with their posted cost-currency clearing. A completed setup also needs its external investment transfer equity account and commission default.",
+		explanation: "Named investment operations must link their posted versions, source lots, effects and journal-backed cash components. Single-disposal sales and write-offs must agree with their posted cost-currency clearing. A completed setup also needs its external investment transfer equity account and commission default.",
 		nextStep:    "Review the named operation, disposal decision, journal or lot and the setup accounts. Preserve the original rows before correcting any mismatch or missing link.",
 	},
 	CheckSQLiteIntegrity: {
@@ -417,6 +417,49 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		result.Sample = append(result.Sample, anomaly.Sample...)
 		summaries = append(summaries, fmt.Sprintf("%d %s", anomaly.Count, check.label))
 	}
+	var componentMismatch int64
+	err := s.repository.StreamInvestmentComponents(ctx, snapshot, BookID, func(component db.SelfCheckInvestmentComponentRecord) error {
+		amount := exact.ScaledIntFromCoefficient(component.AmountValue, component.AmountScale)
+		needsPosting := component.ComponentKind == "net_settlement" && amount.Sign() != 0 ||
+			component.ComponentKind == "charge" && (component.SeparatelyPaid || component.ChargeTreatment.String == "separately_expensed")
+		bad := needsPosting != component.PostingID.Valid
+		if needsPosting && component.PostingID.Valid {
+			expected := amount
+			if component.ComponentKind == "charge" {
+				expected = amount.Negated()
+			}
+			posted, parseErr := exact.Parse(component.PostingValue.String)
+			if parseErr != nil {
+				return fmt.Errorf("parse posting for investment component %d: %w", component.ComponentID, parseErr)
+			}
+			bad = component.PostingBookID.Int64 != BookID || !component.VersionLinked ||
+				component.PostingCommodity.Int64 != component.CommodityID ||
+				component.PostingDate.String != component.AmountDate ||
+				expected.Cmp(exact.ScaledIntFromCoefficient(posted, int(component.PostingScale.Int64))) != 0
+			if component.ComponentKind == "net_settlement" {
+				bad = bad || !component.CashAccountID.Valid || component.PostingAccountID.Int64 != component.CashAccountID.Int64
+			} else if component.ChargeTreatment.String == "separately_expensed" {
+				bad = bad || !component.ChargeAccountID.Valid || component.PostingAccountID.Int64 != component.ChargeAccountID.Int64
+			} else {
+				bad = bad || component.PostingRole.String != "commodity_trading"
+			}
+		}
+		if bad {
+			componentMismatch++
+			if len(result.Sample) < db.SelfCheckSampleLimit {
+				result.Sample = append(result.Sample, component.ComponentID)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	if componentMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += componentMismatch
+		summaries = append(summaries, fmt.Sprintf("%d source components disagree with posted journal legs", componentMismatch))
+	}
 	var decisionID int64
 	var proceeds, clearing *exact.ScaledInt
 	var proceedsMismatch int64
@@ -429,7 +472,7 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			result.Sample = append(result.Sample, decisionID)
 		}
 	}
-	err := s.repository.StreamDisposalClearing(ctx, snapshot, BookID, func(record db.SelfCheckDisposalClearingRecord) error {
+	err = s.repository.StreamDisposalClearing(ctx, snapshot, BookID, func(record db.SelfCheckDisposalClearingRecord) error {
 		if record.DecisionID != decisionID {
 			finishDecision()
 			decisionID = record.DecisionID

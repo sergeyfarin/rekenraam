@@ -78,7 +78,7 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				"investment-operations.csv":              {"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id", "correction_of_operation_id", "correction_mode", "correction_reason"},
 				"investment-operation-journal-links.csv": {"operation_id", "link_seq", "transaction_version_id", "role"},
 				"investment-operation-dates.csv":         {"operation_id", "date_role", "event_date"},
-				"investment-operation-components.csv":    {"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id", "charge_kind", "cash_account_id"},
+				"investment-operation-components.csv":    {"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id", "charge_kind", "cash_account_id", "separately_paid", "posting_version_id"},
 				"investment-lot-facts.csv":               {"lot_id", "operation_id", "account_id", "commodity_id", "position_side", "opened_on", "quantity_value", "quantity_scale", "consideration_value", "consideration_scale", "cost_commodity_id", "audit_event_id"},
 				"investment-lot-events.csv":              {"lot_event_id", "lot_id", "event_kind", "transaction_id", "event_date", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "cost_basis_method", "metadata_json", "audit_event_id"},
 				"investment-lot-effects.csv":             {"operation_id", "effect_seq", "lot_event_id"},
@@ -139,7 +139,9 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				require.Equal(t, operations[1][4], prices[1][12], "trade and price share one audit event")
 				require.Contains(t, string(files["accounts.csv"]), "external_investment_transfer_equity")
 				require.Len(t, readInvestmentContractCSV(t, files, "investment-operation-journal-links.csv"), 5)
-				require.Len(t, readInvestmentContractCSV(t, files, "investment-operation-components.csv"), 5)
+				components := readInvestmentContractCSV(t, files, "investment-operation-components.csv")
+				require.Len(t, components, 5)
+				require.Equal(t, "25", components[1][18], "seeded net cash fact retains its posted version")
 				require.Len(t, readInvestmentContractCSV(t, files, "investment-lot-facts.csv"), 3)
 				require.Len(t, readInvestmentContractCSV(t, files, "investment-lot-effects.csv"), 5)
 				require.Len(t, readInvestmentContractCSV(t, files, "investment-fee-policy-versions.csv"), 2)

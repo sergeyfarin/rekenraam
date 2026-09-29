@@ -56,6 +56,70 @@ type SelfCheckDisposalClearingRecord struct {
 	PostingScale  sql.NullInt64
 }
 
+// SelfCheckInvestmentComponentRecord joins each source fact to its optional
+// posted journal leg. Amount equality is checked by the application with
+// exact scaled arithmetic.
+type SelfCheckInvestmentComponentRecord struct {
+	ComponentID      int64
+	ComponentKind    string
+	ChargeTreatment  sql.NullString
+	SeparatelyPaid   bool
+	AmountValue      exact.Coefficient
+	AmountScale      int
+	AmountDate       string
+	CommodityID      int64
+	CashAccountID    sql.NullInt64
+	ChargeAccountID  sql.NullInt64
+	PostingID        sql.NullInt64
+	PostingBookID    sql.NullInt64
+	PostingAccountID sql.NullInt64
+	PostingRole      sql.NullString
+	PostingCommodity sql.NullInt64
+	PostingValue     sql.NullString
+	PostingScale     sql.NullInt64
+	PostingDate      sql.NullString
+	VersionLinked    bool
+}
+
+func (r *SelfCheckRepository) StreamInvestmentComponents(ctx context.Context, transaction *sql.Tx, bookID int64, visit func(SelfCheckInvestmentComponentRecord) error) error {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT c.id, c.component_kind, c.charge_treatment, c.separately_paid,
+			c.amount_value, c.amount_scale, c.amount_date, c.commodity_id,
+			c.cash_account_id, c.charge_account_id,
+			pv.id, pv.book_id, pv.account_id, a.system_role, pv.commodity_id,
+			pv.quantity_value, pv.quantity_scale, je.entry_date,
+			EXISTS (SELECT 1 FROM investment_operation_journal_links l
+				WHERE l.operation_id = c.operation_id AND l.transaction_version_id = pv.transaction_version_id)
+		FROM investment_operation_components c
+		LEFT JOIN posting_versions pv ON pv.id = c.posting_version_id
+		LEFT JOIN journal_entries je ON je.id = pv.journal_entry_id
+		LEFT JOIN accounts a ON a.id = pv.account_id
+		WHERE c.book_id = ? ORDER BY c.id
+	`, bookID)
+	if err != nil {
+		return fmt.Errorf("read investment components for self-check: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var record SelfCheckInvestmentComponentRecord
+		if err := rows.Scan(&record.ComponentID, &record.ComponentKind, &record.ChargeTreatment,
+			&record.SeparatelyPaid, &record.AmountValue, &record.AmountScale, &record.AmountDate,
+			&record.CommodityID, &record.CashAccountID, &record.ChargeAccountID,
+			&record.PostingID, &record.PostingBookID, &record.PostingAccountID,
+			&record.PostingRole, &record.PostingCommodity, &record.PostingValue,
+			&record.PostingScale, &record.PostingDate, &record.VersionLinked); err != nil {
+			return fmt.Errorf("scan investment component for self-check: %w", err)
+		}
+		if err := visit(record); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate investment components for self-check: %w", err)
+	}
+	return nil
+}
+
 // StreamDisposalClearing covers the currently supported one-decision sell and
 // write-off commands. Compound operations need component-to-posting links to
 // attribute shared clearing legs to individual decisions.

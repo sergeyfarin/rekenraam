@@ -250,6 +250,7 @@ type InvestmentComponentSpec struct {
 	AmountScale        int
 	AmountDate         string
 	GrossUnknown       bool
+	SeparatelyPaid     bool
 	ChargeTreatment    string
 	ChargeAccountID    int64
 	CashAccountID      int64

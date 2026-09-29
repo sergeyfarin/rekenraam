@@ -10,12 +10,14 @@ premature. The operation header's nullable unique `transaction_id` remains a
 compatibility link used by existing reads beside `investment_operation_journal_links`;
 compound and basis-only actions must migrate those reads to the link table.
 Current lot projection columns remain on `investment_lots` instead of a
-separate `investment_lot_state` table. Trade components are not yet linked to
-posting versions or checked against their journal postings. Self-check now
+separate `investment_lot_state` table. Trade net-settlement and separately
+posted fee components now link to their journal posting versions. Self-check
+compares their account, commodity, date, signed exact amount and operation
+version. Gross and fees included within net clearing have no individual
+posting link. Self-check also
 compares single-disposal sell/write-off proceeds with their cost-currency
-clearing postings using exact arithmetic; component attribution and compound
-disposal coverage remain open data-contract gates, not accepted changes to
-ADR 0013. The reviewed
+clearing postings using exact arithmetic; compound disposal attribution remains
+an open data-contract gate, not an accepted change to ADR 0013. The reviewed
 baseline now keys disposal decisions by `(operation_id, decision_seq)`; current
 single-disposal writers emit sequence 1. Correction writers also still have
 separate transaction orchestration. Complete these integrity and correction

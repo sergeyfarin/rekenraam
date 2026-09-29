@@ -23,9 +23,9 @@ Last reconciled: 2026-09-29.
   shipped sub-slices. Imported source corrections, backdated admission, buy
   reversal, and other operation corrections remain open.
 - [ ] Close [T-110 #125](https://github.com/sergeyfarin/rekenraam/issues/125),
-  the reopened slice 2a integrity gates: link component cash facts
-  to posting versions, extend exact proceeds/clearing checks beyond current
-  single-disposal sell/write-off commands,
+  the reopened slice 2a integrity gates: net cash and separately posted fees
+  now link to posting versions and self-check validates them. Extend exact
+  proceeds/clearing checks beyond current single-disposal commands,
   migrate operation reads to journal links, and separate lot projection state.
   Share correction transaction orchestration under T-75b. The
   disposal-decision key now supports `(operation_id, decision_seq)`.
