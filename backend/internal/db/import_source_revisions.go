@@ -30,21 +30,15 @@ func (r *ImportRepository) CommitSourceRevisionInTx(ctx context.Context, tx *sql
 	}
 	var originalTransactionID int64
 	var stagedStatus string
-	var alreadyAccepted int
 	var sourceChanged int
 	err := tx.QueryRowContext(ctx, `
 		SELECT COALESCE(effect.transaction_id, 0), staged.commit_status,
-			EXISTS(SELECT 1 FROM import_source_revisions prior
-				JOIN import_staged_rows prior_row ON prior_row.id = prior.staged_row_id
-				WHERE prior.identity_id = identity_row.id
-					AND json_remove(prior_row.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id') =
-						json_remove(staged.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
-					AND prior_row.normalized_json = staged.normalized_json),
 			EXISTS(SELECT 1 FROM import_staged_rows latest
 				WHERE latest.committed_identity_id = identity_row.id
 					AND latest.commit_status = 'committed'
 					AND latest.id = (SELECT MAX(accepted.id) FROM import_staged_rows accepted
 						WHERE accepted.committed_identity_id = identity_row.id AND accepted.commit_status = 'committed')
+					AND staged.id > latest.id
 					AND (json_remove(latest.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id') <>
 						json_remove(staged.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
 						OR latest.normalized_json <> staged.normalized_json))
@@ -52,15 +46,18 @@ func (r *ImportRepository) CommitSourceRevisionInTx(ctx context.Context, tx *sql
 		JOIN import_commit_identity_effects effect ON effect.identity_id = identity_row.id
 		JOIN import_staged_rows staged ON staged.book_id = identity_row.book_id
 			AND staged.dedupe_fingerprint = identity_row.dedupe_fingerprint
+		JOIN import_batches batch ON batch.id = staged.batch_id AND batch.book_id = identity_row.book_id
 		WHERE identity_row.id = ? AND identity_row.book_id = ?
 			AND identity_row.source_kind = 'trading212'
+			AND batch.source_kind = identity_row.source_kind
+			AND batch.status IN ('previewing', 'partially_committed', 'committed', 'failed')
 			AND effect.operation_id = ? AND staged.id = ?
 			AND json_extract(staged.raw_json, '$.kind') = 'trading212_order_fill'
 	`, params.IdentityID, params.BookID, params.SourceOperationID, params.StagedRowID).
-		Scan(&originalTransactionID, &stagedStatus, &alreadyAccepted, &sourceChanged)
+		Scan(&originalTransactionID, &stagedStatus, &sourceChanged)
 	if errors.Is(err, sql.ErrNoRows) ||
 		(stagedStatus != "pending" && stagedStatus != "skipped") ||
-		alreadyAccepted != 0 || sourceChanged == 0 || originalTransactionID <= 0 {
+		sourceChanged == 0 || originalTransactionID <= 0 {
 		return ErrImportSourceRevisionConflict
 	}
 	if err != nil {

@@ -272,6 +272,12 @@ func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
 	before := captureLedgerState(t, upgraded)
 	require.NoError(t, Migrate(ctx, upgraded))
 	after := captureLedgerState(t, upgraded)
+	// Migration bookkeeping and newly introduced empty tables are not ledger
+	// changes. Every pre-existing durable row must still match the seed.
+	assert.Equal(t, "0", after["count:import_source_revisions"])
+	delete(after, "count:import_source_revisions")
+	delete(before, "count:goose_db_version")
+	delete(after, "count:goose_db_version")
 
 	assert.Equal(t, before, after, "upgrading must not change a single durable figure")
 
@@ -558,7 +564,7 @@ func TestInitialMigrationDownRemovesTheConsolidatedSchema(t *testing.T) {
 
 	_, err = provider.Up(context.Background())
 	require.NoError(t, err)
-	_, err = provider.Down(context.Background())
+	_, err = provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
 
 	var objectCount int
@@ -1219,9 +1225,8 @@ func TestReadOnlySnapshotDoesNotSeeLaterWrites(t *testing.T) {
 	require.Equal(t, before, after, "the snapshot must not grow while it is open")
 }
 
-// The schema is one migration file now (T-64), which means nothing else
-// re-derives it and nothing checks it against a previous shape. What can still
-// be checked is that the file produces what the code expects: every table,
+// The consolidated baseline (T-64) and subsequent migrations must produce
+// what the code expects: every table,
 // index, and trigger the app reads, created exactly once, with the constraints
 // that make the ledger's invariants enforceable rather than aspirational.
 func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
@@ -1229,7 +1234,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), version, "the v0.1.0 baseline must remain a single migration")
+	assert.Equal(t, int64(2), version, "the embedded head must include source revisions")
 
 	ctx := context.Background()
 	database, err := Open(ctx, "file:"+filepath.Join(t.TempDir(), "schema.sqlite"))
@@ -1258,11 +1263,15 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   103,
-		"table":   96,
-		"trigger": 97,
+		"index":   104,
+		"table":   97,
+		"trigger": 100,
 		"view":    6,
-	}, objectCounts, "the consolidated baseline must retain every schema object")
+	}, objectCounts, "the migrated head must retain every schema object")
+	assert.Equal(t, "table", objects["import_source_revisions"])
+	assert.Equal(t, "trigger", objects["import_source_revisions_same_book"])
+	assert.Equal(t, "trigger", objects["import_source_revisions_no_update"])
+	assert.Equal(t, "trigger", objects["import_source_revisions_no_delete"])
 	assert.Equal(t, "table", objects["investment_transfer_facts"])
 	assert.Equal(t, "table", objects["investment_transfer_lot_links"])
 	assert.Equal(t, "trigger", objects["investment_transfer_facts_valid"])

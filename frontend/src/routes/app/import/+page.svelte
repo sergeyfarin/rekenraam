@@ -26,6 +26,7 @@
     getFullImportBatch,
     patchImportBatch,
     commitImportBatch,
+    correctTrading212Buy,
     discardImportBatch,
     parseNormalized,
     parseResolution,
@@ -119,6 +120,14 @@
   let commitError = $state<unknown>(undefined);
   let commitResult = $state<CommitImportBatchResponse | null>(null);
   let reconciliationOverride = $state(false);
+  let sourceCorrectionRowID = $state<number | null>(null);
+  let sourceCorrectionReason = $state('');
+  let sourceCorrectionOverride = $state(false);
+  let sourceCorrectionPending = $state(false);
+  let sourceCorrectionError = $state<unknown>(undefined);
+  let sourceCorrectionSuccessID = $state<number | null>(null);
+  let reviewChangedPending = $state(false);
+  let reviewChangedError = $state<unknown>(undefined);
 
   // Discard
   let discarding = $state(false);
@@ -495,6 +504,66 @@
       : m.import_preview_rule_applied({ name: resolution.applied_rule_name ?? '' });
   }
 
+  function canCorrectTrading212Buy(row: ImportStagedRow): boolean {
+    if (!row.source_changed || !row.source_transaction_id || !row.source_buy_operation ||
+      (row.commit_status !== 'pending' && row.commit_status !== 'skipped')) return false;
+    try {
+      const raw = JSON.parse(row.raw) as { kind?: string; side?: string };
+      return raw.kind === 'trading212_order_fill' && raw.side?.toUpperCase() === 'BUY';
+    } catch {
+      return false;
+    }
+  }
+
+  async function handleSourceBuyCorrection(rowId: number) {
+    if (!batchId || !csrfToken || sourceCorrectionPending || !sourceCorrectionReason.trim()) return;
+    sourceCorrectionPending = true;
+    sourceCorrectionError = undefined;
+    try {
+      const result = await correctTrading212Buy(batchId, rowId, {
+        reason: sourceCorrectionReason.trim(),
+        reconciliation_override: sourceCorrectionOverride
+      }, csrfToken);
+      sourceCorrectionSuccessID = result.replacement.transaction.id;
+      sourceCorrectionRowID = null;
+      sourceCorrectionReason = '';
+      if (previewData) {
+        previewData = {
+          ...previewData,
+          rows: previewData.rows.map((row) => row.id === rowId
+            ? { ...row, source_changed: false, commit_status: 'committed' }
+            : row)
+        };
+      }
+      await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
+      try {
+        const refreshed = await getFullImportBatch(batchId);
+        if (previewData) previewData = { ...previewData, batch: refreshed.batch, rows: refreshed.rows };
+      } catch {
+        // The correction is committed; keep its success link and local row state.
+      }
+    } catch (err) {
+      sourceCorrectionError = err;
+    } finally {
+      sourceCorrectionPending = false;
+    }
+  }
+
+  async function handleReviewChangedFills() {
+    if (!batchId || !previewData) return;
+    reviewChangedPending = true;
+    reviewChangedError = undefined;
+    try {
+      const refreshed = await getFullImportBatch(batchId);
+      previewData = { ...previewData, batch: refreshed.batch, rows: refreshed.rows };
+      step = 'preview';
+    } catch (err) {
+      reviewChangedError = err;
+    } finally {
+      reviewChangedPending = false;
+    }
+  }
+
   // ── Commit ─────────────────────────────────────────────────────────
   async function handleCommit() {
     if (!batchId) return;
@@ -503,7 +572,7 @@
 
     try {
       // First patch resolutions to the server.
-      const patches = (previewData?.rows ?? []).map((row) => ({
+      const patches = (previewData?.rows ?? []).filter((row) => row.commit_status !== 'committed').map((row) => ({
         row_id: row.id,
         dedupe_status: getResolution(row.id).exclude ? 'excluded' : row.dedupe_status,
         resolution: getResolution(row.id)
@@ -540,6 +609,9 @@
       batchId = null;
       selectedFile = null;
       showDiscardConfirm = false;
+      sourceCorrectionRowID = null;
+      sourceCorrectionSuccessID = null;
+      sourceCorrectionError = undefined;
     } catch (err) {
       discardError = err;
     } finally {
@@ -553,6 +625,11 @@
     batchId = null;
     selectedFile = null;
     commitResult = null;
+    sourceCorrectionRowID = null;
+    sourceCorrectionReason = '';
+    sourceCorrectionOverride = false;
+    sourceCorrectionSuccessID = null;
+    sourceCorrectionError = undefined;
   }
 
   // ── Connections ────────────────────────────────────────────────────
@@ -1272,6 +1349,14 @@
     </Panel>
 
     <!-- Rows table -->
+    {#if sourceCorrectionSuccessID}
+      <Panel>
+        <p class="text-sm font-medium text-positive">{m.import_preview_buy_corrected()}</p>
+        <a href={`/app/transactions?transaction_id=${sourceCorrectionSuccessID}`} class="text-sm font-semibold text-foreground underline underline-offset-2">
+          {m.import_preview_open_correction()}
+        </a>
+      </Panel>
+    {/if}
     <Panel padding="none">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -1293,7 +1378,7 @@
               {@const norm = parseNormalized(row)}
               {@const res = getResolution(row.id)}
               {@const isDuplicate = row.dedupe_status === 'duplicate'}
-              {@const isBlocked = isDuplicate || row.source_changed}
+              {@const isBlocked = isDuplicate || row.source_changed || row.commit_status === 'committed' || previewData.batch.status !== 'previewing'}
               {@const isExcluded = res.exclude || row.dedupe_status === 'excluded'}
               {@const isTransfer = !!norm.transfer_hint}
               <tr
@@ -1315,7 +1400,9 @@
                     class:text-muted={row.dedupe_status === 'duplicate' || row.dedupe_status === 'excluded'}
                     class="text-xs font-medium"
                   >
-                    {row.source_changed ? m.import_preview_source_changed() : dedupeStatusLabel(row.dedupe_status)}
+                    {row.commit_status === 'committed' && row.dedupe_status === 'needs_attention'
+                      ? m.import_preview_source_revision_accepted()
+                      : row.source_changed ? m.import_preview_source_changed() : dedupeStatusLabel(row.dedupe_status)}
                   </span>
                   {#if row.source_changed && row.source_transaction_id}
                     <a
@@ -1324,6 +1411,17 @@
                     >
                       {m.import_preview_open_original()}
                     </a>
+                  {/if}
+                  {#if canCorrectTrading212Buy(row)}
+                    <button
+                      type="button"
+                      disabled={sourceCorrectionPending}
+                      class="mt-2 block rounded-(--radius-control) border border-border bg-control px-2 py-1 text-xs font-semibold text-foreground hover:bg-control-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+                      onclick={() => {
+                        sourceCorrectionRowID = sourceCorrectionRowID === row.id ? null : row.id;
+                        sourceCorrectionError = undefined;
+                      }}
+                    >{m.import_preview_correct_buy()}</button>
                   {/if}
                 </td>
                 <td class="px-4 py-2.5">
@@ -1410,6 +1508,36 @@
                   {/if}
                 </td>
               </tr>
+              {#if sourceCorrectionRowID === row.id}
+                <tr class="border-b border-border bg-control">
+                  <td colspan="9" class="px-4 py-4">
+                    <form class="max-w-xl space-y-3" onsubmit={(event) => { event.preventDefault(); void handleSourceBuyCorrection(row.id); }}>
+                      <p class="text-sm text-muted">{m.import_preview_correct_buy_scope()}</p>
+                      <label class="block text-sm font-medium text-foreground" for={`source-correction-reason-${row.id}`}>
+                        {m.import_preview_correct_buy_reason()}
+                      </label>
+                      <input
+                        id={`source-correction-reason-${row.id}`}
+                        type="text"
+                        required
+                        bind:value={sourceCorrectionReason}
+                        class="w-full rounded-(--radius-control) border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground"
+                      />
+                      <label class="flex items-center gap-2 text-sm text-foreground">
+                        <input type="checkbox" bind:checked={sourceCorrectionOverride} class="h-4 w-4 rounded border-border" />
+                        {m.import_commit_reconciliation_override()}
+                      </label>
+                      <p class="text-sm text-muted">{m.import_commit_reconciliation_override_hint()}</p>
+                      <APIFormError error={sourceCorrectionError} id="source-correction-error" />
+                      <button
+                        type="submit"
+                        disabled={sourceCorrectionPending || !csrfToken || !sourceCorrectionReason.trim()}
+                        class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      >{sourceCorrectionPending ? m.import_preview_correct_buy_pending() : m.import_preview_correct_buy_submit()}</button>
+                    </form>
+                  </td>
+                </tr>
+              {/if}
             {/each}
           </tbody>
         </table>
@@ -1421,6 +1549,7 @@
     </Panel>
 
     <!-- Commit controls -->
+    {#if previewData.batch.status === 'previewing'}
     <Panel>
       <div class="space-y-4">
         <label class="flex items-center gap-2 text-sm">
@@ -1440,7 +1569,7 @@
             type="button"
             class="inline-flex items-center gap-2 rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             onclick={handleCommit}
-            disabled={committing}
+            disabled={committing || sourceCorrectionPending}
           >
             {committing ? m.import_commit_pending() : m.import_commit_button()}
           </button>
@@ -1455,6 +1584,7 @@
         </div>
       </div>
     </Panel>
+    {/if}
 
     <!-- Discard confirm -->
     {#if showDiscardConfirm}
@@ -1495,6 +1625,12 @@
         <p class="text-foreground">{m.import_result_committed({ count: commitResult.committed_count })}</p>
         {#if commitResult.skipped_count > 0}
           <p class="text-muted">{m.import_result_skipped({ count: commitResult.skipped_count })}</p>
+          {#if previewData?.rows.some((row) => row.source_changed)}
+            <button type="button" disabled={reviewChangedPending} class="text-sm font-semibold text-foreground underline underline-offset-2 disabled:opacity-60" onclick={() => void handleReviewChangedFills()}>
+              {m.import_result_review_changed_fills()}
+            </button>
+            <APIFormError error={reviewChangedError} id="review-changed-error" />
+          {/if}
         {/if}
         {#if commitResult.failed_count > 0}
           <p class="text-warning">{m.import_result_failed({ count: commitResult.failed_count })}</p>

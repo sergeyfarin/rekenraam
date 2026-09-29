@@ -57,6 +57,7 @@ type ImportStagedRowRecord struct {
 	DedupeStatus           string
 	SourceChanged          bool
 	SourceTransactionID    sql.NullInt64
+	SourceBuyOperation     bool
 	ResolutionJSON         string
 	CommitStatus           string
 	CommittedIdentityID    sql.NullInt64
@@ -1171,7 +1172,14 @@ const importStagedRowSelect = `s.id, s.batch_id, s.book_id, s.row_index, s.dedup
 			AND identity_row.dedupe_fingerprint = s.dedupe_fingerprint
 			AND identity_row.source_kind = 'trading212'
 			AND effect.transaction_id IS NOT NULL
-		ORDER BY effect.effect_seq LIMIT 1)`
+		ORDER BY effect.effect_seq LIMIT 1),
+	EXISTS(SELECT 1 FROM import_commit_identities identity_row
+		JOIN import_commit_identity_effects effect ON effect.identity_id = identity_row.id
+		JOIN investment_operations operation ON operation.id = effect.operation_id
+		WHERE identity_row.book_id = s.book_id
+			AND identity_row.dedupe_fingerprint = s.dedupe_fingerprint
+			AND identity_row.source_kind = 'trading212'
+			AND operation.operation_kind = 'buy')`
 
 // ListImportStagedRows is the paginated API path; limit is clamped to 500 / default 200.
 func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params ListImportStagedRowsParams) ([]ImportStagedRowRecord, error) {
@@ -1310,15 +1318,17 @@ type importStagedRowScanner interface {
 func scanImportStagedRow(row importStagedRowScanner) (ImportStagedRowRecord, error) {
 	var rec ImportStagedRowRecord
 	var sourceChanged int
+	var sourceBuyOperation int
 	if err := row.Scan(
 		&rec.ID, &rec.BatchID, &rec.BookID, &rec.RowIndex, &rec.DedupeFingerprint,
 		&rec.RawJSON, &rec.NormalizedJSON, &rec.DedupeStatus, &rec.ResolutionJSON,
 		&rec.CommitStatus, &rec.CommittedIdentityID, &rec.CommittedTransactionID, &rec.CommitError,
-		&sourceChanged, &rec.SourceTransactionID,
+		&sourceChanged, &rec.SourceTransactionID, &sourceBuyOperation,
 	); err != nil {
 		return ImportStagedRowRecord{}, fmt.Errorf("scan staged row: %w", err)
 	}
 	rec.SourceChanged = sourceChanged != 0
+	rec.SourceBuyOperation = sourceBuyOperation != 0
 	return rec, nil
 }
 

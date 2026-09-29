@@ -796,13 +796,13 @@ next family.
      payload is shown as a distinct review state and skipped at commit even
      if its staged dedupe status is changed. Locally resolved instrument and
      holding IDs are excluded from the comparison. This closes silent
-     changed-fill deduplication; an atomic source-revision correction command
-     remains open.
+     changed-fill deduplication; the buy source-revision correction arrives in
+     4ac.
    - **4aa — source transaction review link — complete 2026-09-29.** The
      import batch read returns the committed original transaction for a
      Trading 212 fill identity. A changed-source row links directly to that
      transaction's detail panel and correction chain; a page reload preserves
-     the link. The source-revision write command remains open.
+     the link. The buy source-revision write command arrives in 4ac.
    - **4ab — atomic source revision foundation — complete 2026-09-29.** An
      append-only `import_source_revisions` record links an accepted staged
      Trading 212 fill to its original source identity and a descendant
@@ -810,10 +810,33 @@ next family.
      transaction callback so the inverse journal, replacement lot replay,
      reconciliation invalidation, staged-row result, and revision record
      succeed or roll back together. The repository checks the latest accepted
-     payload and rejects an unchanged or already accepted revision. Import
+     payload and rejects an unchanged or already committed row. Import
      preview and staging now compare with the latest accepted source snapshot.
-     This is a backend writer seam; the provider-driven correction command,
-     endpoint, and review action are still open.
+     This backend writer seam is consumed by the buy command in 4ac.
+   - **4ac — Trading 212 buy source revision — complete 2026-09-29.** Import
+     review can accept a changed buy fill using its staged provider quantity
+     and net settlement. The `/api/v1/imports/{batch_id}/rows/{row_id}/correct-buy`
+     command posts an audited buy replacement and accepts the source revision
+     in one transaction, including dependent long-sale replay and the normal
+     reconciliation override/invalidation. A second provider revision follows
+     the original source identity through the correction chain. Date,
+     instrument, holding, cash account, and cost-currency changes are rejected
+     until their own correction commands exist; sale and cancellation source
+     revisions are also pending. The import review action exposes the supported
+     scope and a reason field and remains available for skipped rows after
+     batch commit. The batch read model identifies source identities whose
+     original effect was a native buy, so cash-fallback rows do not offer the
+     buy correction control. The writer rejects a revision staged before the
+     latest accepted snapshot and rechecks batch eligibility in the same
+     transaction, so an older row or a discarded batch cannot advance the
+     source history. Positive buy quantity and negative owner-perspective
+     settlement are required; cancellation-shaped payloads stay under review.
+     Buy replacement preflight and transaction-detail availability follow the
+     committed source ancestry, including an imported correction descendant
+     whose identity effect remains on the original operation.
+     A freshly staged provider revision can deliberately restore an earlier
+     payload; an old staged row cannot be reused for that reversion. Source
+     reconciliation-impact preview and sale/cancellation commands remain open.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

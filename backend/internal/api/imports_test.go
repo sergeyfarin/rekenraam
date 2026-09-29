@@ -611,6 +611,7 @@ func TestImportBatchEndpoints_RequireAuthentication(t *testing.T) {
 		{"patch", http.MethodPatch, "/api/v1/imports/1"},
 		{"preview-commit", http.MethodPost, "/api/v1/imports/1/preview-commit"},
 		{"commit", http.MethodPost, "/api/v1/imports/1/commit"},
+		{"correct-buy", http.MethodPost, "/api/v1/imports/1/rows/1/correct-buy"},
 		{"discard", http.MethodPost, "/api/v1/imports/1/discard"},
 	}
 	for _, tc := range cases {
@@ -638,6 +639,7 @@ func TestImportBatchMutations_RequireCSRFToken(t *testing.T) {
 	}{
 		{"patch", http.MethodPatch, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10), resolutionPatchBody(t, checking.ID, commodityID, groceries.ID, started.Rows[0].ID)},
 		{"commit", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/commit", "{}"},
+		{"correct-buy", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/rows/" + strconv.FormatInt(started.Rows[0].ID, 10) + "/correct-buy", `{"reason":"provider correction"}`},
 		{"discard", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/discard", ""},
 		{"analyze", http.MethodPost, "/api/v1/imports/analyze", ""},
 	}

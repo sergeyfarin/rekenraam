@@ -15,6 +15,8 @@ export type GetImportBatchResponse = components['schemas']['GetImportBatchRespon
 export type ListImportBatchesResponse = components['schemas']['ListImportBatchesResponse'];
 export type CommitImportBatchRequest = components['schemas']['CommitImportBatchRequest'];
 export type CommitImportBatchResponse = components['schemas']['CommitImportBatchResponse'];
+export type CorrectTrading212BuyRequest = components['schemas']['CorrectTrading212BuyRequest'];
+export type InvestmentBuyReplacementResponse = components['schemas']['InvestmentBuyReplacementResponse'];
 export type PreviewCommitResponse = components['schemas']['PreviewCommitResponse'];
 export type ImportProfile = components['schemas']['ImportProfileResponse'];
 export type ListImportProfilesResponse = components['schemas']['ListImportProfilesResponse'];
@@ -225,6 +227,19 @@ export async function commitImportBatch(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: JSON.stringify(options)
+  });
+}
+
+export async function correctTrading212Buy(
+  batchId: number,
+  rowId: number,
+  request: CorrectTrading212BuyRequest,
+  csrfToken: string
+): Promise<InvestmentBuyReplacementResponse> {
+  return apiFetch<InvestmentBuyReplacementResponse>(`/api/v1/imports/${batchId}/rows/${rowId}/correct-buy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(request)
   });
 }
 

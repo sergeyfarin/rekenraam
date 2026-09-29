@@ -41,6 +41,10 @@
     enabled: replacementKind !== null && transactionID > 0
   }));
 
+  const sourceLinkedEffectiveBuy = $derived(
+    chainQuery.data?.can_reverse_buy === true && chainQuery.data.effective_transaction_id === transactionID
+  );
+
   let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
   let reversalKind = $state<'buy' | 'sale'>('sale');
   let reason = $state('');
@@ -238,14 +242,14 @@
       {:else if replacementQuery.isError}
         <APIFormError error={replacementQuery.error} />
         <button type="button" class="mt-2 text-sm font-semibold text-accent" onclick={() => replacementQuery.refetch()}>{m.transactions_retry()}</button>
-      {:else if replacementQuery.data?.operation_kind === 'buy' && replacementKind === 'buy' && (!replacementQuery.data.imported || replacementQuery.data.source_identity_id > 0) && !replacementQuery.data.already_corrected && csrfToken}
+      {:else if replacementQuery.data?.operation_kind === 'buy' && replacementKind === 'buy' && (!replacementQuery.data.imported || replacementQuery.data.source_identity_id > 0 || sourceLinkedEffectiveBuy) && !replacementQuery.data.already_corrected && csrfToken}
         <BuyForm {csrfToken} correction={replacementQuery.data} onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
       {:else if replacementQuery.data?.operation_kind === 'sell' && replacementKind === 'sell' && replacementQuery.data.can_replace_sale && !replacementQuery.data.already_corrected && csrfToken}
         <SellForm {csrfToken} correction={replacementQuery.data} onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
       {:else}
         <p class="text-sm text-muted">{m.transactions_investment_replace_unavailable()}</p>
       {/if}
-      {#if replacementQuery.isPending || replacementQuery.isError || replacementQuery.data?.operation_kind !== replacementKind || (replacementQuery.data.imported && replacementQuery.data.source_identity_id === 0) || replacementQuery.data.already_corrected || (replacementKind === 'sell' && !replacementQuery.data.can_replace_sale) || !csrfToken}
+      {#if replacementQuery.isPending || replacementQuery.isError || replacementQuery.data?.operation_kind !== replacementKind || (replacementQuery.data.imported && replacementQuery.data.source_identity_id === 0 && !(replacementKind === 'buy' && sourceLinkedEffectiveBuy)) || replacementQuery.data.already_corrected || (replacementKind === 'sell' && !replacementQuery.data.can_replace_sale) || !csrfToken}
         <button type="button" class="mt-4 min-h-10 rounded-[var(--radius-control)] border border-border bg-control px-4 text-sm font-semibold text-foreground"
           onclick={() => (replacementKind = null)}>{m.investments_form_cancel()}</button>
       {/if}

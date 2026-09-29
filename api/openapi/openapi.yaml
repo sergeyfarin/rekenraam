@@ -213,6 +213,8 @@ paths:
     $ref: "./paths/import-preview-commit.yaml"
   /api/v1/imports/{batch_id}/commit:
     $ref: "./paths/import-commit.yaml"
+  /api/v1/imports/{batch_id}/rows/{row_id}/correct-buy:
+    $ref: "./paths/import-correct-buy.yaml"
   /api/v1/imports/{batch_id}/discard:
     $ref: "./paths/import-discard.yaml"
   /api/v1/import-connections:
@@ -842,6 +844,8 @@ components:
       $ref: "./components/schemas/imports.yaml#/PatchImportBatchRequest"
     CommitImportBatchRequest:
       $ref: "./components/schemas/imports.yaml#/CommitImportBatchRequest"
+    CorrectTrading212BuyRequest:
+      $ref: "./components/schemas/imports.yaml#/CorrectTrading212BuyRequest"
     CommitImportBatchResponse:
       $ref: "./components/schemas/imports.yaml#/CommitImportBatchResponse"
     ImportReconciliationIssue:

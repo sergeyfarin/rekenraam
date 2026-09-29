@@ -150,6 +150,7 @@ ImportStagedRowResponse:
     - raw
     - dedupe_status
     - source_changed
+    - source_buy_operation
     - resolution
     - commit_status
     - commit_effects
@@ -174,7 +175,10 @@ ImportStagedRowResponse:
       $ref: "../../openapi.yaml#/components/schemas/ImportDedupeStatus"
     source_changed:
       type: boolean
-      description: A staged Trading 212 order fill differs from the immutable committed source snapshot for the same fill identity. Commit skips it pending correction review.
+      description: A staged Trading 212 order fill differs from the latest accepted source snapshot for the same fill identity. Ordinary batch commit skips it pending correction review.
+    source_buy_operation:
+      type: boolean
+      description: The original committed Trading 212 identity effect is a native investment buy operation.
     source_transaction_id:
       type: integer
       format: int64
@@ -374,6 +378,15 @@ PatchImportBatchRequest:
 CommitImportBatchRequest:
   type: object
   properties:
+    reconciliation_override:
+      type: boolean
+CorrectTrading212BuyRequest:
+  type: object
+  required: [reason]
+  properties:
+    reason:
+      type: string
+      minLength: 1
     reconciliation_override:
       type: boolean
 CommitImportBatchResponse:

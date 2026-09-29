@@ -9833,6 +9833,99 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/{batch_id}/rows/{row_id}/correct-buy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a changed Trading 212 buy fill as an audited source correction
+         * @description Replaces the current effective buy using the staged provider quantity and net settlement, replays dependent long disposals, and commits the staged source revision in the same transaction. The date, instrument, holding, cash account, and settlement currency must match the current buy. The original import identity remains unchanged and continues to deduplicate source retries. Quantity must be positive and the owner-perspective buy settlement negative; cancellation-shaped rows, changed dates, or changed instruments require another command.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    batch_id: number;
+                    row_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectTrading212BuyRequest"];
+                };
+            };
+            responses: {
+                /** @description Source revision and investment buy replacement committed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentBuyReplacementResponse"];
+                    };
+                };
+                /** @description Invalid request or unsupported source change */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Staged source row no longer eligible, replay dependency failed, or reconciliation override required */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/{batch_id}/discard": {
         parameters: {
             query?: never;
@@ -17639,8 +17732,10 @@ export interface components {
             /** @description JSON string containing source-specific row data. */
             raw: string;
             dedupe_status: components["schemas"]["ImportDedupeStatus"];
-            /** @description A staged Trading 212 order fill differs from the immutable committed source snapshot for the same fill identity. Commit skips it pending correction review. */
+            /** @description A staged Trading 212 order fill differs from the latest accepted source snapshot for the same fill identity. Ordinary batch commit skips it pending correction review. */
             source_changed: boolean;
+            /** @description The original committed Trading 212 identity effect is a native investment buy operation. */
+            source_buy_operation: boolean;
             /**
              * Format: int64
              * @description Original posted transaction linked to the committed Trading 212 identity, when available.
@@ -17735,6 +17830,10 @@ export interface components {
             row_resolutions: components["schemas"]["RowResolutionPatch"][];
         };
         CommitImportBatchRequest: {
+            reconciliation_override?: boolean;
+        };
+        CorrectTrading212BuyRequest: {
+            reason: string;
             reconciliation_override?: boolean;
         };
         CommitImportBatchResponse: {
