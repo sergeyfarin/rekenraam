@@ -153,7 +153,8 @@ still extend proceeds/journal reconciliation beyond single-disposal commands,
 retire the compatibility transaction link and separate lot state. Correction
 history, trade source facts, and buy/sale correction admission now use journal
 links. Export summaries and import effect inference now also use primary links;
-writer bootstrap lookup and column retirement remain.
+writer bootstrap passes the inserted operation ID directly and subsequent lot
+writes use primary links. Compatibility-column and fixture retirement remain.
 Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and
 cash-in-lieu suggestions are currently refused as dividend income (T-109) until

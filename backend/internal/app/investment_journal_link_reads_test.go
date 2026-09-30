@@ -14,6 +14,7 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			ctx := context.Background()
 			f := newInvestmentsTestFixture(t)
+			clearInvestmentHeadersOnInsert(t, f)
 			trade := InvestmentTradeInput{
 				OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 				CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
@@ -34,8 +35,6 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 			require.NoError(t, err)
 			// Isolated mutation proves these consumers do not consult the
 			// transitional header. Durable posted journals and links stay intact.
-			_, err = f.database.ExecContext(ctx, "DROP TRIGGER investment_operations_no_update")
-			require.NoError(t, err)
 			_, err = f.database.ExecContext(ctx, "UPDATE investment_operations SET transaction_id = NULL")
 			require.NoError(t, err)
 			afterFacts, err := f.investmentService.TradeCorrectionContext(ctx, f.ownerUserID, original.Transaction.ID)
@@ -92,6 +91,43 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 			require.Equal(t, SelfCheckPassed, mustRunInvestmentSelfCheck(t, f).Status)
 		})
 	}
+}
+
+// Remove the compatibility identity before the writer can read it, rather than
+// only clearing it after commit. This mutation is confined to the test database.
+func clearInvestmentHeadersOnInsert(t *testing.T, f *investmentsTestFixture) {
+	t.Helper()
+	_, err := f.database.Exec("DROP TRIGGER investment_operations_no_update")
+	require.NoError(t, err)
+	_, err = f.database.Exec(`CREATE TRIGGER test_clear_investment_header
+		AFTER INSERT ON investment_operations BEGIN
+		UPDATE investment_operations SET transaction_id = NULL WHERE id = NEW.id;
+		END`)
+	require.NoError(t, err)
+}
+
+func TestInvestmentTransferAndReinvestmentWritersWithoutCompatibilityHeader(t *testing.T) {
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	clearInvestmentHeadersOnInsert(t, f)
+	seedExternalTransferEquity(t, f.database)
+	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+	inbound, err := f.investmentService.ExternalTransferIn(ctx, knownTransferInput(f))
+	require.NoError(t, err)
+	require.NotNil(t, inbound.LotID)
+	transfer := internalTransferFromLot(f, destinationID, *inbound.LotID, exact.New(1), 0)
+	transfer.EffectiveOn = "2026-07-01"
+	moved, err := f.investmentService.InternalTransfer(ctx, transfer)
+	require.NoError(t, err)
+	require.Len(t, moved.DestinationLotIDs, 1)
+	_, err = f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-08-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: destinationID,
+		IncomeAccountID: &f.incomeAccountID, QuantityValue: exact.New(2),
+		AmountValue: 5000, AmountScale: 2, CashCommodityID: f.eurCommodityID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, SelfCheckPassed, mustRunInvestmentSelfCheck(t, f).Status)
 }
 
 func TestInvestmentCorrectionReadsRequireJournalLinkEvenWithCompatibilityHeader(t *testing.T) {

@@ -21,7 +21,12 @@ representative, while the journal-link CSV retains every linked version. Import
 effects infer operation identity through primary links; a linked inverse remains
 a journal-only effect, and an unlinked investment journal is refused. Seeded
 bundle CSV facts remain byte-identical after clearing the compatibility header.
-Writer bootstrap lookup still needs the cutover before the column can be removed.
+Writer bootstrap now passes the newly inserted operation ID directly into
+journal-link creation; subsequent lot and correction writes resolve identity
+through primary links. Insert-time header-clearing regressions cover buy/sale
+creation, replacement and reversal, external/internal transfer and reinvestment.
+The compatibility column is still populated for the frozen seed and existing
+fixtures; schema/fixture retirement remains the next cutover step.
 Current lot projection columns remain on `investment_lots` instead of a
 separate `investment_lot_state` table. Trade net-settlement and separately
 posted fee components now link to the exact journal posting line keys chosen by

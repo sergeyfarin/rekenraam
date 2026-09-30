@@ -148,11 +148,12 @@ func insertTransactionWithAuditEventTx(ctx context.Context, tx *sql.Tx, params C
 	if err != nil {
 		return TransactionRecord{}, fmt.Errorf("read transaction id: %w", err)
 	}
+	var investmentOperationID int64
 	if params.Spec.InvestmentOperationKind != "" {
 		if params.Spec.TransactionKind != "investment" || params.Spec.Status != "posted" {
 			return TransactionRecord{}, fmt.Errorf("investment operation requires a posted investment transaction")
 		}
-		if _, err := tx.ExecContext(ctx, `
+		operationResult, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_operations (
 				book_id, transaction_id, operation_kind, event_date,
 				created_at, created_audit_event_id, correction_of_operation_id,
@@ -161,8 +162,13 @@ func insertTransactionWithAuditEventTx(ctx context.Context, tx *sql.Tx, params C
 		`, params.BookID, transactionID, params.Spec.InvestmentOperationKind,
 			params.Spec.TransactionDate, params.CreatedAt, auditEventID,
 			params.InvestmentCorrectionOfOperationID, params.InvestmentCorrectionMode,
-			params.InvestmentCorrectionReason); err != nil {
+			params.InvestmentCorrectionReason)
+		if err != nil {
 			return TransactionRecord{}, fmt.Errorf("insert investment operation: %w", err)
+		}
+		investmentOperationID, err = operationResult.LastInsertId()
+		if err != nil {
+			return TransactionRecord{}, fmt.Errorf("read new investment operation id: %w", err)
 		}
 	}
 
@@ -183,7 +189,7 @@ func insertTransactionWithAuditEventTx(ctx context.Context, tx *sql.Tx, params C
 		return TransactionRecord{}, err
 	}
 	if params.Spec.InvestmentOperationKind != "" {
-		if err := recordInvestmentFoundationTx(ctx, tx, params, record, auditEventID); err != nil {
+		if err := recordInvestmentFoundationTx(ctx, tx, params, record, auditEventID, investmentOperationID); err != nil {
 			return TransactionRecord{}, err
 		}
 	}
