@@ -186,8 +186,8 @@ func (r *SelfCheckRepository) StreamInvestmentComponents(ctx context.Context, tr
 }
 
 // StreamDisposalClearing checks aggregate sell/write-off economics, including
-// multiple decisions sharing clearing legs. Individual compound attribution
-// needs a further decision-to-component contract; this checks group totals.
+// multiple decisions sharing clearing legs. The separate clearing-allocation
+// stream checks individual decisions and posting portions independently.
 func (r *SelfCheckRepository) StreamDisposalClearing(ctx context.Context, transaction *sql.Tx, bookID int64, visit func(SelfCheckDisposalClearingRecord) error) error {
 	rows, err := transaction.QueryContext(ctx, `
 		WITH decisions AS (

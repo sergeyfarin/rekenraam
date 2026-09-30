@@ -220,3 +220,16 @@ ID. `lots.csv` retains its joined current-state summary and existing columns;
 ADR 0013's physical identity/projection split and carries both layers in a
 portable snapshot. Missing state is an integrity finding and cannot be exported
 as a fabricated zero balance.
+
+### Disposal-clearing attribution refinement (2026-09-30)
+
+Manifest schema version 4 adds `disposal-clearing-allocations.csv`, with
+`decision_id`, `posting_version_id`, `proceeds_value`, `proceeds_scale`.
+Coefficients are canonical signed exact integers. Each portion represents
+operational proceeds, the opposite sign of the allocated clearing quantity.
+Sum portions per decision to its immutable operational proceeds; sum portions
+per clearing posting to the negated posting amount, aligning scales exactly.
+One decision may span multiple dated legs and multiple decisions may share a
+posting. The links remain original audit evidence after basis replay or
+correction; replacement decisions have their own links. A zero-proceeds
+write-off may have no cost-currency portion. Existing CSV columns are retained.

@@ -130,3 +130,19 @@ requires disposable development databases to be reset. A forward migration is
 equally valid when it gives the same model with less disruption. Once a release
 with actual installations ships, its migrations are immutable and upgrades
 must preserve data.
+
+## Disposal-Clearing Attribution Refinement (2026-09-30)
+
+Operational disposal proceeds are attributed explicitly to pinned
+`commodity_trading` posting versions in the decision's cost currency and
+non-reversal operation journal. Immutable signed portions support several
+decisions sharing a posting and one decision spanning settlement and fee legs.
+Conservation is checked independently per decision and per posting, in exact
+scaled arithmetic. A group total alone cannot prove individual attribution.
+Fee payment dates may differ from the disposal date. Separately expensed fees
+do not contribute; a zero-proceeds write-off may have no cost-currency leg.
+Basis-only replay preserves the attribution; a replacement sale records new
+portions while originals remain audit evidence. Current single-disposal
+commands allocate whole legs atomically; compound commands must supply their
+own portions before posting. This clarifies decision 1 without admitting a
+compound sale workflow or changing fee treatment.

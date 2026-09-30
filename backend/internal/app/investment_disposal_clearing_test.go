@@ -5,7 +5,121 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"rekenraam/backend/internal/exact"
 )
+
+func TestSelfCheckDetectsOffsettingDisposalProceedsDamage(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	buyOn(t, f, "2026-01-01", 2, 2000)
+	sold, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-02-01", 1))
+	require.NoError(t, err)
+	first := *sold.DisposalDecision.ID
+	_, err = f.database.Exec(`DROP TRIGGER investment_disposal_decisions_no_update`)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`UPDATE investment_disposal_decisions SET proceeds_value = '4000',
+		quantity_value = '5', quantity_scale = 1, disposed_basis_value = '500', disposed_basis_scale = 2 WHERE id = ?`, first)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`DROP TRIGGER investment_disposal_allocations_no_update`)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`DROP TRIGGER investment_lot_events_no_update`)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`UPDATE investment_disposal_allocations SET proceeds_value = '4000', proceeds_scale = 2,
+		quantity_value = '5', quantity_scale = 1, cost_basis_value = '500', cost_basis_scale = 2 WHERE decision_id = ?`, first)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`UPDATE investment_lot_events SET quantity_value = '-5', quantity_scale = 1,
+		cost_basis_value = '-500', cost_basis_scale = 2
+		WHERE id = (SELECT lot_event_id FROM investment_disposal_allocations WHERE decision_id = ?)`, first)
+	require.NoError(t, err)
+	second := appendSharedDisposalDecision(t, f, first, "6000", 2, f.eurCommodityID)
+	result, err := f.database.Exec(`INSERT INTO investment_lot_events
+		(book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
+		cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id, cost_basis_method)
+		SELECT book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
+		cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id, cost_basis_method
+		FROM investment_lot_events WHERE id = (SELECT lot_event_id FROM investment_disposal_allocations WHERE decision_id = ?)`, first)
+	require.NoError(t, err)
+	eventID, err := result.LastInsertId()
+	require.NoError(t, err)
+	_, err = f.database.Exec(`INSERT INTO investment_disposal_allocations
+		(book_id, decision_id, lot_event_id, lot_id, allocation_seq, quantity_value, quantity_scale,
+		cost_basis_value, cost_basis_scale, proceeds_value, proceeds_scale)
+		SELECT book_id, ?, ?, lot_id, 1, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, '6000', 2
+		FROM investment_disposal_allocations WHERE decision_id = ?`, second, eventID, first)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`INSERT INTO investment_operation_lot_effects (operation_id, effect_seq, lot_event_id)
+		SELECT operation_id, 2, ? FROM investment_disposal_decisions WHERE id = ?`, eventID, first)
+	require.NoError(t, err)
+	attributeSharedDisposalClearing(t, f, first, second, "4000", 2)
+	baseline := mustRunInvestmentSelfCheck(t, f)
+	require.Equal(t, SelfCheckPassed, baseline.Status, "%+v", baseline.Results)
+	// The shared journal total remains 100.00, so an aggregate check cannot
+	// establish which disposal earned which portion of the clearing proceeds.
+	_, err = f.database.Exec(`UPDATE investment_disposal_decisions SET proceeds_value = '4100' WHERE id = ?`, first)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`UPDATE investment_disposal_decisions SET proceeds_value = '5900' WHERE id = ?`, second)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`UPDATE investment_disposal_allocations SET proceeds_value = '4100' WHERE decision_id = ?`, first)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`UPDATE investment_disposal_allocations SET proceeds_value = '5900' WHERE decision_id = ?`, second)
+	require.NoError(t, err)
+	run := mustRunInvestmentSelfCheck(t, f)
+	require.Equal(t, SelfCheckPassed, resultFor(t, run, CheckLotReconciliation).Status)
+	check := resultFor(t, run, CheckInvestmentFoundation)
+	require.Equal(t, SelfCheckFailed, check.Status)
+	require.EqualValues(t, 2, check.FindingCount)
+	require.Contains(t, check.Summary, "disposal clearing attribution")
+}
+
+// Fixture only: no compound command ships yet. Assign the first decision its
+// elected portion of the first leg, and the second the rest of every leg.
+func attributeSharedDisposalClearing(t *testing.T, f *investmentsTestFixture, first, second int64, value string, scale int) {
+	t.Helper()
+	_, err := f.database.Exec(`DROP TRIGGER IF EXISTS investment_disposal_clearing_allocations_no_delete`)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`DELETE FROM investment_disposal_clearing_allocations WHERE decision_id = ?`, first)
+	require.NoError(t, err)
+	rows, err := f.database.Query(`SELECT pv.id, pv.quantity_value, pv.quantity_scale
+		FROM investment_disposal_decisions d JOIN posting_versions pv ON pv.transaction_version_id = d.transaction_version_id
+			AND pv.commodity_id = d.cost_commodity_id
+		JOIN accounts a ON a.id = pv.account_id AND a.system_role = 'commodity_trading'
+		WHERE d.id = ? ORDER BY pv.id`, first)
+	require.NoError(t, err)
+	type leg struct {
+		id    int64
+		value exact.Coefficient
+		scale int
+	}
+	var legs []leg
+	for rows.Next() {
+		var item leg
+		require.NoError(t, rows.Scan(&item.id, &item.value, &item.scale))
+		legs = append(legs, item)
+	}
+	require.NoError(t, rows.Err())
+	require.NoError(t, rows.Close())
+	firstValue, err := exact.Parse(value)
+	require.NoError(t, err)
+	for i, item := range legs {
+		portion := exact.NewScaledInt()
+		if i == 0 {
+			portion.AddCoefficient(firstValue, scale)
+		}
+		remainder := exact.ScaledIntFromCoefficient(item.value.Negated(), item.scale)
+		remainder.SubScaled(portion)
+		for _, allocated := range []struct {
+			decision int64
+			amount   *exact.ScaledInt
+		}{{first, portion}, {second, remainder}} {
+			coefficient, err := allocated.amount.Coefficient()
+			require.NoError(t, err)
+			_, err = f.database.Exec(`INSERT INTO investment_disposal_clearing_allocations
+				(book_id, decision_id, posting_version_id, proceeds_value, proceeds_scale) VALUES (1, ?, ?, ?, ?)`,
+				allocated.decision, item.id, coefficient, allocated.amount.Scale())
+			require.NoError(t, err)
+		}
+	}
+}
 
 // No compound sale command ships yet. These fixtures exercise the admitted
 // multi-decision journal contract directly; allocation checks remain separate.
@@ -48,6 +162,7 @@ func TestSelfCheckMultipleDisposalsShareClearingOnce(t *testing.T) {
 		{name: "two shared clearing legs", first: "40", second: "5800", secondScale: 2, separateFee: true, want: SelfCheckPassed},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			f := newInvestmentsTestFixture(t)
 			buyOn(t, f, "2026-01-01", 2, 2000)
 			input := sellInput(f, "2026-02-01", 1)
@@ -70,13 +185,14 @@ func TestSelfCheckMultipleDisposalsShareClearingOnce(t *testing.T) {
 			_, err = f.database.Exec(`UPDATE investment_disposal_decisions SET proceeds_value = ?, proceeds_scale = ? WHERE id = ?`,
 				test.first, test.firstScale, *sold.DisposalDecision.ID)
 			require.NoError(t, err)
-			appendSharedDisposalDecision(t, f, *sold.DisposalDecision.ID, test.second, test.secondScale, f.eurCommodityID)
+			second := appendSharedDisposalDecision(t, f, *sold.DisposalDecision.ID, test.second, test.secondScale, f.eurCommodityID)
+			attributeSharedDisposalClearing(t, f, *sold.DisposalDecision.ID, second, test.first, test.firstScale)
 			run := mustRunInvestmentSelfCheck(t, f)
 			require.Equal(t, SelfCheckPassed, resultFor(t, run, CheckEntryBalance).Status)
 			check := resultFor(t, run, CheckInvestmentFoundation)
 			require.Equal(t, test.want, check.Status)
 			if test.want == SelfCheckFailed {
-				require.EqualValues(t, 1, check.FindingCount)
+				require.EqualValues(t, 2, check.FindingCount, "group and individual attribution checks both detect the discrepancy")
 				require.Contains(t, check.Summary, "disposal proceeds disagree with posted clearing")
 				require.Contains(t, check.Sample, *sold.DisposalDecision.ID)
 			}
@@ -98,7 +214,7 @@ func TestSelfCheckDisposalClearingKeepsCurrenciesSeparate(t *testing.T) {
 	secondID := appendSharedDisposalDecision(t, f, *sold.DisposalDecision.ID, "1", 0, usd)
 	check := resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation)
 	require.Equal(t, SelfCheckFailed, check.Status)
-	require.EqualValues(t, 1, check.FindingCount)
+	require.EqualValues(t, 2, check.FindingCount, "the new currency has neither balanced clearing nor attributed proceeds")
 	require.Contains(t, check.Sample, secondID)
 	require.Contains(t, check.Summary, "disposal proceeds disagree with posted clearing")
 }

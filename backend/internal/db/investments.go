@@ -1980,6 +1980,10 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 	if err != nil {
 		return DisposalDecisionRecord{}, fmt.Errorf("read disposal decision id: %w", err)
 	}
+	if err := createDisposalClearingAllocationsTx(ctx, tx, params.BookID, decisionID, transaction.VersionID,
+		costCommodityID, exact.New(params.ProceedsValue), params.ProceedsScale); err != nil {
+		return DisposalDecisionRecord{}, err
+	}
 	for index, allocation := range disposals {
 		if err := linkLotEffectTx(ctx, tx, operationID, allocation.EventID); err != nil {
 			return DisposalDecisionRecord{}, err

@@ -139,6 +139,13 @@ non-trivial diff (yours or reviewed):
     Negative proceeds are valid; nonpositive allocated quantity and negative
     basis are not. Named regression: `TestSelfCheckDetectsDisposalAllocationConservationDamage`.
 
+18. **Offsetting disposal errors hiding behind sound group totals** — combined
+    proceeds and per-lot conservation can both pass after two decisions and
+    their allocation proceeds are changed in opposite directions. Immutable
+    decision-to-clearing portions must conserve each decision and each pinned
+    posting independently. Check provenance even for equal-valued journals.
+    Named regression: `TestSelfCheckDetectsOffsettingDisposalProceedsDamage`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

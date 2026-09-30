@@ -68,12 +68,13 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				} `json:"files"`
 			}
 			require.NoError(t, json.Unmarshal(files["manifest.json"], &manifest))
-			require.Equal(t, 3, manifest.SchemaVersion)
+			require.Equal(t, 4, manifest.SchemaVersion)
 			manifestRows := map[string]int64{}
 			for _, file := range manifest.Files {
 				manifestRows[file.Name] = file.Rows
 			}
 			for file, header := range map[string][]string{
+				"disposal-clearing-allocations.csv":      {"decision_id", "posting_version_id", "proceeds_value", "proceeds_scale"},
 				"lots.csv":                               {"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status", "quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis", "cost_commodity_id", "source_transaction_id"},
 				"investment-operations.csv":              {"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id", "correction_of_operation_id", "correction_mode", "correction_reason"},
 				"investment-operation-journal-links.csv": {"operation_id", "link_seq", "transaction_version_id", "role"},
@@ -126,6 +127,10 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				require.NotEmpty(t, decisions[1][3], "the export must retain the posted transaction version")
 
 				allocations := readInvestmentContractCSV(t, files, "disposal-allocations.csv")
+				require.Equal(t, [][]string{
+					{"decision_id", "posting_version_id", "proceeds_value", "proceeds_scale"},
+					{"1", "33", "150000", "2"},
+				}, readInvestmentContractCSV(t, files, "disposal-clearing-allocations.csv"))
 				require.Len(t, allocations, 3)
 				require.Equal(t, decisions[1][0], allocations[1][0])
 				require.Equal(t, decisions[1][0], allocations[2][0])

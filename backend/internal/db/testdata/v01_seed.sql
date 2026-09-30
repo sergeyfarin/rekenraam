@@ -256,6 +256,7 @@ INSERT INTO investment_position_basis_state VALUES(1,1,15,2,1,'individual_lot','
 INSERT INTO investment_disposal_decisions VALUES(1,1,9,13,3,1,'long',15,2,1,'2026-04-02','1250',2,'130000',2,'150000',2,'fifo','fallback',NULL,NULL,NULL,NULL,NULL,'2026-09-13T11:34:58Z',1,31);
 INSERT INTO investment_disposal_allocations VALUES(1,1,1,3,1,1,'1000',2,100000,2,120000,2);
 INSERT INTO investment_disposal_allocations VALUES(2,1,1,4,2,2,'250',2,30000,2,30000,2);
+INSERT INTO investment_disposal_clearing_allocations VALUES(1,1,1,33,'150000',2);
 INSERT INTO transaction_deletion_events VALUES(1,1,6,'soft_delete','2026-09-13T11:34:58Z',1,19,'wrong account');
 INSERT INTO login_trusted_devices VALUES(1,1,'ae9c1f061975c1053b604ac03cd4f7fa59e57fa30bfeb341086cdb10f6d5143b','2026-09-13T11:34:58Z','2026-09-13T11:34:58Z','2027-03-12T11:34:58Z',NULL,'192.0.2.1');
 INSERT INTO self_check_runs VALUES(1,1,'manual','passed',0,'','2026-09-13T11:34:58Z','2026-09-13T11:34:58Z','2026-09-13T11:34:58Z');

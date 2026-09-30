@@ -7,9 +7,11 @@ import (
 )
 
 // ExportInvestmentFoundation returns exact stored coefficients and provenance.
-// These rows supplement the human-readable lot, price, and import views in bundle v2.
+// These rows supplement the human-readable lot, price, and import bundle views.
 func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *sql.Tx, bookID int64, kind string) ([][]string, error) {
 	queries := map[string]string{
+		"disposal-clearing-allocations": `SELECT decision_id, posting_version_id, proceeds_value, proceeds_scale
+			FROM investment_disposal_clearing_allocations WHERE book_id = ? ORDER BY decision_id, posting_version_id`,
 		"journal-links": `SELECT l.operation_id, l.link_seq, l.transaction_version_id, l.role
 			FROM investment_operation_journal_links l WHERE l.book_id = ? ORDER BY l.operation_id, l.link_seq`,
 		"dates": `SELECT d.operation_id, d.date_role, d.event_date

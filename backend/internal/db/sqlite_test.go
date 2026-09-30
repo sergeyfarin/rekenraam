@@ -1252,9 +1252,9 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   104,
-		"table":   98,
-		"trigger": 104,
+		"index":   105,
+		"table":   99,
+		"trigger": 107,
 		"view":    7,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.Equal(t, "table", objects["import_source_revisions"])

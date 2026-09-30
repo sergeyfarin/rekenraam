@@ -1272,6 +1272,21 @@ CREATE TABLE IF NOT EXISTS investment_disposal_allocations (
   UNIQUE (lot_event_id)
 );
 
+-- Signed operational proceeds attributed to individual pinned clearing legs.
+-- Several decisions may share one posting; one decision may span several legs.
+CREATE TABLE IF NOT EXISTS investment_disposal_clearing_allocations (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  decision_id INTEGER NOT NULL REFERENCES investment_disposal_decisions(id) ON DELETE RESTRICT,
+  posting_version_id INTEGER NOT NULL REFERENCES posting_versions(id) ON DELETE RESTRICT,
+  proceeds_value TEXT NOT NULL CHECK (length(proceeds_value) BETWEEN 1 AND 39),
+  proceeds_scale INTEGER NOT NULL CHECK (proceeds_scale BETWEEN 0 AND 12),
+  UNIQUE (decision_id, posting_version_id)
+);
+
+CREATE INDEX IF NOT EXISTS investment_disposal_clearing_posting_idx
+  ON investment_disposal_clearing_allocations (posting_version_id, book_id);
+
 -- Revision 1 is the immutable decision and allocation snapshot above. Later
 -- replay results append a numbered effective set; no original event changes.
 CREATE TABLE IF NOT EXISTS investment_disposal_revisions (
@@ -1802,6 +1817,34 @@ BEGIN SELECT RAISE(ABORT, 'investment disposal decisions are immutable'); END;
 CREATE TRIGGER IF NOT EXISTS investment_disposal_decisions_no_delete
 BEFORE DELETE ON investment_disposal_decisions
 BEGIN SELECT RAISE(ABORT, 'investment disposal decisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_clearing_allocations_valid
+BEFORE INSERT ON investment_disposal_clearing_allocations
+BEGIN
+  SELECT CASE WHEN NOT EXISTS (
+    SELECT 1 FROM investment_disposal_decisions d
+    JOIN posting_versions pv ON pv.id = NEW.posting_version_id
+      AND pv.book_id = d.book_id AND pv.transaction_version_id = d.transaction_version_id
+      AND pv.commodity_id = d.cost_commodity_id
+    JOIN accounts a ON a.id = pv.account_id AND a.book_id = d.book_id
+      AND a.system_role = 'commodity_trading'
+    JOIN investment_operation_journal_links l ON l.operation_id = d.operation_id
+      AND l.book_id = d.book_id AND l.transaction_version_id = d.transaction_version_id
+      AND l.role <> 'reversal'
+    WHERE d.id = NEW.decision_id AND d.book_id = NEW.book_id
+  ) THEN RAISE(ABORT, 'disposal clearing allocation must reference its linked cost-currency clearing posting') END;
+END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_clearing_allocations_no_update
+BEFORE UPDATE ON investment_disposal_clearing_allocations
+BEGIN SELECT RAISE(ABORT, 'investment disposal clearing allocations are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_clearing_allocations_no_delete
+BEFORE DELETE ON investment_disposal_clearing_allocations
+BEGIN SELECT RAISE(ABORT, 'investment disposal clearing allocations are immutable'); END;
 -- +goose StatementEnd
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_disposal_allocations_no_update
@@ -3690,6 +3733,9 @@ DROP INDEX IF EXISTS import_rules_book_order_idx;
 DROP TABLE IF EXISTS import_rules;
 DROP INDEX IF EXISTS investment_disposal_decisions_event_idx;
 DROP TRIGGER IF EXISTS investment_disposal_allocations_no_delete;
+DROP TRIGGER IF EXISTS investment_disposal_clearing_allocations_valid;
+DROP TRIGGER IF EXISTS investment_disposal_clearing_allocations_no_update;
+DROP TRIGGER IF EXISTS investment_disposal_clearing_allocations_no_delete;
 DROP TRIGGER IF EXISTS investment_disposal_allocations_no_update;
 DROP TRIGGER IF EXISTS investment_disposal_decisions_no_delete;
 DROP TRIGGER IF EXISTS investment_disposal_decisions_no_update;
@@ -3743,6 +3789,7 @@ DROP INDEX IF EXISTS investment_operations_book_kind_date_idx;
 DROP TABLE IF EXISTS investment_disposal_revision_allocations;
 DROP TABLE IF EXISTS investment_disposal_revisions;
 DROP TABLE IF EXISTS investment_disposal_allocations;
+DROP TABLE IF EXISTS investment_disposal_clearing_allocations;
 DROP TABLE IF EXISTS investment_disposal_decisions;
 DROP TABLE IF EXISTS investment_operations;
 DROP TABLE IF EXISTS investment_position_basis_state;

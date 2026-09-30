@@ -61,6 +61,13 @@ correctly formatted for the toolchain actually compiling them.
 ./scripts/test-backend.sh
 ```
 
+The 2026-09-30 disposal-clearing attribution gate passed `internal/app` in
+598.347 seconds, close to the unchanged default 600-second package timeout.
+[T-111 #126](https://github.com/sergeyfarin/rekenraam/issues/126) tracks measured
+fixture/test cost reduction to restore runtime margin. Keep the race detector,
+isolated fixtures and migration/restore coverage; increasing the timeout or
+skipping tests does not resolve that follow-up.
+
 The financial property tests run in the normal backend suite. For a focused
 iteration on ledger, cashflow, lot conservation and gains arithmetic:
 
@@ -349,6 +356,12 @@ consolidated `0001` now separates immutable `investment_lots` from mutable
 `investment_lot_state`. The checksum and frozen seed are updated together.
 Fresh/seeded tests cover schema, exact balances, replay and bundle schema 3.
 No legacy or installed databases exist.
+
+**BREAKING DEV DATABASE, disposal-clearing attribution (2026-09-30):** the
+consolidated `0001` adds immutable decision-to-posting proceeds portions.
+The checksum and frozen seed are updated together. Fresh/seeded bundle schema
+4 preserves these links; self-check conserves decisions and shared postings
+independently. No legacy or installed databases exist.
 
 The final pre-`v0.1.0` consolidation changed the highest schema version from 8
 to 1. Databases and backups made before that consolidation are incompatible in

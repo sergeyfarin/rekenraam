@@ -22,7 +22,7 @@ import (
 // BundleSchemaVersion is the archive's own version, carried in manifest.json.
 // Columns are appended within a version; a change that cannot be made by
 // appending increments this and needs an ADR (ADR 0011).
-const BundleSchemaVersion = 3
+const BundleSchemaVersion = 4
 
 // bundleFile is one entry of the archive, recorded in the manifest with the
 // checksum computed while it was written.
@@ -224,6 +224,9 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		}},
 		{"disposal-decisions.csv", func(w io.Writer) (int64, error) { return s.writeDisposalDecisionsCSV(ctx, w, snapshot) }},
 		{"disposal-allocations.csv", func(w io.Writer) (int64, error) { return s.writeDisposalAllocationsCSV(ctx, w, snapshot) }},
+		{"disposal-clearing-allocations.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "disposal-clearing-allocations", []string{"decision_id", "posting_version_id", "proceeds_value", "proceeds_scale"})
+		}},
 		{"disposal-revisions.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "disposal-revisions", []string{"revision_id", "decision_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "disposed_basis_value", "disposed_basis_scale", "created_at", "audit_event_id"})
 		}},
@@ -876,6 +879,7 @@ value in this archive was ever a floating-point number.`,
   import-identity-effects.csv  ordered operations and transactions per source row
   disposal-decisions.csv  immutable resolved cost-basis elections
   disposal-allocations.csv  exact lot allocations for those elections
+  disposal-clearing-allocations.csv  signed proceeds portions of pinned journal clearing postings
   disposal-revisions.csv  append-only effective replay calculation chain
   disposal-revision-allocations.csv  lot allocations for replay revisions
   prices.csv         non-voided price observations
@@ -935,8 +939,10 @@ unknown. A trade-implied price derived from net cash remains usable for
 valuation and is flagged approximate; its source transaction version and
 shared audit event are in prices.csv.
 disposal-decisions.csv and disposal-allocations.csv preserve the first posted
-calculation even after defaults or dated history change. The highest
-revision_seq per decision in disposal-revisions.csv and its allocation rows
+calculation even after defaults or dated history change.
+disposal-clearing-allocations.csv preserves each decision's signed portions of
+its original journal clearing legs; basis replay does not rewrite these links.
+The highest revision_seq per decision in disposal-revisions.csv and its allocation rows
 are the current effective calculation; earlier revisions remain audit history.`,
 	}
 

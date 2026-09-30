@@ -129,7 +129,7 @@ var checkNarratives = map[string]checkNarrative{
 		nextStep:    "The app refuses to create these, so a non-zero count means rows arrived from outside it — a backfill, a manual repair, or a restored and patched database. Exports have been quietly falling back to each account's earliest version for these rows.",
 	},
 	CheckInvestmentFoundation: {
-		explanation: "Named investment operations must link their posted versions, source lots, effects and journal-backed cash components. Single-disposal sales and write-offs must agree with their posted cost-currency clearing. A completed setup also needs its external investment transfer equity account and commission default.",
+		explanation: "Named investment operations must link their posted versions, source lots, effects and journal-backed cash components. Disposal decisions and each shared cost-currency clearing posting must independently conserve their attributed proceeds. A completed setup also needs its external investment transfer equity account and commission default.",
 		nextStep:    "Review the named operation, disposal decision, journal or lot and the setup accounts. Preserve the original rows before correcting any mismatch or missing link.",
 	},
 	CheckSQLiteIntegrity: {
@@ -575,6 +575,48 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		result.Status = SelfCheckFailed
 		result.FindingCount += proceedsMismatch
 		summaries = append(summaries, fmt.Sprintf("%d disposal proceeds disagree with posted clearing", proceedsMismatch))
+	}
+	var attributionEntity int64
+	var attributionPosting, attributionBad bool
+	var expectedAttribution, allocatedAttribution *exact.ScaledInt
+	var attributionMismatch int64
+	finishAttribution := func() {
+		if attributionEntity == 0 || !attributionBad && expectedAttribution.Cmp(allocatedAttribution) == 0 {
+			return
+		}
+		attributionMismatch++
+		if len(result.Sample) < db.SelfCheckSampleLimit {
+			kind := "decision"
+			if attributionPosting {
+				kind = "posting"
+			}
+			result.Sample = append(result.Sample, attributionEntity)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("%s #%d", kind, attributionEntity))
+		}
+	}
+	err = s.repository.StreamDisposalClearingAllocations(ctx, snapshot, BookID, func(record db.SelfCheckDisposalClearingAllocationRecord) error {
+		if !record.IsAllocation {
+			finishAttribution()
+			attributionEntity, attributionPosting, attributionBad = record.EntityID, record.IsPosting, false
+			expectedAttribution = exact.ScaledIntFromCoefficient(record.AmountValue, record.AmountScale)
+			if record.IsPosting {
+				expectedAttribution = expectedAttribution.Negated()
+			}
+			allocatedAttribution = exact.NewScaledInt()
+		} else {
+			allocatedAttribution.AddCoefficient(record.AmountValue, record.AmountScale)
+			attributionBad = attributionBad || !record.ValidRelationship
+		}
+		return nil
+	})
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	finishAttribution()
+	if attributionMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += attributionMismatch
+		summaries = append(summaries, fmt.Sprintf("%d disposal clearing attribution mismatches", attributionMismatch))
 	}
 	if result.Status == SelfCheckFailed {
 		if len(result.Sample) > db.SelfCheckSampleLimit {

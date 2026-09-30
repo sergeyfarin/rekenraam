@@ -155,8 +155,12 @@ unlinked decision provenance is reported even for equal-valued journals.
 The lot check also conserves quantity, basis and signed proceeds for every
 original disposal allocation set and replay revision, including superseded
 audit snapshots, and reports missing/invalid allocations before projection math.
-Individual compound attribution and nullable unknown-basis projection
-representation remain open.
+Individual decisions now attribute signed exact proceeds portions to immutable
+clearing posting versions. Self-check conserves each decision and each shared
+leg independently, including restored link damage and offsetting allocation
+errors. Current writers remain single-disposal commands; future compound
+commands must supply explicit portions. Bundle schema 4 exports these links.
+Nullable unknown-basis projection representation remains open.
 The consolidated baseline separates immutable lot identity/opening facts from
 `investment_lot_state`; replay reconstructs the state atomically, self-check
 reports missing/corrupt state and bundle schema 3 exports both layers.

@@ -66,9 +66,22 @@ failed findings. Superseded snapshots remain checked as audit evidence; only
 effective snapshots contribute to the current position projection. Allocation
 damage is reported before projection arithmetic and is never repaired by the
 check. Negative proceeds and equivalent scales remain valid.
-Individual compound disposal attribution remains an open data-contract gate;
-equal and opposite errors within one clearing group still require explicit
-decision/component attribution. This is not an accepted change to ADR 0013. The reviewed
+Individual disposal attribution now has immutable
+`investment_disposal_clearing_allocations`: each row names a decision, pinned
+clearing posting version and signed exact proceeds portion. One decision can
+span dated settlement/fee legs and several decisions can share a leg. Current
+single-disposal writers attribute whole legs atomically; compound commands
+must supply explicit portions. Self-check independently compares each decision
+with its portions and each clearing leg with all assigned portions, validating
+book, operation journal link, version, currency and trading account. Equal and
+opposite decision/allocation errors can no longer hide behind a sound group
+total or lot projection. Separately expensed fees are excluded; a zero-proceeds
+write-off needs no cost-currency leg. Correction/replay retains the original
+attribution as audit evidence; a replacement sale records its own attribution.
+Bundle schema 4 adds `disposal-clearing-allocations.csv`. The ADR 0013 baseline,
+checksum and frozen seed are updated together; no legacy databases exist.
+Nullable unknown-basis projection representation remains the next integrity
+gate. The reviewed
 baseline now keys disposal decisions by `(operation_id, decision_seq)`; current
 single-disposal writers emit sequence 1. Correction writers also still have
 separate transaction orchestration. Complete these integrity and correction
