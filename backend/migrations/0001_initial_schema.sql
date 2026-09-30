@@ -1102,31 +1102,81 @@ CREATE TABLE IF NOT EXISTS investment_lots (
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   opened_on TEXT NOT NULL CHECK (opened_on GLOB '????-??-??'),
   source_transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
-  status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 38),
   quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
-  remaining_quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(remaining_quantity_value) BETWEEN 1 AND 38),
-  remaining_quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (remaining_quantity_scale BETWEEN 0 AND 24),
   cost_basis_value TEXT NOT NULL CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
   cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
-  remaining_cost_basis_value TEXT NOT NULL CHECK (length(remaining_cost_basis_value) BETWEEN 1 AND 38),
-  remaining_cost_basis_scale INTEGER NOT NULL CHECK (remaining_cost_basis_scale BETWEEN 0 AND 12),
   cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  updated_at TEXT NOT NULL,
-  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
   position_side TEXT NOT NULL DEFAULT 'long' CHECK (position_side IN ('long', 'short'))
 );
 
 CREATE INDEX IF NOT EXISTS investment_lots_position_idx
-  ON investment_lots (book_id, account_id, commodity_id, status, opened_on, id);
+  ON investment_lots (book_id, account_id, commodity_id, opened_on, id);
 
 CREATE INDEX IF NOT EXISTS investment_lots_side_position_idx
-  ON investment_lots (book_id, account_id, commodity_id, position_side, status, opened_on, id);
+  ON investment_lots (book_id, account_id, commodity_id, position_side, opened_on, id);
+
+CREATE TABLE IF NOT EXISTS investment_lot_state (
+  lot_id INTEGER PRIMARY KEY REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+  remaining_quantity_value TEXT NOT NULL CHECK (length(remaining_quantity_value) BETWEEN 1 AND 38 AND substr(remaining_quantity_value, 1, 1) <> '-'),
+  remaining_quantity_scale INTEGER NOT NULL CHECK (remaining_quantity_scale BETWEEN 0 AND 24),
+  remaining_cost_basis_value TEXT NOT NULL CHECK (length(remaining_cost_basis_value) BETWEEN 1 AND 38 AND substr(remaining_cost_basis_value, 1, 1) <> '-'),
+  remaining_cost_basis_scale INTEGER NOT NULL CHECK (remaining_cost_basis_scale BETWEEN 0 AND 12),
+  updated_at TEXT NOT NULL,
+  updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+CREATE VIEW current_investment_lots AS
+SELECT
+  lot.id,
+  lot.book_id,
+  lot.account_id,
+  lot.commodity_id,
+  lot.opened_on,
+  lot.source_transaction_id,
+  state.status,
+  lot.quantity_value,
+  lot.quantity_scale,
+  state.remaining_quantity_value,
+  state.remaining_quantity_scale,
+  lot.cost_basis_value,
+  lot.cost_basis_scale,
+  state.remaining_cost_basis_value,
+  state.remaining_cost_basis_scale,
+  lot.cost_commodity_id,
+  lot.metadata_json,
+  lot.created_at,
+  lot.created_by_user_id,
+  lot.created_audit_event_id,
+  state.updated_at,
+  state.updated_by_user_id,
+  state.updated_audit_event_id,
+  lot.position_side
+FROM investment_lots lot LEFT JOIN investment_lot_state state
+  ON state.lot_id = lot.id AND state.book_id = lot.book_id;
+
+-- +goose StatementBegin
+CREATE TRIGGER investment_lot_state_same_book_insert BEFORE INSERT ON investment_lot_state
+WHEN NOT EXISTS (SELECT 1 FROM investment_lots lot WHERE lot.id = NEW.lot_id AND lot.book_id = NEW.book_id)
+  OR (NEW.updated_audit_event_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM audit_events audit WHERE audit.id = NEW.updated_audit_event_id AND audit.book_id = NEW.book_id))
+BEGIN SELECT RAISE(ABORT, 'investment lot state must belong to its lot and audit book'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER investment_lot_state_same_book_update BEFORE UPDATE ON investment_lot_state
+WHEN NEW.lot_id IS NOT OLD.lot_id OR NEW.book_id IS NOT OLD.book_id
+  OR (NEW.updated_audit_event_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM audit_events audit WHERE audit.id = NEW.updated_audit_event_id AND audit.book_id = NEW.book_id))
+BEGIN SELECT RAISE(ABORT, 'investment lot state must belong to its lot and audit book'); END;
+-- +goose StatementEnd
 
 CREATE TABLE IF NOT EXISTS investment_lot_events (
   id INTEGER PRIMARY KEY,
@@ -1394,7 +1444,7 @@ CREATE TABLE IF NOT EXISTS investment_fee_policy_versions (
 CREATE UNIQUE INDEX IF NOT EXISTS investment_fee_policy_scope_idx
   ON investment_fee_policies (book_id, IFNULL(account_id, 0), charge_kind);
 
--- investment_lots is the rebuildable current projection. The committed
+-- investment_lots preserves immutable identity/opening facts. The committed
 -- opening lot terms live here and are never changed by a disposal or replay;
 -- raw trade amounts remain in investment_operation_components.
 CREATE TABLE IF NOT EXISTS investment_lot_facts (
@@ -2374,8 +2424,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS investment_lots_values_valid_insert
 BEFORE INSERT ON investment_lots
 WHEN NEW.quantity_value = '0' OR substr(NEW.quantity_value, 1, 1) = '-'
-  OR substr(NEW.remaining_quantity_value, 1, 1) = '-'
-  OR NEW.cost_basis_value < 0 OR NEW.remaining_cost_basis_value < 0
+  OR substr(NEW.cost_basis_value, 1, 1) = '-'
 BEGIN
   SELECT RAISE(ABORT, 'investment lot values are invalid');
 END;
@@ -2385,8 +2434,7 @@ END;
 CREATE TRIGGER IF NOT EXISTS investment_lots_values_valid_update
 BEFORE UPDATE ON investment_lots
 WHEN NEW.quantity_value = '0' OR substr(NEW.quantity_value, 1, 1) = '-'
-  OR substr(NEW.remaining_quantity_value, 1, 1) = '-'
-  OR NEW.cost_basis_value < 0 OR NEW.remaining_cost_basis_value < 0
+  OR substr(NEW.cost_basis_value, 1, 1) = '-'
 BEGIN
   SELECT RAISE(ABORT, 'investment lot values are invalid');
 END;
@@ -3808,6 +3856,10 @@ DROP INDEX IF EXISTS investment_lot_events_lot_idx;
 DROP TABLE IF EXISTS investment_lot_events;
 DROP INDEX IF EXISTS investment_lots_position_idx;
 DROP INDEX IF EXISTS investment_lots_side_position_idx;
+DROP VIEW IF EXISTS current_investment_lots;
+DROP TRIGGER IF EXISTS investment_lot_state_same_book_update;
+DROP TRIGGER IF EXISTS investment_lot_state_same_book_insert;
+DROP TABLE IF EXISTS investment_lot_state;
 DROP TABLE IF EXISTS investment_lots;
 DROP INDEX IF EXISTS dividend_defaults_lookup_idx;
 DROP TABLE IF EXISTS dividend_defaults;

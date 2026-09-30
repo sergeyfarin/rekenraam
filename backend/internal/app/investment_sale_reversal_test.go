@@ -139,7 +139,7 @@ func TestReverseManualSaleRequiresReconciliationOverrideAtomically(t *testing.T)
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_operations WHERE correction_of_operation_id IS NOT NULL`).Scan(&correctionCount))
 	require.Zero(t, correctionCount, "rejected write must roll back operation and replay")
 	var remaining string
-	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value FROM investment_lots WHERE book_id = 1 AND account_id = ? AND commodity_id = ?`,
+	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value FROM current_investment_lots WHERE book_id = 1 AND account_id = ? AND commodity_id = ?`,
 		f.holdingAccountID, f.stockCommodityID).Scan(&remaining))
 	require.Equal(t, "6", remaining)
 	var activePriceCount int

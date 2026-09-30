@@ -765,6 +765,17 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 	if err != nil {
 		return SelfCheckResult{}, err
 	}
+	missing := SelfCheckResult{CheckID: CheckLotReconciliation, Status: SelfCheckFailed, Summary: "lots are missing their current state projection"}
+	for _, lot := range lots {
+		if lot.MissingProjection {
+			missing.FindingCount++
+			missing.Sample = appendCapped(missing.Sample, lot.LotID)
+		}
+	}
+	if missing.FindingCount > 0 {
+		return missing, nil
+	}
+
 	events, err := s.repository.SelfCheckLotEvents(ctx, snapshot, BookID)
 	if err != nil {
 		return SelfCheckResult{}, err

@@ -737,7 +737,7 @@ func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
 	stagedBefore, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
 	require.NoError(t, err)
 	var lotBefore string
-	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT remaining_quantity_value || ':' || remaining_quantity_scale || ':' || remaining_cost_basis_value || ':' || remaining_cost_basis_scale FROM investment_lots`).Scan(&lotBefore))
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT remaining_quantity_value || ':' || remaining_quantity_scale || ':' || remaining_cost_basis_value || ':' || remaining_cost_basis_scale FROM current_investment_lots`).Scan(&lotBefore))
 	before := map[string]int{}
 	for _, table := range []string{"audit_events", "transactions", "investment_operations", "investment_lot_facts", "investment_lot_events", "investment_disposal_revisions", "import_source_revisions"} {
 		var count int
@@ -757,7 +757,7 @@ func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, stagedBefore, stagedAfter)
 	var lotAfter, checkpointStatus string
-	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT remaining_quantity_value || ':' || remaining_quantity_scale || ':' || remaining_cost_basis_value || ':' || remaining_cost_basis_scale FROM investment_lots`).Scan(&lotAfter))
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT remaining_quantity_value || ':' || remaining_quantity_scale || ':' || remaining_cost_basis_value || ':' || remaining_cost_basis_scale FROM current_investment_lots`).Scan(&lotAfter))
 	require.Equal(t, lotBefore, lotAfter)
 	require.NoError(t, f.database.QueryRowContext(ctx, "SELECT status FROM reconciliation_checkpoints WHERE id = ?", checkpointID).Scan(&checkpointStatus))
 	require.Equal(t, "active", checkpointStatus)

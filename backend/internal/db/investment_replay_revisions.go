@@ -23,7 +23,7 @@ func persistInvestmentReplayProjectionTx(ctx context.Context, tx *sql.Tx, bookID
 		return fmt.Errorf("%w: replay method family is invalid", ErrInvalidDisposalParams)
 	}
 	var lotCount int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM investment_lots WHERE book_id = ?
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM current_investment_lots WHERE book_id = ?
 		AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'`,
 		bookID, accountID, commodityID, costCommodityID).Scan(&lotCount); err != nil {
 		return fmt.Errorf("count replay position lots: %w", err)
@@ -120,16 +120,18 @@ func persistInvestmentReplayProjectionTx(ctx context.Context, tx *sql.Tx, bookID
 		}
 	}
 	for _, lot := range projection.Lots {
-		result, err := tx.ExecContext(ctx, `UPDATE investment_lots SET status = ?,
-			remaining_quantity_value = ?, remaining_quantity_scale = ?,
-			remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?,
-			updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
-			WHERE id = ? AND book_id = ? AND account_id = ? AND commodity_id = ?
-				AND cost_commodity_id = ? AND position_side = 'long'`,
-			lot.Status, lot.RemainingQuantityValue, lot.RemainingQuantityScale,
-			lot.RemainingCostBasisValue, lot.RemainingCostBasisScale,
-			createdAt, actorUserID, auditEventID, lot.LotID,
-			bookID, accountID, commodityID, costCommodityID)
+		result, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_state (status,
+		remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
+		updated_at, updated_by_user_id, updated_audit_event_id, lot_id, book_id)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, id, book_id FROM investment_lots
+		WHERE id = ? AND book_id = ? AND account_id = ? AND commodity_id = ?
+		AND cost_commodity_id = ? AND position_side = 'long'
+		ON CONFLICT(lot_id) DO UPDATE SET status = excluded.status,
+		remaining_quantity_value = excluded.remaining_quantity_value, remaining_quantity_scale = excluded.remaining_quantity_scale,
+		remaining_cost_basis_value = excluded.remaining_cost_basis_value, remaining_cost_basis_scale = excluded.remaining_cost_basis_scale,
+		updated_at = excluded.updated_at, updated_by_user_id = excluded.updated_by_user_id, updated_audit_event_id = excluded.updated_audit_event_id`,
+			lot.Status, lot.RemainingQuantityValue, lot.RemainingQuantityScale, lot.RemainingCostBasisValue, lot.RemainingCostBasisScale,
+			createdAt, actorUserID, auditEventID, lot.LotID, bookID, accountID, commodityID, costCommodityID)
 		if err != nil {
 			return fmt.Errorf("install replay lot projection: %w", err)
 		}

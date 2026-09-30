@@ -1111,7 +1111,7 @@ func TestInvestmentLotsAverageCostSequentialSalesConserveUntilFinalClose(t *test
 		eventRows, err := database.QueryContext(ctx, `
 			SELECT event.cost_basis_value, event.cost_basis_scale
 			FROM investment_lot_events event
-			JOIN investment_lots lot ON lot.id = event.lot_id AND lot.book_id = event.book_id
+			JOIN current_investment_lots lot ON lot.id = event.lot_id AND lot.book_id = event.book_id
 			WHERE lot.book_id = ? AND lot.account_id = ? AND lot.commodity_id = ? AND lot.cost_commodity_id = ?
 			ORDER BY event.id
 		`, 1, accountID, commodityID, currencyID)
@@ -1232,12 +1232,8 @@ func TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentScales(t *testing.
 	require.NoError(t, err)
 	// Manually insert a lot with scale=2 to simulate divergence
 	_, err = database.ExecContext(ctx, `
-		INSERT INTO investment_lots (
-			book_id, account_id, commodity_id, cost_commodity_id, opened_on,
-			quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
-			cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
-			status, metadata_json, created_at, created_by_user_id, updated_at, updated_by_user_id
-		) VALUES (1, ?, ?, ?, '2026-02-01', 50, 2, 50, 2, 5000, 2, 5000, 2, 'open', '{}', '2026-02-01T09:00:00Z', ?, '2026-02-01T09:00:00Z', ?)
+		INSERT INTO investment_lots (book_id, account_id, commodity_id, cost_commodity_id, opened_on, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id) VALUES (1, ?, ?, ?, '2026-02-01', 50, 2, 5000, 2, '{}', '2026-02-01T09:00:00Z', ?);
+INSERT INTO investment_lot_state (lot_id, book_id, remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale, status, updated_at, updated_by_user_id) VALUES (last_insert_rowid(), 1, 50, 2, 5000, 2, 'open', '2026-02-01T09:00:00Z', ?)
 	`, accountID, instrument.CommodityID, currencyID, ownerID, ownerID)
 	require.NoError(t, err)
 
@@ -1303,12 +1299,8 @@ func TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentCostBasisScales(t 
 	// Same quantity scale (0), but a different cost basis scale (4) — passes
 	// the existing quantity-scale check but must still be rejected.
 	_, err = database.ExecContext(ctx, `
-		INSERT INTO investment_lots (
-			book_id, account_id, commodity_id, cost_commodity_id, opened_on,
-			quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
-			cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
-			status, metadata_json, created_at, created_by_user_id, updated_at, updated_by_user_id
-		) VALUES (1, ?, ?, ?, '2026-02-01', 100, 0, 100, 0, 1000000, 4, 1000000, 4, 'open', '{}', '2026-02-01T09:00:00Z', ?, '2026-02-01T09:00:00Z', ?)
+		INSERT INTO investment_lots (book_id, account_id, commodity_id, cost_commodity_id, opened_on, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id) VALUES (1, ?, ?, ?, '2026-02-01', 100, 0, 1000000, 4, '{}', '2026-02-01T09:00:00Z', ?);
+INSERT INTO investment_lot_state (lot_id, book_id, remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale, status, updated_at, updated_by_user_id) VALUES (last_insert_rowid(), 1, 100, 0, 1000000, 4, 'open', '2026-02-01T09:00:00Z', ?)
 	`, accountID, instrument.CommodityID, currencyID, ownerID, ownerID)
 	require.NoError(t, err)
 

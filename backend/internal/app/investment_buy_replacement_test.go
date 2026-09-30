@@ -57,7 +57,7 @@ func TestReplaceOldManualBuyReplaysDependentSameDaySale(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lots, 2)
 	var activeLotCount int
-	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_lots
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM current_investment_lots
 		WHERE book_id = 1 AND account_id = ? AND commodity_id = ?
 		AND status = 'open' AND remaining_quantity_value = '6'`,
 		f.holdingAccountID, f.stockCommodityID).Scan(&activeLotCount))

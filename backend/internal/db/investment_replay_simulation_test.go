@@ -107,7 +107,7 @@ func TestInvestmentReplaySimulationRejectsPositionBasisOverflow(t *testing.T) {
 func assertOriginalReplayRowsUnchanged(t *testing.T, tx *sql.Tx, expectedEvents int) {
 	t.Helper()
 	var remaining string
-	require.NoError(t, tx.QueryRow(`SELECT remaining_quantity_value FROM investment_lots WHERE id = 2`).Scan(&remaining))
+	require.NoError(t, tx.QueryRow(`SELECT remaining_quantity_value FROM current_investment_lots WHERE id = 2`).Scan(&remaining))
 	require.Equal(t, "250", remaining)
 	var basis string
 	require.NoError(t, tx.QueryRow(`SELECT disposed_basis_value FROM investment_disposal_decisions WHERE id = 1`).Scan(&basis))

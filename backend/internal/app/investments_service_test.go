@@ -479,7 +479,7 @@ func TestInvestmentWritesRejectDraftBeforeJournalOrLotMutation(t *testing.T) {
 	require.ErrorAs(t, err, &ValidationError{})
 	assert.Equal(t, before, f.transactionCount(t))
 	var lots int
-	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM investment_lots`).Scan(&lots))
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM current_investment_lots`).Scan(&lots))
 	assert.Zero(t, lots)
 }
 

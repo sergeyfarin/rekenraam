@@ -150,8 +150,10 @@ The reopened [operation integrity gate T-110](https://github.com/sergeyfarin/rek
 now links journal-backed trade components to their exact posting lines and
 checks both missing links and unlinked trade cash, expense or charge-clearing legs. It must
 still extend proceeds/journal reconciliation beyond single-disposal commands
-and separate lot state. The consolidated baseline now protects lot identity and
-opening facts from mutation/deletion while permitting replay projection writes.
+and complete nullable unknown-basis projection representation.
+The consolidated baseline separates immutable lot identity/opening facts from
+`investment_lot_state`; replay reconstructs the state atomically, self-check
+reports missing/corrupt state and bundle schema 3 exports both layers.
 Correction history, trade source facts, and buy/sale correction admission now use journal
 links. Export summaries and import effect inference now also use primary links;
 writer bootstrap passes the inserted operation ID directly and subsequent lot

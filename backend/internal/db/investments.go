@@ -1126,16 +1126,14 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 	// drops market value and gain entirely when the result no longer fits in an
 	// int64. Widening on demand keeps the precision where it is needed without
 	// making every position pay for it.
-	result, err := tx.ExecContext(ctx, `
-		INSERT INTO investment_lots (
-			book_id, account_id, commodity_id, opened_on, source_transaction_id, status,
-			quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
-			cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
-			cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id,
-			updated_at, updated_by_user_id, updated_audit_event_id
-		)
-		VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, params.BookID, params.AccountID, params.CommodityID, params.OpenedOn, nullablePositiveInt64(params.SourceTransactionID), params.QuantityValue, params.QuantityScale, params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale, params.CostBasisValue, params.CostBasisScale, params.CostCommodityID, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID, params.CreatedAt, params.CreatedByUserID, auditEventID)
+	result, err := tx.ExecContext(ctx, `INSERT INTO investment_lots (
+		book_id, account_id, commodity_id, opened_on, source_transaction_id,
+		quantity_value, quantity_scale, cost_basis_value, cost_basis_scale,
+		cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		params.BookID, params.AccountID, params.CommodityID, params.OpenedOn, nullablePositiveInt64(params.SourceTransactionID),
+		params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale,
+		params.CostCommodityID, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID)
 	if err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("insert investment lot: %w", err)
 	}
@@ -1143,6 +1141,15 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 	if err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("read investment lot id: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_state
+		(lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale,
+		remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id)
+		VALUES (?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)`, lotID, params.BookID,
+		params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale,
+		params.CreatedAt, params.CreatedByUserID, auditEventID); err != nil {
+		return InvestmentLotRecord{}, fmt.Errorf("initialize investment lot state: %w", err)
+	}
+
 	eventResult, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_lot_events (
 			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
@@ -1304,7 +1311,7 @@ func latestPositionRewriteDateTx(ctx context.Context, tx *sql.Tx, bookID int64, 
 	if err := tx.QueryRowContext(ctx, `
 		SELECT COALESCE(MAX(e.event_date), '')
 		FROM investment_lot_events e
-		JOIN investment_lots l ON l.id = e.lot_id
+		JOIN current_investment_lots l ON l.id = e.lot_id
 		WHERE l.book_id = ? AND l.account_id = ? AND l.commodity_id = ?
 			AND e.event_kind NOT IN (`+placeholders+`)
 	`, args...).Scan(&latest); err != nil {
@@ -1422,7 +1429,7 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 func resolveDisposalCostCommodityTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams) (int64, error) {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT DISTINCT cost_commodity_id
-		FROM investment_lots
+		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND status = 'open'
 			AND opened_on <= ?
 			AND (? = 0 OR cost_commodity_id = ?)
@@ -1485,7 +1492,7 @@ func updatePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispos
 	// release the lock while shares are still held.
 	var openCount int
 	if err := tx.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM investment_lots
+		SELECT COUNT(*) FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND status = 'open'
 	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID).Scan(&openCount); err != nil {
 		return fmt.Errorf("count open lots after disposal: %w", err)
@@ -1553,7 +1560,7 @@ func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT lot.id, lot.remaining_quantity_value, lot.remaining_quantity_scale
-		FROM investment_lots lot
+		FROM current_investment_lots lot
 		LEFT JOIN investment_transfer_lot_links link ON link.destination_lot_id = lot.id
 		WHERE lot.book_id = ? AND lot.account_id = ? AND lot.commodity_id = ?
 			AND lot.cost_commodity_id = ? AND lot.status = 'open' AND lot.opened_on <= ?
@@ -1640,7 +1647,7 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, remaining_quantity_value, remaining_quantity_scale,
 		       remaining_cost_basis_value, remaining_cost_basis_scale
-		FROM investment_lots
+		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND status = 'open'
 			AND opened_on <= ?
 		ORDER BY opened_on, id
@@ -1821,12 +1828,11 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 			return nil, err
 		}
 		if _, err := tx.ExecContext(ctx, `
-			UPDATE investment_lots
+			UPDATE investment_lot_state
 			SET remaining_quantity_value = ?, remaining_quantity_scale = ?,
 				remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?, status = ?,
 				updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
-			WHERE book_id = ? AND id = ?
-		`, nextQty, commonScale, nextBasisValue, commonCostScale, status, params.CreatedAt, params.ActorUserID, auditEventID,
+			WHERE lot_id IN (SELECT id FROM investment_lots WHERE book_id = ? AND id = ?)`, nextQty, commonScale, nextBasisValue, commonCostScale, status, params.CreatedAt, params.ActorUserID, auditEventID,
 			params.BookID, lot.id); err != nil {
 			return nil, fmt.Errorf("update average-cost lot projection: %w", err)
 		}
@@ -1937,7 +1943,7 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 	}
 	costCommodityID := params.CostCommodityID
 	if costCommodityID == 0 {
-		if err := tx.QueryRowContext(ctx, `SELECT cost_commodity_id FROM investment_lots WHERE book_id = ? AND id = ?`, params.BookID, disposals[0].LotID).Scan(&costCommodityID); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT cost_commodity_id FROM current_investment_lots WHERE book_id = ? AND id = ?`, params.BookID, disposals[0].LotID).Scan(&costCommodityID); err != nil {
 			return DisposalDecisionRecord{}, fmt.Errorf("read disposal decision cost commodity: %w", err)
 		}
 	}
@@ -2093,7 +2099,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 				ORDER BY po.valuation_date DESC, CASE WHEN po.is_manual = 1 OR po.quote_type = 'valuation_override' THEN 3 WHEN po.is_approximate = 0 THEN 2 ELSE 1 END DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
 			) AS latest_price_base_quantity_scale
-		FROM investment_lots lot
+		FROM current_investment_lots lot
 		WHERE lot.book_id = ?
 			AND lot.status = 'open'
 			AND lot.remaining_quantity_value <> '0'
@@ -2746,7 +2752,7 @@ func investmentLotSelect(whereClause string) string {
 			quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
 			cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
 			cost_commodity_id, metadata_json, created_at, updated_at
-		FROM investment_lots
+		FROM current_investment_lots
 	` + whereClause
 }
 
@@ -2897,7 +2903,7 @@ func basisFitsInt64At(recorded []recordedBasis, scale int) bool {
 func positionBasisAllocationScaleTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams) (int, error) {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT remaining_cost_basis_value, remaining_cost_basis_scale
-		FROM investment_lots
+		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
 			AND status = 'open' AND opened_on <= ?
 	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate)
@@ -2986,12 +2992,11 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		status = "closed"
 	}
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE investment_lots
+		UPDATE investment_lot_state
 		SET remaining_quantity_value = ?, remaining_quantity_scale = ?,
 			remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?, status = ?,
 			updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
-		WHERE book_id = ? AND id = ?
-	`, nextRemainingQuantity, commonScale, nextRemainingCost, allocationScale, status, params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
+		WHERE lot_id IN (SELECT id FROM investment_lots WHERE book_id = ? AND id = ?)`, nextRemainingQuantity, commonScale, nextRemainingCost, allocationScale, status, params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("update disposed investment lot: %w", err)
 	}
 	result, err := tx.ExecContext(ctx, `
@@ -3145,7 +3150,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			le.cost_basis_value,
 			le.cost_basis_scale
 		FROM investment_lot_events le
-		JOIN investment_lots lot ON lot.id = le.lot_id
+		JOIN current_investment_lots lot ON lot.id = le.lot_id
 		WHERE lot.book_id = ?
 			AND le.event_kind = 'disposal'
 			AND NOT EXISTS (
@@ -3540,7 +3545,7 @@ func mapInvestmentConstraintError(err error) error {
 func requirePositionBasisRangeTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64) error {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT remaining_cost_basis_value, remaining_cost_basis_scale
-		FROM investment_lots
+		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
 			AND status = 'open'
 	`, bookID, accountID, commodityID, costCommodityID)

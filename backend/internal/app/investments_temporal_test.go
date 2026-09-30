@@ -319,7 +319,7 @@ func TestBackdatedPurchaseRollsBackReplayWhenImportIdentityFails(t *testing.T) {
 	require.Equal(t, beforeTransactions, f.transactionCount(t))
 	var audits, lots, revisions int
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&audits))
-	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_lots`).Scan(&lots))
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM current_investment_lots`).Scan(&lots))
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_disposal_revisions`).Scan(&revisions))
 	require.Equal(t, beforeAudits, audits)
 	require.Equal(t, 1, lots)

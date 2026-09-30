@@ -282,6 +282,7 @@ func (r *SelfCheckRepository) StreamPostedNonCurrencyPostings(ctx context.Contex
 
 // SelfCheckLotRecord is one investment lot's current standing.
 type SelfCheckLotRecord struct {
+	MissingProjection       bool
 	LotID                   int64
 	AccountID               int64
 	CommodityID             int64
@@ -299,14 +300,12 @@ type SelfCheckLotRecord struct {
 
 func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckLotRecord, error) {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT id, account_id, commodity_id, status,
-			quantity_value, quantity_scale,
-			remaining_quantity_value, remaining_quantity_scale,
-			cost_basis_value, cost_basis_scale,
-			remaining_cost_basis_value, remaining_cost_basis_scale, cost_commodity_id
-		FROM investment_lots
-		WHERE book_id = ?
-		ORDER BY account_id, commodity_id, id
+		SELECT lot.id, lot.account_id, lot.commodity_id, COALESCE(state.status, ''),
+		lot.quantity_value, lot.quantity_scale, COALESCE(state.remaining_quantity_value, '0'), COALESCE(state.remaining_quantity_scale, 0),
+		lot.cost_basis_value, lot.cost_basis_scale, COALESCE(state.remaining_cost_basis_value, '0'),
+		COALESCE(state.remaining_cost_basis_scale, 0), lot.cost_commodity_id, state.lot_id IS NULL
+		FROM investment_lots lot LEFT JOIN investment_lot_state state ON state.lot_id = lot.id AND state.book_id = lot.book_id
+		WHERE lot.book_id = ? ORDER BY lot.account_id, lot.commodity_id, lot.id
 	`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read self-check lots: %w", err)
@@ -320,7 +319,7 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 			&lot.QuantityValue, &lot.QuantityScale,
 			&lot.RemainingQuantityValue, &lot.RemainingQuantityScale,
 			&lot.CostBasisValue, &lot.CostBasisScale,
-			&lot.RemainingCostBasisValue, &lot.RemainingCostBasisScale, &lot.CostCommodityID); err != nil {
+			&lot.RemainingCostBasisValue, &lot.RemainingCostBasisScale, &lot.CostCommodityID, &lot.MissingProjection); err != nil {
 			return nil, fmt.Errorf("scan self-check lot: %w", err)
 		}
 		lots = append(lots, lot)
@@ -347,7 +346,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		SELECT le.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
 			le.quantity_value, le.quantity_scale, le.cost_basis_value, le.cost_basis_scale
 		FROM investment_lot_events le
-		JOIN investment_lots l ON l.id = le.lot_id
+		JOIN current_investment_lots l ON l.id = le.lot_id
 		WHERE le.book_id = ?
 			AND NOT EXISTS (
 				SELECT 1 FROM investment_operation_lot_effects effect
@@ -390,7 +389,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		FROM investment_disposal_revisions revision
 		JOIN investment_disposal_decisions decision ON decision.id = revision.decision_id
 		JOIN investment_disposal_revision_allocations allocation ON allocation.revision_id = revision.id
-		JOIN investment_lots l ON l.id = allocation.lot_id
+		JOIN current_investment_lots l ON l.id = allocation.lot_id
 		WHERE revision.book_id = ? AND revision.revision_seq = (
 			SELECT MAX(latest.revision_seq) FROM investment_disposal_revisions latest
 			WHERE latest.decision_id = revision.decision_id)

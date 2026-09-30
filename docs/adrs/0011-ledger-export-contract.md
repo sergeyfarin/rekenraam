@@ -210,3 +210,13 @@ post-migration one.
 - ADR 0004 — SQLite connection, migrations, and backup
 - ADR 0009 — lossless quantity precision
 - `docs/design/categories-design.md` — categories are income/expense accounts
+
+### Lot-state export refinement (2026-09-30)
+
+Manifest schema version 3 adds `investment-lot-state.csv`: lot ID, status,
+remaining quantity/basis coefficients and scales, update time, actor and audit
+ID. `lots.csv` retains its joined current-state summary and existing columns;
+`investment-lot-facts.csv` retains immutable opening evidence. This reflects
+ADR 0013's physical identity/projection split and carries both layers in a
+portable snapshot. Missing state is an integrity finding and cannot be exported
+as a fabricated zero balance.

@@ -19,7 +19,7 @@ func (r *TransactionRepository) TransactionHasInvestmentLinks(ctx context.Contex
 			SELECT 1 FROM current_transaction_versions
 			WHERE book_id = ? AND transaction_id = ? AND transaction_kind = 'investment'
 			UNION ALL
-			SELECT 1 FROM investment_lots
+			SELECT 1 FROM current_investment_lots
 			WHERE book_id = ? AND source_transaction_id = ?
 			UNION ALL
 			SELECT 1 FROM investment_lot_events

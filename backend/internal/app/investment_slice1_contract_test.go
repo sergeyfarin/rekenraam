@@ -68,7 +68,7 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				} `json:"files"`
 			}
 			require.NoError(t, json.Unmarshal(files["manifest.json"], &manifest))
-			require.Equal(t, 2, manifest.SchemaVersion)
+			require.Equal(t, 3, manifest.SchemaVersion)
 			manifestRows := map[string]int64{}
 			for _, file := range manifest.Files {
 				manifestRows[file.Name] = file.Rows
@@ -79,6 +79,7 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				"investment-operation-journal-links.csv": {"operation_id", "link_seq", "transaction_version_id", "role"},
 				"investment-operation-dates.csv":         {"operation_id", "date_role", "event_date"},
 				"investment-operation-components.csv":    {"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id", "charge_kind", "cash_account_id", "separately_paid", "posting_version_id"},
+				"investment-lot-state.csv":               {"lot_id", "status", "remaining_quantity_value", "remaining_quantity_scale", "remaining_cost_basis_value", "remaining_cost_basis_scale", "updated_at", "updated_by_user_id", "audit_event_id"},
 				"investment-lot-facts.csv":               {"lot_id", "operation_id", "account_id", "commodity_id", "position_side", "opened_on", "quantity_value", "quantity_scale", "consideration_value", "consideration_scale", "cost_commodity_id", "audit_event_id"},
 				"investment-lot-events.csv":              {"lot_event_id", "lot_id", "event_kind", "transaction_id", "event_date", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "cost_basis_method", "metadata_json", "audit_event_id"},
 				"investment-lot-effects.csv":             {"operation_id", "effect_seq", "lot_event_id"},
@@ -143,6 +144,10 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				require.Len(t, components, 5)
 				require.Equal(t, "25", components[1][18], "seeded net cash fact retains its posted version")
 				require.Len(t, readInvestmentContractCSV(t, files, "investment-lot-facts.csv"), 3)
+				require.Len(t, readInvestmentContractCSV(t, files, "investment-lot-state.csv"), 3)
+				stateRows := readInvestmentContractCSV(t, files, "investment-lot-state.csv")
+				require.Equal(t, []string{"1", "closed", "0", "2", "0", "2", "2026-09-13T11:34:58Z", "1", "31"}, stateRows[1])
+				require.Equal(t, []string{"2", "open", "250", "2", "30000", "2", "2026-09-13T11:34:58Z", "1", "31"}, stateRows[2])
 				require.Len(t, readInvestmentContractCSV(t, files, "investment-lot-effects.csv"), 5)
 				require.Len(t, readInvestmentContractCSV(t, files, "investment-fee-policy-versions.csv"), 2)
 

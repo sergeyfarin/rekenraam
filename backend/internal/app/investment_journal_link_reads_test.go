@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"bytes"
+	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
 
@@ -146,4 +148,51 @@ func TestInvestmentOperationSchemaRetiresTransactionHeader(t *testing.T) {
 	var count int
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM pragma_table_info('investment_operations') WHERE name = 'transaction_id'`).Scan(&count))
 	require.Zero(t, count, "journal links are the only operation-to-transaction relationship")
+}
+
+func TestLotSelfCheckReportsMissingAndCorruptState(t *testing.T) {
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	bought := buyOn(t, f, "2026-01-01", 3, 30000)
+	_, err := f.database.ExecContext(ctx, `UPDATE investment_lot_state SET remaining_quantity_value = '4' WHERE lot_id = ?`, *bought.LotID)
+	require.NoError(t, err)
+	require.Equal(t, SelfCheckFailed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckLotReconciliation).Status)
+	_, err = f.database.ExecContext(ctx, `DELETE FROM investment_lot_state WHERE lot_id = ?`, *bought.LotID)
+	require.NoError(t, err)
+	missing := resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckLotReconciliation)
+	require.Equal(t, SelfCheckFailed, missing.Status)
+	require.Contains(t, missing.Summary, "missing their current state projection")
+	require.EqualValues(t, 1, missing.FindingCount)
+	require.Contains(t, missing.Sample, *bought.LotID)
+	var quantity string
+	require.NoError(t, f.database.QueryRow(`SELECT quantity_value FROM investment_lots WHERE id = ?`, *bought.LotID).Scan(&quantity))
+	require.Equal(t, "3", quantity)
+	var bundle bytes.Buffer
+	require.Error(t, NewExportService(db.NewExportRepository(f.database)).WriteBundle(ctx, &bundle, ExportFilter{}), "missing state must not export a fabricated zero")
+}
+
+func TestBuyLotStateInitializationFailureRollsBackCommand(t *testing.T) {
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	counts := func() map[string]int {
+		result := map[string]int{}
+		for _, table := range []string{"audit_events", "transactions", "investment_operations", "investment_lots", "investment_lot_state", "investment_lot_events", "price_observations"} {
+			var count int
+			require.NoError(t, f.database.QueryRow("SELECT count(*) FROM "+table).Scan(&count))
+			result[table] = count
+		}
+		return result
+	}
+	before := counts()
+	_, err := f.database.ExecContext(ctx, `CREATE TRIGGER reject_lot_state BEFORE INSERT ON investment_lot_state
+ BEGIN SELECT RAISE(ABORT, 'lot state rejected'); END`)
+	require.NoError(t, err)
+	_, err = f.investmentService.Buy(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		QuantityValue: exact.New(3), CashAmountValue: 30000, CashAmountScale: 2,
+	})
+	require.ErrorContains(t, err, "lot state rejected")
+	require.Equal(t, before, counts())
 }

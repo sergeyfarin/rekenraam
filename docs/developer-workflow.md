@@ -344,6 +344,12 @@ or installed databases exist. Source revision tables and lot opening guards
 are folded into `0001`, with an updated checksum. The embedded migration head
 is again 1. Fresh and seeded equivalence tests cover the complete baseline.
 
+**BREAKING DEV DATABASE, lot identity/state split (2026-09-30):** the
+consolidated `0001` now separates immutable `investment_lots` from mutable
+`investment_lot_state`. The checksum and frozen seed are updated together.
+Fresh/seeded tests cover schema, exact balances, replay and bundle schema 3.
+No legacy or installed databases exist.
+
 The final pre-`v0.1.0` consolidation changed the highest schema version from 8
 to 1. Databases and backups made before that consolidation are incompatible in
 both directions: export anything worth keeping before updating, then recreate

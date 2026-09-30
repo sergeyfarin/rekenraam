@@ -321,12 +321,12 @@ func captureLedgerState(t *testing.T, database *sql.DB) map[string]string {
 				tv.transaction_date || '/' || coalesce(t.deleted_at, '-')
 			FROM transaction_versions tv JOIN transactions t ON t.id = tv.transaction_id
 			ORDER BY tv.id`,
-		"lots": `SELECT id || '=' || opened_on || '/' || status || '/' ||
+		"lots": `SELECT id || '=' || opened_on || '/' || COALESCE(status, 'missing') || '/' ||
 				quantity_value || 'e-' || quantity_scale || '/' ||
-				remaining_quantity_value || 'e-' || remaining_quantity_scale || '/' ||
+				COALESCE(remaining_quantity_value, 'missing') || 'e-' || COALESCE(remaining_quantity_scale, -1) || '/' ||
 				cost_basis_value || 'e-' || cost_basis_scale || '/' ||
-				remaining_cost_basis_value || 'e-' || remaining_cost_basis_scale
-			FROM investment_lots ORDER BY id`,
+				COALESCE(remaining_cost_basis_value, 'missing') || 'e-' || COALESCE(remaining_cost_basis_scale, -1)
+			FROM current_investment_lots ORDER BY id`,
 		"lot_events": `SELECT id || '=' || lot_id || '/' || event_kind || '/' || event_date || '/' ||
 				quantity_value || 'e-' || quantity_scale || '/' || cost_basis_value || 'e-' || cost_basis_scale ||
 				'/' || coalesce(cost_basis_method, '-')
@@ -443,7 +443,7 @@ func assertUpgradedBookIsIntact(t *testing.T, database *sql.DB) {
 	// more than it was acquired with, and the closed one holds nothing.
 	lotRows, err := database.QueryContext(ctx, `
 		SELECT id, status, quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale
-		FROM investment_lots ORDER BY id
+		FROM current_investment_lots ORDER BY id
 	`)
 	require.NoError(t, err)
 	defer lotRows.Close()
@@ -1253,9 +1253,9 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	}
 	assert.Equal(t, map[string]int{
 		"index":   104,
-		"table":   97,
-		"trigger": 102,
-		"view":    6,
+		"table":   98,
+		"trigger": 104,
+		"view":    7,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.Equal(t, "table", objects["import_source_revisions"])
 	assert.Equal(t, "trigger", objects["import_source_revisions_same_book"])
@@ -1286,6 +1286,10 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		"investment_disposal_revision_allocations": "table",
 		"investment_disposal_decisions":            "table",
 		"investment_disposal_decisions_event_idx":  "index",
+		"investment_lot_state":                     "table",
+		"current_investment_lots":                  "view",
+		"investment_lot_state_same_book_insert":    "trigger",
+		"investment_lot_state_same_book_update":    "trigger",
 		"investment_lots":                          "table",
 		"investment_lots_opening_no_update":        "trigger",
 		"investment_lots_no_delete":                "trigger",

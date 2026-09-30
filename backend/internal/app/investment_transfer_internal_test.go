@@ -47,10 +47,10 @@ func TestInternalTransferPartialLotConservesQuantityBasisAndJournal(t *testing.T
 	var sourceBasis, destBasis int64
 	var sourceScale, destScale int
 	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value,
-		remaining_cost_basis_value, remaining_cost_basis_scale FROM investment_lots WHERE id = ?`,
+		remaining_cost_basis_value, remaining_cost_basis_scale FROM current_investment_lots WHERE id = ?`,
 		*buy.LotID).Scan(&sourceQty, &sourceBasis, &sourceScale))
 	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value,
-		remaining_cost_basis_value, remaining_cost_basis_scale FROM investment_lots WHERE id = ?`,
+		remaining_cost_basis_value, remaining_cost_basis_scale FROM current_investment_lots WHERE id = ?`,
 		result.DestinationLotIDs[0]).Scan(&destQty, &destBasis, &destScale))
 	assert.Equal(t, "2", sourceQty)
 	assert.Equal(t, "1", destQty)
@@ -123,7 +123,7 @@ func TestInternalTransferKnownZeroBasisKeepsZeroWithoutGain(t *testing.T) {
 	var sourceEventBasis, destinationBasis, linkedBasis string
 	require.NoError(t, f.database.QueryRow(`SELECT e.cost_basis_value, l.cost_basis_value, x.carried_basis_value
 		FROM investment_transfer_lot_links x
-		JOIN investment_lots l ON l.id = x.destination_lot_id
+		JOIN current_investment_lots l ON l.id = x.destination_lot_id
 		JOIN investment_operations o ON o.id = x.operation_id
 		JOIN investment_lot_events e ON e.lot_id = x.source_lot_id
 			AND e.transaction_id = (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
@@ -274,9 +274,9 @@ func TestInternalTransferDepletionSurvivesLaterSaleReversalReplay(t *testing.T) 
 	})
 	require.NoError(t, err)
 	var sourceQty, destinationQty string
-	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value FROM investment_lots WHERE id = ?`,
+	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value FROM current_investment_lots WHERE id = ?`,
 		*buy.LotID).Scan(&sourceQty))
-	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value FROM investment_lots
+	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value FROM current_investment_lots
 		WHERE source_transaction_id IN (SELECT (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
         JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
         WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) FROM investment_operations o

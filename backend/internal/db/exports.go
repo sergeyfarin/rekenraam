@@ -834,7 +834,7 @@ func (r *ExportRepository) ExportLots(ctx context.Context, transaction *sql.Tx, 
 			cost_basis_value, cost_basis_scale,
 			remaining_cost_basis_value, remaining_cost_basis_scale,
 			cost_commodity_id, source_transaction_id
-		FROM investment_lots
+		FROM current_investment_lots
 		WHERE book_id = ?
 		ORDER BY account_id, commodity_id, opened_on, id
 	`, bookID)

@@ -31,10 +31,18 @@ equivalence coverage. Lot identity, opening quantity/basis, source evidence and 
 are now guarded against updates and deletion by the consolidated baseline.
 Remaining balances, status and projection update attribution remain mutable
 for disposal and replay. Seeded mutation tests cover every opening field and
-confirm that projection-only writes preserve acquisition facts. Current lot
-projection columns still remain on `investment_lots` instead of a separate
-`investment_lot_state` table; the physical split and its reconstruction/export
-gates remain open. Trade net-settlement and separately
+confirm that projection-only writes preserve acquisition facts. The physical
+split is now implemented: `investment_lots` contains immutable identity and
+opening facts, `investment_lot_state` holds remaining balances/status and update
+attribution, and `current_investment_lots` provides the joined read model.
+Effective long-position replay reconstructs missing lot and basis state in one
+transaction without changing opening/event facts. Self-check reports missing
+or corrupt projection state. Bundle schema 3 exports the state separately while
+preserving the existing lot summary. Fresh/seeded fixtures, correction and
+transfer flows, reconstruction and installation-failure rollback are covered.
+Unknown carried-basis knowledge still comes from immutable transfer facts;
+the accepted nullable basis/knowledge representation in projection state remains
+a further integrity slice. Trade net-settlement and separately
 posted fee components now link to the exact journal posting line keys chosen by
 their command, including when another leg has identical account, currency,
 date and amount. Self-check compares their account, commodity, date, signed
