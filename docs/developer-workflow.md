@@ -82,10 +82,10 @@ the cost commodity's maximum scale, one scale per position — when a test's
 expected basis or gain looks deeper than the amount that produced it, that is
 the policy, not a rounding slip.
 
-The backend suite enforces migration checksums and exercises the upgrade from
-the v0.1 candidate schema to `HEAD`, including schema equivalence and
-sentinel-data preservation. A checksum failure normally means the old
-migration must be restored and the change moved into the next numbered
+The backend suite enforces the consolidated migration checksum and exercises
+fresh and seeded baseline equivalence, including durable-data preservation
+when migration admission is repeated. No legacy databases exist. A checksum
+failure normally means the old migration must be restored and the change moved into the next numbered
 migration. ADR 0013 permits an explicitly declared pre-release redesign of
 the unused v0.1 baseline, with an updated checksum and fixtures. See
 `docs/upgrades.md` for the operator path.
@@ -339,6 +339,11 @@ the sole relationship. The checksum and frozen seed changed together. Stop the
 app and reset the same disposable `DATABASE_URL` database and sidecars using
 the command above before restarting. No installed v0.1 database exists.
 
+**BREAKING DEV DATABASE, consolidated baseline (2026-09-30):** no legacy
+or installed databases exist. Source revision tables and lot opening guards
+are folded into `0001`, with an updated checksum. The embedded migration head
+is again 1. Fresh and seeded equivalence tests cover the complete baseline.
+
 The final pre-`v0.1.0` consolidation changed the highest schema version from 8
 to 1. Databases and backups made before that consolidation are incompatible in
 both directions: export anything worth keeping before updating, then recreate
@@ -358,14 +363,13 @@ run and needs nothing.
   a migration already on `main` counts as a rewrite.
 - Migration numbers are monotonic database sequence numbers, not release
   numbers. Release notes record the highest migration included in each release.
-- CI validates the fresh-install path on every run, because every job migrates
-  from an empty database. The historical-upgrade path is covered by
-  `TestMigrateUpgradesV01DatabaseToFreshHeadSchema` in `internal/db`: it loads
-  the frozen seed at `internal/db/testdata/v01_seed.sql` into a database
-  migrated only to `0001`, upgrades it to HEAD, and asserts both that the schema
-  matches a fresh install **and** that every durable figure survived — row
-  counts per table, exact coefficients and scales, lifecycle states, lot and
-  checkpoint conservation, per-commodity balance, and `foreign_key_check`.
+- CI validates the fresh-install path on every run. Candidate seeded equivalence
+  is covered by `TestMigrateSeededBaselineMatchesFreshSchema` in `internal/db`:
+  it loads `internal/db/testdata/v01_seed.sql` into the consolidated baseline,
+  repeats migration admission, and checks schema equivalence and every durable
+  figure — row counts, exact coefficients/scales, lifecycle states, lot and
+  checkpoint conservation, per-commodity balance and `foreign_key_check`.
+  Legacy upgrade fixtures are added once installed releases actually exist.
 - **Installed-release seed fixtures are frozen.** The unused v0.1 candidate
   seed may be revised with its baseline under ADR 0013. Once a release is
   installed, its seed stands in for a database written by that version, so

@@ -229,28 +229,19 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoint_postings"))
 }
 
-// The v0.1 database starts at migration 1. This test builds that released
-// state from the frozen baseline plus a frozen seed — a real book written
-// through the real API and dumped — then upgrades it to HEAD and checks that
-// both the schema and the data came through.
-//
-// The data half is the point. Schema convergence alone says a migration
-// produced the right shape; it says nothing about whether it carried the
-// ledger across. While every migration only adds tables that distinction is
-// academic, but the first migration that rewrites one — SQLite's twelve-step
-// table rebuild, which is how a post-v0.1 schema redesign has to happen — makes
-// this test the only thing standing between a redesign and silent data loss.
-// It needs to be watching the ledger by then, not just the DDL.
-func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
+// No legacy installations exist. The consolidated candidate baseline must load
+// the frozen book, preserve it on repeated migration admission, and produce the
+// same schema as a fresh database.
+func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	ctx := context.Background()
-	upgraded := openTestDatabase(t)
+	seeded := openTestDatabase(t)
 
 	baseline, err := migrations.FS.ReadFile("0001_initial_schema.sql")
 	require.NoError(t, err)
 	baselineFS := fstest.MapFS{
 		"0001_initial_schema.sql": {Data: baseline},
 	}
-	provider, err := goose.NewProvider(goose.DialectSQLite3, upgraded, baselineFS)
+	provider, err := goose.NewProvider(goose.DialectSQLite3, seeded, baselineFS)
 	require.NoError(t, err)
 	_, err = provider.Up(ctx)
 	require.NoError(t, err)
@@ -261,7 +252,7 @@ func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
 	// one that has not been inserted yet. defer_foreign_keys holds every check
 	// until COMMIT — which still enforces them, just once the whole book is
 	// present. Turning foreign keys off outright would not.
-	loadTx, err := upgraded.BeginTx(ctx, nil)
+	loadTx, err := seeded.BeginTx(ctx, nil)
 	require.NoError(t, err)
 	_, err = loadTx.ExecContext(ctx, `PRAGMA defer_foreign_keys = ON`)
 	require.NoError(t, err)
@@ -269,13 +260,11 @@ func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
 	require.NoError(t, err, "the frozen seed must load into the frozen baseline")
 	require.NoError(t, loadTx.Commit(), "the frozen seed must satisfy every foreign key")
 
-	before := captureLedgerState(t, upgraded)
-	require.NoError(t, Migrate(ctx, upgraded))
-	after := captureLedgerState(t, upgraded)
-	// Migration bookkeeping and newly introduced empty tables are not ledger
-	// changes. Every pre-existing durable row must still match the seed.
+	before := captureLedgerState(t, seeded)
+	require.NoError(t, Migrate(ctx, seeded))
+	after := captureLedgerState(t, seeded)
+	// Re-running migration admission must preserve every seeded durable row.
 	assert.Equal(t, "0", after["count:import_source_revisions"])
-	delete(after, "count:import_source_revisions")
 	delete(before, "count:goose_db_version")
 	delete(after, "count:goose_db_version")
 
@@ -283,11 +272,11 @@ func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
 
 	// Stated separately from the snapshot comparison so a failure names what
 	// broke rather than dumping two large maps side by side.
-	assertUpgradedBookIsIntact(t, upgraded)
+	assertUpgradedBookIsIntact(t, seeded)
 
 	fresh := openTestDatabase(t)
 	require.NoError(t, Migrate(ctx, fresh))
-	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, upgraded))
+	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, seeded))
 }
 
 // captureLedgerState reads every durable figure the seed carries, keyed so a
@@ -1234,7 +1223,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), version, "the embedded head must include source revisions")
+	assert.Equal(t, int64(1), version, "the consolidated baseline includes source revisions and immutable lot opening guards")
 
 	ctx := context.Background()
 	database, err := Open(ctx, "file:"+filepath.Join(t.TempDir(), "schema.sqlite"))
@@ -1265,7 +1254,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	assert.Equal(t, map[string]int{
 		"index":   104,
 		"table":   97,
-		"trigger": 100,
+		"trigger": 102,
 		"view":    6,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.Equal(t, "table", objects["import_source_revisions"])
@@ -1298,6 +1287,8 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		"investment_disposal_decisions":            "table",
 		"investment_disposal_decisions_event_idx":  "index",
 		"investment_lots":                          "table",
+		"investment_lots_opening_no_update":        "trigger",
+		"investment_lots_no_delete":                "trigger",
 		"investment_lots_side_position_idx":        "index",
 		"investment_operations":                    "table",
 		"investment_operation_journal_links":       "table",

@@ -25,8 +25,16 @@ ADR 0013 pre-release baseline rewrite removes `investment_operations.transaction
 and its header-dependent trigger checks. The checksum and frozen seed are
 updated together. Reset disposable development databases as documented in
 `docs/developer-workflow.md`; this is not an installed-release upgrade.
-Current lot projection columns remain on `investment_lots` instead of a
-separate `investment_lot_state` table. Trade net-settlement and separately
+No legacy databases exist; source revision tables and the lot opening guards
+are consolidated into migration `0001` with an updated checksum and fresh/seeded
+equivalence coverage. Lot identity, opening quantity/basis, source evidence and creation attribution
+are now guarded against updates and deletion by the consolidated baseline.
+Remaining balances, status and projection update attribution remain mutable
+for disposal and replay. Seeded mutation tests cover every opening field and
+confirm that projection-only writes preserve acquisition facts. Current lot
+projection columns still remain on `investment_lots` instead of a separate
+`investment_lot_state` table; the physical split and its reconstruction/export
+gates remain open. Trade net-settlement and separately
 posted fee components now link to the exact journal posting line keys chosen by
 their command, including when another leg has identical account, currency,
 date and amount. Self-check compares their account, commodity, date, signed

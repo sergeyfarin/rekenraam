@@ -61,10 +61,10 @@ migration in order before listening. After startup, run Settings → Data →
 Self-check and retain the pre-upgrade backup until the result is `passed`.
 
 The first installed release has no earlier supported release to upgrade from.
-Later releases must accept a database from any earlier installed release. CI
-constructs the current v0.1 candidate state, inserts sentinel
-user data, upgrades it to `HEAD`, and asserts that its schema matches a fresh
-install.
+Later releases must accept a database from any earlier installed release.
+No legacy databases currently exist. CI loads the current consolidated baseline with frozen seeded user data, repeats migration admission, and asserts
+data preservation and schema equivalence with a fresh install. Installed-release
+upgrade fixtures will be required once those releases exist.
 
 ## Failed upgrade or rollback
 

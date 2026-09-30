@@ -88,11 +88,9 @@ Product and architecture decisions live in the
 [requirements](docs/product-requirements.md),
 [conventions](docs/conventions.md), and [ADRs](docs/adrs/).
 
-### Development database reset: investment journal links
+### Consolidated development schema
 
-**BREAKING DEV DATABASE (2026-09-30):** the ADR 0013 pre-release baseline
-retires the investment operation transaction header. Existing disposable
-development databases must be reset before restarting; see
-[the migration reset instructions](docs/developer-workflow.md#migrations-and-resetting-your-database).
-The frozen seed and checksum are updated together. This reset does not apply to
-installed releases.
+No legacy databases exist. The pre-release schema is consolidated into
+`0001_initial_schema.sql`, including source revisions, authoritative journal
+links and immutable lot opening guards. The checksum and seeded equivalence
+tests are updated together; see [the migration workflow](docs/developer-workflow.md#migrations-and-resetting-your-database).
