@@ -45,15 +45,17 @@ type SelfCheckPostingRecord struct {
 	QuantityScale    int
 }
 
-// SelfCheckDisposalClearingRecord keeps decision proceeds and each matching
-// commodity-trading posting as coefficients. The caller compares them with
-// exact arithmetic; SQLite must not sum money coefficients.
+// SelfCheckDisposalClearingRecord streams each decision and each matching
+// clearing posting once per operation/version/currency group. The caller
+// sums and compares coefficients with exact arithmetic, never SQLite SUM.
 type SelfCheckDisposalClearingRecord struct {
-	DecisionID    int64
-	ProceedsValue exact.Coefficient
-	ProceedsScale int
-	PostingValue  sql.NullString
-	PostingScale  sql.NullInt64
+	OperationID          int64
+	TransactionVersionID int64
+	CostCommodityID      int64
+	IsPosting            bool
+	DecisionID           int64
+	AmountValue          exact.Coefficient
+	AmountScale          int
 }
 
 // SelfCheckInvestmentComponentRecord joins each source fact to its optional
@@ -120,23 +122,31 @@ func (r *SelfCheckRepository) StreamInvestmentComponents(ctx context.Context, tr
 	return nil
 }
 
-// StreamDisposalClearing covers the currently supported one-decision sell and
-// write-off commands. Compound operations need component-to-posting links to
-// attribute shared clearing legs to individual decisions.
+// StreamDisposalClearing checks aggregate sell/write-off economics, including
+// multiple decisions sharing clearing legs. Individual compound attribution
+// needs a further decision-to-component contract; this checks group totals.
 func (r *SelfCheckRepository) StreamDisposalClearing(ctx context.Context, transaction *sql.Tx, bookID int64, visit func(SelfCheckDisposalClearingRecord) error) error {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT d.id, d.proceeds_value, d.proceeds_scale,
-			pv.quantity_value, pv.quantity_scale
-		FROM investment_disposal_decisions d
-		JOIN investment_operations o ON o.id = d.operation_id
-		LEFT JOIN posting_versions pv ON pv.transaction_version_id = d.transaction_version_id
-			AND pv.commodity_id = d.cost_commodity_id
-			AND pv.account_id IN (SELECT id FROM accounts
-				WHERE book_id = d.book_id AND system_role = 'commodity_trading')
-		WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
-			AND (SELECT COUNT(*) FROM investment_disposal_decisions sibling
-				WHERE sibling.operation_id = d.operation_id) = 1
-		ORDER BY d.id, pv.id
+		WITH decisions AS (
+			SELECT d.* FROM investment_disposal_decisions d
+			JOIN investment_operations o ON o.id = d.operation_id AND o.book_id = d.book_id
+			WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
+		), clearing_groups AS (
+			SELECT DISTINCT book_id, operation_id, transaction_version_id, cost_commodity_id
+			FROM decisions
+		)
+		SELECT operation_id, transaction_version_id, cost_commodity_id,
+			0 AS is_posting, id AS decision_id, proceeds_value AS amount_value, proceeds_scale AS amount_scale
+		FROM decisions
+		UNION ALL
+		SELECT g.operation_id, g.transaction_version_id, g.cost_commodity_id,
+			1, 0, pv.quantity_value, pv.quantity_scale
+		FROM clearing_groups g
+		JOIN posting_versions pv ON pv.transaction_version_id = g.transaction_version_id
+			AND pv.book_id = g.book_id AND pv.commodity_id = g.cost_commodity_id
+		JOIN accounts a ON a.id = pv.account_id AND a.book_id = g.book_id
+			AND a.system_role = 'commodity_trading'
+		ORDER BY operation_id, transaction_version_id, cost_commodity_id, is_posting, decision_id
 	`, bookID)
 	if err != nil {
 		return fmt.Errorf("read disposal clearing: %w", err)
@@ -144,8 +154,8 @@ func (r *SelfCheckRepository) StreamDisposalClearing(ctx context.Context, transa
 	defer rows.Close()
 	for rows.Next() {
 		var record SelfCheckDisposalClearingRecord
-		if err := rows.Scan(&record.DecisionID, &record.ProceedsValue, &record.ProceedsScale,
-			&record.PostingValue, &record.PostingScale); err != nil {
+		if err := rows.Scan(&record.OperationID, &record.TransactionVersionID, &record.CostCommodityID,
+			&record.IsPosting, &record.DecisionID, &record.AmountValue, &record.AmountScale); err != nil {
 			return fmt.Errorf("scan disposal clearing: %w", err)
 		}
 		if err := visit(record); err != nil {

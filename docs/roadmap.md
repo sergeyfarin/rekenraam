@@ -148,9 +148,12 @@ fills with a committed identity can be manually replaced. Source-file-driven
 corrections and other backdated operation families remain.
 The reopened [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
 now links journal-backed trade components to their exact posting lines and
-checks both missing links and unlinked trade cash, expense or charge-clearing legs. It must
-still extend proceeds/journal reconciliation beyond single-disposal commands
-and complete nullable unknown-basis projection representation.
+checks both missing links and unlinked trade cash, expense or charge-clearing legs.
+Sell/write-off proceeds checking now covers multiple decisions by operation,
+pinned journal version and cost currency, counting shared clearing legs once;
+unlinked decision provenance is reported even for equal-valued journals.
+Individual compound attribution and nullable unknown-basis projection
+representation remain open.
 The consolidated baseline separates immutable lot identity/opening facts from
 `investment_lot_state`; replay reconstructs the state atomically, self-check
 reports missing/corrupt state and bundle schema 3 exports both layers.
