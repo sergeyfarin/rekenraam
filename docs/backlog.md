@@ -22,7 +22,6 @@ the existing local IDs resolvable; it is not a second task list.
 | T-87 | [#101 — Owner-local dates](https://github.com/sergeyfarin/rekenraam/issues/101) |
 | T-108 | [#103 — Short sale and cover](https://github.com/sergeyfarin/rekenraam/issues/103) |
 | T-110 | [#125 — Investment operation integrity](https://github.com/sergeyfarin/rekenraam/issues/125) |
-| T-111 | [#126 — Application test runtime margin](https://github.com/sergeyfarin/rekenraam/issues/126) |
 
 The [roadmap](roadmap.md) owns product order; its
 [GitHub index](https://github.com/sergeyfarin/rekenraam/issues/120) links current

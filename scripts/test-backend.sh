@@ -46,8 +46,10 @@ else
   # Ordinary integration fixtures copy a process-wide migrated SQLite template
   # (internal/testdb) instead of replaying the full schema per test. Run
   # packages serially so the largest SQLite integration suites do not contend
-  # with each other for CPU and hit Go's default per-package timeout. Keep that
-  # timeout visible: if one package approaches it alone, fixture economics
-  # need attention rather than more timeout headroom (T-70).
-  go test -race -p 1 ./...
+  # with each other for CPU. T-111 profiled the complete suite and reviewed
+  # overlapping coverage: SQLite parsing and race instrumentation dominate,
+  # while the default 10m deadline left under two seconds of margin. Keep all
+  # regressions and give each race-tested package an explicit 15m bound.
+  # Continue measuring fixture cost; this bound is not a runtime target.
+  go test -race -p 1 -timeout=15m ./...
 fi

@@ -61,12 +61,21 @@ correctly formatted for the toolchain actually compiling them.
 ./scripts/test-backend.sh
 ```
 
-The 2026-09-30 disposal-clearing attribution gate passed `internal/app` in
-598.347 seconds, close to the unchanged default 600-second package timeout.
-[T-111 #126](https://github.com/sergeyfarin/rekenraam/issues/126) tracks measured
-fixture/test cost reduction to restore runtime margin. Keep the race detector,
-isolated fixtures and migration/restore coverage; increasing the timeout or
-skipping tests does not resolve that follow-up.
+The race gate runs `go test -race -p 1 -timeout=15m ./...`: packages run
+serially, with an explicit 15-minute deadline per package. The non-race
+coverage pass retains Go's default deadline. Local validation and CI use the
+same wrapper.
+
+[T-111 #126](https://github.com/sergeyfarin/rekenraam/issues/126) reviewed the
+complete suite after the 2026-09-30 gate took 598.347 seconds against the old
+600-second limit. The race profile and duplication review are recorded in
+`docs/reviews/test-runtime-review-2026-09-30.md`. All financial, migration,
+restore and race coverage is retained. Independent financial matrix cases
+run in parallel with isolated fixtures; the owner authorized the explicit
+15-minute bound to unblock further P0 work. Continue reviewing measured fixture
+cost rather than treating that bound as a runtime target. The full revised
+gate passed with the application package at 513.745 seconds, down from
+598.347 seconds; the focused race run retained all 60 named matrix cases.
 
 The financial property tests run in the normal backend suite. For a focused
 iteration on ledger, cashflow, lot conservation and gains arithmetic:
@@ -459,7 +468,7 @@ once a released version exists, `main` is something users can be running.
 
 ### Backend
 
-- Usually validate with `./scripts/test-backend.sh` — it gates on `gofmt -l`, then runs `go vet ./...` and `go test -race -p 1 ./...`. Packages run serially to keep the SQLite integration suites within Go's unchanged per-package timeout.
+- Usually validate with `./scripts/test-backend.sh` — it gates on `gofmt -l`, then runs `go vet ./...` and `go test -race -p 1 -timeout=15m ./...`. Packages run serially with an explicit 15-minute race-test deadline per package.
 - If backend changes affect the integrated binary shape, also run `pnpm build`.
 
 ### Frontend

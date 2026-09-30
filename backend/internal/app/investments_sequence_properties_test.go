@@ -38,9 +38,11 @@ func snapshotFinancialState(t *testing.T, f *investmentsTestFixture) financialSn
 }
 
 func TestFinancialTradeSequencesPreserveJournalLotsBasisAndGains(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		for _, seed := range []uint64{7, 19, 43} {
 			t.Run(fmt.Sprintf("%s/seed_%d", method, seed), func(t *testing.T) {
+				t.Parallel()
 				f := newInvestmentsTestFixture(t)
 				ctx := context.Background()
 				rng := rand.New(rand.NewPCG(seed, 11))
@@ -191,10 +193,12 @@ func TestFinancialTradeSequencesPreserveJournalLotsBasisAndGains(t *testing.T) {
 // Trailing zeros change representation, never the economic result of closing
 // a position. Cross both scale directions, all methods and gain/loss/zero.
 func TestFinancialClosedPositionGainIgnoresDecimalRepresentation(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		for variant := 0; variant < 4; variant++ {
 			for _, delta := range []int64{-1, 0, 1} {
 				t.Run(fmt.Sprintf("%s/representation_%d/gain_cents_%d", method, variant, delta), func(t *testing.T) {
+					t.Parallel()
 					f := newInvestmentsTestFixture(t)
 					ctx := context.Background()
 					var allocations []InvestmentLotAllocationInput
