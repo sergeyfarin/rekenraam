@@ -149,9 +149,16 @@ type ExportInvestmentOperationRecord struct {
 
 func (r *ExportRepository) ExportInvestmentOperations(ctx context.Context, transaction *sql.Tx, bookID int64) ([]ExportInvestmentOperationRecord, error) {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT id, transaction_id, operation_kind, event_date, created_audit_event_id,
-			correction_of_operation_id, correction_mode, correction_reason
-		FROM investment_operations WHERE book_id = ? ORDER BY event_date, id
+		SELECT operation.id, version.transaction_id, operation.operation_kind,
+			operation.event_date, operation.created_audit_event_id,
+			operation.correction_of_operation_id, operation.correction_mode, operation.correction_reason
+		FROM investment_operations operation
+		LEFT JOIN investment_operation_journal_links link ON link.operation_id = operation.id
+			AND link.book_id = operation.book_id AND link.role = 'primary'
+			AND link.link_seq = (SELECT MIN(link_seq) FROM investment_operation_journal_links
+				WHERE operation_id = operation.id AND role = 'primary')
+		LEFT JOIN transaction_versions version ON version.id = link.transaction_version_id
+		WHERE operation.book_id = ? ORDER BY operation.event_date, operation.id
 	`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read export investment operations: %w", err)
@@ -827,7 +834,7 @@ func (r *ExportRepository) ExportLots(ctx context.Context, transaction *sql.Tx, 
 			cost_basis_value, cost_basis_scale,
 			remaining_cost_basis_value, remaining_cost_basis_scale,
 			cost_commodity_id, source_transaction_id
-		FROM investment_lots
+		FROM current_investment_lots
 		WHERE book_id = ?
 		ORDER BY account_id, commodity_id, opened_on, id
 	`, bookID)

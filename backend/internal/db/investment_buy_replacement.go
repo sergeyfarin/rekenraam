@@ -35,7 +35,7 @@ func (r *InvestmentRepository) BuyOperationByTransactionID(ctx context.Context, 
 func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationReader, bookID, transactionID int64) (BuyOperationRecord, error) {
 	var record BuyOperationRecord
 	var corrected, imported int
-	err := reader.QueryRowContext(ctx, `SELECT o.id, o.transaction_id, link.transaction_version_id,
+	err := reader.QueryRowContext(ctx, `SELECT o.id, linked_version.transaction_id, link.transaction_version_id,
 		current.id, f.lot_id, o.event_date, f.account_id, f.commodity_id, f.cost_commodity_id,
 		EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id),
 		(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
@@ -47,9 +47,10 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
 		JOIN investment_lot_facts f ON f.operation_id = o.id AND f.position_side = 'long'
-		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.role = 'primary'
-		JOIN current_transaction_versions current ON current.transaction_id = o.transaction_id
-		WHERE o.book_id = ? AND o.transaction_id = ? AND o.operation_kind = 'buy'
+		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
+		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
+		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
+		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind = 'buy'
 		AND (SELECT count(*) FROM investment_lot_facts one WHERE one.operation_id = o.id) = 1`,
 		bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.LotID,
@@ -112,6 +113,15 @@ type BuyReplacementRecord struct {
 // one audit event or roll back together.
 func (r *InvestmentRepository) ReplaceBuy(ctx context.Context, expected BuyOperationRecord,
 	inverseParams, replacementParams CreateTransactionParams, lotParams CreateInvestmentLotParams,
+) (BuyReplacementRecord, error) {
+	return r.ReplaceBuyWithPostWrite(ctx, expected, inverseParams, replacementParams, lotParams, nil)
+}
+
+// ReplaceBuyWithPostWrite lets a source correction record its accepted staged
+// row in the same transaction as the inverse, replacement, and lot replay.
+func (r *InvestmentRepository) ReplaceBuyWithPostWrite(ctx context.Context, expected BuyOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, lotParams CreateInvestmentLotParams,
+	postWrite func(*sql.Tx, int64, int64) error,
 ) (BuyReplacementRecord, error) {
 	if expected.OperationID <= 0 || expected.LotID <= 0 ||
 		inverseParams.BookID <= 0 || inverseParams.BookID != replacementParams.BookID ||
@@ -219,6 +229,11 @@ func (r *InvestmentRepository) ReplaceBuy(ctx context.Context, expected BuyOpera
 	replacement.InvalidatedCheckpointIDs, err = invalidateCreateTransactionCheckpointsTx(ctx, tx, replacementParams, auditEventID)
 	if err != nil {
 		return BuyReplacementRecord{}, err
+	}
+	if postWrite != nil {
+		if err := postWrite(tx, operationID, auditEventID); err != nil {
+			return BuyReplacementRecord{}, fmt.Errorf("record buy source revision: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return BuyReplacementRecord{}, fmt.Errorf("commit buy replacement: %w", err)

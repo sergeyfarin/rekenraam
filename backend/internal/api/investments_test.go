@@ -309,7 +309,7 @@ func TestReverseManualSaleAPI(t *testing.T) {
 	require.Nil(t, chain.EffectiveTransactionID)
 	require.False(t, chain.CanReverseManualSale)
 	var remaining int
-	require.NoError(t, database.QueryRow(`SELECT count(*) FROM investment_lots WHERE book_id = 1 AND remaining_quantity_value = '5'`).Scan(&remaining))
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM current_investment_lots WHERE book_id = 1 AND remaining_quantity_value = '5'`).Scan(&remaining))
 	require.Equal(t, 1, remaining)
 	conflict := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
 	require.Contains(t, conflict.Body.String(), "INVESTMENT_SALE_ALREADY_CORRECTED")
@@ -424,7 +424,7 @@ func TestReplaceLatestManualSaleAPI(t *testing.T) {
 	require.Equal(t, "posted", corrected.InverseTransaction.Status)
 	require.Equal(t, "posted", corrected.Replacement.Transaction.Status)
 	var remaining int
-	require.NoError(t, database.QueryRow(`SELECT count(*) FROM investment_lots
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM current_investment_lots
 		WHERE book_id = 1 AND remaining_quantity_value = '1'`).Scan(&remaining))
 	require.Equal(t, 1, remaining)
 	conflict := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
@@ -474,7 +474,7 @@ func TestReplaceOldManualBuyAPI(t *testing.T) {
 	require.Equal(t, "posted", corrected.InverseTransaction.Status)
 	require.Equal(t, "posted", corrected.Replacement.Transaction.Status)
 	var activeLotCount int
-	require.NoError(t, database.QueryRow(`SELECT count(*) FROM investment_lots
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM current_investment_lots
 		WHERE book_id = 1 AND account_id = ? AND remaining_quantity_value = '3'`, holding.ID).Scan(&activeLotCount))
 	require.Equal(t, 1, activeLotCount)
 	contextResult = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,

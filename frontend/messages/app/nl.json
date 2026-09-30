@@ -154,6 +154,17 @@
   "import_preview_dedupe_duplicate": "Al geïmporteerd",
   "import_preview_dedupe_needs_attention": "Dubbel controleren",
   "import_preview_source_changed": "Brontransactie gewijzigd — controle nodig; import slaat deze over",
+  "import_preview_open_original": "Open oorspronkelijke transactie",
+  "import_preview_correct_buy": "Aankoop corrigeren vanuit bron",
+  "import_preview_correct_buy_scope": "Past de gewijzigde hoeveelheid en het nettobedrag van de aanbieder toe. Voor een andere datum, belegging, rekening of valuta is een andere correctie nodig.",
+  "import_preview_correct_buy_reason": "Reden voor correctie",
+  "import_preview_correct_buy_submit": "Broncorrectie toepassen",
+  "import_preview_correct_buy_pending": "Correctie wordt toegepast…",
+  "import_preview_buy_corrected": "Bronaankoop gecorrigeerd",
+  "import_preview_open_correction": "Gecorrigeerde transactie openen",
+  "import_preview_source_revision_accepted": "Bronwijziging geaccepteerd",
+  "import_result_review_changed_fills": "Gewijzigde brontransacties bekijken",
+  "transactions_linked_loading": "Transactie openen…",
   "import_preview_dedupe_excluded": "Uitgesloten",
   "import_preview_account_label": "Doelrekening",
   "import_preview_account_placeholder": "Kies een rekening…",
@@ -587,5 +598,9 @@
   "forecast_learning_no_groups": "Nog niets te schatten.",
   "forecast_learning_excluded_heading": "Niet geschatte categorieën",
   "forecast_learning_unit_week": "weken",
-  "forecast_learning_unit_month": "maanden"
+  "forecast_learning_unit_month": "maanden",
+  "import_preview_correct_buy_preview": "Reconciliatie-impact bekijken",
+  "import_preview_correct_buy_impact": "Deze correctie beïnvloedt deze reconciliatiecontrolepunten:",
+  "import_preview_correct_buy_no_impact": "Er worden geen reconciliatiecontrolepunten beïnvloed.",
+  "import_preview_correct_buy_preview_pending": "Reconciliatie controleren…"
 }

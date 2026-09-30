@@ -32,3 +32,28 @@ func TestCorrectionChainReadsReplacementAndTerminalReversalFromAnyLinkedTransact
 	_, err = NewInvestmentRepository(database).CorrectionChainByTransactionID(ctx, 2, 9)
 	require.ErrorIs(t, err, ErrNotFound)
 }
+
+func TestRetiredOperationHeaderPreservesJournalLinkConstraints(t *testing.T) {
+	ctx := context.Background()
+	database := seedReplayTestBook(t)
+	for _, test := range []struct {
+		name                           string
+		bookID, operationID, versionID int64
+	}{
+		{"other_book", 2, 1, 11},
+		{"ordinary_journal", 1, 1, 1},
+		{"missing_version", 1, 1, 999999},
+		{"missing_operation", 1, 999999, 11},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := database.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
+				(book_id, operation_id, transaction_version_id, link_seq, role)
+				VALUES (?, ?, ?, 2, 'primary')`, test.bookID, test.operationID, test.versionID)
+			require.ErrorContains(t, err, "posted investment version in the same book")
+		})
+	}
+	_, err := database.ExecContext(ctx, `UPDATE investment_operation_journal_links SET role = 'reversal' WHERE operation_id = 1`)
+	require.ErrorContains(t, err, "immutable")
+	_, err = database.ExecContext(ctx, `DELETE FROM investment_operation_journal_links WHERE operation_id = 1`)
+	require.ErrorContains(t, err, "immutable")
+}

@@ -154,6 +154,17 @@
   "import_preview_dedupe_duplicate": "Already imported",
   "import_preview_dedupe_needs_attention": "Check duplicate",
   "import_preview_source_changed": "Source fill changed — review required; import will skip it",
+  "import_preview_open_original": "Open original transaction",
+  "import_preview_correct_buy": "Correct buy from source",
+  "import_preview_correct_buy_scope": "Applies the provider's revised quantity and net amount. Date, instrument, account, and currency changes need another correction workflow.",
+  "import_preview_correct_buy_reason": "Reason for correction",
+  "import_preview_correct_buy_submit": "Apply source correction",
+  "import_preview_correct_buy_pending": "Applying correction…",
+  "import_preview_buy_corrected": "Source buy corrected",
+  "import_preview_open_correction": "Open corrected transaction",
+  "import_preview_source_revision_accepted": "Source revision accepted",
+  "import_result_review_changed_fills": "Review changed source fills",
+  "transactions_linked_loading": "Opening transaction…",
   "import_preview_dedupe_excluded": "Excluded",
   "import_preview_account_label": "Target account",
   "import_preview_account_placeholder": "Select account…",
@@ -623,5 +634,9 @@
   "forecast_learning_no_groups": "Nothing to estimate yet.",
   "forecast_learning_excluded_heading": "Categories not estimated",
   "forecast_learning_unit_week": "weeks",
-  "forecast_learning_unit_month": "months"
+  "forecast_learning_unit_month": "months",
+  "import_preview_correct_buy_preview": "Preview reconciliation impact",
+  "import_preview_correct_buy_impact": "This correction affects these reconciliation checkpoints:",
+  "import_preview_correct_buy_no_impact": "No reconciliation checkpoints are affected.",
+  "import_preview_correct_buy_preview_pending": "Checking reconciliation…"
 }

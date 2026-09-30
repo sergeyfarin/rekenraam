@@ -78,7 +78,9 @@ func TestExternalTransferInKnownBasisPostsBookBridgeAndReplaysAsOpening(t *testi
 			x.basis_knowledge, x.carried_basis_value, x.source_evidence_json
 		FROM investment_operations o JOIN investment_operation_dates d ON d.operation_id = o.id
 		JOIN investment_transfer_lot_links x ON x.operation_id = o.id
-		WHERE o.transaction_id = ?`, result.Transaction.ID).Scan(&kind, &dateRole, &originalDate,
+		WHERE (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) = ?`, result.Transaction.ID).Scan(&kind, &dateRole, &originalDate,
 		&originalKnowledge, &basisKnowledge, &basis, &evidence)
 	require.NoError(t, err)
 	assert.Equal(t, "external_transfer_in", kind)
@@ -142,15 +144,10 @@ func TestExternalTransferInKnownBasisPostsBookBridgeAndReplaysAsOpening(t *testi
 
 func TestExternalTransferFoundationUsesJournalLinkWithoutCompatibilityID(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
+	requireInvestmentHeaderRetired(t, f)
 	seedExternalTransferEquity(t, f.database)
 	ctx := context.Background()
-	transfer, err := f.investmentService.ExternalTransferIn(ctx, knownTransferInput(f))
-	require.NoError(t, err)
-	_, err = f.database.ExecContext(ctx, `DROP TRIGGER investment_operations_no_update`)
-	require.NoError(t, err)
-	_, err = f.database.ExecContext(ctx, `UPDATE investment_operations SET transaction_id = NULL
-		WHERE id IN (SELECT operation_id FROM investment_operation_journal_links
-			WHERE transaction_version_id = ?)`, transfer.Transaction.VersionID)
+	_, err := f.investmentService.ExternalTransferIn(ctx, knownTransferInput(f))
 	require.NoError(t, err)
 	require.Equal(t, SelfCheckPassed,
 		resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
@@ -240,7 +237,9 @@ func TestExternalTransferInKnownZeroBasisAndUnknownOriginalDate(t *testing.T) {
 	require.NoError(t, f.database.QueryRow(`
 		SELECT x.carried_basis_value, x.original_date_knowledge, x.original_acquired_on
 		FROM investment_transfer_lot_links x JOIN investment_operations o ON o.id = x.operation_id
-		WHERE o.transaction_id = ?`, result.Transaction.ID).Scan(&basis, &knowledge, &original))
+		WHERE (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) = ?`, result.Transaction.ID).Scan(&basis, &knowledge, &original))
 	assert.Equal(t, "0", basis)
 	assert.Equal(t, "unknown", knowledge)
 	assert.False(t, original.Valid)

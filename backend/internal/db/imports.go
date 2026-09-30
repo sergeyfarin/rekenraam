@@ -56,6 +56,8 @@ type ImportStagedRowRecord struct {
 	NormalizedJSON         string
 	DedupeStatus           string
 	SourceChanged          bool
+	SourceTransactionID    sql.NullInt64
+	SourceBuyOperation     bool
 	ResolutionJSON         string
 	CommitStatus           string
 	CommittedIdentityID    sql.NullInt64
@@ -64,9 +66,8 @@ type ImportStagedRowRecord struct {
 	CommitError            sql.NullString
 }
 
-// The original committed staged row is the immutable provider snapshot for a
-// Trading 212 fill identity. Later rows with the same fingerprint can be
-// compared with it without changing the dedupe identity or its effects.
+// The latest committed staged row is the accepted provider snapshot for a
+// Trading 212 fill identity. The first identity effect remains immutable.
 func (r *ImportRepository) FindCommittedTrading212FillSnapshot(ctx context.Context, bookID int64, fingerprint string) (string, string, bool, error) {
 	var rawJSON, normalizedJSON string
 	err := r.database.QueryRowContext(ctx, `
@@ -77,7 +78,7 @@ func (r *ImportRepository) FindCommittedTrading212FillSnapshot(ctx context.Conte
 			AND identity_row.source_kind = 'trading212'
 			AND original.commit_status = 'committed'
 			AND json_extract(original.raw_json, '$.kind') = 'trading212_order_fill'
-		ORDER BY original.id LIMIT 1
+		ORDER BY original.id DESC LIMIT 1
 	`, bookID, fingerprint).Scan(&rawJSON, &normalizedJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", false, nil
@@ -1158,9 +1159,27 @@ const importStagedRowSelect = `s.id, s.batch_id, s.book_id, s.row_index, s.dedup
 			AND original.commit_status = 'committed'
 			AND json_extract(original.raw_json, '$.kind') = 'trading212_order_fill'
 			AND json_extract(s.raw_json, '$.kind') = 'trading212_order_fill'
+			AND original.id = (SELECT MAX(latest.id) FROM import_staged_rows latest
+				WHERE latest.committed_identity_id = identity_row.id
+					AND latest.commit_status = 'committed'
+					AND json_extract(latest.raw_json, '$.kind') = 'trading212_order_fill')
 			AND (json_remove(original.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
 				<> json_remove(s.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
-				OR original.normalized_json <> s.normalized_json))`
+				OR original.normalized_json <> s.normalized_json)),
+	(SELECT effect.transaction_id FROM import_commit_identities identity_row
+		JOIN import_commit_identity_effects effect ON effect.identity_id = identity_row.id
+		WHERE identity_row.book_id = s.book_id
+			AND identity_row.dedupe_fingerprint = s.dedupe_fingerprint
+			AND identity_row.source_kind = 'trading212'
+			AND effect.transaction_id IS NOT NULL
+		ORDER BY effect.effect_seq LIMIT 1),
+	EXISTS(SELECT 1 FROM import_commit_identities identity_row
+		JOIN import_commit_identity_effects effect ON effect.identity_id = identity_row.id
+		JOIN investment_operations operation ON operation.id = effect.operation_id
+		WHERE identity_row.book_id = s.book_id
+			AND identity_row.dedupe_fingerprint = s.dedupe_fingerprint
+			AND identity_row.source_kind = 'trading212'
+			AND operation.operation_kind = 'buy')`
 
 // ListImportStagedRows is the paginated API path; limit is clamped to 500 / default 200.
 func (r *ImportRepository) ListImportStagedRows(ctx context.Context, params ListImportStagedRowsParams) ([]ImportStagedRowRecord, error) {
@@ -1299,15 +1318,17 @@ type importStagedRowScanner interface {
 func scanImportStagedRow(row importStagedRowScanner) (ImportStagedRowRecord, error) {
 	var rec ImportStagedRowRecord
 	var sourceChanged int
+	var sourceBuyOperation int
 	if err := row.Scan(
 		&rec.ID, &rec.BatchID, &rec.BookID, &rec.RowIndex, &rec.DedupeFingerprint,
 		&rec.RawJSON, &rec.NormalizedJSON, &rec.DedupeStatus, &rec.ResolutionJSON,
 		&rec.CommitStatus, &rec.CommittedIdentityID, &rec.CommittedTransactionID, &rec.CommitError,
-		&sourceChanged,
+		&sourceChanged, &rec.SourceTransactionID, &sourceBuyOperation,
 	); err != nil {
 		return ImportStagedRowRecord{}, fmt.Errorf("scan staged row: %w", err)
 	}
 	rec.SourceChanged = sourceChanged != 0
+	rec.SourceBuyOperation = sourceBuyOperation != 0
 	return rec, nil
 }
 
@@ -1536,12 +1557,34 @@ func (r *ImportRepository) CreateCommitIdentityWithEffects(ctx context.Context, 
 		if effect.TransactionID.Valid && !effect.OperationID.Valid {
 			var operationID int64
 			err := tx.QueryRowContext(ctx, `
-				SELECT id FROM investment_operations WHERE book_id = ? AND transaction_id = ?
+				SELECT operation.id FROM investment_operation_journal_links link
+				JOIN investment_operations operation ON operation.id = link.operation_id
+				JOIN transaction_versions version ON version.id = link.transaction_version_id
+				WHERE link.book_id = ? AND operation.book_id = link.book_id
+					AND version.transaction_id = ? AND link.role = 'primary'
 			`, params.BookID, effect.TransactionID.Int64).Scan(&operationID)
 			if err == nil {
 				effect.OperationID = sql.NullInt64{Int64: operationID, Valid: true}
 			} else if !errors.Is(err, sql.ErrNoRows) {
 				return 0, fmt.Errorf("read imported investment operation: %w", err)
+			} else {
+				// Ordinary journals have no operation, and an inverse can have
+				// only a reversal link. A journal-backed investment with no link
+				// at all is corrupt; do not silently admit it as an ordinary effect.
+				var unlinkedInvestment int
+				if err := tx.QueryRowContext(ctx, `SELECT EXISTS (
+					SELECT 1 FROM current_transaction_versions current
+					JOIN transactions t ON t.id = current.transaction_id
+					WHERE t.book_id = ? AND t.id = ? AND current.transaction_kind = 'investment'
+						AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links link
+							JOIN transaction_versions version ON version.id = link.transaction_version_id
+							WHERE link.book_id = t.book_id AND version.transaction_id = t.id)
+				)`, params.BookID, effect.TransactionID.Int64).Scan(&unlinkedInvestment); err != nil {
+					return 0, fmt.Errorf("check imported investment journal link: %w", err)
+				}
+				if unlinkedInvestment != 0 {
+					return 0, errors.New("imported investment journal has no operation link")
+				}
 			}
 		}
 		if !effect.OperationID.Valid && !effect.TransactionID.Valid {

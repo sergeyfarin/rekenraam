@@ -6,16 +6,43 @@ and ADR 0013 govern. R16 owns the near-term work, T-75b owns native
 correction, and T-108 owns short sales and covers.
 
 The 2026-09-29 review found that calling 2a and all of slice 4 complete was
-premature. The operation header's nullable unique `transaction_id` remains a
-compatibility link used by existing reads beside `investment_operation_journal_links`;
-compound and basis-only actions must migrate those reads to the link table.
-Transfer depletion replay already reads the immutable operation/lot-effect
-link instead of joining through that compatibility column. Foundation
-self-check now requires posted journal links for all implemented journal-backed
-operation kinds and resolves lot/effect and transfer provenance through links;
-correction/detail/export/import readers still need the same cutover.
-Current lot projection columns remain on `investment_lots` instead of a
-separate `investment_lot_state` table. Trade net-settlement and separately
+premature. The nullable unique operation transaction header has now been
+retired from the pre-release baseline, writer and frozen seed. Pinned
+`investment_operation_journal_links` are the sole operation-to-journal
+relationship. Foundation self-check, replay, correction history, trade source
+facts, correction admission and import effect inference use these links.
+Writer bootstrap passes its inserted operation ID directly into link creation.
+Correction history and export summaries display the first primary link once
+per operation; the journal-link CSV retains every linked version. An inverse
+resolves the same correction history but is not offered as a replacement trade
+or inferred as a primary import operation. Unlinked investment journals are
+refused. Fresh and seeded tests exercise the actual retired-header schema,
+retain the seeded operation CSV contract, and cover correction/reversal,
+transfer, reinvestment and link-integrity mutations.
+
+**BREAKING DEV DATABASE, R16 journal-link authority (2026-09-30):** this
+ADR 0013 pre-release baseline rewrite removes `investment_operations.transaction_id`
+and its header-dependent trigger checks. The checksum and frozen seed are
+updated together. Reset disposable development databases as documented in
+`docs/developer-workflow.md`; this is not an installed-release upgrade.
+No legacy databases exist; source revision tables and the lot opening guards
+are consolidated into migration `0001` with an updated checksum and fresh/seeded
+equivalence coverage. Lot identity, opening quantity/basis, source evidence and creation attribution
+are now guarded against updates and deletion by the consolidated baseline.
+Remaining balances, status and projection update attribution remain mutable
+for disposal and replay. Seeded mutation tests cover every opening field and
+confirm that projection-only writes preserve acquisition facts. The physical
+split is now implemented: `investment_lots` contains immutable identity and
+opening facts, `investment_lot_state` holds remaining balances/status and update
+attribution, and `current_investment_lots` provides the joined read model.
+Effective long-position replay reconstructs missing lot and basis state in one
+transaction without changing opening/event facts. Self-check reports missing
+or corrupt projection state. Bundle schema 3 exports the state separately while
+preserving the existing lot summary. Fresh/seeded fixtures, correction and
+transfer flows, reconstruction and installation-failure rollback are covered.
+Unknown carried-basis knowledge still comes from immutable transfer facts;
+the accepted nullable basis/knowledge representation in projection state remains
+a further integrity slice. Trade net-settlement and separately
 posted fee components now link to the exact journal posting line keys chosen by
 their command, including when another leg has identical account, currency,
 date and amount. Self-check compares their account, commodity, date, signed
@@ -792,12 +819,65 @@ next family.
      stay fenced. Source-file-driven corrections remain separate work.
    - **4z — changed-source fill review gate — complete 2026-09-29.** A
      Trading 212 order fill with an already committed stable fingerprint is
-     compared with the original committed source snapshot. Changed provider
+     compared with the latest accepted committed source snapshot. Changed provider
      payload is shown as a distinct review state and skipped at commit even
      if its staged dedupe status is changed. Locally resolved instrument and
      holding IDs are excluded from the comparison. This closes silent
-     changed-fill deduplication; an atomic source-revision correction command
-     remains open.
+     changed-fill deduplication; the buy source-revision correction arrives in
+     4ac.
+   - **4aa — source transaction review link — complete 2026-09-29.** The
+     import batch read returns the committed original transaction for a
+     Trading 212 fill identity. A changed-source row links directly to that
+     transaction's detail panel and correction chain; a page reload preserves
+     the link. The buy source-revision write command arrives in 4ac.
+   - **4ab — atomic source revision foundation — complete 2026-09-29.** An
+     append-only `import_source_revisions` record links an accepted staged
+     Trading 212 fill to its original source identity and a descendant
+     investment correction operation. The buy replacement writer has a
+     transaction callback so the inverse journal, replacement lot replay,
+     reconciliation invalidation, staged-row result, and revision record
+     succeed or roll back together. The repository checks the latest accepted
+     payload and rejects an unchanged or already committed row. Import
+     preview and staging now compare with the latest accepted source snapshot.
+     This backend writer seam is consumed by the buy command in 4ac.
+   - **4ac — Trading 212 buy source revision — complete 2026-09-29.** Import
+     review can accept a changed buy fill using its staged provider quantity
+     and net settlement. The `/api/v1/imports/{batch_id}/rows/{row_id}/correct-buy`
+     command posts an audited buy replacement and accepts the source revision
+     in one transaction, including dependent long-sale replay and the normal
+     reconciliation override/invalidation. A second provider revision follows
+     the original source identity through the correction chain. Date,
+     instrument, holding, cash account, and cost-currency changes are rejected
+     until their own correction commands exist; sale and cancellation source
+     revisions are also pending. The import review action exposes the supported
+     scope and a reason field and remains available for skipped rows after
+     batch commit. The batch read model identifies source identities whose
+     original effect was a native buy, so cash-fallback rows do not offer the
+     buy correction control. The writer rejects a revision staged before the
+     latest accepted snapshot and rechecks batch eligibility in the same
+     transaction, so an older row or a discarded batch cannot advance the
+     source history. Positive buy quantity and negative owner-perspective
+     settlement are required; cancellation-shaped payloads stay under review.
+     Buy replacement preflight and transaction-detail availability follow the
+     committed source ancestry, including an imported correction descendant
+     whose identity effect remains on the original operation.
+     A freshly staged provider revision can deliberately restore an earlier
+     payload; an old staged row cannot be reused for that reversion. Source
+     reconciliation-impact preview arrives in 4ad; sale/cancellation commands
+     remain open.
+   - **4ad — source buy reconciliation preview — complete 2026-09-29.** The
+     read-only `POST /api/v1/imports/{batch_id}/rows/{row_id}/correct-buy/reconciliation-impact`
+     endpoint uses the same staged provider quantity/net settlement and source
+     eligibility checks as the correction command. It returns distinct
+     affected checkpoints for the inverse and replacement journals without
+     accepting the revision, posting journals, changing lots, or invalidating
+     checkpoints. Import review previews first, names the affected account,
+     currency, and statement date, and requires explicit override before
+     applying an affected correction. Changing the reason or selected row, or a failed command,
+     clears the preview and override. The command rechecks eligibility and
+     reconciliation at commit time; the preview does not reserve the staged
+     source or guarantee dependent replay can succeed. Database query failures
+     remain errors rather than being disguised as source eligibility conflicts.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

@@ -611,6 +611,8 @@ func TestImportBatchEndpoints_RequireAuthentication(t *testing.T) {
 		{"patch", http.MethodPatch, "/api/v1/imports/1"},
 		{"preview-commit", http.MethodPost, "/api/v1/imports/1/preview-commit"},
 		{"commit", http.MethodPost, "/api/v1/imports/1/commit"},
+		{"correct-buy", http.MethodPost, "/api/v1/imports/1/rows/1/correct-buy"},
+		{"correct-buy-impact", http.MethodPost, "/api/v1/imports/1/rows/1/correct-buy/reconciliation-impact"},
 		{"discard", http.MethodPost, "/api/v1/imports/1/discard"},
 	}
 	for _, tc := range cases {
@@ -638,6 +640,7 @@ func TestImportBatchMutations_RequireCSRFToken(t *testing.T) {
 	}{
 		{"patch", http.MethodPatch, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10), resolutionPatchBody(t, checking.ID, commodityID, groceries.ID, started.Rows[0].ID)},
 		{"commit", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/commit", "{}"},
+		{"correct-buy", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/rows/" + strconv.FormatInt(started.Rows[0].ID, 10) + "/correct-buy", `{"reason":"provider correction"}`},
 		{"discard", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/discard", ""},
 		{"analyze", http.MethodPost, "/api/v1/imports/analyze", ""},
 	}
@@ -935,4 +938,34 @@ func TestCommitImportBatch_LinksRowsToExistingPayeesByName(t *testing.T) {
 	for _, payee := range payees.Payees {
 		assert.NotEqual(t, "Employer Nobody Recorded", payee.Name)
 	}
+}
+
+func TestImportBuySourceCorrectionImpactIsReadOnlyAndRequiresEligibleSource(t *testing.T) {
+	t.Parallel()
+	handler, database := newImportConnectionsTestHandler(t, app.NoOpProber{})
+	cookie, csrf, _, _, _ := bootstrapImportAPITest(t, handler)
+	started := startQIFImportForSession(t, handler, cookie, csrf, "source.qif", qifRow("06/01/26", "-10.00", "Coffee"), http.StatusCreated)
+	var before int
+	require.NoError(t, database.QueryRow("SELECT count(*) FROM audit_events").Scan(&before))
+	for _, test := range []struct {
+		path   string
+		body   string
+		status int
+	}{
+		{"/api/v1/imports/999999/rows/1/correct-buy/reconciliation-impact", `{"reason":"provider revision"}`, http.StatusNotFound},
+		{"/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/rows/" + strconv.FormatInt(started.Rows[0].ID, 10) + "/correct-buy/reconciliation-impact", `{"reason":"provider revision"}`, http.StatusConflict},
+		{"/api/v1/imports/1/rows/1/correct-buy/reconciliation-impact", `{`, http.StatusBadRequest},
+	} {
+		req := httptest.NewRequest(http.MethodPost, test.path, strings.NewReader(test.body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(cookie)
+		// Read-only POST previews follow the investment preview contract: no
+		// CSRF token is needed, while the correction command still requires it.
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		require.Equal(t, test.status, res.Code, res.Body.String())
+	}
+	var after int
+	require.NoError(t, database.QueryRow("SELECT count(*) FROM audit_events").Scan(&after))
+	require.Equal(t, before, after)
 }

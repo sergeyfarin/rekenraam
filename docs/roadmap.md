@@ -102,7 +102,7 @@ Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
 
-The reusable application runtime ([#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers long-buy and long-sale reversal and prefilled replacement of manual or source-linked imported buys and sales. Old buys and sales replay dependent allocations in one audited transaction; buy reversal refuses any dependent disposal it cannot satisfy. New backdated long buys use the same replay and atomic writer. A committed import source identity remains attached to its original fill after manual replacement or terminal reversal, so retries remain deduplicated. A Trading 212 fill whose stable source ID now has a changed provider payload is flagged in import preview and skipped at commit pending source correction. Source-file-driven correction and other operation corrections remain. The 2026-09-29 review reopened slice 2a journal/subledger integrity and writer gates; complete those before further transfer and basis-action commands.
+The reusable application runtime ([#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers long-buy and long-sale reversal and prefilled replacement of manual or source-linked imported buys and sales. Old buys and sales replay dependent allocations in one audited transaction; buy reversal refuses any dependent disposal it cannot satisfy. New backdated long buys use the same replay and atomic writer. A committed import source identity remains attached to its original fill after manual replacement or terminal reversal, so retries remain deduplicated. Changed Trading 212 fills are compared with the latest accepted source payload, flagged in import review, and skipped by ordinary batch commit. Import review now accepts revised buy quantity/net settlement through an audited atomic source correction, with dependent replay and a read-only reconciliation-impact preview before explicit override; changed date, instrument, account, or currency remains unsupported. Sale and cancellation source revisions and other operation corrections remain. The 2026-09-29 review reopened slice 2a journal/subledger integrity and writer gates; complete those before further transfer and basis-action commands.
 
 ### Completed initiatives through R10
 
@@ -149,8 +149,16 @@ corrections and other backdated operation families remain.
 The reopened [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
 now links journal-backed trade components to their exact posting lines and
 checks both missing links and unlinked trade cash, expense or charge-clearing legs. It must
-still extend proceeds/journal reconciliation beyond single-disposal commands,
-retire the compatibility transaction link and separate lot state.
+still extend proceeds/journal reconciliation beyond single-disposal commands
+and complete nullable unknown-basis projection representation.
+The consolidated baseline separates immutable lot identity/opening facts from
+`investment_lot_state`; replay reconstructs the state atomically, self-check
+reports missing/corrupt state and bundle schema 3 exports both layers.
+Correction history, trade source facts, and buy/sale correction admission now use journal
+links. Export summaries and import effect inference now also use primary links;
+writer bootstrap passes the inserted operation ID directly and subsequent lot
+writes use primary links. The compatibility column is retired from the baseline
+and frozen seed; seeded operation export summaries retain their CSV contract.
 Transfers and basis actions, including manual splits, follow;
 then short-sale/cover, then compound corporate actions. Return-of-capital and
 cash-in-lieu suggestions are currently refused as dividend income (T-109) until

@@ -3,6 +3,7 @@ import {
   analyzeCSVImport,
   getFullImportBatch,
   parseBatchSourceMeta,
+  previewTrading212BuyCorrectionReconciliation,
   startImport,
   type GetImportBatchResponse,
   type ImportBatch
@@ -32,6 +33,7 @@ function importBatchResponse(rows: { id: number }[], nextCursor: string | null):
       raw: '{}',
       dedupe_status: 'new',
       source_changed: false,
+      source_buy_operation: false,
       resolution: '{}',
       commit_status: 'pending',
       commit_effects: []
@@ -42,6 +44,20 @@ function importBatchResponse(rows: { id: number }[], nextCursor: string | null):
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('previewTrading212BuyCorrectionReconciliation', () => {
+  it('reads the staged-row impact with the authenticated session without a mutation token', async () => {
+    const impact = { affected_checkpoints: [{ checkpoint_id: 8, account_id: 2, account_label: 'Cash', commodity_id: 1, commodity_code: 'EUR', statement_date: '2026-06-10' }] };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify(impact), { status: 200, headers: { 'content-type': 'application/json' } })
+    );
+    await expect(previewTrading212BuyCorrectionReconciliation(4, 12, { reason: 'Provider revision' })).resolves.toEqual(impact);
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/imports/4/rows/12/correct-buy/reconciliation-impact', expect.objectContaining({
+      method: 'POST', credentials: 'same-origin', body: JSON.stringify({ reason: 'Provider revision' })
+    }));
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).not.toHaveProperty('X-CSRF-Token');
+  });
 });
 
 describe('startImport', () => {

@@ -97,8 +97,8 @@ func TestSelfCheckFindsInvestmentOperationWithoutPostedVersionLink(t *testing.T)
 	require.NoError(t, err)
 	_, err = harness.writer.ExecContext(ctx, `
 		INSERT INTO investment_operations
-			(book_id, transaction_id, operation_kind, event_date, created_at, created_audit_event_id)
-		VALUES (1, 1, 'buy', '2026-01-01', '2026-08-24T04:00:00Z', ?)
+			(book_id, operation_kind, event_date, created_at, created_audit_event_id)
+		VALUES (1, 'buy', '2026-01-01', '2026-08-24T04:00:00Z', ?)
 	`, auditID)
 	require.NoError(t, err)
 	run := harness.run(t)
@@ -219,16 +219,8 @@ func TestSelfCheckCatchesEachCorruption(t *testing.T) {
 						account_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason,
 						status, opened_on, name, account_class, account_kind, allows_postings
 					) VALUES (3, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', '2026-01-01', 'Holdings', 'asset', 'security_holding', 1);
-					INSERT INTO investment_lots (
-						id, book_id, account_id, commodity_id, opened_on, status,
-						quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
-						cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
-						cost_commodity_id, created_at, created_by_user_id, updated_at, updated_by_user_id
-					) VALUES (
-						1, 1, 3, 2, '2026-06-01', 'open',
-						'100000', 4, '100000', 4, 100000, 2, 100000, 2, 1,
-						'2026-06-01T00:00:00Z', 1, '2026-06-01T00:00:00Z', 1
-					);
+					INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, cost_commodity_id, created_at, created_by_user_id) VALUES (1, 1, 3, 2, '2026-06-01', '100000', 4, 100000, 2, 1, '2026-06-01T00:00:00Z', 1);
+INSERT INTO investment_lot_state (lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id) VALUES (1, 1, 'open', '100000', 4, 100000, 2, '2026-06-01T00:00:00Z', 1);
 				`)
 			},
 		},
@@ -245,12 +237,8 @@ func TestSelfCheckCatchesEachCorruption(t *testing.T) {
 					INSERT INTO account_versions (account_id, version_seq, effective_from, recorded_at, changed_by_user_id, change_reason,
 						status, opened_on, name, account_class, account_kind, allows_postings)
 					VALUES (3, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', '2026-01-01', 'Holdings', 'asset', 'security_holding', 1);
-					INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, status,
-						quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
-						cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
-						cost_commodity_id, created_at, created_by_user_id, updated_at, updated_by_user_id)
-					VALUES (1, 1, 3, 2, '2026-06-01', 'open', '1', 0, '1', 0, 10000, 2, 12000, 2, 1,
-						'2026-06-01T00:00:00Z', 1, '2026-06-01T00:00:00Z', 1);
+					INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, cost_commodity_id, created_at, created_by_user_id) VALUES (1, 1, 3, 2, '2026-06-01', '1', 0, 10000, 2, 1, '2026-06-01T00:00:00Z', 1);
+INSERT INTO investment_lot_state (lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id) VALUES (1, 1, 'open', '1', 0, 12000, 2, '2026-06-01T00:00:00Z', 1);
 					INSERT INTO investment_lot_events (book_id, lot_id, event_kind, event_date, quantity_value, quantity_scale,
 						cost_basis_value, cost_basis_scale, created_at, created_by_user_id)
 					VALUES (1, 1, 'acquisition', '2026-06-01', '1', 0, 10000, 2, '2026-06-01T00:00:00Z', 1);
@@ -272,12 +260,8 @@ func TestSelfCheckCatchesEachCorruption(t *testing.T) {
 						status, opened_on, name, account_class, account_kind, allows_postings) VALUES
 						(3, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', '2026-01-01', 'Holdings', 'asset', 'security_holding', 1),
 						(4, 1, '2026-01-01', '2026-01-01T00:00:00Z', 1, 'seed', 'active', '2026-01-01', 'Trading', 'equity', 'equity', 1);
-					INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, status,
-						quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
-						cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
-						cost_commodity_id, created_at, created_by_user_id, updated_at, updated_by_user_id)
-					VALUES (1, 1, 3, 2, '2026-05-01', 'closed', '1', 0, '0', 0, 10000, 2, 0, 2, 1,
-						'2026-05-01T00:00:00Z', 1, '2026-06-01T00:00:00Z', 1);
+					INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, cost_commodity_id, created_at, created_by_user_id) VALUES (1, 1, 3, 2, '2026-05-01', '1', 0, 10000, 2, 1, '2026-05-01T00:00:00Z', 1);
+INSERT INTO investment_lot_state (lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id) VALUES (1, 1, 'closed', '0', 0, 0, 2, '2026-06-01T00:00:00Z', 1);
 					INSERT INTO investment_lot_events (book_id, lot_id, event_kind, event_date, quantity_value, quantity_scale,
 						cost_basis_value, cost_basis_scale, created_at, created_by_user_id) VALUES
 						(1, 1, 'acquisition', '2026-05-01', '1', 0, 10000, 2, '2026-05-01T00:00:00Z', 1),

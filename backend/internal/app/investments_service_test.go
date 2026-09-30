@@ -274,7 +274,7 @@ func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
 		var kind, eventDate string
 		err := f.database.QueryRowContext(ctx, `
 			SELECT operation_kind, event_date FROM investment_operations
-			WHERE transaction_id = ?
+			WHERE id IN (SELECT link.operation_id FROM investment_operation_journal_links link JOIN transaction_versions version ON version.id = link.transaction_version_id WHERE version.transaction_id = ? AND link.role = 'primary')
 		`, item.transactionID).Scan(&kind, &eventDate)
 		require.NoError(t, err)
 		assert.Equal(t, item.kind, kind)
@@ -284,7 +284,9 @@ func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
 			SELECT count(*) FROM investment_operation_journal_links l
 			JOIN investment_operations o ON o.id = l.operation_id
 			JOIN transaction_versions v ON v.id = l.transaction_version_id
-			WHERE o.transaction_id = ? AND v.transaction_id = ?
+			WHERE (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) = ? AND v.transaction_id = ?
 		`, item.transactionID, item.transactionID).Scan(&linkCount))
 		assert.Equal(t, 1, linkCount, item.kind)
 	}
@@ -321,9 +323,9 @@ func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
 		SELECT count(*) FROM investment_operation_components WHERE book_id = 1
 	`).Scan(&componentCount))
 	assert.EqualValues(t, 4, componentCount, "buy, sell, dividend, and reinvestment source facts")
-	_, err = f.database.ExecContext(ctx, `UPDATE investment_operations SET operation_kind = 'short_sale' WHERE transaction_id = ?`, buy.Transaction.ID)
+	_, err = f.database.ExecContext(ctx, `UPDATE investment_operations SET operation_kind = 'short_sale' WHERE id IN (SELECT link.operation_id FROM investment_operation_journal_links link JOIN transaction_versions version ON version.id = link.transaction_version_id WHERE version.transaction_id = ? AND link.role = 'primary')`, buy.Transaction.ID)
 	require.ErrorContains(t, err, "investment operations are immutable")
-	_, err = f.database.ExecContext(ctx, `DELETE FROM investment_operations WHERE transaction_id = ?`, buy.Transaction.ID)
+	_, err = f.database.ExecContext(ctx, `DELETE FROM investment_operations WHERE id IN (SELECT link.operation_id FROM investment_operation_journal_links link JOIN transaction_versions version ON version.id = link.transaction_version_id WHERE version.transaction_id = ? AND link.role = 'primary')`, buy.Transaction.ID)
 	require.ErrorContains(t, err, "investment operations are immutable")
 }
 
@@ -477,7 +479,7 @@ func TestInvestmentWritesRejectDraftBeforeJournalOrLotMutation(t *testing.T) {
 	require.ErrorAs(t, err, &ValidationError{})
 	assert.Equal(t, before, f.transactionCount(t))
 	var lots int
-	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM investment_lots`).Scan(&lots))
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT COUNT(*) FROM current_investment_lots`).Scan(&lots))
 	assert.Zero(t, lots)
 }
 

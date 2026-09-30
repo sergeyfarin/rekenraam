@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -28,8 +29,9 @@ type ReplaceInvestmentBuyInput struct {
 }
 
 type ReplaceInvestmentBuyResult struct {
-	Inverse     Transaction
-	Replacement InvestmentTradeResult
+	Inverse                Transaction
+	Replacement            InvestmentTradeResult
+	CorrectedTransactionID int64
 }
 
 type InvestmentBuyDependencyError struct {
@@ -49,6 +51,18 @@ func (e InvestmentBuyDependencyError) Unwrap() error { return ErrInvestmentBuyDe
 // ReplaceBuy preserves the source journal and opening lot as history, then
 // posts a compound correction and replays every affected long disposal.
 func (s *InvestmentService) ReplaceBuy(ctx context.Context, input ReplaceInvestmentBuyInput) (ReplaceInvestmentBuyResult, error) {
+	return s.replaceBuyWithPostWrite(ctx, input, nil)
+}
+
+func (s *InvestmentService) replaceBuyWithPostWrite(ctx context.Context, input ReplaceInvestmentBuyInput,
+	postWrite func(*sql.Tx, int64, int64) error,
+) (ReplaceInvestmentBuyResult, error) {
+	return s.replaceBuyWithPostWriteOrigin(ctx, input, "browser_api", "investment.buy.replace", postWrite)
+}
+
+func (s *InvestmentService) replaceBuyWithPostWriteOrigin(ctx context.Context, input ReplaceInvestmentBuyInput,
+	originType, operationCode string, postWrite func(*sql.Tx, int64, int64) error,
+) (ReplaceInvestmentBuyResult, error) {
 	operation, inversePlan, err := s.buyReplacementPlan(ctx, input)
 	if err != nil {
 		return ReplaceInvestmentBuyResult{}, err
@@ -57,14 +71,15 @@ func (s *InvestmentService) ReplaceBuy(ctx context.Context, input ReplaceInvestm
 	replacement.OwnerUserID = input.OwnerUserID
 	replacement.AuthSessionID = input.AuthSessionID
 	replacement.RequestID = input.RequestID
-	replacement.OriginType = "browser_api"
-	replacement.Operation = "investment.buy.replace"
+	replacement.OriginType = originType
+	replacement.Operation = operationCode
 	replacement.ChangeReason = inversePlan.ChangeReason
 	replacement.ReconciliationOverride = input.ReconciliationOverride
 	if err := validateBuyReplacementTrade(replacement, operation); err != nil {
 		return ReplaceInvestmentBuyResult{}, err
 	}
-	inversePlan.Operation = "investment.buy.replace"
+	inversePlan.OriginType = originType
+	inversePlan.Operation = operationCode
 	inversePlan.ReconciliationOverride = input.ReconciliationOverride
 	inverseParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, inversePlan, nil)
 	if err != nil {
@@ -79,14 +94,15 @@ func (s *InvestmentService) ReplaceBuy(ctx context.Context, input ReplaceInvestm
 	replacementParams.InvestmentCorrectionMode = "replace"
 	replacementParams.InvestmentCorrectionReason = inversePlan.ChangeReason
 	replacementParams.CreatedAt = inverseParams.CreatedAt
-	record, err := s.repository.ReplaceBuy(ctx, operation, inverseParams, replacementParams, lotParams)
+	record, err := s.repository.ReplaceBuyWithPostWrite(ctx, operation, inverseParams, replacementParams, lotParams, postWrite)
 	if err != nil {
 		return ReplaceInvestmentBuyResult{}, mapBuyReplacementError(err)
 	}
 	lotID := record.Lot.ID
 	return ReplaceInvestmentBuyResult{
-		Inverse:     toTransaction(record.Inverse),
-		Replacement: InvestmentTradeResult{Transaction: toTransaction(record.Replacement), LotID: &lotID},
+		Inverse:                toTransaction(record.Inverse),
+		Replacement:            InvestmentTradeResult{Transaction: toTransaction(record.Replacement), LotID: &lotID},
+		CorrectedTransactionID: operation.TransactionID,
 	}, nil
 }
 
@@ -135,8 +151,14 @@ func (s *InvestmentService) buyReplacementPlan(ctx context.Context, input Replac
 	if operation.AlreadyCorrected {
 		return db.BuyOperationRecord{}, CreateTransactionInput{}, ErrInvestmentBuyAlreadyCorrected
 	}
-	if operation.Imported && operation.SourceIdentityID == 0 {
-		return db.BuyOperationRecord{}, CreateTransactionInput{}, ErrInvestmentImportedBuy
+	if operation.ImportedLineage {
+		linked, err := s.repository.HasCommittedImportSource(ctx, BookID, operation.OperationID)
+		if err != nil {
+			return db.BuyOperationRecord{}, CreateTransactionInput{}, err
+		}
+		if !linked {
+			return db.BuyOperationRecord{}, CreateTransactionInput{}, ErrInvestmentImportedBuy
+		}
 	}
 	original, err := s.transactionService.Transaction(ctx, operation.TransactionID)
 	if err != nil {

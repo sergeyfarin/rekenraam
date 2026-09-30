@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
@@ -7,7 +8,7 @@
   import Panel from '$lib/components/panel.svelte';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { authSessionQueryOptions } from '$lib/api/auth';
-  import { transactionsQueryKey, type TransactionResponse } from '$lib/api/transactions';
+  import { getTransaction, transactionsQueryKey, type TransactionResponse } from '$lib/api/transactions';
   import { forecastQueryKey } from '$lib/api/forecast';
   import TransactionList from '$lib/transactions/transaction-list.svelte';
   import {
@@ -28,6 +29,21 @@
     | { type: 'just-deleted'; transaction: TransactionResponse };
 
   let panel = $state<PanelState>({ type: 'none' });
+  const linkedTransactionID = Number($page.url.searchParams.get('transaction_id') ?? 0);
+  let linkedPending = $state(Number.isSafeInteger(linkedTransactionID) && linkedTransactionID > 0);
+  let linkedError = $state<unknown>();
+
+  onMount(() => {
+    if (!linkedPending) return;
+    let active = true;
+    void getTransaction(linkedTransactionID)
+      .then((transaction) => {
+        if (active && panel.type === 'none') panel = { type: 'detail', transaction };
+      })
+      .catch((error: unknown) => { if (active) linkedError = error; })
+      .finally(() => { if (active) linkedPending = false; });
+    return () => { active = false; };
+  });
 
   // The URL seeds the list once, so a report drill-down lands pre-filtered, and
   // is rewritten in place as the bar changes. `replaceState` keeps filter
@@ -140,6 +156,11 @@
 <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
   <!-- Main list -->
   <div class="min-w-0">
+    {#if linkedPending}
+      <p role="status" class="mb-4 text-sm text-muted">{m.transactions_linked_loading()}</p>
+    {:else if linkedError}
+      <div class="mb-4"><APIFormError error={linkedError} /></div>
+    {/if}
     <div class="mb-4 flex items-center justify-between">
       <div><!-- spacer --></div>
       <button

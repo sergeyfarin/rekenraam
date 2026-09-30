@@ -77,7 +77,7 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 	var payeeID sql.NullInt64
 	var imported, corrected int
 	err = tx.QueryRowContext(ctx, `
-		SELECT o.id, o.transaction_id, o.operation_kind, o.event_date,
+		SELECT o.id, linked_version.transaction_id, o.operation_kind, o.event_date,
 			COALESCE(f.account_id, d.account_id), COALESCE(f.commodity_id, d.commodity_id),
 			c.code, COALESCE(f.cost_commodity_id, d.cost_commodity_id),
 			COALESCE(f.quantity_value, d.quantity_value),
@@ -95,7 +95,9 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id)
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
-		JOIN current_transaction_versions version ON version.transaction_id = o.transaction_id
+		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
+		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
+		JOIN current_transaction_versions version ON version.transaction_id = linked_version.transaction_id
 		JOIN investment_operation_components net ON net.operation_id = o.id AND net.component_kind = 'net_settlement'
 			AND net.component_seq = (SELECT MIN(component_seq) FROM investment_operation_components
 				WHERE operation_id = o.id AND component_kind = 'net_settlement')
@@ -103,7 +105,7 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 		LEFT JOIN investment_lot_facts f ON f.operation_id = o.id AND f.position_side = 'long'
 		LEFT JOIN investment_disposal_decisions d ON d.operation_id = o.id AND d.position_side = 'long'
 		JOIN commodities c ON c.id = COALESCE(f.commodity_id, d.commodity_id)
-		WHERE o.book_id = ? AND o.transaction_id = ? AND o.operation_kind IN ('buy', 'sell')
+		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind IN ('buy', 'sell')
 			AND (SELECT count(*) FROM investment_lot_facts WHERE operation_id = o.id) <= 1
 			AND (SELECT count(*) FROM investment_disposal_decisions WHERE operation_id = o.id) <= 1
 	`, bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
