@@ -113,8 +113,8 @@ var checkNarratives = map[string]checkNarrative{
 		nextStep:    "The named rows are structurally orphaned. They cannot be fixed from the app; keep a backup before anyone tries anything else.",
 	},
 	CheckLotReconciliation: {
-		explanation: "Open investment lots must account for exactly what the holding account holds, and no lot may have negative or over-consumed remaining quantity.",
-		nextStep:    "Compare the named account's holdings with its lots. A mismatch means gains and cost basis are being computed from a position the ledger does not agree with.",
+		explanation: "Open investment lots must account for exactly what the holding account holds. Every original disposal and replay revision must allocate its full quantity, basis and signed proceeds, with positive allocated quantities and nonnegative basis.",
+		nextStep:    "Inspect the named disposal snapshot when allocation totals disagree; self-check does not repair its evidence. For a position mismatch, compare the named account's holdings with its lots. Either can make gains and cost basis unreliable.",
 	},
 	CheckCommodityPositionSign: {
 		explanation: "A negative number of countable units needs an explicit explanation: it may be an out-of-order entry, an error, or a short position. This app has no named short-sale workflow yet, so ordinary negative coin and share positions are unclassified and need review. Negative money is normal. The commodity-trading clearing account is excluded because it carries the other half of each movement.",
@@ -789,6 +789,12 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 	if missing.FindingCount > 0 {
 		return missing, nil
 	}
+	// Do not derive a projection from damaged allocation evidence. Report the
+	// source snapshot and leave the immutable history untouched for inspection.
+	allocationCheck, err := s.disposalAllocationCheck(ctx, snapshot)
+	if err != nil || allocationCheck.Status == SelfCheckFailed {
+		return allocationCheck, err
+	}
 
 	events, err := s.repository.SelfCheckLotEvents(ctx, snapshot, BookID)
 	if err != nil {
@@ -949,6 +955,66 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 		result.Summary = "no investment lots or posted holding positions in this book"
 	}
 
+	return result, nil
+}
+
+// disposalAllocationCheck checks the original snapshot and every replay
+// revision independently. Revision basis replaces the original basis, while
+// the decision's quantity and signed proceeds remain the conserved facts.
+func (s *SelfCheckService) disposalAllocationCheck(ctx context.Context, snapshot *sql.Tx) (SelfCheckResult, error) {
+	result := SelfCheckResult{CheckID: CheckLotReconciliation, Status: SelfCheckPassed}
+	var decisionID, revisionID int64
+	var expectedQuantity, expectedBasis, expectedProceeds *exact.ScaledInt
+	var quantity, basis, proceeds *exact.ScaledInt
+	var allocationCount int
+	var invalid bool
+	var references []string
+	finishSet := func() {
+		if decisionID == 0 {
+			return
+		}
+		if allocationCount > 0 && !invalid && quantity.Cmp(expectedQuantity) == 0 &&
+			basis.Cmp(expectedBasis) == 0 && proceeds.Cmp(expectedProceeds) == 0 {
+			return
+		}
+		result.Status = SelfCheckFailed
+		result.FindingCount++
+		if len(result.Sample) < db.SelfCheckSampleLimit {
+			result.Sample = append(result.Sample, decisionID)
+			if revisionID == 0 {
+				references = append(references, fmt.Sprintf("decision #%d original", decisionID))
+			} else {
+				references = append(references, fmt.Sprintf("decision #%d revision #%d", decisionID, revisionID))
+			}
+		}
+	}
+	err := s.repository.StreamDisposalAllocationSets(ctx, snapshot, BookID, func(record db.SelfCheckDisposalAllocationRecord) error {
+		if !record.IsAllocation {
+			finishSet()
+			decisionID, revisionID = record.DecisionID, record.RevisionID
+			expectedQuantity = exact.ScaledIntFromCoefficient(record.QuantityValue, record.QuantityScale)
+			expectedBasis = exact.ScaledIntFromCoefficient(record.BasisValue, record.BasisScale)
+			expectedProceeds = exact.ScaledIntFromCoefficient(record.ProceedsValue, record.ProceedsScale)
+			quantity, basis, proceeds = exact.NewScaledInt(), exact.NewScaledInt(), exact.NewScaledInt()
+			allocationCount = 0
+			invalid = record.QuantityValue.Sign() <= 0 || record.BasisValue.Sign() < 0
+			return nil
+		}
+		allocationCount++
+		invalid = invalid || record.QuantityValue.Sign() <= 0 || record.BasisValue.Sign() < 0
+		quantity.AddCoefficient(record.QuantityValue, record.QuantityScale)
+		basis.AddCoefficient(record.BasisValue, record.BasisScale)
+		proceeds.AddCoefficient(record.ProceedsValue, record.ProceedsScale)
+		return nil
+	})
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	finishSet()
+	if result.FindingCount > 0 {
+		result.Summary = fmt.Sprintf("%d disposal allocation sets disagree with quantity, basis or proceeds; sample references: %s",
+			result.FindingCount, strings.Join(references, ", "))
+	}
 	return result, nil
 }
 

@@ -58,6 +58,69 @@ type SelfCheckDisposalClearingRecord struct {
 	AmountScale          int
 }
 
+// Each allocation set starts with its immutable decision/revision totals,
+// followed by its allocation rows. A header with no following rows represents
+// missing evidence, rather than an inner join silently excluding that set.
+type SelfCheckDisposalAllocationRecord struct {
+	DecisionID    int64
+	RevisionID    int64
+	RevisionSeq   int
+	IsAllocation  bool
+	QuantityValue exact.Coefficient
+	QuantityScale int
+	BasisValue    exact.Coefficient
+	BasisScale    int
+	ProceedsValue exact.Coefficient
+	ProceedsScale int
+}
+
+func (r *SelfCheckRepository) StreamDisposalAllocationSets(ctx context.Context, transaction *sql.Tx, bookID int64, visit func(SelfCheckDisposalAllocationRecord) error) error {
+	rows, err := transaction.QueryContext(ctx, `
+		WITH decisions AS (
+			SELECT * FROM investment_disposal_decisions WHERE book_id = ?
+		), revisions AS (
+			SELECT revision.* FROM investment_disposal_revisions revision
+			JOIN decisions d ON d.id = revision.decision_id AND d.book_id = revision.book_id
+		)
+		SELECT d.id AS decision_id, 0 AS revision_id, 1 AS revision_seq, 0 AS is_allocation, 0 AS allocation_seq,
+			d.quantity_value, d.quantity_scale, d.disposed_basis_value, d.disposed_basis_scale, d.proceeds_value, d.proceeds_scale
+		FROM decisions d
+		UNION ALL
+		SELECT d.id, 0, 1, 1, a.allocation_seq,
+			a.quantity_value, a.quantity_scale, a.cost_basis_value, a.cost_basis_scale, a.proceeds_value, a.proceeds_scale
+		FROM decisions d JOIN investment_disposal_allocations a ON a.decision_id = d.id AND a.book_id = d.book_id
+		UNION ALL
+		SELECT d.id, revision.id, revision.revision_seq, 0, 0,
+			d.quantity_value, d.quantity_scale, revision.disposed_basis_value, revision.disposed_basis_scale, d.proceeds_value, d.proceeds_scale
+		FROM revisions revision JOIN decisions d ON d.id = revision.decision_id
+		UNION ALL
+		SELECT revision.decision_id, revision.id, revision.revision_seq, 1, a.allocation_seq,
+			a.quantity_value, a.quantity_scale, a.cost_basis_value, a.cost_basis_scale, a.proceeds_value, a.proceeds_scale
+		FROM revisions revision JOIN investment_disposal_revision_allocations a
+			ON a.revision_id = revision.id AND a.book_id = revision.book_id
+		ORDER BY decision_id, revision_seq, is_allocation, allocation_seq
+	`, bookID)
+	if err != nil {
+		return fmt.Errorf("read disposal allocation sets: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var record SelfCheckDisposalAllocationRecord
+		var allocationSeq int
+		if err := rows.Scan(&record.DecisionID, &record.RevisionID, &record.RevisionSeq, &record.IsAllocation, &allocationSeq,
+			&record.QuantityValue, &record.QuantityScale, &record.BasisValue, &record.BasisScale, &record.ProceedsValue, &record.ProceedsScale); err != nil {
+			return fmt.Errorf("scan disposal allocation set: %w", err)
+		}
+		if err := visit(record); err != nil {
+			return err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate disposal allocation sets: %w", err)
+	}
+	return nil
+}
+
 // SelfCheckInvestmentComponentRecord joins each source fact to its optional
 // posted journal leg. Amount equality is checked by the application with
 // exact scaled arithmetic.

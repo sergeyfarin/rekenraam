@@ -129,6 +129,16 @@ non-trivial diff (yours or reviewed):
     click — so opacity stays a step function. Synchronising the test instead
     only moves the race, and costs the check its view of the loading state.
 
+17. **A sound current projection hiding damaged disposal snapshots** — original
+    allocation quantity, basis and proceeds mutations passed self-check because
+    current lots were compared with lot events, while replayed allocations only
+    contributed quantity and basis to that projection. Proceeds corruption and
+    damage to superseded revisions could pass silently. Check every original and
+    revision allocation set independently against its snapshot totals, including
+    missing allocations, before using effective evidence for a projection.
+    Negative proceeds are valid; nonpositive allocated quantity and negative
+    basis are not. Named regression: `TestSelfCheckDetectsDisposalAllocationConservationDamage`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

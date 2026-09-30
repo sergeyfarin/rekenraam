@@ -58,6 +58,14 @@ decision and shared posting once and summing in exact Go arithmetic. Multiple
 decisions are no longer silently excluded; negative proceeds, differing scales
 and wide coefficients retain their exact values. A decision must have a matching
 non-reversal operation journal link, even if another journal has equal amounts.
+The lot check validates each original disposal allocation set and every replay
+revision independently: exact quantity and signed proceeds sum to the immutable
+decision, and basis sums to that snapshot's original or revised basis total.
+Missing allocations, nonpositive allocated quantities and negative basis are
+failed findings. Superseded snapshots remain checked as audit evidence; only
+effective snapshots contribute to the current position projection. Allocation
+damage is reported before projection arithmetic and is never repaired by the
+check. Negative proceeds and equivalent scales remain valid.
 Individual compound disposal attribution remains an open data-contract gate;
 equal and opposite errors within one clearing group still require explicit
 decision/component attribution. This is not an accepted change to ADR 0013. The reviewed

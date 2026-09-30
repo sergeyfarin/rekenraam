@@ -152,6 +152,9 @@ checks both missing links and unlinked trade cash, expense or charge-clearing le
 Sell/write-off proceeds checking now covers multiple decisions by operation,
 pinned journal version and cost currency, counting shared clearing legs once;
 unlinked decision provenance is reported even for equal-valued journals.
+The lot check also conserves quantity, basis and signed proceeds for every
+original disposal allocation set and replay revision, including superseded
+audit snapshots, and reports missing/invalid allocations before projection math.
 Individual compound attribution and nullable unknown-basis projection
 representation remain open.
 The consolidated baseline separates immutable lot identity/opening facts from
