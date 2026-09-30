@@ -21,6 +21,9 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 			c.fee_policy_version_id, c.source_evidence_json, c.created_audit_event_id, c.charge_kind, c.cash_account_id,
 			c.separately_paid, c.posting_version_id
 			FROM investment_operation_components c WHERE c.book_id = ? ORDER BY c.operation_id, c.component_seq`,
+		"lot-state": `SELECT lot_id, status, remaining_quantity_value, remaining_quantity_scale,
+		remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id
+		FROM investment_lot_state WHERE book_id = ? ORDER BY lot_id`,
 		"lot-facts": `SELECT f.lot_id, f.operation_id, f.account_id, f.commodity_id,
 			f.position_side, f.opened_on, f.quantity_value, f.quantity_scale,
 			f.consideration_value, f.consideration_scale, f.cost_commodity_id, f.created_audit_event_id

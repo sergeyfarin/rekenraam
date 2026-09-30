@@ -9833,6 +9833,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/{batch_id}/rows/{row_id}/correct-buy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a changed Trading 212 buy fill as an audited source correction
+         * @description Replaces the current effective buy using the staged provider quantity and net settlement, replays dependent long disposals, and commits the staged source revision in the same transaction. The date, instrument, holding, cash account, and settlement currency must match the current buy. The original import identity remains unchanged and continues to deduplicate source retries. Quantity must be positive and the owner-perspective buy settlement negative; cancellation-shaped rows, changed dates, or changed instruments require another command.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    batch_id: number;
+                    row_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectTrading212BuyRequest"];
+                };
+            };
+            responses: {
+                /** @description Source revision and investment buy replacement committed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentBuyReplacementResponse"];
+                    };
+                };
+                /** @description Invalid request or unsupported source change */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Staged source row no longer eligible, replay dependency failed, or reconciliation override required */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/rows/{row_id}/correct-buy/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation impact of a Trading 212 buy source correction
+         * @description Read-only preview using the staged provider quantity and net settlement. Returns the distinct checkpoints affected by the inverse and replacement journals. Uses the correction command's source eligibility and supported scope checks, without accepting a source revision or changing the ledger. The command rechecks eligibility and reconciliation at commit time.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    batch_id: number;
+                    row_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectTrading212BuyRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or unsupported source change */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Staged source row or current buy no longer eligible */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/{batch_id}/discard": {
         parameters: {
             query?: never;
@@ -13364,8 +13539,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reverse a posted manual long sale
-         * @description Posts a balanced inverse transaction, retires the source trade price and dependent prices, and replays the long position in one database transaction. The original sale remains posted audit history. Imported fills require a source-aware correction and cannot use this command. Reversal is terminal; an already corrected sale cannot be reversed again.
+         * Reverse a posted long sale
+         * @description Posts a balanced inverse transaction, retires the source trade price and dependent prices, and replays the long position in one database transaction. The original sale remains posted audit history. Imported lineage requires a committed source identity that stays attached to the original fill. Reversal is terminal; an already corrected sale cannot be reversed again.
          */
         post: {
             parameters: {
@@ -13421,7 +13596,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long sale not found */
+                /** @description Posted long sale not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13430,7 +13605,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Already corrected, imported, changed, impossible replay, or reconciliation override required */
+                /** @description Already corrected, unlinked import, changed, impossible replay, or reconciliation override required */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13503,7 +13678,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long sale not found */
+                /** @description Posted long sale not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13512,7 +13687,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Sale already corrected, imported, or changed */
+                /** @description Sale already corrected, unlinked import, or changed */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13539,8 +13714,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Reverse a posted manual long buy
-         * @description Posts an exact inverse, retires the source trade price, and replays later long-position decisions in one audited database transaction. The original buy remains posted history. A dependent disposal that cannot be satisfied refuses the command without durable effects. Imported buys require a separate source-aware terminal correction.
+         * Reverse a posted long buy
+         * @description Posts an exact inverse, retires the source trade price, and replays later long-position decisions in one audited database transaction. The original buy remains posted history. A dependent disposal that cannot be satisfied refuses the command without durable effects. Imported lineage requires a committed source identity, which remains attached to the original fill.
          */
         post: {
             parameters: {
@@ -13595,7 +13770,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long buy not found */
+                /** @description Posted long buy not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13604,7 +13779,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Already corrected, imported, changed, dependent operation impossible, or reconciliation override required */
+                /** @description Already corrected, unlinked import, changed, dependent operation impossible, or reconciliation override required */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13631,7 +13806,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Preview a manual long-buy reversal
+         * Preview a long-buy reversal
          * @description Simulates dependent long-position replay and returns affected reconciliation checkpoints without writing. Pass reconciliation_override=true to the reversal command after reviewing those checkpoints.
          */
         post: {
@@ -13676,7 +13851,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Posted manual long buy not found */
+                /** @description Posted long buy not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -13685,7 +13860,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Already corrected, imported, changed, or dependent replay impossible */
+                /** @description Already corrected, unlinked import, changed, or dependent replay impossible */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -17639,6 +17814,15 @@ export interface components {
             /** @description JSON string containing source-specific row data. */
             raw: string;
             dedupe_status: components["schemas"]["ImportDedupeStatus"];
+            /** @description A staged Trading 212 order fill differs from the latest accepted source snapshot for the same fill identity. Ordinary batch commit skips it pending correction review. */
+            source_changed: boolean;
+            /** @description The original committed Trading 212 identity effect is a native investment buy operation. */
+            source_buy_operation: boolean;
+            /**
+             * Format: int64
+             * @description Original posted transaction linked to the committed Trading 212 identity, when available.
+             */
+            source_transaction_id?: number;
             /** @description JSON string matching ImportResolution. */
             resolution: string;
             commit_status: components["schemas"]["ImportCommitStatus"];
@@ -17728,6 +17912,10 @@ export interface components {
             row_resolutions: components["schemas"]["RowResolutionPatch"][];
         };
         CommitImportBatchRequest: {
+            reconciliation_override?: boolean;
+        };
+        CorrectTrading212BuyRequest: {
+            reason: string;
             reconciliation_override?: boolean;
         };
         CommitImportBatchResponse: {
@@ -18500,6 +18688,10 @@ export interface components {
             can_reverse_manual_sale: boolean;
             /** @description Whether the effective operation is a posted manual long buy eligible for a guarded reversal attempt. Dependent replay may still refuse the command. */
             can_reverse_manual_buy: boolean;
+            /** @description Whether the effective posted long sale can be reversed. Imported lineage requires a committed source identity. */
+            can_reverse_sale: boolean;
+            /** @description Whether the effective posted long buy can attempt reversal. Dependent replay may still refuse the command; imported lineage requires a committed source identity. */
+            can_reverse_buy: boolean;
             operations: components["schemas"]["InvestmentCorrectionNodeResponse"][];
         };
         /** @description Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility. */

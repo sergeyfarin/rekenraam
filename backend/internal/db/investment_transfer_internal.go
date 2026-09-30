@@ -83,7 +83,7 @@ func (r *InvestmentRepository) PreviewInternalTransferLots(ctx context.Context, 
 		}
 		seen[allocation.LotID] = true
 		var auditEventID int64
-		if err := tx.QueryRowContext(ctx, `SELECT created_audit_event_id FROM investment_lots
+		if err := tx.QueryRowContext(ctx, `SELECT created_audit_event_id FROM current_investment_lots
 			WHERE book_id = ? AND id = ?`, transfer.BookID, allocation.LotID).Scan(&auditEventID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrNotFound

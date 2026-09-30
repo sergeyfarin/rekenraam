@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -322,7 +323,9 @@ func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing
 		SELECT c.gross_unknown
 		FROM investment_operations o
 		JOIN investment_operation_components c ON c.operation_id = o.id AND c.component_kind = 'net_settlement'
-		WHERE o.transaction_id = ?`, transaction.ID).Scan(&grossUnknown))
+		WHERE (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) = ?`, transaction.ID).Scan(&grossUnknown))
 	require.Equal(t, 1, grossUnknown, "Trading 212's unit price does not supply a sourced gross in the net currency")
 }
 
@@ -372,11 +375,16 @@ func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
 	require.True(t, chain.Operations[0].Imported)
 	require.False(t, chain.CanReverseManualBuy)
+	require.True(t, chain.CanReverseBuy)
 	_, err = f.investmentSvc.ReverseBuy(ctx, ReverseInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
 		Reason: "remove source-linked replacement",
 	})
-	require.ErrorIs(t, err, ErrInvestmentImportedBuy)
+	require.NoError(t, err)
+	chain, err = f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.Len(t, chain.Operations, 3)
 	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
 	require.NoError(t, err)
 	require.Len(t, effects, 1, "the immutable source effect still identifies the original fill")
@@ -385,6 +393,438 @@ func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	duplicate, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: duplicateBatch})
 	require.NoError(t, err)
 	require.Zero(t, duplicate.CommittedCount)
+}
+
+func TestReverseCommittedImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "reversed-fill", OrderID: "reversed-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	}
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	rows, err := f.importRepo.ListAllImportStagedRows(ctx, batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	source := rows[0].CommitEffects[0]
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.True(t, chain.CanReverseBuy)
+	require.False(t, chain.CanReverseManualBuy)
+	_, err = f.investmentSvc.ReverseBuy(ctx, ReverseInvestmentBuyInput{
+		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64, Reason: "cancel imported fill",
+	})
+	require.NoError(t, err)
+	chain, err = f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.Len(t, chain.Operations, 2)
+	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
+	require.NoError(t, err)
+	require.Len(t, effects, 1)
+	require.Equal(t, source.OperationID.Int64, effects[0].OperationID.Int64)
+	duplicateBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	duplicate, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: duplicateBatch})
+	require.NoError(t, err)
+	require.Zero(t, duplicate.CommittedCount)
+}
+
+func TestChangedTrading212FillIsHeldForSourceCorrection(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "changed-fill", OrderID: "changed-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	}
+	originalBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	committed, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: originalBatch})
+	require.NoError(t, err)
+	require.Equal(t, 1, committed.CommittedCount)
+	originalRows, err := f.importRepo.ListAllImportStagedRows(ctx, originalBatch)
+	require.NoError(t, err)
+	require.Len(t, originalRows, 1)
+	require.False(t, originalRows[0].SourceChanged)
+
+	changed := fill
+	changed.Price = "151.00"
+	changed.NetValue = "-302.00"
+	changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+	changedRows, err := f.importRepo.ListAllImportStagedRows(ctx, changedBatch)
+	require.NoError(t, err)
+	require.Len(t, changedRows, 1)
+	require.Equal(t, "needs_attention", changedRows[0].DedupeStatus)
+	require.True(t, changedRows[0].SourceChanged)
+	require.True(t, changedRows[0].SourceBuyOperation)
+	require.True(t, changedRows[0].SourceTransactionID.Valid)
+	require.Equal(t, originalRows[0].CommittedTransactionID.Int64, changedRows[0].SourceTransactionID.Int64)
+	preview, err := f.importService.PreviewCommit(ctx, PreviewCommitInput{OwnerUserID: f.ownerUserID, BatchID: changedBatch})
+	require.NoError(t, err)
+	require.Equal(t, 1, preview.DuplicateCount)
+	require.Zero(t, preview.IncludableCount)
+
+	// Changing the review status cannot post a second operation under the
+	// already committed fingerprint.
+	f.resolveRowGeneric(t, changedBatch, changedRowID, f.cashAccountID)
+	result, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: changedBatch})
+	require.NoError(t, err)
+	require.Zero(t, result.CommittedCount)
+	require.Equal(t, 1, result.SkippedCount)
+	changedRows, err = f.importRepo.ListAllImportStagedRows(ctx, changedBatch)
+	require.NoError(t, err)
+	require.True(t, changedRows[0].SourceChanged)
+	require.Equal(t, "skipped", changedRows[0].CommitStatus)
+	require.Contains(t, changedRows[0].CommitError.String, "source fill changed")
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, originalRows[0].CommittedTransactionID.Int64)
+	require.NoError(t, err)
+	require.Len(t, chain.Operations, 1)
+
+	duplicateBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	duplicateRows, err := f.importRepo.ListAllImportStagedRows(ctx, duplicateBatch)
+	require.NoError(t, err)
+	require.Len(t, duplicateRows, 1)
+	require.Equal(t, "duplicate", duplicateRows[0].DedupeStatus)
+	require.False(t, duplicateRows[0].SourceChanged)
+}
+
+func TestTrading212BuySourceRevisionCommitsWithReplacementAndBecomesSnapshot(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "revision-fill", OrderID: "revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	}
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	originalRows, err := f.importRepo.ListAllImportStagedRows(ctx, batchID)
+	require.NoError(t, err)
+	source := originalRows[0].CommitEffects[0]
+	identityID := originalRows[0].CommittedIdentityID.Int64
+	changed := fill
+	changed.Price, changed.NetValue = "151.00", "-302.00"
+	changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+	instruments, err := f.investmentSvc.ListInstruments(ctx)
+	require.NoError(t, err)
+	holdingID, found, err := f.connService.HoldingAccountForCommodity(ctx, conn.ID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	require.True(t, found)
+	input := ReplaceInvestmentBuyInput{
+		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64,
+		Reason: "accept changed provider fill", Replacement: InvestmentTradeInput{
+			TransactionDate: "2026-06-01", CommodityID: instruments[0].CommodityID,
+			HoldingAccountID: holdingID, CashAccountID: f.cashAccountID,
+			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(2),
+			CashAmountValue: 30200, CashAmountScale: 2,
+		},
+	}
+	postWrite := func(tx *sql.Tx, correctionOperationID, auditEventID int64) error {
+		return f.importRepo.CommitSourceRevisionInTx(ctx, tx, db.CommitImportSourceRevisionParams{
+			BookID: BookID, IdentityID: identityID, StagedRowID: changedRowID,
+			SourceOperationID: source.OperationID.Int64, CorrectionOperationID: correctionOperationID,
+			CreatedAuditEventID: auditEventID, CreatedAt: time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+	_, err = f.investmentSvc.replaceBuyWithPostWrite(ctx, input, func(tx *sql.Tx, operationID, auditEventID int64) error {
+		if err := postWrite(tx, operationID, auditEventID); err != nil {
+			return err
+		}
+		return errors.New("force rollback after source revision")
+	})
+	require.ErrorContains(t, err, "force rollback")
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Len(t, chain.Operations, 1)
+	staged, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", staged.CommitStatus)
+
+	replaced, err := f.investmentSvc.replaceBuyWithPostWrite(ctx, input, postWrite)
+	require.NoError(t, err)
+	require.Positive(t, replaced.Replacement.Transaction.ID)
+	staged, err = f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	require.Equal(t, "committed", staged.CommitStatus)
+	require.Equal(t, identityID, staged.CommittedIdentityID.Int64)
+	require.Equal(t, source.TransactionID.Int64, staged.CommittedTransactionID.Int64)
+	var revisionCount int
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM import_source_revisions WHERE identity_id = ?`, identityID).Scan(&revisionCount))
+	require.Equal(t, 1, revisionCount)
+	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, identityID)
+	require.NoError(t, err)
+	require.Len(t, effects, 1)
+	require.Equal(t, source.OperationID.Int64, effects[0].OperationID.Int64)
+
+	repeatBatch, _ := f.stageOrderFillRow(t, conn.ID, changed)
+	repeatRows, err := f.importRepo.ListAllImportStagedRows(ctx, repeatBatch)
+	require.NoError(t, err)
+	require.False(t, repeatRows[0].SourceChanged)
+	require.Equal(t, "duplicate", repeatRows[0].DedupeStatus)
+	newer := changed
+	newer.NetValue = "-303.00"
+	newerBatch, _ := f.stageOrderFillRow(t, conn.ID, newer)
+	newerRows, err := f.importRepo.ListAllImportStagedRows(ctx, newerBatch)
+	require.NoError(t, err)
+	require.True(t, newerRows[0].SourceChanged)
+	require.Equal(t, "needs_attention", newerRows[0].DedupeStatus)
+	changedRows, err := f.importRepo.ListAllImportStagedRows(ctx, changedBatch)
+	require.NoError(t, err)
+	require.False(t, changedRows[0].SourceChanged)
+}
+
+func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "source-command-fill", OrderID: "source-command-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	}
+	originalBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: originalBatch})
+	require.NoError(t, err)
+	originalRows, err := f.importRepo.ListAllImportStagedRows(ctx, originalBatch)
+	require.NoError(t, err)
+	source := originalRows[0].CommitEffects[0]
+	stale := fill
+	stale.NetValue = "-301.00"
+	staleBatch, staleRowID := f.stageOrderFillRow(t, conn.ID, stale)
+	changed := fill
+	changed.Quantity, changed.NetValue = "3", "-450.00"
+	changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+	impact, err := f.importService.Trading212BuyCorrectionReconciliationImpact(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID, Reason: "broker revised fill",
+	})
+	require.NoError(t, err)
+	require.Empty(t, impact.AffectedCheckpoints)
+	result, err := f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
+		Reason: "broker revised fill",
+	})
+	require.NoError(t, err)
+	require.Positive(t, result.Replacement.Transaction.ID)
+	corrected, err := f.investmentSvc.TradeCorrectionContext(ctx, f.ownerUserID, result.Replacement.Transaction.ID)
+	require.NoError(t, err)
+	require.Equal(t, "3", corrected.QuantityValue)
+	require.Equal(t, "-45000", corrected.NetValue)
+	require.Equal(t, source.OperationID.Int64, originalRows[0].CommitEffects[0].OperationID.Int64)
+	staged, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	require.Equal(t, "committed", staged.CommitStatus)
+	require.Equal(t, source.TransactionID.Int64, staged.CommittedTransactionID.Int64)
+	_, err = f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
+		Reason: "retry broker revision",
+	})
+	require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
+	_, err = f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: staleBatch, RowID: staleRowID,
+		Reason: "attempt older staged revision",
+	})
+	require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
+	_, err = f.importService.Trading212BuyCorrectionReconciliationImpact(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: staleBatch, RowID: staleRowID, Reason: "preview older staged revision",
+	})
+	require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
+	staleRow, err := f.importRepo.ImportStagedRowByID(ctx, staleRowID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", staleRow.CommitStatus)
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Len(t, chain.Operations, 2)
+	var origin, operation string
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT audit.origin_type, audit.operation
+		FROM investment_operations op JOIN audit_events audit ON audit.id = op.created_audit_event_id
+		JOIN investment_operation_journal_links link ON link.operation_id = op.id AND link.role = 'primary'
+		JOIN transaction_versions version ON version.id = link.transaction_version_id
+		WHERE version.transaction_id = ?`, result.Replacement.Transaction.ID).Scan(&origin, &operation))
+	require.Equal(t, "import", origin)
+	require.Equal(t, "investment.buy.source_correct", operation)
+	newer := changed
+	newer.Quantity, newer.NetValue = "4", "-600.00"
+	newerBatch, newerRowID := f.stageOrderFillRow(t, conn.ID, newer)
+	second, err := f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: newerBatch, RowID: newerRowID,
+		Reason: "broker revised fill again",
+	})
+	require.NoError(t, err)
+	secondContext, err := f.investmentSvc.TradeCorrectionContext(ctx, f.ownerUserID, second.Replacement.Transaction.ID)
+	require.NoError(t, err)
+	require.Equal(t, "4", secondContext.QuantityValue)
+	chain, err = f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Len(t, chain.Operations, 3)
+	var revisionCount int
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM import_source_revisions WHERE identity_id = ?`,
+		originalRows[0].CommittedIdentityID.Int64).Scan(&revisionCount))
+	require.Equal(t, 2, revisionCount)
+	revertedBatch, revertedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+	reverted, err := f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: revertedBatch, RowID: revertedRowID,
+		Reason: "broker restored the earlier revised fill",
+	})
+	require.NoError(t, err)
+	revertedContext, err := f.investmentSvc.TradeCorrectionContext(ctx, f.ownerUserID, reverted.Replacement.Transaction.ID)
+	require.NoError(t, err)
+	require.Equal(t, "3", revertedContext.QuantityValue)
+	require.Equal(t, "-45000", revertedContext.NetValue)
+	repeatBatch, _ := f.stageOrderFillRow(t, conn.ID, changed)
+	repeatRows, err := f.importRepo.ListAllImportStagedRows(ctx, repeatBatch)
+	require.NoError(t, err)
+	require.False(t, repeatRows[0].SourceChanged)
+	require.Equal(t, "duplicate", repeatRows[0].DedupeStatus)
+}
+
+func TestCorrectTrading212BuyRejectsChangedDateWithoutPosting(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "date-change-fill", OrderID: "date-change-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	}
+	originalBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: originalBatch})
+	require.NoError(t, err)
+	originalRows, err := f.importRepo.ListAllImportStagedRows(ctx, originalBatch)
+	require.NoError(t, err)
+	changed := fill
+	changed.FilledAt = "2026-06-02T10:00:00Z"
+	changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+	_, err = f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
+		Reason: "broker revised date",
+	})
+	var validationErr ValidationError
+	require.ErrorAs(t, err, &validationErr)
+	chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, originalRows[0].CommittedTransactionID.Int64)
+	require.NoError(t, err)
+	require.Len(t, chain.Operations, 1)
+	staged, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", staged.CommitStatus)
+}
+
+func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillID: "reconciled-revision-fill", OrderID: "reconciled-revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+	}
+	originalBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: originalBatch})
+	require.NoError(t, err)
+	checkpointID := f.createCashReconciliationCheckpoint(t, "2026-06-10")
+	changed := fill
+	changed.NetValue = "-301.00"
+	changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+	input := CorrectTrading212BuyInput{
+		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
+		Reason: "broker revised reconciled fill",
+	}
+	stagedBefore, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	var lotBefore string
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT remaining_quantity_value || ':' || remaining_quantity_scale || ':' || remaining_cost_basis_value || ':' || remaining_cost_basis_scale FROM current_investment_lots`).Scan(&lotBefore))
+	before := map[string]int{}
+	for _, table := range []string{"audit_events", "transactions", "investment_operations", "investment_lot_facts", "investment_lot_events", "investment_disposal_revisions", "import_source_revisions"} {
+		var count int
+		require.NoError(t, f.database.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&count))
+		before[table] = count
+	}
+	impact, err := f.importService.Trading212BuyCorrectionReconciliationImpact(ctx, input)
+	require.NoError(t, err)
+	require.Len(t, impact.AffectedCheckpoints, 1)
+	require.Equal(t, checkpointID, impact.AffectedCheckpoints[0].CheckpointID)
+	for table, count := range before {
+		var after int
+		require.NoError(t, f.database.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&after))
+		require.Equal(t, count, after, "preview must not write %s", table)
+	}
+	stagedAfter, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	require.Equal(t, stagedBefore, stagedAfter)
+	var lotAfter, checkpointStatus string
+	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT remaining_quantity_value || ':' || remaining_quantity_scale || ':' || remaining_cost_basis_value || ':' || remaining_cost_basis_scale FROM current_investment_lots`).Scan(&lotAfter))
+	require.Equal(t, lotBefore, lotAfter)
+	require.NoError(t, f.database.QueryRowContext(ctx, "SELECT status FROM reconciliation_checkpoints WHERE id = ?", checkpointID).Scan(&checkpointStatus))
+	require.Equal(t, "active", checkpointStatus)
+	_, err = f.importService.CorrectTrading212Buy(ctx, input)
+	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
+	staged, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", staged.CommitStatus)
+	input.ReconciliationOverride = true
+	result, err := f.importService.CorrectTrading212Buy(ctx, input)
+	require.NoError(t, err)
+	require.Contains(t, append(result.Inverse.InvalidatedCheckpointIDs, result.Replacement.Transaction.InvalidatedCheckpointIDs...), checkpointID)
+	_, err = f.importService.Trading212BuyCorrectionReconciliationImpact(ctx, input)
+	require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
+}
+
+func TestCorrectTrading212BuyRejectsCancellationSignedPayload(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		quantity string
+		net      string
+	}{
+		{name: "negative quantity", quantity: "-2", net: "-300.00"},
+		{name: "positive settlement", quantity: "2", net: "300.00"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			f := newInvestTestFixture(t)
+			ctx := context.Background()
+			conn := f.createConnection(t, &f.cashAccountID)
+			fill := trading212OrderFill{
+				FillID: "signed-revision-fill", OrderID: "signed-revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+				Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
+				FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
+			}
+			originalBatch, _ := f.stageOrderFillRow(t, conn.ID, fill)
+			_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: originalBatch})
+			require.NoError(t, err)
+			originalRows, err := f.importRepo.ListAllImportStagedRows(ctx, originalBatch)
+			require.NoError(t, err)
+			changed := fill
+			changed.Quantity, changed.NetValue = test.quantity, test.net
+			changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
+			_, err = f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+				OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
+				Reason: "review signed revision",
+			})
+			var validationErr ValidationError
+			require.ErrorAs(t, err, &validationErr)
+			chain, err := f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, originalRows[0].CommittedTransactionID.Int64)
+			require.NoError(t, err)
+			require.Len(t, chain.Operations, 1)
+			staged, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
+			require.NoError(t, err)
+			require.Equal(t, "pending", staged.CommitStatus)
+		})
+	}
+}
+
+func TestTrading212FillSourceComparisonIgnoresLocalResolution(t *testing.T) {
+	changed, err := trading212FillSourceChanged(
+		`{"kind":"trading212_order_fill","quantity":"2","resolved_commodity_id":"10"}`,
+		`{"kind":"trading212_order_fill","quantity":"2","resolved_commodity_id":"11","resolved_holding_account_id":"20"}`,
+		`{"date":"2026-06-01","amount":"-300.00"}`,
+		`{"date":"2026-06-01","amount":"-300.00"}`,
+	)
+	require.NoError(t, err)
+	require.False(t, changed)
 }
 
 func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
@@ -420,10 +860,6 @@ func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.Equal(t, rows[0].CommittedIdentityID.Int64, saleContext.SourceIdentityID)
 	require.Equal(t, "trading212", saleContext.SourceKind)
 	require.True(t, saleContext.CanReplaceSale)
-	_, err = f.investmentSvc.ReverseSale(ctx, ReverseInvestmentSaleInput{
-		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64, Reason: "reverse imported source",
-	})
-	require.ErrorIs(t, err, ErrInvestmentImportedSale, "terminal reversal still requires its own source-aware command")
 	instruments, err := f.investmentSvc.ListInstruments(ctx)
 	require.NoError(t, err)
 	require.Len(t, instruments, 1)
@@ -445,11 +881,16 @@ func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
 	require.True(t, chain.Operations[0].Imported)
 	require.False(t, chain.CanReverseManualSale)
+	require.True(t, chain.CanReverseSale)
 	_, err = f.investmentSvc.ReverseSale(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
 		Reason: "remove source-linked replacement",
 	})
-	require.ErrorIs(t, err, ErrInvestmentImportedSale)
+	require.NoError(t, err)
+	chain, err = f.investmentSvc.CorrectionChain(ctx, f.ownerUserID, source.TransactionID.Int64)
+	require.NoError(t, err)
+	require.Nil(t, chain.EffectiveTransactionID)
+	require.Len(t, chain.Operations, 3)
 	effects, err := f.importRepo.ListCommitIdentityEffects(ctx, rows[0].CommittedIdentityID.Int64)
 	require.NoError(t, err)
 	require.Len(t, effects, 1)
@@ -689,6 +1130,10 @@ func TestCommitImportBatch_OrderFillWithoutCashAccountFallsBackToGenericCommit(t
 	instruments, err := f.investmentSvc.ListInstruments(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, instruments, "no instrument should be created when investment routing never engaged")
+	rows, err := f.importRepo.ListAllImportStagedRows(context.Background(), batchID)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.False(t, rows[0].SourceBuyOperation, "cash fallback must not offer the native buy source correction")
 }
 
 // TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrades

@@ -87,3 +87,10 @@ work, [backlog](docs/backlog.md) maps legacy IDs to those issues, and
 Product and architecture decisions live in the
 [requirements](docs/product-requirements.md),
 [conventions](docs/conventions.md), and [ADRs](docs/adrs/).
+
+### Consolidated development schema
+
+No legacy databases exist. The pre-release schema is consolidated into
+`0001_initial_schema.sql`, including source revisions, authoritative journal
+links and separate immutable lot identity/mutable lot state. The checksum and seeded equivalence
+tests are updated together; see [the migration workflow](docs/developer-workflow.md#migrations-and-resetting-your-database).

@@ -91,7 +91,7 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 	}
 	var unmodeledLotID int64
 	err := tx.QueryRowContext(ctx, `
-		SELECT l.id FROM investment_lots l
+		SELECT l.id FROM current_investment_lots l
 		LEFT JOIN investment_lot_facts f ON f.lot_id = l.id
 		WHERE l.book_id = ? AND l.account_id = ? AND l.commodity_id = ?
 			AND l.cost_commodity_id = ? AND l.position_side = 'long' AND f.lot_id IS NULL
@@ -102,13 +102,15 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 	if !errors.Is(err, sql.ErrNoRows) {
 		return InvestmentReplayProjection{}, fmt.Errorf("check replay opening coverage: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE investment_lots SET status = 'closed', remaining_quantity_value = '0',
-			remaining_quantity_scale = quantity_scale, remaining_cost_basis_value = '0',
-			remaining_cost_basis_scale = cost_basis_scale
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
-			AND cost_commodity_id = ? AND position_side = 'long'
-	`, bookID, accountID, commodityID, costCommodityID); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_state
+		(lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale,
+		remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id)
+		SELECT id, book_id, 'closed', '0', quantity_scale, '0', cost_basis_scale,
+		created_at, created_by_user_id, created_audit_event_id FROM investment_lots
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'
+		ON CONFLICT(lot_id) DO UPDATE SET status = 'closed', remaining_quantity_value = '0',
+		remaining_quantity_scale = excluded.remaining_quantity_scale, remaining_cost_basis_value = '0',
+		remaining_cost_basis_scale = excluded.remaining_cost_basis_scale`, bookID, accountID, commodityID, costCommodityID); err != nil {
 		return InvestmentReplayProjection{}, fmt.Errorf("reset replay lot projection: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM investment_position_basis_state
@@ -128,12 +130,11 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 				return InvestmentReplayProjection{}, fmt.Errorf("%w: replay opening lot %d has invalid quantity or basis", ErrInvestmentBasisRange, intent.LotID)
 			}
 			result, err := tx.ExecContext(ctx, `
-				UPDATE investment_lots SET status = 'open',
+				UPDATE investment_lot_state SET status = 'open',
 					remaining_quantity_value = ?, remaining_quantity_scale = ?,
 					remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?
-				WHERE id = ? AND book_id = ? AND account_id = ? AND commodity_id = ?
-					AND cost_commodity_id = ? AND position_side = 'long' AND opened_on = ?
-			`, intent.QuantityValue, intent.QuantityScale, basis, intent.AmountScale,
+				WHERE lot_id IN (SELECT id FROM investment_lots WHERE id = ? AND book_id = ? AND account_id = ? AND commodity_id = ?
+					AND cost_commodity_id = ? AND position_side = 'long' AND opened_on = ?)`, intent.QuantityValue, intent.QuantityScale, basis, intent.AmountScale,
 				intent.LotID, bookID, accountID, commodityID, costCommodityID, intent.EventDate)
 			if err != nil {
 				return InvestmentReplayProjection{}, fmt.Errorf("activate replay opening lot %d: %w", intent.LotID, err)
@@ -210,7 +211,7 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, status, remaining_quantity_value, remaining_quantity_scale,
 			remaining_cost_basis_value, remaining_cost_basis_scale
-		FROM investment_lots
+		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
 			AND cost_commodity_id = ? AND position_side = 'long'
 		ORDER BY id`, bookID, accountID, commodityID, costCommodityID)

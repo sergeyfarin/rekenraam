@@ -9,15 +9,9 @@ import (
 )
 
 // recordInvestmentFoundationTx attaches the posted version and immutable
-// source facts to the operation created by createTransactionWithAuditTx. It
+// source facts to the operation identity returned by its insert. It
 // also records the trade price with the command's audit event, before commit.
-func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams, transaction TransactionRecord, auditEventID int64) error {
-	var operationID int64
-	if err := tx.QueryRowContext(ctx, `
-		SELECT id FROM investment_operations WHERE book_id = ? AND transaction_id = ?
-	`, params.BookID, transaction.ID).Scan(&operationID); err != nil {
-		return fmt.Errorf("read investment operation for journal link: %w", err)
-	}
+func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams, transaction TransactionRecord, auditEventID, operationID int64) error {
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_operation_journal_links
 			(book_id, operation_id, transaction_version_id, link_seq, role)
@@ -178,7 +172,11 @@ func recordTradeImpliedPriceTx(ctx context.Context, tx *sql.Tx, params CreateTra
 func investmentOperationIDTx(ctx context.Context, tx *sql.Tx, bookID, transactionID int64) (int64, error) {
 	var id int64
 	if err := tx.QueryRowContext(ctx, `
-		SELECT id FROM investment_operations WHERE book_id = ? AND transaction_id = ?
+		SELECT operation.id FROM investment_operation_journal_links link
+		JOIN investment_operations operation ON operation.id = link.operation_id
+		JOIN transaction_versions version ON version.id = link.transaction_version_id
+		WHERE link.book_id = ? AND operation.book_id = link.book_id
+			AND version.transaction_id = ? AND link.role = 'primary'
 	`, bookID, transactionID).Scan(&id); err != nil {
 		return 0, fmt.Errorf("read investment operation: %w", err)
 	}

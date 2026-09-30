@@ -447,6 +447,13 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			WHERE o.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
 			AND NOT EXISTS (SELECT 1 FROM investment_disposal_decisions d
 				WHERE d.operation_id = o.id AND d.position_side = 'long')`},
+		{"disposal decision has no matching operation journal link", `
+			SELECT d.id FROM investment_disposal_decisions d
+			JOIN investment_operations o ON o.id = d.operation_id
+			WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
+			AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links l
+				WHERE l.operation_id = d.operation_id AND l.book_id = d.book_id
+				AND l.transaction_version_id = d.transaction_version_id AND l.role <> 'reversal')`},
 	}
 	var summaries []string
 	var sampleReferences []string
@@ -470,6 +477,8 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			kind = "lot"
 		case "operation lot event missing effect link":
 			kind = "lot event"
+		case "disposal decision has no matching operation journal link":
+			kind = "decision"
 		}
 		for _, id := range anomaly.Sample {
 			if len(result.Sample) >= db.SelfCheckSampleLimit {
@@ -524,39 +533,44 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		result.FindingCount += componentMismatch
 		summaries = append(summaries, fmt.Sprintf("%d source components disagree with posted journal legs", componentMismatch))
 	}
+	type clearingKey struct {
+		operationID, versionID, currencyID int64
+	}
+	var group clearingKey
 	var decisionID int64
 	var proceeds, clearing *exact.ScaledInt
 	var proceedsMismatch int64
-	finishDecision := func() {
+	finishGroup := func() {
 		if decisionID == 0 || proceeds.Cmp(clearing.Negated()) == 0 {
 			return
 		}
 		proceedsMismatch++
 		if len(result.Sample) < db.SelfCheckSampleLimit {
 			result.Sample = append(result.Sample, decisionID)
-			sampleReferences = append(sampleReferences, fmt.Sprintf("decision #%d", decisionID))
+			sampleReferences = append(sampleReferences, fmt.Sprintf("decision #%d (operation #%d, version #%d, currency #%d)",
+				decisionID, group.operationID, group.versionID, group.currencyID))
 		}
 	}
 	err = s.repository.StreamDisposalClearing(ctx, snapshot, BookID, func(record db.SelfCheckDisposalClearingRecord) error {
-		if record.DecisionID != decisionID {
-			finishDecision()
+		key := clearingKey{record.OperationID, record.TransactionVersionID, record.CostCommodityID}
+		if key != group {
+			finishGroup()
+			group = key
 			decisionID = record.DecisionID
-			proceeds = exact.ScaledIntFromCoefficient(record.ProceedsValue, record.ProceedsScale)
+			proceeds = exact.NewScaledInt()
 			clearing = exact.NewScaledInt()
 		}
-		if record.PostingValue.Valid {
-			posting, err := exact.Parse(record.PostingValue.String)
-			if err != nil {
-				return fmt.Errorf("parse disposal clearing posting for decision %d: %w", decisionID, err)
-			}
-			clearing.AddCoefficient(posting, int(record.PostingScale.Int64))
+		if record.IsPosting {
+			clearing.AddCoefficient(record.AmountValue, record.AmountScale)
+		} else {
+			proceeds.AddCoefficient(record.AmountValue, record.AmountScale)
 		}
 		return nil
 	})
 	if err != nil {
 		return SelfCheckResult{}, err
 	}
-	finishDecision()
+	finishGroup()
 	if proceedsMismatch > 0 {
 		result.Status = SelfCheckFailed
 		result.FindingCount += proceedsMismatch
@@ -765,6 +779,17 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 	if err != nil {
 		return SelfCheckResult{}, err
 	}
+	missing := SelfCheckResult{CheckID: CheckLotReconciliation, Status: SelfCheckFailed, Summary: "lots are missing their current state projection"}
+	for _, lot := range lots {
+		if lot.MissingProjection {
+			missing.FindingCount++
+			missing.Sample = appendCapped(missing.Sample, lot.LotID)
+		}
+	}
+	if missing.FindingCount > 0 {
+		return missing, nil
+	}
+
 	events, err := s.repository.SelfCheckLotEvents(ctx, snapshot, BookID)
 	if err != nil {
 		return SelfCheckResult{}, err

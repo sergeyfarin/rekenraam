@@ -15,6 +15,8 @@ function row(
     batch_id: 1,
     row_index: id - 1,
     dedupe_fingerprint: `row-${id}`,
+    source_changed: false,
+    source_buy_operation: false,
     normalized: JSON.stringify({
       date: '2026-08-28',
       amount: '-12.34',

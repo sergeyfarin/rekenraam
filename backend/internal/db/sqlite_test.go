@@ -229,28 +229,19 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	assert.True(t, sqliteObjectExists(t, database, "table", "reconciliation_checkpoint_postings"))
 }
 
-// The v0.1 database starts at migration 1. This test builds that released
-// state from the frozen baseline plus a frozen seed — a real book written
-// through the real API and dumped — then upgrades it to HEAD and checks that
-// both the schema and the data came through.
-//
-// The data half is the point. Schema convergence alone says a migration
-// produced the right shape; it says nothing about whether it carried the
-// ledger across. While every migration only adds tables that distinction is
-// academic, but the first migration that rewrites one — SQLite's twelve-step
-// table rebuild, which is how a post-v0.1 schema redesign has to happen — makes
-// this test the only thing standing between a redesign and silent data loss.
-// It needs to be watching the ledger by then, not just the DDL.
-func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
+// No legacy installations exist. The consolidated candidate baseline must load
+// the frozen book, preserve it on repeated migration admission, and produce the
+// same schema as a fresh database.
+func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	ctx := context.Background()
-	upgraded := openTestDatabase(t)
+	seeded := openTestDatabase(t)
 
 	baseline, err := migrations.FS.ReadFile("0001_initial_schema.sql")
 	require.NoError(t, err)
 	baselineFS := fstest.MapFS{
 		"0001_initial_schema.sql": {Data: baseline},
 	}
-	provider, err := goose.NewProvider(goose.DialectSQLite3, upgraded, baselineFS)
+	provider, err := goose.NewProvider(goose.DialectSQLite3, seeded, baselineFS)
 	require.NoError(t, err)
 	_, err = provider.Up(ctx)
 	require.NoError(t, err)
@@ -261,7 +252,7 @@ func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
 	// one that has not been inserted yet. defer_foreign_keys holds every check
 	// until COMMIT — which still enforces them, just once the whole book is
 	// present. Turning foreign keys off outright would not.
-	loadTx, err := upgraded.BeginTx(ctx, nil)
+	loadTx, err := seeded.BeginTx(ctx, nil)
 	require.NoError(t, err)
 	_, err = loadTx.ExecContext(ctx, `PRAGMA defer_foreign_keys = ON`)
 	require.NoError(t, err)
@@ -269,19 +260,23 @@ func TestMigrateUpgradesV01DatabaseToFreshHeadSchema(t *testing.T) {
 	require.NoError(t, err, "the frozen seed must load into the frozen baseline")
 	require.NoError(t, loadTx.Commit(), "the frozen seed must satisfy every foreign key")
 
-	before := captureLedgerState(t, upgraded)
-	require.NoError(t, Migrate(ctx, upgraded))
-	after := captureLedgerState(t, upgraded)
+	before := captureLedgerState(t, seeded)
+	require.NoError(t, Migrate(ctx, seeded))
+	after := captureLedgerState(t, seeded)
+	// Re-running migration admission must preserve every seeded durable row.
+	assert.Equal(t, "0", after["count:import_source_revisions"])
+	delete(before, "count:goose_db_version")
+	delete(after, "count:goose_db_version")
 
 	assert.Equal(t, before, after, "upgrading must not change a single durable figure")
 
 	// Stated separately from the snapshot comparison so a failure names what
 	// broke rather than dumping two large maps side by side.
-	assertUpgradedBookIsIntact(t, upgraded)
+	assertUpgradedBookIsIntact(t, seeded)
 
 	fresh := openTestDatabase(t)
 	require.NoError(t, Migrate(ctx, fresh))
-	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, upgraded))
+	assert.Equal(t, schemaFingerprint(t, fresh), schemaFingerprint(t, seeded))
 }
 
 // captureLedgerState reads every durable figure the seed carries, keyed so a
@@ -326,12 +321,12 @@ func captureLedgerState(t *testing.T, database *sql.DB) map[string]string {
 				tv.transaction_date || '/' || coalesce(t.deleted_at, '-')
 			FROM transaction_versions tv JOIN transactions t ON t.id = tv.transaction_id
 			ORDER BY tv.id`,
-		"lots": `SELECT id || '=' || opened_on || '/' || status || '/' ||
+		"lots": `SELECT id || '=' || opened_on || '/' || COALESCE(status, 'missing') || '/' ||
 				quantity_value || 'e-' || quantity_scale || '/' ||
-				remaining_quantity_value || 'e-' || remaining_quantity_scale || '/' ||
+				COALESCE(remaining_quantity_value, 'missing') || 'e-' || COALESCE(remaining_quantity_scale, -1) || '/' ||
 				cost_basis_value || 'e-' || cost_basis_scale || '/' ||
-				remaining_cost_basis_value || 'e-' || remaining_cost_basis_scale
-			FROM investment_lots ORDER BY id`,
+				COALESCE(remaining_cost_basis_value, 'missing') || 'e-' || COALESCE(remaining_cost_basis_scale, -1)
+			FROM current_investment_lots ORDER BY id`,
 		"lot_events": `SELECT id || '=' || lot_id || '/' || event_kind || '/' || event_date || '/' ||
 				quantity_value || 'e-' || quantity_scale || '/' || cost_basis_value || 'e-' || cost_basis_scale ||
 				'/' || coalesce(cost_basis_method, '-')
@@ -448,7 +443,7 @@ func assertUpgradedBookIsIntact(t *testing.T, database *sql.DB) {
 	// more than it was acquired with, and the closed one holds nothing.
 	lotRows, err := database.QueryContext(ctx, `
 		SELECT id, status, quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale
-		FROM investment_lots ORDER BY id
+		FROM current_investment_lots ORDER BY id
 	`)
 	require.NoError(t, err)
 	defer lotRows.Close()
@@ -558,7 +553,7 @@ func TestInitialMigrationDownRemovesTheConsolidatedSchema(t *testing.T) {
 
 	_, err = provider.Up(context.Background())
 	require.NoError(t, err)
-	_, err = provider.Down(context.Background())
+	_, err = provider.DownTo(context.Background(), 0)
 	require.NoError(t, err)
 
 	var objectCount int
@@ -1219,9 +1214,8 @@ func TestReadOnlySnapshotDoesNotSeeLaterWrites(t *testing.T) {
 	require.Equal(t, before, after, "the snapshot must not grow while it is open")
 }
 
-// The schema is one migration file now (T-64), which means nothing else
-// re-derives it and nothing checks it against a previous shape. What can still
-// be checked is that the file produces what the code expects: every table,
+// The consolidated baseline (T-64) and subsequent migrations must produce
+// what the code expects: every table,
 // index, and trigger the app reads, created exactly once, with the constraints
 // that make the ledger's invariants enforceable rather than aspirational.
 func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
@@ -1229,7 +1223,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), version, "the v0.1.0 baseline must remain a single migration")
+	assert.Equal(t, int64(1), version, "the consolidated baseline includes source revisions and immutable lot opening guards")
 
 	ctx := context.Background()
 	database, err := Open(ctx, "file:"+filepath.Join(t.TempDir(), "schema.sqlite"))
@@ -1258,11 +1252,15 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   103,
-		"table":   96,
-		"trigger": 97,
-		"view":    6,
-	}, objectCounts, "the consolidated baseline must retain every schema object")
+		"index":   104,
+		"table":   98,
+		"trigger": 104,
+		"view":    7,
+	}, objectCounts, "the migrated head must retain every schema object")
+	assert.Equal(t, "table", objects["import_source_revisions"])
+	assert.Equal(t, "trigger", objects["import_source_revisions_same_book"])
+	assert.Equal(t, "trigger", objects["import_source_revisions_no_update"])
+	assert.Equal(t, "trigger", objects["import_source_revisions_no_delete"])
 	assert.Equal(t, "table", objects["investment_transfer_facts"])
 	assert.Equal(t, "table", objects["investment_transfer_lot_links"])
 	assert.Equal(t, "trigger", objects["investment_transfer_facts_valid"])
@@ -1288,7 +1286,13 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		"investment_disposal_revision_allocations": "table",
 		"investment_disposal_decisions":            "table",
 		"investment_disposal_decisions_event_idx":  "index",
+		"investment_lot_state":                     "table",
+		"current_investment_lots":                  "view",
+		"investment_lot_state_same_book_insert":    "trigger",
+		"investment_lot_state_same_book_update":    "trigger",
 		"investment_lots":                          "table",
+		"investment_lots_opening_no_update":        "trigger",
+		"investment_lots_no_delete":                "trigger",
 		"investment_lots_side_position_idx":        "index",
 		"investment_operations":                    "table",
 		"investment_operation_journal_links":       "table",

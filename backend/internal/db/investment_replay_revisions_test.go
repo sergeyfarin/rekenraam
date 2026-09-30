@@ -39,7 +39,7 @@ func TestInvestmentReplayRevisionPreservesOriginalAndInstallsEffectiveState(t *t
 	var remainingBasis int64
 	var remainingBasisScale int
 	require.NoError(t, tx.QueryRow(`SELECT remaining_cost_basis_value, remaining_cost_basis_scale
-		FROM investment_lots WHERE id = 2`).Scan(&remainingBasis, &remainingBasisScale))
+		FROM current_investment_lots WHERE id = 2`).Scan(&remainingBasis, &remainingBasisScale))
 	require.Zero(t, exact.ScaledIntFromInt64(remainingBasis, remainingBasisScale).Cmp(exact.ScaledIntFromInt64(300, 0)))
 	require.NoError(t, tx.Commit())
 
@@ -227,4 +227,75 @@ func TestSelfCheckLotEventsUseEffectiveDisposalAfterReplay(t *testing.T) {
 	}
 	require.Zero(t, basisFromEvents.Cmp(basisRemaining))
 	require.Zero(t, basisRemaining.Cmp(exact.ScaledIntFromInt64(250, 0)), "LIFO leaves 2.5 shares of the older 1000 EUR lot")
+}
+
+func TestInvestmentReplayReconstructsMissingLotState(t *testing.T) {
+	ctx := context.Background()
+	database := seedReplayTestBook(t)
+	before := captureLedgerState(t, database)
+	originalLots, err := NewInvestmentRepository(database).ListLots(ctx, 1, 15, 2)
+	require.NoError(t, err)
+	_, err = database.ExecContext(ctx, `DELETE FROM investment_lot_state;
+ DELETE FROM investment_position_basis_state;`)
+	require.NoError(t, err)
+	tx, err := database.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	intents, err := investmentReplayIntentsQuery(ctx, tx, 1, 15, 2, 1, "long")
+	require.NoError(t, err)
+	projection, err := simulateInvestmentReplayTx(ctx, tx, 1, 15, 2, 1, intents)
+	require.NoError(t, err)
+	var stateCount int
+	require.NoError(t, tx.QueryRow(`SELECT count(*) FROM investment_lot_state`).Scan(&stateCount))
+	require.Zero(t, stateCount, "simulation must not install rebuilt state")
+	require.NoError(t, persistInvestmentReplayProjectionTx(ctx, tx, 1, 15, 2, 1,
+		3, 31, 1, "2026-09-13T11:34:58Z", intents, projection))
+	require.NoError(t, tx.Commit())
+	after := captureLedgerState(t, database)
+	for _, key := range []string{"lot_events", "transactions", "postings"} {
+		require.Equal(t, before[key], after[key], key)
+	}
+	rebuilt, err := NewInvestmentRepository(database).ListLots(ctx, 1, 15, 2)
+	require.NoError(t, err)
+	require.Len(t, rebuilt, len(originalLots))
+	for i, lot := range rebuilt {
+		source := originalLots[i]
+		require.Equal(t, source.ID, lot.ID)
+		require.Equal(t, source.QuantityValue, lot.QuantityValue)
+		require.Equal(t, source.CostBasisValue, lot.CostBasisValue)
+		require.Equal(t, source.CostBasisScale, lot.CostBasisScale)
+		require.Equal(t, source.Status, lot.Status)
+		require.Zero(t, exact.ScaledIntFromCoefficient(source.RemainingQuantityValue, source.RemainingQuantityScale).Cmp(exact.ScaledIntFromCoefficient(lot.RemainingQuantityValue, lot.RemainingQuantityScale)))
+		require.Zero(t, exact.ScaledIntFromInt64(source.RemainingCostBasisValue, source.RemainingCostBasisScale).Cmp(exact.ScaledIntFromInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)))
+	}
+
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM investment_lot_state`).Scan(&stateCount))
+	require.Equal(t, 2, stateCount)
+}
+
+func TestInvestmentReplayStateInstallationFailureRollsBack(t *testing.T) {
+	ctx := context.Background()
+	database := seedReplayTestBook(t)
+	_, err := database.ExecContext(ctx, `DELETE FROM investment_lot_state`)
+	require.NoError(t, err)
+	// Simulate without durable state, then inject a failure during installation.
+
+	tx, err := database.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	intents, err := investmentReplayIntentsQuery(ctx, tx, 1, 15, 2, 1, "long")
+	require.NoError(t, err)
+	projection, err := simulateInvestmentReplayTx(ctx, tx, 1, 15, 2, 1, intents)
+	require.NoError(t, err)
+	require.NoError(t, tx.Rollback())
+	_, err = database.ExecContext(ctx, `CREATE TRIGGER reject_rebuilt_state BEFORE INSERT ON investment_lot_state WHEN NEW.lot_id = 2
+ BEGIN SELECT RAISE(ABORT, 'state install rejected'); END;`)
+	require.NoError(t, err)
+	before := captureLedgerState(t, database)
+	tx, err = database.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	err = persistInvestmentReplayProjectionTx(ctx, tx, 1, 15, 2, 1, 3, 31, 1,
+		"2026-09-30T00:00:00Z", intents, projection)
+	require.ErrorContains(t, err, "state install rejected")
+	require.NoError(t, tx.Rollback())
+	require.Equal(t, before, captureLedgerState(t, database))
 }

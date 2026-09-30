@@ -258,6 +258,8 @@ type investmentCorrectionChainResponse struct {
 	EffectiveTransactionID *int64                             `json:"effective_transaction_id"`
 	CanReverseManualSale   bool                               `json:"can_reverse_manual_sale"`
 	CanReverseManualBuy    bool                               `json:"can_reverse_manual_buy"`
+	CanReverseSale         bool                               `json:"can_reverse_sale"`
+	CanReverseBuy          bool                               `json:"can_reverse_buy"`
 	Operations             []investmentCorrectionNodeResponse `json:"operations"`
 }
 
@@ -1003,6 +1005,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 		writeJSON(w, http.StatusOK, investmentCorrectionChainResponse{
 			RootOperationID: chain.RootOperationID, EffectiveTransactionID: chain.EffectiveTransactionID,
 			CanReverseManualSale: chain.CanReverseManualSale, CanReverseManualBuy: chain.CanReverseManualBuy,
+			CanReverseSale: chain.CanReverseSale, CanReverseBuy: chain.CanReverseBuy,
 			Operations: operations,
 		})
 	}

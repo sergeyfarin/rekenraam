@@ -34,6 +34,9 @@ type importStagedRowResponse struct {
 	NormalizedJSON         string                       `json:"normalized"`
 	RawJSON                string                       `json:"raw"`
 	DedupeStatus           string                       `json:"dedupe_status"`
+	SourceChanged          bool                         `json:"source_changed"`
+	SourceBuyOperation     bool                         `json:"source_buy_operation"`
+	SourceTransactionID    *int64                       `json:"source_transaction_id,omitempty"`
 	ResolutionJSON         string                       `json:"resolution"`
 	CommitStatus           string                       `json:"commit_status"`
 	CommittedIdentityID    *int64                       `json:"committed_identity_id,omitempty"`
@@ -115,6 +118,11 @@ type patchImportBatchRequest struct {
 
 type commitImportBatchRequest struct {
 	ReconciliationOverride bool `json:"reconciliation_override"`
+}
+
+type correctTrading212BuyRequest struct {
+	Reason                 string `json:"reason"`
+	ReconciliationOverride bool   `json:"reconciliation_override"`
 }
 
 type commitImportBatchResponse struct {
@@ -663,6 +671,86 @@ func commitImportBatch(logger *slog.Logger, authService *app.AuthService, import
 	}))
 }
 
+func trading212BuyCorrectionReconciliationImpact(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		batchID, ok := readImportBatchID(w, r)
+		if !ok {
+			return
+		}
+		rowID, ok := readPathInt64(w, r, "row_id", "row id")
+		if !ok {
+			return
+		}
+		var request correctTrading212BuyRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := importService.Trading212BuyCorrectionReconciliationImpact(r.Context(), app.CorrectTrading212BuyInput{
+			OwnerUserID: owner.ID, BatchID: batchID, RowID: rowID, Reason: request.Reason,
+		})
+		if err != nil {
+			switch {
+			case errors.Is(err, app.ErrImportBatchNotFound):
+				writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import batch not found")
+			case errors.Is(err, app.ErrImportSourceCorrectionConflict):
+				writeAPIError(w, http.StatusConflict, "CONFLICT", "source buy revision is no longer eligible")
+			default:
+				writeInvestmentServiceError(w, r, logger, "preview Trading 212 buy source correction", err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+	}
+}
+
+func correctTrading212Buy(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		batchID, ok := readImportBatchID(w, r)
+		if !ok {
+			return
+		}
+		rowID, ok := readPathInt64(w, r, "row_id", "row id")
+		if !ok {
+			return
+		}
+		var request correctTrading212BuyRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := importService.CorrectTrading212Buy(r.Context(), app.CorrectTrading212BuyInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
+			RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID,
+			Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
+		})
+		if err != nil {
+			switch {
+			case errors.Is(err, app.ErrImportBatchNotFound):
+				writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import batch not found")
+			case errors.Is(err, app.ErrImportSourceCorrectionConflict):
+				writeAPIError(w, http.StatusConflict, "CONFLICT", "source buy revision is no longer eligible")
+			default:
+				writeInvestmentServiceError(w, r, logger, "correct Trading 212 buy source", err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentBuyReplacementResponse{
+			InverseTransaction:     toTransactionResponse(result.Inverse),
+			Replacement:            toInvestmentTradeResponse(result.Replacement),
+			CorrectedTransactionID: result.CorrectedTransactionID,
+		})
+	}))
+}
+
 func discardImportBatch(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
 	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedMutationOwner(w, r)
@@ -851,6 +939,9 @@ func toImportStagedRowResponse(row app.ImportStagedRow) importStagedRowResponse 
 		NormalizedJSON:         normalized,
 		RawJSON:                raw,
 		DedupeStatus:           row.DedupeStatus,
+		SourceChanged:          row.SourceChanged,
+		SourceBuyOperation:     row.SourceBuyOperation,
+		SourceTransactionID:    row.SourceTransactionID,
 		ResolutionJSON:         resolution,
 		CommitStatus:           row.CommitStatus,
 		CommittedIdentityID:    row.CommittedIdentityID,

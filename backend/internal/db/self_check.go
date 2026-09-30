@@ -45,15 +45,17 @@ type SelfCheckPostingRecord struct {
 	QuantityScale    int
 }
 
-// SelfCheckDisposalClearingRecord keeps decision proceeds and each matching
-// commodity-trading posting as coefficients. The caller compares them with
-// exact arithmetic; SQLite must not sum money coefficients.
+// SelfCheckDisposalClearingRecord streams each decision and each matching
+// clearing posting once per operation/version/currency group. The caller
+// sums and compares coefficients with exact arithmetic, never SQLite SUM.
 type SelfCheckDisposalClearingRecord struct {
-	DecisionID    int64
-	ProceedsValue exact.Coefficient
-	ProceedsScale int
-	PostingValue  sql.NullString
-	PostingScale  sql.NullInt64
+	OperationID          int64
+	TransactionVersionID int64
+	CostCommodityID      int64
+	IsPosting            bool
+	DecisionID           int64
+	AmountValue          exact.Coefficient
+	AmountScale          int
 }
 
 // SelfCheckInvestmentComponentRecord joins each source fact to its optional
@@ -120,23 +122,31 @@ func (r *SelfCheckRepository) StreamInvestmentComponents(ctx context.Context, tr
 	return nil
 }
 
-// StreamDisposalClearing covers the currently supported one-decision sell and
-// write-off commands. Compound operations need component-to-posting links to
-// attribute shared clearing legs to individual decisions.
+// StreamDisposalClearing checks aggregate sell/write-off economics, including
+// multiple decisions sharing clearing legs. Individual compound attribution
+// needs a further decision-to-component contract; this checks group totals.
 func (r *SelfCheckRepository) StreamDisposalClearing(ctx context.Context, transaction *sql.Tx, bookID int64, visit func(SelfCheckDisposalClearingRecord) error) error {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT d.id, d.proceeds_value, d.proceeds_scale,
-			pv.quantity_value, pv.quantity_scale
-		FROM investment_disposal_decisions d
-		JOIN investment_operations o ON o.id = d.operation_id
-		LEFT JOIN posting_versions pv ON pv.transaction_version_id = d.transaction_version_id
-			AND pv.commodity_id = d.cost_commodity_id
-			AND pv.account_id IN (SELECT id FROM accounts
-				WHERE book_id = d.book_id AND system_role = 'commodity_trading')
-		WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
-			AND (SELECT COUNT(*) FROM investment_disposal_decisions sibling
-				WHERE sibling.operation_id = d.operation_id) = 1
-		ORDER BY d.id, pv.id
+		WITH decisions AS (
+			SELECT d.* FROM investment_disposal_decisions d
+			JOIN investment_operations o ON o.id = d.operation_id AND o.book_id = d.book_id
+			WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
+		), clearing_groups AS (
+			SELECT DISTINCT book_id, operation_id, transaction_version_id, cost_commodity_id
+			FROM decisions
+		)
+		SELECT operation_id, transaction_version_id, cost_commodity_id,
+			0 AS is_posting, id AS decision_id, proceeds_value AS amount_value, proceeds_scale AS amount_scale
+		FROM decisions
+		UNION ALL
+		SELECT g.operation_id, g.transaction_version_id, g.cost_commodity_id,
+			1, 0, pv.quantity_value, pv.quantity_scale
+		FROM clearing_groups g
+		JOIN posting_versions pv ON pv.transaction_version_id = g.transaction_version_id
+			AND pv.book_id = g.book_id AND pv.commodity_id = g.cost_commodity_id
+		JOIN accounts a ON a.id = pv.account_id AND a.book_id = g.book_id
+			AND a.system_role = 'commodity_trading'
+		ORDER BY operation_id, transaction_version_id, cost_commodity_id, is_posting, decision_id
 	`, bookID)
 	if err != nil {
 		return fmt.Errorf("read disposal clearing: %w", err)
@@ -144,8 +154,8 @@ func (r *SelfCheckRepository) StreamDisposalClearing(ctx context.Context, transa
 	defer rows.Close()
 	for rows.Next() {
 		var record SelfCheckDisposalClearingRecord
-		if err := rows.Scan(&record.DecisionID, &record.ProceedsValue, &record.ProceedsScale,
-			&record.PostingValue, &record.PostingScale); err != nil {
+		if err := rows.Scan(&record.OperationID, &record.TransactionVersionID, &record.CostCommodityID,
+			&record.IsPosting, &record.DecisionID, &record.AmountValue, &record.AmountScale); err != nil {
 			return fmt.Errorf("scan disposal clearing: %w", err)
 		}
 		if err := visit(record); err != nil {
@@ -282,6 +292,7 @@ func (r *SelfCheckRepository) StreamPostedNonCurrencyPostings(ctx context.Contex
 
 // SelfCheckLotRecord is one investment lot's current standing.
 type SelfCheckLotRecord struct {
+	MissingProjection       bool
 	LotID                   int64
 	AccountID               int64
 	CommodityID             int64
@@ -299,14 +310,12 @@ type SelfCheckLotRecord struct {
 
 func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckLotRecord, error) {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT id, account_id, commodity_id, status,
-			quantity_value, quantity_scale,
-			remaining_quantity_value, remaining_quantity_scale,
-			cost_basis_value, cost_basis_scale,
-			remaining_cost_basis_value, remaining_cost_basis_scale, cost_commodity_id
-		FROM investment_lots
-		WHERE book_id = ?
-		ORDER BY account_id, commodity_id, id
+		SELECT lot.id, lot.account_id, lot.commodity_id, COALESCE(state.status, ''),
+		lot.quantity_value, lot.quantity_scale, COALESCE(state.remaining_quantity_value, '0'), COALESCE(state.remaining_quantity_scale, 0),
+		lot.cost_basis_value, lot.cost_basis_scale, COALESCE(state.remaining_cost_basis_value, '0'),
+		COALESCE(state.remaining_cost_basis_scale, 0), lot.cost_commodity_id, state.lot_id IS NULL
+		FROM investment_lots lot LEFT JOIN investment_lot_state state ON state.lot_id = lot.id AND state.book_id = lot.book_id
+		WHERE lot.book_id = ? ORDER BY lot.account_id, lot.commodity_id, lot.id
 	`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read self-check lots: %w", err)
@@ -320,7 +329,7 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 			&lot.QuantityValue, &lot.QuantityScale,
 			&lot.RemainingQuantityValue, &lot.RemainingQuantityScale,
 			&lot.CostBasisValue, &lot.CostBasisScale,
-			&lot.RemainingCostBasisValue, &lot.RemainingCostBasisScale, &lot.CostCommodityID); err != nil {
+			&lot.RemainingCostBasisValue, &lot.RemainingCostBasisScale, &lot.CostCommodityID, &lot.MissingProjection); err != nil {
 			return nil, fmt.Errorf("scan self-check lot: %w", err)
 		}
 		lots = append(lots, lot)
@@ -347,7 +356,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		SELECT le.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
 			le.quantity_value, le.quantity_scale, le.cost_basis_value, le.cost_basis_scale
 		FROM investment_lot_events le
-		JOIN investment_lots l ON l.id = le.lot_id
+		JOIN current_investment_lots l ON l.id = le.lot_id
 		WHERE le.book_id = ?
 			AND NOT EXISTS (
 				SELECT 1 FROM investment_operation_lot_effects effect
@@ -390,7 +399,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		FROM investment_disposal_revisions revision
 		JOIN investment_disposal_decisions decision ON decision.id = revision.decision_id
 		JOIN investment_disposal_revision_allocations allocation ON allocation.revision_id = revision.id
-		JOIN investment_lots l ON l.id = allocation.lot_id
+		JOIN current_investment_lots l ON l.id = allocation.lot_id
 		WHERE revision.book_id = ? AND revision.revision_seq = (
 			SELECT MAX(latest.revision_seq) FROM investment_disposal_revisions latest
 			WHERE latest.decision_id = revision.decision_id)

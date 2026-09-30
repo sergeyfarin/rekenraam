@@ -28,6 +28,8 @@ type InvestmentCorrectionChain struct {
 	EffectiveTransactionID *int64
 	CanReverseManualSale   bool
 	CanReverseManualBuy    bool
+	CanReverseSale         bool
+	CanReverseBuy          bool
 	Operations             []InvestmentCorrectionNode
 }
 
@@ -53,6 +55,13 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 	for _, record := range records {
 		importedLineage = importedLineage || record.Imported
 	}
+	committedSource := false
+	if importedLineage {
+		committedSource, err = s.repository.HasCommittedImportSource(ctx, BookID, records[len(records)-1].OperationID)
+		if err != nil {
+			return InvestmentCorrectionChain{}, err
+		}
+	}
 	for index, record := range records {
 		isLast := index == len(records)-1
 		effective := isLast && record.CorrectionMode.String != "reverse"
@@ -74,13 +83,15 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 			node.CorrectionOfOperationID = &id
 		}
 		chain.Operations = append(chain.Operations, node)
-		if effective && record.OperationKind == "sell" && !importedLineage &&
+		if effective && record.OperationKind == "sell" && (!importedLineage || committedSource) &&
 			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {
-			chain.CanReverseManualSale = true
+			chain.CanReverseSale = true
+			chain.CanReverseManualSale = !importedLineage
 		}
-		if effective && record.OperationKind == "buy" && !importedLineage &&
+		if effective && record.OperationKind == "buy" && (!importedLineage || committedSource) &&
 			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {
-			chain.CanReverseManualBuy = true
+			chain.CanReverseBuy = true
+			chain.CanReverseManualBuy = !importedLineage
 		}
 	}
 	return chain, nil

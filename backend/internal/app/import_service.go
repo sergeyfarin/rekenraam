@@ -498,6 +498,12 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 		return nil, 0, fmt.Errorf("list applicable import rules: %w", err)
 	}
 	var dbRows []db.CreateImportStagedRowParams
+	type committedFillSnapshot struct {
+		rawJSON        string
+		normalizedJSON string
+		found          bool
+	}
+	fillSnapshots := make(map[string]committedFillSnapshot)
 	for i, row := range parseResult.Rows {
 		rawJSON, _ := json.Marshal(row.Raw)
 		normalizedJSON, _ := json.Marshal(map[string]any{
@@ -517,6 +523,26 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 		if fpCommittedDupe[row.DedupeFingerprint] {
 			// Exists in commit_identities → duplicate of a previously committed row.
 			dedupeStatus = "duplicate"
+			if row.Raw[rawKeyKind] == trading212RawKindOrderFill {
+				snapshot, checked := fillSnapshots[row.DedupeFingerprint]
+				if !checked {
+					originalRaw, originalNormalized, found, err := s.repository.FindCommittedTrading212FillSnapshot(ctx, BookID, row.DedupeFingerprint)
+					if err != nil {
+						return nil, 0, fmt.Errorf("compare committed fill source: %w", err)
+					}
+					snapshot = committedFillSnapshot{originalRaw, originalNormalized, found}
+					fillSnapshots[row.DedupeFingerprint] = snapshot
+				}
+				if snapshot.found {
+					changed, err := trading212FillSourceChanged(snapshot.rawJSON, string(rawJSON), snapshot.normalizedJSON, string(normalizedJSON))
+					if err != nil {
+						return nil, 0, fmt.Errorf("compare Trading 212 fill payload: %w", err)
+					}
+					if changed {
+						dedupeStatus = "needs_attention"
+					}
+				}
+			}
 		} else if seenInBatch[row.DedupeFingerprint] {
 			// Duplicate within this batch (this call or an earlier one).
 			dedupeStatus = "needs_attention"
@@ -553,6 +579,34 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 		return nil, 0, fmt.Errorf("list staged rows: %w", err)
 	}
 	return stagedRows, baseIndex, nil
+}
+
+func trading212FillSourceChanged(originalRaw, currentRaw, originalNormalized, currentNormalized string) (bool, error) {
+	if originalNormalized != currentNormalized {
+		return true, nil
+	}
+	var original, current map[string]string
+	if err := json.Unmarshal([]byte(originalRaw), &original); err != nil {
+		return false, err
+	}
+	if err := json.Unmarshal([]byte(currentRaw), &current); err != nil {
+		return false, err
+	}
+	// These keys come from local resolution, not the provider payload. A
+	// changed local instrument mapping must not invent a source revision.
+	for _, raw := range []map[string]string{original, current} {
+		delete(raw, rawKeyResolvedCommodityID)
+		delete(raw, rawKeyResolvedHoldingID)
+	}
+	originalSource, err := json.Marshal(original)
+	if err != nil {
+		return false, err
+	}
+	currentSource, err := json.Marshal(current)
+	if err != nil {
+		return false, err
+	}
+	return string(originalSource) != string(currentSource), nil
 }
 
 // applyImportRules snapshots the first matching enabled rule into a staged
@@ -723,7 +777,7 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 		if row.CommitStatus == "committed" || row.CommitStatus == "skipped" {
 			continue
 		}
-		if row.DedupeStatus == "duplicate" || row.DedupeStatus == "excluded" {
+		if row.DedupeStatus == "duplicate" || row.DedupeStatus == "excluded" || row.SourceChanged {
 			result.DuplicateCount++
 			continue
 		}
@@ -805,6 +859,15 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 			continue
 		}
 
+		if row.SourceChanged {
+			if err := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
+				RowID: row.ID, CommitStatus: "skipped",
+				CommitError: sql.NullString{String: "source fill changed; correction review required", Valid: true},
+			}, nil); err != nil {
+				return result, fmt.Errorf("hold changed source row %d: %w", row.ID, err)
+			}
+			continue
+		}
 		if row.DedupeStatus == "duplicate" || row.DedupeStatus == "excluded" {
 			// Skip rows excluded by the user or already in the ledger.
 			if err := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
@@ -1464,6 +1527,10 @@ func toImportStagedRow(rec db.ImportStagedRowRecord) ImportStagedRow {
 	if rec.CommitError.Valid {
 		commitError = rec.CommitError.String
 	}
+	var sourceTransactionID *int64
+	if rec.SourceTransactionID.Valid {
+		sourceTransactionID = &rec.SourceTransactionID.Int64
+	}
 	effects := make([]ImportCommitEffect, 0, len(rec.CommitEffects))
 	for _, effect := range rec.CommitEffects {
 		converted := ImportCommitEffect{EffectSeq: effect.EffectSeq}
@@ -1486,6 +1553,9 @@ func toImportStagedRow(rec db.ImportStagedRowRecord) ImportStagedRow {
 		RawJSON:                rec.RawJSON,
 		NormalizedJSON:         rec.NormalizedJSON,
 		DedupeStatus:           rec.DedupeStatus,
+		SourceChanged:          rec.SourceChanged,
+		SourceBuyOperation:     rec.SourceBuyOperation,
+		SourceTransactionID:    sourceTransactionID,
 		ResolutionJSON:         rec.ResolutionJSON,
 		CommitStatus:           rec.CommitStatus,
 		CommittedIdentityID:    identityID,
