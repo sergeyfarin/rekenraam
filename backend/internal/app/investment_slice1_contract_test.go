@@ -146,28 +146,16 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				require.Len(t, readInvestmentContractCSV(t, files, "investment-lot-effects.csv"), 5)
 				require.Len(t, readInvestmentContractCSV(t, files, "investment-fee-policy-versions.csv"), 2)
 
-				// A portable seeded book must retain identical CSV facts after
-				// consumers stop relying on the transitional operation header.
-				_, err = database.ExecContext(ctx, "DROP TRIGGER investment_operations_no_update")
-				require.NoError(t, err)
-				_, err = database.ExecContext(ctx, "UPDATE investment_operations SET transaction_id = NULL")
-				require.NoError(t, err)
-				var headerless bytes.Buffer
-				require.NoError(t, app.NewExportService(db.NewExportRepository(database)).WriteBundle(ctx, &headerless, app.ExportFilter{}))
-				headerlessArchive, err := zip.NewReader(bytes.NewReader(headerless.Bytes()), int64(headerless.Len()))
-				require.NoError(t, err)
-				require.Len(t, headerlessArchive.File, len(files))
-				for _, entry := range headerlessArchive.File {
-					if !strings.HasSuffix(entry.Name, ".csv") {
-						continue // Manifest creation time is intentionally different.
-					}
-					reader, err := entry.Open()
-					require.NoError(t, err)
-					content, err := io.ReadAll(reader)
-					require.NoError(t, err)
-					require.NoError(t, reader.Close())
-					require.Equal(t, files[entry.Name], content, entry.Name)
-				}
+				var headerColumns int
+				require.NoError(t, database.QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info('investment_operations') WHERE name = 'transaction_id'`).Scan(&headerColumns))
+				require.Zero(t, headerColumns)
+				require.Equal(t, [][]string{
+					{"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id", "correction_of_operation_id", "correction_mode", "correction_reason"},
+					{"1", "7", "buy", "2026-02-02", "27", "", "", ""},
+					{"2", "8", "buy", "2026-03-02", "29", "", "", ""},
+					{"3", "9", "sell", "2026-04-02", "31", "", "", ""},
+					{"4", "10", "dividend", "2026-05-02", "33", "", "", ""},
+				}, readInvestmentContractCSV(t, files, "investment-operations.csv"), "seeded portable operation facts retain their existing CSV contract")
 			}
 		})
 	}

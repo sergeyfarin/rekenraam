@@ -1260,7 +1260,6 @@ CREATE INDEX IF NOT EXISTS investment_disposal_decisions_event_idx
 CREATE TABLE IF NOT EXISTS investment_operations (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  transaction_id INTEGER UNIQUE REFERENCES transactions(id) ON DELETE RESTRICT,
   operation_kind TEXT NOT NULL CHECK (length(trim(operation_kind)) > 0 AND operation_kind = trim(operation_kind)),
   event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
   created_at TEXT NOT NULL,
@@ -1286,16 +1285,13 @@ CREATE INDEX IF NOT EXISTS investment_operations_book_kind_date_idx
 CREATE TRIGGER IF NOT EXISTS investment_operations_same_book
 BEFORE INSERT ON investment_operations
 WHEN NOT EXISTS (SELECT 1 FROM audit_events a WHERE a.id = NEW.created_audit_event_id AND a.book_id = NEW.book_id)
-  OR (NEW.transaction_id IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM transactions t WHERE t.id = NEW.transaction_id AND t.book_id = NEW.book_id
-  ))
   OR (NEW.correction_of_operation_id IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM investment_operations original
     WHERE original.id = NEW.correction_of_operation_id AND original.book_id = NEW.book_id
       AND original.correction_mode IS NOT 'reverse'
   ))
 BEGIN
-  SELECT RAISE(ABORT, 'investment operation must reference a transaction, audit event and correctable predecessor in the same book');
+  SELECT RAISE(ABORT, 'investment operation must reference an audit event and correctable predecessor in the same book');
 END;
 -- +goose StatementEnd
 
@@ -1552,7 +1548,6 @@ WHEN NOT EXISTS (
   WHERE o.id = NEW.operation_id AND o.book_id = NEW.book_id
     AND v.book_id = NEW.book_id AND v.status = 'posted'
     AND v.transaction_kind = 'investment'
-    AND (NEW.link_seq <> 1 OR o.transaction_id IS NULL OR o.transaction_id = v.transaction_id)
 )
 BEGIN
   SELECT RAISE(ABORT, 'investment journal link must use a posted investment version in the same book');

@@ -6,27 +6,25 @@ and ADR 0013 govern. R16 owns the near-term work, T-75b owns native
 correction, and T-108 owns short sales and covers.
 
 The 2026-09-29 review found that calling 2a and all of slice 4 complete was
-premature. The operation header's nullable unique `transaction_id` remains a
-compatibility link used by existing reads beside `investment_operation_journal_links`;
-compound and basis-only actions must migrate those reads to the link table.
-Transfer depletion replay already reads the immutable operation/lot-effect
-link instead of joining through that compatibility column. Foundation
-self-check now requires posted journal links for all implemented journal-backed
-operation kinds and resolves lot/effect and transfer provenance through links;
-Correction history, trade-detail source facts, and buy/sale correction admission
-now derive their transaction from pinned primary journal links; inverse journals
-resolve to the same history. A chain displays the first primary link in sequence
-once per operation. Export operation summaries now use that same primary-link
-representative, while the journal-link CSV retains every linked version. Import
-effects infer operation identity through primary links; a linked inverse remains
-a journal-only effect, and an unlinked investment journal is refused. Seeded
-bundle CSV facts remain byte-identical after clearing the compatibility header.
-Writer bootstrap now passes the newly inserted operation ID directly into
-journal-link creation; subsequent lot and correction writes resolve identity
-through primary links. Insert-time header-clearing regressions cover buy/sale
-creation, replacement and reversal, external/internal transfer and reinvestment.
-The compatibility column is still populated for the frozen seed and existing
-fixtures; schema/fixture retirement remains the next cutover step.
+premature. The nullable unique operation transaction header has now been
+retired from the pre-release baseline, writer and frozen seed. Pinned
+`investment_operation_journal_links` are the sole operation-to-journal
+relationship. Foundation self-check, replay, correction history, trade source
+facts, correction admission and import effect inference use these links.
+Writer bootstrap passes its inserted operation ID directly into link creation.
+Correction history and export summaries display the first primary link once
+per operation; the journal-link CSV retains every linked version. An inverse
+resolves the same correction history but is not offered as a replacement trade
+or inferred as a primary import operation. Unlinked investment journals are
+refused. Fresh and seeded tests exercise the actual retired-header schema,
+retain the seeded operation CSV contract, and cover correction/reversal,
+transfer, reinvestment and link-integrity mutations.
+
+**BREAKING DEV DATABASE, R16 journal-link authority (2026-09-30):** this
+ADR 0013 pre-release baseline rewrite removes `investment_operations.transaction_id`
+and its header-dependent trigger checks. The checksum and frozen seed are
+updated together. Reset disposable development databases as documented in
+`docs/developer-workflow.md`; this is not an installed-release upgrade.
 Current lot projection columns remain on `investment_lots` instead of a
 separate `investment_lot_state` table. Trade net-settlement and separately
 posted fee components now link to the exact journal posting line keys chosen by

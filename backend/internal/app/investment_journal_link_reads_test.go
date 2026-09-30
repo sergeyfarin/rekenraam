@@ -14,7 +14,7 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			ctx := context.Background()
 			f := newInvestmentsTestFixture(t)
-			clearInvestmentHeadersOnInsert(t, f)
+			requireInvestmentHeaderRetired(t, f)
 			trade := InvestmentTradeInput{
 				OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 				CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
@@ -33,10 +33,7 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 			require.NoError(t, err)
 			before, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, original.Transaction.ID)
 			require.NoError(t, err)
-			// Isolated mutation proves these consumers do not consult the
-			// transitional header. Durable posted journals and links stay intact.
-			_, err = f.database.ExecContext(ctx, "UPDATE investment_operations SET transaction_id = NULL")
-			require.NoError(t, err)
+			// Reads and commands run with the compatibility column absent.
 			afterFacts, err := f.investmentService.TradeCorrectionContext(ctx, f.ownerUserID, original.Transaction.ID)
 			require.NoError(t, err)
 			require.Equal(t, facts, afterFacts)
@@ -61,8 +58,6 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 				require.NoError(t, err)
 				replacement, inverse = result.Replacement.Transaction, result.Inverse
 			}
-			_, err = f.database.ExecContext(ctx, "UPDATE investment_operations SET transaction_id = NULL")
-			require.NoError(t, err)
 			chain, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, original.Transaction.ID)
 			require.NoError(t, err)
 			require.Len(t, chain.Operations, 2, "inverse journal must not duplicate the replacement node")
@@ -81,8 +76,6 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 				reversal, err = f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: replacement.ID, Reason: "cancel linked sale"})
 			}
 			require.NoError(t, err)
-			_, err = f.database.ExecContext(ctx, "UPDATE investment_operations SET transaction_id = NULL")
-			require.NoError(t, err)
 			terminal, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, reversal.ID)
 			require.NoError(t, err)
 			require.Len(t, terminal.Operations, 3)
@@ -93,23 +86,18 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 	}
 }
 
-// Remove the compatibility identity before the writer can read it, rather than
-// only clearing it after commit. This mutation is confined to the test database.
-func clearInvestmentHeadersOnInsert(t *testing.T, f *investmentsTestFixture) {
+// Every writer regression runs against the actual retired-header schema.
+func requireInvestmentHeaderRetired(t *testing.T, f *investmentsTestFixture) {
 	t.Helper()
-	_, err := f.database.Exec("DROP TRIGGER investment_operations_no_update")
-	require.NoError(t, err)
-	_, err = f.database.Exec(`CREATE TRIGGER test_clear_investment_header
-		AFTER INSERT ON investment_operations BEGIN
-		UPDATE investment_operations SET transaction_id = NULL WHERE id = NEW.id;
-		END`)
-	require.NoError(t, err)
+	var count int
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM pragma_table_info('investment_operations') WHERE name = 'transaction_id'`).Scan(&count))
+	require.Zero(t, count)
 }
 
 func TestInvestmentTransferAndReinvestmentWritersWithoutCompatibilityHeader(t *testing.T) {
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
-	clearInvestmentHeadersOnInsert(t, f)
+	requireInvestmentHeaderRetired(t, f)
 	seedExternalTransferEquity(t, f.database)
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
 	inbound, err := f.investmentService.ExternalTransferIn(ctx, knownTransferInput(f))
@@ -130,7 +118,7 @@ func TestInvestmentTransferAndReinvestmentWritersWithoutCompatibilityHeader(t *t
 	require.Equal(t, SelfCheckPassed, mustRunInvestmentSelfCheck(t, f).Status)
 }
 
-func TestInvestmentCorrectionReadsRequireJournalLinkEvenWithCompatibilityHeader(t *testing.T) {
+func TestInvestmentCorrectionReadsRequireJournalLink(t *testing.T) {
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -151,4 +139,11 @@ func TestInvestmentCorrectionReadsRequireJournalLinkEvenWithCompatibilityHeader(
 	_, err = f.investmentService.ReverseBuy(ctx, ReverseInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID, Reason: "refuse unlinked buy"})
 	require.ErrorIs(t, err, ErrInvestmentBuyNotFound)
 	require.Equal(t, SelfCheckFailed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
+}
+
+func TestInvestmentOperationSchemaRetiresTransactionHeader(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	var count int
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM pragma_table_info('investment_operations') WHERE name = 'transaction_id'`).Scan(&count))
+	require.Zero(t, count, "journal links are the only operation-to-transaction relationship")
 }

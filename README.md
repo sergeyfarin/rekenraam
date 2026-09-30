@@ -87,3 +87,12 @@ work, [backlog](docs/backlog.md) maps legacy IDs to those issues, and
 Product and architecture decisions live in the
 [requirements](docs/product-requirements.md),
 [conventions](docs/conventions.md), and [ADRs](docs/adrs/).
+
+### Development database reset: investment journal links
+
+**BREAKING DEV DATABASE (2026-09-30):** the ADR 0013 pre-release baseline
+retires the investment operation transaction header. Existing disposable
+development databases must be reset before restarting; see
+[the migration reset instructions](docs/developer-workflow.md#migrations-and-resetting-your-database).
+The frozen seed and checksum are updated together. This reset does not apply to
+installed releases.

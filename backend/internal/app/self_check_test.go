@@ -97,8 +97,8 @@ func TestSelfCheckFindsInvestmentOperationWithoutPostedVersionLink(t *testing.T)
 	require.NoError(t, err)
 	_, err = harness.writer.ExecContext(ctx, `
 		INSERT INTO investment_operations
-			(book_id, transaction_id, operation_kind, event_date, created_at, created_audit_event_id)
-		VALUES (1, 1, 'buy', '2026-01-01', '2026-08-24T04:00:00Z', ?)
+			(book_id, operation_kind, event_date, created_at, created_audit_event_id)
+		VALUES (1, 'buy', '2026-01-01', '2026-08-24T04:00:00Z', ?)
 	`, auditID)
 	require.NoError(t, err)
 	run := harness.run(t)

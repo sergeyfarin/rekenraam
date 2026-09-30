@@ -63,9 +63,15 @@ func TestInternalTransferPartialLotConservesQuantityBasisAndJournal(t *testing.T
 	require.NoError(t, f.database.QueryRow(`SELECT x.original_acquired_on, src.event_kind,
 		dst.event_kind, x.carried_basis_value FROM investment_transfer_lot_links x
 		JOIN investment_operations o ON o.id = x.operation_id
-		JOIN investment_lot_events src ON src.lot_id = x.source_lot_id AND src.transaction_id = o.transaction_id
-		JOIN investment_lot_events dst ON dst.lot_id = x.destination_lot_id AND dst.transaction_id = o.transaction_id
-		WHERE o.transaction_id = ?`, result.Transaction.ID).Scan(&originalDate, &sourceKind, &destinationKind, &linkedBasis))
+		JOIN investment_lot_events src ON src.lot_id = x.source_lot_id AND src.transaction_id = (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1)
+		JOIN investment_lot_events dst ON dst.lot_id = x.destination_lot_id AND dst.transaction_id = (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1)
+		WHERE (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) = ?`, result.Transaction.ID).Scan(&originalDate, &sourceKind, &destinationKind, &linkedBasis))
 	assert.Equal(t, "2026-05-01", originalDate)
 	assert.Equal(t, "transfer_out", sourceKind)
 	assert.Equal(t, "transfer_in", destinationKind)
@@ -120,7 +126,9 @@ func TestInternalTransferKnownZeroBasisKeepsZeroWithoutGain(t *testing.T) {
 		JOIN investment_lots l ON l.id = x.destination_lot_id
 		JOIN investment_operations o ON o.id = x.operation_id
 		JOIN investment_lot_events e ON e.lot_id = x.source_lot_id
-			AND e.transaction_id = o.transaction_id AND e.event_kind = 'transfer_out'
+			AND e.transaction_id = (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) AND e.event_kind = 'transfer_out'
 		WHERE x.destination_lot_id = ?`, transfer.DestinationLotIDs[0]).Scan(
 		&sourceEventBasis, &destinationBasis, &linkedBasis))
 	assert.Equal(t, "0", sourceEventBasis)
@@ -242,7 +250,7 @@ func TestBuyCorrectionRefusesChangedBasisOfLinkedInternalTransfer(t *testing.T) 
 	var dependency InvestmentBuyDependencyError
 	require.ErrorAs(t, err, &dependency)
 	var transferOperationID int64
-	require.NoError(t, f.database.QueryRow(`SELECT id FROM investment_operations WHERE transaction_id = ?`,
+	require.NoError(t, f.database.QueryRow(`SELECT id FROM investment_operations WHERE id IN (SELECT link.operation_id FROM investment_operation_journal_links link JOIN transaction_versions version ON version.id = link.transaction_version_id WHERE version.transaction_id = ? AND link.role = 'primary')`,
 		transfer.Transaction.ID).Scan(&transferOperationID))
 	assert.Equal(t, transferOperationID, dependency.OperationID)
 	assert.Equal(t, before, f.transactionCount(t))
@@ -269,7 +277,9 @@ func TestInternalTransferDepletionSurvivesLaterSaleReversalReplay(t *testing.T) 
 	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value FROM investment_lots WHERE id = ?`,
 		*buy.LotID).Scan(&sourceQty))
 	require.NoError(t, f.database.QueryRow(`SELECT remaining_quantity_value FROM investment_lots
-		WHERE source_transaction_id IN (SELECT o.transaction_id FROM investment_operations o
+		WHERE source_transaction_id IN (SELECT (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) FROM investment_operations o
 			JOIN investment_transfer_facts f ON f.operation_id = o.id
 			WHERE f.transfer_kind = 'internal')`).Scan(&destinationQty))
 	assert.Equal(t, "2", sourceQty)
@@ -284,14 +294,8 @@ func TestReplayTransferDepletionUsesEffectLinkWithoutLegacyOperationTransactionI
 	transfer, err := f.investmentService.InternalTransfer(ctx,
 		internalTransferFromLot(f, destinationID, *buy.LotID, exact.New(1), 0))
 	require.NoError(t, err)
-	// Simulate the future schema without the operation header's compatibility
-	// transaction ID. The immutable lot-effect link still identifies its event.
-	_, err = f.database.ExecContext(ctx, `DROP TRIGGER investment_operations_no_update`)
-	require.NoError(t, err)
-	_, err = f.database.ExecContext(ctx, `UPDATE investment_operations SET transaction_id = NULL
-		WHERE id IN (SELECT operation_id FROM investment_operation_journal_links
-			WHERE transaction_version_id = ?)`, transfer.Transaction.VersionID)
-	require.NoError(t, err)
+	// The retired-header schema resolves depletion through its immutable lot-effect link.
+	requireInvestmentHeaderRetired(t, f)
 	intents, err := f.investmentService.repository.ListInvestmentReplayIntents(ctx,
 		BookID, f.holdingAccountID, f.stockCommodityID, f.eurCommodityID, "long")
 	require.NoError(t, err)

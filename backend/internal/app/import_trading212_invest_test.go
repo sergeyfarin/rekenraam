@@ -323,7 +323,9 @@ func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing
 		SELECT c.gross_unknown
 		FROM investment_operations o
 		JOIN investment_operation_components c ON c.operation_id = o.id AND c.component_kind = 'net_settlement'
-		WHERE o.transaction_id = ?`, transaction.ID).Scan(&grossUnknown))
+		WHERE (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = o.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) = ?`, transaction.ID).Scan(&grossUnknown))
 	require.Equal(t, 1, grossUnknown, "Trading 212's unit price does not supply a sourced gross in the net currency")
 }
 
@@ -641,7 +643,9 @@ func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
 	var origin, operation string
 	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT audit.origin_type, audit.operation
 		FROM investment_operations op JOIN audit_events audit ON audit.id = op.created_audit_event_id
-		WHERE op.transaction_id = ?`, result.Replacement.Transaction.ID).Scan(&origin, &operation))
+		JOIN investment_operation_journal_links link ON link.operation_id = op.id AND link.role = 'primary'
+		JOIN transaction_versions version ON version.id = link.transaction_version_id
+		WHERE version.transaction_id = ?`, result.Replacement.Transaction.ID).Scan(&origin, &operation))
 	require.Equal(t, "import", origin)
 	require.Equal(t, "investment.buy.source_correct", operation)
 	newer := changed

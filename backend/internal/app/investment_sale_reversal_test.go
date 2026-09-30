@@ -12,7 +12,7 @@ import (
 func saleOperationIDForTest(t *testing.T, f *investmentsTestFixture, transactionID int64) int64 {
 	t.Helper()
 	var operationID int64
-	require.NoError(t, f.database.QueryRow(`SELECT id FROM investment_operations WHERE transaction_id = ?`,
+	require.NoError(t, f.database.QueryRow(`SELECT id FROM investment_operations WHERE id IN (SELECT link.operation_id FROM investment_operation_journal_links link JOIN transaction_versions version ON version.id = link.transaction_version_id WHERE version.transaction_id = ? AND link.role = 'primary')`,
 		transactionID).Scan(&operationID))
 	return operationID
 }
@@ -71,7 +71,7 @@ func TestReverseManualSaleReplaysLaterSaleAndKeepsOriginalHistory(t *testing.T) 
 	var correctionOfOperationID int64
 	var auditID int64
 	require.NoError(t, f.database.QueryRow(`SELECT correction_of_operation_id, created_audit_event_id
-		FROM investment_operations WHERE transaction_id = ?`, reversal.ID).Scan(&correctionOfOperationID, &auditID))
+		FROM investment_operations WHERE id IN (SELECT link.operation_id FROM investment_operation_journal_links link JOIN transaction_versions version ON version.id = link.transaction_version_id WHERE version.transaction_id = ? AND link.role = 'primary')`, reversal.ID).Scan(&correctionOfOperationID, &auditID))
 	require.Equal(t, operationID, correctionOfOperationID)
 	var retiredAuditID int64
 	require.NoError(t, f.database.QueryRow(`SELECT voided_audit_event_id FROM price_observations

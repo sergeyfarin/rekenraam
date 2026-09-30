@@ -54,7 +54,9 @@ func TestReplaceLatestManualSalePostsOneAuditedCompoundCorrection(t *testing.T) 
 	require.EqualValues(t, 1, activePriceCount)
 	require.NoError(t, f.database.QueryRow(`SELECT link.transaction_version_id FROM investment_operation_journal_links link
 		JOIN investment_operations operation ON operation.id = link.operation_id
-		WHERE operation.transaction_id = ? AND link.role = 'reversal'`, result.Replacement.Transaction.ID).Scan(&linkedInverse))
+		WHERE (SELECT linked_version.transaction_id FROM investment_operation_journal_links journal_link
+        JOIN transaction_versions linked_version ON linked_version.id = journal_link.transaction_version_id
+        WHERE journal_link.operation_id = operation.id AND journal_link.role = 'primary' ORDER BY journal_link.link_seq LIMIT 1) = ? AND link.role = 'reversal'`, result.Replacement.Transaction.ID).Scan(&linkedInverse))
 	require.Equal(t, result.Inverse.VersionID, linkedInverse)
 	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
 	require.NoError(t, err)

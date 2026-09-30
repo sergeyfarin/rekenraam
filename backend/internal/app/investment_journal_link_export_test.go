@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/csv"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,17 +38,12 @@ func TestInvestmentOperationExportAndImportEffectsUsePrimaryJournalLinks(t *test
 	_, err = exporter.writeInvestmentOperationsCSV(ctx, &before, snapshot)
 	require.NoError(t, err)
 	require.NoError(t, snapshot.Rollback())
-	_, err = f.database.ExecContext(ctx, "DROP TRIGGER investment_operations_no_update")
+	requireInvestmentHeaderRetired(t, f)
+	exported, err := csv.NewReader(bytes.NewReader(before.Bytes())).ReadAll()
 	require.NoError(t, err)
-	_, err = f.database.ExecContext(ctx, "UPDATE investment_operations SET transaction_id = NULL")
-	require.NoError(t, err)
-	var after bytes.Buffer
-	snapshot, err = db.NewExportRepository(f.database).Snapshot(ctx)
-	require.NoError(t, err)
-	_, err = exporter.writeInvestmentOperationsCSV(ctx, &after, snapshot)
-	require.NoError(t, err)
-	require.NoError(t, snapshot.Rollback())
-	require.Equal(t, before.String(), after.String(), "multi-journal replacement must keep its primary representative")
+	require.Len(t, exported, 3, "one row per operation even for a multi-journal replacement")
+	require.Equal(t, strconv.FormatInt(original.Transaction.ID, 10), exported[1][1])
+	require.Equal(t, strconv.FormatInt(corrected.Replacement.Transaction.ID, 10), exported[2][1])
 
 	operation, err := f.investmentService.repository.BuyOperationByTransactionID(ctx, BookID, corrected.Replacement.Transaction.ID)
 	require.NoError(t, err)

@@ -333,6 +333,12 @@ to their posting versions. Its checksum changed. Stop the app and reset the
 same disposable `DATABASE_URL` database and sidecars using the command above
 before restarting. No installed v0.1 database exists.
 
+**BREAKING DEV DATABASE, R16 journal-link authority (2026-09-30):** `0001`
+now removes `investment_operations.transaction_id`; pinned journal links are
+the sole relationship. The checksum and frozen seed changed together. Stop the
+app and reset the same disposable `DATABASE_URL` database and sidecars using
+the command above before restarting. No installed v0.1 database exists.
+
 The final pre-`v0.1.0` consolidation changed the highest schema version from 8
 to 1. Databases and backups made before that consolidation are incompatible in
 both directions: export anything worth keeping before updating, then recreate

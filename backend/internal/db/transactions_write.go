@@ -155,11 +155,11 @@ func insertTransactionWithAuditEventTx(ctx context.Context, tx *sql.Tx, params C
 		}
 		operationResult, err := tx.ExecContext(ctx, `
 			INSERT INTO investment_operations (
-				book_id, transaction_id, operation_kind, event_date,
+				book_id, operation_kind, event_date,
 				created_at, created_audit_event_id, correction_of_operation_id,
 				correction_mode, correction_reason
-			) VALUES (?, ?, ?, ?, ?, ?, NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''))
-		`, params.BookID, transactionID, params.Spec.InvestmentOperationKind,
+			) VALUES (?, ?, ?, ?, ?, NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''))
+		`, params.BookID, params.Spec.InvestmentOperationKind,
 			params.Spec.TransactionDate, params.CreatedAt, auditEventID,
 			params.InvestmentCorrectionOfOperationID, params.InvestmentCorrectionMode,
 			params.InvestmentCorrectionReason)
