@@ -52,10 +52,15 @@ journal. An inverse journal linked as a correction reversal has no new source
 components. Gross and fees included within net clearing have
 no individual posting link. Every currently shipped operation kind requires a
 posted journal link; a future basis-only kind needs an explicit exemption.
-Self-check also
-compares single-disposal sell/write-off proceeds with their cost-currency
-clearing postings using exact arithmetic; compound disposal attribution remains
-an open data-contract gate, not an accepted change to ADR 0013. The reviewed
+Self-check also compares aggregate sell/write-off proceeds with their clearing
+postings per operation, pinned journal version and cost currency, streaming each
+decision and shared posting once and summing in exact Go arithmetic. Multiple
+decisions are no longer silently excluded; negative proceeds, differing scales
+and wide coefficients retain their exact values. A decision must have a matching
+non-reversal operation journal link, even if another journal has equal amounts.
+Individual compound disposal attribution remains an open data-contract gate;
+equal and opposite errors within one clearing group still require explicit
+decision/component attribution. This is not an accepted change to ADR 0013. The reviewed
 baseline now keys disposal decisions by `(operation_id, decision_seq)`; current
 single-disposal writers emit sequence 1. Correction writers also still have
 separate transaction orchestration. Complete these integrity and correction
