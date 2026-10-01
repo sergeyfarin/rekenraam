@@ -97,12 +97,11 @@ Bundle schema 4 adds `disposal-clearing-allocations.csv`. The ADR 0013 baseline,
 checksum and frozen seed are updated together; no legacy databases exist.
 T-110 #125's current-command integrity acceptance is complete, including the
 nullable projection/read/export gate. Unknown-basis source
-and command replay remain scoped to slice 5; correction writer convergence
-remains in T-75b. The reviewed
+and command replay remain scoped to slice 5; remaining correction gates
+belong to T-75b. The reviewed
 baseline now keys disposal decisions by `(operation_id, decision_seq)`; current
-single-disposal writers emit sequence 1. Buy/sale reversals now share the
-investment transaction writer; compound buy/sale replacements still have
-separate transaction orchestration. Complete the remaining T-75b correction
+single-disposal writers emit sequence 1. Buy/sale reversals and compound buy/sale replacements now share the
+investment transaction writer, including atomic source acceptance. Complete the remaining T-75b correction
 gates before adding outbound transfers or basis actions.
 
 ## Outcome and boundaries
@@ -632,7 +631,8 @@ next family.
    this refines ADR 0013's foundation-to-correction sequence.
    The named sub-slices below are complete individually, while source-file-driven
    imported correction, broader
-   operation corrections, and shared correction orchestration remain open.
+   operation corrections remain open; shared buy/sale orchestration is complete
+   in 4ag–4ah.
    - **4a — immutable intent reader — complete 2026-09-27.** The long-position
      reader takes opening terms from lot facts and disposal terms from decisions,
      retains method/provenance and specific-lot elections, and orders them by
@@ -976,6 +976,21 @@ next family.
      checkpoints remain intact, and retry succeeds. Compound replacements and
      their source-acceptance callback still need shared orchestration; this
      does not complete T-75b's other source/correction-family gates.
+   - **4ah — shared compound replacement orchestration — complete 2026-10-01.**
+     BUY and SALE replacements now use the same investment writer as ordinary
+     commands and native reversals. It owns the SQLite transaction, one audit
+     for ordered inverse/replacement journals, checkpoint invalidation, source
+     acceptance and commit/rollback. Pinned source/import ancestry guards and
+     historical-sale replay preparation run before either journal is inserted.
+     Kind-specific lot creation, disposal decisions, dependent replay and price
+     retirement remain atomic effects. Each journal retains its own affected
+     checkpoint IDs; source acceptance runs after all checkpoint changes. Named
+     tests cover both kinds' stale prepared commands, forced late checkpoint
+     failure and acceptance callback failure, unchanged financial state and
+     successful retry. Existing Trading 212 revision tests retain original
+     source identity and staged acceptance behavior. No schema/API/UI scope
+     changes; verified source cancellation, wider source revisions and other
+     operation correction/backdating gates remain in T-75b.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

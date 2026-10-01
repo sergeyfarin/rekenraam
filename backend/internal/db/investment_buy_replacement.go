@@ -146,98 +146,65 @@ func (r *InvestmentRepository) ReplaceBuyWithPostWrite(ctx context.Context, expe
 		replacementParams.CorrectionOfTransactionID.Int64 != expected.TransactionID {
 		return BuyReplacementRecord{}, fmt.Errorf("%w: buy replacement is incomplete", ErrInvalidDisposalParams)
 	}
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return BuyReplacementRecord{}, fmt.Errorf("begin buy replacement: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
-	current, err := checkBuyOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
-	if err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	if _, err := readBookForUpdate(ctx, tx, inverseParams.BookID); err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	for _, params := range []CreateTransactionParams{inverseParams, replacementParams} {
-		if err := requireAccountRuleDependenciesTx(ctx, tx, params.Spec, params.AccountRuleDependencies); err != nil {
-			return BuyReplacementRecord{}, err
-		}
-	}
-	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
-		BookID: inverseParams.BookID, ActorUserID: inverseParams.ActorUserID,
-		AuthSessionID: inverseParams.AuthSessionID, OccurredAt: inverseParams.CreatedAt,
-		RequestID: inverseParams.RequestID, OriginType: inverseParams.OriginType,
-		Operation: inverseParams.Operation, Reason: inverseParams.ChangeReason,
-	})
-	if err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	inverse, err := insertTransactionWithAuditEventTx(ctx, tx, inverseParams, auditEventID)
-	if err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	replacement, err := insertTransactionWithAuditEventTx(ctx, tx, replacementParams, auditEventID)
-	if err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	operationID, err := investmentOperationIDTx(ctx, tx, replacementParams.BookID, replacement.ID)
-	if err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
+	var current BuyOperationRecord
+	var operationID int64
+	journals, lot, err := executeInvestmentJournalsWithGuardTx(ctx, r.database,
+		[]CreateTransactionParams{inverseParams, replacementParams},
+		func(tx *sql.Tx) error {
+			var err error
+			current, err = checkBuyOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
+			return err
+		}, func(tx *sql.Tx, journals []TransactionRecord, auditEventID int64) (InvestmentLotRecord, error) {
+			inverse, replacement := journals[0], journals[1]
+			var err error
+			operationID, err = investmentOperationIDTx(ctx, tx, replacementParams.BookID, replacement.ID)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
 		(book_id, operation_id, transaction_version_id, link_seq, role)
 		VALUES (?, ?, ?, 2, 'reversal')`, replacementParams.BookID, operationID, inverse.VersionID); err != nil {
-		return BuyReplacementRecord{}, fmt.Errorf("link buy replacement inverse: %w", err)
-	}
-	lotParams.SourceTransactionID = replacement.ID
-	lotParams.CreatedAt = replacementParams.CreatedAt
-	lot, err := createLotWithAuditTx(ctx, tx, lotParams, auditEventID, true)
+				return InvestmentLotRecord{}, fmt.Errorf("link buy replacement inverse: %w", err)
+			}
+			lotParams.SourceTransactionID = replacement.ID
+			lotParams.CreatedAt = replacementParams.CreatedAt
+			lot, err := createLotWithAuditTx(ctx, tx, lotParams, auditEventID, true)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			intents, err := investmentReplayIntentsQuery(ctx, tx, replacementParams.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			projection, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, intents)
+			if err != nil {
+				if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) {
+					return InvestmentLotRecord{}, fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)
+				}
+				return InvestmentLotRecord{}, err
+			}
+			if err := persistInvestmentReplayProjectionTx(ctx, tx, replacementParams.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID,
+				operationID, auditEventID, replacementParams.ActorUserID, replacementParams.CreatedAt,
+				intents, projection); err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			if err := voidTradePricesForVersionTx(ctx, tx, inverseParams, current.TransactionVersionID, auditEventID); err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			return lot, nil
+		}, func(tx *sql.Tx, _ []TransactionRecord, auditEventID int64) error {
+			if postWrite != nil {
+				if err := postWrite(tx, operationID, auditEventID); err != nil {
+					return fmt.Errorf("record buy source revision: %w", err)
+				}
+			}
+			return nil
+		})
 	if err != nil {
 		return BuyReplacementRecord{}, err
 	}
-	intents, err := investmentReplayIntentsQuery(ctx, tx, replacementParams.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, "long")
-	if err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	projection, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, intents)
-	if err != nil {
-		if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) {
-			return BuyReplacementRecord{}, fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)
-		}
-		return BuyReplacementRecord{}, err
-	}
-	if err := persistInvestmentReplayProjectionTx(ctx, tx, replacementParams.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID,
-		operationID, auditEventID, replacementParams.ActorUserID, replacementParams.CreatedAt,
-		intents, projection); err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	if err := voidTradePricesForVersionTx(ctx, tx, inverseParams, current.TransactionVersionID, auditEventID); err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	inverse.InvalidatedCheckpointIDs, err = invalidateCreateTransactionCheckpointsTx(ctx, tx, inverseParams, auditEventID)
-	if err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	replacement.InvalidatedCheckpointIDs, err = invalidateCreateTransactionCheckpointsTx(ctx, tx, replacementParams, auditEventID)
-	if err != nil {
-		return BuyReplacementRecord{}, err
-	}
-	if postWrite != nil {
-		if err := postWrite(tx, operationID, auditEventID); err != nil {
-			return BuyReplacementRecord{}, fmt.Errorf("record buy source revision: %w", err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return BuyReplacementRecord{}, fmt.Errorf("commit buy replacement: %w", err)
-	}
-	committed = true
-	return BuyReplacementRecord{Inverse: inverse, Replacement: replacement, Lot: lot}, nil
+	return BuyReplacementRecord{Inverse: journals[0], Replacement: journals[1], Lot: lot}, nil
 }

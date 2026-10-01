@@ -45,162 +45,137 @@ func (r *InvestmentRepository) ReplaceSaleWithPostWrite(ctx context.Context, exp
 		disposalParams.CostCommodityID != expected.CostCommodityID {
 		return noInverse, noReplacement, nil, noDecision, fmt.Errorf("%w: sale replacement is incomplete", ErrInvalidDisposalParams)
 	}
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, fmt.Errorf("begin sale replacement: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
-	current, err := checkSaleOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	intents, err := investmentReplayIntentsQuery(ctx, tx, inverseParams.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, "long")
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	saleIndex := -1
-	for index, intent := range intents {
-		if intent.OperationID == current.OperationID && intent.Kind == "disposal" {
-			saleIndex = index
-			break
-		}
-	}
-	if saleIndex < 0 {
-		return noInverse, noReplacement, nil, noDecision, ErrNotFound
-	}
-	latestRewriteDate, err := latestPositionRewriteDateTx(ctx, tx, inverseParams.BookID,
-		current.AccountID, current.CommodityID)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	// A later sale that was subsequently reversed is absent from effective
-	// intents but its immutable dated event still makes the ordinary disposal
-	// guard reject a backdated insert. Use chronological replay in that case.
-	olderSale := saleIndex < len(intents)-1 || latestRewriteDate > current.EventDate
-	sourceIntents := intents
-	sourceDecisionID := intents[saleIndex].DecisionID
-	if _, err := readBookForUpdate(ctx, tx, inverseParams.BookID); err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	for _, params := range []CreateTransactionParams{inverseParams, replacementParams} {
-		if err := requireAccountRuleDependenciesTx(ctx, tx, params.Spec, params.AccountRuleDependencies); err != nil {
-			return noInverse, noReplacement, nil, noDecision, err
-		}
-	}
-	auditEventID, err := insertAuditEvent(ctx, tx, AuditEventParams{
-		BookID: inverseParams.BookID, ActorUserID: inverseParams.ActorUserID,
-		AuthSessionID: inverseParams.AuthSessionID, OccurredAt: inverseParams.CreatedAt,
-		RequestID: inverseParams.RequestID, OriginType: inverseParams.OriginType,
-		Operation: inverseParams.Operation, Reason: inverseParams.ChangeReason,
-	})
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	inverse, err := insertTransactionWithAuditEventTx(ctx, tx, inverseParams, auditEventID)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	replacement, err := insertTransactionWithAuditEventTx(ctx, tx, replacementParams, auditEventID)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	operationID, err := investmentOperationIDTx(ctx, tx, replacementParams.BookID, replacement.ID)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
+	var current SaleOperationRecord
+	var sourceIntents []InvestmentReplayIntent
+	var sourceDecisionID, operationID int64
+	var olderSale bool
+	journals, effects, err := executeInvestmentJournalsWithGuardTx(ctx, r.database,
+		[]CreateTransactionParams{inverseParams, replacementParams},
+		func(tx *sql.Tx) error {
+			var err error
+			current, err = checkSaleOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
+			if err != nil {
+				return err
+			}
+			intents, err := investmentReplayIntentsQuery(ctx, tx, inverseParams.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+			if err != nil {
+				return err
+			}
+			saleIndex := -1
+			for index, intent := range intents {
+				if intent.OperationID == current.OperationID && intent.Kind == "disposal" {
+					saleIndex = index
+					break
+				}
+			}
+			if saleIndex < 0 {
+				return ErrNotFound
+			}
+			latestRewriteDate, err := latestPositionRewriteDateTx(ctx, tx, inverseParams.BookID,
+				current.AccountID, current.CommodityID)
+			if err != nil {
+				return err
+			}
+			// A later sale that was subsequently reversed is absent from effective
+			// intents but its immutable dated event still makes the ordinary disposal
+			// guard reject a backdated insert. Use chronological replay in that case.
+			olderSale = saleIndex < len(intents)-1 || latestRewriteDate > current.EventDate
+			sourceIntents = intents
+			sourceDecisionID = intents[saleIndex].DecisionID
+			return nil
+		}, func(tx *sql.Tx, journals []TransactionRecord, auditEventID int64) (saleReplacementEffects, error) {
+			inverse, replacement := journals[0], journals[1]
+			var err error
+			operationID, err = investmentOperationIDTx(ctx, tx, replacementParams.BookID, replacement.ID)
+			if err != nil {
+				return saleReplacementEffects{}, err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
 		(book_id, operation_id, transaction_version_id, link_seq, role)
 		VALUES (?, ?, ?, 2, 'reversal')`, replacementParams.BookID, operationID, inverse.VersionID); err != nil {
-		return noInverse, noReplacement, nil, noDecision, fmt.Errorf("link replacement inverse: %w", err)
-	}
-	disposalParams.TransactionID = replacement.ID
-	disposalParams.CreatedAt = replacementParams.CreatedAt
-	var disposals []LotDisposalRecord
-	var decision DisposalDecisionRecord
-	if olderSale {
-		proposedIntents, err := proposedSaleReplayIntents(sourceIntents, current.OperationID, disposalParams)
-		if err != nil {
-			return noInverse, noReplacement, nil, noDecision, err
-		}
-		proposed, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
-			current.AccountID, current.CommodityID, current.CostCommodityID, proposedIntents)
-		if err != nil {
-			return noInverse, noReplacement, nil, noDecision, err
-		}
-		var historical *InvestmentReplayDisposal
-		for index := range proposed.Disposals {
-			if proposed.Disposals[index].DecisionID == sourceDecisionID {
-				historical = &proposed.Disposals[index]
-				break
+				return saleReplacementEffects{}, fmt.Errorf("link replacement inverse: %w", err)
 			}
-		}
-		if historical == nil {
-			return noInverse, noReplacement, nil, noDecision,
-				fmt.Errorf("%w: corrected sale has no simulated allocation", ErrInvalidDisposalParams)
-		}
-		disposals, err = insertHistoricalSaleDisposalsTx(ctx, tx, disposalParams,
-			historical.Allocations, auditEventID)
-		if err != nil {
-			return noInverse, noReplacement, nil, noDecision, err
-		}
-		decision, err = createDisposalDecisionTx(ctx, tx, replacement, disposalParams, disposals, auditEventID)
-		if err != nil {
-			return noInverse, noReplacement, nil, noDecision, err
-		}
-	}
-	intents, err = investmentReplayIntentsQuery(ctx, tx, replacementParams.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+			disposalParams.TransactionID = replacement.ID
+			disposalParams.CreatedAt = replacementParams.CreatedAt
+			var disposals []LotDisposalRecord
+			var decision DisposalDecisionRecord
+			if olderSale {
+				proposedIntents, err := proposedSaleReplayIntents(sourceIntents, current.OperationID, disposalParams)
+				if err != nil {
+					return saleReplacementEffects{}, err
+				}
+				proposed, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
+					current.AccountID, current.CommodityID, current.CostCommodityID, proposedIntents)
+				if err != nil {
+					return saleReplacementEffects{}, err
+				}
+				var historical *InvestmentReplayDisposal
+				for index := range proposed.Disposals {
+					if proposed.Disposals[index].DecisionID == sourceDecisionID {
+						historical = &proposed.Disposals[index]
+						break
+					}
+				}
+				if historical == nil {
+					return saleReplacementEffects{},
+						fmt.Errorf("%w: corrected sale has no simulated allocation", ErrInvalidDisposalParams)
+				}
+				disposals, err = insertHistoricalSaleDisposalsTx(ctx, tx, disposalParams,
+					historical.Allocations, auditEventID)
+				if err != nil {
+					return saleReplacementEffects{}, err
+				}
+				decision, err = createDisposalDecisionTx(ctx, tx, replacement, disposalParams, disposals, auditEventID)
+				if err != nil {
+					return saleReplacementEffects{}, err
+				}
+			}
+			intents, err := investmentReplayIntentsQuery(ctx, tx, replacementParams.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+			if err != nil {
+				return saleReplacementEffects{}, err
+			}
+			projection, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, intents)
+			if err != nil {
+				return saleReplacementEffects{}, err
+			}
+			if err := persistInvestmentReplayProjectionTx(ctx, tx, replacementParams.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID,
+				operationID, auditEventID, replacementParams.ActorUserID, replacementParams.CreatedAt,
+				intents, projection); err != nil {
+				return saleReplacementEffects{}, err
+			}
+			if !olderSale {
+				disposals, err = disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID, false)
+				if err != nil {
+					return saleReplacementEffects{}, err
+				}
+				decision, err = createDisposalDecisionTx(ctx, tx, replacement, disposalParams, disposals, auditEventID)
+				if err != nil {
+					return saleReplacementEffects{}, err
+				}
+			}
+			if err := voidTradePricesForVersionTx(ctx, tx, inverseParams, current.TransactionVersionID, auditEventID); err != nil {
+				return saleReplacementEffects{}, err
+			}
+			return saleReplacementEffects{disposals: disposals, decision: decision}, nil
+		}, func(tx *sql.Tx, _ []TransactionRecord, auditEventID int64) error {
+			if postWrite != nil {
+				return postWrite(tx, operationID, auditEventID)
+			}
+			return nil
+		})
 	if err != nil {
 		return noInverse, noReplacement, nil, noDecision, err
 	}
-	projection, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, intents)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	if err := persistInvestmentReplayProjectionTx(ctx, tx, replacementParams.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID,
-		operationID, auditEventID, replacementParams.ActorUserID, replacementParams.CreatedAt,
-		intents, projection); err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	if !olderSale {
-		disposals, err = disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID, false)
-		if err != nil {
-			return noInverse, noReplacement, nil, noDecision, err
-		}
-		decision, err = createDisposalDecisionTx(ctx, tx, replacement, disposalParams, disposals, auditEventID)
-		if err != nil {
-			return noInverse, noReplacement, nil, noDecision, err
-		}
-	}
-	if err := voidTradePricesForVersionTx(ctx, tx, inverseParams, current.TransactionVersionID, auditEventID); err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	inverse.InvalidatedCheckpointIDs, err = invalidateCreateTransactionCheckpointsTx(ctx, tx, inverseParams, auditEventID)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	replacement.InvalidatedCheckpointIDs, err = invalidateCreateTransactionCheckpointsTx(ctx, tx, replacementParams, auditEventID)
-	if err != nil {
-		return noInverse, noReplacement, nil, noDecision, err
-	}
-	if postWrite != nil {
-		if err := postWrite(tx, operationID, auditEventID); err != nil {
-			return noInverse, noReplacement, nil, noDecision, err
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		return noInverse, noReplacement, nil, noDecision, fmt.Errorf("commit sale replacement: %w", err)
-	}
-	committed = true
-	return inverse, replacement, disposals, decision, nil
+	return journals[0], journals[1], effects.disposals, effects.decision, nil
+}
+
+type saleReplacementEffects struct {
+	disposals []LotDisposalRecord
+	decision  DisposalDecisionRecord
 }
 
 // These events are immutable evidence of the corrected sale at its historical
