@@ -171,6 +171,15 @@ non-trivial diff (yours or reviewed):
     `TestUnsupportedSaleFillCannotUseCashFallback`,
     `TestUnsupportedFillCannotCorrectAcceptedBuyOrSale`.
 
+22. **A correction preview reporting checkpoints for an impossible replay** —
+    buy replacement preview originally validated journal shape but never tested
+    dependent lots. Run the proposed domain correction in a rolled-back path
+    before reporting impact, with the same ordering, lot lineage and elections
+    as commit. Never accept staged source evidence or expose temporary IDs.
+    Snapshot durable rows after failure and repeated successful previews; the
+    actual write still rechecks dependencies and reconciliation. Named regression:
+    `TestBuyReplacementPreviewRejectsDependentDisposalWithoutWriting`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

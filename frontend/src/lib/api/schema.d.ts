@@ -9937,7 +9937,7 @@ export interface paths {
         put?: never;
         /**
          * Preview reconciliation impact of a Trading 212 buy source correction
-         * @description Read-only preview using the staged provider quantity and net settlement. Returns the distinct checkpoints affected by the inverse and replacement journals. Uses the correction command's source eligibility and supported scope checks, without accepting a source revision or changing the ledger. The command rechecks eligibility and reconciliation at commit time.
+         * @description Read-only preview using the staged provider quantity and net settlement. Returns the distinct checkpoints affected by the inverse and replacement journals. Uses the correction command's source eligibility and supported scope checks and proves dependent disposal/transfer replay through a rolled-back buy replacement, without accepting a source revision or changing the ledger. The command rechecks eligibility and reconciliation at commit time.
          */
         post: {
             parameters: {
@@ -9991,7 +9991,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Staged source row or current buy no longer eligible */
+                /** @description Staged source row or current buy no longer eligible, or dependent disposal/transfer impossible */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -14328,7 +14328,7 @@ export interface paths {
         put?: never;
         /**
          * Preview reconciliation impact of a long-buy replacement
-         * @description Plans the inverse and corrected buy journals and returns their distinct affected checkpoints without writing. Pass reconciliation_override=true to the replacement command after reviewing those checkpoints.
+         * @description Plans the inverse and corrected buy journals and returns their distinct affected checkpoints without durable changes. Replays the proposed buy through the replacement writer in a rolled-back transaction, refusing impossible dependent disposals or transfers with INVESTMENT_BUY_DEPENDENCY. Pass reconciliation_override=true to the replacement command after reviewing those checkpoints.
          */
         post: {
             parameters: {
@@ -14381,7 +14381,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Buy already corrected, imported, or changed */
+                /** @description Buy already corrected, imported without source identity, changed, or dependent disposal/transfer impossible */
                 409: {
                     headers: {
                         [name: string]: unknown;

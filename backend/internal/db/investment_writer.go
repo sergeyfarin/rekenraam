@@ -45,6 +45,27 @@ func executeInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *
 	guard func(*sql.Tx) error, effect func(*sql.Tx, []TransactionRecord, int64) (T, error),
 	postWrite func(*sql.Tx, []TransactionRecord, int64) error,
 ) ([]TransactionRecord, T, error) {
+	return runInvestmentJournalsWithGuardTx(ctx, database, params, guard, effect, postWrite, true)
+}
+
+// previewInvestmentJournalsWithGuardTx runs the exact journal and domain path,
+// then rolls back. Its temporary IDs must never be exposed as durable records.
+// Source acceptance is deliberately omitted from a preview.
+func previewInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.DB, params []CreateTransactionParams,
+	guard func(*sql.Tx) error, effect func(*sql.Tx, []TransactionRecord, int64) (T, error),
+	postWrite func(*sql.Tx, []TransactionRecord, int64) error,
+) ([]TransactionRecord, T, error) {
+	if postWrite != nil {
+		var zero T
+		return nil, zero, fmt.Errorf("investment preview cannot accept source evidence")
+	}
+	return runInvestmentJournalsWithGuardTx(ctx, database, params, guard, effect, nil, false)
+}
+
+func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.DB, params []CreateTransactionParams,
+	guard func(*sql.Tx) error, effect func(*sql.Tx, []TransactionRecord, int64) (T, error),
+	postWrite func(*sql.Tx, []TransactionRecord, int64) error, persist bool,
+) ([]TransactionRecord, T, error) {
 	var zero T
 	if len(params) == 0 {
 		return nil, zero, fmt.Errorf("investment write requires a journal")
@@ -58,9 +79,9 @@ func executeInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *
 	if err != nil {
 		return nil, zero, fmt.Errorf("begin investment write: %w", err)
 	}
-	committed := false
+	finished := false
 	defer func() {
-		if !committed {
+		if !finished {
 			rollbackTx(ctx, tx)
 		}
 	}()
@@ -104,9 +125,13 @@ func executeInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *
 			return nil, zero, err
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, zero, fmt.Errorf("commit investment write: %w", err)
+	if persist {
+		if err := tx.Commit(); err != nil {
+			return nil, zero, fmt.Errorf("commit investment write: %w", err)
+		}
+	} else if err := tx.Rollback(); err != nil {
+		return nil, zero, fmt.Errorf("rollback investment preview: %w", err)
 	}
-	committed = true
+	finished = true
 	return journals, result, nil
 }

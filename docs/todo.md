@@ -33,6 +33,11 @@ Last reconciled: 2026-10-01.
   journal and late checkpoint/acceptance rollback plus stale-command coverage.
   Verified source execution cancellation, wider source revisions and other
   operation correction/backdating gates remain in #99.
+- [x] Prove dependent replay in manual/source-linked and Trading 212 buy
+  replacement reconciliation previews (slice 4ai). Preview uses the actual
+  writer in a rolled-back transaction, refuses named disposal/transfer conflicts,
+  and preserves exact durable rows. The commit still rechecks and requires
+  explicit checkpoint override.
 - [x] Preserve Trading 212 fill taxonomy and hold unsupported or missing
   types before any trade/cash import or source correction (slice 4af,
   [T-112 #127](https://github.com/sergeyfarin/rekenraam/issues/127)). Source
@@ -45,7 +50,8 @@ Last reconciled: 2026-10-01.
   explicit nullable projected-basis knowledge, export and mutation/seeded tests.
   Current commands require known source basis; unknown immutable facts and
   resolution replay remain slice 5 gates. Sharing correction transaction
-  orchestration remains in T-75b #99.
+  orchestration is complete in T-75b slices 4ag–4ah; its remaining correction
+  gates stay in #99.
 
 ## Then, within R16
 

@@ -991,6 +991,25 @@ next family.
      source identity and staged acceptance behavior. No schema/API/UI scope
      changes; verified source cancellation, wider source revisions and other
      operation correction/backdating gates remain in T-75b.
+   - **4ai — replay-aware buy replacement preview — complete 2026-10-01.**
+     Manual/source-linked buy replacement and Trading 212 buy source-correction
+     reconciliation previews now prove the proposed acquisition and dependent
+     disposal/transfer replay before returning affected checkpoints. Preview
+     and commit share journal/economic/lot preparation and the compound writer;
+     preview rolls back the complete write transaction and never accepts source
+     evidence or exposes temporary IDs. Using the actual replacement lot and
+     correction chain preserves write-time selection, specific-lot lineage and
+     root same-day ordering rather than approximating them with the old lot.
+     An impossible disposal/transfer returns the existing named
+     `INVESTMENT_BUY_DEPENDENCY` conflict. The write still repeats all guards and
+     requires explicit reconciliation override. Named tests reproduce the old
+     false-success preview under all four methods, check exact unchanged rows
+     after failed/repeated successful previews, verify independent committed
+     basis/gains, stale prepared sources, same-day ordering, transfer conflicts,
+     staged source non-acceptance and late checkpoint-failure rollback. API and
+     OpenAPI contracts cover both existing preview routes. This adds no date,
+     account, instrument or currency correction scope; remaining T-75b source
+     cancellation and correction-family/backdating gates stay open.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

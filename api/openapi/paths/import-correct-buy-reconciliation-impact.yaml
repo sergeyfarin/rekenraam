@@ -4,7 +4,8 @@ post:
     Read-only preview using the staged provider quantity and net settlement.
     Returns the distinct checkpoints affected by the inverse and replacement
     journals. Uses the correction command's source eligibility and supported
-    scope checks, without accepting a source revision or changing the ledger.
+    scope checks and proves dependent disposal/transfer replay through a rolled-back
+    buy replacement, without accepting a source revision or changing the ledger.
     The command rechecks eligibility and reconciliation at commit time.
   parameters:
     - in: path
@@ -47,7 +48,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Staged source row or current buy no longer eligible
+      description: Staged source row or current buy no longer eligible, or dependent disposal/transfer impossible
       content:
         application/json:
           schema:

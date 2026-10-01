@@ -33,6 +33,11 @@ func (s *TransactionService) reconciliationImpactForCreate(ctx context.Context, 
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
+	return s.reconciliationImpactForPreparedCreate(ctx, spec)
+}
+
+// Prepared investment journals have already passed posting/account validation.
+func (s *TransactionService) reconciliationImpactForPreparedCreate(ctx context.Context, spec db.TransactionSpec) (ReconciliationImpact, error) {
 	refs, err := s.resolveCheckpointRefs(ctx, reconciliationCandidatesFromSpec(spec))
 	if err != nil {
 		return ReconciliationImpact{}, err

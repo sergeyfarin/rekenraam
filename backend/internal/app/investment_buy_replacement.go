@@ -63,9 +63,36 @@ func (s *InvestmentService) replaceBuyWithPostWrite(ctx context.Context, input R
 func (s *InvestmentService) replaceBuyWithPostWriteOrigin(ctx context.Context, input ReplaceInvestmentBuyInput,
 	originType, operationCode string, postWrite func(*sql.Tx, int64, int64) error,
 ) (ReplaceInvestmentBuyResult, error) {
-	operation, inversePlan, err := s.buyReplacementPlan(ctx, input)
+	prepared, err := s.prepareBuyReplacementWrite(ctx, input, originType, operationCode)
 	if err != nil {
 		return ReplaceInvestmentBuyResult{}, err
+	}
+	record, err := s.repository.ReplaceBuyWithPostWrite(ctx, prepared.Operation, prepared.Inverse, prepared.Replacement, prepared.Lot, postWrite)
+	if err != nil {
+		return ReplaceInvestmentBuyResult{}, mapBuyReplacementError(err)
+	}
+	lotID := record.Lot.ID
+	return ReplaceInvestmentBuyResult{
+		Inverse:                toTransaction(record.Inverse),
+		Replacement:            InvestmentTradeResult{Transaction: toTransaction(record.Replacement), LotID: &lotID},
+		CorrectedTransactionID: prepared.Operation.TransactionID,
+	}, nil
+}
+
+type preparedBuyReplacementWrite struct {
+	Operation   db.BuyOperationRecord
+	Inverse     db.CreateTransactionParams
+	Replacement db.CreateTransactionParams
+	Lot         db.CreateInvestmentLotParams
+}
+
+// Preview and commit freeze identical journal, source-economics and lot facts.
+func (s *InvestmentService) prepareBuyReplacementWrite(ctx context.Context, input ReplaceInvestmentBuyInput,
+	originType, operationCode string,
+) (preparedBuyReplacementWrite, error) {
+	operation, inversePlan, err := s.buyReplacementPlan(ctx, input)
+	if err != nil {
+		return preparedBuyReplacementWrite{}, err
 	}
 	replacement := input.Replacement
 	replacement.OwnerUserID = input.OwnerUserID
@@ -76,57 +103,43 @@ func (s *InvestmentService) replaceBuyWithPostWriteOrigin(ctx context.Context, i
 	replacement.ChangeReason = inversePlan.ChangeReason
 	replacement.ReconciliationOverride = input.ReconciliationOverride
 	if err := validateBuyReplacementTrade(replacement, operation); err != nil {
-		return ReplaceInvestmentBuyResult{}, err
+		return preparedBuyReplacementWrite{}, err
 	}
 	inversePlan.OriginType = originType
 	inversePlan.Operation = operationCode
 	inversePlan.ReconciliationOverride = input.ReconciliationOverride
 	inverseParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, inversePlan, nil)
 	if err != nil {
-		return ReplaceInvestmentBuyResult{}, err
+		return preparedBuyReplacementWrite{}, err
 	}
 	replacementParams, lotParams, err := s.prepareBuyWrite(ctx, replacement)
 	if err != nil {
-		return ReplaceInvestmentBuyResult{}, err
+		return preparedBuyReplacementWrite{}, err
 	}
 	replacementParams.CorrectionOfTransactionID = inverseParams.CorrectionOfTransactionID
 	replacementParams.InvestmentCorrectionOfOperationID = operation.OperationID
 	replacementParams.InvestmentCorrectionMode = "replace"
 	replacementParams.InvestmentCorrectionReason = inversePlan.ChangeReason
 	replacementParams.CreatedAt = inverseParams.CreatedAt
-	record, err := s.repository.ReplaceBuyWithPostWrite(ctx, operation, inverseParams, replacementParams, lotParams, postWrite)
-	if err != nil {
-		return ReplaceInvestmentBuyResult{}, mapBuyReplacementError(err)
-	}
-	lotID := record.Lot.ID
-	return ReplaceInvestmentBuyResult{
-		Inverse:                toTransaction(record.Inverse),
-		Replacement:            InvestmentTradeResult{Transaction: toTransaction(record.Replacement), LotID: &lotID},
-		CorrectedTransactionID: operation.TransactionID,
-	}, nil
+	return preparedBuyReplacementWrite{Operation: operation, Inverse: inverseParams, Replacement: replacementParams, Lot: lotParams}, nil
 }
 
 func (s *InvestmentService) ReplaceBuyReconciliationImpact(ctx context.Context, input ReplaceInvestmentBuyInput) (ReconciliationImpact, error) {
-	operation, inversePlan, err := s.buyReplacementPlan(ctx, input)
+	// A preview can examine reconciled periods without the owner authorizing a
+	// write. Simulation and all checkpoint changes are rolled back together.
+	input.ReconciliationOverride = true
+	prepared, err := s.prepareBuyReplacementWrite(ctx, input, "browser_api", "investment.buy.replace")
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	replacement := input.Replacement
-	replacement.OwnerUserID = input.OwnerUserID
-	if err := validateBuyReplacementTrade(replacement, operation); err != nil {
-		return ReconciliationImpact{}, err
+	if err := s.repository.SimulateBuyReplacement(ctx, prepared.Operation, prepared.Inverse, prepared.Replacement, prepared.Lot); err != nil {
+		return ReconciliationImpact{}, mapBuyReplacementError(err)
 	}
-	plan, err := s.buyPlan(ctx, replacement)
+	inverseImpact, err := s.transactionService.reconciliationImpactForPreparedCreate(ctx, prepared.Inverse.Spec)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	inverseImpact, err := s.transactionService.investmentReconciliationImpactForCreate(ctx,
-		CreateReconciliationImpactInput{OwnerUserID: input.OwnerUserID, Spec: inversePlan.Spec})
-	if err != nil {
-		return ReconciliationImpact{}, err
-	}
-	replacementImpact, err := s.transactionService.investmentReconciliationImpactForCreate(ctx,
-		CreateReconciliationImpactInput{OwnerUserID: input.OwnerUserID, Spec: plan.Create.Spec})
+	replacementImpact, err := s.transactionService.reconciliationImpactForPreparedCreate(ctx, prepared.Replacement.Spec)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}

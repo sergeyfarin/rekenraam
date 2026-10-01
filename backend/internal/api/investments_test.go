@@ -1517,3 +1517,27 @@ func TestBuyInvestment_BackdatedBehindSaleReplaysPosition(t *testing.T) {
 	backdated.TransactionDate = "2026-03-01"
 	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/buy", backdated, http.StatusCreated)
 }
+
+func TestBuyReplacementPreviewAPIRejectsDependentDisposal(t *testing.T) {
+	t.Parallel()
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "BUYPREVIEW")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 50000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&bought))
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "2", 24000)
+	sale.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sale, http.StatusCreated)
+	var before int
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM transactions`).Scan(&before))
+	request := investmentBuyReplacementRequest{Reason: "corrected quantity", Replacement: tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 10000)}
+	path := "/api/v1/investments/transactions/" + strconv.FormatInt(bought.Transaction.ID, 10) + "/replace-buy/reconciliation-impact"
+	conflict := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusConflict)
+	require.Contains(t, conflict.Body.String(), "INVESTMENT_BUY_DEPENDENCY")
+	var after int
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM transactions`).Scan(&after))
+	require.Equal(t, before, after)
+}

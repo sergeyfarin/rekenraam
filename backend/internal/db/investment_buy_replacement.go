@@ -123,6 +123,24 @@ func (r *InvestmentRepository) ReplaceBuyWithPostWrite(ctx context.Context, expe
 	inverseParams, replacementParams CreateTransactionParams, lotParams CreateInvestmentLotParams,
 	postWrite func(*sql.Tx, int64, int64) error,
 ) (BuyReplacementRecord, error) {
+	return r.replaceBuy(ctx, expected, inverseParams, replacementParams, lotParams, postWrite, false)
+}
+
+// SimulateBuyReplacement proves the same opening, ordering, specific-lot
+// lineage, dependent disposals and transfer guards as the write. All journals,
+// audit, lot/revision, price and checkpoint effects are rolled back; source
+// acceptance is never invoked and no temporary IDs escape.
+func (r *InvestmentRepository) SimulateBuyReplacement(ctx context.Context, expected BuyOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, lotParams CreateInvestmentLotParams,
+) error {
+	_, err := r.replaceBuy(ctx, expected, inverseParams, replacementParams, lotParams, nil, true)
+	return err
+}
+
+func (r *InvestmentRepository) replaceBuy(ctx context.Context, expected BuyOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, lotParams CreateInvestmentLotParams,
+	postWrite func(*sql.Tx, int64, int64) error, preview bool,
+) (BuyReplacementRecord, error) {
 	if expected.OperationID <= 0 || expected.LotID <= 0 ||
 		inverseParams.BookID <= 0 || inverseParams.BookID != replacementParams.BookID ||
 		inverseParams.BookID != lotParams.BookID ||
@@ -148,7 +166,20 @@ func (r *InvestmentRepository) ReplaceBuyWithPostWrite(ctx context.Context, expe
 	}
 	var current BuyOperationRecord
 	var operationID int64
-	journals, lot, err := executeInvestmentJournalsWithGuardTx(ctx, r.database,
+	var acceptSource func(*sql.Tx, []TransactionRecord, int64) error
+	if postWrite != nil {
+		acceptSource = func(tx *sql.Tx, _ []TransactionRecord, auditEventID int64) error {
+			if err := postWrite(tx, operationID, auditEventID); err != nil {
+				return fmt.Errorf("record buy source revision: %w", err)
+			}
+			return nil
+		}
+	}
+	write := executeInvestmentJournalsWithGuardTx[InvestmentLotRecord]
+	if preview {
+		write = previewInvestmentJournalsWithGuardTx[InvestmentLotRecord]
+	}
+	journals, lot, err := write(ctx, r.database,
 		[]CreateTransactionParams{inverseParams, replacementParams},
 		func(tx *sql.Tx) error {
 			var err error
@@ -195,14 +226,7 @@ func (r *InvestmentRepository) ReplaceBuyWithPostWrite(ctx context.Context, expe
 				return InvestmentLotRecord{}, err
 			}
 			return lot, nil
-		}, func(tx *sql.Tx, _ []TransactionRecord, auditEventID int64) error {
-			if postWrite != nil {
-				if err := postWrite(tx, operationID, auditEventID); err != nil {
-					return fmt.Errorf("record buy source revision: %w", err)
-				}
-			}
-			return nil
-		})
+		}, acceptSource)
 	if err != nil {
 		return BuyReplacementRecord{}, err
 	}

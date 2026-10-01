@@ -2,7 +2,9 @@ post:
   summary: Preview reconciliation impact of a long-buy replacement
   description: >-
     Plans the inverse and corrected buy journals and returns their distinct
-    affected checkpoints without writing. Pass reconciliation_override=true
+    affected checkpoints without durable changes. Replays the proposed buy
+    through the replacement writer in a rolled-back transaction, refusing
+    impossible dependent disposals or transfers with INVESTMENT_BUY_DEPENDENCY. Pass reconciliation_override=true
     to the replacement command after reviewing those checkpoints.
   parameters:
     - in: path
@@ -41,7 +43,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Buy already corrected, imported, or changed
+      description: Buy already corrected, imported without source identity, changed, or dependent disposal/transfer impossible
       content:
         application/json:
           schema:
