@@ -16,6 +16,8 @@ export type ListImportBatchesResponse = components['schemas']['ListImportBatches
 export type CommitImportBatchRequest = components['schemas']['CommitImportBatchRequest'];
 export type CommitImportBatchResponse = components['schemas']['CommitImportBatchResponse'];
 export type CorrectTrading212BuyRequest = components['schemas']['CorrectTrading212BuyRequest'];
+export type CorrectTrading212SaleRequest = components['schemas']['CorrectTrading212SaleRequest'];
+export type InvestmentSaleReplacementResponse = components['schemas']['InvestmentSaleReplacementResponse'];
 export type InvestmentBuyReplacementResponse = components['schemas']['InvestmentBuyReplacementResponse'];
 export type PreviewCommitResponse = components['schemas']['PreviewCommitResponse'];
 export type ImportProfile = components['schemas']['ImportProfileResponse'];
@@ -251,6 +253,31 @@ export async function correctTrading212Buy(
   csrfToken: string
 ): Promise<InvestmentBuyReplacementResponse> {
   return apiFetch<InvestmentBuyReplacementResponse>(`/api/v1/imports/${batchId}/rows/${rowId}/correct-buy`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify(request)
+  });
+}
+
+export async function previewTrading212SaleCorrectionReconciliation(
+  batchId: number,
+  rowId: number,
+  request: CorrectTrading212SaleRequest
+): Promise<ReconciliationImpactResponse> {
+  return apiFetch<ReconciliationImpactResponse>(`/api/v1/imports/${batchId}/rows/${rowId}/correct-sale/reconciliation-impact`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request)
+  });
+}
+
+export async function correctTrading212Sale(
+  batchId: number,
+  rowId: number,
+  request: CorrectTrading212SaleRequest,
+  csrfToken: string
+): Promise<InvestmentSaleReplacementResponse> {
+  return apiFetch<InvestmentSaleReplacementResponse>(`/api/v1/imports/${batchId}/rows/${rowId}/correct-sale`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
     body: JSON.stringify(request)

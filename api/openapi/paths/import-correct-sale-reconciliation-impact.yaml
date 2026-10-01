@@ -1,0 +1,54 @@
+post:
+  summary: Preview reconciliation impact of a Trading 212 sale source correction
+  description: >-
+    Read-only preview using the staged provider quantity and net settlement.
+    Returns the distinct checkpoints affected by the inverse and replacement
+    journals. Uses the correction command's source eligibility and supported
+    scope checks, without accepting a source revision or changing the ledger.
+    The command rechecks eligibility and reconciliation at commit time.
+  parameters:
+    - in: path
+      name: batch_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: path
+      name: row_id
+      required: true
+      schema: { type: integer, format: int64 }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CorrectTrading212SaleRequest"
+  responses:
+    "200":
+      description: Reconciliation impact computed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ReconciliationImpactResponse"
+    "400":
+      description: Invalid request or unsupported source change
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Import batch not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Staged source row or current sale no longer eligible
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

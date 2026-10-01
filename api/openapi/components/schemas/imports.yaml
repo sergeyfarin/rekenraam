@@ -151,6 +151,7 @@ ImportStagedRowResponse:
     - dedupe_status
     - source_changed
     - source_buy_operation
+    - source_sale_operation
     - resolution
     - commit_status
     - commit_effects
@@ -179,6 +180,9 @@ ImportStagedRowResponse:
     source_buy_operation:
       type: boolean
       description: The original committed Trading 212 identity effect is a native investment buy operation.
+    source_sale_operation:
+      type: boolean
+      description: The original committed Trading 212 identity effect is a native investment sale; cash fallback rows are false.
     source_transaction_id:
       type: integer
       format: int64

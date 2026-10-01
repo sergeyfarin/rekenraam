@@ -1555,6 +1555,7 @@ func toImportStagedRow(rec db.ImportStagedRowRecord) ImportStagedRow {
 		DedupeStatus:           rec.DedupeStatus,
 		SourceChanged:          rec.SourceChanged,
 		SourceBuyOperation:     rec.SourceBuyOperation,
+		SourceSaleOperation:    rec.SourceSaleOperation,
 		SourceTransactionID:    sourceTransactionID,
 		ResolutionJSON:         rec.ResolutionJSON,
 		CommitStatus:           rec.CommitStatus,

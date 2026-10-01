@@ -969,3 +969,48 @@ func TestImportBuySourceCorrectionImpactIsReadOnlyAndRequiresEligibleSource(t *t
 	require.NoError(t, database.QueryRow("SELECT count(*) FROM audit_events").Scan(&after))
 	require.Equal(t, before, after)
 }
+
+func TestImportSaleSourceCorrectionImpactIsReadOnlyAndRequiresEligibleSource(t *testing.T) {
+	t.Parallel()
+	handler, database := newImportConnectionsTestHandler(t, app.NoOpProber{})
+	cookie, csrf, _, _, _ := bootstrapImportAPITest(t, handler)
+	started := startQIFImportForSession(t, handler, cookie, csrf, "source.qif", qifRow("06/01/26", "-10.00", "Coffee"), http.StatusCreated)
+	var before int
+	require.NoError(t, database.QueryRow("SELECT count(*) FROM audit_events").Scan(&before))
+	for _, test := range []struct {
+		path   string
+		body   string
+		status int
+	}{
+		{"/api/v1/imports/999999/rows/1/correct-sale/reconciliation-impact", `{"reason":"provider revision"}`, http.StatusNotFound},
+		{"/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/rows/" + strconv.FormatInt(started.Rows[0].ID, 10) + "/correct-sale/reconciliation-impact", `{"reason":"provider revision"}`, http.StatusConflict},
+		{"/api/v1/imports/1/rows/1/correct-sale/reconciliation-impact", `{`, http.StatusBadRequest},
+	} {
+		req := httptest.NewRequest(http.MethodPost, test.path, strings.NewReader(test.body))
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(cookie)
+		// Read-only POST previews follow the investment preview contract: no
+		// CSRF token is needed, while the correction command still requires it.
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		require.Equal(t, test.status, res.Code, res.Body.String())
+	}
+	commandPath := "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/rows/" + strconv.FormatInt(started.Rows[0].ID, 10) + "/correct-sale"
+	for _, token := range []string{"", csrf} {
+		req := httptest.NewRequest(http.MethodPost, commandPath, strings.NewReader(`{"reason":"provider revision"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set(csrfTokenHeader, token)
+		setSameOrigin(req)
+		req.AddCookie(cookie)
+		res := httptest.NewRecorder()
+		handler.ServeHTTP(res, req)
+		want := http.StatusForbidden
+		if token != "" {
+			want = http.StatusConflict
+		}
+		require.Equal(t, want, res.Code, res.Body.String())
+	}
+	var after int
+	require.NoError(t, database.QueryRow("SELECT count(*) FROM audit_events").Scan(&after))
+	require.Equal(t, before, after)
+}

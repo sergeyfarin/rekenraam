@@ -234,6 +234,8 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/imports/{batch_id}/commit", commitImportBatch(logger, services.Auth, services.Import, options))
 	mux.HandleFunc("POST /api/v1/imports/{batch_id}/rows/{row_id}/correct-buy", correctTrading212Buy(logger, services.Auth, services.Import, options))
 	mux.HandleFunc("POST /api/v1/imports/{batch_id}/rows/{row_id}/correct-buy/reconciliation-impact", trading212BuyCorrectionReconciliationImpact(logger, services.Auth, services.Import))
+	mux.HandleFunc("POST /api/v1/imports/{batch_id}/rows/{row_id}/correct-sale", correctTrading212Sale(logger, services.Auth, services.Import, options))
+	mux.HandleFunc("POST /api/v1/imports/{batch_id}/rows/{row_id}/correct-sale/reconciliation-impact", trading212SaleCorrectionReconciliationImpact(logger, services.Auth, services.Import))
 	mux.HandleFunc("POST /api/v1/imports/{batch_id}/discard", discardImportBatch(logger, services.Auth, services.Import, options))
 	mux.HandleFunc("GET /api/v1/import-profiles", listImportProfiles(logger, services.Auth, services.Import))
 	mux.HandleFunc("POST /api/v1/import-profiles", createImportProfile(logger, services.Auth, services.Import, options))

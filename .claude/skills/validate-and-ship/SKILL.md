@@ -154,6 +154,14 @@ non-trivial diff (yours or reviewed):
     unresolved inputs before known-basis pooling/disposal/range arithmetic.
     Named regression: `TestUnknownProjectedBasisDoesNotBecomeZeroGain`.
 
+20. **Source identity lost on an imported correction descendant** — import
+    audit origin marks the replacement as imported, while committed identity
+    effects stay on the original fill. A direct-only identity lookup incorrectly
+    fences later sale corrections and hides effective specific-lot elections.
+    Read committed source provenance through immutable correction ancestry,
+    matching the writer's lineage guard; never copy or rebind original effects.
+    Named regression: `TestCorrectTrading212SalePreservesSpecificElectionWithoutGuessingQuantityChanges`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

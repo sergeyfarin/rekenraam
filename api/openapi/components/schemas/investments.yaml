@@ -914,7 +914,7 @@ InvestmentTradeCorrectionContextResponse:
     gross_value: { type: string, description: Signed gross source amount when known. }
     gross_scale: { type: integer }
     imported: { type: boolean }
-    source_identity_id: { type: integer, format: int64, description: Committed import source identity; zero for manual trades or an imported trade without a source link. }
+    source_identity_id: { type: integer, format: int64, description: Committed import source identity through immutable correction ancestry; zero for standalone manual or unlinked imported trades. }
     source_kind: { type: string, description: Stable import source kind; empty when no committed source identity exists. }
     already_corrected: { type: boolean }
     charges:

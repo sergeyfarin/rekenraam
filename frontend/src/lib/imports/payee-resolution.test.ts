@@ -17,6 +17,7 @@ function row(
     dedupe_fingerprint: `row-${id}`,
     source_changed: false,
     source_buy_operation: false,
+    source_sale_operation: false,
     normalized: JSON.stringify({
       date: '2026-08-28',
       amount: '-12.34',

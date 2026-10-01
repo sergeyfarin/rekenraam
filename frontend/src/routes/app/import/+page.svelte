@@ -15,6 +15,7 @@
   import PayeeResolutionPanel from '$lib/imports/payee-resolution-panel.svelte';
   import ImportRulesPanel from '$lib/imports/import-rules-panel.svelte';
   import type { PayeeResponse } from '$lib/api/payees';
+  import { sourceCorrectionKind } from '$lib/imports/source-correction';
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { accountsQueryOptions } from '$lib/api/accounts';
   import { currenciesQueryOptions } from '$lib/api/currencies';
@@ -29,6 +30,8 @@
     patchImportBatch,
     commitImportBatch,
     correctTrading212Buy,
+    correctTrading212Sale,
+    previewTrading212SaleCorrectionReconciliation,
     previewTrading212BuyCorrectionReconciliation,
     type ReconciliationImpactResponse,
     discardImportBatch,
@@ -517,30 +520,22 @@
       : m.import_preview_rule_applied({ name: resolution.applied_rule_name ?? '' });
   }
 
-  function canCorrectTrading212Buy(row: ImportStagedRow): boolean {
-    if (!row.source_changed || !row.source_transaction_id || !row.source_buy_operation ||
-      (row.commit_status !== 'pending' && row.commit_status !== 'skipped')) return false;
-    try {
-      const raw = JSON.parse(row.raw) as { kind?: string; side?: string };
-      return raw.kind === 'trading212_order_fill' && raw.side?.toUpperCase() === 'BUY';
-    } catch {
-      return false;
-    }
-  }
-
-  async function handleSourceBuyCorrection(rowId: number) {
+  async function handleSourceCorrection(row: ImportStagedRow) {
     if (!batchId || !csrfToken || sourceCorrectionPending || !sourceCorrectionReason.trim()) return;
+    const kind = sourceCorrectionKind(row);
+    if (!kind) return;
+    const rowId = row.id;
     sourceCorrectionPending = true;
     sourceCorrectionError = undefined;
     try {
       if (!sourceCorrectionImpact) {
-        sourceCorrectionImpact = await previewTrading212BuyCorrectionReconciliation(batchId, rowId, {
+        sourceCorrectionImpact = await (kind === 'sale' ? previewTrading212SaleCorrectionReconciliation : previewTrading212BuyCorrectionReconciliation)(batchId, rowId, {
           reason: sourceCorrectionReason.trim()
         });
         return;
       }
       if (sourceCorrectionImpact.affected_checkpoints.length > 0 && !sourceCorrectionOverride) return;
-      const result = await correctTrading212Buy(batchId, rowId, {
+      const result = await (kind === 'sale' ? correctTrading212Sale : correctTrading212Buy)(batchId, rowId, {
         reason: sourceCorrectionReason.trim(),
         reconciliation_override: sourceCorrectionOverride
       }, csrfToken);
@@ -1376,7 +1371,7 @@
     <!-- Rows table -->
     {#if sourceCorrectionSuccessID}
       <Panel>
-        <p class="text-sm font-medium text-positive">{m.import_preview_buy_corrected()}</p>
+        <p class="text-sm font-medium text-positive">{m.import_preview_source_corrected()}</p>
         <a href={`/app/transactions?transaction_id=${sourceCorrectionSuccessID}`} class="text-sm font-semibold text-foreground underline underline-offset-2">
           {m.import_preview_open_correction()}
         </a>
@@ -1437,7 +1432,7 @@
                       {m.import_preview_open_original()}
                     </a>
                   {/if}
-                  {#if canCorrectTrading212Buy(row)}
+                  {#if sourceCorrectionKind(row)}
                     <button
                       type="button"
                       disabled={sourceCorrectionPending}
@@ -1449,7 +1444,7 @@
                         sourceCorrectionImpact = null;
                         sourceCorrectionOverride = false;
                       }}
-                    >{m.import_preview_correct_buy()}</button>
+                    >{sourceCorrectionKind(row) === 'sale' ? m.import_preview_correct_sale() : m.import_preview_correct_buy()}</button>
                   {/if}
                 </td>
                 <td class="px-4 py-2.5">
@@ -1539,8 +1534,8 @@
               {#if sourceCorrectionRowID === row.id}
                 <tr class="border-b border-border bg-control">
                   <td colspan="9" class="px-4 py-4">
-                    <form class="max-w-xl space-y-3" onsubmit={(event) => { event.preventDefault(); void handleSourceBuyCorrection(row.id); }}>
-                      <p class="text-sm text-muted">{m.import_preview_correct_buy_scope()}</p>
+                    <form class="max-w-xl space-y-3" onsubmit={(event) => { event.preventDefault(); void handleSourceCorrection(row); }}>
+                      <p class="text-sm text-muted">{sourceCorrectionKind(row) === 'sale' ? m.import_preview_correct_sale_scope() : m.import_preview_correct_buy_scope()}</p>
                       <label class="block text-sm font-medium text-foreground" for={`source-correction-reason-${row.id}`}>
                         {m.import_preview_correct_buy_reason()}
                       </label>

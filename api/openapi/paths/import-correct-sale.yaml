@@ -1,0 +1,67 @@
+post:
+  summary: Accept a changed Trading 212 sale fill as an audited source correction
+  description: >-
+    Replaces the current effective sale using the staged provider quantity and
+    net settlement, replays dependent long disposals, and commits the staged
+    source revision in the same transaction. The date, instrument, holding,
+    cash account, and settlement currency must match the current sale. The
+    original import identity remains unchanged and continues to deduplicate
+    source retries. Quantity must be positive and the owner-perspective sale
+    settlement positive. The effective recorded basis method is retained; specific-lot quantity changes need an explicit manual election. Cancellation-shaped rows, changed dates, or changed
+    instruments require another command.
+  parameters:
+    - in: path
+      name: batch_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: path
+      name: row_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CorrectTrading212SaleRequest"
+  responses:
+    "201":
+      description: Source revision and investment sale replacement committed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReplacementResponse"
+    "400":
+      description: Invalid request or unsupported source change
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Import batch not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Staged source row no longer eligible, replay dependency failed, or reconciliation override required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

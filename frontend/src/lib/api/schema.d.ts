@@ -10008,6 +10008,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/{batch_id}/rows/{row_id}/correct-sale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept a changed Trading 212 sale fill as an audited source correction
+         * @description Replaces the current effective sale using the staged provider quantity and net settlement, replays dependent long disposals, and commits the staged source revision in the same transaction. The date, instrument, holding, cash account, and settlement currency must match the current sale. The original import identity remains unchanged and continues to deduplicate source retries. Quantity must be positive and the owner-perspective sale settlement positive. The effective recorded basis method is retained; specific-lot quantity changes need an explicit manual election. Cancellation-shaped rows, changed dates, or changed instruments require another command.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    batch_id: number;
+                    row_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectTrading212BuyRequest"];
+                };
+            };
+            responses: {
+                /** @description Source revision and investment sale replacement committed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentSaleReplacementResponse"];
+                    };
+                };
+                /** @description Invalid request or unsupported source change */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Staged source row no longer eligible, replay dependency failed, or reconciliation override required */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/rows/{row_id}/correct-sale/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation impact of a Trading 212 sale source correction
+         * @description Read-only preview using the staged provider quantity and net settlement. Returns the distinct checkpoints affected by the inverse and replacement journals. Uses the correction command's source eligibility and supported scope checks, without accepting a source revision or changing the ledger. The command rechecks eligibility and reconciliation at commit time.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    batch_id: number;
+                    row_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CorrectTrading212BuyRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or unsupported source change */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Staged source row or current sale no longer eligible */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/{batch_id}/discard": {
         parameters: {
             query?: never;
@@ -17818,6 +17993,8 @@ export interface components {
             source_changed: boolean;
             /** @description The original committed Trading 212 identity effect is a native investment buy operation. */
             source_buy_operation: boolean;
+            /** @description The original committed Trading 212 identity effect is a native investment sale; cash fallback rows are false. */
+            source_sale_operation: boolean;
             /**
              * Format: int64
              * @description Original posted transaction linked to the committed Trading 212 identity, when available.
@@ -17918,6 +18095,7 @@ export interface components {
             reason: string;
             reconciliation_override?: boolean;
         };
+        CorrectTrading212SaleRequest: components["schemas"]["CorrectTrading212BuyRequest"];
         CommitImportBatchResponse: {
             /** Format: int64 */
             batch_id: number;
@@ -18731,7 +18909,7 @@ export interface components {
             imported: boolean;
             /**
              * Format: int64
-             * @description Committed import source identity; zero for manual trades or an imported trade without a source link.
+             * @description Committed import source identity through immutable correction ancestry; zero for standalone manual or unlinked imported trades.
              */
             source_identity_id: number;
             /** @description Stable import source kind; empty when no committed source identity exists. */

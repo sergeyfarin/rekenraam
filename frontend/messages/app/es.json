@@ -603,5 +603,8 @@
   "import_preview_correct_buy_impact": "Esta corrección afecta a estos puntos de control de conciliación:",
   "import_preview_correct_buy_no_impact": "No se afecta ningún punto de control de conciliación.",
   "import_preview_correct_buy_preview_pending": "Comprobando la conciliación…",
-  "investments_basis_unknown": "Coste de adquisición desconocido"
+  "investments_basis_unknown": "Coste de adquisición desconocido",
+  "import_preview_correct_sale": "Corregir venta desde el origen",
+  "import_preview_correct_sale_scope": "Aplica la cantidad revisada y el importe neto positivo del proveedor conservando el método de coste de adquisición registrado. Los cambios de fecha, instrumento, cuenta o moneda requieren otra corrección. Los cambios de cantidad de lotes seleccionados explícitamente requieren una corrección manual.",
+  "import_preview_source_corrected": "Operación de origen corregida"
 }

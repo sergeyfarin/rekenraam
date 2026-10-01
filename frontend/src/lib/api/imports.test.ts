@@ -4,6 +4,8 @@ import {
   getFullImportBatch,
   parseBatchSourceMeta,
   previewTrading212BuyCorrectionReconciliation,
+  previewTrading212SaleCorrectionReconciliation,
+  correctTrading212Sale,
   startImport,
   type GetImportBatchResponse,
   type ImportBatch
@@ -34,6 +36,7 @@ function importBatchResponse(rows: { id: number }[], nextCursor: string | null):
       dedupe_status: 'new',
       source_changed: false,
       source_buy_operation: false,
+    source_sale_operation: false,
       resolution: '{}',
       commit_status: 'pending',
       commit_effects: []
@@ -44,6 +47,24 @@ function importBatchResponse(rows: { id: number }[], nextCursor: string | null):
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('Trading 212 sale source correction', () => {
+  it('previews without a mutation token and applies with the session CSRF token', async () => {
+    const impact = { affected_checkpoints: [] };
+    const result = { inverse_transaction: { id: 20 }, replacement: { transaction: { id: 21 } }, corrected_transaction_id: 12 };
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(impact), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(result), { status: 201 }));
+    await expect(previewTrading212SaleCorrectionReconciliation(4, 12, { reason: 'Provider revision' })).resolves.toEqual(impact);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/imports/4/rows/12/correct-sale/reconciliation-impact');
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).not.toHaveProperty('X-CSRF-Token');
+    await expect(correctTrading212Sale(4, 12, { reason: 'Provider revision', reconciliation_override: true }, 'csrf')).resolves.toEqual(result);
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/imports/4/rows/12/correct-sale', expect.objectContaining({
+      method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': 'csrf' },
+      body: JSON.stringify({ reason: 'Provider revision', reconciliation_override: true })
+    }));
+  });
 });
 
 describe('previewTrading212BuyCorrectionReconciliation', () => {

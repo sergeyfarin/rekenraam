@@ -603,5 +603,8 @@
   "import_preview_correct_buy_impact": "Deze correctie beïnvloedt deze reconciliatiecontrolepunten:",
   "import_preview_correct_buy_no_impact": "Er worden geen reconciliatiecontrolepunten beïnvloed.",
   "import_preview_correct_buy_preview_pending": "Reconciliatie controleren…",
-  "investments_basis_unknown": "Kostprijs onbekend"
+  "investments_basis_unknown": "Kostprijs onbekend",
+  "import_preview_correct_sale": "Verkoop corrigeren vanuit bron",
+  "import_preview_correct_sale_scope": "Past het gewijzigde aantal en positieve nettobedrag van de aanbieder toe met behoud van de vastgelegde kostprijsmethode. Wijzigingen in datum, instrument, rekening en valuta vereisen een andere correctie. Aantalwijzigingen voor expliciet geselecteerde partijen vereisen een handmatige correctie.",
+  "import_preview_source_corrected": "Transactie vanuit bron gecorrigeerd"
 }

@@ -13,6 +13,15 @@ import (
 func (r *InvestmentRepository) ReplaceSale(ctx context.Context, expected SaleOperationRecord,
 	inverseParams, replacementParams CreateTransactionParams, disposalParams DisposeLotsParams,
 ) (TransactionRecord, TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
+	return r.ReplaceSaleWithPostWrite(ctx, expected, inverseParams, replacementParams, disposalParams, nil)
+}
+
+// ReplaceSaleWithPostWrite accepts source evidence in the same transaction as
+// the journal, disposal replay, prices, audit and reconciliation invalidation.
+func (r *InvestmentRepository) ReplaceSaleWithPostWrite(ctx context.Context, expected SaleOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, disposalParams DisposeLotsParams,
+	postWrite func(*sql.Tx, int64, int64) error,
+) (TransactionRecord, TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
 	var noInverse, noReplacement TransactionRecord
 	var noDecision DisposalDecisionRecord
 	if expected.OperationID <= 0 || inverseParams.BookID <= 0 ||
@@ -181,6 +190,11 @@ func (r *InvestmentRepository) ReplaceSale(ctx context.Context, expected SaleOpe
 	replacement.InvalidatedCheckpointIDs, err = invalidateCreateTransactionCheckpointsTx(ctx, tx, replacementParams, auditEventID)
 	if err != nil {
 		return noInverse, noReplacement, nil, noDecision, err
+	}
+	if postWrite != nil {
+		if err := postWrite(tx, operationID, auditEventID); err != nil {
+			return noInverse, noReplacement, nil, noDecision, err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return noInverse, noReplacement, nil, noDecision, fmt.Errorf("commit sale replacement: %w", err)

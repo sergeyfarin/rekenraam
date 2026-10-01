@@ -77,6 +77,18 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 	var payeeID sql.NullInt64
 	var imported, corrected int
 	err = tx.QueryRowContext(ctx, `
+		WITH RECURSIVE source_lineage(id, parent_id, depth) AS (
+			SELECT source.id, source.correction_of_operation_id, 0
+			FROM investment_operations source
+			JOIN investment_operation_journal_links source_link ON source_link.operation_id = source.id
+				AND source_link.book_id = source.book_id AND source_link.role = 'primary'
+			JOIN transaction_versions source_version ON source_version.id = source_link.transaction_version_id
+			WHERE source.book_id = ? AND source_version.transaction_id = ?
+			UNION ALL
+			SELECT parent.id, parent.correction_of_operation_id, lineage.depth + 1
+			FROM investment_operations parent JOIN source_lineage lineage ON parent.id = lineage.parent_id
+			WHERE parent.book_id = ?
+		)
 		SELECT o.id, linked_version.transaction_id, o.operation_kind, o.event_date,
 			COALESCE(f.account_id, d.account_id), COALESCE(f.commodity_id, d.commodity_id),
 			c.code, COALESCE(f.cost_commodity_id, d.cost_commodity_id),
@@ -88,10 +100,12 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
 				WHERE effect.operation_id = o.id)),
 			COALESCE((SELECT effect.identity_id FROM import_commit_identity_effects effect
-				WHERE effect.operation_id = o.id), 0),
+				JOIN source_lineage lineage ON lineage.id = effect.operation_id
+				ORDER BY lineage.depth, effect.effect_seq LIMIT 1), 0),
 			COALESCE((SELECT identity.source_kind FROM import_commit_identity_effects effect
 				JOIN import_commit_identities identity ON identity.id = effect.identity_id
-				WHERE effect.operation_id = o.id), ''),
+				JOIN source_lineage lineage ON lineage.id = effect.operation_id
+				ORDER BY lineage.depth, effect.effect_seq LIMIT 1), ''),
 			EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id)
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
@@ -108,7 +122,7 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind IN ('buy', 'sell')
 			AND (SELECT count(*) FROM investment_lot_facts WHERE operation_id = o.id) <= 1
 			AND (SELECT count(*) FROM investment_disposal_decisions WHERE operation_id = o.id) <= 1
-	`, bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
+	`, bookID, transactionID, bookID, bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
 		&record.OperationKind, &record.EventDate, &record.HoldingAccountID,
 		&record.CommodityID, &record.CommodityCode, &record.CostCommodityID,
 		&record.QuantityValue, &record.QuantityScale, &record.CostBasisMethod,

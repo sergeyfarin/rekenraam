@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -33,13 +34,20 @@ type ReplaceInvestmentSaleInput struct {
 }
 
 type ReplaceInvestmentSaleResult struct {
-	Inverse     Transaction
-	Replacement InvestmentTradeResult
+	CorrectedTransactionID int64
+	Inverse                Transaction
+	Replacement            InvestmentTradeResult
 }
 
 // ReplaceSale corrects an effective manual or source-linked imported long sale and replays dependent
 // long-position decisions under one audited repository transaction.
 func (s *InvestmentService) ReplaceSale(ctx context.Context, input ReplaceInvestmentSaleInput) (ReplaceInvestmentSaleResult, error) {
+	return s.replaceSaleWithPostWriteOrigin(ctx, input, "browser_api", "investment.sale.replace", nil)
+}
+
+func (s *InvestmentService) replaceSaleWithPostWriteOrigin(ctx context.Context, input ReplaceInvestmentSaleInput,
+	originType, operationCode string, postWrite func(*sql.Tx, int64, int64) error,
+) (ReplaceInvestmentSaleResult, error) {
 	operation, inversePlan, err := s.reverseSalePlan(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 		RequestID: input.RequestID, TransactionID: input.TransactionID,
@@ -58,12 +66,13 @@ func (s *InvestmentService) ReplaceSale(ctx context.Context, input ReplaceInvest
 	replacement.OwnerUserID = input.OwnerUserID
 	replacement.AuthSessionID = input.AuthSessionID
 	replacement.RequestID = input.RequestID
-	replacement.OriginType = "browser_api"
-	replacement.Operation = "investment.sale.replace"
+	replacement.OriginType = originType
+	replacement.Operation = operationCode
 	replacement.ChangeReason = inversePlan.ChangeReason
 	replacement.ReconciliationOverride = input.ReconciliationOverride
 	replacement.WriteOff = false
-	inversePlan.Operation = "investment.sale.replace"
+	inversePlan.OriginType = originType
+	inversePlan.Operation = operationCode
 	inversePlan.Spec.InvestmentOperationKind = ""
 	inverseParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, inversePlan, nil)
 	if err != nil {
@@ -78,13 +87,14 @@ func (s *InvestmentService) ReplaceSale(ctx context.Context, input ReplaceInvest
 	replacementParams.InvestmentCorrectionMode = "replace"
 	replacementParams.InvestmentCorrectionReason = inversePlan.ChangeReason
 	replacementParams.CreatedAt = inverseParams.CreatedAt
-	inverse, replacementRecord, disposals, decision, err := s.repository.ReplaceSale(ctx, operation, inverseParams, replacementParams, disposalParams)
+	inverse, replacementRecord, disposals, decision, err := s.repository.ReplaceSaleWithPostWrite(ctx, operation, inverseParams, replacementParams, disposalParams, postWrite)
 	if err != nil {
 		return ReplaceInvestmentSaleResult{}, mapReplaceSaleError(err, operation.OperationID)
 	}
 	committedDecision := toDisposalDecision(decision)
 	return ReplaceInvestmentSaleResult{
-		Inverse: toTransaction(inverse),
+		CorrectedTransactionID: operation.TransactionID,
+		Inverse:                toTransaction(inverse),
 		Replacement: InvestmentTradeResult{Transaction: toTransaction(replacementRecord),
 			Allocations: toInvestmentLotDisposals(disposals), DisposalDecision: &committedDecision},
 	}, nil

@@ -217,6 +217,10 @@ paths:
     $ref: "./paths/import-correct-buy.yaml"
   /api/v1/imports/{batch_id}/rows/{row_id}/correct-buy/reconciliation-impact:
     $ref: "./paths/import-correct-buy-reconciliation-impact.yaml"
+  /api/v1/imports/{batch_id}/rows/{row_id}/correct-sale:
+    $ref: "./paths/import-correct-sale.yaml"
+  /api/v1/imports/{batch_id}/rows/{row_id}/correct-sale/reconciliation-impact:
+    $ref: "./paths/import-correct-sale-reconciliation-impact.yaml"
   /api/v1/imports/{batch_id}/discard:
     $ref: "./paths/import-discard.yaml"
   /api/v1/import-connections:
@@ -847,6 +851,8 @@ components:
     CommitImportBatchRequest:
       $ref: "./components/schemas/imports.yaml#/CommitImportBatchRequest"
     CorrectTrading212BuyRequest:
+      $ref: "./components/schemas/imports.yaml#/CorrectTrading212BuyRequest"
+    CorrectTrading212SaleRequest:
       $ref: "./components/schemas/imports.yaml#/CorrectTrading212BuyRequest"
     CommitImportBatchResponse:
       $ref: "./components/schemas/imports.yaml#/CommitImportBatchResponse"

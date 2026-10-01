@@ -891,8 +891,8 @@ next family.
      reconciliation override/invalidation. A second provider revision follows
      the original source identity through the correction chain. Date,
      instrument, holding, cash account, and cost-currency changes are rejected
-     until their own correction commands exist; sale and cancellation source
-     revisions are also pending. The import review action exposes the supported
+     until their own correction commands exist; sale source revisions arrive
+     in 4ae, while cancellation revisions remain pending. The import review action exposes the supported
      scope and a reason field and remains available for skipped rows after
      batch commit. The batch read model identifies source identities whose
      original effect was a native buy, so cash-fallback rows do not offer the
@@ -906,8 +906,8 @@ next family.
      whose identity effect remains on the original operation.
      A freshly staged provider revision can deliberately restore an earlier
      payload; an old staged row cannot be reused for that reversion. Source
-     reconciliation-impact preview arrives in 4ad; sale/cancellation commands
-     remain open.
+     reconciliation-impact preview arrives in 4ad; sale follows in 4ae and
+     cancellation commands remain open.
    - **4ad — source buy reconciliation preview — complete 2026-09-29.** The
      read-only `POST /api/v1/imports/{batch_id}/rows/{row_id}/correct-buy/reconciliation-impact`
      endpoint uses the same staged provider quantity/net settlement and source
@@ -921,6 +921,28 @@ next family.
      reconciliation at commit time; the preview does not reserve the staged
      source or guarantee dependent replay can succeed. Database query failures
      remain errors rather than being disguised as source eligibility conflicts.
+   - **4ae — Trading 212 sale source revision — complete 2026-10-01.** Import
+     review accepts changed sale quantity and positive owner-perspective net
+     settlement through `/api/v1/imports/{batch_id}/rows/{row_id}/correct-sale`
+     and its read-only `/reconciliation-impact` preview. The native sale
+     writer atomically posts inverse/replacement journals, fresh disposal and
+     clearing attribution, dependent allocation revisions, price retirement,
+     reconciliation invalidation, staged acceptance and source revision under
+     one import audit. Original source identity/effects remain unchanged;
+     repeated and stale staged revisions are refused, and further revisions
+     follow the effective correction descendant. BUY and SALE share source
+     eligibility and scope checks. The composed batch read identifies native
+     sale effects; cash fallback rows are not offered this action. The existing
+     mobile review form provides a reason, names affected checkpoints and
+     requires explicit override. The command retains the effective recorded
+     basis method. A specific-lot settlement-only revision preserves its
+     effective election; quantity changes require a manual explicit election.
+     Nonpositive proceeds, cancellation-shaped quantities, date, instrument,
+     account or currency changes stay under review. Named tests cover all four
+     methods, older-sale dependent replay, read-only preview, source acceptance
+     failure rollback and reconciliation guards. Source cancellation and wider
+     source scope, other correction families and writer convergence remain
+     T-75b gates.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

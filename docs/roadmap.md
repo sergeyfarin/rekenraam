@@ -102,7 +102,7 @@ Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
 
-The reusable application runtime ([#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers long-buy and long-sale reversal and prefilled replacement of manual or source-linked imported buys and sales. Old buys and sales replay dependent allocations in one audited transaction; buy reversal refuses any dependent disposal it cannot satisfy. New backdated long buys use the same replay and atomic writer. A committed import source identity remains attached to its original fill after manual replacement or terminal reversal, so retries remain deduplicated. Changed Trading 212 fills are compared with the latest accepted source payload, flagged in import review, and skipped by ordinary batch commit. Import review now accepts revised buy quantity/net settlement through an audited atomic source correction, with dependent replay and a read-only reconciliation-impact preview before explicit override; changed date, instrument, account, or currency remains unsupported. Sale and cancellation source revisions and other operation corrections remain. The 2026-09-29 review reopened slice 2a journal/subledger integrity and writer gates; complete those before further transfer and basis-action commands.
+The reusable application runtime ([#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers long-buy and long-sale reversal and prefilled replacement of manual or source-linked imported buys and sales. Old buys and sales replay dependent allocations in one audited transaction; buy reversal refuses any dependent disposal it cannot satisfy. New backdated long buys use the same replay and atomic writer. A committed import source identity remains attached to its original fill after manual replacement or terminal reversal, so retries remain deduplicated. Changed Trading 212 fills are compared with the latest accepted source payload, flagged in import review, and skipped by ordinary batch commit. Import review now accepts revised buy and sale quantity/net settlement through an audited atomic source correction, with dependent replay and a read-only reconciliation-impact preview before explicit override; changed date, instrument, account, or currency remains unsupported. Source sale revisions retain the recorded basis method; specific-lot quantity changes require manual explicit election. Cancellation source revisions, broader source scope and other operation corrections remain. T-110 slice 2a integrity is complete; T-75b correction and writer convergence remain gates before further transfer and basis-action commands.
 
 ### Completed initiatives through R10
 
@@ -144,8 +144,10 @@ reversal, old-sale replacement and old-buy replacement. Transaction detail
 offers sale reversal and prefilled buy and sale replacement. The sale form uses
 pre-sale available lots for specific-lot correction, and old sales replay
 dependent disposals. New backdated long buys replay dependent sales; imported
-fills with a committed identity can be manually replaced. Source-file-driven
-corrections and other backdated operation families remain.
+fills with a committed identity can be manually replaced. Trading 212 BUY and
+SALE source quantity/net-settlement corrections and their
+reconciliation previews are shipped. Source cancellations, broader source
+correction scope and other backdated operation families remain.
 The completed [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
 now links journal-backed trade components to their exact posting lines and
 checks both missing links and unlinked trade cash, expense or charge-clearing legs.

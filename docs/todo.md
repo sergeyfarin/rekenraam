@@ -20,9 +20,10 @@ Last reconciled: 2026-10-01.
   under all four methods, with rollback and effective allocation revisions.
   See the [feature ledger](implemented.md)
   and [slice 4 plan](plans/investment-operation-refactor-plan.md) for the
-  shipped sub-slices. Trading 212 BUY source replacement and its dedicated
-  reconciliation preview are also shipped. Source SALE/cancellation, broader
-  backdated admission, buy reversal and other operation corrections remain open.
+  shipped sub-slices. Trading 212 BUY and SALE source replacement and their
+  dedicated reconciliation previews are also shipped. Terminal native buy/sale
+  reversal is shipped. Source cancellation, broader backdated admission, other
+  operation corrections and writer convergence remain open.
 - [x] Complete [T-110 #125](https://github.com/sergeyfarin/rekenraam/issues/125)'s
   reopened slice 2a integrity gates: pinned component posting links,
   independent decision/clearing attribution, authoritative operation journal
