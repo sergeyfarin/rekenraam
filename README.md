@@ -93,5 +93,6 @@ Product and architecture decisions live in the
 No legacy databases exist. The pre-release schema is consolidated into
 `0001_initial_schema.sql`, including source revisions, authoritative journal
 links, separate immutable lot identity/mutable lot state, and immutable disposal
-proceeds portions tied to clearing postings. The checksum and seeded equivalence
+proceeds portions tied to clearing postings. Projected basis has explicit
+known/unknown knowledge and nullable unknown amounts. The checksum and seeded equivalence
 tests are updated together; see [the migration workflow](docs/developer-workflow.md#migrations-and-resetting-your-database).

@@ -214,9 +214,10 @@
             <div class="grid gap-2 border-t border-border pt-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
               <label for={`internal-transfer-lot-${lot.id}`} class="text-sm text-foreground">
                 <span class="font-medium">{m.investments_transfer_internal_lot_quantity()}</span>
-                <span class="block text-xs text-muted">#{lot.id} · {dateFormatter.format(parseISO(lot.opened_on))} · {m.investments_transfer_internal_available()} {formatQuantity(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)} · {m.investments_col_cost_basis()} {formatQuantity(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale)} {basisCurrency}</span>
+                <span class="block text-xs text-muted">#{lot.id} · {dateFormatter.format(parseISO(lot.opened_on))} · {m.investments_transfer_internal_available()} {formatQuantity(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)} · {m.investments_col_cost_basis()} {lot.remaining_cost_basis_value !== null && lot.remaining_cost_basis_scale !== null ? formatQuantity(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale) : m.investments_basis_unknown()} {basisCurrency}</span>
               </label>
               <input id={`internal-transfer-lot-${lot.id}`} type="text" inputmode="decimal"
+                disabled={lot.basis_knowledge === 'unknown'}
                 value={quantities[String(lot.id)] ?? ''}
                 oninput={(event) => { quantities[String(lot.id)] = event.currentTarget.value; }}
                 class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />

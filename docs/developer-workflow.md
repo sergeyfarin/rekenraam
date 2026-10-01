@@ -372,6 +372,14 @@ The checksum and frozen seed are updated together. Fresh/seeded bundle schema
 4 preserves these links; self-check conserves decisions and shared postings
 independently. No legacy or installed databases exist.
 
+**BREAKING DEV DATABASE, projected-basis knowledge (2026-10-01):** consolidated
+`0001` stores explicit known/unknown projection knowledge and requires NULL
+remaining basis/scale for unknown. Checksum and frozen known-basis seed are
+updated together. Fresh/seeded bundle schema 5 appends knowledge; API unknown
+basis fields are NULL, with quantities and independently priced value retained.
+Unknown-input commands still require their immutable-fact/replay contracts.
+No legacy or installed databases exist.
+
 The final pre-`v0.1.0` consolidation changed the highest schema version from 8
 to 1. Databases and backups made before that consolidation are incompatible in
 both directions: export anything worth keeping before updating, then recreate

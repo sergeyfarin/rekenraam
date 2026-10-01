@@ -10,7 +10,7 @@ The [GitHub roadmap index](https://github.com/sergeyfarin/rekenraam/issues/120)
 links current slices to their actionable tickets; this file remains the
 ordered product plan.
 
-Last reviewed: 2026-09-29. The current order is R16,
+Last reviewed: 2026-10-01. The current order is R16,
 R11 price management, R17 quotes and crypto, R18 gains projections, then R13
 returns analytics. Cross-border input and date correctness run in parallel.
 Prior roadmap detail is retained in the
@@ -146,7 +146,7 @@ pre-sale available lots for specific-lot correction, and old sales replay
 dependent disposals. New backdated long buys replay dependent sales; imported
 fills with a committed identity can be manually replaced. Source-file-driven
 corrections and other backdated operation families remain.
-The reopened [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
+The completed [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
 now links journal-backed trade components to their exact posting lines and
 checks both missing links and unlinked trade cash, expense or charge-clearing legs.
 Sell/write-off proceeds checking now covers multiple decisions by operation,
@@ -160,7 +160,15 @@ clearing posting versions. Self-check conserves each decision and each shared
 leg independently, including restored link damage and offsetting allocation
 errors. Current writers remain single-disposal commands; future compound
 commands must supply explicit portions. Bundle schema 4 exports these links.
-Nullable unknown-basis projection representation remains open.
+Nullable projected basis now has explicit known/unknown state. API and bundle
+schema 5 retain quantities and NULL/empty unknown amounts; known zero stays
+explicit. One unknown lot makes position basis/gain unavailable while retaining
+priced market value. Self-check still verifies quantities and reports unresolved
+or inconsistent basis knowledge. Current known-basis writers refuse unresolved
+positions; current replay reconstructs from known source evidence atomically.
+Unknown opening/event/disposal knowledge and sourced resolution replay remain
+gates for slice 5's unknown-basis commands. T-75b correction writer convergence
+and remaining correction families remain P0 work.
 The consolidated baseline separates immutable lot identity/opening facts from
 `investment_lot_state`; replay reconstructs the state atomically, self-check
 reports missing/corrupt state and bundle schema 3 exports both layers.
@@ -201,7 +209,7 @@ split by risk:
    The write-off UI and price-void operator surface remain separate follow-ups.
 2. **Foundation and exact trade economics — partial.** Operation links,
    source components, import identity, lot-opening facts and gross/charge/net
-   trade terms are shipped. The reopened T-110 integrity gate covers posting
+   trade terms are shipped. The completed T-110 integrity gate covers posting
    links, proceeds/journal reconciliation, authoritative operation journal
    links and the lot-state projection split. ADR 0013 governs the unused
    pre-release baseline redesign.

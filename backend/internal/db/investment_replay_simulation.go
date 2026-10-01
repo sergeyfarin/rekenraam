@@ -108,7 +108,7 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 		SELECT id, book_id, 'closed', '0', quantity_scale, '0', cost_basis_scale,
 		created_at, created_by_user_id, created_audit_event_id FROM investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'
-		ON CONFLICT(lot_id) DO UPDATE SET status = 'closed', remaining_quantity_value = '0',
+		ON CONFLICT(lot_id) DO UPDATE SET basis_knowledge = 'known', status = 'closed', remaining_quantity_value = '0',
 		remaining_quantity_scale = excluded.remaining_quantity_scale, remaining_cost_basis_value = '0',
 		remaining_cost_basis_scale = excluded.remaining_cost_basis_scale`, bookID, accountID, commodityID, costCommodityID); err != nil {
 		return InvestmentReplayProjection{}, fmt.Errorf("reset replay lot projection: %w", err)
@@ -130,7 +130,7 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 				return InvestmentReplayProjection{}, fmt.Errorf("%w: replay opening lot %d has invalid quantity or basis", ErrInvestmentBasisRange, intent.LotID)
 			}
 			result, err := tx.ExecContext(ctx, `
-				UPDATE investment_lot_state SET status = 'open',
+				UPDATE investment_lot_state SET basis_knowledge = 'known', status = 'open',
 					remaining_quantity_value = ?, remaining_quantity_scale = ?,
 					remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?
 				WHERE lot_id IN (SELECT id FROM investment_lots WHERE id = ? AND book_id = ? AND account_id = ? AND commodity_id = ?
@@ -221,7 +221,7 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 	for rows.Next() {
 		var lot InvestmentReplayLotState
 		if err := rows.Scan(&lot.LotID, &lot.Status, &lot.RemainingQuantityValue,
-			&lot.RemainingQuantityScale, &lot.RemainingCostBasisValue,
+			&lot.RemainingQuantityScale, (*knownInvestmentBasis)(&lot.RemainingCostBasisValue),
 			&lot.RemainingCostBasisScale); err != nil {
 			rows.Close()
 			return InvestmentReplayProjection{}, fmt.Errorf("scan replay lot projection: %w", err)

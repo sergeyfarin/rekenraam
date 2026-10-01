@@ -602,5 +602,6 @@
   "import_preview_correct_buy_preview": "Проверить влияние на сверку",
   "import_preview_correct_buy_impact": "Эта корректировка затрагивает следующие контрольные точки сверки:",
   "import_preview_correct_buy_no_impact": "Контрольные точки сверки не затронуты.",
-  "import_preview_correct_buy_preview_pending": "Проверка сверки…"
+  "import_preview_correct_buy_preview_pending": "Проверка сверки…",
+  "investments_basis_unknown": "Себестоимость неизвестна"
 }

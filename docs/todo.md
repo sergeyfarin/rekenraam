@@ -6,7 +6,7 @@ R16 acceptance criteria. [GitHub Issues](https://github.com/sergeyfarin/rekenraa
 tracks actionable work; the [backlog](backlog.md) maps local IDs, and
 [implemented](implemented.md) records shipped behavior.
 
-Last reconciled: 2026-09-29.
+Last reconciled: 2026-10-01.
 
 ## Current: R16 correction
 
@@ -20,15 +20,17 @@ Last reconciled: 2026-09-29.
   under all four methods, with rollback and effective allocation revisions.
   See the [feature ledger](implemented.md)
   and [slice 4 plan](plans/investment-operation-refactor-plan.md) for the
-  shipped sub-slices. Imported source corrections, backdated admission, buy
-  reversal, and other operation corrections remain open.
-- [ ] Close [T-110 #125](https://github.com/sergeyfarin/rekenraam/issues/125),
-  the reopened slice 2a integrity gates: net cash and separately posted fees
-  now link to posting versions and self-check validates them. Extend exact
-  proceeds/clearing checks beyond current single-disposal commands,
-  migrate operation reads to journal links, and separate lot projection state.
-  Share correction transaction orchestration under T-75b. The
-  disposal-decision key now supports `(operation_id, decision_seq)`.
+  shipped sub-slices. Trading 212 BUY source replacement and its dedicated
+  reconciliation preview are also shipped. Source SALE/cancellation, broader
+  backdated admission, buy reversal and other operation corrections remain open.
+- [x] Complete [T-110 #125](https://github.com/sergeyfarin/rekenraam/issues/125)'s
+  reopened slice 2a integrity gates: pinned component posting links,
+  independent decision/clearing attribution, authoritative operation journal
+  links, immutable lot identity/current-state separation, reconstruction,
+  explicit nullable projected-basis knowledge, export and mutation/seeded tests.
+  Current commands require known source basis; unknown immutable facts and
+  resolution replay remain slice 5 gates. Sharing correction transaction
+  orchestration remains in T-75b #99.
 
 ## Then, within R16
 

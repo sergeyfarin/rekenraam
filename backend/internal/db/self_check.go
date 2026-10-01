@@ -355,6 +355,8 @@ func (r *SelfCheckRepository) StreamPostedNonCurrencyPostings(ctx context.Contex
 
 // SelfCheckLotRecord is one investment lot's current standing.
 type SelfCheckLotRecord struct {
+	InvalidBasisProjection  bool
+	BasisKnowledge          string
 	MissingProjection       bool
 	LotID                   int64
 	AccountID               int64
@@ -375,8 +377,8 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 	rows, err := transaction.QueryContext(ctx, `
 		SELECT lot.id, lot.account_id, lot.commodity_id, COALESCE(state.status, ''),
 		lot.quantity_value, lot.quantity_scale, COALESCE(state.remaining_quantity_value, '0'), COALESCE(state.remaining_quantity_scale, 0),
-		lot.cost_basis_value, lot.cost_basis_scale, COALESCE(state.remaining_cost_basis_value, '0'),
-		COALESCE(state.remaining_cost_basis_scale, 0), lot.cost_commodity_id, state.lot_id IS NULL
+		lot.cost_basis_value, lot.cost_basis_scale, state.remaining_cost_basis_value,
+		state.remaining_cost_basis_scale, lot.cost_commodity_id, state.lot_id IS NULL, COALESCE(state.basis_knowledge, '')
 		FROM investment_lots lot LEFT JOIN investment_lot_state state ON state.lot_id = lot.id AND state.book_id = lot.book_id
 		WHERE lot.book_id = ? ORDER BY lot.account_id, lot.commodity_id, lot.id
 	`, bookID)
@@ -388,12 +390,19 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 	var lots []SelfCheckLotRecord
 	for rows.Next() {
 		var lot SelfCheckLotRecord
+		var basisValue, basisScale sql.NullInt64
 		if err := rows.Scan(&lot.LotID, &lot.AccountID, &lot.CommodityID, &lot.Status,
 			&lot.QuantityValue, &lot.QuantityScale,
 			&lot.RemainingQuantityValue, &lot.RemainingQuantityScale,
 			&lot.CostBasisValue, &lot.CostBasisScale,
-			&lot.RemainingCostBasisValue, &lot.RemainingCostBasisScale, &lot.CostCommodityID, &lot.MissingProjection); err != nil {
+			&basisValue, &basisScale, &lot.CostCommodityID, &lot.MissingProjection, &lot.BasisKnowledge); err != nil {
 			return nil, fmt.Errorf("scan self-check lot: %w", err)
+		}
+		if !lot.MissingProjection {
+			lot.RemainingCostBasisValue, lot.RemainingCostBasisScale, err = projectedBasis(basisValue, basisScale, lot.BasisKnowledge)
+			if err != nil {
+				lot.InvalidBasisProjection = true
+			}
 		}
 		lots = append(lots, lot)
 	}

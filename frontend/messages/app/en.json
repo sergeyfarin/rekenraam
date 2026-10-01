@@ -638,5 +638,6 @@
   "import_preview_correct_buy_preview": "Preview reconciliation impact",
   "import_preview_correct_buy_impact": "This correction affects these reconciliation checkpoints:",
   "import_preview_correct_buy_no_impact": "No reconciliation checkpoints are affected.",
-  "import_preview_correct_buy_preview_pending": "Checking reconciliation…"
+  "import_preview_correct_buy_preview_pending": "Checking reconciliation…",
+  "investments_basis_unknown": "Cost basis unknown"
 }

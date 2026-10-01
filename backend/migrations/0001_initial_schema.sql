@@ -1126,11 +1126,14 @@ CREATE TABLE IF NOT EXISTS investment_lot_state (
   status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
   remaining_quantity_value TEXT NOT NULL CHECK (length(remaining_quantity_value) BETWEEN 1 AND 38 AND substr(remaining_quantity_value, 1, 1) <> '-'),
   remaining_quantity_scale INTEGER NOT NULL CHECK (remaining_quantity_scale BETWEEN 0 AND 24),
-  remaining_cost_basis_value TEXT NOT NULL CHECK (length(remaining_cost_basis_value) BETWEEN 1 AND 38 AND substr(remaining_cost_basis_value, 1, 1) <> '-'),
-  remaining_cost_basis_scale INTEGER NOT NULL CHECK (remaining_cost_basis_scale BETWEEN 0 AND 12),
+  remaining_cost_basis_value TEXT CHECK (length(remaining_cost_basis_value) BETWEEN 1 AND 38 AND substr(remaining_cost_basis_value, 1, 1) <> '-'),
+  remaining_cost_basis_scale INTEGER CHECK (remaining_cost_basis_scale BETWEEN 0 AND 12),
   updated_at TEXT NOT NULL,
   updated_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+  updated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  basis_knowledge TEXT NOT NULL DEFAULT 'known' CHECK (basis_knowledge IN ('known', 'unknown')),
+  CHECK ((basis_knowledge = 'known' AND remaining_cost_basis_value IS NOT NULL AND remaining_cost_basis_scale IS NOT NULL)
+      OR (basis_knowledge = 'unknown' AND remaining_cost_basis_value IS NULL AND remaining_cost_basis_scale IS NULL))
 );
 
 CREATE VIEW current_investment_lots AS
@@ -1158,7 +1161,8 @@ SELECT
   state.updated_at,
   state.updated_by_user_id,
   state.updated_audit_event_id,
-  lot.position_side
+  lot.position_side,
+  state.basis_knowledge
 FROM investment_lots lot LEFT JOIN investment_lot_state state
   ON state.lot_id = lot.id AND state.book_id = lot.book_id;
 

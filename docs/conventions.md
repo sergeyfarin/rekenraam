@@ -180,6 +180,13 @@ When a feature introduces a durable new rule, update one of those documents in t
   be represented at its recorded scale, inside the same transaction as all
   journal, lot and audit writes. Include future-dated lots when checking the
   current position; never truncate recorded residuals to satisfy this limit.
+- Projected investment basis has explicit `known`/`unknown` knowledge. Unknown
+  coefficient and scale are NULL in storage and on the API, and empty in CSV;
+  known zero remains numeric. Numeric read-model fields are usable only when
+  knowledge is known. An unknown lot makes position basis/gain unavailable,
+  while quantity and independently priced market value remain available.
+  Known-basis algorithms must refuse unresolved inputs before arithmetic;
+  self-check continues quantity verification and names unresolved basis.
 - Money and countable commodities are not the same kind of quantity. A currency
   balance may be negative — an overdraft and a credit-card balance are real
   positions. A negative non-currency balance may be an out-of-order entry, an

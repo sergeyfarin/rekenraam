@@ -146,6 +146,14 @@ non-trivial diff (yours or reviewed):
     posting independently. Check provenance even for equal-valued journals.
     Named regression: `TestSelfCheckDetectsOffsettingDisposalProceedsDamage`.
 
+19. **Unknown basis converted to a numeric zero** — preserve NULL coefficient
+    and scale with explicit knowledge, through read APIs and CSV. One unknown
+    lot makes the position's basis/gain unavailable; quantity and independently
+    priced market value stay available. Never use known-only numeric fields
+    without checking knowledge. Keep quantity self-check active and refuse
+    unresolved inputs before known-basis pooling/disposal/range arithmetic.
+    Named regression: `TestUnknownProjectedBasisDoesNotBecomeZeroGain`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

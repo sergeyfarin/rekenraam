@@ -18917,8 +18917,14 @@ export interface components {
             remaining_quantity_scale: number;
             cost_basis_value: string;
             cost_basis_scale: number;
-            remaining_cost_basis_value: string;
-            remaining_cost_basis_scale: number;
+            /** @description Null when projected basis is unknown; known zero remains an explicit coefficient. */
+            remaining_cost_basis_value: string | null;
+            remaining_cost_basis_scale: number | null;
+            /**
+             * @description Knowledge of remaining projected basis; any unknown lot makes the position basis unknown.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
             /** Format: int64 */
             cost_commodity_id: number;
             metadata: {
@@ -18940,8 +18946,14 @@ export interface components {
             /** @description Lossless exact integer coefficient normalized to quantity_scale. */
             quantity_value: string;
             quantity_scale: number;
-            remaining_cost_basis_value: string;
-            remaining_cost_basis_scale: number;
+            /** @description Null when projected basis is unknown; known zero remains an explicit coefficient. */
+            remaining_cost_basis_value: string | null;
+            remaining_cost_basis_scale: number | null;
+            /**
+             * @description Knowledge of remaining projected basis; any unknown lot makes the position basis unknown.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
             /** Format: int64 */
             cost_commodity_id: number;
             latest_price_value?: string;
@@ -19094,8 +19106,14 @@ export interface components {
             /** @description Remaining quantity as a base-10 integer string. */
             quantity_value: string;
             quantity_scale: number;
-            remaining_cost_basis_value: string;
-            remaining_cost_basis_scale: number;
+            /** @description Null when projected basis is unknown; known zero remains an explicit coefficient. */
+            remaining_cost_basis_value: string | null;
+            remaining_cost_basis_scale: number | null;
+            /**
+             * @description Knowledge of remaining projected basis; any unknown lot makes the position basis unknown.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
             /** @description Omitted when no price observation exists. */
             latest_price_value?: string;
             /** @description Omitted when no price observation exists. */
@@ -19120,6 +19138,11 @@ export interface components {
              * @enum {string}
              */
             valuation_unavailable?: "no_price" | "unrepresentable";
+            /**
+             * @description Gain is omitted when basis is unknown; quantity and any available market value are retained.
+             * @enum {string}
+             */
+            gain_unavailable?: "unknown_basis";
         };
         RealizedGainTotal: {
             /** Format: int64 */

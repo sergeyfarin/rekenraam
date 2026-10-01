@@ -556,6 +556,7 @@ type InvestmentLot struct {
 	MetadataJSON            string
 	CreatedAt               string
 	UpdatedAt               string
+	BasisKnowledge          string
 }
 
 type InvestmentPosition struct {
@@ -570,6 +571,7 @@ type InvestmentPosition struct {
 	LatestPriceScale        *int
 	LatestPriceDate         string
 	LatestPriceApproximate  bool
+	BasisKnowledge          string
 }
 
 type InvestmentProviderEvent struct {
@@ -2540,6 +2542,7 @@ func toInvestmentLot(record db.InvestmentLotRecord) InvestmentLot {
 		CostBasisValue:          record.CostBasisValue,
 		CostBasisScale:          record.CostBasisScale,
 		RemainingCostBasisValue: record.RemainingCostBasisValue,
+		BasisKnowledge:          record.BasisKnowledge,
 		RemainingCostBasisScale: record.RemainingCostBasisScale,
 		CostCommodityID:         record.CostCommodityID,
 		MetadataJSON:            record.MetadataJSON,
@@ -2570,6 +2573,7 @@ func toInvestmentPositions(records []db.InvestmentPositionRecord) []InvestmentPo
 			QuantityValue:           record.QuantityValue,
 			QuantityScale:           record.QuantityScale,
 			RemainingCostBasisValue: record.RemainingCostBasisValue,
+			BasisKnowledge:          record.BasisKnowledge,
 			RemainingCostBasisScale: record.RemainingCostBasisScale,
 			CostCommodityID:         record.CostCommodityID,
 			LatestPriceValue:        nullableSQLInt64Ptr(record.LatestPriceValue),
@@ -2736,6 +2740,8 @@ type UnrealizedGainEntry struct {
 	UnrealizedGainValue     *int64
 	UnrealizedGainScale     *int
 	ValuationUnavailable    string
+	BasisKnowledge          string
+	GainUnavailable         string
 }
 
 func (s *InvestmentService) ListRealizedGains(ctx context.Context, params GainsReportParams) ([]RealizedGainEntry, error) {
@@ -2783,6 +2789,7 @@ func (s *InvestmentService) ListUnrealizedGains(ctx context.Context) ([]Unrealiz
 			QuantityValue:           r.QuantityValue,
 			QuantityScale:           r.QuantityScale,
 			RemainingCostBasisValue: r.RemainingCostBasisValue,
+			BasisKnowledge:          r.BasisKnowledge,
 			RemainingCostBasisScale: r.RemainingCostBasisScale,
 			LatestPriceValue:        nullableSQLInt64Ptr(r.LatestPriceValue),
 			LatestPriceScale:        priceScale,
@@ -2793,6 +2800,7 @@ func (s *InvestmentService) ListUnrealizedGains(ctx context.Context) ([]Unrealiz
 			UnrealizedGainValue:     r.UnrealizedGainValue,
 			UnrealizedGainScale:     r.UnrealizedGainScale,
 			ValuationUnavailable:    r.ValuationUnavailable,
+			GainUnavailable:         r.GainUnavailable,
 		})
 	}
 	return entries, nil

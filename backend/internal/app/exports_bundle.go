@@ -22,7 +22,7 @@ import (
 // BundleSchemaVersion is the archive's own version, carried in manifest.json.
 // Columns are appended within a version; a change that cannot be made by
 // appending increments this and needs an ADR (ADR 0011).
-const BundleSchemaVersion = 4
+const BundleSchemaVersion = 5
 
 // bundleFile is one entry of the archive, recorded in the manifest with the
 // checksum computed while it was written.
@@ -193,7 +193,7 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "components", []string{"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id", "charge_kind", "cash_account_id", "separately_paid", "posting_version_id"})
 		}},
 		{"investment-lot-state.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "lot-state", []string{"lot_id", "status", "remaining_quantity_value", "remaining_quantity_scale", "remaining_cost_basis_value", "remaining_cost_basis_scale", "updated_at", "updated_by_user_id", "audit_event_id"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "lot-state", []string{"lot_id", "status", "remaining_quantity_value", "remaining_quantity_scale", "remaining_cost_basis_value", "remaining_cost_basis_scale", "updated_at", "updated_by_user_id", "audit_event_id", "basis_knowledge"})
 		}},
 		{"investment-lot-facts.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "lot-facts", []string{"lot_id", "operation_id", "account_id", "commodity_id", "position_side", "opened_on", "quantity_value", "quantity_scale", "consideration_value", "consideration_scale", "cost_commodity_id", "audit_event_id"})
@@ -493,7 +493,7 @@ func (s *ExportService) writeLotsCSV(ctx context.Context, out io.Writer, snapsho
 	writer, err := newBundleCSV(out, []string{
 		"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status",
 		"quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis",
-		"cost_commodity_id", "source_transaction_id",
+		"cost_commodity_id", "source_transaction_id", "basis_knowledge",
 	})
 	if err != nil {
 		return 0, err
@@ -501,6 +501,10 @@ func (s *ExportService) writeLotsCSV(ctx context.Context, out io.Writer, snapsho
 
 	var rows int64
 	for _, lot := range lots {
+		remainingBasis := ""
+		if lot.RemainingCostBasisValue.Valid {
+			remainingBasis = exact.Decimal(exact.New(lot.RemainingCostBasisValue.Int64), int(lot.RemainingCostBasisScale.Int64))
+		}
 		record := []string{
 			strconv.FormatInt(lot.LotID, 10),
 			strconv.FormatInt(lot.AccountID, 10),
@@ -512,9 +516,10 @@ func (s *ExportService) writeLotsCSV(ctx context.Context, out io.Writer, snapsho
 			exact.Decimal(lot.QuantityValue, lot.QuantityScale),
 			exact.Decimal(lot.RemainingQuantityValue, lot.RemainingQuantityScale),
 			exact.Decimal(exact.New(lot.CostBasisValue), lot.CostBasisScale),
-			exact.Decimal(exact.New(lot.RemainingCostBasisValue), lot.RemainingCostBasisScale),
+			remainingBasis,
 			strconv.FormatInt(lot.CostCommodityID, 10),
 			nullableID(lot.SourceTransactionID),
+			lot.BasisKnowledge,
 		}
 		if err := writer.Write(record); err != nil {
 			return rows, fmt.Errorf("write lot row: %w", err)
@@ -933,6 +938,10 @@ audit-complete record is the SQLite backup.
 Attachments are not included; they are not implemented yet, and manifest.json
 says so rather than leaving you to assume either way.
 lots.csv is a statement of current lot state, not a replayable event log.
+Both lots.csv and investment-lot-state.csv carry basis_knowledge for remaining
+projected basis. Unknown basis has empty amount/scale fields, never numeric
+zero; known zero remains explicit. Quantity and immutable opening facts remain
+separate from that current knowledge state.
 The investment-operation, lot-fact, and lot-event files preserve the source
 and projection evidence separately. A net-only trade explicitly marks gross
 unknown. A trade-implied price derived from net cash remains usable for

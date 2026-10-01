@@ -233,3 +233,13 @@ One decision may span multiple dated legs and multiple decisions may share a
 posting. The links remain original audit evidence after basis replay or
 correction; replacement decisions have their own links. A zero-proceeds
 write-off may have no cost-currency portion. Existing CSV columns are retained.
+
+### Projected-basis knowledge refinement (2026-10-01)
+
+Manifest schema version 5 appends `basis_knowledge` to `lots.csv` and
+`investment-lot-state.csv`. It describes remaining projected basis, independently
+of immutable opening evidence. Known basis includes known zero. Unknown basis
+has an empty `remaining_cost_basis` summary cell and empty coefficient/scale
+cells in state CSV; it is never exported as zero. Quantity remains exact and
+available. Existing columns retain their order. Missing state or inconsistent
+knowledge/amount pairs remain export errors, preserving the integrity boundary.

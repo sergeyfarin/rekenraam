@@ -108,7 +108,7 @@
                     {formatScaledValue(pos.quantity_value, pos.quantity_scale, locale)}
                   </td>
                   <td class="px-3 py-3 text-right font-mono text-muted">
-                    {formatGain(pos.remaining_cost_basis_value, pos.remaining_cost_basis_scale, pos.cost_commodity_id)}
+                    {pos.remaining_cost_basis_value !== null && pos.remaining_cost_basis_scale !== null ? formatGain(pos.remaining_cost_basis_value, pos.remaining_cost_basis_scale, pos.cost_commodity_id) : m.investments_basis_unknown()}
                   </td>
                   <td class="px-3 py-3 text-right font-mono text-foreground">
                     {#if pos.market_value_value !== undefined && pos.market_value_scale !== undefined}
@@ -123,7 +123,7 @@
                         {formatGain(pos.unrealized_gain_value, pos.unrealized_gain_scale, pos.cost_commodity_id)}
                       </span>
                     {:else}
-                      <span class="text-muted">{unavailableLabel(pos.valuation_unavailable)}</span>
+                      <span class="text-muted">{pos.gain_unavailable === 'unknown_basis' ? m.investments_basis_unknown() : unavailableLabel(pos.valuation_unavailable)}</span>
                     {/if}
                   </td>
                 </tr>

@@ -113,8 +113,8 @@ var checkNarratives = map[string]checkNarrative{
 		nextStep:    "The named rows are structurally orphaned. They cannot be fixed from the app; keep a backup before anyone tries anything else.",
 	},
 	CheckLotReconciliation: {
-		explanation: "Open investment lots must account for exactly what the holding account holds. Every original disposal and replay revision must allocate its full quantity, basis and signed proceeds, with positive allocated quantities and nonnegative basis.",
-		nextStep:    "Inspect the named disposal snapshot when allocation totals disagree; self-check does not repair its evidence. For a position mismatch, compare the named account's holdings with its lots. Either can make gains and cost basis unreliable.",
+		explanation: "Open investment lots must account for exactly what the holding account holds. Every original disposal and replay revision must allocate its full quantity, basis and signed proceeds, with positive allocated quantities and nonnegative basis. Unknown projected basis leaves basis reconciliation unavailable; quantities are still checked.",
+		nextStep:    "Inspect the named disposal snapshot when allocation totals disagree; self-check does not repair its evidence. For a position mismatch, compare the named account's holdings with its lots. For unknown or inconsistent projected basis, preserve the named lot's source evidence before investigating its projection.",
 	},
 	CheckCommodityPositionSign: {
 		explanation: "A negative number of countable units needs an explicit explanation: it may be an out-of-order entry, an error, or a short position. This app has no named short-sale workflow yet, so ordinary negative coin and share positions are unclassified and need review. Negative money is normal. The commodity-trading clearing account is excluded because it carries the other half of each movement.",
@@ -857,10 +857,11 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 
 	remaining := map[position]*exact.ScaledInt{}
 	remainingBasis := map[basisPosition]*exact.ScaledInt{}
+	unknownBasis := map[basisPosition]bool{}
 	eventQuantity := map[int64]*exact.ScaledInt{}
 	eventBasis := map[basisPosition]*exact.ScaledInt{}
 	var summaries []string
-	var negative, overConsumed, negativeBasis int64
+	var negative, overConsumed, negativeBasis, unknown, invalidBasis int64
 
 	for _, lot := range lots {
 		remainingValue := exact.ScaledIntFromCoefficient(lot.RemainingQuantityValue, lot.RemainingQuantityScale)
@@ -874,7 +875,7 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 			overConsumed++
 			result.Sample = appendCapped(result.Sample, lot.LotID)
 		}
-		if lot.RemainingCostBasisValue < 0 {
+		if !lot.InvalidBasisProjection && lot.BasisKnowledge == db.InvestmentBasisKnown && lot.RemainingCostBasisValue < 0 {
 			negativeBasis++
 			result.Sample = appendCapped(result.Sample, lot.LotID)
 		}
@@ -884,6 +885,18 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 		}
 		remaining[key].AddScaled(remainingValue)
 		basisKey := basisPosition{accountID: lot.AccountID, commodityID: lot.CommodityID, costCommodityID: lot.CostCommodityID}
+		if lot.InvalidBasisProjection {
+			invalidBasis++
+			unknownBasis[basisKey] = true
+			result.Sample = appendCapped(result.Sample, lot.LotID)
+			continue
+		}
+		if lot.BasisKnowledge == db.InvestmentBasisUnknown {
+			unknown++
+			unknownBasis[basisKey] = true
+			result.Sample = appendCapped(result.Sample, lot.LotID)
+			continue
+		}
 		if remainingBasis[basisKey] == nil {
 			remainingBasis[basisKey] = exact.NewScaledInt()
 		}
@@ -955,6 +968,9 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 		allBasisPositions[key] = true
 	}
 	for key := range allBasisPositions {
+		if unknownBasis[key] {
+			continue
+		}
 		projected := remainingBasis[key]
 		if projected == nil {
 			projected = exact.NewScaledInt()
@@ -971,6 +987,12 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 
 	if negative > 0 {
 		summaries = append(summaries, fmt.Sprintf("%d lots have negative remaining quantity", negative))
+	}
+	if unknown > 0 {
+		summaries = append(summaries, fmt.Sprintf("%d lots have unknown projected basis; basis reconciliation is unavailable", unknown))
+	}
+	if invalidBasis > 0 {
+		summaries = append(summaries, fmt.Sprintf("%d lots have inconsistent projected basis knowledge and amounts", invalidBasis))
 	}
 	if overConsumed > 0 {
 		summaries = append(summaries, fmt.Sprintf("%d lots have more remaining than they ever held", overConsumed))
@@ -989,7 +1011,7 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 	}
 	if len(summaries) > 0 {
 		result.Status = SelfCheckFailed
-		result.FindingCount = negative + overConsumed + negativeBasis + mismatched + eventQuantityMismatch + basisMismatch
+		result.FindingCount = negative + overConsumed + negativeBasis + mismatched + eventQuantityMismatch + basisMismatch + unknown + invalidBasis
 		result.Summary = joinSummaries(summaries)
 		sort.Slice(result.Sample, func(i, j int) bool { return result.Sample[i] < result.Sample[j] })
 	}

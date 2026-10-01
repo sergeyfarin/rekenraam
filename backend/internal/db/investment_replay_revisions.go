@@ -128,7 +128,7 @@ func persistInvestmentReplayProjectionTx(ctx context.Context, tx *sql.Tx, bookID
 		AND cost_commodity_id = ? AND position_side = 'long'
 		ON CONFLICT(lot_id) DO UPDATE SET status = excluded.status,
 		remaining_quantity_value = excluded.remaining_quantity_value, remaining_quantity_scale = excluded.remaining_quantity_scale,
-		remaining_cost_basis_value = excluded.remaining_cost_basis_value, remaining_cost_basis_scale = excluded.remaining_cost_basis_scale,
+		remaining_cost_basis_value = excluded.remaining_cost_basis_value, remaining_cost_basis_scale = excluded.remaining_cost_basis_scale, basis_knowledge = 'known',
 		updated_at = excluded.updated_at, updated_by_user_id = excluded.updated_by_user_id, updated_audit_event_id = excluded.updated_audit_event_id`,
 			lot.Status, lot.RemainingQuantityValue, lot.RemainingQuantityScale, lot.RemainingCostBasisValue, lot.RemainingCostBasisScale,
 			createdAt, actorUserID, auditEventID, lot.LotID, bookID, accountID, commodityID, costCommodityID)

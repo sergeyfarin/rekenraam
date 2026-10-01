@@ -118,6 +118,7 @@ type ExportTagRecord struct {
 }
 
 type ExportLotRecord struct {
+	BasisKnowledge          string
 	LotID                   int64
 	AccountID               int64
 	CommodityID             int64
@@ -130,8 +131,8 @@ type ExportLotRecord struct {
 	RemainingQuantityScale  int
 	CostBasisValue          int64
 	CostBasisScale          int
-	RemainingCostBasisValue int64
-	RemainingCostBasisScale int
+	RemainingCostBasisValue sql.NullInt64
+	RemainingCostBasisScale sql.NullInt64
 	CostCommodityID         int64
 	SourceTransactionID     sql.NullInt64
 }
@@ -833,7 +834,7 @@ func (r *ExportRepository) ExportLots(ctx context.Context, transaction *sql.Tx, 
 			remaining_quantity_value, remaining_quantity_scale,
 			cost_basis_value, cost_basis_scale,
 			remaining_cost_basis_value, remaining_cost_basis_scale,
-			cost_commodity_id, source_transaction_id
+			cost_commodity_id, source_transaction_id, basis_knowledge
 		FROM current_investment_lots
 		WHERE book_id = ?
 		ORDER BY account_id, commodity_id, opened_on, id
@@ -863,8 +864,12 @@ func (r *ExportRepository) ExportLots(ctx context.Context, transaction *sql.Tx, 
 			&lot.RemainingCostBasisScale,
 			&lot.CostCommodityID,
 			&lot.SourceTransactionID,
+			&lot.BasisKnowledge,
 		); err != nil {
 			return nil, fmt.Errorf("scan export lot: %w", err)
+		}
+		if _, _, err := projectedBasis(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale, lot.BasisKnowledge); err != nil {
+			return nil, err
 		}
 		lots = append(lots, lot)
 	}

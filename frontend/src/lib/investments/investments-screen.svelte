@@ -242,7 +242,7 @@
                         {formatScaledValue(pos.quantity_value, pos.quantity_scale, locale)}
                       </td>
                       <td class="px-3 py-3 text-right font-mono text-muted">
-                        {formatScaledValue(pos.remaining_cost_basis_value, pos.remaining_cost_basis_scale, locale)}
+                        {pos.remaining_cost_basis_value !== null && pos.remaining_cost_basis_scale !== null ? formatScaledValue(pos.remaining_cost_basis_value, pos.remaining_cost_basis_scale, locale) : m.investments_basis_unknown()}
                       </td>
                       <td class="py-3 pl-3 pr-5 text-right">
                         {#if pos.latest_price_value !== undefined && pos.latest_price_scale !== undefined}
@@ -320,7 +320,7 @@
                           </span>
                           <span class="text-muted">{m.investments_lot_cost_basis()}</span>
                           <span class="text-right font-mono text-foreground">
-                            {formatScaledValue(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale)}
+                            {lot.remaining_cost_basis_value !== null && lot.remaining_cost_basis_scale !== null ? formatScaledValue(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale) : m.investments_basis_unknown()}
                           </span>
                           <span class="text-muted">{m.investments_lot_original_qty()}</span>
                           <span class="text-right font-mono text-muted">

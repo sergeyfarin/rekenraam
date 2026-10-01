@@ -174,10 +174,14 @@ that allocation rather than rewriting the 8.00 EUR receipt.
 1. Add each command's typed source and lot links before exposing that command.
    Slice 5b added transfer endpoints, original-date knowledge, nullable
    **source** basis knowledge, a known-basis inbound lot, replay opening,
-   self-check and export. The current lot projection still requires a
-   non-NULL basis, so unknown-basis transfers remain refused. Before those
-   writes, make the projection basis nullable and preserve the status through
-   gains, export and replay. Split ratio/eligibility and basis-action links
+   self-check and export. The projection now accepts explicit unknown knowledge
+   with NULL remaining basis/scale, and read APIs, gains, UI and bundle schema 5
+   preserve it. Known zero stays numeric. Current writers refuse unresolved
+   positions; replay reconstructs known state from the currently known immutable
+   opening evidence and rolls back knowledge/NULLs atomically. Unknown-basis
+   transfers remain refused until immutable opening/event/disposal knowledge,
+   unknown-basis replay and sourced resolution propagate that state end to end.
+   Split ratio/eligibility and basis-action links
    are likewise prerequisites for their respective commands.
 2. Ship manual known-basis external inbound transfer, then explicit-lot
    internal transfer, outbound transfer and unknown-basis resolution. Prove

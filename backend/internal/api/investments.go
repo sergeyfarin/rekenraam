@@ -507,8 +507,9 @@ type investmentLotResponse struct {
 	RemainingQuantityScale  int               `json:"remaining_quantity_scale"`
 	CostBasisValue          moneyCoefficient  `json:"cost_basis_value"`
 	CostBasisScale          int               `json:"cost_basis_scale"`
-	RemainingCostBasisValue moneyCoefficient  `json:"remaining_cost_basis_value"`
-	RemainingCostBasisScale int               `json:"remaining_cost_basis_scale"`
+	RemainingCostBasisValue *moneyCoefficient `json:"remaining_cost_basis_value"`
+	RemainingCostBasisScale *int              `json:"remaining_cost_basis_scale"`
+	BasisKnowledge          string            `json:"basis_knowledge"`
 	CostCommodityID         int64             `json:"cost_commodity_id"`
 	Metadata                json.RawMessage   `json:"metadata"`
 	CreatedAt               string            `json:"created_at"`
@@ -524,8 +525,9 @@ type investmentPositionResponse struct {
 	CommodityID             int64             `json:"commodity_id"`
 	QuantityValue           exact.Coefficient `json:"quantity_value"`
 	QuantityScale           int               `json:"quantity_scale"`
-	RemainingCostBasisValue moneyCoefficient  `json:"remaining_cost_basis_value"`
-	RemainingCostBasisScale int               `json:"remaining_cost_basis_scale"`
+	RemainingCostBasisValue *moneyCoefficient `json:"remaining_cost_basis_value"`
+	RemainingCostBasisScale *int              `json:"remaining_cost_basis_scale"`
+	BasisKnowledge          string            `json:"basis_knowledge"`
 	CostCommodityID         int64             `json:"cost_commodity_id"`
 	LatestPriceValue        *moneyCoefficient `json:"latest_price_value,omitempty"`
 	LatestPriceScale        *int              `json:"latest_price_scale,omitempty"`
@@ -1877,7 +1879,7 @@ func toInvestmentLotDisposalResponses(disposals []app.InvestmentLotDisposal) []i
 }
 
 func toInvestmentLotResponse(lot app.InvestmentLot) investmentLotResponse {
-	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: moneyCoefficient(lot.CostBasisValue), CostBasisScale: lot.CostBasisScale, RemainingCostBasisValue: moneyCoefficient(lot.RemainingCostBasisValue), RemainingCostBasisScale: lot.RemainingCostBasisScale, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt}
+	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: moneyCoefficient(lot.CostBasisValue), CostBasisScale: lot.CostBasisScale, RemainingCostBasisValue: projectedBasisValue(lot.RemainingCostBasisValue, lot.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(lot.RemainingCostBasisScale, lot.BasisKnowledge), BasisKnowledge: lot.BasisKnowledge, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt}
 }
 
 func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse {
@@ -1891,7 +1893,7 @@ func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse 
 func toInvestmentPositionResponses(positions []app.InvestmentPosition) []investmentPositionResponse {
 	responses := make([]investmentPositionResponse, 0, len(positions))
 	for _, position := range positions {
-		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: moneyCoefficient(position.RemainingCostBasisValue), RemainingCostBasisScale: position.RemainingCostBasisScale, CostCommodityID: position.CostCommodityID, LatestPriceValue: moneyCoefficientPointer(position.LatestPriceValue), LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate, LatestPriceApproximate: position.LatestPriceApproximate})
+		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: projectedBasisValue(position.RemainingCostBasisValue, position.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(position.RemainingCostBasisScale, position.BasisKnowledge), BasisKnowledge: position.BasisKnowledge, CostCommodityID: position.CostCommodityID, LatestPriceValue: moneyCoefficientPointer(position.LatestPriceValue), LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate, LatestPriceApproximate: position.LatestPriceApproximate})
 	}
 	return responses
 }
@@ -1964,8 +1966,9 @@ type unrealizedGainResponse struct {
 	CostCommodityID         int64             `json:"cost_commodity_id"`
 	QuantityValue           exact.Coefficient `json:"quantity_value"`
 	QuantityScale           int               `json:"quantity_scale"`
-	RemainingCostBasisValue moneyCoefficient  `json:"remaining_cost_basis_value"`
-	RemainingCostBasisScale int               `json:"remaining_cost_basis_scale"`
+	RemainingCostBasisValue *moneyCoefficient `json:"remaining_cost_basis_value"`
+	RemainingCostBasisScale *int              `json:"remaining_cost_basis_scale"`
+	BasisKnowledge          string            `json:"basis_knowledge"`
 	LatestPriceValue        *moneyCoefficient `json:"latest_price_value,omitempty"`
 	LatestPriceScale        *int              `json:"latest_price_scale,omitempty"`
 	LatestPriceDate         string            `json:"latest_price_date,omitempty"`
@@ -1975,6 +1978,7 @@ type unrealizedGainResponse struct {
 	UnrealizedGainValue     *moneyCoefficient `json:"unrealized_gain_value,omitempty"`
 	UnrealizedGainScale     *int              `json:"unrealized_gain_scale,omitempty"`
 	ValuationUnavailable    string            `json:"valuation_unavailable,omitempty"`
+	GainUnavailable         string            `json:"gain_unavailable,omitempty"`
 }
 
 type realizedGainTotalResponse struct {
@@ -2040,17 +2044,18 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				CostCommodityID:         e.CostCommodityID,
 				QuantityValue:           e.QuantityValue,
 				QuantityScale:           e.QuantityScale,
-				RemainingCostBasisValue: moneyCoefficient(e.RemainingCostBasisValue),
-				RemainingCostBasisScale: e.RemainingCostBasisScale,
-				LatestPriceValue:        moneyCoefficientPointer(e.LatestPriceValue),
-				LatestPriceScale:        e.LatestPriceScale,
-				LatestPriceDate:         e.LatestPriceDate,
-				LatestPriceApproximate:  e.LatestPriceApproximate,
-				MarketValueValue:        moneyCoefficientPointer(e.MarketValueValue),
-				MarketValueScale:        e.MarketValueScale,
-				UnrealizedGainValue:     moneyCoefficientPointer(e.UnrealizedGainValue),
-				UnrealizedGainScale:     e.UnrealizedGainScale,
-				ValuationUnavailable:    e.ValuationUnavailable,
+				RemainingCostBasisValue: projectedBasisValue(e.RemainingCostBasisValue, e.BasisKnowledge),
+				RemainingCostBasisScale: projectedBasisScale(e.RemainingCostBasisScale, e.BasisKnowledge), BasisKnowledge: e.BasisKnowledge,
+				LatestPriceValue:       moneyCoefficientPointer(e.LatestPriceValue),
+				LatestPriceScale:       e.LatestPriceScale,
+				LatestPriceDate:        e.LatestPriceDate,
+				LatestPriceApproximate: e.LatestPriceApproximate,
+				MarketValueValue:       moneyCoefficientPointer(e.MarketValueValue),
+				MarketValueScale:       e.MarketValueScale,
+				UnrealizedGainValue:    moneyCoefficientPointer(e.UnrealizedGainValue),
+				UnrealizedGainScale:    e.UnrealizedGainScale,
+				ValuationUnavailable:   e.ValuationUnavailable,
+				GainUnavailable:        e.GainUnavailable,
 			})
 		}
 
@@ -2092,4 +2097,18 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 			RealizedTotals: realizedTotals,
 		})
 	}
+}
+
+func projectedBasisValue(value int64, knowledge string) *moneyCoefficient {
+	if knowledge == "unknown" {
+		return nil
+	}
+	result := moneyCoefficient(value)
+	return &result
+}
+func projectedBasisScale(scale int, knowledge string) *int {
+	if knowledge == "unknown" {
+		return nil
+	}
+	return &scale
 }

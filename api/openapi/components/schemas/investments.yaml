@@ -1249,6 +1249,7 @@ InvestmentLotResponse:
     - cost_basis_scale
     - remaining_cost_basis_value
     - remaining_cost_basis_scale
+    - basis_knowledge
     - cost_commodity_id
     - metadata
     - created_at
@@ -1292,10 +1293,15 @@ InvestmentLotResponse:
     cost_basis_scale:
       type: integer
     remaining_cost_basis_value:
-      type: string
+      type: [string, 'null']
+      description: Null when projected basis is unknown; known zero remains an explicit coefficient.
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
     remaining_cost_basis_scale:
-      type: integer
+      type: [integer, 'null']
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: Knowledge of remaining projected basis; any unknown lot makes the position basis unknown.
     cost_commodity_id:
       type: integer
       format: int64
@@ -1328,6 +1334,7 @@ InvestmentPositionResponse:
     - quantity_scale
     - remaining_cost_basis_value
     - remaining_cost_basis_scale
+    - basis_knowledge
     - cost_commodity_id
     - latest_price_approximate
   properties:
@@ -1344,10 +1351,15 @@ InvestmentPositionResponse:
     quantity_scale:
       type: integer
     remaining_cost_basis_value:
-      type: string
+      type: [string, 'null']
+      description: Null when projected basis is unknown; known zero remains an explicit coefficient.
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
     remaining_cost_basis_scale:
-      type: integer
+      type: [integer, 'null']
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: Knowledge of remaining projected basis; any unknown lot makes the position basis unknown.
     cost_commodity_id:
       type: integer
       format: int64
@@ -1660,6 +1672,7 @@ UnrealizedGainEntry:
     - quantity_scale
     - remaining_cost_basis_value
     - remaining_cost_basis_scale
+    - basis_knowledge
     - latest_price_approximate
   properties:
     account_id:
@@ -1677,10 +1690,15 @@ UnrealizedGainEntry:
     quantity_scale:
       type: integer
     remaining_cost_basis_value:
-      type: string
+      type: [string, 'null']
+      description: Null when projected basis is unknown; known zero remains an explicit coefficient.
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
     remaining_cost_basis_scale:
-      type: integer
+      type: [integer, 'null']
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: Knowledge of remaining projected basis; any unknown lot makes the position basis unknown.
     latest_price_value:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
@@ -1722,6 +1740,10 @@ UnrealizedGainEntry:
         why. no_price means no price observation exists for the position;
         unrepresentable means one is priced but the value does not fit the
         response's int64 fields.
+    gain_unavailable:
+      type: string
+      enum: [unknown_basis]
+      description: Gain is omitted when basis is unknown; quantity and any available market value are retained.
 
 RealizedGainTotal:
   type: object

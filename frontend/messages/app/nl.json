@@ -602,5 +602,6 @@
   "import_preview_correct_buy_preview": "Reconciliatie-impact bekijken",
   "import_preview_correct_buy_impact": "Deze correctie beïnvloedt deze reconciliatiecontrolepunten:",
   "import_preview_correct_buy_no_impact": "Er worden geen reconciliatiecontrolepunten beïnvloed.",
-  "import_preview_correct_buy_preview_pending": "Reconciliatie controleren…"
+  "import_preview_correct_buy_preview_pending": "Reconciliatie controleren…",
+  "investments_basis_unknown": "Kostprijs onbekend"
 }

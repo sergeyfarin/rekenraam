@@ -214,6 +214,7 @@ type InvestmentLotRecord struct {
 	MetadataJSON            string
 	CreatedAt               string
 	UpdatedAt               string
+	BasisKnowledge          string
 }
 
 type CreateInvestmentLotParams struct {
@@ -392,6 +393,7 @@ type InvestmentPositionRecord struct {
 	// Defaults: base_quantity_value=1, base_quantity_scale=0 (price is per 1 unit).
 	LatestPriceBaseQuantityValue sql.NullInt64
 	LatestPriceBaseQuantityScale sql.NullInt64
+	BasisKnowledge               string
 }
 
 type InvestmentProviderEventRecord struct {
@@ -1658,7 +1660,7 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 	var lots []avgCostLotRef
 	for rows.Next() {
 		var lot avgCostLotRef
-		if err := rows.Scan(&lot.id, &lot.quantityValue, &lot.quantityScale, &lot.costBasisValue, &lot.costBasisScale); err != nil {
+		if err := rows.Scan(&lot.id, &lot.quantityValue, &lot.quantityScale, (*knownInvestmentBasis)(&lot.costBasisValue), &lot.costBasisScale); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan average-cost lot: %w", err)
 		}
@@ -2102,7 +2104,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 					AND po.voided_at IS NULL
 				ORDER BY po.valuation_date DESC, CASE WHEN po.is_manual = 1 OR po.quote_type = 'valuation_override' THEN 3 WHEN po.is_approximate = 0 THEN 2 ELSE 1 END DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
-			) AS latest_price_base_quantity_scale
+			) AS latest_price_base_quantity_scale, lot.basis_knowledge
 		FROM current_investment_lots lot
 		WHERE lot.book_id = ?
 			AND lot.status = 'open'
@@ -2127,10 +2129,13 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 		var record InvestmentPositionRecord
 		var quantity exact.Coefficient
 		var quantityScale int
-		var costValue int64
-		var costScale int
-		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate, &record.LatestPriceApproximate, &record.LatestPriceBaseQuantityValue, &record.LatestPriceBaseQuantityScale); err != nil {
+		var costValue, costScale sql.NullInt64
+		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate, &record.LatestPriceApproximate, &record.LatestPriceBaseQuantityValue, &record.LatestPriceBaseQuantityScale, &record.BasisKnowledge); err != nil {
 			return nil, fmt.Errorf("scan investment position: %w", err)
+		}
+		value, scale, err := projectedBasis(costValue, costScale, record.BasisKnowledge)
+		if err != nil {
+			return nil, err
 		}
 		key := positionKey{record.AccountID, record.CommodityID, record.CostCommodityID}
 		position := positions[key]
@@ -2140,7 +2145,12 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 			order = append(order, key)
 		}
 		position.quantity.Add(quantity.BigInt(), quantityScale)
-		position.cost.Add(big.NewInt(costValue), costScale)
+		if record.BasisKnowledge == InvestmentBasisUnknown {
+			position.record.BasisKnowledge = InvestmentBasisUnknown
+		}
+		if position.record.BasisKnowledge == InvestmentBasisKnown {
+			position.cost.AddInt64(value, scale)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate investment positions: %w", err)
@@ -2152,14 +2162,19 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 		if err != nil {
 			return nil, err
 		}
-		cost, err := position.cost.Int64()
+		var cost int64
+		if position.record.BasisKnowledge == InvestmentBasisKnown {
+			cost, err = position.cost.Int64()
+		}
 		if err != nil {
 			return nil, fmt.Errorf("investment position cost basis: %w", err)
 		}
 		position.record.QuantityValue = quantity
 		position.record.QuantityScale = position.quantity.Scale()
 		position.record.RemainingCostBasisValue = cost
-		position.record.RemainingCostBasisScale = position.cost.Scale()
+		if position.record.BasisKnowledge == InvestmentBasisKnown {
+			position.record.RemainingCostBasisScale = position.cost.Scale()
+		}
 		records = append(records, position.record)
 	}
 	return records, nil
@@ -2755,7 +2770,7 @@ func investmentLotSelect(whereClause string) string {
 		SELECT id, book_id, account_id, commodity_id, opened_on, source_transaction_id, status,
 			quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
 			cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
-			cost_commodity_id, metadata_json, created_at, updated_at
+			cost_commodity_id, metadata_json, created_at, updated_at, basis_knowledge
 		FROM current_investment_lots
 	` + whereClause
 }
@@ -2768,11 +2783,17 @@ func investmentLotByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, lotID in
 
 func scanInvestmentLotRow(row rowScanner) (InvestmentLotRecord, error) {
 	var record InvestmentLotRecord
-	if err := row.Scan(&record.ID, &record.BookID, &record.AccountID, &record.CommodityID, &record.OpenedOn, &record.SourceTransactionID, &record.Status, &record.QuantityValue, &record.QuantityScale, &record.RemainingQuantityValue, &record.RemainingQuantityScale, &record.CostBasisValue, &record.CostBasisScale, &record.RemainingCostBasisValue, &record.RemainingCostBasisScale, &record.CostCommodityID, &record.MetadataJSON, &record.CreatedAt, &record.UpdatedAt); err != nil {
+	var basisValue, basisScale sql.NullInt64
+	if err := row.Scan(&record.ID, &record.BookID, &record.AccountID, &record.CommodityID, &record.OpenedOn, &record.SourceTransactionID, &record.Status, &record.QuantityValue, &record.QuantityScale, &record.RemainingQuantityValue, &record.RemainingQuantityScale, &record.CostBasisValue, &record.CostBasisScale, &basisValue, &basisScale, &record.CostCommodityID, &record.MetadataJSON, &record.CreatedAt, &record.UpdatedAt, &record.BasisKnowledge); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return InvestmentLotRecord{}, ErrNotFound
 		}
 		return InvestmentLotRecord{}, fmt.Errorf("scan investment lot: %w", err)
+	}
+	var err error
+	record.RemainingCostBasisValue, record.RemainingCostBasisScale, err = projectedBasis(basisValue, basisScale, record.BasisKnowledge)
+	if err != nil {
+		return InvestmentLotRecord{}, err
 	}
 	return record, nil
 }
@@ -2918,7 +2939,7 @@ func positionBasisAllocationScaleTx(ctx context.Context, tx *sql.Tx, params Disp
 	var recorded []recordedBasis
 	for rows.Next() {
 		var basis recordedBasis
-		if err := rows.Scan(&basis.value, &basis.scale); err != nil {
+		if err := rows.Scan((*knownInvestmentBasis)(&basis.value), &basis.scale); err != nil {
 			return 0, fmt.Errorf("scan position basis for allocation scale: %w", err)
 		}
 		recorded = append(recorded, basis)
@@ -2944,6 +2965,9 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 	if lot.AccountID != params.AccountID || lot.CommodityID != params.CommodityID ||
 		lot.CostCommodityID != params.CostCommodityID || lot.Status != "open" {
 		return LotDisposalRecord{}, ErrNotFound
+	}
+	if lot.BasisKnowledge != InvestmentBasisKnown {
+		return LotDisposalRecord{}, ErrUnknownInvestmentBasis
 	}
 	// Temporal eligibility (T-95). A disposal may only consume shares that were
 	// already held on its own event date; same-day acquisition and disposal is
@@ -3404,6 +3428,8 @@ type UnrealizedGainRecord struct {
 	UnrealizedGainValue     *int64
 	UnrealizedGainScale     *int
 	ValuationUnavailable    string
+	GainUnavailable         string
+	BasisKnowledge          string
 }
 
 // Valuation unavailability reasons reported by PositionsWithGains when market
@@ -3453,11 +3479,15 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 			QuantityValue:           pos.QuantityValue,
 			QuantityScale:           pos.QuantityScale,
 			RemainingCostBasisValue: pos.RemainingCostBasisValue,
+			BasisKnowledge:          pos.BasisKnowledge,
 			RemainingCostBasisScale: pos.RemainingCostBasisScale,
 			LatestPriceValue:        pos.LatestPriceValue,
 			LatestPriceScale:        pos.LatestPriceScale,
 			LatestPriceDate:         pos.LatestPriceDate,
 			LatestPriceApproximate:  pos.LatestPriceApproximate,
+		}
+		if pos.BasisKnowledge == InvestmentBasisUnknown {
+			record.GainUnavailable = "unknown_basis"
 		}
 		if pos.LatestPriceValue.Valid && pos.LatestPriceScale.Valid {
 			// market_value = quantity × price_value ÷ base_quantity_value,
@@ -3500,6 +3530,16 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 			}
 
 			market := exact.ScaledIntFromBig(marketBig, gainScale)
+			if pos.BasisKnowledge == InvestmentBasisUnknown {
+				marketValue, marketValueScale, marketFits := int64AtUsableScale(market)
+				if marketFits {
+					record.MarketValueValue, record.MarketValueScale = &marketValue, &marketValueScale
+				} else {
+					record.ValuationUnavailable = ValuationUnrepresentable
+				}
+				records = append(records, record)
+				continue
+			}
 			cost := exact.ScaledIntFromInt64(pos.RemainingCostBasisValue, pos.RemainingCostBasisScale)
 			gain := exact.ScaledIntFromBig(marketBig, gainScale)
 			gain.SubScaled(cost)
@@ -3561,7 +3601,7 @@ func requirePositionBasisRangeTx(ctx context.Context, tx *sql.Tx, bookID, accoun
 	for rows.Next() {
 		var value int64
 		var scale int
-		if err := rows.Scan(&value, &scale); err != nil {
+		if err := rows.Scan((*knownInvestmentBasis)(&value), &scale); err != nil {
 			return fmt.Errorf("scan position basis range: %w", err)
 		}
 		total.AddInt64(value, scale)

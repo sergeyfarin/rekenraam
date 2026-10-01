@@ -602,5 +602,6 @@
   "import_preview_correct_buy_preview": "Auswirkungen auf den Abgleich prüfen",
   "import_preview_correct_buy_impact": "Diese Korrektur betrifft folgende Abgleich-Kontrollpunkte:",
   "import_preview_correct_buy_no_impact": "Es sind keine Abgleich-Kontrollpunkte betroffen.",
-  "import_preview_correct_buy_preview_pending": "Abgleich wird geprüft…"
+  "import_preview_correct_buy_preview_pending": "Abgleich wird geprüft…",
+  "investments_basis_unknown": "Anschaffungskosten unbekannt"
 }

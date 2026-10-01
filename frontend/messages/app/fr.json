@@ -602,5 +602,6 @@
   "import_preview_correct_buy_preview": "Prévisualiser les effets sur le rapprochement",
   "import_preview_correct_buy_impact": "Cette correction affecte les points de contrôle de rapprochement suivants :",
   "import_preview_correct_buy_no_impact": "Aucun point de contrôle de rapprochement n’est affecté.",
-  "import_preview_correct_buy_preview_pending": "Vérification du rapprochement…"
+  "import_preview_correct_buy_preview_pending": "Vérification du rapprochement…",
+  "investments_basis_unknown": "Prix de revient inconnu"
 }

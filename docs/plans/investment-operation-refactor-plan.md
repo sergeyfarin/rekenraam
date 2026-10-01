@@ -1,6 +1,6 @@
 # Investment operation and subledger refactor plan
 
-Status: active implementation plan, reviewed 2026-09-29. Completed slices are
+Status: active implementation plan, reviewed 2026-10-01. Completed slices are
 marked below; no behavior is shipped merely because it appears here. ADR 0012
 and ADR 0013 govern. R16 owns the near-term work, T-75b owns native
 correction, and T-108 owns short sales and covers.
@@ -40,9 +40,24 @@ transaction without changing opening/event facts. Self-check reports missing
 or corrupt projection state. Bundle schema 3 exports the state separately while
 preserving the existing lot summary. Fresh/seeded fixtures, correction and
 transfer flows, reconstruction and installation-failure rollback are covered.
-Unknown carried-basis knowledge still comes from immutable transfer facts;
-the accepted nullable basis/knowledge representation in projection state remains
-a further integrity slice. Trade net-settlement and separately
+Unknown carried-basis knowledge still comes from immutable transfer facts.
+Current lot state now stores explicit `basis_knowledge` with nullable remaining
+basis coefficient and scale. Known zero is numeric; unknown requires both
+fields NULL. Lots/positions API responses preserve quantity and return NULL
+basis fields with knowledge; one unknown lot makes its entire cost-currency
+position basis unknown. Market value remains available when a price fits,
+while gain is omitted with `gain_unavailable: unknown_basis`. Portfolio, lot,
+gain and transfer-picker views label this state through translations.
+Self-check reports unresolved or inconsistent knowledge/amount pairs without
+comparing unknown with zero, and still verifies quantities against both lot
+events and journal holdings. Bundle schema 5 appends knowledge to the lot
+summary/state CSVs and represents unknown amounts/scales as empty cells.
+Known-basis writers refuse unresolved positions before disposal, average-pool,
+precision or range arithmetic. Current replay derives known state from known
+immutable opening evidence and preserves NULL/knowledge on rollback. This
+projection contract does not admit unknown-basis transfers: nullable immutable
+opening/event/disposal facts and sourced unknown-basis replay/resolution remain
+slice 5 command gates. Trade net-settlement and separately
 posted fee components now link to the exact journal posting line keys chosen by
 their command, including when another leg has identical account, currency,
 date and amount. Self-check compares their account, commodity, date, signed
@@ -80,11 +95,13 @@ write-off needs no cost-currency leg. Correction/replay retains the original
 attribution as audit evidence; a replacement sale records its own attribution.
 Bundle schema 4 adds `disposal-clearing-allocations.csv`. The ADR 0013 baseline,
 checksum and frozen seed are updated together; no legacy databases exist.
-Nullable unknown-basis projection representation remains the next integrity
-gate. The reviewed
+T-110 #125's current-command integrity acceptance is complete, including the
+nullable projection/read/export gate. Unknown-basis source
+and command replay remain scoped to slice 5; correction writer convergence
+remains in T-75b. The reviewed
 baseline now keys disposal decisions by `(operation_id, decision_seq)`; current
 single-disposal writers emit sequence 1. Correction writers also still have
-separate transaction orchestration. Complete these integrity and correction
+separate transaction orchestration. Complete the remaining T-75b correction
 gates before adding outbound transfers or basis actions.
 
 ## Outcome and boundaries
