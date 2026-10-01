@@ -41,15 +41,17 @@ type trading212Movement struct {
 
 // trading212OrderFill mirrors trading212.OrderFill (B-T212-INVST/Slice 4b).
 type trading212OrderFill struct {
-	FillID   string `json:"fill_id"`
-	OrderID  string `json:"order_id"`
-	Ticker   string `json:"ticker"`
-	ISIN     string `json:"isin"`
-	Side     string `json:"side"`
-	Quantity string `json:"quantity"`
-	Price    string `json:"price"` // denominated in Currency (the instrument's trading currency)
-	Currency string `json:"currency"`
-	FilledAt string `json:"filled_at"`
+	FillType    string `json:"fill_type"`
+	OrderStatus string `json:"order_status"`
+	FillID      string `json:"fill_id"`
+	OrderID     string `json:"order_id"`
+	Ticker      string `json:"ticker"`
+	ISIN        string `json:"isin"`
+	Side        string `json:"side"`
+	Quantity    string `json:"quantity"`
+	Price       string `json:"price"` // denominated in Currency (the instrument's trading currency)
+	Currency    string `json:"currency"`
+	FilledAt    string `json:"filled_at"`
 	// NetValue is denominated in NetValueCurrency, which is NOT always the
 	// same as Currency for a multi-currency account — see trading212.OrderFill's
 	// doc comment. Always pair the two.
@@ -157,13 +159,18 @@ func (a *Trading212Adapter) Parse(ctx context.Context, input RawInput, profile *
 		row, warning := trading212MovementToStagedRow(m, payload.ConnectionID, i)
 		addRow(row, warning)
 	}
-	// No ParseWarning here for order fills/dividends: whether these need
-	// manual attention depends on instrument/holding-account resolution,
+	// Unsupported fill types need review before resolution. Other fills and
+	// dividends may need manual attention depending on instrument/holding-account resolution,
 	// which requires DB access Parse doesn't have. The fetch worker's
 	// resolution pass (import_fetch_worker.go, runs after Parse) appends a
 	// warning only for rows it couldn't fully resolve.
 	for i, o := range payload.OrderFills {
-		addRow(trading212OrderFillToStagedRow(o, payload.ConnectionID, i), "")
+		row := trading212OrderFillToStagedRow(o, payload.ConnectionID, i)
+		warning := ""
+		if unsupportedTrading212Fill(row.Raw) {
+			warning = "unsupported fill type; review required"
+		}
+		addRow(row, warning)
 	}
 	for i, d := range payload.Dividends {
 		addRow(trading212DividendToStagedRow(d, payload.ConnectionID, i), "")
@@ -217,6 +224,8 @@ func trading212MovementToStagedRow(m trading212Movement, connectionID int64, occ
 func trading212OrderFillToStagedRow(o trading212OrderFill, connectionID int64, occurrence int) StagedRow {
 	raw := map[string]string{
 		rawKeyKind:     trading212RawKindOrderFill,
+		"fill_type":    o.FillType,
+		"order_status": o.OrderStatus,
 		rawKeyOrderID:  o.OrderID,
 		rawKeyTicker:   o.Ticker,
 		rawKeyISIN:     o.ISIN,
@@ -342,4 +351,18 @@ func (p *Trading212Prober) Probe(ctx context.Context, sourceKind string, apiKey 
 		return fmt.Errorf("trading212 probe: %w", err)
 	}
 	return nil
+}
+
+// A side is not an event type. Missing and future provider types fail closed;
+// order lifecycle status cannot prove an execution cancellation.
+func unsupportedTrading212Fill(raw map[string]string) bool {
+	return raw[rawKeyKind] == trading212RawKindOrderFill && raw["fill_type"] != "TRADE"
+}
+
+func unsupportedTrading212FillJSON(rawJSON string) bool {
+	var raw map[string]string
+	if json.Unmarshal([]byte(rawJSON), &raw) != nil {
+		return false
+	}
+	return unsupportedTrading212Fill(raw)
 }

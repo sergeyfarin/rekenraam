@@ -153,6 +153,8 @@
   "import_preview_dedupe_new": "Nouvelle",
   "import_preview_dedupe_duplicate": "Déjà importée",
   "import_preview_dedupe_needs_attention": "Doublon à vérifier",
+  "import_preview_warning_row": "Ligne {row} : {message}",
+  "import_preview_unsupported_fill": "Type d’exécution non pris en charge ou manquant — vérification requise ; import ignoré",
   "import_preview_source_changed": "Exécution source modifiée — vérification requise ; import ignoré",
   "import_preview_open_original": "Ouvrir l’opération d’origine",
   "import_preview_correct_buy": "Corriger l’achat depuis la source",

@@ -607,6 +607,8 @@ func toAdapterOrderFills(fills []trading212.OrderFill) []trading212OrderFill {
 	for i, f := range fills {
 		out[i] = trading212OrderFill{
 			FillID:           f.FillID,
+			FillType:         f.FillType,
+			OrderStatus:      f.OrderStatus,
 			OrderID:          f.OrderID,
 			Ticker:           f.Ticker,
 			ISIN:             f.ISIN,

@@ -58,7 +58,7 @@ func (s *ImportService) prepareTrading212SourceCorrection(ctx context.Context, i
 	}
 	if json.Unmarshal([]byte(row.RawJSON), &raw) != nil ||
 		json.Unmarshal([]byte(row.NormalizedJSON), &normalized) != nil ||
-		raw[rawKeyKind] != trading212RawKindOrderFill || strings.ToUpper(strings.TrimSpace(raw[rawKeySide])) != strings.ToUpper(kind) {
+		raw[rawKeyKind] != trading212RawKindOrderFill || unsupportedTrading212Fill(raw) || strings.ToUpper(strings.TrimSpace(raw[rawKeySide])) != strings.ToUpper(kind) {
 		return preparedSourceCorrection{}, ErrImportSourceCorrectionConflict
 	}
 	acceptedRawJSON, _, found, err := s.repository.FindCommittedTrading212FillSnapshot(ctx, BookID, row.DedupeFingerprint)
@@ -66,7 +66,7 @@ func (s *ImportService) prepareTrading212SourceCorrection(ctx context.Context, i
 		return preparedSourceCorrection{}, err
 	}
 	var acceptedRaw map[string]string
-	if !found || json.Unmarshal([]byte(acceptedRawJSON), &acceptedRaw) != nil ||
+	if !found || json.Unmarshal([]byte(acceptedRawJSON), &acceptedRaw) != nil || unsupportedTrading212Fill(acceptedRaw) ||
 		raw[rawKeyISIN] != acceptedRaw[rawKeyISIN] || raw[rawKeyTicker] != acceptedRaw[rawKeyTicker] {
 		return preparedSourceCorrection{}, ValidationError{Message: "source instrument change requires a different correction command"}
 	}

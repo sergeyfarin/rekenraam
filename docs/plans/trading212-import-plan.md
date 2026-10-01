@@ -31,6 +31,19 @@ reusing the history endpoint. See `docs/backlog.md` T-21 (closed).
 Slice 4b (investment lot import, B-T212-INVST) shipped 2026-07-03 — see its
 "Delivery slices" entry below for what's actually built vs. deferred.**
 
+**2026-10-01 P0 guard (R16 slice 4af, T-112 #127):** order side alone
+must not classify a fill as a trade. Fetch and stage exact `fill.type` and
+`order.status`. Only explicit `TRADE` fills may enter native BUY/SELL or the
+generic cash fallback; unsupported, missing and future types stay in review
+before setup or financial writes, even after local resolution/dedupe edits.
+BUY/SALE source corrections and previews enforce the same boundary. Preserve
+order status as evidence but exclude it from economic revision comparison.
+A `TRADE` executed on a cancelled order is still a trade; order cancellation
+is not a fill reversal. The [official historical orders contract](https://docs.trading212.com/api/historical-events/orders_1),
+checked on that date, does not document an execution-cancellation fill type.
+Corporate action/FOP types need their own producer/operation mapping (#114,
+#115), and verified execution cancellation remains #99.
+
 **Also found and fixed while building Slice 4b (severity-1, pre-existing since
 Slice 1, unrelated to Trading 212 specifically):** `buildTransactionSpec`
 (`import_service.go`) set every journal entry's `EntryKind` to `"main"`, which

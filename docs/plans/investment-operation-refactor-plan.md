@@ -943,6 +943,23 @@ next family.
      failure rollback and reconciliation guards. Source cancellation and wider
      source scope, other correction families and writer convergence remain
      T-75b gates.
+   - **4af — Trading 212 fill taxonomy admission — complete 2026-10-01.**
+     Preserve exact `fill.type` and `order.status` as staged provider evidence.
+     Only explicit `TRADE` executions enter ordinary BUY/SELL, cash fallback,
+     or BUY/SALE source correction/preview. Unsupported, future and missing
+     types remain review-only regardless of local resolution/dedupe edits;
+     they consume no committed identity and create no instrument/holding or
+     financial facts. The composed review uses localized hold text and blocks
+     ordinary editing/correction actions. Order lifecycle status is excluded
+     from economic source comparison in staging, read models and revision
+     acceptance. An executed TRADE on a cancelled order remains an execution.
+     [Provider contract](https://docs.trading212.com/api/historical-events/orders_1)
+     checked 2026-10-01 documents CANCELLED as order status, and corporate
+     action/FOP variants as fill types; it supplies no documented execution
+     cancellation fill type. Do not infer cancellation from order status,
+     FOP_CORRECTION, negative quantities or opposite cash signs. Native source
+     cancellation remains a T-75b gate pending verified provider evidence.
+     Typed corporate-action producers/commands stay under #114/#115.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

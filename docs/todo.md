@@ -24,6 +24,11 @@ Last reconciled: 2026-10-01.
   dedicated reconciliation previews are also shipped. Terminal native buy/sale
   reversal is shipped. Source cancellation, broader backdated admission, other
   operation corrections and writer convergence remain open.
+- [x] Preserve Trading 212 fill taxonomy and hold unsupported or missing
+  types before any trade/cash import or source correction (slice 4af,
+  [T-112 #127](https://github.com/sergeyfarin/rekenraam/issues/127)). Source
+  execution cancellation still needs verified provider evidence; cancelled
+  order status and FOP_CORRECTION are insufficient to reverse an execution.
 - [x] Complete [T-110 #125](https://github.com/sergeyfarin/rekenraam/issues/125)'s
   reopened slice 2a integrity gates: pinned component posting links,
   independent decision/clearing attribution, authoritative operation journal

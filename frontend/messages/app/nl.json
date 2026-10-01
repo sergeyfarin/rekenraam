@@ -153,6 +153,8 @@
   "import_preview_dedupe_new": "Nieuw",
   "import_preview_dedupe_duplicate": "Al geïmporteerd",
   "import_preview_dedupe_needs_attention": "Dubbel controleren",
+  "import_preview_warning_row": "Rij {row}: {message}",
+  "import_preview_unsupported_fill": "Niet-ondersteund of ontbrekend uitvoeringstype — controle nodig; import slaat deze over",
   "import_preview_source_changed": "Brontransactie gewijzigd — controle nodig; import slaat deze over",
   "import_preview_open_original": "Open oorspronkelijke transactie",
   "import_preview_correct_buy": "Aankoop corrigeren vanuit bron",

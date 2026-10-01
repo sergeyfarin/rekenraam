@@ -153,6 +153,8 @@
   "import_preview_dedupe_new": "Новая",
   "import_preview_dedupe_duplicate": "Уже импортирована",
   "import_preview_dedupe_needs_attention": "Проверьте дубликат",
+  "import_preview_warning_row": "Строка {row}: {message}",
+  "import_preview_unsupported_fill": "Неподдерживаемый или отсутствующий тип исполнения — требуется проверка; импорт пропустит его",
   "import_preview_source_changed": "Исходная сделка изменилась — требуется проверка; импорт пропустит её",
   "import_preview_open_original": "Открыть исходную операцию",
   "import_preview_correct_buy": "Исправить покупку по источнику",

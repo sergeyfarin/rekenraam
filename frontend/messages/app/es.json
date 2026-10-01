@@ -153,6 +153,8 @@
   "import_preview_dedupe_new": "Nueva",
   "import_preview_dedupe_duplicate": "Ya importada",
   "import_preview_dedupe_needs_attention": "Revisar duplicado",
+  "import_preview_warning_row": "Fila {row}: {message}",
+  "import_preview_unsupported_fill": "Tipo de ejecución no admitido o ausente — requiere revisión; se omitirá al importar",
   "import_preview_source_changed": "Operación de origen modificada — requiere revisión; se omitirá al importar",
   "import_preview_open_original": "Abrir operación original",
   "import_preview_correct_buy": "Corregir compra desde el origen",

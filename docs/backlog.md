@@ -21,6 +21,8 @@ the existing local IDs resolvable; it is not a second task list.
 | T-80 | [#102 — Translation catalog parity](https://github.com/sergeyfarin/rekenraam/issues/102) |
 | T-87 | [#101 — Owner-local dates](https://github.com/sergeyfarin/rekenraam/issues/101) |
 | T-108 | [#103 — Short sale and cover](https://github.com/sergeyfarin/rekenraam/issues/103) |
+| T-112 | [#127 — Trading 212 fill taxonomy admission](https://github.com/sergeyfarin/rekenraam/issues/127) |
+| T-113 | [#128 — SQLite fixture URI path escaping](https://github.com/sergeyfarin/rekenraam/issues/128) |
 
 The [roadmap](roadmap.md) owns product order; its
 [GitHub index](https://github.com/sergeyfarin/rekenraam/issues/120) links current

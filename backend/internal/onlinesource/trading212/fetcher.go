@@ -249,6 +249,7 @@ type rawFillWalletImpact struct {
 
 // rawFill mirrors one order's "fill" object (/equity/history/orders).
 type rawFill struct {
+	Type         string              `json:"type"`
 	ID           json.Number         `json:"id"`
 	FilledAt     string              `json:"filledAt"`
 	Price        json.Number         `json:"price"`
@@ -258,6 +259,7 @@ type rawFill struct {
 
 // rawOrder mirrors one order's "order" object (/equity/history/orders).
 type rawOrder struct {
+	Status     string        `json:"status"`
 	ID         json.Number   `json:"id"`
 	Ticker     string        `json:"ticker"`
 	Instrument rawInstrument `json:"instrument"`
@@ -319,6 +321,8 @@ func (f *Fetcher) fetchOrdersPage(ctx context.Context, apiKey string, path strin
 		}
 		out = append(out, OrderFill{
 			FillID:           item.Fill.ID.String(),
+			FillType:         item.Fill.Type,
+			OrderStatus:      item.Order.Status,
 			OrderID:          item.Order.ID.String(),
 			Ticker:           ticker,
 			ISIN:             item.Order.Instrument.ISIN,

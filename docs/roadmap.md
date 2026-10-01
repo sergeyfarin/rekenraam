@@ -146,7 +146,11 @@ pre-sale available lots for specific-lot correction, and old sales replay
 dependent disposals. New backdated long buys replay dependent sales; imported
 fills with a committed identity can be manually replaced. Trading 212 BUY and
 SALE source quantity/net-settlement corrections and their
-reconciliation previews are shipped. Source cancellations, broader source
+reconciliation previews are shipped. Slice 4af preserves provider fill taxonomy
+and holds unsupported or missing fill types before ordinary trade/cash writes
+and source corrections ([T-112 #127](https://github.com/sergeyfarin/rekenraam/issues/127)).
+Order lifecycle status is advisory, never execution-cancellation evidence.
+Source cancellations, broader source
 correction scope and other backdated operation families remain.
 The completed [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
 now links journal-backed trade components to their exact posting lines and

@@ -395,6 +395,24 @@ func TestFetchOrdersHitsRealPath(t *testing.T) {
 	}
 }
 
+func TestFetchOrdersPreservesUnsupportedFillType(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"items": []map[string]any{{
+			"order": map[string]any{"id": 1, "side": "BUY", "status": "CANCELLED"},
+			"fill":  map[string]any{"id": 2, "type": "FOP_CORRECTION", "filledAt": "2026-06-01T10:00:00Z", "quantity": "2"},
+		}}})
+	}))
+	defer server.Close()
+	result, err := NewFetcher(server.Client(), server.URL).FetchOrders(context.Background(), "test-key", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Fills) != 1 || result.Fills[0].FillType != "FOP_CORRECTION" || result.Fills[0].OrderStatus != "CANCELLED" {
+		t.Fatalf("provider facts lost: %+v", result.Fills)
+	}
+}
+
 func TestFetchDividendsHitsRealPath(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/equity/history/dividends" {
@@ -418,7 +436,7 @@ func writeGoldenOrderJSON(w http.ResponseWriter, nextPagePath string) {
 		"items": []map[string]any{
 			{
 				"order": map[string]any{
-					"id": 111, "ticker": "AAPL_US_EQ", "side": "BUY", "currency": "USD",
+					"status": "CANCELLED", "id": 111, "ticker": "AAPL_US_EQ", "side": "BUY", "currency": "USD",
 					"instrument": map[string]any{"ticker": "AAPL_US_EQ", "isin": "US0378331005", "name": "Apple Inc.", "currency": "USD"},
 				},
 				// walletImpact.currency deliberately differs from order.currency:
@@ -426,7 +444,7 @@ func writeGoldenOrderJSON(w http.ResponseWriter, nextPagePath string) {
 				// its wallet settles net_value in EUR (the provider converts
 				// internally) — this golden fixture guards against conflating
 				// the two (see OrderFill.NetValueCurrency's doc comment).
-				"fill": map[string]any{
+				"fill": map[string]any{"type": "TRADE",
 					"id": 222, "filledAt": "2024-02-01T10:00:00Z", "price": "150.25", "quantity": "2",
 					"walletImpact": map[string]any{"currency": "EUR", "netValue": "-278.50"},
 				},
@@ -451,6 +469,9 @@ func TestFetchOrdersParsesRealShape(t *testing.T) {
 		t.Fatalf("expected 1 fill, got %d", len(result.Fills))
 	}
 	fill := result.Fills[0]
+	if fill.FillType != "TRADE" || fill.OrderStatus != "CANCELLED" {
+		t.Fatalf("lost fill taxonomy: %+v", fill)
+	}
 	if fill.FillID != "222" || fill.OrderID != "111" {
 		t.Fatalf("unexpected ids: %+v", fill)
 	}
@@ -480,7 +501,7 @@ func TestFetchOrdersIncrementalCursorStopsOnFilledAt(t *testing.T) {
 			"items": []map[string]any{
 				{
 					"order": map[string]any{"id": 1, "ticker": "AAPL_US_EQ", "side": "BUY", "currency": "USD", "instrument": map[string]any{"ticker": "AAPL_US_EQ", "isin": "US0378331005"}},
-					"fill":  map[string]any{"id": 1, "filledAt": "2024-01-01T00:00:00Z", "price": "1", "quantity": "1", "walletImpact": map[string]any{"netValue": "-1"}},
+					"fill":  map[string]any{"type": "TRADE", "id": 1, "filledAt": "2024-01-01T00:00:00Z", "price": "1", "quantity": "1", "walletImpact": map[string]any{"netValue": "-1"}},
 				},
 			},
 			"nextPagePath": "/equity/history/orders?p=1",

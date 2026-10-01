@@ -153,6 +153,8 @@
   "import_preview_dedupe_new": "New",
   "import_preview_dedupe_duplicate": "Already imported",
   "import_preview_dedupe_needs_attention": "Check duplicate",
+  "import_preview_warning_row": "Row {row}: {message}",
+  "import_preview_unsupported_fill": "Unsupported or missing fill type — review required; import will skip it",
   "import_preview_source_changed": "Source fill changed — review required; import will skip it",
   "import_preview_open_original": "Open original transaction",
   "import_preview_correct_buy": "Correct buy from source",

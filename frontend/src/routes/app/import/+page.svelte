@@ -15,7 +15,7 @@
   import PayeeResolutionPanel from '$lib/imports/payee-resolution-panel.svelte';
   import ImportRulesPanel from '$lib/imports/import-rules-panel.svelte';
   import type { PayeeResponse } from '$lib/api/payees';
-  import { sourceCorrectionKind } from '$lib/imports/source-correction';
+  import { sourceCorrectionKind, unsupportedSourceFill } from '$lib/imports/source-correction';
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { accountsQueryOptions } from '$lib/api/accounts';
   import { currenciesQueryOptions } from '$lib/api/currencies';
@@ -1260,7 +1260,10 @@
         </div>
         <ul class="mt-3 space-y-1">
           {#each previewData.warnings as w}
-            <li class="text-sm text-muted">Row {w.row_index + 1}: {w.message}</li>
+            <li class="text-sm text-muted">{m.import_preview_warning_row({
+              row: w.row_index + 1,
+              message: w.message === 'unsupported fill type; review required' ? m.import_preview_unsupported_fill() : w.message
+            })}</li>
           {/each}
         </ul>
       </Panel>
@@ -1398,7 +1401,8 @@
               {@const norm = parseNormalized(row)}
               {@const res = getResolution(row.id)}
               {@const isDuplicate = row.dedupe_status === 'duplicate'}
-              {@const isBlocked = isDuplicate || row.source_changed || row.commit_status === 'committed' || previewData.batch.status !== 'previewing'}
+              {@const unsupportedFill = unsupportedSourceFill(row)}
+              {@const isBlocked = unsupportedFill || isDuplicate || row.source_changed || row.commit_status === 'committed' || previewData.batch.status !== 'previewing'}
               {@const isExcluded = res.exclude || row.dedupe_status === 'excluded'}
               {@const isTransfer = !!norm.transfer_hint}
               <tr
@@ -1416,13 +1420,13 @@
                 </td>
                 <td class="px-4 py-2.5">
                   <span
-                    class:text-warning={row.source_changed || row.dedupe_status === 'needs_attention'}
+                    class:text-warning={unsupportedFill || row.source_changed || row.dedupe_status === 'needs_attention'}
                     class:text-muted={row.dedupe_status === 'duplicate' || row.dedupe_status === 'excluded'}
                     class="text-xs font-medium"
                   >
                     {row.commit_status === 'committed' && row.dedupe_status === 'needs_attention'
                       ? m.import_preview_source_revision_accepted()
-                      : row.source_changed ? m.import_preview_source_changed() : dedupeStatusLabel(row.dedupe_status)}
+                      : unsupportedFill ? m.import_preview_unsupported_fill() : row.source_changed ? m.import_preview_source_changed() : dedupeStatusLabel(row.dedupe_status)}
                   </span>
                   {#if row.source_changed && row.source_transaction_id}
                     <a

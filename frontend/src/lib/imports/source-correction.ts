@@ -1,7 +1,7 @@
 import type { ImportStagedRow } from '$lib/api/imports';
 
 export function sourceCorrectionKind(row: ImportStagedRow): 'buy' | 'sale' | null {
-  if (!row.source_changed || !row.source_transaction_id ||
+  if (unsupportedSourceFill(row) || !row.source_changed || !row.source_transaction_id ||
     (row.commit_status !== 'pending' && row.commit_status !== 'skipped')) return null;
   try {
     const raw = JSON.parse(row.raw) as { kind?: string; side?: string };
@@ -13,4 +13,12 @@ export function sourceCorrectionKind(row: ImportStagedRow): 'buy' | 'sale' | nul
   } catch {
     return null;
   }
+}
+
+/** Only documented ordinary executions may enter the trade import path. */
+export function unsupportedSourceFill(row: Pick<ImportStagedRow, 'raw'>): boolean {
+  try {
+    const raw = JSON.parse(row.raw) as { kind?: string; fill_type?: string } | null;
+    return raw?.kind === 'trading212_order_fill' && raw.fill_type !== 'TRADE';
+  } catch { return false; }
 }

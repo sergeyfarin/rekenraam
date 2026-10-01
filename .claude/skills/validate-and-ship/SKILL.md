@@ -162,6 +162,15 @@ non-trivial diff (yours or reviewed):
     matching the writer's lineage guard; never copy or rebind original effects.
     Named regression: `TestCorrectTrading212SalePreservesSpecificElectionWithoutGuessingQuantityChanges`.
 
+21. **Order side mistaken for provider event type** — BUY/SELL does not
+    establish an ordinary execution. Preserve the provider fill taxonomy and
+    require explicit TRADE before native import, generic cash fallback or
+    source correction. Unknown/missing types fail closed. Order lifecycle
+    status cannot cancel an execution and must not create economic revisions.
+    Named regressions: `TestImportUnsupportedFillCannotPost`,
+    `TestUnsupportedSaleFillCannotUseCashFallback`,
+    `TestUnsupportedFillCannotCorrectAcceptedBuyOrSale`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

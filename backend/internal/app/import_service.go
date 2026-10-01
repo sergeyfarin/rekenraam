@@ -548,6 +548,9 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 			dedupeStatus = "needs_attention"
 		}
 		seenInBatch[row.DedupeFingerprint] = true
+		if unsupportedTrading212Fill(row.Raw) {
+			dedupeStatus = "needs_attention"
+		}
 
 		resolutionJSON := "{}"
 		if resolution := applyImportRules(row, rules); resolution.AppliedRuleID != nil {
@@ -597,6 +600,8 @@ func trading212FillSourceChanged(originalRaw, currentRaw, originalNormalized, cu
 	for _, raw := range []map[string]string{original, current} {
 		delete(raw, rawKeyResolvedCommodityID)
 		delete(raw, rawKeyResolvedHoldingID)
+		// Order lifecycle is advisory evidence, not execution economics.
+		delete(raw, "order_status")
 	}
 	originalSource, err := json.Marshal(original)
 	if err != nil {
@@ -777,7 +782,7 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 		if row.CommitStatus == "committed" || row.CommitStatus == "skipped" {
 			continue
 		}
-		if row.DedupeStatus == "duplicate" || row.DedupeStatus == "excluded" || row.SourceChanged {
+		if row.DedupeStatus == "duplicate" || row.DedupeStatus == "excluded" || row.SourceChanged || unsupportedTrading212FillJSON(row.RawJSON) {
 			result.DuplicateCount++
 			continue
 		}
@@ -855,6 +860,16 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 				result.CommittedCount++
 			} else {
 				result.SkippedCount++
+			}
+			continue
+		}
+
+		if unsupportedTrading212FillJSON(row.RawJSON) {
+			if err := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
+				RowID: row.ID, CommitStatus: "skipped",
+				CommitError: sql.NullString{String: "unsupported fill type; review required", Valid: true},
+			}, nil); err != nil {
+				return result, fmt.Errorf("hold unsupported fill %d: %w", row.ID, err)
 			}
 			continue
 		}

@@ -1164,8 +1164,8 @@ const importStagedRowSelect = `s.id, s.batch_id, s.book_id, s.row_index, s.dedup
 				WHERE latest.committed_identity_id = identity_row.id
 					AND latest.commit_status = 'committed'
 					AND json_extract(latest.raw_json, '$.kind') = 'trading212_order_fill')
-			AND (json_remove(original.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
-				<> json_remove(s.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
+			AND (json_remove(original.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id', '$.order_status')
+				<> json_remove(s.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id', '$.order_status')
 				OR original.normalized_json <> s.normalized_json)),
 	(SELECT effect.transaction_id FROM import_commit_identities identity_row
 		JOIN import_commit_identity_effects effect ON effect.identity_id = identity_row.id

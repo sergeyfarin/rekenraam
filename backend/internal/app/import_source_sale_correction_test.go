@@ -20,7 +20,7 @@ func newSourceSaleFixture(t *testing.T) sourceSaleFixture {
 	t.Helper()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
-	buy := trading212OrderFill{FillID: "sale-buy", OrderID: "sale-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+	buy := trading212OrderFill{FillType: "TRADE", FillID: "sale-buy", OrderID: "sale-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "10", Price: "100.00", Currency: "EUR", FilledAt: "2026-06-01T10:00:00Z", NetValue: "-1000.00", NetValueCurrency: "EUR"}
 	commitSourceFill(t, f, conn.ID, buy)
 	sale := buy
@@ -289,7 +289,7 @@ func TestCorrectTrading212SaleDoesNotOfferCashFallback(t *testing.T) {
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	connection := f.createConnection(t, nil)
-	fill := trading212OrderFill{FillID: "fallback-sale", OrderID: "fallback-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+	fill := trading212OrderFill{FillType: "TRADE", FillID: "fallback-sale", OrderID: "fallback-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "SELL", Quantity: "2", Price: "150.00", Currency: "EUR", FilledAt: "2026-07-01T10:00:00Z", NetValue: "300.00", NetValueCurrency: "EUR"}
 	batchID, rowID := f.stageOrderFillRow(t, connection.ID, fill)
 	f.resolveRowGeneric(t, batchID, rowID, f.cashAccountID)

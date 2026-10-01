@@ -87,8 +87,8 @@ func checkSourceRevision(ctx context.Context, queryer rowQueryer, params CommitI
 					AND latest.id = (SELECT MAX(accepted.id) FROM import_staged_rows accepted
 						WHERE accepted.committed_identity_id = identity_row.id AND accepted.commit_status = 'committed')
 					AND staged.id > latest.id
-					AND (json_remove(latest.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id') <>
-						json_remove(staged.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id')
+					AND (json_remove(latest.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id', '$.order_status') <>
+						json_remove(staged.raw_json, '$.resolved_commodity_id', '$.resolved_holding_account_id', '$.order_status')
 						OR latest.normalized_json <> staged.normalized_json))
 		FROM import_commit_identities identity_row
 		JOIN import_commit_identity_effects effect ON effect.identity_id = identity_row.id

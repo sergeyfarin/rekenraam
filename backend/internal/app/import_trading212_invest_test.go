@@ -278,7 +278,7 @@ func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing
 	conn := f.createConnection(t, &f.cashAccountID)
 
 	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
 	})
@@ -334,7 +334,7 @@ func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
 	fill := trading212OrderFill{
-		FillID: "corrected-fill", OrderID: "corrected-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "corrected-fill", OrderID: "corrected-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
 	}
@@ -400,7 +400,7 @@ func TestReverseCommittedImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *test
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
 	fill := trading212OrderFill{
-		FillID: "reversed-fill", OrderID: "reversed-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "reversed-fill", OrderID: "reversed-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	}
@@ -438,7 +438,7 @@ func TestChangedTrading212FillIsHeldForSourceCorrection(t *testing.T) {
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
 	fill := trading212OrderFill{
-		FillID: "changed-fill", OrderID: "changed-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "changed-fill", OrderID: "changed-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	}
@@ -497,7 +497,7 @@ func TestTrading212BuySourceRevisionCommitsWithReplacementAndBecomesSnapshot(t *
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
 	fill := trading212OrderFill{
-		FillID: "revision-fill", OrderID: "revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "revision-fill", OrderID: "revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	}
@@ -584,7 +584,7 @@ func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
 	fill := trading212OrderFill{
-		FillID: "source-command-fill", OrderID: "source-command-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "source-command-fill", OrderID: "source-command-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	}
@@ -688,7 +688,7 @@ func TestCorrectTrading212BuyRejectsChangedDateWithoutPosting(t *testing.T) {
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
 	fill := trading212OrderFill{
-		FillID: "date-change-fill", OrderID: "date-change-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "date-change-fill", OrderID: "date-change-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	}
@@ -719,7 +719,7 @@ func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
 	fill := trading212OrderFill{
-		FillID: "reconciled-revision-fill", OrderID: "reconciled-revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "reconciled-revision-fill", OrderID: "reconciled-revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	}
@@ -788,7 +788,7 @@ func TestCorrectTrading212BuyRejectsCancellationSignedPayload(t *testing.T) {
 			ctx := context.Background()
 			conn := f.createConnection(t, &f.cashAccountID)
 			fill := trading212OrderFill{
-				FillID: "signed-revision-fill", OrderID: "signed-revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+				FillType: "TRADE", FillID: "signed-revision-fill", OrderID: "signed-revision-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 				Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
 				FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 			}
@@ -832,14 +832,14 @@ func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
 	buyBatch, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "sale-source-buy", OrderID: "sale-source-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "sale-source-buy", OrderID: "sale-source-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "EUR",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	})
 	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: buyBatch})
 	require.NoError(t, err)
 	fill := trading212OrderFill{
-		FillID: "sale-source-sell", OrderID: "sale-source-sell-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "sale-source-sell", OrderID: "sale-source-sell-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "SELL", Quantity: "1", Price: "170.00", Currency: "EUR",
 		FilledAt: "2026-07-01T10:00:00Z", NetValue: "170.00", NetValueCurrency: "EUR",
 	}
@@ -907,7 +907,7 @@ func TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride
 	checkpointID := f.createCashReconciliationCheckpoint(t, "2026-06-10")
 
 	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "fill-reconciled-1", OrderID: "order-reconciled-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "fill-reconciled-1", OrderID: "order-reconciled-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
 	})
@@ -934,7 +934,7 @@ func TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride
 	assert.Equal(t, "active", checkpoints[0].Status)
 
 	overrideBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "fill-reconciled-2", OrderID: "order-reconciled-2", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "fill-reconciled-2", OrderID: "order-reconciled-2", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "1", Price: "151.00", Currency: "USD",
 		FilledAt: "2026-06-02T10:00:00Z", NetValue: "-151.00", NetValueCurrency: "EUR",
 	})
@@ -964,7 +964,7 @@ func TestCommitImportBatch_BuyOrderFillReusesHoldingAccountAcrossFetches(t *test
 
 	fill := func(fillID string, filledAt string) trading212OrderFill {
 		return trading212OrderFill{
-			FillID: fillID, OrderID: "order-" + fillID, Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+			FillType: "TRADE", FillID: fillID, OrderID: "order-" + fillID, Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 			Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
 			FilledAt: filledAt, NetValue: "-150.00", NetValueCurrency: "EUR",
 		}
@@ -1117,7 +1117,7 @@ func TestCommitImportBatch_OrderFillWithoutCashAccountFallsBackToGenericCommit(t
 	conn := f.createConnection(t, nil) // no cash_account_id configured
 
 	batchID, rowID := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
 	})
@@ -1165,13 +1165,13 @@ func TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrade
 
 	// Row index 0: the SELL (newer trade, provider's first page).
 	stage(trading212FetchPayload{ConnectionID: conn.ID, OrderFills: []trading212OrderFill{{
-		FillID: "fill-sell", OrderID: "order-sell", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "fill-sell", OrderID: "order-sell", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "SELL", Quantity: "1", Price: "160.00", Currency: "USD",
 		FilledAt: "2026-06-01T15:00:00Z", NetValue: "160.00", NetValueCurrency: "EUR",
 	}}})
 	// Row index 1: the intraday BUY that opened the lot (later provider page).
 	stage(trading212FetchPayload{ConnectionID: conn.ID, OrderFills: []trading212OrderFill{{
-		FillID: "fill-buy", OrderID: "order-buy", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "fill-buy", OrderID: "order-buy", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
 		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-150.00", NetValueCurrency: "EUR",
 	}}})
@@ -1227,7 +1227,7 @@ func TestCommitImportBatch_BuyOrderFillUnexpectedInvestmentErrorFailsRowInsteadO
 	conn := f.createConnection(t, &f.cashAccountID)
 
 	batchID, rowID := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
 	})
@@ -1262,7 +1262,7 @@ func TestCommitImportBatch_InsufficientLotFallbackCleansCreatedInvestmentSetup(t
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	batchID, rowID := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "orphan-sell", OrderID: "orphan-sell-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "orphan-sell", OrderID: "orphan-sell-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "SELL", Quantity: "1", Price: "160.00", Currency: "USD",
 		FilledAt: "2026-06-02T10:00:00Z", NetValue: "160.00", NetValueCurrency: "EUR",
 	})
@@ -1308,7 +1308,7 @@ func TestCommitImportBatch_DividendPostsAsInvestmentIncome(t *testing.T) {
 	// buy, then save a dividend default income account, mirroring what a
 	// real user would already have from owning the position.
 	buyBatch, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
 	})
@@ -1394,7 +1394,7 @@ func TestCommitImportBatch_InvestmentBuyRollsBackWhenIdentityRecordingFails(t *t
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "atomic-buy", OrderID: "atomic-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "atomic-buy", OrderID: "atomic-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
 		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	})
@@ -1412,7 +1412,7 @@ func TestCommitImportBatch_InvestmentSellRollsBackWhenIdentityRecordingFails(t *
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	buyBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "atomic-sell-buy", OrderID: "atomic-sell-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "atomic-sell-buy", OrderID: "atomic-sell-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
 		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	})
@@ -1420,7 +1420,7 @@ func TestCommitImportBatch_InvestmentSellRollsBackWhenIdentityRecordingFails(t *
 	require.NoError(t, err)
 
 	sellBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "atomic-sell", OrderID: "atomic-sell-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "atomic-sell", OrderID: "atomic-sell-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "SELL", Quantity: "1", Price: "160.00", Currency: "USD",
 		FilledAt: "2026-06-02T09:00:00Z", NetValue: "160.00", NetValueCurrency: "EUR",
 	})
@@ -1439,7 +1439,7 @@ func TestCommitImportBatch_InvestmentDividendRollsBackWhenIdentityRecordingFails
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	buyBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "atomic-dividend-buy", OrderID: "atomic-dividend-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "atomic-dividend-buy", OrderID: "atomic-dividend-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
 		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	})
@@ -1474,7 +1474,7 @@ func TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow(t *tes
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	setupBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "concurrent-setup", OrderID: "concurrent-setup-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "concurrent-setup", OrderID: "concurrent-setup-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
 		FilledAt: "2026-05-30T09:00:00Z", NetValue: "-150.00", NetValueCurrency: "EUR",
 	})
@@ -1483,7 +1483,7 @@ func TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow(t *tes
 	initialTransactions := transactionCount(t, f)
 
 	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "concurrent-buy", OrderID: "concurrent-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "concurrent-buy", OrderID: "concurrent-buy-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
 		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	})
@@ -1548,12 +1548,12 @@ func TestCommitImportBatch_ConcurrentFirstTimeHoldingMapReusesWinner(t *testing.
 	require.NoError(t, f.database.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM accounts`).Scan(&initialAccountCount))
 
 	batchOneID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "holding-race-one", OrderID: "holding-race-one-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "holding-race-one", OrderID: "holding-race-one-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.00", Currency: "USD",
 		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-300.00", NetValueCurrency: "EUR",
 	})
 	batchTwoID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "holding-race-two", OrderID: "holding-race-two-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "holding-race-two", OrderID: "holding-race-two-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "151.00", Currency: "USD",
 		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-302.00", NetValueCurrency: "EUR",
 	})
@@ -1614,7 +1614,7 @@ func TestCommitImportStagedRow_DoesNotOverwriteCommitted(t *testing.T) {
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "terminal-status-guard", OrderID: "terminal-status-guard-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "terminal-status-guard", OrderID: "terminal-status-guard-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
 		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-150.00", NetValueCurrency: "EUR",
 	})
@@ -1710,7 +1710,7 @@ func TestCommitImportBatch_BackdatedFirstTradeNeedsNoInstrumentBackdating(t *tes
 	conn := f.createConnection(t, &cashAccountID)
 
 	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
-		FillID: "fill-old", OrderID: "order-old", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		FillType: "TRADE", FillID: "fill-old", OrderID: "order-old", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
 		FilledAt: "2023-06-05T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
 	})
@@ -1741,7 +1741,7 @@ func TestCommitImportBatch_LaterImportCarryingAnEarlierTradeStillCommits(t *test
 
 	fill := func(fillID string, filledAt string) trading212OrderFill {
 		return trading212OrderFill{
-			FillID: fillID, OrderID: "order-" + fillID, Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+			FillType: "TRADE", FillID: fillID, OrderID: "order-" + fillID, Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
 			Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
 			FilledAt: filledAt, NetValue: "-150.00", NetValueCurrency: "EUR",
 		}

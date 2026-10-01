@@ -58,15 +58,19 @@ type FetchResult struct {
 // with its own FillID). Verified 2026-07-03 against the published OpenAPI
 // spec for GET /equity/history/orders (B-T212-INVST/Slice 4b).
 type OrderFill struct {
-	FillID   string // fill.id — the actual execution event; the strong dedupe key
-	OrderID  string // order.id — links partial fills of the same order together
-	Ticker   string // e.g. "AAPL_US_EQ"
-	ISIN     string
-	Side     string // "BUY" | "SELL"
-	Quantity string // decimal string, shares filled in this fill
-	Price    string // decimal string, fill price, denominated in Currency
-	Currency string // ISO 4217, the order's own trading currency (for Price)
-	FilledAt string // RFC3339
+	// FillType is the provider taxonomy, independently of order side.
+	FillType string
+	// OrderStatus is lifecycle evidence, not an execution reversal.
+	OrderStatus string
+	FillID      string // fill.id — the actual execution event; the strong dedupe key
+	OrderID     string // order.id — links partial fills of the same order together
+	Ticker      string // e.g. "AAPL_US_EQ"
+	ISIN        string
+	Side        string // "BUY" | "SELL"
+	Quantity    string // decimal string, shares filled in this fill
+	Price       string // decimal string, fill price, denominated in Currency
+	Currency    string // ISO 4217, the order's own trading currency (for Price)
+	FilledAt    string // RFC3339
 	// NetValue is fill.walletImpact.netValue: the actual net cash effect of
 	// this fill (fees/taxes already netted in by the provider) — this is
 	// what the ledger's cash leg must move, not quantity*price recomputed
