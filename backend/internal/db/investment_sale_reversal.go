@@ -97,8 +97,7 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 
 // ReverseSale posts an inverse journal and installs the replayed long position
 // under one audit event. The original journal, decision, and lot events remain
-// immutable. Imported sales stay fenced until source identity correction is
-// part of the same command.
+// immutable. Source-linked imported sales retain their committed identity.
 func (r *InvestmentRepository) ReverseSale(ctx context.Context, params CreateTransactionParams, expected SaleOperationRecord) (TransactionRecord, error) {
 	if params.BookID <= 0 || params.ActorUserID <= 0 || expected.OperationID <= 0 ||
 		params.Spec.InvestmentOperationKind != "reversal" || params.Spec.Status != "posted" ||
@@ -109,56 +108,40 @@ func (r *InvestmentRepository) ReverseSale(ctx context.Context, params CreateTra
 		!params.CorrectionOfTransactionID.Valid || params.CorrectionOfTransactionID.Int64 != expected.TransactionID {
 		return TransactionRecord{}, fmt.Errorf("%w: sale reversal is incomplete", ErrInvalidDisposalParams)
 	}
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("begin sale reversal: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
-	current, err := checkSaleOperationForCorrectionTx(ctx, tx, params.BookID, expected)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	transaction, auditEventID, err := createTransactionWithAuditTx(ctx, tx, params)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, "long")
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, intents)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	if err := persistInvestmentReplayProjectionTx(ctx, tx, params.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID,
-		operationID, auditEventID, params.ActorUserID, params.CreatedAt,
-		intents, projection); err != nil {
-		return TransactionRecord{}, err
-	}
-	if err := voidTradePricesForVersionTx(ctx, tx, params, current.TransactionVersionID, auditEventID); err != nil {
-		return TransactionRecord{}, err
-	}
-	transaction.InvalidatedCheckpointIDs, err = invalidateCreateTransactionCheckpointsTx(ctx, tx, params, auditEventID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, fmt.Errorf("commit sale reversal: %w", err)
-	}
-	committed = true
-	return transaction, nil
+	var current SaleOperationRecord
+	transaction, _, err := executeInvestmentWriteWithGuardTx(ctx, r.database, params,
+		func(tx *sql.Tx) error {
+			var err error
+			current, err = checkSaleOperationForCorrectionTx(ctx, tx, params.BookID, expected)
+			return err
+		},
+		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (struct{}, error) {
+			operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
+			if err != nil {
+				return struct{}{}, err
+			}
+			intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+			if err != nil {
+				return struct{}{}, err
+			}
+			projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, intents)
+			if err != nil {
+				return struct{}{}, err
+			}
+			if err := persistInvestmentReplayProjectionTx(ctx, tx, params.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID,
+				operationID, auditEventID, params.ActorUserID, params.CreatedAt,
+				intents, projection); err != nil {
+				return struct{}{}, err
+			}
+			if err := voidTradePricesForVersionTx(ctx, tx, params, current.TransactionVersionID, auditEventID); err != nil {
+				return struct{}{}, err
+			}
+			return struct{}{}, nil
+		}, nil)
+	return transaction, err
 }
 
 func checkSaleOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected SaleOperationRecord) (SaleOperationRecord, error) {

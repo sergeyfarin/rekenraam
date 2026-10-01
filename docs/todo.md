@@ -23,7 +23,11 @@ Last reconciled: 2026-10-01.
   shipped sub-slices. Trading 212 BUY and SALE source replacement and their
   dedicated reconciliation previews are also shipped. Terminal native buy/sale
   reversal is shipped. Source cancellation, broader backdated admission, other
-  operation corrections and writer convergence remain open.
+  operation corrections and compound replacement writer convergence remain open.
+- [x] Converge native BUY/SALE reversal transaction orchestration onto the
+  existing investment writer (slice 4ag), with source guard before journal
+  insertion and late checkpoint-failure rollback coverage. Compound
+  replacements and source acceptance are the next writer-convergence slice.
 - [x] Preserve Trading 212 fill taxonomy and hold unsupported or missing
   types before any trade/cash import or source correction (slice 4af,
   [T-112 #127](https://github.com/sergeyfarin/rekenraam/issues/127)). Source

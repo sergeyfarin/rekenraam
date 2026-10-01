@@ -100,7 +100,8 @@ nullable projection/read/export gate. Unknown-basis source
 and command replay remain scoped to slice 5; correction writer convergence
 remains in T-75b. The reviewed
 baseline now keys disposal decisions by `(operation_id, decision_seq)`; current
-single-disposal writers emit sequence 1. Correction writers also still have
+single-disposal writers emit sequence 1. Buy/sale reversals now share the
+investment transaction writer; compound buy/sale replacements still have
 separate transaction orchestration. Complete the remaining T-75b correction
 gates before adding outbound transfers or basis actions.
 
@@ -960,6 +961,21 @@ next family.
      FOP_CORRECTION, negative quantities or opposite cash signs. Native source
      cancellation remains a T-75b gate pending verified provider evidence.
      Typed corporate-action producers/commands stay under #114/#115.
+   - **4ag — shared buy/sale reversal orchestration — complete 2026-10-01.**
+     Both native reversal repositories use the existing investment writer's
+     commit/rollback, journal/audit creation and reconciliation invalidation.
+     The writer accepts a transaction-scoped guard before journal insertion;
+     each reversal rechecks its pinned source, correction status and committed
+     import ancestry there. Checking after insertion would mistake its own
+     successor for a prior correction. Kind-specific replay and price retirement
+     remain effect callbacks inside that same transaction. Ordinary investment
+     commands retain their existing writer interface and behavior. Named tests
+     submit stale prepared reversals directly to each repository and inject
+     a late checkpoint-update failure after journal, replay and price effects;
+     source history, audit/journal counts, lot balances, gains, prices and active
+     checkpoints remain intact, and retry succeeds. Compound replacements and
+     their source-acceptance callback still need shared orchestration; this
+     does not complete T-75b's other source/correction-family gates.
 5. **Transfer and basis actions.** Transfer lots in kind across accounts
    without a gain; return of capital with exact basis effects; split and
    reverse split with conserved basis; cash in lieu with allocated fraction.

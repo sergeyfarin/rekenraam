@@ -6,12 +6,20 @@ import (
 	"fmt"
 )
 
-// executeInvestmentWriteTx is the only commit boundary for current investment
-// commands. The effect callback may create a lot, allocate a disposal, or do
-// nothing for a cash dividend. An import identity callback sees the completed
-// command but still runs before commit.
+// executeInvestmentWriteTx commits an investment journal, its domain effects,
+// reconciliation changes and optional import identity together.
 func executeInvestmentWriteTx[T any](ctx context.Context, database *sql.DB, params CreateTransactionParams,
 	effect func(*sql.Tx, TransactionRecord, int64) (T, error), postWrite func(*sql.Tx, int64) error,
+) (TransactionRecord, T, error) {
+	return executeInvestmentWriteWithGuardTx(ctx, database, params, nil, effect, postWrite)
+}
+
+// Correction guards run under the same SQLite write transaction, before a
+// successor journal exists. Checking after insertion would see the command's
+// own successor and incorrectly reject an otherwise effective source.
+func executeInvestmentWriteWithGuardTx[T any](ctx context.Context, database *sql.DB, params CreateTransactionParams,
+	guard func(*sql.Tx) error, effect func(*sql.Tx, TransactionRecord, int64) (T, error),
+	postWrite func(*sql.Tx, int64) error,
 ) (TransactionRecord, T, error) {
 	var zero T
 	tx, err := database.BeginTx(ctx, nil)
@@ -24,6 +32,11 @@ func executeInvestmentWriteTx[T any](ctx context.Context, database *sql.DB, para
 			rollbackTx(ctx, tx)
 		}
 	}()
+	if guard != nil {
+		if err := guard(tx); err != nil {
+			return TransactionRecord{}, zero, err
+		}
+	}
 	transaction, auditEventID, err := createTransactionWithAuditTx(ctx, tx, params)
 	if err != nil {
 		return TransactionRecord{}, zero, err

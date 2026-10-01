@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 )
@@ -18,59 +19,43 @@ func (r *InvestmentRepository) ReverseBuy(ctx context.Context, params CreateTran
 		!params.CorrectionOfTransactionID.Valid || params.CorrectionOfTransactionID.Int64 != expected.TransactionID {
 		return TransactionRecord{}, fmt.Errorf("%w: buy reversal is incomplete", ErrInvalidDisposalParams)
 	}
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return TransactionRecord{}, fmt.Errorf("begin buy reversal: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			rollbackTx(ctx, tx)
-		}
-	}()
-	current, err := checkBuyOperationForCorrectionTx(ctx, tx, params.BookID, expected)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	transaction, auditEventID, err := createTransactionWithAuditTx(ctx, tx, params)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, "long")
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, intents)
-	if err != nil {
-		if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvestmentCorrectionDependency) {
-			return TransactionRecord{}, fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)
-		}
-		return TransactionRecord{}, err
-	}
-	if err := persistInvestmentReplayProjectionTx(ctx, tx, params.BookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID,
-		operationID, auditEventID, params.ActorUserID, params.CreatedAt,
-		intents, projection); err != nil {
-		return TransactionRecord{}, err
-	}
-	if err := voidTradePricesForVersionTx(ctx, tx, params, current.TransactionVersionID, auditEventID); err != nil {
-		return TransactionRecord{}, err
-	}
-	transaction.InvalidatedCheckpointIDs, err = invalidateCreateTransactionCheckpointsTx(ctx, tx, params, auditEventID)
-	if err != nil {
-		return TransactionRecord{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return TransactionRecord{}, fmt.Errorf("commit buy reversal: %w", err)
-	}
-	committed = true
-	return transaction, nil
+	var current BuyOperationRecord
+	transaction, _, err := executeInvestmentWriteWithGuardTx(ctx, r.database, params,
+		func(tx *sql.Tx) error {
+			var err error
+			current, err = checkBuyOperationForCorrectionTx(ctx, tx, params.BookID, expected)
+			return err
+		},
+		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (struct{}, error) {
+			operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
+			if err != nil {
+				return struct{}{}, err
+			}
+			intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+			if err != nil {
+				return struct{}{}, err
+			}
+			projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, intents)
+			if err != nil {
+				if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvestmentCorrectionDependency) {
+					return struct{}{}, fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)
+				}
+				return struct{}{}, err
+			}
+			if err := persistInvestmentReplayProjectionTx(ctx, tx, params.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID,
+				operationID, auditEventID, params.ActorUserID, params.CreatedAt,
+				intents, projection); err != nil {
+				return struct{}{}, err
+			}
+			if err := voidTradePricesForVersionTx(ctx, tx, params, current.TransactionVersionID, auditEventID); err != nil {
+				return struct{}{}, err
+			}
+			return struct{}{}, nil
+		}, nil)
+	return transaction, err
 }
 
 // SimulateBuyReversal checks dependent long-position intents without a durable
