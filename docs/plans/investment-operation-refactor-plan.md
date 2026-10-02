@@ -6,8 +6,9 @@ owns shorts. Planned behavior is not shipped behavior.
 
 [Implemented features](../implemented.md) records shipped behavior.
 [The 2026-10-01 progress snapshot](../reviews/investment-operation-progress-2026-10-01.md)
-preserves the former slice-by-slice history. [The review disposition](../reviews/investment-review-2026-10-02.md)
-records evidence, qualifications and follow-up issues for the latest review.
+preserves the former slice-by-slice history. [The initial review](../reviews/investment-review-2026-10-02.md) and
+[follow-up disposition](../reviews/investment-followup-review-2026-10-02.md)
+record evidence, qualifications and issue boundaries.
 The [roadmap](../roadmap.md) owns product order; GitHub owns live issue state
 and priority. Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
 
@@ -15,7 +16,7 @@ and priority. Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
 |---|---|---|
 | Foundation / exact trade economics (1–3) | Shipped; #125 integrity complete; bundle schema 5 | Remove duplicated opening evidence and centralize effective reads without weakening audit checks |
 | Long buy/sale correction (4a–4ai, #99) | Reversal, replacement, recorded-method replay, backdated buys, Trading 212 quantity/net revisions, shared writer | Gain-impact disclosure and remaining families have separate bounded issues |
-| Preview feasibility | Buy replacements/source replacements and plain buys run rolled-back writer replay | Disclose and acknowledge revised disposal basis/gains for every replaying command |
+| Preview feasibility | Buy/source replacements, plain buys and reinvestment run rolled-back writer replay; openings return actual checkpoint sets | Shared disclosure mechanism #129; existing-path coverage #141; new commands integrate the mechanism |
 | Transfers (5b/5d) | Known-basis external inbound; explicit-lot internal, with carried-basis dependency fence | Pooled allocation and cross-position replay; unknown immutable facts/resolution |
 | Split / basis actions (5) | Contract specified; commands missing | Manual split/reverse split and verified import mapping first |
 | Shorts / compound actions (6–7) | Operation/side foundation only | Side-aware commands; compound date/effect cardinality and replay |
@@ -429,10 +430,14 @@ Each slice keeps the app runnable, updates API, export/restore and self-check
 when affected, and has named exact-conservation and rollback tests. Current
 sequence:
 
-1. **Gain-impact safety** — [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129). Plain-buy preview feasibility is
-   fixed in this review, but previews still lack changed-disposal disclosure.
-   Define and implement one impact/acknowledgement contract across manual and
-   imported replay, including stale-preview revalidation in the write transaction.
+1. **Shared gain-impact safety mechanism** — [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129). Buy and reinvestment preview feasibility
+   and writer-derived checkpoint sets ship; changed-disposal disclosure remains open.
+   Implement the reusable exact impact/acknowledgement contract, one manual-buy
+   pilot and stale-preview revalidation in the write transaction. Capture the
+   effective before-state before corrective mutations; comparing revisions in
+   `persistInvestmentReplayProjectionTx` alone misses removed/superseded disposals.
+   Roll out existing paths under parallel P1 [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141). New split, transfer and correction commands
+   must integrate #129 in their own acceptance, but do not wait for all of #141.
    A permanent “gains acknowledged through” date is an unaccepted design option,
    not a new book rule. R18 still owns reproducible historical/tax reporting.
 2. **Split/reverse split** — [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137), under
@@ -448,7 +453,8 @@ sequence:
 4. **General backdating** — [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132). Transfer-in behind later
    disposals first, then earlier sales/write-offs through dependent replay.
    Reinvestment already admits earlier openings through the same writer;
-   prove preview feasibility/disclosure in T-114 rather than widen admission.
+   preview feasibility is fixed. T-126 covers gain disclosure for this existing
+   path; no wider admission is needed.
    Some earlier sales already work when no later disposal exists.
 5. **Replay scope / effective reader consolidation** — [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).
    Decide before outbound transfers or compound actions. Compare affected

@@ -1,5 +1,9 @@
 # Investment review disposition — 2026-10-02
 
+The [follow-up review](investment-followup-review-2026-10-02.md) supersedes
+preview feasibility, checkpoint-set and #129 scope details below. This record
+preserves the evidence and disposition of the initial review.
+
 Reviewed the supplied twelve findings against starting commit `4cf39833`, the
 accepted ADRs, current writers/readers, named regression tests and live GitHub
 issue bodies/states. This is an independent disposition, not a claim to have

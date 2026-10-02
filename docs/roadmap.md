@@ -124,14 +124,16 @@ ADR 0013 defines the named operation/side foundation. The
 the contract and gates; [implemented](implemented.md) records shipped commands.
 The foundation, trade economics, long-buy/sale reversal/replacement, backdated
 buy replay and Trading 212 quantity/net source corrections ship. Their writer
-convergence and operation-integrity gates are complete. Correction preview for
-plain buys now proves replay feasibility through the rolled-back writer.
+convergence and operation-integrity gates are complete. Buy and reinvestment
+checkpoint previews prove replay feasibility through the rolled-back writer
+and report its actual invalidation set.
 
 Remaining work, in order:
 
-1. **Realized-gain restatement preview and acknowledgement [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129).**
+1. **Shared gain-impact/acknowledgement mechanism [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129).**
    Replay may revise prior basis and gains even with no affected checkpoint.
-   Apply the same impact contract to manual and import paths. R18 retains
+   Deliver the reusable contract and one manual-buy pilot. Roll out the other
+   existing paths in parallel P1 [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141); new commands integrate #129 themselves and do not wait for that entire matrix. R18 retains
    historical reporting and tax profiles; no permanent filed-through date has
    been adopted.
 2. **Manual split/reverse split plus verified Trading 212 mapping [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137).**
@@ -143,8 +145,8 @@ Remaining work, in order:
    pools remain refused until exact carried-basis allocation is implemented.
 4. **Broader backdated replay [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132).** Transfer-in behind
    later sales and earlier disposal replay. Reinvestment already admits earlier
-   openings; its preview parity belongs to T-114. Current earlier sales without
-   a later disposal remain supported.
+   openings and now proves preview feasibility; gain disclosure belongs to T-126.
+   Current earlier sales without a later disposal remain supported.
 5. **Cross-position replay decision and effective-reader consolidation [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).**
    Settle before outbound transfers and compound actions. Full rebuild and
    affected dependency closure both need durable elections, dated bridges and

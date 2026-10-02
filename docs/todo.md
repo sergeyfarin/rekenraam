@@ -10,8 +10,9 @@ Last reconciled: 2026-10-02.
 
 ## Current: R16 gain-impact safety
 
-- [ ] Deliver replay gain restatement preview and explicit acknowledgement
-  [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129); cover manual and imported replay, stale preview and rollback.
+- [ ] Deliver the shared replay gain-impact/acknowledgement mechanism
+  [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129), including one manual-buy pilot, stale acknowledgement and rollback.
+  New commands integrate it directly; their delivery does not wait for all existing-path wiring.
 - [ ] Deliver manual split/reverse split and verified Trading 212 review mapping
   [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137) using the slice 5 exact-conservation contract.
 - [ ] Support pooled average-cost internal transfers [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).
@@ -20,7 +21,7 @@ Last reconciled: 2026-10-02.
 - [ ] Decide cross-position replay and consolidate effective readers
   [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139) before outbound transfers and compound actions.
 
-## Then, within R16
+## Then, within R16 (P2 correction families)
 
 - [ ] Deliver dividend/reinvestment correction [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130), trade field
   correction [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131), write-off correction [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133), transfer
@@ -36,10 +37,14 @@ Last reconciled: 2026-10-02.
 #99 long-buy/sale correction and #125 integrity are complete within their
 bounded scopes. History belongs in [implemented](implemented.md) and dated
 reviews. Provider execution cancellation [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) remains blocked on
-verified evidence; cancelled order status is insufficient. The plain-buy
-preview replay fix is shipped by this review; gain disclosure is still open.
+verified evidence; cancelled order status is insufficient. Buy and reinvestment
+previews now replay and return the writer’s actual checkpoint set; gain disclosure is still open.
 
 ## Parallel trust work
+
+- [ ] Roll out gain acknowledgement across existing replay paths
+  [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141) after the shared mechanism, as P1 safety work alongside new commands.
+  Finish the explicit coverage matrix before claiming universal protection.
 
 - [ ] Close [G-08 locale-aware amount input](https://github.com/sergeyfarin/rekenraam/issues/100)
   and [T-87 owner-local financial date](https://github.com/sergeyfarin/rekenraam/issues/101)

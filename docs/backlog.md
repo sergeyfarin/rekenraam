@@ -22,7 +22,7 @@ the existing local IDs resolvable; it is not a second task list.
 | T-108 | [#103 — Short sale and cover](https://github.com/sergeyfarin/rekenraam/issues/103) |
 | T-112 | [#127 — Trading 212 fill taxonomy admission](https://github.com/sergeyfarin/rekenraam/issues/127) |
 | T-113 | [#128 — SQLite fixture URI path escaping](https://github.com/sergeyfarin/rekenraam/issues/128) |
-| T-114 | [#129 — Preview and acknowledge realized-gain restatements from replay](https://github.com/sergeyfarin/rekenraam/issues/129) |
+| T-114 | [#129 — Build shared replay gain disclosure and acknowledgement](https://github.com/sergeyfarin/rekenraam/issues/129) |
 | T-115 | [#130 — Correct cash dividends and reinvested dividends](https://github.com/sergeyfarin/rekenraam/issues/130) |
 | T-116 | [#131 — Correct trade date, holding account, instrument or cost currency](https://github.com/sergeyfarin/rekenraam/issues/131) |
 | T-117 | [#132 — Admit backdated transfer-in and replay earlier disposals](https://github.com/sergeyfarin/rekenraam/issues/132) |
@@ -34,6 +34,7 @@ the existing local IDs resolvable; it is not a second task list.
 | T-123 | [#138 — Carry pooled average-cost basis through internal transfers](https://github.com/sergeyfarin/rekenraam/issues/138) |
 | T-124 | [#139 — Decide cross-position replay scope and consolidate effective investment reads](https://github.com/sergeyfarin/rekenraam/issues/139) |
 | T-125 | [#140 — Measure and shorten the complete backend race gate](https://github.com/sergeyfarin/rekenraam/issues/140) |
+| T-126 | [#141 — Roll out replay gain acknowledgement across existing commands](https://github.com/sergeyfarin/rekenraam/issues/141) |
 
 T-75b [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is closed for
 its delivered long-buy/sale scope; the [2026-10-02 review](reviews/investment-review-2026-10-02.md)
