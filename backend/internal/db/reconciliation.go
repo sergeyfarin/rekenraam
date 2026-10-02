@@ -927,34 +927,13 @@ func invalidateReconciliationCheckpoints(ctx context.Context, tx *sql.Tx, params
 			continue
 		}
 		seen[key] = true
-		rows, err := tx.QueryContext(ctx, `
-			SELECT id
-			FROM reconciliation_checkpoints
-			WHERE book_id = ?
-				AND account_id = ?
-				AND commodity_id = ?
-				AND status = 'active'
-				AND statement_date >= ?
-			ORDER BY statement_date, id
-		`, params.BookID, ref.AccountID, ref.CommodityID, ref.EntryDate)
+		affected, err := activeReconciliationCheckpointRefsFromDate(ctx, tx, params.BookID,
+			PeriodScopedCheckpointRef{AccountID: ref.AccountID, CommodityID: ref.CommodityID, EntryDate: ref.EntryDate})
 		if err != nil {
-			return nil, fmt.Errorf("read reconciliation checkpoints to invalidate: %w", err)
+			return nil, err
 		}
-		var checkpointIDs []int64
-		for rows.Next() {
-			var checkpointID int64
-			if err := rows.Scan(&checkpointID); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("scan reconciliation checkpoint to invalidate: %w", err)
-			}
-			checkpointIDs = append(checkpointIDs, checkpointID)
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("iterate reconciliation checkpoints to invalidate: %w", err)
-		}
-		rows.Close()
-		for _, checkpointID := range checkpointIDs {
+		for _, checkpoint := range affected {
+			checkpointID := checkpoint.CheckpointID
 			if _, err := tx.ExecContext(ctx, `
 				UPDATE reconciliation_checkpoints
 				SET status = 'invalidated',
@@ -1282,13 +1261,16 @@ type PeriodScopedCheckpointRef struct {
 	AccountDaySequence int64
 }
 
-// PeriodScopedCheckpointInvalidationRefs returns a CheckpointInvalidationRef for
-// each ref in candidates that falls within the latest active checkpoint's period
-// for its (account_id, commodity_id). A posting is inside the period when:
+// PeriodScopedCheckpointInvalidationRefs returns every active checkpoint the
+// current write guard would invalidate, once per checkpoint. A candidate first
+// has to fall within its latest active checkpoint's period:
 //
 //	entry_date < statement_date
 //	OR (entry_date = statement_date AND account_day_sequence <= statement_account_sequence)
 //
+// Once eligible, invalidation includes all active checkpoints dated at or after
+// the candidate, matching the writer's current date-based cascade. Same-day
+// per-boundary sequence filtering is separate follow-up work (T-120 #135).
 // Candidates with no active checkpoint are silently excluded.
 func (r *TransactionRepository) PeriodScopedCheckpointInvalidationRefs(ctx context.Context, bookID int64, candidates []PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {
 	return periodScopedCheckpointInvalidationRefs(ctx, r.database, bookID, candidates)
@@ -1300,12 +1282,14 @@ func (r *TransactionRepository) PeriodScopedCheckpointInvalidationRefs(ctx conte
 // passing the pool instead answers a question about the past (T-94).
 func periodScopedCheckpointInvalidationRefs(ctx context.Context, queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, bookID int64, candidates []PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {
 	if len(candidates) == 0 {
 		return nil, nil
 	}
 
 	seen := map[string]bool{}
+	checkpointIndexes := map[int64]int{}
 	var refs []CheckpointInvalidationRef
 
 	for _, candidate := range candidates {
@@ -1326,18 +1310,56 @@ func periodScopedCheckpointInvalidationRefs(ctx context.Context, queryer interfa
 		inside := candidate.EntryDate < checkpoint.StatementDate ||
 			(candidate.EntryDate == checkpoint.StatementDate &&
 				candidate.AccountDaySequence <= checkpoint.StatementAccountSequence)
-		if inside {
-			refs = append(refs, CheckpointInvalidationRef{
-				CheckpointID:             checkpoint.ID,
-				AccountID:                candidate.AccountID,
-				CommodityID:              candidate.CommodityID,
-				EntryDate:                candidate.EntryDate,
-				StatementDate:            checkpoint.StatementDate,
-				StatementAccountSequence: checkpoint.StatementAccountSequence,
-			})
+		if !inside {
+			continue
+		}
+		affected, err := activeReconciliationCheckpointRefsFromDate(ctx, queryer, bookID, candidate)
+		if err != nil {
+			return nil, err
+		}
+		for _, ref := range affected {
+			if index, exists := checkpointIndexes[ref.CheckpointID]; exists {
+				if ref.EntryDate < refs[index].EntryDate {
+					refs[index].EntryDate = ref.EntryDate
+				}
+				continue
+			}
+			checkpointIndexes[ref.CheckpointID] = len(refs)
+			refs = append(refs, ref)
 		}
 	}
 
+	return refs, nil
+}
+
+// Shared by preview resolution and durable invalidation so their checkpoint
+// selection cannot drift. This helper does not decide candidate eligibility.
+func activeReconciliationCheckpointRefsFromDate(ctx context.Context, queryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, bookID int64, candidate PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {
+	rows, err := queryer.QueryContext(ctx, `
+        SELECT id, statement_date, statement_account_sequence
+        FROM reconciliation_checkpoints
+        WHERE book_id = ? AND account_id = ? AND commodity_id = ?
+            AND status = 'active' AND statement_date >= ?
+        ORDER BY statement_date, id
+    `, bookID, candidate.AccountID, candidate.CommodityID, candidate.EntryDate)
+	if err != nil {
+		return nil, fmt.Errorf("read reconciliation checkpoints to invalidate: %w", err)
+	}
+	defer rows.Close()
+	var refs []CheckpointInvalidationRef
+	for rows.Next() {
+		ref := CheckpointInvalidationRef{AccountID: candidate.AccountID,
+			CommodityID: candidate.CommodityID, EntryDate: candidate.EntryDate}
+		if err := rows.Scan(&ref.CheckpointID, &ref.StatementDate, &ref.StatementAccountSequence); err != nil {
+			return nil, fmt.Errorf("scan reconciliation checkpoint to invalidate: %w", err)
+		}
+		refs = append(refs, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate reconciliation checkpoints to invalidate: %w", err)
+	}
 	return refs, nil
 }
 

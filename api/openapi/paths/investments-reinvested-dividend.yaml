@@ -1,5 +1,9 @@
 post:
   summary: Record a reinvested dividend (dividend income applied as additional units)
+  description: >
+    Opens an acquisition lot and replays affected later disposals atomically.
+    An impossible dependent acquisition replay returns the historical
+    INVESTMENT_BUY_DEPENDENCY conflict code, also used by buy commands.
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -43,6 +47,15 @@ post:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "403":
       description: Origin or CSRF validation failed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Acquisition replay conflict or reconciliation override required
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

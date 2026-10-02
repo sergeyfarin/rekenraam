@@ -981,6 +981,14 @@ Minimum transaction endpoints:
 The `unvoid`, `soft-delete`, and `restore` endpoints implement the independent
 void and deletion workflows above.
 
+Shared checkpoint resolution reports the full unique active invalidation set,
+including later checkpoints, with each checkpoint’s own statement metadata;
+commit resolves it again inside the write transaction (T-127 #142). Current
+eligibility uses the latest date/sequence boundary, then invalidation cascades
+by date alone. T-120 #135 tracks making that cascade respect each same-day
+sequence boundary and the command’s combined balance delta. Preview parity
+does not claim that over-invalidation is solved.
+
 Minimum query parameters:
 
 `GET /api/v1/transactions`:

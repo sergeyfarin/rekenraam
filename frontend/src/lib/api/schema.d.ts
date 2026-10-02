@@ -14757,7 +14757,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record a reinvested dividend (dividend income applied as additional units) */
+        /**
+         * Record a reinvested dividend (dividend income applied as additional units)
+         * @description Opens an acquisition lot and replays affected later disposals atomically. An impossible dependent acquisition replay returns the historical INVESTMENT_BUY_DEPENDENCY conflict code, also used by buy commands.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -14814,6 +14817,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Acquisition replay conflict or reconciliation override required */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -14843,7 +14856,7 @@ export interface paths {
         put?: never;
         /**
          * Preview which reconciliation checkpoints a buy would invalidate
-         * @description Executes the proposed buy and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
+         * @description Executes the proposed buy and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY, the stable acquisition replay conflict code also used for reinvestment. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
          */
         post: {
             parameters: {
@@ -14888,7 +14901,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Dependent replay cannot complete (INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER) */
+                /** @description Acquisition replay cannot complete (historical code INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER) */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -15149,7 +15162,7 @@ export interface paths {
         put?: never;
         /**
          * Preview which reconciliation checkpoints a reinvested dividend would invalidate
-         * @description Executes the proposed reinvested dividend and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
+         * @description Executes the proposed reinvested dividend and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY, the stable acquisition replay conflict code also used for reinvestment. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
          */
         post: {
             parameters: {
@@ -15194,7 +15207,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Dependent replay cannot complete (INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER) */
+                /** @description Acquisition replay cannot complete (historical code INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER) */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -17894,7 +17907,7 @@ export interface components {
             reconciliation_override?: boolean;
         };
         ReconciliationImpactResponse: {
-            /** @description Checkpoints that would be invalidated by the proposed operation. Empty when no reconciliation guard applies. */
+            /** @description Complete active checkpoint set the proposed operation would invalidate, including later checkpoints, once per checkpoint. Statement fields belong to each named checkpoint; entry_date names a triggering posting date. Empty when no reconciliation guard applies. Commit rechecks the set against current state; a preview is not an override. */
             affected_checkpoints: {
                 /** Format: int64 */
                 checkpoint_id: number;

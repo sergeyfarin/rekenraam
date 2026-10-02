@@ -186,6 +186,13 @@ non-trivial diff (yours or reviewed):
     the writer’s actual invalidated checkpoint set, including later checkpoints;
     a second latest-boundary calculation can underreport it. Pin multiple
     checkpoints in `TestBuyPreviewReplaysAndRollsBackReconciledHistory`.
+    Shared reconciliation resolution must report all checkpoints the writer
+    invalidates, once each, rather than only the latest checkpoint per candidate.
+    Fix the common selector when generic transactions and other investment
+    previews share it (T-127 #142). Named preview/commit pairs:
+    `TestCreatePreviewReportsEveryCheckpointCommitInvalidates` and
+    `TestSalePreviewReportsEveryCheckpointCommitInvalidates`. Same-day sequence
+    versus date-only cascade is tracked separately in T-120 #135.
     Feasibility is separate from disclosing revised gains (T-114 #129 / T-126 #141).
 
 Fix workflow for any bug: failing named test first, then the fix, then the

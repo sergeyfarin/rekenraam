@@ -487,7 +487,12 @@ ReconciliationImpactResponse:
   properties:
     affected_checkpoints:
       type: array
-      description: Checkpoints that would be invalidated by the proposed operation. Empty when no reconciliation guard applies.
+      description: >
+        Complete active checkpoint set the proposed operation would invalidate,
+        including later checkpoints, once per checkpoint. Statement fields belong
+        to each named checkpoint; entry_date names a triggering posting date.
+        Empty when no reconciliation guard applies. Commit rechecks the set against
+        current state; a preview is not an override.
       items:
         type: object
         required:

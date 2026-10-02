@@ -1,5 +1,8 @@
 # Investment follow-up review — 2026-10-02
 
+The [shared reconciliation follow-up](reconciliation-preview-review-2026-10-02.md)
+records the broader root cause and fix after the opening-specific change here.
+
 Reviewed the five remaining points against `73994e92`, the actual investment
 writer, effective-revision/correction readers, regression tests and live GitHub
 issue bodies. This follows the [initial review](investment-review-2026-10-02.md).

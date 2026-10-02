@@ -126,7 +126,9 @@ The foundation, trade economics, long-buy/sale reversal/replacement, backdated
 buy replay and Trading 212 quantity/net source corrections ship. Their writer
 convergence and operation-integrity gates are complete. Buy and reinvestment
 checkpoint previews prove replay feasibility through the rolled-back writer
-and report its actual invalidation set.
+and report its actual invalidation set. Shared reconciliation resolution now
+also reports the full write set for generic transactions and other previews
+(T-127 #142); per-boundary date/sequence and net-delta semantics remain #135.
 
 Remaining work, in order:
 

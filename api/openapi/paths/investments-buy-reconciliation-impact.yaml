@@ -4,7 +4,8 @@ post:
     Executes the proposed buy and dependent replay through the actual
     writer in a rolled-back transaction. Returns every active checkpoint the
     writer would invalidate, including later checkpoints. Impossible dependent
-    disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY.
+    disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY,
+    the stable acquisition replay conflict code also used for reinvestment.
     No durable changes or temporary operation/lot IDs escape. Review the named
     checkpoints before committing with reconciliation_override=true; commit
     rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
@@ -43,7 +44,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Dependent replay cannot complete (INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER)
+      description: Acquisition replay cannot complete (historical code INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER)
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"
