@@ -27,7 +27,7 @@ func TestReplaceLatestManualSalePostsOneAuditedCompoundCorrection(t *testing.T) 
 		QuantityValue: exact.New(4), CashAmountValue: 48000, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
-	result, err := f.investmentService.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+	result, err := acknowledgedReplaceSale(ctx, f.investmentService, ReplaceInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
 		Reason: "corrected broker fill",
 		Replacement: InvestmentTradeInput{
@@ -95,7 +95,7 @@ func TestReplaceLatestManualSaleCanUseSharesRestoredByItsOwnInverse(t *testing.T
 		QuantityValue: exact.New(4), CashAmountValue: 48000, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
-	result, err := f.investmentService.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+	result, err := acknowledgedReplaceSale(ctx, f.investmentService, ReplaceInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: sale.Transaction.ID, Reason: "fill was eight shares",
 		Replacement: InvestmentTradeInput{
 			TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
@@ -147,10 +147,10 @@ func TestReplaceOlderManualSaleReplaysLaterPositionIntent(t *testing.T) {
 	input.Replacement.QuantityValue = exact.New(11)
 	_, err = f.investmentService.ReplaceSaleReconciliationImpact(ctx, input)
 	require.ErrorIs(t, err, ErrInvestmentLotsInsufficient)
-	_, err = f.investmentService.ReplaceSale(ctx, input)
+	_, err = acknowledgedReplaceSale(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrInvestmentLotsInsufficient)
 	input.Replacement.QuantityValue = exact.New(3)
-	result, err := f.investmentService.ReplaceSale(ctx, input)
+	result, err := acknowledgedReplaceSale(ctx, f.investmentService, input)
 	require.NoError(t, err)
 	require.Equal(t, "posted", result.Replacement.Transaction.Status)
 	var correctionCount int
@@ -215,7 +215,7 @@ func TestReplaceOlderManualSaleReplaysDependentSaleAndRefusesImpossibleCorrectio
 	_, err = f.investmentService.ReplaceSaleReconciliationImpact(ctx, input)
 	require.ErrorIs(t, err, ErrInvestmentSaleDependency)
 	require.ErrorContains(t, err, fmt.Sprintf("operation %d", saleOperationIDForTest(t, f, later.Transaction.ID)))
-	_, err = f.investmentService.ReplaceSale(ctx, input)
+	_, err = acknowledgedReplaceSale(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrInvestmentSaleDependency)
 	var auditAfter, revisionsAfter int
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&auditAfter))
@@ -227,7 +227,7 @@ func TestReplaceOlderManualSaleReplaysDependentSaleAndRefusesImpossibleCorrectio
 	input.Replacement.CashAmountValue = 39000
 	_, err = f.investmentService.ReplaceSaleReconciliationImpact(ctx, input)
 	require.NoError(t, err)
-	result, err := f.investmentService.ReplaceSale(ctx, input)
+	result, err := acknowledgedReplaceSale(ctx, f.investmentService, input)
 	require.NoError(t, err)
 	require.Equal(t, "posted", result.Replacement.Transaction.Status)
 	require.Len(t, result.Replacement.Allocations, 1)
@@ -307,7 +307,7 @@ func TestReplaceOlderManualSaleReplaysEveryBasisMethod(t *testing.T) {
 					LotID: *first.LotID, QuantityValue: exact.New(4),
 				}}
 			}
-			result, err := f.investmentService.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+			result, err := acknowledgedReplaceSale(ctx, f.investmentService, ReplaceInvestmentSaleInput{
 				OwnerUserID: f.ownerUserID, TransactionID: older.Transaction.ID,
 				Reason: "correct quantity and proceeds", Replacement: replacement,
 			})
@@ -356,7 +356,7 @@ func TestReplaceOlderSpecificLotSaleAfterBuyCorrectionUsesEffectiveLot(t *testin
 	saleInput.LotAllocations[0].QuantityValue = exact.New(3)
 	_, err = f.investmentService.Sell(ctx, saleInput)
 	require.NoError(t, err)
-	correctedBuy, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	correctedBuy, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID,
 		Reason: "correct acquisition cost",
 		Replacement: InvestmentTradeInput{
@@ -376,7 +376,7 @@ func TestReplaceOlderSpecificLotSaleAfterBuyCorrectionUsesEffectiveLot(t *testin
 	replacement.LotAllocations = []InvestmentLotAllocationInput{{
 		LotID: *correctedBuy.Replacement.LotID, QuantityValue: exact.New(3),
 	}}
-	result, err := f.investmentService.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+	result, err := acknowledgedReplaceSale(ctx, f.investmentService, ReplaceInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: older.Transaction.ID,
 		Reason: "correct sale quantity", Replacement: replacement,
 	})
@@ -411,12 +411,12 @@ func TestReplaceSaleAfterLaterSaleReversalUsesHistoricalReplay(t *testing.T) {
 		QuantityValue: exact.New(3), CashAmountValue: 39000, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
-	_, err = f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{
+	_, err = acknowledgedReverseSale(ctx, f.investmentService, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: later.Transaction.ID,
 		Reason: "later fill was canceled",
 	})
 	require.NoError(t, err)
-	result, err := f.investmentService.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+	result, err := acknowledgedReplaceSale(ctx, f.investmentService, ReplaceInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: older.Transaction.ID,
 		Reason: "correct earlier quantity",
 		Replacement: InvestmentTradeInput{
@@ -471,7 +471,7 @@ func TestReplaceOlderManualSaleRequiresReconciliationOverrideAtomically(t *testi
 	require.NoError(t, err)
 	require.Len(t, impact.AffectedCheckpoints, 1)
 	require.Equal(t, checkpointID, impact.AffectedCheckpoints[0].CheckpointID)
-	_, err = f.investmentService.ReplaceSale(ctx, input)
+	_, err = acknowledgedReplaceSale(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	var correctionCount int
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_operations
@@ -479,7 +479,7 @@ func TestReplaceOlderManualSaleRequiresReconciliationOverrideAtomically(t *testi
 	require.Zero(t, correctionCount)
 	require.Equal(t, []int64{checkpointID}, activeCheckpointIDs(t, f))
 	input.ReconciliationOverride = true
-	result, err := f.investmentService.ReplaceSale(ctx, input)
+	result, err := acknowledgedReplaceSale(ctx, f.investmentService, input)
 	require.NoError(t, err)
 	require.Empty(t, activeCheckpointIDs(t, f))
 	var checkpointAudit, replacementAudit int64
@@ -507,7 +507,7 @@ func TestReplaceLatestManualSaleRollsBackImpossibleQuantity(t *testing.T) {
 		QuantityValue: exact.New(4), CashAmountValue: 48000, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
-	_, err = f.investmentService.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+	_, err = acknowledgedReplaceSale(ctx, f.investmentService, ReplaceInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: sale.Transaction.ID,
 		Reason: "broker fill exceeds balance",
 		Replacement: InvestmentTradeInput{
@@ -570,7 +570,7 @@ func TestReplaceManualSaleRequiresExplicitEconomicElections(t *testing.T) {
 				TransactionID: sale.Transaction.ID, Reason: "correct fill", Replacement: replacement}
 			_, err := f.investmentService.ReplaceSaleReconciliationImpact(ctx, input)
 			require.ErrorContains(t, err, test.want)
-			_, err = f.investmentService.ReplaceSale(ctx, input)
+			_, err = acknowledgedReplaceSale(ctx, f.investmentService, input)
 			require.ErrorContains(t, err, test.want)
 		})
 	}

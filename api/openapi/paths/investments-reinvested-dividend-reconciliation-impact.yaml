@@ -8,7 +8,8 @@ post:
     the stable acquisition replay conflict code also used for reinvestment.
     No durable changes or temporary operation/lot IDs escape. Review the named
     checkpoints before committing with reconciliation_override=true; commit
-    rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
+    rechecks dependencies and reconciliation. 
+    Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
   requestBody:
     required: true
     content:

@@ -7,6 +7,7 @@ post:
     scope checks and proves dependent disposal/transfer replay through a rolled-back
     buy replacement, without accepting a source revision or changing the ledger.
     The command rechecks eligibility and reconciliation at commit time.
+    Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
   parameters:
     - in: path
       name: batch_id

@@ -199,7 +199,7 @@ func TestTransferOriginalAcquisitionDateOrdersFIFOAndLIFO(t *testing.T) {
 				}
 				assert.Equal(t, want, sold.Allocations[0].LotID)
 				if method == "fifo" && !moveAgain {
-					_, err = f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+					_, err = acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 						OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID,
 						Reason: "correct source statement", Replacement: InvestmentTradeInput{
 							TransactionDate: "2026-01-01", HoldingAccountID: holdingID,

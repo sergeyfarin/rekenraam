@@ -31,6 +31,15 @@
     type InvestmentTradeCorrectionContextResponse
   } from '$lib/api/investments';
   import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
+  import {
+    gainAcknowledgement,
+    gainImpactCurrency,
+    gainImpactRows,
+    hasGainChanges,
+    impactNeedsReview,
+    isGainAcknowledgementRefusal
+  } from '$lib/investments/gain-impact';
+  import type { GainImpact } from '$lib/api/investments';
   import { formatScaledValue, costBasisMethodLabel } from '$lib/investments/investment-labels';
   import { coefficientSign } from '$lib/money/amount';
   import { getLocale } from '$lib/paraglide/runtime.js';
@@ -111,8 +120,12 @@
 
   // See buy-form: a backdated sell must be able to proceed deliberately rather
   // than being refused with no way forward (T-53).
+  // A sale correction can also change the gain of the corrected sale and of
+  // later sales that replay behind it (T-126); one confirmation covers both.
   let reconciliationModal = $state<{
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
+    gainImpact: GainImpact | null;
+    gainRefreshed: boolean;
     payload: InvestmentTradeRequest;
     reason: string;
   } | null>(null);
@@ -160,6 +173,11 @@
     new Map<number, CurrencyResponse>(
       (currenciesQuery.data?.currencies ?? []).map((c: CurrencyResponse) => [c.id, c])
     )
+  );
+  const modalGainRows = $derived(
+    reconciliationModal?.gainImpact
+      ? gainImpactRows(reconciliationModal.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
+      : []
   );
 
   const cashCommodityID = $derived(selectedCashAccount?.default_commodity_id);
@@ -326,51 +344,65 @@
     pending = true;
     formError = undefined;
 
+    const correctionReason = reason.trim();
     try {
-      const correctionReason = reason.trim();
-      const impact = correction
-        ? await previewSaleReplacementReconciliation(correction.transaction_id, {
-          reason: correctionReason,
-          replacement: { ...payload, cost_basis_method: payload.cost_basis_method!,
-            charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) }
-        })
-        : await sellReconciliationImpact(payload);
-      if (impact.affected_checkpoints.length > 0) {
-        // Hand the decision to the user rather than overriding for them.
-        reconciliationModal = { impacts: impact.affected_checkpoints, payload, reason: correctionReason };
-        return;
-      }
-
-      await submitSell(payload, false, correctionReason);
+      if (await reviewImpact(payload, correctionReason, false)) return;
+      await submitSell(payload, false, correctionReason, '');
     } catch (err) {
-      formError = err;
+      await recoverFromRefusal(err, payload, correctionReason);
     } finally {
       pending = false;
+    }
+  }
+
+  // Hand any checkpoint or gain consequence to the user rather than deciding.
+  async function reviewImpact(payload: InvestmentTradeRequest, correctionReason: string, refreshed: boolean): Promise<boolean> {
+    const impact = correction
+      ? await previewSaleReplacementReconciliation(correction.transaction_id, {
+        reason: correctionReason,
+        replacement: { ...payload, cost_basis_method: payload.cost_basis_method!,
+          charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) }
+      })
+      : await sellReconciliationImpact(payload);
+    if (!impactNeedsReview(impact)) return false;
+    const gainImpact = hasGainChanges(impact.gain_impact) ? impact.gain_impact : null;
+    reconciliationModal = { impacts: impact.affected_checkpoints, gainImpact,
+      gainRefreshed: refreshed && !!gainImpact, payload, reason: correctionReason };
+    return true;
+  }
+
+  // A stale or missing gain acknowledgement re-previews the current set.
+  async function recoverFromRefusal(err: unknown, payload: InvestmentTradeRequest, correctionReason: string) {
+    try {
+      if (!isGainAcknowledgementRefusal(err) || !(await reviewImpact(payload, correctionReason, true))) formError = err;
+    } catch (previewErr) {
+      formError = previewErr;
     }
   }
 
   async function confirmOverride() {
     if (!reconciliationModal) return;
-    const { payload, reason: correctionReason } = reconciliationModal;
+    const { payload, reason: correctionReason, impacts, gainImpact } = reconciliationModal;
     reconciliationModal = null;
     pending = true;
     formError = undefined;
 
     try {
-      await submitSell(payload, true, correctionReason);
+      await submitSell(payload, impacts.length > 0, correctionReason, gainAcknowledgement(gainImpact));
     } catch (err) {
-      formError = err;
+      await recoverFromRefusal(err, payload, correctionReason);
     } finally {
       pending = false;
     }
   }
 
-  async function submitSell(payload: InvestmentTradeRequest, override: boolean, correctionReason: string) {
+  async function submitSell(payload: InvestmentTradeRequest, override: boolean, correctionReason: string, acknowledgement: string) {
     if (correction) {
       await replaceManualSale(correction.transaction_id, {
         reason: correctionReason, reconciliation_override: override,
         replacement: { ...payload, cost_basis_method: payload.cost_basis_method!,
-          charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) }
+          charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) },
+        ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
       }, csrfToken);
     } else {
       await recordSell(override ? { ...payload, reconciliation_override: true } : payload, csrfToken);
@@ -413,6 +445,8 @@
 {#if reconciliationModal}
   <ReconciliationConfirm
     impacts={reconciliationModal.impacts}
+    gainRows={modalGainRows}
+    gainRefreshed={reconciliationModal.gainRefreshed}
     {pending}
     onCancel={() => (reconciliationModal = null)}
     onConfirm={confirmOverride}

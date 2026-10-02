@@ -360,7 +360,7 @@ func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	holdingID, found, err := f.connService.HoldingAccountForCommodity(ctx, conn.ID, instruments[0].CommodityID)
 	require.NoError(t, err)
 	require.True(t, found)
-	replaced, err := f.investmentSvc.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	replaced, err := acknowledgedReplaceBuy(ctx, f.investmentSvc, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64,
 		Reason: "correct sourced settlement", Replacement: InvestmentTradeInput{
 			TransactionDate: "2026-06-01", CommodityID: instruments[0].CommodityID,
@@ -376,7 +376,7 @@ func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.True(t, chain.Operations[0].Imported)
 	require.False(t, chain.CanReverseManualBuy)
 	require.True(t, chain.CanReverseBuy)
-	_, err = f.investmentSvc.ReverseBuy(ctx, ReverseInvestmentBuyInput{
+	_, err = acknowledgedReverseBuy(ctx, f.investmentSvc, ReverseInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
 		Reason: "remove source-linked replacement",
 	})
@@ -415,7 +415,7 @@ func TestReverseCommittedImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *test
 	require.NoError(t, err)
 	require.True(t, chain.CanReverseBuy)
 	require.False(t, chain.CanReverseManualBuy)
-	_, err = f.investmentSvc.ReverseBuy(ctx, ReverseInvestmentBuyInput{
+	_, err = acknowledgedReverseBuy(ctx, f.investmentSvc, ReverseInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64, Reason: "cancel imported fill",
 	})
 	require.NoError(t, err)
@@ -605,7 +605,7 @@ func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Empty(t, impact.AffectedCheckpoints)
-	result, err := f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+	result, err := acknowledgedCorrectTrading212Buy(ctx, f.importService, CorrectTrading212BuyInput{
 		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
 		Reason: "broker revised fill",
 	})
@@ -620,12 +620,12 @@ func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "committed", staged.CommitStatus)
 	require.Equal(t, source.TransactionID.Int64, staged.CommittedTransactionID.Int64)
-	_, err = f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+	_, err = acknowledgedCorrectTrading212Buy(ctx, f.importService, CorrectTrading212BuyInput{
 		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
 		Reason: "retry broker revision",
 	})
 	require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
-	_, err = f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+	_, err = acknowledgedCorrectTrading212Buy(ctx, f.importService, CorrectTrading212BuyInput{
 		OwnerUserID: f.ownerUserID, BatchID: staleBatch, RowID: staleRowID,
 		Reason: "attempt older staged revision",
 	})
@@ -651,7 +651,7 @@ func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
 	newer := changed
 	newer.Quantity, newer.NetValue = "4", "-600.00"
 	newerBatch, newerRowID := f.stageOrderFillRow(t, conn.ID, newer)
-	second, err := f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+	second, err := acknowledgedCorrectTrading212Buy(ctx, f.importService, CorrectTrading212BuyInput{
 		OwnerUserID: f.ownerUserID, BatchID: newerBatch, RowID: newerRowID,
 		Reason: "broker revised fill again",
 	})
@@ -667,7 +667,7 @@ func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
 		originalRows[0].CommittedIdentityID.Int64).Scan(&revisionCount))
 	require.Equal(t, 2, revisionCount)
 	revertedBatch, revertedRowID := f.stageOrderFillRow(t, conn.ID, changed)
-	reverted, err := f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+	reverted, err := acknowledgedCorrectTrading212Buy(ctx, f.importService, CorrectTrading212BuyInput{
 		OwnerUserID: f.ownerUserID, BatchID: revertedBatch, RowID: revertedRowID,
 		Reason: "broker restored the earlier revised fill",
 	})
@@ -700,7 +700,7 @@ func TestCorrectTrading212BuyRejectsChangedDateWithoutPosting(t *testing.T) {
 	changed := fill
 	changed.FilledAt = "2026-06-02T10:00:00Z"
 	changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
-	_, err = f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+	_, err = acknowledgedCorrectTrading212Buy(ctx, f.importService, CorrectTrading212BuyInput{
 		OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
 		Reason: "broker revised date",
 	})
@@ -761,13 +761,13 @@ func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
 	require.Equal(t, lotBefore, lotAfter)
 	require.NoError(t, f.database.QueryRowContext(ctx, "SELECT status FROM reconciliation_checkpoints WHERE id = ?", checkpointID).Scan(&checkpointStatus))
 	require.Equal(t, "active", checkpointStatus)
-	_, err = f.importService.CorrectTrading212Buy(ctx, input)
+	_, err = acknowledgedCorrectTrading212Buy(ctx, f.importService, input)
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	staged, err := f.importRepo.ImportStagedRowByID(ctx, changedRowID)
 	require.NoError(t, err)
 	require.Equal(t, "pending", staged.CommitStatus)
 	input.ReconciliationOverride = true
-	result, err := f.importService.CorrectTrading212Buy(ctx, input)
+	result, err := acknowledgedCorrectTrading212Buy(ctx, f.importService, input)
 	require.NoError(t, err)
 	require.Contains(t, append(result.Inverse.InvalidatedCheckpointIDs, result.Replacement.Transaction.InvalidatedCheckpointIDs...), checkpointID)
 	_, err = f.importService.Trading212BuyCorrectionReconciliationImpact(ctx, input)
@@ -800,7 +800,7 @@ func TestCorrectTrading212BuyRejectsCancellationSignedPayload(t *testing.T) {
 			changed := fill
 			changed.Quantity, changed.NetValue = test.quantity, test.net
 			changedBatch, changedRowID := f.stageOrderFillRow(t, conn.ID, changed)
-			_, err = f.importService.CorrectTrading212Buy(ctx, CorrectTrading212BuyInput{
+			_, err = acknowledgedCorrectTrading212Buy(ctx, f.importService, CorrectTrading212BuyInput{
 				OwnerUserID: f.ownerUserID, BatchID: changedBatch, RowID: changedRowID,
 				Reason: "review signed revision",
 			})
@@ -866,7 +866,7 @@ func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	holdingID, found, err := f.connService.HoldingAccountForCommodity(ctx, conn.ID, instruments[0].CommodityID)
 	require.NoError(t, err)
 	require.True(t, found)
-	replaced, err := f.investmentSvc.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+	replaced, err := acknowledgedReplaceSale(ctx, f.investmentSvc, ReplaceInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID.Int64,
 		Reason: "correct sourced settlement", Replacement: InvestmentTradeInput{
 			TransactionDate: "2026-07-01", CommodityID: instruments[0].CommodityID,
@@ -882,7 +882,7 @@ func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 	require.True(t, chain.Operations[0].Imported)
 	require.False(t, chain.CanReverseManualSale)
 	require.True(t, chain.CanReverseSale)
-	_, err = f.investmentSvc.ReverseSale(ctx, ReverseInvestmentSaleInput{
+	_, err = acknowledgedReverseSale(ctx, f.investmentSvc, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: replaced.Replacement.Transaction.ID,
 		Reason: "remove source-linked replacement",
 	})

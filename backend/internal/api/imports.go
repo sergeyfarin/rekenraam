@@ -119,11 +119,19 @@ type patchImportBatchRequest struct {
 
 type commitImportBatchRequest struct {
 	ReconciliationOverride bool `json:"reconciliation_override"`
+	// GainImpactAcknowledgements echo preview-commit gain tokens per row (T-126).
+	GainImpactAcknowledgements []rowGainImpactAcknowledgementRequest `json:"gain_impact_acknowledgements,omitempty"`
+}
+
+type rowGainImpactAcknowledgementRequest struct {
+	RowID           int64  `json:"row_id"`
+	Acknowledgement string `json:"acknowledgement"`
 }
 
 type correctTrading212SourceRequest struct {
-	Reason                 string `json:"reason"`
-	ReconciliationOverride bool   `json:"reconciliation_override"`
+	Reason                    string `json:"reason"`
+	ReconciliationOverride    bool   `json:"reconciliation_override"`
+	GainImpactAcknowledgement string `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type commitImportBatchResponse struct {
@@ -133,12 +141,22 @@ type commitImportBatchResponse struct {
 	CommittedCount int    `json:"committed_count"`
 	SkippedCount   int    `json:"skipped_count"`
 	FailedCount    int    `json:"failed_count"`
+	// GainReviewRowIDs stay pending until their current gain changes are
+	// acknowledged in another preview and commit.
+	GainReviewRowIDs []int64 `json:"gain_review_row_ids"`
 }
 
 type previewCommitResponse struct {
 	IncludableCount      int                           `json:"includable_count"`
 	DuplicateCount       int                           `json:"duplicate_count"`
 	ReconciliationIssues []reconciliationIssueResponse `json:"reconciliation_issues"`
+	GainImpacts          []rowGainImpactResponse       `json:"gain_impacts"`
+}
+
+type rowGainImpactResponse struct {
+	RowID      int64              `json:"row_id"`
+	RowIndex   int                `json:"row_index"`
+	GainImpact gainImpactResponse `json:"gain_impact"`
 }
 
 type reconciliationIssueResponse struct {
@@ -623,10 +641,21 @@ func previewCommitImportBatch(logger *slog.Logger, authService *app.AuthService,
 			})
 		}
 
+		gainImpacts := make([]rowGainImpactResponse, 0, len(result.GainImpacts))
+		for _, row := range result.GainImpacts {
+			impact, err := toGainImpactResponse(&row.GainImpact)
+			if err != nil {
+				writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+				return
+			}
+			gainImpacts = append(gainImpacts, rowGainImpactResponse{RowID: row.RowID, RowIndex: row.RowIndex, GainImpact: *impact})
+		}
+
 		writeJSON(w, http.StatusOK, previewCommitResponse{
 			IncludableCount:      result.IncludableCount,
 			DuplicateCount:       result.DuplicateCount,
 			ReconciliationIssues: issues,
+			GainImpacts:          gainImpacts,
 		})
 	}
 }
@@ -649,25 +678,35 @@ func commitImportBatch(logger *slog.Logger, authService *app.AuthService, import
 			return
 		}
 
+		gainAcknowledgements := make(map[int64]string, len(request.GainImpactAcknowledgements))
+		for _, acknowledgement := range request.GainImpactAcknowledgements {
+			gainAcknowledgements[acknowledgement.RowID] = acknowledgement.Acknowledgement
+		}
 		result, err := importService.CommitImportBatch(r.Context(), app.CommitImportBatchInput{
-			OwnerUserID:            owner.ID,
-			AuthSessionID:          authenticatedSessionID(r),
-			RequestID:              RequestIDFromContext(r.Context()),
-			BatchID:                batchID,
-			ReconciliationOverride: request.ReconciliationOverride,
+			OwnerUserID:                owner.ID,
+			AuthSessionID:              authenticatedSessionID(r),
+			RequestID:                  RequestIDFromContext(r.Context()),
+			BatchID:                    batchID,
+			ReconciliationOverride:     request.ReconciliationOverride,
+			GainImpactAcknowledgements: gainAcknowledgements,
 		})
 		if err != nil {
 			writeImportServiceError(w, r, logger, "commit import batch", err)
 			return
 		}
 
+		gainReviewRowIDs := result.GainReviewRowIDs
+		if gainReviewRowIDs == nil {
+			gainReviewRowIDs = []int64{}
+		}
 		writeJSON(w, http.StatusOK, commitImportBatchResponse{
-			BatchID:        result.BatchID,
-			Status:         result.Status,
-			TotalRows:      result.TotalRows,
-			CommittedCount: result.CommittedCount,
-			SkippedCount:   result.SkippedCount,
-			FailedCount:    result.FailedCount,
+			BatchID:          result.BatchID,
+			Status:           result.Status,
+			TotalRows:        result.TotalRows,
+			CommittedCount:   result.CommittedCount,
+			SkippedCount:     result.SkippedCount,
+			FailedCount:      result.FailedCount,
+			GainReviewRowIDs: gainReviewRowIDs,
 		})
 	}))
 }
@@ -705,7 +744,7 @@ func trading212BuyCorrectionReconciliationImpact(logger *slog.Logger, authServic
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -732,6 +771,7 @@ func correctTrading212Buy(logger *slog.Logger, authService *app.AuthService, imp
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
 			RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID,
 			Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
+			GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 		})
 		if err != nil {
 			switch {
@@ -785,7 +825,7 @@ func trading212SaleCorrectionReconciliationImpact(logger *slog.Logger, authServi
 			}
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -812,6 +852,7 @@ func correctTrading212Sale(logger *slog.Logger, authService *app.AuthService, im
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
 			RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID,
 			Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
+			GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 		})
 		if err != nil {
 			switch {

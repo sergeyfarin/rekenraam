@@ -608,5 +608,7 @@
   "investments_basis_unknown": "Prix de revient inconnu",
   "import_preview_correct_sale": "Corriger la vente depuis la source",
   "import_preview_correct_sale_scope": "Applique la quantité révisée et le montant net positif du fournisseur en conservant la méthode de prix de revient enregistrée. Les changements de date, d’instrument, de compte ou de devise nécessitent une autre correction. Les changements de quantité des lots explicitement sélectionnés nécessitent une correction manuelle.",
-  "import_preview_source_corrected": "Transaction source corrigée"
+  "import_preview_source_corrected": "Transaction source corrigée",
+  "import_result_gain_review": "{count} achats importés modifieraient les plus-values de ventes antérieures et ne sont pas encore comptabilisés.",
+  "import_result_gain_review_action": "Vérifier les plus-values modifiées"
 }

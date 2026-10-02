@@ -87,7 +87,7 @@ func (s *ImportService) commitTrading212InvestmentRow(ctx context.Context, row d
 		postWrite := func(tx *sql.Tx, transactionID int64) error {
 			return s.recordCommitIdentityAndMarkRowInTx(ctx, tx, row.ID, row.DedupeFingerprint, batch.SourceKind, holding.AccountID, transactionID, nowStr)
 		}
-		handled, txnID, err := s.commitTrading212OrderFill(ctx, raw, normalized.Date, normalized.ExternalRef, metadataJSON, commodityID, holding.AccountID, *conn.CashAccountID, cashCurrency.ID, input, postWrite)
+		handled, txnID, err := s.commitTrading212OrderFill(ctx, raw, normalized.Date, normalized.ExternalRef, metadataJSON, commodityID, holding.AccountID, *conn.CashAccountID, cashCurrency.ID, input, input.GainImpactAcknowledgements[row.ID], postWrite)
 		if !handled || err != nil {
 			err = s.cleanupTrading212InvestmentSetup(ctx, connectionID, commodityID, instrumentID, createdInstrument, holding, input.OwnerUserID, err)
 		}
@@ -184,25 +184,48 @@ func (s *ImportService) resolveTrading212HoldingAccount(ctx context.Context, con
 	return resolution, nil
 }
 
-func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[string]string, date string, externalRef string, metadataJSON string, commodityID int64, holdingAccountID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput, postWrite func(*sql.Tx, int64) error) (bool, int64, error) {
+func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[string]string, date string, externalRef string, metadataJSON string, commodityID int64, holdingAccountID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput, gainAcknowledgement string, postWrite func(*sql.Tx, int64) error) (bool, int64, error) {
+	side, tradeInput, ok := trading212OrderFillTradeInput(raw, date, externalRef, metadataJSON, commodityID, holdingAccountID, cashAccountID, cashCommodityID, input)
+	if !ok {
+		return false, 0, nil
+	}
+	tradeInput.GainImpactAcknowledgement = gainAcknowledgement
+
+	var (
+		transaction Transaction
+		tradeErr    error
+	)
+	if side == "BUY" {
+		result, err := s.investmentService.buyWithPostWrite(ctx, tradeInput, postWrite)
+		transaction, tradeErr = result.Transaction, err
+	} else {
+		result, err := s.investmentService.sellWithPostWrite(ctx, tradeInput, postWrite)
+		transaction, tradeErr = result.Transaction, err
+	}
+	return s.finishTrading212OrderFill(side, transaction, tradeErr)
+}
+
+// trading212OrderFillTradeInput is the exact trade a committed order-fill row
+// posts; the gain preview builds the same input without creating anything.
+func trading212OrderFillTradeInput(raw map[string]string, date string, externalRef string, metadataJSON string, commodityID int64, holdingAccountID int64, cashAccountID int64, cashCommodityID int64, input CommitImportBatchInput) (string, InvestmentTradeInput, bool) {
 	side := strings.ToUpper(strings.TrimSpace(raw[rawKeySide]))
 	if side != "BUY" && side != "SELL" {
-		return false, 0, nil
+		return "", InvestmentTradeInput{}, false
 	}
 	quantity, quantityScale, err := parsePositiveCoefficient(raw[rawKeyQuantity])
 	if err != nil {
-		return false, 0, nil
+		return "", InvestmentTradeInput{}, false
 	}
 	cashValue, cashScale, err := parsePositiveDecimalAmount(raw["net_value"])
 	if err != nil {
-		return false, 0, nil
+		return "", InvestmentTradeInput{}, false
 	}
 	// This provider payload supplies a unit price and net wallet value, but no
 	// sourced gross or charge breakdown. Do not multiply price by quantity and
 	// invent a gross: rounding, FX and broker fees could explain a difference.
 	// The shared trade writer retains gross_unknown and an approximate price.
 
-	tradeInput := InvestmentTradeInput{
+	return side, InvestmentTradeInput{
 		OwnerUserID:            input.OwnerUserID,
 		AuthSessionID:          input.AuthSessionID,
 		RequestID:              input.RequestID,
@@ -222,19 +245,10 @@ func (s *ImportService) commitTrading212OrderFill(ctx context.Context, raw map[s
 		ReconciliationOverride: input.ReconciliationOverride,
 		OriginType:             "import",
 		Operation:              "investment." + strings.ToLower(side) + ".import",
-	}
+	}, true
+}
 
-	var (
-		transaction Transaction
-		tradeErr    error
-	)
-	if side == "BUY" {
-		result, err := s.investmentService.buyWithPostWrite(ctx, tradeInput, postWrite)
-		transaction, tradeErr = result.Transaction, err
-	} else {
-		result, err := s.investmentService.sellWithPostWrite(ctx, tradeInput, postWrite)
-		transaction, tradeErr = result.Transaction, err
-	}
+func (s *ImportService) finishTrading212OrderFill(side string, transaction Transaction, tradeErr error) (bool, int64, error) {
 	if tradeErr != nil {
 		if isExpectedInvestmentCommitGap(tradeErr) {
 			// Insufficient lots (partial history fetched, or an unhandled
@@ -388,4 +402,61 @@ func parsePositiveDecimalAmount(raw string) (int64, int, error) {
 		return 0, 0, fmt.Errorf("amount out of int64 range: %s", coeff)
 	}
 	return value.Int64(), scale, nil
+}
+
+// previewTrading212BuyGainImpact runs a pending imported acquisition through
+// the rolled-back buy writer against the current ledger (T-126). It resolves
+// the instrument and holding read-only: a fill with no existing instrument or
+// holding has no history to replay, so it cannot change committed gains.
+func (s *ImportService) previewTrading212BuyGainImpact(ctx context.Context, row db.ImportStagedRowRecord, batch db.ImportBatchRecord, ownerUserID int64) (*db.InvestmentGainImpact, error) {
+	if s.investmentService == nil || s.connectionService == nil || !batch.ConnectionID.Valid {
+		return nil, nil
+	}
+	var raw map[string]string
+	if json.Unmarshal([]byte(row.RawJSON), &raw) != nil || raw[rawKeyKind] != trading212RawKindOrderFill ||
+		strings.ToUpper(strings.TrimSpace(raw[rawKeySide])) != "BUY" {
+		return nil, nil
+	}
+	conn, err := s.connectionService.GetImportConnection(ctx, batch.ConnectionID.Int64)
+	if err != nil || conn.CashAccountID == nil {
+		return nil, nil
+	}
+	var normalized struct {
+		Date          string `json:"date"`
+		CommodityHint string `json:"commodity_hint"`
+		ExternalRef   string `json:"external_ref"`
+	}
+	if json.Unmarshal([]byte(row.NormalizedJSON), &normalized) != nil || normalized.Date == "" || normalized.CommodityHint == "" {
+		return nil, nil
+	}
+	cashCurrency, err := s.accountRepository.CurrentCurrencyByCode(ctx, BookID, normalized.CommodityHint)
+	if err != nil {
+		return nil, nil
+	}
+	_, commodityID, found, err := s.investmentService.FindInstrumentForImport(ctx, raw[rawKeyISIN], raw[rawKeyTicker])
+	if err != nil || !found {
+		return nil, err
+	}
+	holdingAccountID, found, err := s.connectionService.HoldingAccountForCommodity(ctx, batch.ConnectionID.Int64, commodityID)
+	if err != nil || !found {
+		return nil, err
+	}
+	// Mirror the writer's replay admission: a buy on or after the position's
+	// latest rewrite opens a lot without replay, so it changes no gains.
+	latest, err := s.investmentService.repository.LatestPositionRewriteDate(ctx, BookID, holdingAccountID, commodityID)
+	if err != nil || latest == "" || normalized.Date >= latest {
+		return nil, err
+	}
+	metadataJSON := trading212ImportMetadata(batch.ConnectionID.Int64, "order_fill", normalized.ExternalRef)
+	_, tradeInput, ok := trading212OrderFillTradeInput(raw, normalized.Date, normalized.ExternalRef, metadataJSON,
+		commodityID, holdingAccountID, *conn.CashAccountID, cashCurrency.ID, CommitImportBatchInput{OwnerUserID: ownerUserID})
+	if !ok {
+		return nil, nil
+	}
+	impact, err := s.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactBuy, tradeInput)
+	if err != nil {
+		// The commit reports the row's own refusal; a preview never fails the batch.
+		return nil, nil
+	}
+	return impact.GainImpact, nil
 }

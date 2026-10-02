@@ -7,6 +7,16 @@
   import APIFormError from '$lib/components/api-form-error.svelte';
   import BuyForm from '$lib/investments/buy-form.svelte';
   import SellForm from '$lib/investments/sell-form.svelte';
+  import GainImpactList from '$lib/investments/gain-impact-list.svelte';
+  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
+  import {
+    gainAcknowledgement,
+    gainImpactCurrency,
+    gainImpactRows,
+    hasGainChanges,
+    impactNeedsReview,
+    isGainAcknowledgementRefusal
+  } from '$lib/investments/gain-impact';
   import {
     getInvestmentCorrectionChain,
     getInvestmentTradeCorrectionContext,
@@ -15,6 +25,7 @@
     previewSaleReversalReconciliation,
     reverseManualBuy,
     reverseManualSale,
+    type GainImpact,
     type ReconciliationImpactResponse
   } from '$lib/api/investments';
 
@@ -51,6 +62,15 @@
   let pending = $state(false);
   let actionError = $state<unknown>(undefined);
   let impacts = $state<ReconciliationImpactResponse['affected_checkpoints']>([]);
+  // A reversal removes the reversed sale's gain and can revise later sales
+  // (T-126). The review step lists those beside any checkpoints.
+  let gainImpact = $state<GainImpact | null>(null);
+  let gainRefreshed = $state(false);
+  const currenciesQuery = createQuery(() => currenciesQueryOptions());
+  const gainRows = $derived(gainImpact
+    ? gainImpactRows(gainImpact.changes, gainImpactCurrency(new Map(
+        (currenciesQuery.data?.currencies ?? []).map((c: CurrencyResponse) => [c.id, c]))), getLocale())
+    : []);
   let reasonInputElement: HTMLInputElement | undefined = $state();
   let confirmButtonElement: HTMLButtonElement | undefined = $state();
 
@@ -77,6 +97,39 @@
     modal = 'closed';
     actionError = undefined;
     impacts = [];
+    gainImpact = null;
+    gainRefreshed = false;
+  }
+
+  // Preview through the actual reversal writer; any checkpoint or gain
+  // consequence moves to the review step instead of committing.
+  async function previewReversal(refreshed: boolean): Promise<boolean> {
+    const preview = reversalKind === 'buy'
+      ? await previewBuyReversalReconciliation(transactionID, { reason: reason.trim() })
+      : await previewSaleReversalReconciliation(transactionID, { reason: reason.trim() });
+    if (!impactNeedsReview(preview)) return false;
+    impacts = preview.affected_checkpoints;
+    gainImpact = hasGainChanges(preview.gain_impact) ? preview.gain_impact : null;
+    gainRefreshed = refreshed && gainImpact !== null;
+    modal = 'reconciliation';
+    return true;
+  }
+
+  async function commitReversal() {
+    if (!csrfToken) return;
+    const acknowledgement = gainAcknowledgement(gainImpact);
+    const body = {
+      reason: reason.trim(),
+      ...(impacts.length > 0 ? { reconciliation_override: true } : {}),
+      ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
+    };
+    if (reversalKind === 'buy') {
+      await reverseManualBuy(transactionID, body, csrfToken);
+    } else {
+      await reverseManualSale(transactionID, body, csrfToken);
+    }
+    closeModal();
+    onRefresh?.();
   }
 
   async function submitReason() {
@@ -84,21 +137,7 @@
     pending = true;
     actionError = undefined;
     try {
-      const preview = reversalKind === 'buy'
-        ? await previewBuyReversalReconciliation(transactionID, { reason: reason.trim() })
-        : await previewSaleReversalReconciliation(transactionID, { reason: reason.trim() });
-      if (preview.affected_checkpoints.length > 0) {
-        impacts = preview.affected_checkpoints;
-        modal = 'reconciliation';
-      } else {
-        if (reversalKind === 'buy') {
-          await reverseManualBuy(transactionID, { reason: reason.trim() }, csrfToken);
-        } else {
-          await reverseManualSale(transactionID, { reason: reason.trim() }, csrfToken);
-        }
-        closeModal();
-        onRefresh?.();
-      }
+      if (!(await previewReversal(false))) await commitReversal();
     } catch (error) {
       actionError = error;
       modal = 'reason';
@@ -112,19 +151,14 @@
     pending = true;
     actionError = undefined;
     try {
-      if (reversalKind === 'buy') {
-        await reverseManualBuy(transactionID, {
-          reason: reason.trim(), reconciliation_override: true
-        }, csrfToken);
-      } else {
-        await reverseManualSale(transactionID, {
-          reason: reason.trim(), reconciliation_override: true
-        }, csrfToken);
-      }
-      closeModal();
-      onRefresh?.();
+      await commitReversal();
     } catch (error) {
-      actionError = error;
+      // The gain set changed since review: show the current one, not a dead end.
+      try {
+        if (!isGainAcknowledgementRefusal(error) || !(await previewReversal(true))) actionError = error;
+      } catch (previewError) {
+        actionError = previewError;
+      }
     } finally {
       pending = false;
     }
@@ -259,19 +293,21 @@
 
 {#if modal !== 'closed'}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-4 py-6 backdrop-blur-sm">
-    <div class="w-full max-w-lg rounded-[var(--radius-panel)] border border-border bg-surface shadow-[var(--shadow-panel)]"
+    <div class="max-h-full w-full max-w-lg overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface shadow-[var(--shadow-panel)]"
       role="alertdialog" aria-modal="true" aria-labelledby="investment-reversal-title">
       <div class="border-b border-border px-4 py-3">
         <h3 id="investment-reversal-title" class="text-sm font-semibold text-foreground">
           {modal === 'reason'
             ? reversalKind === 'buy' ? m.transactions_investment_reverse_buy_title() : m.transactions_investment_reverse_title()
-            : m.transactions_reconciliation_warning_title()}
+            : impacts.length > 0 ? m.transactions_reconciliation_warning_title() : m.investments_gain_impact_title()}
         </h3>
-        <p class="mt-1 text-xs leading-5 text-muted">
-          {modal === 'reason'
-            ? reversalKind === 'buy' ? m.transactions_investment_reverse_buy_copy() : m.transactions_investment_reverse_copy()
-            : m.transactions_reconciliation_warning_copy()}
-        </p>
+        {#if modal === 'reason' || impacts.length > 0}
+          <p class="mt-1 text-xs leading-5 text-muted">
+            {modal === 'reason'
+              ? reversalKind === 'buy' ? m.transactions_investment_reverse_buy_copy() : m.transactions_investment_reverse_copy()
+              : m.transactions_reconciliation_warning_copy()}
+          </p>
+        {/if}
       </div>
 
       {#if modal === 'reason'}
@@ -283,6 +319,7 @@
             class="mt-1.5 h-10 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground outline-none focus:border-accent" />
         </div>
       {:else}
+        {#if impacts.length > 0}
         <ul class="divide-y divide-border px-4 py-3 text-sm">
           {#each impacts as checkpoint (checkpoint.checkpoint_id)}
             <li class="flex gap-2 py-2 text-foreground">
@@ -295,6 +332,13 @@
             </li>
           {/each}
         </ul>
+        {/if}
+        {#if gainRows.length > 0}
+          <div class:border-t={impacts.length > 0} class="border-border">
+            <GainImpactList rows={gainRows} refreshed={gainRefreshed} showHeading={impacts.length > 0}
+              labelledBy="investment-reversal-title" />
+          </div>
+        {/if}
       {/if}
 
       <div class="px-4 pb-2"><APIFormError error={actionError} /></div>
@@ -304,7 +348,11 @@
         <button type="button" bind:this={confirmButtonElement} class="min-h-10 rounded-[var(--radius-control)] bg-warning px-4 text-sm font-semibold text-warning-foreground disabled:opacity-60"
           disabled={pending || (modal === 'reason' && !reason.trim())}
           onclick={modal === 'reason' ? submitReason : confirmReconciliation}>
-          {modal === 'reason' ? m.transactions_investment_reverse_confirm() : m.transactions_reconciliation_confirm()}
+          {modal === 'reason'
+            ? m.transactions_investment_reverse_confirm()
+            : impacts.length > 0 && gainRows.length > 0
+              ? m.investments_gain_impact_confirm_with_reconciliation()
+              : impacts.length > 0 ? m.transactions_reconciliation_confirm() : m.investments_gain_impact_confirm()}
         </button>
       </div>
     </div>

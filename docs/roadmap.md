@@ -130,24 +130,21 @@ and report its actual invalidation set. Shared reconciliation resolution now
 also reports the full write set for generic transactions and other previews
 (T-127 #142); per-boundary date/sequence and net-delta semantics remain #135.
 
-The shared gain-impact mechanism and its manual-buy pilot (T-114 #129) ship;
-manual buys now disclose and require acknowledgement of revised committed gains.
+The shared gain-impact mechanism (T-114 #129) and its rollout to every existing
+replay path (T-126 #141) ship: manual and imported acquisitions, reinvestment,
+native reversals/replacements and Trading 212 source revisions disclose and
+require acknowledgement of revised committed gains.
 Near-term focus is **#137 now**, then #138 → #132 → #139.
-Run #141’s existing-path safety rollout in parallel, starting
-with reinvestment/imported acquisitions and continuing with native corrections
-and source revisions. Deliver bounded slices alongside new commands; completion
-of the entire rollout is not a prerequisite for splits or pooled transfers.
-Closed #99/#125/#113/#127/#142 are historical evidence, not active gates.
+New replaying commands opt into the same disclosure in their own acceptance.
+Closed #99/#125/#113/#127/#129/#141/#142 are historical evidence, not active gates.
 Priority labels describe urgency; this sequence does not add hard dependencies.
 
 Remaining work, in order:
 
-1. **Existing-path gain disclosure rollout [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141)** (parallel P1).
-   The shared mechanism and manual-buy pilot shipped under [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129).
-   Reinvestment, imported acquisitions, native corrections and source revisions
-   still replay without disclosure. New commands opt in themselves and do not
-   wait for that entire matrix. R18 retains historical reporting and tax
-   profiles; no permanent filed-through date has been adopted.
+1. **Gain disclosure is complete for existing paths** ([T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129), [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141)).
+   New split, transfer and correction commands opt in as part of their own
+   acceptance. R18 retains historical reporting and tax profiles; no permanent
+   filed-through date has been adopted.
 2. **Manual split/reverse split plus verified Trading 212 mapping [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137).**
    Missing split effects can block later sales in instrument migration. Follow
    the existing exact-ratio/basis-conservation contract; hold insufficient
@@ -157,7 +154,7 @@ Remaining work, in order:
    pools remain refused until exact carried-basis allocation is implemented.
 4. **Broader backdated replay [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132).** Transfer-in behind
    later sales and earlier disposal replay. Reinvestment already admits earlier
-   openings and now proves preview feasibility; gain disclosure belongs to T-126.
+   openings, proves preview feasibility and discloses gain changes (T-126).
    Current earlier sales without a later disposal remain supported.
 5. **Cross-position replay decision and effective-reader consolidation [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).**
    Settle before outbound transfers and compound actions. Full rebuild and

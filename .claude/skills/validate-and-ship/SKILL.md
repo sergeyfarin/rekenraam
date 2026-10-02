@@ -193,7 +193,7 @@ non-trivial diff (yours or reviewed):
     `TestCreatePreviewReportsEveryCheckpointCommitInvalidates` and
     `TestSalePreviewReportsEveryCheckpointCommitInvalidates`. Same-day sequence
     versus date-only cascade is tracked separately in T-120 #135.
-    Feasibility is separate from disclosing revised gains (T-114 #129 / T-126 #141).
+    Gain disclosure now also runs through these writer previews (T-114 #129 / T-126 #141).
 
 23. **Replay silently restating committed gains** — a backdated or corrective
     command can change an earlier sale's basis/gain without touching any
@@ -201,7 +201,9 @@ non-trivial diff (yours or reviewed):
     replaying command must set `db.GainImpactPolicy` on its first journal, return
     `gain_impact` from its preview, and accept `gain_impact_acknowledgement` on
     commit; the writer recomputes and binds the set in-transaction. Test the
-    changed, empty, stale and late-rollback cases. Comparing only inside replay
+    changed, empty, stale and late-rollback cases. A preview must run the
+    command's actual writer — reversal previews that planned only the inverse
+    journal missed both impossible replays and gain changes (T-126). Comparing only inside replay
     persistence misses reversed/superseded disposals. Named regressions:
     `TestBuyGainImpactDisclosesFIFORevisionAndRequiresExactAcknowledgement`,
     `TestBuyGainImpactRejectsAcknowledgementOfAnEarlierChangeSet`,

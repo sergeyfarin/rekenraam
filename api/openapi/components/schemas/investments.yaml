@@ -459,8 +459,8 @@ InvestmentTradeRequest:
       description: >-
         The gain_impact.acknowledgement token returned by this command's
         preview for the committed-disposal gain changes the user accepted.
-        Honoured only by commands opted into replay gain disclosure (currently
-        manual buys). Commit recomputes the change set in its write
+        Honoured by buys (manual and imported); sells and write-offs do not
+        replay committed disposals and ignore it. Commit recomputes the change set in its write
         transaction; a non-empty set without this token is refused with
         INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, and a token for any
         other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. An empty
@@ -734,6 +734,14 @@ InvestmentSaleReversalRequest:
     reconciliation_override:
       type: boolean
       description: Omit or set false to keep affected reconciliation checkpoints active.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview, accepting the committed-disposal gain
+        changes it disclosed (T-126). A non-empty change set without it is
+        refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token
+        for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE.
 
 InvestmentSaleReversalResponse:
   type: object
@@ -759,6 +767,14 @@ InvestmentBuyReversalRequest:
     reconciliation_override:
       type: boolean
       description: Omit or set false to keep affected reconciliation checkpoints active.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview, accepting the committed-disposal gain
+        changes it disclosed (T-126). A non-empty change set without it is
+        refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token
+        for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE.
 
 InvestmentBuyReversalResponse:
   type: object
@@ -782,6 +798,14 @@ InvestmentSaleReplacementRequest:
     reconciliation_override:
       type: boolean
       description: Omit or set false to preserve affected reconciliation checkpoints.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview, accepting the committed-disposal gain
+        changes it disclosed (T-126). A non-empty change set without it is
+        refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token
+        for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE.
     replacement:
       $ref: "#/InvestmentSaleReplacementTradeRequest"
 
@@ -832,6 +856,14 @@ InvestmentBuyReplacementRequest:
     reconciliation_override:
       type: boolean
       description: Omit or set false to preserve affected reconciliation checkpoints.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview, accepting the committed-disposal gain
+        changes it disclosed (T-126). A non-empty change set without it is
+        refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token
+        for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE.
     replacement:
       $ref: "#/InvestmentBuyReplacementTradeRequest"
 
@@ -1242,6 +1274,14 @@ ReinvestedDividendRequest:
         Allows a backdated trade to proceed into a reconciled period,
         invalidating the affected checkpoints. Without it such a trade is
         refused with a 409 CONFLICT.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview, accepting the committed-disposal gain
+        changes it disclosed (T-126). A non-empty change set without it is
+        refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token
+        for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE.
 
 InvestmentLotResponse:
   type: object

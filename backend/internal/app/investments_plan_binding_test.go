@@ -288,7 +288,7 @@ func TestOrdinaryInvestmentCommandsStillCommit(t *testing.T) {
 		IncomeAccountID: &f.incomeAccountID, AmountValue: 500, AmountScale: 2,
 	})
 	require.NoError(t, err)
-	_, err = f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+	_, err = acknowledgedReinvestedDividend(ctx, f.investmentService, ReinvestedDividendInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-03",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		IncomeAccountID: &f.incomeAccountID, QuantityValue: exact.New(1), QuantityScale: 0,

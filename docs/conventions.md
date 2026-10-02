@@ -108,9 +108,11 @@ When a feature introduces a durable new rule, update one of those documents in t
   effects in the same SQLite transaction, and refuses a non-empty change set
   unless the caller echoes the preview's exact acknowledgement token. Removal and
   replacement are compared by correction root and decision sequence, never by
-  preview-only IDs. New replaying commands must opt in as part of their own
-  acceptance; existing paths not yet opted in are tracked in T-126 #141 and must
-  not be described as protected.
+  preview-only IDs. Every existing replaying command is opted in (T-126 #141);
+  a new replaying command must opt in as part of its own acceptance, preview
+  through its actual rolled-back writer, and must not plan journals alone. An
+  import that cannot be acknowledged in the batch keeps the row pending rather
+  than skipping it.
 - Realized/unrealized gains are server-computed read models with named policy.
   Reproducible investment reports state their `as_of` date, price-knowledge
   cutoff, valuation/FX method, staleness policy, reporting currency, basis profile,

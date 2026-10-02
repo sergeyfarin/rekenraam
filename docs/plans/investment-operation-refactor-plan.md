@@ -16,7 +16,7 @@ and priority. Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
 |---|---|---|
 | Foundation / exact trade economics (1–3) | Shipped; #125 integrity complete; bundle schema 5 | Remove duplicated opening evidence and centralize effective reads without weakening audit checks |
 | Long buy/sale correction (4a–4ai, #99) | Reversal, replacement, recorded-method replay, backdated buys, Trading 212 quantity/net revisions, shared writer | Gain-impact disclosure and remaining families have separate bounded issues |
-| Preview feasibility | Buy/source replacements, plain buys and reinvestment run rolled-back writer replay; openings return actual checkpoint sets | Shared disclosure mechanism and manual-buy pilot shipped (#129); existing-path coverage #141; new commands opt in |
+| Preview feasibility | Buy/source replacements, plain buys and reinvestment run rolled-back writer replay; openings return actual checkpoint sets | Disclosure shipped for every existing replay path (#129, #141); new commands opt in |
 | Transfers (5b/5d) | Known-basis external inbound; explicit-lot internal, with carried-basis dependency fence | Pooled allocation and cross-position replay; unknown immutable facts/resolution |
 | Split / basis actions (5) | Contract specified; commands missing | Manual split/reverse split and verified import mapping first |
 | Shorts / compound actions (6–7) | Operation/side foundation only | Side-aware commands; compound date/effect cardinality and replay |
@@ -428,10 +428,9 @@ accepted and flagged, but cannot be silently reclassified as shorts.
 
 Each slice keeps the app runnable, updates API, export/restore and self-check
 when affected, and has named exact-conservation and rollback tests. Immediate
-focus is #137 (the #129 mechanism shipped), then #138 → #132 → #139. Run #141’s
-existing-path rollout in parallel, with reinvestment/imported acquisitions first,
-then native reversals/replacements and source revisions. Interleave bounded
-safety slices with new commands; do not turn all of #141 into a split gate.
+focus is #137 (the #129 mechanism and #141 rollout shipped), then #138 → #132 → #139. #141 covered
+reinvestment, imported acquisitions, native reversals/replacements and source
+revisions; new commands opt into the same policy themselves.
 Shared checkpoint preview under-reporting #142 is complete; same-day boundary
 and combined-delta behavior remain #135. Current sequence:
 
@@ -441,8 +440,8 @@ and combined-delta behavior remain #135. Current sequence:
    (revised/replaced/removed, by correction root + decision sequence), and refuses a
    non-empty set without the preview's exact token. Removal/replacement are
    compared explicitly; `persistInvestmentReplayProjectionTx` is not the hook.
-   Roll out existing paths under parallel P1 [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141). New split, transfer and correction commands
-   must integrate #129 in their own acceptance, but do not wait for all of #141.
+   Existing paths are rolled out under [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141) (shipped; matrix in implemented.md).
+   New split, transfer and correction commands must integrate #129 in their own acceptance.
    A permanent “gains acknowledged through” date is an unaccepted design option,
    not a new book rule. R18 still owns reproducible historical/tax reporting.
 2. **Split/reverse split** — [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137), under

@@ -26,6 +26,9 @@ type ReplaceInvestmentBuyInput struct {
 	Reason                 string
 	ReconciliationOverride bool
 	Replacement            InvestmentTradeInput
+	// GainImpactAcknowledgement echoes the preview token for the committed
+	// disposal gain changes the user accepted (T-126).
+	GainImpactAcknowledgement string
 }
 
 type ReplaceInvestmentBuyResult struct {
@@ -121,6 +124,9 @@ func (s *InvestmentService) prepareBuyReplacementWrite(ctx context.Context, inpu
 	replacementParams.InvestmentCorrectionMode = "replace"
 	replacementParams.InvestmentCorrectionReason = inversePlan.ChangeReason
 	replacementParams.CreatedAt = inverseParams.CreatedAt
+	// The compound command's first journal carries the disclosure policy.
+	inverseParams.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
+	replacementParams.GainImpact = nil
 	return preparedBuyReplacementWrite{Operation: operation, Inverse: inverseParams, Replacement: replacementParams, Lot: lotParams}, nil
 }
 
@@ -132,18 +138,11 @@ func (s *InvestmentService) ReplaceBuyReconciliationImpact(ctx context.Context, 
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	if err := s.repository.SimulateBuyReplacement(ctx, prepared.Operation, prepared.Inverse, prepared.Replacement, prepared.Lot); err != nil {
+	simulated, err := s.repository.SimulateBuyReplacement(ctx, prepared.Operation, prepared.Inverse, prepared.Replacement, prepared.Lot)
+	if err != nil {
 		return ReconciliationImpact{}, mapBuyReplacementError(err)
 	}
-	inverseImpact, err := s.transactionService.reconciliationImpactForPreparedCreate(ctx, prepared.Inverse.Spec)
-	if err != nil {
-		return ReconciliationImpact{}, err
-	}
-	replacementImpact, err := s.transactionService.reconciliationImpactForPreparedCreate(ctx, prepared.Replacement.Spec)
-	if err != nil {
-		return ReconciliationImpact{}, err
-	}
-	return mergeInvestmentCorrectionImpacts(inverseImpact, replacementImpact), nil
+	return s.simulatedReconciliationImpact(ctx, simulated)
 }
 
 func (s *InvestmentService) buyReplacementPlan(ctx context.Context, input ReplaceInvestmentBuyInput) (db.BuyOperationRecord, CreateTransactionInput, error) {

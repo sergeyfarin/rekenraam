@@ -1,5 +1,11 @@
 post:
   summary: Commit import batch
+  description: >-
+    Commits pending rows chronologically, each in its own transaction. An
+    imported acquisition whose replay changes committed disposal gains commits
+    only with that row's current preview-commit acknowledgement; otherwise it
+    stays pending, is listed in gain_review_row_ids, and the batch stays
+    partially_committed (T-126).
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ImportBatchID"
     - in: header

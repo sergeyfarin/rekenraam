@@ -23,7 +23,7 @@ func TestReinvestmentPreviewRejectsChangedTransferBasisWithoutWriting(t *testing
 		IncomeAccountID: &f.incomeAccountID, CashCommodityID: f.eurCommodityID,
 		QuantityValue: exact.New(2), AmountValue: 100, AmountScale: 2}
 	before := buyReplacementPreviewSnapshot(t, f.database)
-	_, err = f.investmentService.ReinvestedDividend(ctx, input)
+	_, err = acknowledgedReinvestedDividend(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
 	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
 	_, err = f.investmentService.ReinvestedDividendReconciliationImpact(ctx, input)
@@ -82,11 +82,11 @@ func TestReinvestmentPreviewReplaysAndRollsBackReconciledHolding(t *testing.T) {
 		require.NotEmpty(t, impact.AffectedCheckpoints[0].CommodityCode)
 		require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
 	}
-	_, err = f.investmentService.ReinvestedDividend(ctx, input)
+	_, err = acknowledgedReinvestedDividend(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
 	input.ReconciliationOverride = true
-	result, err := f.investmentService.ReinvestedDividend(ctx, input)
+	result, err := acknowledgedReinvestedDividend(ctx, f.investmentService, input)
 	require.NoError(t, err)
 	require.Equal(t, []int64{checkpoints[0].ID}, result.Transaction.InvalidatedCheckpointIDs)
 	gains, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})

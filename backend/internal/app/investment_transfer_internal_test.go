@@ -237,7 +237,7 @@ func TestBuyCorrectionRefusesChangedBasisOfLinkedInternalTransfer(t *testing.T) 
 		internalTransferFromLot(f, destinationID, *buy.LotID, exact.New(1), 0))
 	require.NoError(t, err)
 	before := f.transactionCount(t)
-	_, err = f.investmentService.ReplaceBuy(context.Background(), ReplaceInvestmentBuyInput{
+	_, err = acknowledgedReplaceBuy(context.Background(), f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: buy.Transaction.ID,
 		Reason: "broker correction", Replacement: InvestmentTradeInput{
 			TransactionDate: "2026-05-01", CommodityID: f.stockCommodityID,
@@ -268,7 +268,7 @@ func TestInternalTransferDepletionSurvivesLaterSaleReversalReplay(t *testing.T) 
 	require.NoError(t, err)
 	sale, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-07-01", 1))
 	require.NoError(t, err)
-	_, err = f.investmentService.ReverseSale(context.Background(), ReverseInvestmentSaleInput{
+	_, err = acknowledgedReverseSale(context.Background(), f.investmentService, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: sale.Transaction.ID,
 		Reason: "duplicate sale",
 	})

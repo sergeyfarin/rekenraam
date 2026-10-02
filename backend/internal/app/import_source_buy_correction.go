@@ -19,6 +19,9 @@ type CorrectTrading212SourceInput struct {
 	RowID                  int64
 	Reason                 string
 	ReconciliationOverride bool
+	// GainImpactAcknowledgement echoes the preview token for the committed
+	// disposal gain changes the user accepted (T-126).
+	GainImpactAcknowledgement string
 }
 
 type CorrectTrading212BuyInput = CorrectTrading212SourceInput
@@ -63,6 +66,6 @@ func sourceBuyReplacement(input CorrectTrading212BuyInput, prepared preparedSour
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 		RequestID: input.RequestID, TransactionID: prepared.TransactionID,
 		Reason: input.Reason, ReconciliationOverride: input.ReconciliationOverride,
-		Replacement: prepared.Trade,
+		Replacement: prepared.Trade, GainImpactAcknowledgement: input.GainImpactAcknowledgement,
 	}
 }

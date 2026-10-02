@@ -49,14 +49,14 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 				input := ReplaceInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID, Reason: "correct linked buy", Replacement: trade}
 				_, err = f.investmentService.ReplaceBuyReconciliationImpact(ctx, input)
 				require.NoError(t, err)
-				result, err := f.investmentService.ReplaceBuy(ctx, input)
+				result, err := acknowledgedReplaceBuy(ctx, f.investmentService, input)
 				require.NoError(t, err)
 				replacement, inverse = result.Replacement.Transaction, result.Inverse
 			} else {
 				input := ReplaceInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID, Reason: "correct linked sale", Replacement: trade}
 				_, err = f.investmentService.ReplaceSaleReconciliationImpact(ctx, input)
 				require.NoError(t, err)
-				result, err := f.investmentService.ReplaceSale(ctx, input)
+				result, err := acknowledgedReplaceSale(ctx, f.investmentService, input)
 				require.NoError(t, err)
 				replacement, inverse = result.Replacement.Transaction, result.Inverse
 			}
@@ -73,9 +73,9 @@ func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
 			require.ErrorIs(t, err, ErrInvestmentOperationNotFound, "inverse is not a replacement trade")
 			var reversal Transaction
 			if kind == "buy" {
-				reversal, err = f.investmentService.ReverseBuy(ctx, ReverseInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: replacement.ID, Reason: "cancel linked buy"})
+				reversal, err = acknowledgedReverseBuy(ctx, f.investmentService, ReverseInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: replacement.ID, Reason: "cancel linked buy"})
 			} else {
-				reversal, err = f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: replacement.ID, Reason: "cancel linked sale"})
+				reversal, err = acknowledgedReverseSale(ctx, f.investmentService, ReverseInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: replacement.ID, Reason: "cancel linked sale"})
 			}
 			require.NoError(t, err)
 			terminal, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, reversal.ID)
@@ -110,7 +110,7 @@ func TestInvestmentTransferAndReinvestmentWritersWithoutCompatibilityHeader(t *t
 	moved, err := f.investmentService.InternalTransfer(ctx, transfer)
 	require.NoError(t, err)
 	require.Len(t, moved.DestinationLotIDs, 1)
-	_, err = f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+	_, err = acknowledgedReinvestedDividend(ctx, f.investmentService, ReinvestedDividendInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-08-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: destinationID,
 		IncomeAccountID: &f.incomeAccountID, QuantityValue: exact.New(2),
@@ -138,7 +138,7 @@ func TestInvestmentCorrectionReadsRequireJournalLink(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvestmentOperationNotFound)
 	_, err = f.investmentService.CorrectionChain(ctx, f.ownerUserID, bought.Transaction.ID)
 	require.ErrorIs(t, err, ErrInvestmentOperationNotFound)
-	_, err = f.investmentService.ReverseBuy(ctx, ReverseInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID, Reason: "refuse unlinked buy"})
+	_, err = acknowledgedReverseBuy(ctx, f.investmentService, ReverseInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID, Reason: "refuse unlinked buy"})
 	require.ErrorIs(t, err, ErrInvestmentBuyNotFound)
 	require.Equal(t, SelfCheckFailed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
 }

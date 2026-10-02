@@ -1,5 +1,10 @@
 post:
   summary: Preview import commit
+  description: >-
+    Read-only commit preview. gain_impacts runs each pending imported
+    acquisition with an existing instrument and holding through the rolled-back
+    buy writer against the current ledger (T-126). Also open for a
+    partially_committed batch so held rows can be reviewed again.
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ImportBatchID"
   responses:

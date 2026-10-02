@@ -49,6 +49,31 @@ func TestReplacementWriterRollsBackLateFailure(t *testing.T) {
 				return []int{transactions, audits, operations, revisions, lots, events, prices, links}
 			}
 			beforeCounts := counts()
+			buyReplacement := ReplaceInvestmentBuyInput{
+				OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "correct acquisition", ReconciliationOverride: true,
+				Replacement: InvestmentTradeInput{TransactionDate: target.TransactionDate,
+					HoldingAccountID: f.holdingAccountID, CommodityID: f.stockCommodityID,
+					CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+					QuantityValue: buyQuantity, CashAmountValue: 20000, CashAmountScale: 2},
+			}
+			corrected := sellInput(f, target.TransactionDate, 4)
+			corrected.CostBasisMethod = "fifo"
+			saleReplacement := ReplaceInvestmentSaleInput{
+				OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "correct disposal", ReconciliationOverride: true,
+				Replacement: corrected,
+			}
+			// Review the gain changes before forcing a failure: the preview runs
+			// the same checkpoint invalidation, so it must happen first.
+			if kind == "buy" {
+				impact, err := f.investmentService.ReplaceBuyReconciliationImpact(ctx, buyReplacement)
+				require.NoError(t, err)
+				buyReplacement.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+			} else {
+				impact, err := f.investmentService.ReplaceSaleReconciliationImpact(ctx, saleReplacement)
+				require.NoError(t, err)
+				saleReplacement.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+			}
+			require.Equal(t, beforeCounts, counts())
 			if test.failure == "checkpoint" {
 				_, err = f.database.Exec(`CREATE TRIGGER reject_replacement_checkpoint AFTER UPDATE ON reconciliation_checkpoints
 				WHEN NEW.status = 'invalidated' BEGIN SELECT RAISE(ABORT, 'forced checkpoint failure'); END`)
@@ -71,21 +96,11 @@ func TestReplacementWriterRollsBackLateFailure(t *testing.T) {
 			}
 			replace := func() error {
 				if kind == "buy" {
-					_, err := f.investmentService.replaceBuyWithPostWrite(ctx, ReplaceInvestmentBuyInput{
-						OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "correct acquisition", ReconciliationOverride: true,
-						Replacement: InvestmentTradeInput{TransactionDate: target.TransactionDate,
-							HoldingAccountID: f.holdingAccountID, CommodityID: f.stockCommodityID,
-							CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
-							QuantityValue: buyQuantity, CashAmountValue: 20000, CashAmountScale: 2},
-					}, postWrite)
+					_, err := f.investmentService.replaceBuyWithPostWrite(ctx, buyReplacement, postWrite)
 					return err
 				}
-				replacement := sellInput(f, target.TransactionDate, 4)
-				replacement.CostBasisMethod = "fifo"
-				_, err := f.investmentService.replaceSaleWithPostWriteOrigin(ctx, ReplaceInvestmentSaleInput{
-					OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "correct disposal", ReconciliationOverride: true,
-					Replacement: replacement,
-				}, "browser_api", "investment.sale.replace", postWrite)
+				_, err := f.investmentService.replaceSaleWithPostWriteOrigin(ctx, saleReplacement,
+					"browser_api", "investment.sale.replace", postWrite)
 				return err
 			}
 			err = replace()

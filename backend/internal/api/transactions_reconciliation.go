@@ -25,6 +25,20 @@ type checkpointImpactResponse struct {
 	EntryDate                string `json:"entry_date"`
 }
 
+// writeReconciliationImpact writes a preview's checkpoint impact and, for an
+// opted-in command, its gain impact. A gain value wider than the coefficient
+// contract is an overflow, never a silently omitted disclosure.
+func writeReconciliationImpact(w http.ResponseWriter, impact app.ReconciliationImpact) {
+	response := toReconciliationImpactResponse(impact)
+	gainImpact, err := toGainImpactResponse(impact.GainImpact)
+	if err != nil {
+		writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+		return
+	}
+	response.GainImpact = gainImpact
+	writeJSON(w, http.StatusOK, response)
+}
+
 func toReconciliationImpactResponse(impact app.ReconciliationImpact) reconciliationImpactResponse {
 	out := make([]checkpointImpactResponse, 0, len(impact.AffectedCheckpoints))
 	for _, ref := range impact.AffectedCheckpoints {
@@ -61,7 +75,7 @@ func createReconciliationImpact(logger *slog.Logger, authService *app.AuthServic
 			writeTransactionServiceError(w, r, logger, "reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -89,7 +103,7 @@ func updateReconciliationImpact(logger *slog.Logger, authService *app.AuthServic
 			writeTransactionServiceError(w, r, logger, "reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -108,6 +122,6 @@ func postReconciliationImpact(logger *slog.Logger, auth *app.AuthService, servic
 			writeTransactionServiceError(w, r, logger, "posting reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }

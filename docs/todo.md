@@ -9,8 +9,8 @@ tracks actionable work; the [backlog](backlog.md) maps local IDs, and
 Last reconciled: 2026-10-02.
 
 Done: [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129) shared gain-impact mechanism and
-manual-buy API/UI pilot (see [implemented](implemented.md)). Other existing
-replay paths are not yet protected; see #141 below.
+[T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141) rollout to every existing replay path (see
+[implemented](implemented.md) for the coverage matrix).
 
 ## Now: splits, then remaining replay gaps
 
@@ -24,7 +24,7 @@ replay paths are not yet protected; see #141 below.
    [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139) before outbound transfers and compound actions.
 
 This is execution order, not an extra dependency chain. New commands integrate
-#129 themselves; splits and pooled transfers do not wait for all of #141.
+the #129 gain-impact policy themselves.
 
 ## Then, within R16 (P2 correction families)
 
@@ -44,15 +44,9 @@ This is execution order, not an extra dependency chain. New commands integrate
 preview selection are complete within their bounded scopes. History belongs
 in [implemented](implemented.md) and dated reviews. Provider execution cancellation [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) remains blocked on
 verified evidence; cancelled order status is insufficient. Buy and reinvestment
-previews now replay and return the writer’s actual checkpoint set; only manual buys disclose revised gains so far.
+previews now replay and return the writer’s actual checkpoint set, and every existing replay path discloses revised gains.
 
 ## Parallel trust work
-
-- [ ] Roll out gain acknowledgement across existing replay paths
-  [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141) now that the shared mechanism ships, as P1 safety work alongside new commands.
-  Start with reinvestment/imported acquisitions, then native reversals/replacements
-  and Trading 212 source revisions in bounded slices. Credit #129’s manual-buy pilot.
-  Finish the coverage matrix before claiming universal protection.
 
 - [ ] Close [G-08 locale-aware amount input](https://github.com/sergeyfarin/rekenraam/issues/100)
   and [T-87 owner-local financial date](https://github.com/sergeyfarin/rekenraam/issues/101)

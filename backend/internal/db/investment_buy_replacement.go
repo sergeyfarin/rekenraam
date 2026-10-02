@@ -132,9 +132,12 @@ func (r *InvestmentRepository) ReplaceBuyWithPostWrite(ctx context.Context, expe
 // acceptance is never invoked and no temporary IDs escape.
 func (r *InvestmentRepository) SimulateBuyReplacement(ctx context.Context, expected BuyOperationRecord,
 	inverseParams, replacementParams CreateTransactionParams, lotParams CreateInvestmentLotParams,
-) error {
-	_, err := r.replaceBuy(ctx, expected, inverseParams, replacementParams, lotParams, nil, true)
-	return err
+) (SimulatedInvestmentWrite, error) {
+	record, err := r.replaceBuy(ctx, expected, inverseParams, replacementParams, lotParams, nil, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, err
+	}
+	return simulatedInvestmentWrite(record.Inverse, record.Replacement), nil
 }
 
 func (r *InvestmentRepository) replaceBuy(ctx context.Context, expected BuyOperationRecord,

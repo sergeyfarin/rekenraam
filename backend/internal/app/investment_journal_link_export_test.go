@@ -26,7 +26,7 @@ func TestInvestmentOperationExportAndImportEffectsUsePrimaryJournalLinks(t *test
 	original, err := f.investmentService.Buy(ctx, trade)
 	require.NoError(t, err)
 	trade.CashAmountValue = 21000
-	corrected, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	corrected, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
 		Reason: "correct source settlement", Replacement: trade,
 	})

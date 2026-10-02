@@ -6,6 +6,7 @@ post:
     The original sale remains posted audit history. Imported lineage requires
     a committed source identity that stays attached to the original fill. Reversal is terminal;
     an already corrected sale cannot be reversed again.
+    A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
   parameters:
     - in: path
       name: transaction_id
@@ -54,7 +55,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Already corrected, unlinked import, changed, impossible replay, or reconciliation override required
+      description: Already corrected, unlinked import, changed, impossible replay, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
       content:
         application/json:
           schema:

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { GainImpactChange } from '$lib/api/investments';
-import { gainImpactRows, hasGainChanges } from './gain-impact';
+import { APIClientError } from '$lib/api/client';
+import {
+  gainAcknowledgement,
+  gainImpactCurrency,
+  gainImpactRows,
+  hasGainChanges,
+  impactNeedsReview,
+  isGainAcknowledgementRefusal
+} from './gain-impact';
 
 function state(gain: string | null, date = '2026-03-01'): GainImpactChange['before'] {
   return {
@@ -21,7 +29,8 @@ function change(kind: GainImpactChange['change_kind'], before: GainImpactChange[
 describe('gainImpactRows', () => {
   it('formats the issue FIFO case exactly: 50.00 to 140.00', () => {
     const [row] = gainImpactRows([change('revised', state('5000'), state('14000'))], () => ({ code: 'EUR', standardScale: 2 }), 'en-US');
-    expect(row).toEqual({ key: '7:1', kind: 'revised', date: '2026-03-01', before: '50.00', after: '140.00', currency: 'EUR' });
+    expect(row).toEqual({ key: '7:1', kind: 'revised', date: '2026-03-01', before: '50.00', after: '140.00',
+      basisBefore: '100.00', basisAfter: '100.00', currency: 'EUR' });
   });
 
   it('drops replay scale padding without rounding a revision away', () => {
@@ -34,6 +43,7 @@ describe('gainImpactRows', () => {
     const [row] = gainImpactRows([change('revised', state('-2050'), state(null))], () => ({ code: 'EUR', standardScale: 2 }), 'en-US');
     expect(row.before).toBe('-20.50');
     expect(row.after).toBeNull();
+    expect(row.basisAfter).toBeNull();
   });
 
   it('shows a removed disposal without an after value and a replacement on its new date', () => {
@@ -51,5 +61,35 @@ describe('hasGainChanges', () => {
     expect(hasGainChanges(undefined)).toBe(false);
     expect(hasGainChanges({ changes: [], acknowledgement: '' })).toBe(false);
     expect(hasGainChanges({ changes: [change('removed', state('1'), null)], acknowledgement: 'x' })).toBe(true);
+  });
+});
+
+describe('impact review helpers', () => {
+  const changed = { changes: [change('removed', state('1'), null)], acknowledgement: 'token' };
+
+  it('asks for review on checkpoints or gain changes, and only then', () => {
+    expect(impactNeedsReview({ affected_checkpoints: [] })).toBe(false);
+    expect(impactNeedsReview({ affected_checkpoints: [], gain_impact: { changes: [], acknowledgement: '' } })).toBe(false);
+    expect(impactNeedsReview({ affected_checkpoints: [{}] })).toBe(true);
+    expect(impactNeedsReview({ affected_checkpoints: [], gain_impact: changed })).toBe(true);
+  });
+
+  it('sends a token only for a non-empty change set', () => {
+    expect(gainAcknowledgement(changed)).toBe('token');
+    expect(gainAcknowledgement({ changes: [], acknowledgement: 'ignored' })).toBe('');
+    expect(gainAcknowledgement(undefined)).toBe('');
+  });
+
+  it('recognises both gain refusals and nothing else', () => {
+    expect(isGainAcknowledgementRefusal(new APIClientError({ status: 409, code: 'INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE' }))).toBe(true);
+    expect(isGainAcknowledgementRefusal(new APIClientError({ status: 409, code: 'INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED' }))).toBe(true);
+    expect(isGainAcknowledgementRefusal(new APIClientError({ status: 409, code: 'CONFLICT' }))).toBe(false);
+    expect(isGainAcknowledgementRefusal(new Error('x'))).toBe(false);
+  });
+
+  it('keeps every digit for an unknown currency', () => {
+    const lookup = gainImpactCurrency(new Map([[5, { code: 'EUR', standard_scale: 2 }]]));
+    expect(lookup(5)).toEqual({ code: 'EUR', standardScale: 2 });
+    expect(lookup(9)).toEqual({ code: '#9', standardScale: 0 });
   });
 });

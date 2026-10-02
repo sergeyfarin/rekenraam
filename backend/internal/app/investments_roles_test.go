@@ -184,7 +184,7 @@ func TestReinvestedDividendRejectsASecurityAsItsSettlementCommodity(t *testing.T
 	ctx := context.Background()
 	income := f.incomeAccountID
 
-	_, err := f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+	_, err := acknowledgedReinvestedDividend(ctx, f.investmentService, ReinvestedDividendInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		IncomeAccountID: &income, QuantityValue: exact.New(1), QuantityScale: 0,

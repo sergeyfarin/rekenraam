@@ -209,8 +209,9 @@ type internalTransferResponse struct {
 }
 
 type investmentSaleReversalRequest struct {
-	Reason                 string `json:"reason"`
-	ReconciliationOverride bool   `json:"reconciliation_override"`
+	Reason                    string `json:"reason"`
+	ReconciliationOverride    bool   `json:"reconciliation_override"`
+	GainImpactAcknowledgement string `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type investmentSaleReversalResponse struct {
@@ -219,9 +220,10 @@ type investmentSaleReversalResponse struct {
 }
 
 type investmentSaleReplacementRequest struct {
-	Reason                 string                 `json:"reason"`
-	ReconciliationOverride bool                   `json:"reconciliation_override"`
-	Replacement            investmentTradeRequest `json:"replacement"`
+	Reason                    string                 `json:"reason"`
+	ReconciliationOverride    bool                   `json:"reconciliation_override"`
+	Replacement               investmentTradeRequest `json:"replacement"`
+	GainImpactAcknowledgement string                 `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type investmentSaleReplacementResponse struct {
@@ -231,9 +233,10 @@ type investmentSaleReplacementResponse struct {
 }
 
 type investmentBuyReplacementRequest struct {
-	Reason                 string                 `json:"reason"`
-	ReconciliationOverride bool                   `json:"reconciliation_override"`
-	Replacement            investmentTradeRequest `json:"replacement"`
+	Reason                    string                 `json:"reason"`
+	ReconciliationOverride    bool                   `json:"reconciliation_override"`
+	Replacement               investmentTradeRequest `json:"replacement"`
+	GainImpactAcknowledgement string                 `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type investmentBuyReplacementResponse struct {
@@ -480,20 +483,21 @@ type dividendRequest struct {
 }
 
 type reinvestedDividendRequest struct {
-	TransactionDate        string            `json:"transaction_date"`
-	CommodityID            int64             `json:"commodity_id"`
-	HoldingAccountID       int64             `json:"holding_account_id"`
-	IncomeAccountID        *int64            `json:"income_account_id"`
-	QuantityValue          exact.Coefficient `json:"quantity_value"`
-	QuantityScale          int               `json:"quantity_scale"`
-	AmountValue            moneyCoefficient  `json:"amount_value"`
-	AmountScale            int               `json:"amount_scale"`
-	CashCommodityID        int64             `json:"cash_commodity_id"`
-	Memo                   string            `json:"memo"`
-	PayeeID                *int64            `json:"payee_id"`
-	Status                 string            `json:"status"`
-	ChangeReason           string            `json:"change_reason"`
-	ReconciliationOverride bool              `json:"reconciliation_override"`
+	TransactionDate           string            `json:"transaction_date"`
+	CommodityID               int64             `json:"commodity_id"`
+	HoldingAccountID          int64             `json:"holding_account_id"`
+	IncomeAccountID           *int64            `json:"income_account_id"`
+	QuantityValue             exact.Coefficient `json:"quantity_value"`
+	QuantityScale             int               `json:"quantity_scale"`
+	AmountValue               moneyCoefficient  `json:"amount_value"`
+	AmountScale               int               `json:"amount_scale"`
+	CashCommodityID           int64             `json:"cash_commodity_id"`
+	Memo                      string            `json:"memo"`
+	PayeeID                   *int64            `json:"payee_id"`
+	Status                    string            `json:"status"`
+	ChangeReason              string            `json:"change_reason"`
+	ReconciliationOverride    bool              `json:"reconciliation_override"`
+	GainImpactAcknowledgement string            `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type investmentLotResponse struct {
@@ -914,7 +918,7 @@ func externalTransferInReconciliationImpact(logger *slog.Logger, authService *ap
 			writeInvestmentServiceError(w, r, logger, "external investment transfer impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -978,7 +982,7 @@ func internalTransferReconciliationImpact(logger *slog.Logger, authService *app.
 			writeInvestmentServiceError(w, r, logger, "internal investment transfer impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -1053,7 +1057,7 @@ func reverseInvestmentSale(logger *slog.Logger, authService *app.AuthService, in
 		transaction, err := investmentService.ReverseSale(r.Context(), app.ReverseInvestmentSaleInput{
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 			OriginType: "browser_api", TransactionID: transactionID, Reason: request.Reason,
-			ReconciliationOverride: request.ReconciliationOverride,
+			ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 		})
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "reverse investment sale", err)
@@ -1085,7 +1089,7 @@ func reverseInvestmentSaleReconciliationImpact(logger *slog.Logger, authService 
 			writeInvestmentServiceError(w, r, logger, "preview sale reversal reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -1107,7 +1111,7 @@ func reverseInvestmentBuy(logger *slog.Logger, authService *app.AuthService, inv
 		transaction, err := investmentService.ReverseBuy(r.Context(), app.ReverseInvestmentBuyInput{
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 			TransactionID: transactionID, Reason: request.Reason,
-			ReconciliationOverride: request.ReconciliationOverride,
+			ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 		})
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "reverse investment buy", err)
@@ -1139,7 +1143,7 @@ func reverseInvestmentBuyReconciliationImpact(logger *slog.Logger, authService *
 			writeInvestmentServiceError(w, r, logger, "preview buy reversal reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -1162,7 +1166,8 @@ func replaceInvestmentSale(logger *slog.Logger, authService *app.AuthService, in
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
 			RequestID: RequestIDFromContext(r.Context()), TransactionID: transactionID,
 			Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
-			Replacement: toInvestmentTradeInput(owner, r, request.Replacement),
+			Replacement:               toInvestmentTradeInput(owner, r, request.Replacement),
+			GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 		})
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "replace investment sale", err)
@@ -1199,7 +1204,7 @@ func replaceInvestmentSaleReconciliationImpact(logger *slog.Logger, authService 
 			writeInvestmentServiceError(w, r, logger, "preview sale replacement reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -1222,7 +1227,8 @@ func replaceInvestmentBuy(logger *slog.Logger, authService *app.AuthService, inv
 			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
 			RequestID: RequestIDFromContext(r.Context()), TransactionID: transactionID,
 			Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
-			Replacement: toInvestmentTradeInput(owner, r, request.Replacement),
+			Replacement:               toInvestmentTradeInput(owner, r, request.Replacement),
+			GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 		})
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "replace investment buy", err)
@@ -1259,7 +1265,7 @@ func replaceInvestmentBuyReconciliationImpact(logger *slog.Logger, authService *
 			writeInvestmentServiceError(w, r, logger, "preview buy replacement reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -1315,12 +1321,7 @@ func investmentTradeReconciliationImpact(logger *slog.Logger, authService *app.A
 			writeInvestmentServiceError(w, r, logger, "investment reconciliation impact", err)
 			return
 		}
-		response := toReconciliationImpactResponse(impact)
-		if response.GainImpact, err = toGainImpactResponse(impact.GainImpact); err != nil {
-			writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
-			return
-		}
-		writeJSON(w, http.StatusOK, response)
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -1392,7 +1393,7 @@ func writeOffReconciliationImpact(logger *slog.Logger, authService *app.AuthServ
 			writeInvestmentServiceError(w, r, logger, "write-off reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -1412,7 +1413,7 @@ func dividendReconciliationImpact(logger *slog.Logger, authService *app.AuthServ
 			writeInvestmentServiceError(w, r, logger, "dividend reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -1432,7 +1433,7 @@ func reinvestedDividendReconciliationImpact(logger *slog.Logger, authService *ap
 			writeInvestmentServiceError(w, r, logger, "reinvested dividend reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		writeReconciliationImpact(w, impact)
 	}
 }
 
@@ -1805,7 +1806,7 @@ func toReinvestedDividendInput(owner app.Owner, r *http.Request, request reinves
 		IncomeAccountID: request.IncomeAccountID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
 		AmountValue: int64(request.AmountValue), AmountScale: request.AmountScale, CashCommodityID: request.CashCommodityID,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, ChangeReason: request.ChangeReason,
-		ReconciliationOverride: request.ReconciliationOverride,
+		ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 	}
 }
 

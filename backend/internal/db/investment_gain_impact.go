@@ -275,33 +275,3 @@ func requireInvestmentGainAcknowledgement(policy GainImpactPolicy, impact Invest
 	}
 	return nil
 }
-
-// InvestmentGainSnapshot is a point-in-time copy of the effective disposal set.
-type InvestmentGainSnapshot struct {
-	entries map[InvestmentGainIdentity]investmentGainSnapshotEntry
-}
-
-// InvestmentGainSnapshot reads the effective disposal set in its own read
-// transaction. It serves diagnostics and tests that compare separate commands;
-// a command's own disclosure must compare inside its write via GainImpactPolicy.
-func (r *InvestmentRepository) InvestmentGainSnapshot(ctx context.Context, bookID int64) (InvestmentGainSnapshot, error) {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return InvestmentGainSnapshot{}, fmt.Errorf("begin gain impact snapshot: %w", err)
-	}
-	defer rollbackTx(ctx, tx)
-	entries, err := investmentGainSnapshotTx(ctx, tx, bookID)
-	if err != nil {
-		return InvestmentGainSnapshot{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return InvestmentGainSnapshot{}, fmt.Errorf("close gain impact snapshot: %w", err)
-	}
-	return InvestmentGainSnapshot{entries: entries}, nil
-}
-
-// CompareInvestmentGainSnapshots applies the write-path comparison to two
-// separately read snapshots.
-func CompareInvestmentGainSnapshots(before, after InvestmentGainSnapshot) InvestmentGainImpact {
-	return compareInvestmentGainSnapshots(before.entries, after.entries)
-}

@@ -4,6 +4,7 @@ post:
     Opens an acquisition lot and replays affected later disposals atomically.
     An impossible dependent acquisition replay returns the historical
     INVESTMENT_BUY_DEPENDENCY conflict code, also used by buy commands.
+    A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -55,7 +56,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Acquisition replay conflict or reconciliation override required
+      description: Acquisition replay conflict or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

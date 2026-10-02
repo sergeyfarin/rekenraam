@@ -608,5 +608,7 @@
   "investments_basis_unknown": "Kostprijs onbekend",
   "import_preview_correct_sale": "Verkoop corrigeren vanuit bron",
   "import_preview_correct_sale_scope": "Past het gewijzigde aantal en positieve nettobedrag van de aanbieder toe met behoud van de vastgelegde kostprijsmethode. Wijzigingen in datum, instrument, rekening en valuta vereisen een andere correctie. Aantalwijzigingen voor expliciet geselecteerde partijen vereisen een handmatige correctie.",
-  "import_preview_source_corrected": "Transactie vanuit bron gecorrigeerd"
+  "import_preview_source_corrected": "Transactie vanuit bron gecorrigeerd",
+  "import_result_gain_review": "{count} geïmporteerde aankopen zouden winsten van eerdere verkopen wijzigen en zijn nog niet geboekt.",
+  "import_result_gain_review_action": "Gewijzigde winsten controleren"
 }

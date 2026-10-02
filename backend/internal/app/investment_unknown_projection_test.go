@@ -229,7 +229,7 @@ func TestKnownOpeningReplayReconstructsUnknownProjectionAtomically(t *testing.T)
 					WHEN NEW.basis_knowledge = 'known' BEGIN SELECT RAISE(ABORT, 'fixture basis rebuild failure'); END`)
 				require.NoError(t, err)
 			}
-			_, err = f.investmentService.ReplaceBuy(context.Background(), ReplaceInvestmentBuyInput{
+			_, err = acknowledgedReplaceBuy(context.Background(), f.investmentService, ReplaceInvestmentBuyInput{
 				OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID, Reason: "correct sourced purchase",
 				Replacement: InvestmentTradeInput{TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID,
 					HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,

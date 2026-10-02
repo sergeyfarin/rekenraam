@@ -768,7 +768,9 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 		}
 		return PreviewCommitResult{}, fmt.Errorf("get import batch for preview: %w", err)
 	}
-	if batch.Status != "previewing" {
+	// A partially committed batch can hold acquisitions awaiting gain review,
+	// so it previews the same way it commits (T-126).
+	if batch.Status != "previewing" && batch.Status != "partially_committed" {
 		return PreviewCommitResult{}, ErrImportBatchNotOpen
 	}
 
@@ -778,6 +780,7 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 	}
 
 	var result PreviewCommitResult
+	sortRowsForInvestmentCommitOrder(rows)
 	for _, row := range rows {
 		if row.CommitStatus == "committed" || row.CommitStatus == "skipped" {
 			continue
@@ -785,6 +788,14 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 		if row.DedupeStatus == "duplicate" || row.DedupeStatus == "excluded" || row.SourceChanged || unsupportedTrading212FillJSON(row.RawJSON) {
 			result.DuplicateCount++
 			continue
+		}
+		gainImpact, err := s.previewTrading212BuyGainImpact(ctx, row, batch, input.OwnerUserID)
+		if err != nil {
+			return PreviewCommitResult{}, fmt.Errorf("preview imported acquisition gains row %d: %w", row.ID, err)
+		}
+		if gainImpact != nil && len(gainImpact.Changes) > 0 {
+			result.GainImpacts = append(result.GainImpacts, RowGainImpactPreview{
+				RowID: row.ID, RowIndex: row.RowIndex, GainImpact: *gainImpact})
 		}
 
 		resolution, err := parseResolutionJSON(row.ResolutionJSON)
@@ -945,6 +956,13 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 				}
 				continue
 			}
+			if errors.Is(err, ErrGainImpactAcknowledgementRequired) || errors.Is(err, ErrGainImpactAcknowledgementStale) {
+				// The acquisition would change committed gains that were not
+				// acknowledged as they stand now. Its write rolled back; keep it
+				// pending so a fresh preview can disclose the current set (T-126).
+				result.GainReviewRowIDs = append(result.GainReviewRowIDs, row.ID)
+				continue
+			}
 			if err2 := s.recordImportStagedRowTerminal(ctx, &result, db.CommitImportStagedRowParams{
 				RowID:        row.ID,
 				CommitStatus: "failed",
@@ -1071,11 +1089,16 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 	if result.CommittedCount == 0 && result.FailedCount == 0 {
 		finalStatus = "committed"
 	}
+	// Rows held for gain review are still pending: the batch stays open.
+	if len(result.GainReviewRowIDs) > 0 {
+		finalStatus = "partially_committed"
+	}
 
 	detailJSON, _ := json.Marshal(map[string]any{
-		"committed": result.CommittedCount,
-		"skipped":   result.SkippedCount,
-		"failed":    result.FailedCount,
+		"committed":   result.CommittedCount,
+		"skipped":     result.SkippedCount,
+		"failed":      result.FailedCount,
+		"gain_review": len(result.GainReviewRowIDs),
 	})
 
 	eventKind := finalStatus

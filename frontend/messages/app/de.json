@@ -608,5 +608,7 @@
   "investments_basis_unknown": "Anschaffungskosten unbekannt",
   "import_preview_correct_sale": "Verkauf anhand der Quelle korrigieren",
   "import_preview_correct_sale_scope": "Übernimmt die geänderte Menge und den positiven Nettobetrag des Anbieters mit der gespeicherten Anschaffungskostenmethode. Änderungen an Datum, Instrument, Konto und Währung erfordern eine andere Korrektur. Mengenänderungen für ausdrücklich ausgewählte Lose erfordern eine manuelle Korrektur.",
-  "import_preview_source_corrected": "Quelltransaktion korrigiert"
+  "import_preview_source_corrected": "Quelltransaktion korrigiert",
+  "import_result_gain_review": "{count} importierte Käufe würden Gewinne früherer Verkäufe ändern und wurden noch nicht gebucht.",
+  "import_result_gain_review_action": "Geänderte Gewinne prüfen"
 }

@@ -36,7 +36,7 @@ func TestTradeCorrectionContextReadsImmutableSourceFacts(t *testing.T) {
 	require.Len(t, before.Charges, 1)
 	require.Equal(t, "clearing_included", before.Charges[0].Treatment)
 	require.False(t, before.AlreadyCorrected)
-	_, err = f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID,
 		Reason: "correct broker cost",
 		Replacement: InvestmentTradeInput{
@@ -97,7 +97,7 @@ func TestTradeCorrectionContextIncludesSaleElection(t *testing.T) {
 	require.Equal(t, "48000", context.NetValue)
 	require.Nil(t, context.GrossValue)
 	require.Empty(t, context.Charges)
-	replaced, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	replaced, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID,
 		Reason: "correct original basis",
 		Replacement: InvestmentTradeInput{
@@ -142,7 +142,7 @@ func TestTradeCorrectionContextPreservesOlderSalePrefixForReplacement(t *testing
 		QuantityValue: exact.New(6), CashAmountValue: 72000, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
-	replaced, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	replaced, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: bought.Transaction.ID,
 		Reason: "correct acquisition basis",
 		Replacement: InvestmentTradeInput{

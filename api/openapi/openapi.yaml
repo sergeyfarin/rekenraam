@@ -850,6 +850,10 @@ components:
       $ref: "./components/schemas/imports.yaml#/PatchImportBatchRequest"
     CommitImportBatchRequest:
       $ref: "./components/schemas/imports.yaml#/CommitImportBatchRequest"
+    ImportRowGainImpactAcknowledgement:
+      $ref: "./components/schemas/imports.yaml#/ImportRowGainImpactAcknowledgement"
+    ImportRowGainImpact:
+      $ref: "./components/schemas/imports.yaml#/ImportRowGainImpact"
     CorrectTrading212BuyRequest:
       $ref: "./components/schemas/imports.yaml#/CorrectTrading212BuyRequest"
     CorrectTrading212SaleRequest:

@@ -608,5 +608,7 @@
   "investments_basis_unknown": "Coste de adquisición desconocido",
   "import_preview_correct_sale": "Corregir venta desde el origen",
   "import_preview_correct_sale_scope": "Aplica la cantidad revisada y el importe neto positivo del proveedor conservando el método de coste de adquisición registrado. Los cambios de fecha, instrumento, cuenta o moneda requieren otra corrección. Los cambios de cantidad de lotes seleccionados explícitamente requieren una corrección manual.",
-  "import_preview_source_corrected": "Operación de origen corregida"
+  "import_preview_source_corrected": "Operación de origen corregida",
+  "import_result_gain_review": "{count} compras importadas cambiarían las ganancias de ventas anteriores y aún no se registraron.",
+  "import_result_gain_review_action": "Revisar ganancias modificadas"
 }

@@ -1301,6 +1301,25 @@ var validCostBasisMethods = map[string]bool{
 // current projection and rewrites it, which is what makes ordering matter.
 var acquisitionEventKinds = []string{"acquisition", "reinvested_dividend", "transfer_in"}
 
+// LatestPositionRewriteDate reads the date an acquisition must precede to be
+// admitted through replay. An acquisition on or after it cannot change any
+// committed disposal, so previews may skip simulating it (T-126).
+func (r *InvestmentRepository) LatestPositionRewriteDate(ctx context.Context, bookID, accountID, commodityID int64) (string, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("begin position rewrite date read: %w", err)
+	}
+	defer rollbackTx(ctx, tx)
+	latest, err := latestPositionRewriteDateTx(ctx, tx, bookID, accountID, commodityID)
+	if err != nil {
+		return "", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("close position rewrite date read: %w", err)
+	}
+	return latest, nil
+}
+
 // latestPositionRewriteDateTx returns the most recent date on which something
 // rewrote a position's projection. An empty string means nothing has.
 func latestPositionRewriteDateTx(ctx context.Context, tx *sql.Tx, bookID int64, accountID int64, commodityID int64) (string, error) {
@@ -1856,19 +1875,12 @@ func (r *InvestmentRepository) CreateTransactionAndLotWithPostWrite(ctx context.
 // SimulateLotOpening executes the acquisition writer, replay, prices and
 // checkpoint effects, then rolls back. Only pre-existing checkpoint refs and,
 // for an opted-in command, the committed-disposal gain changes escape.
-func (r *InvestmentRepository) SimulateLotOpening(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) (SimulatedLotOpening, error) {
+func (r *InvestmentRepository) SimulateLotOpening(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) (SimulatedInvestmentWrite, error) {
 	transaction, _, err := r.createTransactionAndLot(ctx, transactionParams, lotParams, nil, true)
 	if err != nil {
-		return SimulatedLotOpening{}, err
+		return SimulatedInvestmentWrite{}, err
 	}
-	return SimulatedLotOpening{InvalidatedCheckpointRefs: transaction.InvalidatedCheckpointRefs,
-		GainImpact: transaction.GainImpact}, nil
-}
-
-// SimulatedLotOpening is the durable-ID-free result of a rolled-back opening.
-type SimulatedLotOpening struct {
-	InvalidatedCheckpointRefs []CheckpointInvalidationRef
-	GainImpact                *InvestmentGainImpact
+	return simulatedInvestmentWrite(transaction), nil
 }
 
 func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams, postWrite func(*sql.Tx, int64) error, preview bool) (TransactionRecord, InvestmentLotRecord, error) {

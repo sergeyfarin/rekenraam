@@ -123,12 +123,12 @@ func TestUnsupportedFillCannotCorrectAcceptedBuyOrSale(t *testing.T) {
 			input := CorrectTrading212BuyInput{OwnerUserID: f.ownerUserID, BatchID: batchID, RowID: rowID, Reason: "provider revision"}
 			_, err = f.importService.Trading212BuyCorrectionReconciliationImpact(context.Background(), input)
 			require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
-			_, err = f.importService.CorrectTrading212Buy(context.Background(), input)
+			_, err = acknowledgedCorrectTrading212Buy(context.Background(), f.importService, input)
 		} else {
 			input := CorrectTrading212SaleInput{OwnerUserID: f.ownerUserID, BatchID: batchID, RowID: rowID, Reason: "provider revision"}
 			_, err = f.importService.Trading212SaleCorrectionReconciliationImpact(context.Background(), input)
 			require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
-			_, err = f.importService.CorrectTrading212Sale(context.Background(), input)
+			_, err = acknowledgedCorrectTrading212Sale(context.Background(), f.importService, input)
 		}
 		require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
 	}

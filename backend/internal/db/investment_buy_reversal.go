@@ -11,6 +11,20 @@ import (
 // effective long-position replay. Later sales keep their original decisions
 // and receive new effective allocations, or the entire command rolls back.
 func (r *InvestmentRepository) ReverseBuy(ctx context.Context, params CreateTransactionParams, expected BuyOperationRecord) (TransactionRecord, error) {
+	return r.reverseBuy(ctx, params, expected, false)
+}
+
+// PreviewBuyReversal runs the reversal writer, dependent replay, price
+// retirement and checkpoint invalidation, then rolls back (T-126).
+func (r *InvestmentRepository) PreviewBuyReversal(ctx context.Context, params CreateTransactionParams, expected BuyOperationRecord) (SimulatedInvestmentWrite, error) {
+	transaction, err := r.reverseBuy(ctx, params, expected, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, err
+	}
+	return simulatedInvestmentWrite(transaction), nil
+}
+
+func (r *InvestmentRepository) reverseBuy(ctx context.Context, params CreateTransactionParams, expected BuyOperationRecord, preview bool) (TransactionRecord, error) {
 	if params.BookID <= 0 || params.ActorUserID <= 0 || expected.OperationID <= 0 ||
 		params.Spec.InvestmentOperationKind != "reversal" || params.Spec.TransactionKind != "investment" ||
 		params.Spec.Status != "posted" || params.Spec.TransactionDate != expected.EventDate ||
@@ -20,77 +34,46 @@ func (r *InvestmentRepository) ReverseBuy(ctx context.Context, params CreateTran
 		return TransactionRecord{}, fmt.Errorf("%w: buy reversal is incomplete", ErrInvalidDisposalParams)
 	}
 	var current BuyOperationRecord
-	transaction, _, err := executeInvestmentWriteWithGuardTx(ctx, r.database, params,
-		func(tx *sql.Tx) error {
-			var err error
-			current, err = checkBuyOperationForCorrectionTx(ctx, tx, params.BookID, expected)
-			return err
-		},
-		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (struct{}, error) {
-			operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
-			if err != nil {
-				return struct{}{}, err
-			}
-			intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID,
-				current.AccountID, current.CommodityID, current.CostCommodityID, "long")
-			if err != nil {
-				return struct{}{}, err
-			}
-			projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID,
-				current.AccountID, current.CommodityID, current.CostCommodityID, intents)
-			if err != nil {
-				if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvestmentCorrectionDependency) {
-					return struct{}{}, fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)
-				}
-				return struct{}{}, err
-			}
-			if err := persistInvestmentReplayProjectionTx(ctx, tx, params.BookID,
-				current.AccountID, current.CommodityID, current.CostCommodityID,
-				operationID, auditEventID, params.ActorUserID, params.CreatedAt,
-				intents, projection); err != nil {
-				return struct{}{}, err
-			}
-			if err := voidTradePricesForVersionTx(ctx, tx, params, current.TransactionVersionID, auditEventID); err != nil {
-				return struct{}{}, err
-			}
-			return struct{}{}, nil
-		}, nil)
-	return transaction, err
-}
-
-// SimulateBuyReversal checks dependent long-position intents without a durable
-// journal, audit event, revision, or lot change. The write repeats this check.
-func (r *InvestmentRepository) SimulateBuyReversal(ctx context.Context, bookID int64, expected BuyOperationRecord) error {
-	tx, err := r.database.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin buy reversal preview: %w", err)
-	}
-	defer rollbackTx(ctx, tx)
-	current, err := checkBuyOperationForCorrectionTx(ctx, tx, bookID, expected)
-	if err != nil {
+	guard := func(tx *sql.Tx) error {
+		var err error
+		current, err = checkBuyOperationForCorrectionTx(ctx, tx, params.BookID, expected)
 		return err
 	}
-	intents, err := investmentReplayIntentsQuery(ctx, tx, bookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, "long")
-	if err != nil {
-		return err
-	}
-	filtered := make([]InvestmentReplayIntent, 0, len(intents))
-	found := false
-	for _, intent := range intents {
-		if intent.OperationID == current.OperationID && intent.Kind == "opening" {
-			found = true
-			continue
+	effect := func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (struct{}, error) {
+		operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
+		if err != nil {
+			return struct{}{}, err
 		}
-		filtered = append(filtered, intent)
+		intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID,
+			current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+		if err != nil {
+			return struct{}{}, err
+		}
+		projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID,
+			current.AccountID, current.CommodityID, current.CostCommodityID, intents)
+		if err != nil {
+			if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvestmentCorrectionDependency) {
+				return struct{}{}, fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)
+			}
+			return struct{}{}, err
+		}
+		if err := persistInvestmentReplayProjectionTx(ctx, tx, params.BookID,
+			current.AccountID, current.CommodityID, current.CostCommodityID,
+			operationID, auditEventID, params.ActorUserID, params.CreatedAt,
+			intents, projection); err != nil {
+			return struct{}{}, err
+		}
+		if err := voidTradePricesForVersionTx(ctx, tx, params, current.TransactionVersionID, auditEventID); err != nil {
+			return struct{}{}, err
+		}
+		return struct{}{}, nil
 	}
-	if !found {
-		return ErrNotFound
+	var transaction TransactionRecord
+	var err error
+	if preview {
+		transaction, _, err = previewInvestmentWriteWithGuardTx(ctx, r.database, params, guard, effect)
+	} else {
+		transaction, _, err = executeInvestmentWriteWithGuardTx(ctx, r.database, params, guard, effect, nil)
 	}
-	_, err = simulateInvestmentReplayTx(ctx, tx, bookID,
-		current.AccountID, current.CommodityID, current.CostCommodityID, filtered)
-	if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvestmentCorrectionDependency) {
-		return fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)
-	}
-	return err
+	return transaction, err
 }

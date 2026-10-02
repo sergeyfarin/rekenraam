@@ -61,7 +61,7 @@ func TestCorrectTrading212SaleKeepsIdentityAndRecordedMethodWithDependentReplay(
 			if method != "fifo" {
 				source, err := f.investmentSvc.TradeCorrectionContext(ctx, f.ownerUserID, f.original.CommittedTransactionID.Int64)
 				require.NoError(t, err)
-				_, err = f.investmentSvc.ReplaceSale(ctx, ReplaceInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID,
+				_, err = acknowledgedReplaceSale(ctx, f.investmentSvc, ReplaceInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID,
 					Reason: "explicit method election", Replacement: InvestmentTradeInput{TransactionDate: source.EventDate,
 						HoldingAccountID: source.HoldingAccountID, CommodityID: source.CommodityID, CashAccountID: source.CashAccountID,
 						CashCommodityID: source.CostCommodityID, QuantityValue: exact.New(2), CashAmountValue: 30000, CashAmountScale: 2, CostBasisMethod: method}})
@@ -82,7 +82,7 @@ func TestCorrectTrading212SaleKeepsIdentityAndRecordedMethodWithDependentReplay(
 			impact, err := f.importService.Trading212SaleCorrectionReconciliationImpact(ctx, input)
 			require.NoError(t, err)
 			require.Empty(t, impact.AffectedCheckpoints)
-			result, err := f.importService.CorrectTrading212Sale(ctx, input)
+			result, err := acknowledgedCorrectTrading212Sale(ctx, f.importService, input)
 			require.NoError(t, err)
 			corrected, err := f.investmentSvc.TradeCorrectionContext(ctx, f.ownerUserID, result.Replacement.Transaction.ID)
 			require.NoError(t, err)
@@ -100,13 +100,13 @@ func TestCorrectTrading212SaleKeepsIdentityAndRecordedMethodWithDependentReplay(
 			require.Equal(t, "committed", staged.CommitStatus)
 			require.Equal(t, f.original.CommittedIdentityID, staged.CommittedIdentityID)
 			require.Equal(t, f.original.CommittedTransactionID, staged.CommittedTransactionID)
-			_, err = f.importService.CorrectTrading212Sale(ctx, input)
+			_, err = acknowledgedCorrectTrading212Sale(ctx, f.importService, input)
 			require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
-			_, err = f.importService.CorrectTrading212Sale(ctx, staleInput)
+			_, err = acknowledgedCorrectTrading212Sale(ctx, f.importService, staleInput)
 			require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
 			newer := changed
 			newer.NetValue = "451.00"
-			_, err = f.importService.CorrectTrading212Sale(ctx, f.revision(t, newer))
+			_, err = acknowledgedCorrectTrading212Sale(ctx, f.importService, f.revision(t, newer))
 			require.NoError(t, err)
 			repeatBatch, _ := f.stageOrderFillRow(t, f.connectionID, newer)
 			repeat, err := f.importRepo.ListAllImportStagedRows(ctx, repeatBatch)
@@ -165,13 +165,13 @@ func TestCorrectTrading212SalePreviewAndSourceAcceptanceRollback(t *testing.T) {
 	require.Len(t, impact.AffectedCheckpoints, 1)
 	require.Equal(t, checkpointID, impact.AffectedCheckpoints[0].CheckpointID)
 	require.Equal(t, before, sourceSaleWriteSnapshot(t, f))
-	_, err = f.importService.CorrectTrading212Sale(ctx, input)
+	_, err = acknowledgedCorrectTrading212Sale(ctx, f.importService, input)
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	require.Equal(t, before, sourceSaleWriteSnapshot(t, f))
 	_, err = f.database.Exec(`CREATE TRIGGER abort_sale_source_revision BEFORE INSERT ON import_source_revisions BEGIN SELECT RAISE(ABORT, 'injected source acceptance failure'); END`)
 	require.NoError(t, err)
 	input.ReconciliationOverride = true
-	_, err = f.importService.CorrectTrading212Sale(ctx, input)
+	_, err = acknowledgedCorrectTrading212Sale(ctx, f.importService, input)
 	require.ErrorContains(t, err, "injected source acceptance failure")
 	require.Equal(t, before, sourceSaleWriteSnapshot(t, f))
 	staged, err := f.importRepo.ImportStagedRowByID(ctx, input.RowID)
@@ -182,7 +182,7 @@ func TestCorrectTrading212SalePreviewAndSourceAcceptanceRollback(t *testing.T) {
 	require.Equal(t, "active", status)
 	_, err = f.database.Exec(`DROP TRIGGER abort_sale_source_revision`)
 	require.NoError(t, err)
-	result, err := f.importService.CorrectTrading212Sale(ctx, input)
+	result, err := acknowledgedCorrectTrading212Sale(ctx, f.importService, input)
 	require.NoError(t, err)
 	require.Contains(t, append(result.Inverse.InvalidatedCheckpointIDs, result.Replacement.Transaction.InvalidatedCheckpointIDs...), checkpointID)
 	assertSourceSaleIntegrity(t, f)
@@ -215,7 +215,7 @@ func TestCorrectTrading212SaleRefusesUnsupportedSourceChangesAtomically(t *testi
 			before := sourceSaleWriteSnapshot(t, f)
 			_, err := f.importService.Trading212SaleCorrectionReconciliationImpact(context.Background(), input)
 			require.Error(t, err)
-			_, err = f.importService.CorrectTrading212Sale(context.Background(), input)
+			_, err = acknowledgedCorrectTrading212Sale(context.Background(), f.importService, input)
 			require.Error(t, err)
 			require.Equal(t, before, sourceSaleWriteSnapshot(t, f))
 			row, err := f.importRepo.ImportStagedRowByID(context.Background(), input.RowID)
@@ -232,7 +232,7 @@ func TestCorrectTrading212SalePreservesSpecificElectionWithoutGuessingQuantityCh
 	source, err := f.investmentSvc.TradeCorrectionContext(ctx, f.ownerUserID, f.original.CommittedTransactionID.Int64)
 	require.NoError(t, err)
 	require.Len(t, source.AvailableLots, 1)
-	_, err = f.investmentSvc.ReplaceSale(ctx, ReplaceInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID,
+	_, err = acknowledgedReplaceSale(ctx, f.investmentSvc, ReplaceInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: source.TransactionID,
 		Reason: "explicit lot election", Replacement: InvestmentTradeInput{TransactionDate: source.EventDate,
 			HoldingAccountID: source.HoldingAccountID, CommodityID: source.CommodityID, CashAccountID: source.CashAccountID,
 			CashCommodityID: source.CostCommodityID, QuantityValue: exact.New(2), CashAmountValue: 30000, CashAmountScale: 2,
@@ -240,7 +240,7 @@ func TestCorrectTrading212SalePreservesSpecificElectionWithoutGuessingQuantityCh
 	require.NoError(t, err)
 	changed := f.fill
 	changed.NetValue = "310.00"
-	result, err := f.importService.CorrectTrading212Sale(ctx, f.revision(t, changed))
+	result, err := acknowledgedCorrectTrading212Sale(ctx, f.importService, f.revision(t, changed))
 	require.NoError(t, err)
 	corrected, err := f.investmentSvc.TradeCorrectionContext(ctx, f.ownerUserID, result.Replacement.Transaction.ID)
 	require.NoError(t, err)
@@ -248,12 +248,12 @@ func TestCorrectTrading212SalePreservesSpecificElectionWithoutGuessingQuantityCh
 	require.Len(t, corrected.EffectiveElectedLots, 1)
 	require.Equal(t, source.AvailableLots[0].LotID, corrected.EffectiveElectedLots[0].LotID)
 	changed.NetValue = "311.00"
-	_, err = f.importService.CorrectTrading212Sale(ctx, f.revision(t, changed))
+	_, err = acknowledgedCorrectTrading212Sale(ctx, f.importService, f.revision(t, changed))
 	require.NoError(t, err, "a source correction descendant must retain its effective specific-lot election")
 	changed.Quantity = "3"
 	input := f.revision(t, changed)
 	before := sourceSaleWriteSnapshot(t, f)
-	_, err = f.importService.CorrectTrading212Sale(ctx, input)
+	_, err = acknowledgedCorrectTrading212Sale(ctx, f.importService, input)
 	require.ErrorContains(t, err, "explicit lot election")
 	require.Equal(t, before, sourceSaleWriteSnapshot(t, f))
 	assertSourceSaleIntegrity(t, f)
@@ -275,7 +275,7 @@ func TestCorrectTrading212SaleRefusesImpossibleDependentReplay(t *testing.T) {
 	before := sourceSaleWriteSnapshot(t, f)
 	_, err = f.importService.Trading212SaleCorrectionReconciliationImpact(ctx, input)
 	require.ErrorIs(t, err, ErrInvestmentSaleDependency)
-	_, err = f.importService.CorrectTrading212Sale(ctx, input)
+	_, err = acknowledgedCorrectTrading212Sale(ctx, f.importService, input)
 	require.ErrorIs(t, err, ErrInvestmentSaleDependency)
 	require.Equal(t, before, sourceSaleWriteSnapshot(t, f))
 	row, err := f.importRepo.ImportStagedRowByID(ctx, input.RowID)
@@ -302,6 +302,6 @@ func TestCorrectTrading212SaleDoesNotOfferCashFallback(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, row.SourceChanged)
 	require.False(t, row.SourceSaleOperation)
-	_, err = f.importService.CorrectTrading212Sale(ctx, CorrectTrading212SaleInput{OwnerUserID: f.ownerUserID, BatchID: batchID, RowID: rowID, Reason: "revised cash fallback"})
+	_, err = acknowledgedCorrectTrading212Sale(ctx, f.importService, CorrectTrading212SaleInput{OwnerUserID: f.ownerUserID, BatchID: batchID, RowID: rowID, Reason: "revised cash fallback"})
 	require.ErrorIs(t, err, ErrImportSourceCorrectionConflict)
 }

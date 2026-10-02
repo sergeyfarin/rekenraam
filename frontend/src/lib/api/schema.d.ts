@@ -9670,7 +9670,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Preview import commit */
+        /**
+         * Preview import commit
+         * @description Read-only commit preview. gain_impacts runs each pending imported acquisition with an existing instrument and holding through the rolled-back buy writer against the current ledger (T-126). Also open for a partially_committed batch so held rows can be reviewed again.
+         */
         post: {
             parameters: {
                 query?: never;
@@ -9744,7 +9747,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Commit import batch */
+        /**
+         * Commit import batch
+         * @description Commits pending rows chronologically, each in its own transaction. An imported acquisition whose replay changes committed disposal gains commits only with that row's current preview-commit acknowledgement; otherwise it stays pending, is listed in gain_review_row_ids, and the batch stays partially_committed (T-126).
+         */
         post: {
             parameters: {
                 query?: never;
@@ -9844,7 +9850,7 @@ export interface paths {
         put?: never;
         /**
          * Accept a changed Trading 212 buy fill as an audited source correction
-         * @description Replaces the current effective buy using the staged provider quantity and net settlement, replays dependent long disposals, and commits the staged source revision in the same transaction. The date, instrument, holding, cash account, and settlement currency must match the current buy. The original import identity remains unchanged and continues to deduplicate source retries. Quantity must be positive and the owner-perspective buy settlement negative; cancellation-shaped rows, changed dates, or changed instruments require another command.
+         * @description Replaces the current effective buy using the staged provider quantity and net settlement, replays dependent long disposals, and commits the staged source revision in the same transaction. The date, instrument, holding, cash account, and settlement currency must match the current buy. The original import identity remains unchanged and continues to deduplicate source retries. Quantity must be positive and the owner-perspective buy settlement negative; cancellation-shaped rows, changed dates, or changed instruments require another command. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
          */
         post: {
             parameters: {
@@ -9909,7 +9915,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Staged source row no longer eligible, replay dependency failed, or reconciliation override required */
+                /** @description Staged source row no longer eligible, replay dependency failed, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -9937,7 +9943,7 @@ export interface paths {
         put?: never;
         /**
          * Preview reconciliation impact of a Trading 212 buy source correction
-         * @description Read-only preview using the staged provider quantity and net settlement. Returns the distinct checkpoints affected by the inverse and replacement journals. Uses the correction command's source eligibility and supported scope checks and proves dependent disposal/transfer replay through a rolled-back buy replacement, without accepting a source revision or changing the ledger. The command rechecks eligibility and reconciliation at commit time.
+         * @description Read-only preview using the staged provider quantity and net settlement. Returns the distinct checkpoints affected by the inverse and replacement journals. Uses the correction command's source eligibility and supported scope checks and proves dependent disposal/transfer replay through a rolled-back buy replacement, without accepting a source revision or changing the ledger. The command rechecks eligibility and reconciliation at commit time. Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
          */
         post: {
             parameters: {
@@ -10019,7 +10025,7 @@ export interface paths {
         put?: never;
         /**
          * Accept a changed Trading 212 sale fill as an audited source correction
-         * @description Replaces the current effective sale using the staged provider quantity and net settlement, replays dependent long disposals, and commits the staged source revision in the same transaction. The date, instrument, holding, cash account, and settlement currency must match the current sale. The original import identity remains unchanged and continues to deduplicate source retries. Quantity must be positive and the owner-perspective sale settlement positive. The effective recorded basis method is retained; specific-lot quantity changes need an explicit manual election. Cancellation-shaped rows, changed dates, or changed instruments require another command.
+         * @description Replaces the current effective sale using the staged provider quantity and net settlement, replays dependent long disposals, and commits the staged source revision in the same transaction. The date, instrument, holding, cash account, and settlement currency must match the current sale. The original import identity remains unchanged and continues to deduplicate source retries. Quantity must be positive and the owner-perspective sale settlement positive. The effective recorded basis method is retained; specific-lot quantity changes need an explicit manual election. Cancellation-shaped rows, changed dates, or changed instruments require another command. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
          */
         post: {
             parameters: {
@@ -10084,7 +10090,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Staged source row no longer eligible, replay dependency failed, or reconciliation override required */
+                /** @description Staged source row no longer eligible, replay dependency failed, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -10112,7 +10118,7 @@ export interface paths {
         put?: never;
         /**
          * Preview reconciliation impact of a Trading 212 sale source correction
-         * @description Read-only preview using the staged provider quantity and net settlement. Returns the distinct checkpoints affected by the inverse and replacement journals. Uses the correction command's source eligibility and supported scope checks, without accepting a source revision or changing the ledger. The command rechecks eligibility and reconciliation at commit time.
+         * @description Read-only preview using the staged provider quantity and net settlement. Returns the distinct checkpoints affected by the inverse and replacement journals. Uses the correction command's source eligibility and supported scope checks, without accepting a source revision or changing the ledger. The command rechecks eligibility and reconciliation at commit time. Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
          */
         post: {
             parameters: {
@@ -13725,7 +13731,7 @@ export interface paths {
         put?: never;
         /**
          * Reverse a posted long sale
-         * @description Posts a balanced inverse transaction, retires the source trade price and dependent prices, and replays the long position in one database transaction. The original sale remains posted audit history. Imported lineage requires a committed source identity that stays attached to the original fill. Reversal is terminal; an already corrected sale cannot be reversed again.
+         * @description Posts a balanced inverse transaction, retires the source trade price and dependent prices, and replays the long position in one database transaction. The original sale remains posted audit history. Imported lineage requires a committed source identity that stays attached to the original fill. Reversal is terminal; an already corrected sale cannot be reversed again. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
          */
         post: {
             parameters: {
@@ -13790,7 +13796,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Already corrected, unlinked import, changed, impossible replay, or reconciliation override required */
+                /** @description Already corrected, unlinked import, changed, impossible replay, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13818,7 +13824,7 @@ export interface paths {
         put?: never;
         /**
          * Preview reconciliation impact of a sale reversal
-         * @description Plans the inverse journal and returns affected checkpoints without writing. Pass reconciliation_override=true to the reversal command after reviewing the listed checkpoints.
+         * @description Pass reconciliation_override=true to the reversal command after reviewing the listed checkpoints. Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
          */
         post: {
             parameters: {
@@ -13900,7 +13906,7 @@ export interface paths {
         put?: never;
         /**
          * Reverse a posted long buy
-         * @description Posts an exact inverse, retires the source trade price, and replays later long-position decisions in one audited database transaction. The original buy remains posted history. A dependent disposal that cannot be satisfied refuses the command without durable effects. Imported lineage requires a committed source identity, which remains attached to the original fill.
+         * @description Posts an exact inverse, retires the source trade price, and replays later long-position decisions in one audited database transaction. The original buy remains posted history. A dependent disposal that cannot be satisfied refuses the command without durable effects. Imported lineage requires a committed source identity, which remains attached to the original fill. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
          */
         post: {
             parameters: {
@@ -13964,7 +13970,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Already corrected, unlinked import, changed, dependent operation impossible, or reconciliation override required */
+                /** @description Already corrected, unlinked import, changed, dependent operation impossible, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13992,7 +13998,7 @@ export interface paths {
         put?: never;
         /**
          * Preview a long-buy reversal
-         * @description Simulates dependent long-position replay and returns affected reconciliation checkpoints without writing. Pass reconciliation_override=true to the reversal command after reviewing those checkpoints.
+         * @description Simulates dependent long-position replay and returns affected reconciliation checkpoints without writing. Pass reconciliation_override=true to the reversal command after reviewing those checkpoints. Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
          */
         post: {
             parameters: {
@@ -14073,7 +14079,7 @@ export interface paths {
         put?: never;
         /**
          * Replace a posted long sale, including a source-linked imported fill
-         * @description Posts an inverse and corrected sale, rebuilds the position, retires the original trade price, and updates reconciliation under one audit event. Older dependent sales are replayed. The original remains posted history. An imported sale needs an immutable committed source identity effect pointing to that operation; the original source row and dedupe fingerprint remain unchanged.
+         * @description Posts an inverse and corrected sale, rebuilds the position, retires the original trade price, and updates reconciliation under one audit event. Older dependent sales are replayed. The original remains posted history. An imported sale needs an immutable committed source identity effect pointing to that operation; the original source row and dedupe fingerprint remain unchanged. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
          */
         post: {
             parameters: {
@@ -14137,7 +14143,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Sale corrected, imported without source identity, changed, dependent operation impossible, or reconciliation override required */
+                /** @description Sale corrected, imported without source identity, changed, dependent operation impossible, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -14165,7 +14171,7 @@ export interface paths {
         put?: never;
         /**
          * Preview reconciliation impact of a long-sale replacement
-         * @description Plans both journals and returns their distinct affected checkpoints without writing. Pass reconciliation_override=true to the replacement command after reviewing the listed checkpoints.
+         * @description Plans both journals and returns their distinct affected checkpoints without writing. Pass reconciliation_override=true to the replacement command after reviewing the listed checkpoints. Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
          */
         post: {
             parameters: {
@@ -14246,7 +14252,7 @@ export interface paths {
         put?: never;
         /**
          * Replace a posted long buy, including a source-linked imported fill, and replay dependent sales
-         * @description Posts an inverse and corrected buy, replays later long disposals using their recorded basis methods, retires the original trade price, and updates reconciliation under one audit event. The original journal and lot facts remain audit history. A replacement keeps the source buy date, holding, instrument, and cost currency. An imported buy needs an immutable committed source identity effect pointing to that operation; the original source row and dedupe fingerprint remain unchanged.
+         * @description Posts an inverse and corrected buy, replays later long disposals using their recorded basis methods, retires the original trade price, and updates reconciliation under one audit event. The original journal and lot facts remain audit history. A replacement keeps the source buy date, holding, instrument, and cost currency. An imported buy needs an immutable committed source identity effect pointing to that operation; the original source row and dedupe fingerprint remain unchanged. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
          */
         post: {
             parameters: {
@@ -14310,7 +14316,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Buy already corrected, imported without source identity, changed, dependent sale impossible, or reconciliation override required */
+                /** @description Buy already corrected, imported without source identity, changed, dependent sale impossible, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -14338,7 +14344,7 @@ export interface paths {
         put?: never;
         /**
          * Preview reconciliation impact of a long-buy replacement
-         * @description Plans the inverse and corrected buy journals and returns their distinct affected checkpoints without durable changes. Replays the proposed buy through the replacement writer in a rolled-back transaction, refusing impossible dependent disposals or transfers with INVESTMENT_BUY_DEPENDENCY. Pass reconciliation_override=true to the replacement command after reviewing those checkpoints.
+         * @description Plans the inverse and corrected buy journals and returns their distinct affected checkpoints without durable changes. Replays the proposed buy through the replacement writer in a rolled-back transaction, refusing impossible dependent disposals or transfers with INVESTMENT_BUY_DEPENDENCY. Pass reconciliation_override=true to the replacement command after reviewing those checkpoints. Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
          */
         post: {
             parameters: {
@@ -14769,7 +14775,7 @@ export interface paths {
         put?: never;
         /**
          * Record a reinvested dividend (dividend income applied as additional units)
-         * @description Opens an acquisition lot and replays affected later disposals atomically. An impossible dependent acquisition replay returns the historical INVESTMENT_BUY_DEPENDENCY conflict code, also used by buy commands.
+         * @description Opens an acquisition lot and replays affected later disposals atomically. An impossible dependent acquisition replay returns the historical INVESTMENT_BUY_DEPENDENCY conflict code, also used by buy commands. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
          */
         post: {
             parameters: {
@@ -14827,7 +14833,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Acquisition replay conflict or reconciliation override required */
+                /** @description Acquisition replay conflict or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
                 409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
@@ -15172,7 +15178,7 @@ export interface paths {
         put?: never;
         /**
          * Preview which reconciliation checkpoints a reinvested dividend would invalidate
-         * @description Executes the proposed reinvested dividend and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY, the stable acquisition replay conflict code also used for reinvestment. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
+         * @description Executes the proposed reinvested dividend and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY, the stable acquisition replay conflict code also used for reinvestment. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation.  Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
          */
         post: {
             parameters: {
@@ -18134,10 +18140,25 @@ export interface components {
         };
         CommitImportBatchRequest: {
             reconciliation_override?: boolean;
+            /** @description One preview-commit gain_impacts acknowledgement per imported acquisition the user accepted (T-126). A row whose current change set is missing or differs is held pending and listed in gain_review_row_ids; it is never skipped. */
+            gain_impact_acknowledgements?: components["schemas"]["ImportRowGainImpactAcknowledgement"][];
+        };
+        ImportRowGainImpactAcknowledgement: {
+            /** Format: int64 */
+            row_id: number;
+            acknowledgement: string;
+        };
+        ImportRowGainImpact: {
+            /** Format: int64 */
+            row_id: number;
+            row_index: number;
+            gain_impact: components["schemas"]["GainImpact"];
         };
         CorrectTrading212BuyRequest: {
             reason: string;
             reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's reconciliation-impact preview, accepting the committed-disposal gain changes it disclosed (T-126). A non-empty change set without it is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. */
+            gain_impact_acknowledgement?: string;
         };
         CorrectTrading212SaleRequest: components["schemas"]["CorrectTrading212BuyRequest"];
         CommitImportBatchResponse: {
@@ -18148,12 +18169,16 @@ export interface components {
             committed_count: number;
             skipped_count: number;
             failed_count: number;
+            /** @description Imported acquisitions held pending because their committed-disposal gain changes were not acknowledged as they stand now. The batch stays partially_committed; preview and commit again to review them. */
+            gain_review_row_ids: number[];
         };
         ImportReconciliationIssue: {
             row_index: number;
             checkpoint_ids: number[];
         };
         PreviewCommitResponse: {
+            /** @description Pending imported acquisitions whose rolled-back writer replay changes committed disposal gains against the current ledger (T-126). Rows commit chronologically, so an earlier row can change a later row's set; that row is then held for another review rather than committed. */
+            gain_impacts: components["schemas"]["ImportRowGainImpact"][];
             includable_count: number;
             duplicate_count: number;
             reconciliation_issues: components["schemas"]["ImportReconciliationIssue"][];
@@ -18726,7 +18751,7 @@ export interface components {
             cost_basis_method?: components["schemas"]["CostBasisMethod"];
             /** @description Allows a backdated trade to proceed into a reconciled period, invalidating the affected checkpoints. Without it such a trade is refused with a 409 CONFLICT. */
             reconciliation_override?: boolean;
-            /** @description The gain_impact.acknowledgement token returned by this command's preview for the committed-disposal gain changes the user accepted. Honoured only by commands opted into replay gain disclosure (currently manual buys). Commit recomputes the change set in its write transaction; a non-empty set without this token is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, and a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. An empty set needs no token and ignores one. */
+            /** @description The gain_impact.acknowledgement token returned by this command's preview for the committed-disposal gain changes the user accepted. Honoured by buys (manual and imported); sells and write-offs do not replay committed disposals and ignore it. Commit recomputes the change set in its write transaction; a non-empty set without this token is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, and a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. An empty set needs no token and ignores one. */
             gain_impact_acknowledgement?: string;
         };
         /** @description Replay gain disclosure (T-114). Lists every committed disposal whose effective operational basis, proceeds, gain, knowledge, date, position or method the command would change, compared inside the command's own rolled-back write transaction. Disposals the command itself creates under a new correction root are not listed. Re-selected allocations with identical totals are not a change. Present only for commands opted into disclosure; an omitted gain_impact is not a claim that no gain changes. */
@@ -18906,6 +18931,8 @@ export interface components {
             reason: string;
             /** @description Omit or set false to keep affected reconciliation checkpoints active. */
             reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's reconciliation-impact preview, accepting the committed-disposal gain changes it disclosed (T-126). A non-empty change set without it is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. */
+            gain_impact_acknowledgement?: string;
         };
         InvestmentSaleReversalResponse: {
             transaction: components["schemas"]["TransactionResponse"];
@@ -18917,6 +18944,8 @@ export interface components {
             reason: string;
             /** @description Omit or set false to keep affected reconciliation checkpoints active. */
             reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's reconciliation-impact preview, accepting the committed-disposal gain changes it disclosed (T-126). A non-empty change set without it is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. */
+            gain_impact_acknowledgement?: string;
         };
         InvestmentBuyReversalResponse: {
             transaction: components["schemas"]["TransactionResponse"];
@@ -18928,6 +18957,8 @@ export interface components {
             reason: string;
             /** @description Omit or set false to preserve affected reconciliation checkpoints. */
             reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's reconciliation-impact preview, accepting the committed-disposal gain changes it disclosed (T-126). A non-empty change set without it is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. */
+            gain_impact_acknowledgement?: string;
             replacement: components["schemas"]["InvestmentSaleReplacementTradeRequest"];
         };
         /** @description Full corrected sale. The cost-basis election and each charge treatment must be explicit so changed defaults cannot alter corrected economics. */
@@ -18949,6 +18980,8 @@ export interface components {
             reason: string;
             /** @description Omit or set false to preserve affected reconciliation checkpoints. */
             reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's reconciliation-impact preview, accepting the committed-disposal gain changes it disclosed (T-126). A non-empty change set without it is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. */
+            gain_impact_acknowledgement?: string;
             replacement: components["schemas"]["InvestmentBuyReplacementTradeRequest"];
         };
         /** @description Full corrected buy. Every charge treatment must be explicit so changed defaults cannot alter corrected economics. */
@@ -19182,6 +19215,8 @@ export interface components {
             change_reason?: string;
             /** @description Allows a backdated trade to proceed into a reconciled period, invalidating the affected checkpoints. Without it such a trade is refused with a 409 CONFLICT. */
             reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's reconciliation-impact preview, accepting the committed-disposal gain changes it disclosed (T-126). A non-empty change set without it is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. */
+            gain_impact_acknowledgement?: string;
         };
         InvestmentLotResponse: {
             /** Format: int64 */

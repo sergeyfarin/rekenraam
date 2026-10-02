@@ -324,53 +324,55 @@ func TestBuyGainImpactLeavesRowsUnchangedOnImpossibleDependency(t *testing.T) {
 	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
 }
 
-// Removals and replacements happen in correction commands that are not yet
-// opted in (T-126), so these cases drive the shared snapshot comparison across
-// those commands to prove superseded and reversed disposals are disclosed.
+// A replacement supersedes the corrected sale's decision and a reversal
+// removes it. Both are disclosed through the command's own rolled-back writer
+// preview and require that exact acknowledgement at commit (T-126).
 func TestGainImpactSnapshotDisclosesRemovedAndReplacedDisposals(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
-	repository := f.investmentService.repository
 	buyOn(t, f, "2026-01-01", 10, 10000)
 	first, err := f.investmentService.Sell(ctx, sellInput(f, "2026-02-01", 2))
 	require.NoError(t, err)
 	second, err := f.investmentService.Sell(ctx, sellInput(f, "2026-03-01", 2))
 	require.NoError(t, err)
 
-	before, err := repository.InvestmentGainSnapshot(ctx, BookID)
-	require.NoError(t, err)
 	replacement := sellInput(f, "2026-03-01", 2)
 	replacement.CashAmountValue = 12000
 	replacement.CostBasisMethod = "fifo"
-	_, err = f.investmentService.ReplaceSale(ctx, ReplaceInvestmentSaleInput{OwnerUserID: f.ownerUserID,
-		TransactionID: second.Transaction.ID, Reason: "broker corrected the fill", Replacement: replacement})
+	replace := ReplaceInvestmentSaleInput{OwnerUserID: f.ownerUserID,
+		TransactionID: second.Transaction.ID, Reason: "broker corrected the fill", Replacement: replacement}
+	before := buyReplacementPreviewSnapshot(t, f.database)
+	impact, err := f.investmentService.ReplaceSaleReconciliationImpact(ctx, replace)
 	require.NoError(t, err)
-	after, err := repository.InvestmentGainSnapshot(ctx, BookID)
-	require.NoError(t, err)
-	impact := db.CompareInvestmentGainSnapshots(before, after)
-	require.Len(t, impact.Changes, 1)
-	replaced := impact.Changes[0]
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+	require.Len(t, impact.GainImpact.Changes, 1)
+	replaced := impact.GainImpact.Changes[0]
 	require.Equal(t, db.GainImpactReplaced, replaced.Kind)
 	require.Equal(t, second.Transaction.ID, replaced.TransactionID)
 	requireScaled(t, 10000, 2, replaced.Before.Proceeds, "proceeds before replacement")
 	requireScaled(t, 12000, 2, replaced.After.Proceeds, "proceeds after replacement")
 	requireScaled(t, 10000, 2, replaced.After.Gain, "gain after replacement")
+	_, err = f.investmentService.ReplaceSale(ctx, replace)
+	require.ErrorIs(t, err, ErrGainImpactAcknowledgementRequired)
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+	replace.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	_, err = f.investmentService.ReplaceSale(ctx, replace)
+	require.NoError(t, err)
 
-	before = after
-	_, err = f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{OwnerUserID: f.ownerUserID,
-		TransactionID: first.Transaction.ID, Reason: "entered twice"})
+	reverse := ReverseInvestmentSaleInput{OwnerUserID: f.ownerUserID,
+		TransactionID: first.Transaction.ID, Reason: "entered twice"}
+	impact, err = f.investmentService.ReverseSaleReconciliationImpact(ctx, reverse)
 	require.NoError(t, err)
-	after, err = repository.InvestmentGainSnapshot(ctx, BookID)
-	require.NoError(t, err)
-	impact = db.CompareInvestmentGainSnapshots(before, after)
-	require.Len(t, impact.Changes, 1, "the replayed later sale keeps its single-lot basis")
-	removed := impact.Changes[0]
+	require.Len(t, impact.GainImpact.Changes, 1, "the replayed later sale keeps its single-lot basis")
+	removed := impact.GainImpact.Changes[0]
 	require.Equal(t, db.GainImpactRemoved, removed.Kind)
 	require.Equal(t, first.Transaction.ID, removed.TransactionID)
 	require.Nil(t, removed.After, "a removed disposal has no effective result")
 	requireScaled(t, 8000, 2, removed.Before.Gain, "removed gain")
-	require.NotEqual(t, db.CompareInvestmentGainSnapshots(after, after).Acknowledgement, impact.Acknowledgement)
+	reverse.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	_, err = f.investmentService.ReverseSale(ctx, reverse)
+	require.NoError(t, err)
 }
 
 func TestBuyGainImpactLeavesRowsUnchangedWhenReplayEvidenceIsMissing(t *testing.T) {

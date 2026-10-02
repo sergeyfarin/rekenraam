@@ -303,12 +303,17 @@ func TestBackdatedPurchaseRollsBackReplayWhenImportIdentityFails(t *testing.T) {
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&beforeAudits))
 
 	markerError := errors.New("import identity failed")
-	_, err = f.investmentService.buyWithPostWrite(ctx, InvestmentTradeInput{
+	imported := InvestmentTradeInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, QuantityValue: exact.New(10),
 		CashAmountValue: 30000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
-	}, func(*sql.Tx, int64) error { return markerError })
+	}
+	// The LIFO sale now consumes the March lot; acknowledge that so the
+	// identity failure happens after the accepted replay was written.
+	imported.GainImpactAcknowledgement = previewBuyGainImpact(t, f, imported).Acknowledgement
+	require.NotEmpty(t, imported.GainImpactAcknowledgement)
+	_, err = f.investmentService.buyWithPostWrite(ctx, imported, func(*sql.Tx, int64) error { return markerError })
 	require.ErrorIs(t, err, markerError)
 	require.Equal(t, beforeTransactions, f.transactionCount(t))
 	var audits, lots, revisions int

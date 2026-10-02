@@ -28,7 +28,7 @@ func TestReplaceOldManualBuyReplaysDependentSameDaySale(t *testing.T) {
 		CostBasisMethod: "fifo",
 	})
 	require.NoError(t, err)
-	result, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	result, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
 		Reason: "correct broker cost",
 		Replacement: InvestmentTradeInput{
@@ -91,7 +91,7 @@ func TestReplaceOldBuyRollsBackWhenDependentSaleNeedsMoreShares(t *testing.T) {
 		QuantityValue: exact.New(8), CashAmountValue: 96000, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
-	_, err = f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
 		Reason: "broker recorded five shares",
 		Replacement: InvestmentTradeInput{
@@ -151,7 +151,7 @@ func TestReplaceOldBuyRequiresReconciliationOverrideAtomically(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, impact.AffectedCheckpoints, 1)
 	require.Equal(t, checkpointID, impact.AffectedCheckpoints[0].CheckpointID)
-	_, err = f.investmentService.ReplaceBuy(ctx, input)
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	var correctionCount int
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_operations
@@ -159,7 +159,7 @@ func TestReplaceOldBuyRequiresReconciliationOverrideAtomically(t *testing.T) {
 	require.Zero(t, correctionCount)
 	require.Equal(t, []int64{checkpointID}, activeCheckpointIDs(t, f))
 	input.ReconciliationOverride = true
-	result, err := f.investmentService.ReplaceBuy(ctx, input)
+	result, err := acknowledgedReplaceBuy(ctx, f.investmentService, input)
 	require.NoError(t, err)
 	require.Empty(t, activeCheckpointIDs(t, f))
 	var checkpointAudit, replacementAudit int64
@@ -180,7 +180,7 @@ func TestReplaceImportedBuyRequiresSourceAwareCorrection(t *testing.T) {
 		QuantityValue: exact.New(10), CashAmountValue: 100000, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
-	_, err = f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
 		Reason: "source corrected acquisition",
 	})
@@ -213,7 +213,7 @@ func TestReplaceBuyRequiresExplicitChargeTreatment(t *testing.T) {
 	}
 	_, err = f.investmentService.ReplaceBuyReconciliationImpact(ctx, input)
 	require.ErrorContains(t, err, "charge 1 treatment is required")
-	_, err = f.investmentService.ReplaceBuy(ctx, input)
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, input)
 	require.ErrorContains(t, err, "charge 1 treatment is required")
 }
 
@@ -227,7 +227,7 @@ func TestReplaceBuyReplacesApproximatePriceWithGrossPrice(t *testing.T) {
 		QuantityValue: exact.New(1), CashAmountValue: 10200, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
-	result, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	result, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
 		Reason: "add broker gross and commission",
 		Replacement: InvestmentTradeInput{
@@ -279,7 +279,7 @@ func TestReplaceBuyTwiceKeepsOriginalSpecificLotElection(t *testing.T) {
 	require.NoError(t, err)
 	replace := func(transactionID int64, basis int64) ReplaceInvestmentBuyResult {
 		t.Helper()
-		result, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+		result, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 			OwnerUserID: f.ownerUserID, TransactionID: transactionID,
 			Reason: "correct purchase amount",
 			Replacement: InvestmentTradeInput{
@@ -350,7 +350,7 @@ func TestReplaceOldBuyRecalculatesDependentSaleUnderEveryBasisMethod(t *testing.
 			saleInput.TransactionDate = "2026-01-04"
 			_, err = f.investmentService.Sell(ctx, saleInput)
 			require.NoError(t, err)
-			replaced, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+			replaced, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 				OwnerUserID: f.ownerUserID, TransactionID: first.Transaction.ID,
 				Reason: "correct purchase cost",
 				Replacement: InvestmentTradeInput{

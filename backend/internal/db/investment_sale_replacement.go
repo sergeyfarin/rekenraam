@@ -22,6 +22,26 @@ func (r *InvestmentRepository) ReplaceSaleWithPostWrite(ctx context.Context, exp
 	inverseParams, replacementParams CreateTransactionParams, disposalParams DisposeLotsParams,
 	postWrite func(*sql.Tx, int64, int64) error,
 ) (TransactionRecord, TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
+	return r.replaceSale(ctx, expected, inverseParams, replacementParams, disposalParams, postWrite, false)
+}
+
+// PreviewSaleReplacement runs the complete replacement writer — inverse,
+// corrected disposal, dependent replay, prices and checkpoints — and rolls
+// back. Source acceptance never runs and no temporary IDs escape (T-126).
+func (r *InvestmentRepository) PreviewSaleReplacement(ctx context.Context, expected SaleOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, disposalParams DisposeLotsParams,
+) (SimulatedInvestmentWrite, error) {
+	inverse, replacement, _, _, err := r.replaceSale(ctx, expected, inverseParams, replacementParams, disposalParams, nil, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, err
+	}
+	return simulatedInvestmentWrite(inverse, replacement), nil
+}
+
+func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, disposalParams DisposeLotsParams,
+	postWrite func(*sql.Tx, int64, int64) error, preview bool,
+) (TransactionRecord, TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
 	var noInverse, noReplacement TransactionRecord
 	var noDecision DisposalDecisionRecord
 	if expected.OperationID <= 0 || inverseParams.BookID <= 0 ||
@@ -49,7 +69,17 @@ func (r *InvestmentRepository) ReplaceSaleWithPostWrite(ctx context.Context, exp
 	var sourceIntents []InvestmentReplayIntent
 	var sourceDecisionID, operationID int64
 	var olderSale bool
-	journals, effects, err := executeInvestmentJournalsWithGuardTx(ctx, r.database,
+	write := executeInvestmentJournalsWithGuardTx[saleReplacementEffects]
+	if preview {
+		write = previewInvestmentJournalsWithGuardTx[saleReplacementEffects]
+	}
+	var acceptSource func(*sql.Tx, []TransactionRecord, int64) error
+	if postWrite != nil {
+		acceptSource = func(tx *sql.Tx, _ []TransactionRecord, auditEventID int64) error {
+			return postWrite(tx, operationID, auditEventID)
+		}
+	}
+	journals, effects, err := write(ctx, r.database,
 		[]CreateTransactionParams{inverseParams, replacementParams},
 		func(tx *sql.Tx) error {
 			var err error
@@ -161,12 +191,7 @@ func (r *InvestmentRepository) ReplaceSaleWithPostWrite(ctx context.Context, exp
 				return saleReplacementEffects{}, err
 			}
 			return saleReplacementEffects{disposals: disposals, decision: decision}, nil
-		}, func(tx *sql.Tx, _ []TransactionRecord, auditEventID int64) error {
-			if postWrite != nil {
-				return postWrite(tx, operationID, auditEventID)
-			}
-			return nil
-		})
+		}, acceptSource)
 	if err != nil {
 		return noInverse, noReplacement, nil, noDecision, err
 	}

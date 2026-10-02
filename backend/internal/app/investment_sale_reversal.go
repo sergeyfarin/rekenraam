@@ -25,23 +25,19 @@ type ReverseInvestmentSaleInput struct {
 	TransactionID          int64
 	Reason                 string
 	ReconciliationOverride bool
+	// GainImpactAcknowledgement echoes the preview token for the committed
+	// disposal gain changes the user accepted (T-126).
+	GainImpactAcknowledgement string
 }
 
 // ReverseSale posts a new inverse transaction and removes the original sale
 // from the effective long-position replay. Imported fills require a committed
 // source identity, which remains bound to the original operation.
 func (s *InvestmentService) ReverseSale(ctx context.Context, input ReverseInvestmentSaleInput) (Transaction, error) {
-	operation, planned, err := s.reverseSalePlan(ctx, input)
+	operation, params, err := s.prepareSaleReversalWrite(ctx, input)
 	if err != nil {
 		return Transaction{}, err
 	}
-	params, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, planned, nil)
-	if err != nil {
-		return Transaction{}, err
-	}
-	params.InvestmentCorrectionOfOperationID = operation.OperationID
-	params.InvestmentCorrectionMode = "reverse"
-	params.InvestmentCorrectionReason = planned.ChangeReason
 	record, err := s.repository.ReverseSale(ctx, params, operation)
 	if err != nil {
 		return Transaction{}, mapReverseSaleError(err)
@@ -49,14 +45,36 @@ func (s *InvestmentService) ReverseSale(ctx context.Context, input ReverseInvest
 	return toTransaction(record), nil
 }
 
+// ReverseSaleReconciliationImpact runs the actual reversal writer and its
+// dependent replay in a rolled-back transaction rather than planning the
+// inverse journal alone, so impossible replays and gain changes surface (T-126).
 func (s *InvestmentService) ReverseSaleReconciliationImpact(ctx context.Context, input ReverseInvestmentSaleInput) (ReconciliationImpact, error) {
-	_, planned, err := s.reverseSalePlan(ctx, input)
+	input.ReconciliationOverride = true
+	operation, params, err := s.prepareSaleReversalWrite(ctx, input)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	return s.transactionService.investmentReconciliationImpactForCreate(ctx, CreateReconciliationImpactInput{
-		OwnerUserID: input.OwnerUserID, Spec: planned.Spec,
-	})
+	simulated, err := s.repository.PreviewSaleReversal(ctx, params, operation)
+	if err != nil {
+		return ReconciliationImpact{}, mapReverseSaleError(err)
+	}
+	return s.simulatedReconciliationImpact(ctx, simulated)
+}
+
+func (s *InvestmentService) prepareSaleReversalWrite(ctx context.Context, input ReverseInvestmentSaleInput) (db.SaleOperationRecord, db.CreateTransactionParams, error) {
+	operation, planned, err := s.reverseSalePlan(ctx, input)
+	if err != nil {
+		return db.SaleOperationRecord{}, db.CreateTransactionParams{}, err
+	}
+	params, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, planned, nil)
+	if err != nil {
+		return db.SaleOperationRecord{}, db.CreateTransactionParams{}, err
+	}
+	params.InvestmentCorrectionOfOperationID = operation.OperationID
+	params.InvestmentCorrectionMode = "reverse"
+	params.InvestmentCorrectionReason = planned.ChangeReason
+	params.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
+	return operation, params, nil
 }
 
 func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseInvestmentSaleInput) (db.SaleOperationRecord, CreateTransactionInput, error) {

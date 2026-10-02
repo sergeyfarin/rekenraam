@@ -33,7 +33,7 @@ func TestSelfCheckDetectsDisposalAllocationConservationDamage(t *testing.T) {
 				where := "decision_id"
 				id := *sold.DisposalDecision.ID
 				if replayed {
-					replaced, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+					replaced, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 						OwnerUserID: f.ownerUserID, TransactionID: buy.Transaction.ID, Reason: "correct basis",
 						Replacement: InvestmentTradeInput{TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID,
 							HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
@@ -102,7 +102,7 @@ func TestSelfCheckDetectsDisposalRevisionBasisHeaderDamage(t *testing.T) {
 	buy := buyOn(t, f, "2026-01-01", 2, 2000)
 	sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-02-01", 1))
 	require.NoError(t, err)
-	_, err = f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: buy.Transaction.ID, Reason: "correct basis",
 		Replacement: InvestmentTradeInput{TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID,
 			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
@@ -130,7 +130,7 @@ func TestSelfCheckChecksEveryDisposalRevisionSnapshot(t *testing.T) {
 			sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-02-01", 1))
 			require.NoError(t, err)
 			for _, basis := range []int64{4000, 6000} {
-				replaced, err := f.investmentService.ReplaceBuy(ctx, ReplaceInvestmentBuyInput{
+				replaced, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 					OwnerUserID: f.ownerUserID, TransactionID: buy.Transaction.ID, Reason: "correct basis",
 					Replacement: InvestmentTradeInput{TransactionDate: "2026-01-01", CommodityID: f.stockCommodityID,
 						HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,

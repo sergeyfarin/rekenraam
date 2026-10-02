@@ -544,6 +544,9 @@ type ReinvestedDividendInput struct {
 	Status                 string
 	ChangeReason           string
 	ReconciliationOverride bool
+	// GainImpactAcknowledgement echoes the preview token for the committed
+	// disposal gain changes the user accepted (T-126).
+	GainImpactAcknowledgement string
 }
 
 type InvestmentLot struct {
@@ -752,23 +755,34 @@ func (s *InvestmentService) CreateInstrument(ctx context.Context, input Investme
 // durably-created instrument nobody asked for). Returns the resolved
 // instrument's InstrumentID and CommodityID together, since callers need
 // both (CommodityID for postings, InstrumentID for CreateHoldingAccount).
-func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, isin string, ticker string) (instrumentID int64, commodityID int64, created bool, err error) {
+// FindInstrumentForImport is the read-only half of
+// ResolveOrCreateInstrumentForImport: ISIN first, then ticker. Previews use it
+// so they never create an instrument.
+func (s *InvestmentService) FindInstrumentForImport(ctx context.Context, isin string, ticker string) (instrumentID int64, commodityID int64, found bool, err error) {
 	isin = strings.TrimSpace(isin)
 	ticker = strings.TrimSpace(ticker)
-
 	if isin != "" {
 		if rec, err := s.repository.InstrumentByISIN(ctx, BookID, isin); err == nil {
-			return rec.ID, rec.CommodityID, false, nil
+			return rec.ID, rec.CommodityID, true, nil
 		} else if !errors.Is(err, db.ErrNotFound) {
 			return 0, 0, false, fmt.Errorf("find instrument by isin: %w", err)
 		}
 	}
 	if ticker != "" {
 		if rec, err := s.repository.InstrumentBySymbol(ctx, BookID, ticker); err == nil {
-			return rec.ID, rec.CommodityID, false, nil
+			return rec.ID, rec.CommodityID, true, nil
 		} else if !errors.Is(err, db.ErrNotFound) {
 			return 0, 0, false, fmt.Errorf("find instrument by symbol: %w", err)
 		}
+	}
+	return 0, 0, false, nil
+}
+
+func (s *InvestmentService) ResolveOrCreateInstrumentForImport(ctx context.Context, ownerUserID int64, authSessionID int64, requestID string, isin string, ticker string) (instrumentID int64, commodityID int64, created bool, err error) {
+	isin = strings.TrimSpace(isin)
+	ticker = strings.TrimSpace(ticker)
+	if instrumentID, commodityID, found, err := s.FindInstrumentForImport(ctx, isin, ticker); err != nil || found {
+		return instrumentID, commodityID, false, err
 	}
 	if ticker == "" {
 		return 0, 0, false, fmt.Errorf("cannot create instrument: no ticker")
@@ -1097,10 +1111,9 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 	}
 	var transactionRecord db.TransactionRecord
 	var lot db.InvestmentLotRecord
+	// Manual (T-114) and imported (T-126) acquisitions disclose gain changes.
+	transactionParams.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
 	if postWrite == nil {
-		// Manual buys are the gain-disclosure pilot. Import acquisitions
-		// (postWrite) are not yet migrated; T-126 owns that rollout.
-		transactionParams.GainImpact = &db.GainImpactPolicy{Acknowledgement: input.GainImpactAcknowledgement}
 		transactionRecord, lot, err = s.repository.CreateTransactionAndLot(ctx, transactionParams, lotParams)
 	} else {
 		transactionRecord, lot, err = s.repository.CreateTransactionAndLotWithPostWrite(ctx, transactionParams, lotParams, postWrite)
@@ -1811,6 +1824,7 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
+	transactionParams.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
 	transactionRecord, lot, err := s.repository.CreateTransactionAndLot(ctx, transactionParams, lotParams)
 	if err != nil {
 		return InvestmentTradeResult{}, mapInvestmentOpeningWriteError(err, "reinvested dividend")
@@ -2856,7 +2870,6 @@ func (s *InvestmentService) TradeReconciliationImpact(ctx context.Context, kind 
 		if err != nil {
 			return ReconciliationImpact{}, err
 		}
-		transactionParams.GainImpact = &db.GainImpactPolicy{}
 		return s.openingReconciliationImpact(ctx, transactionParams, lotParams, "buy")
 	case InvestmentImpactSell:
 		plan, err = s.sellPlan(ctx, input)
@@ -2892,16 +2905,28 @@ func (s *InvestmentService) ReinvestedDividendReconciliationImpact(ctx context.C
 	return s.openingReconciliationImpact(ctx, transactionParams, lotParams, "reinvested dividend")
 }
 
-func (s *InvestmentService) openingReconciliationImpact(ctx context.Context, transactionParams db.CreateTransactionParams, lotParams db.CreateInvestmentLotParams, kind string) (ReconciliationImpact, error) {
-	simulated, err := s.repository.SimulateLotOpening(ctx, transactionParams, lotParams)
-	if err != nil {
-		return ReconciliationImpact{}, mapInvestmentOpeningWriteError(err, kind)
-	}
+// simulatedReconciliationImpact names the checkpoints a rolled-back writer
+// invalidated and carries its committed-disposal gain changes (T-126).
+func (s *InvestmentService) simulatedReconciliationImpact(ctx context.Context, simulated db.SimulatedInvestmentWrite) (ReconciliationImpact, error) {
 	refs := simulated.InvalidatedCheckpointRefs
 	if err := s.transactionService.enrichCheckpointRefs(ctx, refs); err != nil {
 		return ReconciliationImpact{}, err
 	}
 	return ReconciliationImpact{AffectedCheckpoints: refs, GainImpact: simulated.GainImpact}, nil
+}
+
+// gainImpactPolicy opts a command's first journal into gain disclosure.
+func gainImpactPolicy(acknowledgement string) *db.GainImpactPolicy {
+	return &db.GainImpactPolicy{Acknowledgement: acknowledgement}
+}
+
+func (s *InvestmentService) openingReconciliationImpact(ctx context.Context, transactionParams db.CreateTransactionParams, lotParams db.CreateInvestmentLotParams, kind string) (ReconciliationImpact, error) {
+	transactionParams.GainImpact = gainImpactPolicy("")
+	simulated, err := s.repository.SimulateLotOpening(ctx, transactionParams, lotParams)
+	if err != nil {
+		return ReconciliationImpact{}, mapInvestmentOpeningWriteError(err, kind)
+	}
+	return s.simulatedReconciliationImpact(ctx, simulated)
 }
 
 func (s *InvestmentService) reconciliationImpactForPlan(ctx context.Context, plan investmentTransactionPlan) (ReconciliationImpact, error) {

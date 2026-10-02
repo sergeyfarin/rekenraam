@@ -9,6 +9,7 @@ post:
     source retries. Quantity must be positive and the owner-perspective buy
     settlement negative; cancellation-shaped rows, changed dates, or changed
     instruments require another command.
+    A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
   parameters:
     - in: path
       name: batch_id
@@ -60,7 +61,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Staged source row no longer eligible, replay dependency failed, or reconciliation override required
+      description: Staged source row no longer eligible, replay dependency failed, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
       content:
         application/json:
           schema:

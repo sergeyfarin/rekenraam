@@ -1,6 +1,10 @@
 package app
 
-import "errors"
+import (
+	"errors"
+
+	"rekenraam/backend/internal/db"
+)
 
 var (
 	ErrImportBatchNotFound   = errors.New("import batch not found")
@@ -268,6 +272,9 @@ type CommitImportBatchInput struct {
 	RequestID              string
 	BatchID                int64
 	ReconciliationOverride bool
+	// GainImpactAcknowledgements maps a staged row ID to the preview token for
+	// the committed-disposal gain changes its imported acquisition makes (T-126).
+	GainImpactAcknowledgements map[int64]string
 }
 
 type CommitImportBatchResult struct {
@@ -277,6 +284,10 @@ type CommitImportBatchResult struct {
 	CommittedCount int
 	SkippedCount   int
 	FailedCount    int
+	// GainReviewRowIDs are imported acquisitions whose gain changes were not
+	// (or no longer) acknowledged. They stay pending, not skipped, so a fresh
+	// preview and commit can post them.
+	GainReviewRowIDs []int64
 }
 
 type PreviewCommitInput struct {
@@ -288,6 +299,17 @@ type PreviewCommitResult struct {
 	IncludableCount      int
 	DuplicateCount       int
 	ReconciliationIssues []ReconciliationIssuePreview
+	// GainImpacts lists each pending imported acquisition whose rolled-back
+	// writer replay changes committed disposal gains against the current
+	// ledger. Rows commit chronologically, so an earlier row in the same run
+	// can change a later row's set; that row is then held for another review.
+	GainImpacts []RowGainImpactPreview
+}
+
+type RowGainImpactPreview struct {
+	RowID      int64
+	RowIndex   int
+	GainImpact db.InvestmentGainImpact
 }
 
 type ReconciliationIssuePreview struct {

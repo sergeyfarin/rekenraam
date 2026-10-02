@@ -247,7 +247,7 @@ func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
 		AmountValue: 500, AmountScale: 2,
 	})
 	require.NoError(t, err)
-	reinvestment, err := f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+	reinvestment, err := acknowledgedReinvestedDividend(ctx, f.investmentService, ReinvestedDividendInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-04",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		IncomeAccountID: &f.incomeAccountID, CashCommodityID: f.eurCommodityID,
@@ -1066,7 +1066,7 @@ func TestReinvestedDividend_OpensNewLotFromIncomeWithoutCashLeg(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
-	result, err := f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+	result, err := acknowledgedReinvestedDividend(ctx, f.investmentService, ReinvestedDividendInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		IncomeAccountID: &f.incomeAccountID,
@@ -1095,7 +1095,7 @@ func TestReinvestedDividend_UsesConfiguredDividendDefaultWhenIncomeAccountOmitte
 	})
 	require.NoError(t, err)
 
-	result, err := f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+	result, err := acknowledgedReinvestedDividend(ctx, f.investmentService, ReinvestedDividendInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		QuantityValue: exact.New(1), QuantityScale: 0,

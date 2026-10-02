@@ -24,6 +24,16 @@
     type ReconciliationImpactResponse
   } from '$lib/api/investments';
   import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
+  import { getLocale } from '$lib/paraglide/runtime.js';
+  import {
+    gainAcknowledgement,
+    gainImpactCurrency,
+    gainImpactRows,
+    hasGainChanges,
+    impactNeedsReview,
+    isGainAcknowledgementRefusal
+  } from '$lib/investments/gain-impact';
+  import type { GainImpact } from '$lib/api/investments';
 
   let {
     mode = 'cash',
@@ -100,8 +110,12 @@
   type PendingDividend =
     | { mode: 'cash'; payload: DividendRequest }
     | { mode: 'reinvest'; payload: ReinvestedDividendRequest };
+  // A backdated reinvestment opens an earlier lot and can change the basis and
+  // gain of later sales (T-126); the confirmation lists those beside checkpoints.
   let reconciliationModal = $state<{
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
+    gainImpact: GainImpact | null;
+    gainRefreshed: boolean;
     pending: PendingDividend;
   } | null>(null);
 
@@ -148,6 +162,11 @@
     new Map<number, CurrencyResponse>(
       (currenciesQuery.data?.currencies ?? []).map((c: CurrencyResponse) => [c.id, c])
     )
+  );
+  const modalGainRows = $derived(
+    reconciliationModal?.gainImpact
+      ? gainImpactRows(reconciliationModal.gainImpact.changes, gainImpactCurrency(currenciesByID), getLocale())
+      : []
   );
 
   const cashCommodityID = $derived(selectedCashAccount?.default_commodity_id);
@@ -247,6 +266,8 @@
         if (impact.affected_checkpoints.length > 0) {
           reconciliationModal = {
             impacts: impact.affected_checkpoints,
+            gainImpact: null,
+            gainRefreshed: false,
             pending: { mode: 'cash', payload }
           };
           return;
@@ -270,29 +291,44 @@
           memo: memo.trim() || undefined
         };
 
-        const impact = await reinvestedDividendReconciliationImpact(payload);
-        if (impact.affected_checkpoints.length > 0) {
-          reconciliationModal = {
-            impacts: impact.affected_checkpoints,
-            pending: { mode: 'reinvest', payload }
-          };
-          return;
-        }
-
+        lastReinvestment = payload;
+        if (await reviewReinvestment(payload, false)) return;
         await recordReinvestedDividend(payload, csrfToken);
       }
 
       await refreshAfterSave();
     } catch (err) {
-      formError = err;
+      await recoverFromRefusal(err);
     } finally {
       pending = false;
     }
   }
 
+  async function reviewReinvestment(payload: ReinvestedDividendRequest, refreshed: boolean): Promise<boolean> {
+    const impact = await reinvestedDividendReconciliationImpact(payload);
+    if (!impactNeedsReview(impact)) return false;
+    const gainImpact = hasGainChanges(impact.gain_impact) ? impact.gain_impact : null;
+    reconciliationModal = { impacts: impact.affected_checkpoints, gainImpact,
+      gainRefreshed: refreshed && !!gainImpact, pending: { mode: 'reinvest', payload } };
+    return true;
+  }
+
+  // The server recomputed the gain change set at commit and it differs from
+  // what was accepted: show the current set instead of a dead end.
+  let lastReinvestment: ReinvestedDividendRequest | null = null;
+  async function recoverFromRefusal(err: unknown) {
+    try {
+      if (!isGainAcknowledgementRefusal(err) || !lastReinvestment || !(await reviewReinvestment(lastReinvestment, true))) {
+        formError = err;
+      }
+    } catch (previewErr) {
+      formError = previewErr;
+    }
+  }
+
   async function confirmOverride() {
     if (!reconciliationModal) return;
-    const target = reconciliationModal.pending;
+    const { pending: target, impacts, gainImpact } = reconciliationModal;
     reconciliationModal = null;
     pending = true;
     formError = undefined;
@@ -301,15 +337,18 @@
       if (target.mode === 'cash') {
         await recordDividend({ ...target.payload, reconciliation_override: true }, csrfToken);
       } else {
-        await recordReinvestedDividend(
-          { ...target.payload, reconciliation_override: true },
-          csrfToken
-        );
+        const acknowledgement = gainAcknowledgement(gainImpact);
+        lastReinvestment = target.payload;
+        await recordReinvestedDividend({
+          ...target.payload,
+          ...(impacts.length > 0 ? { reconciliation_override: true } : {}),
+          ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
+        }, csrfToken);
       }
 
       await refreshAfterSave();
     } catch (err) {
-      formError = err;
+      await recoverFromRefusal(err);
     } finally {
       pending = false;
     }
@@ -333,6 +372,8 @@
 {#if reconciliationModal}
   <ReconciliationConfirm
     impacts={reconciliationModal.impacts}
+    gainRows={modalGainRows}
+    gainRefreshed={reconciliationModal.gainRefreshed}
     {pending}
     onCancel={() => (reconciliationModal = null)}
     onConfirm={confirmOverride}

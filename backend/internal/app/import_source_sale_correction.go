@@ -44,6 +44,6 @@ func sourceSaleReplacement(input CorrectTrading212SaleInput, prepared preparedSo
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 		RequestID: input.RequestID, TransactionID: prepared.TransactionID,
 		Reason: input.Reason, ReconciliationOverride: input.ReconciliationOverride,
-		Replacement: prepared.Trade,
+		Replacement: prepared.Trade, GainImpactAcknowledgement: input.GainImpactAcknowledgement,
 	}
 }

@@ -36,6 +36,7 @@ the existing local IDs resolvable; it is not a second task list.
 | T-125 | [#140 — Measure and shorten the complete backend race gate](https://github.com/sergeyfarin/rekenraam/issues/140) |
 | T-126 | [#141 — Roll out replay gain acknowledgement across existing commands](https://github.com/sergeyfarin/rekenraam/issues/141) |
 | T-127 | [#142 — Make shared reconciliation previews report the full invalidation set](https://github.com/sergeyfarin/rekenraam/issues/142) |
+| T-128 | [#143 — API and browser evidence for import gain review and Trading 212 source revisions](https://github.com/sergeyfarin/rekenraam/issues/143) |
 
 T-75b [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is closed for
 its delivered long-buy/sale scope; the [2026-10-02 review](reviews/investment-review-2026-10-02.md)

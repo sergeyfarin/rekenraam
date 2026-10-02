@@ -42,18 +42,30 @@ func TestReversalWriterRollsBackLateCheckpointFailure(t *testing.T) {
 				return []int{transactions, audits, operations, revisions}
 			}
 			beforeCounts := counts()
+			// Review the gain changes before the forced failure: the preview runs
+			// the same checkpoint invalidation, so it must happen first.
+			buyReversal := ReverseInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: target.ID,
+				Reason: "reverse duplicate acquisition", ReconciliationOverride: true}
+			saleReversal := ReverseInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: target.ID,
+				Reason: "reverse erroneous disposal", ReconciliationOverride: true}
+			if kind == "buy" {
+				impact, err := f.investmentService.ReverseBuyReconciliationImpact(ctx, buyReversal)
+				require.NoError(t, err)
+				buyReversal.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+			} else {
+				impact, err := f.investmentService.ReverseSaleReconciliationImpact(ctx, saleReversal)
+				require.NoError(t, err)
+				saleReversal.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+			}
+			require.Equal(t, beforeCounts, counts())
 			_, err = f.database.Exec(`CREATE TRIGGER reject_reversal_checkpoint AFTER UPDATE ON reconciliation_checkpoints
 				WHEN NEW.status = 'invalidated' BEGIN SELECT RAISE(ABORT, 'forced reversal checkpoint failure'); END`)
 			require.NoError(t, err)
 			reverse := func() (Transaction, error) {
 				if kind == "buy" {
-					return f.investmentService.ReverseBuy(ctx, ReverseInvestmentBuyInput{
-						OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "reverse duplicate acquisition", ReconciliationOverride: true,
-					})
+					return f.investmentService.ReverseBuy(ctx, buyReversal)
 				}
-				return f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{
-					OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "reverse erroneous disposal", ReconciliationOverride: true,
-				})
+				return f.investmentService.ReverseSale(ctx, saleReversal)
 			}
 			_, err = reverse()
 			require.ErrorContains(t, err, "forced reversal checkpoint failure")

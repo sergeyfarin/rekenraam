@@ -47,7 +47,7 @@ func TestReverseManualSaleReplaysLaterSaleAndKeepsOriginalHistory(t *testing.T) 
 	require.Len(t, beforeChain.Operations, 1)
 	require.True(t, beforeChain.CanReverseManualSale)
 	require.Equal(t, firstSale.Transaction.ID, *beforeChain.EffectiveTransactionID)
-	reversal, err := f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{
+	reversal, err := acknowledgedReverseSale(ctx, f.investmentService, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, OperationID: operationID,
 		Reason: "broker canceled this fill",
 	})
@@ -104,7 +104,7 @@ func TestReverseManualSaleReplaysLaterSaleAndKeepsOriginalHistory(t *testing.T) 
 	check, err := selfCheckOver(t, f.database).RunSelfCheck(ctx, "manual")
 	require.NoError(t, err)
 	require.Equal(t, SelfCheckPassed, check.Status)
-	_, err = f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{
+	_, err = acknowledgedReverseSale(ctx, f.investmentService, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, OperationID: operationID, Reason: "again",
 	})
 	require.ErrorIs(t, err, ErrInvestmentSaleAlreadyCorrected)
@@ -133,7 +133,7 @@ func TestReverseManualSaleRequiresReconciliationOverrideAtomically(t *testing.T)
 	require.NoError(t, err)
 	require.Len(t, impact.AffectedCheckpoints, 1)
 	require.Equal(t, checkpointID, impact.AffectedCheckpoints[0].CheckpointID)
-	_, err = f.investmentService.ReverseSale(ctx, input)
+	_, err = acknowledgedReverseSale(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	var correctionCount int
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_operations WHERE correction_of_operation_id IS NOT NULL`).Scan(&correctionCount))
@@ -148,7 +148,7 @@ func TestReverseManualSaleRequiresReconciliationOverrideAtomically(t *testing.T)
 	require.Equal(t, 1, activePriceCount)
 	require.Equal(t, []int64{checkpointID}, activeCheckpointIDs(t, f))
 	input.ReconciliationOverride = true
-	_, err = f.investmentService.ReverseSale(ctx, input)
+	_, err = acknowledgedReverseSale(ctx, f.investmentService, input)
 	require.NoError(t, err)
 	require.Empty(t, activeCheckpointIDs(t, f))
 	var invalidatedAuditID, correctionAuditID int64
@@ -179,7 +179,7 @@ func TestReverseImportedSaleRequiresSourceAwareCorrection(t *testing.T) {
 	require.Len(t, chain.Operations, 1)
 	require.True(t, chain.Operations[0].Imported)
 	require.False(t, chain.CanReverseManualSale)
-	_, err = f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{
+	_, err = acknowledgedReverseSale(ctx, f.investmentService, ReverseInvestmentSaleInput{
 		OwnerUserID: f.ownerUserID, TransactionID: sale.Transaction.ID, Reason: "source removed fill",
 	})
 	require.ErrorIs(t, err, ErrInvestmentImportedSale)

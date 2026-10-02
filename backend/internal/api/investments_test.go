@@ -296,8 +296,17 @@ func TestReverseManualSaleAPI(t *testing.T) {
 	require.True(t, chain.CanReverseManualSale)
 	require.True(t, chain.CanReverseSale)
 	request := investmentSaleReversalRequest{Reason: "broker canceled fill"}
-	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
+	previewRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
+	var impact reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(previewRes.Body).Decode(&impact))
+	require.NotNil(t, impact.GainImpact)
+	require.Len(t, impact.GainImpact.Changes, 1)
+	require.Equal(t, "removed", impact.GainImpact.Changes[0].ChangeKind)
+	require.Nil(t, impact.GainImpact.Changes[0].After)
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
+	required := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
+	require.Contains(t, required.Body.String(), "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED")
+	request.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
 	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
 	var reversed investmentSaleReversalResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&reversed))
@@ -416,7 +425,18 @@ func TestReplaceLatestManualSaleAPI(t *testing.T) {
 		path+"/reconciliation-impact", request, http.StatusOK)
 	var impact reconciliationImpactResponse
 	require.NoError(t, json.NewDecoder(preview.Body).Decode(&impact))
+	require.NotNil(t, impact.GainImpact)
+	kinds := map[string]int{}
+	for _, change := range impact.GainImpact.Changes {
+		kinds[change.ChangeKind]++
+	}
+	require.Equal(t, map[string]int{"replaced": 1}, kinds, "a single lot keeps the later sale's per-share basis")
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
+	stale := request
+	stale.GainImpactAcknowledgement = "stale"
+	staleRes := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, stale, http.StatusConflict)
+	require.Contains(t, staleRes.Body.String(), "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE")
+	request.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
 	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
 	var corrected investmentSaleReplacementResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&corrected))
@@ -465,7 +485,14 @@ func TestReplaceOldManualBuyAPI(t *testing.T) {
 		path+"/reconciliation-impact", request, http.StatusOK)
 	var impact reconciliationImpactResponse
 	require.NoError(t, json.NewDecoder(preview.Body).Decode(&impact))
+	require.NotNil(t, impact.GainImpact)
+	require.Len(t, impact.GainImpact.Changes, 1)
+	assertGainCoefficient(t, 20000, 2, impact.GainImpact.Changes[0].Before.DisposedBasisValue, impact.GainImpact.Changes[0].Before.DisposedBasisScale)
+	assertGainCoefficient(t, 40000, 2, impact.GainImpact.Changes[0].After.DisposedBasisValue, impact.GainImpact.Changes[0].After.DisposedBasisScale)
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)
+	required := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
+	require.Contains(t, required.Body.String(), "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED")
+	request.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
 	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
 		path, request, http.StatusCreated)
 	var corrected investmentBuyReplacementResponse

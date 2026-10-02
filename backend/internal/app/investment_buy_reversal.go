@@ -14,23 +14,19 @@ type ReverseInvestmentBuyInput struct {
 	TransactionID          int64
 	Reason                 string
 	ReconciliationOverride bool
+	// GainImpactAcknowledgement echoes the preview token for the committed
+	// disposal gain changes the user accepted (T-126).
+	GainImpactAcknowledgement string
 }
 
 // ReverseBuy terminates an effective long buy. The inverse journal and
 // replayed lot projection commit together; an impossible later disposal
 // leaves the original buy effective.
 func (s *InvestmentService) ReverseBuy(ctx context.Context, input ReverseInvestmentBuyInput) (Transaction, error) {
-	operation, planned, err := s.reverseBuyPlan(ctx, input)
+	operation, params, err := s.prepareBuyReversalWrite(ctx, input)
 	if err != nil {
 		return Transaction{}, err
 	}
-	params, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, planned, nil)
-	if err != nil {
-		return Transaction{}, err
-	}
-	params.InvestmentCorrectionOfOperationID = operation.OperationID
-	params.InvestmentCorrectionMode = "reverse"
-	params.InvestmentCorrectionReason = planned.ChangeReason
 	record, err := s.repository.ReverseBuy(ctx, params, operation)
 	if err != nil {
 		return Transaction{}, mapBuyReplacementError(err)
@@ -38,17 +34,35 @@ func (s *InvestmentService) ReverseBuy(ctx context.Context, input ReverseInvestm
 	return toTransaction(record), nil
 }
 
+// ReverseBuyReconciliationImpact runs the actual reversal writer and its
+// dependent replay in a rolled-back transaction (T-126).
 func (s *InvestmentService) ReverseBuyReconciliationImpact(ctx context.Context, input ReverseInvestmentBuyInput) (ReconciliationImpact, error) {
-	operation, planned, err := s.reverseBuyPlan(ctx, input)
+	input.ReconciliationOverride = true
+	operation, params, err := s.prepareBuyReversalWrite(ctx, input)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	if err := s.repository.SimulateBuyReversal(ctx, BookID, operation); err != nil {
+	simulated, err := s.repository.PreviewBuyReversal(ctx, params, operation)
+	if err != nil {
 		return ReconciliationImpact{}, mapBuyReplacementError(err)
 	}
-	return s.transactionService.investmentReconciliationImpactForCreate(ctx, CreateReconciliationImpactInput{
-		OwnerUserID: input.OwnerUserID, Spec: planned.Spec,
-	})
+	return s.simulatedReconciliationImpact(ctx, simulated)
+}
+
+func (s *InvestmentService) prepareBuyReversalWrite(ctx context.Context, input ReverseInvestmentBuyInput) (db.BuyOperationRecord, db.CreateTransactionParams, error) {
+	operation, planned, err := s.reverseBuyPlan(ctx, input)
+	if err != nil {
+		return db.BuyOperationRecord{}, db.CreateTransactionParams{}, err
+	}
+	params, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, planned, nil)
+	if err != nil {
+		return db.BuyOperationRecord{}, db.CreateTransactionParams{}, err
+	}
+	params.InvestmentCorrectionOfOperationID = operation.OperationID
+	params.InvestmentCorrectionMode = "reverse"
+	params.InvestmentCorrectionReason = planned.ChangeReason
+	params.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
+	return operation, params, nil
 }
 
 func (s *InvestmentService) reverseBuyPlan(ctx context.Context, input ReverseInvestmentBuyInput) (db.BuyOperationRecord, CreateTransactionInput, error) {

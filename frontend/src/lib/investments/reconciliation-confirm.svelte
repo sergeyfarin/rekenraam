@@ -3,6 +3,7 @@
   import { m } from '$lib/paraglide/messages.js';
   import type { ReconciliationImpactResponse } from '$lib/api/investments';
   import type { GainImpactRow } from '$lib/investments/gain-impact';
+  import GainImpactList from '$lib/investments/gain-impact-list.svelte';
 
   type CheckpointImpact = ReconciliationImpactResponse['affected_checkpoints'][number];
 
@@ -25,19 +26,6 @@
   const titleID = 'investment-recon-modal-title';
   const hasCheckpoints = $derived(impacts.length > 0);
   const hasGains = $derived(gainRows.length > 0);
-
-  function gainLabel(row: GainImpactRow): string {
-    const unknown = m.investments_gain_impact_unknown();
-    const values = { date: row.date, before: row.before ?? unknown, after: row.after ?? unknown, currency: row.currency };
-    switch (row.kind) {
-      case 'removed':
-        return m.investments_gain_impact_removed(values);
-      case 'replaced':
-        return m.investments_gain_impact_replaced(values);
-      default:
-        return m.investments_gain_impact_revised(values);
-    }
-  }
 </script>
 
 <!--
@@ -82,25 +70,9 @@
     {/if}
 
     {#if hasGains}
-      <section class="border-t border-border px-4 py-3"
-        aria-labelledby={hasCheckpoints ? 'investment-gain-impact-title' : titleID}>
-        {#if hasCheckpoints}
-          <h4 id="investment-gain-impact-title" class="text-sm font-semibold text-foreground">
-            {m.investments_gain_impact_title()}
-          </h4>
-        {/if}
-        <p class="mt-1 text-xs leading-5 text-muted">{m.investments_gain_impact_copy()}</p>
-        {#if gainRefreshed}
-          <p class="mt-2 text-xs font-semibold leading-5 text-warning" role="status">
-            {m.investments_gain_impact_refreshed()}
-          </p>
-        {/if}
-        <ul class="mt-2 divide-y divide-border text-sm">
-          {#each gainRows as row (row.key)}
-            <li class="py-2 font-mono text-foreground">{gainLabel(row)}</li>
-          {/each}
-        </ul>
-      </section>
+      <div class:border-t={hasCheckpoints} class="border-border">
+        <GainImpactList rows={gainRows} refreshed={gainRefreshed} showHeading={hasCheckpoints} labelledBy={titleID} />
+      </div>
     {/if}
 
     <div class="flex flex-wrap justify-end gap-2 border-t border-border px-4 py-3">

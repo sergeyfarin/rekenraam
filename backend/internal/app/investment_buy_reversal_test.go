@@ -25,7 +25,7 @@ func TestReverseManualBuyReplaysDependentLIFOSaleAndKeepsHistory(t *testing.T) {
 	impact, err := f.investmentService.ReverseBuyReconciliationImpact(ctx, input)
 	require.NoError(t, err)
 	require.Empty(t, impact.AffectedCheckpoints)
-	reversal, err := f.investmentService.ReverseBuy(ctx, input)
+	reversal, err := acknowledgedReverseBuy(ctx, f.investmentService, input)
 	require.NoError(t, err)
 	require.Equal(t, "posted", reversal.Status)
 	require.Equal(t, target.Transaction.ID, *reversal.CorrectionOfTransactionID)
@@ -53,7 +53,7 @@ func TestReverseManualBuyReplaysDependentLIFOSaleAndKeepsHistory(t *testing.T) {
 	check, err := selfCheckOver(t, f.database).RunSelfCheck(ctx, "manual")
 	require.NoError(t, err)
 	require.Equal(t, SelfCheckPassed, check.Status)
-	_, err = f.investmentService.ReverseBuy(ctx, input)
+	_, err = acknowledgedReverseBuy(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrInvestmentBuyAlreadyCorrected)
 }
 
@@ -69,7 +69,7 @@ func TestReverseManualBuyRejectsDependentSaleAndRollsBack(t *testing.T) {
 	}
 	_, err = f.investmentService.ReverseBuyReconciliationImpact(ctx, input)
 	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	_, err = f.investmentService.ReverseBuy(ctx, input)
+	_, err = acknowledgedReverseBuy(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
 	var corrections, revisions int
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_operations
@@ -96,7 +96,7 @@ func TestReverseManualBuyRefusesSpecificLotElectionForRemovedAcquisition(t *test
 	input := ReverseInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: target.Transaction.ID, Reason: "duplicate acquisition"}
 	_, err = f.investmentService.ReverseBuyReconciliationImpact(ctx, input)
 	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	_, err = f.investmentService.ReverseBuy(ctx, input)
+	_, err = acknowledgedReverseBuy(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
 	require.Equal(t, before, f.transactionCount(t))
 	var corrections, revisions int
@@ -120,11 +120,11 @@ func TestReverseManualBuyRequiresReconciliationOverride(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, impact.AffectedCheckpoints, 1)
 	require.Equal(t, checkpointID, impact.AffectedCheckpoints[0].CheckpointID)
-	_, err = f.investmentService.ReverseBuy(ctx, input)
+	_, err = acknowledgedReverseBuy(ctx, f.investmentService, input)
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	require.Equal(t, []int64{checkpointID}, activeCheckpointIDs(t, f))
 	input.ReconciliationOverride = true
-	_, err = f.investmentService.ReverseBuy(ctx, input)
+	_, err = acknowledgedReverseBuy(ctx, f.investmentService, input)
 	require.NoError(t, err)
 	require.Empty(t, activeCheckpointIDs(t, f))
 	check, err := selfCheckOver(t, f.database).RunSelfCheck(ctx, "manual")
@@ -142,7 +142,7 @@ func TestReverseImportedBuyRemainsFenced(t *testing.T) {
 		QuantityValue: exact.New(10), CashAmountValue: 10000, CashAmountScale: 2,
 	})
 	require.NoError(t, err)
-	_, err = f.investmentService.ReverseBuy(ctx, ReverseInvestmentBuyInput{
+	_, err = acknowledgedReverseBuy(ctx, f.investmentService, ReverseInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: target.Transaction.ID, Reason: "remove import",
 	})
 	require.ErrorIs(t, err, ErrInvestmentImportedBuy)

@@ -384,6 +384,24 @@ CommitImportBatchRequest:
   properties:
     reconciliation_override:
       type: boolean
+    gain_impact_acknowledgements:
+      type: array
+      description: >-
+        One preview-commit gain_impacts acknowledgement per imported
+        acquisition the user accepted (T-126). A row whose current change set
+        is missing or differs is held pending and listed in
+        gain_review_row_ids; it is never skipped.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ImportRowGainImpactAcknowledgement"
+ImportRowGainImpactAcknowledgement:
+  type: object
+  required: [row_id, acknowledgement]
+  properties:
+    row_id:
+      type: integer
+      format: int64
+    acknowledgement:
+      type: string
 CorrectTrading212BuyRequest:
   type: object
   required: [reason]
@@ -393,6 +411,15 @@ CorrectTrading212BuyRequest:
       minLength: 1
     reconciliation_override:
       type: boolean
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview, accepting the committed-disposal gain
+        changes it disclosed (T-126). A non-empty change set without it is
+        refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token
+        for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE.
+
 CommitImportBatchResponse:
   type: object
   required:
@@ -402,6 +429,7 @@ CommitImportBatchResponse:
     - committed_count
     - skipped_count
     - failed_count
+    - gain_review_row_ids
   properties:
     batch_id:
       type: integer
@@ -416,6 +444,15 @@ CommitImportBatchResponse:
       type: integer
     failed_count:
       type: integer
+    gain_review_row_ids:
+      type: array
+      description: >-
+        Imported acquisitions held pending because their committed-disposal
+        gain changes were not acknowledged as they stand now. The batch stays
+        partially_committed; preview and commit again to review them.
+      items:
+        type: integer
+        format: int64
 ImportReconciliationIssue:
   type: object
   required:
@@ -485,7 +522,17 @@ PreviewCommitResponse:
     - includable_count
     - duplicate_count
     - reconciliation_issues
+    - gain_impacts
   properties:
+    gain_impacts:
+      type: array
+      description: >-
+        Pending imported acquisitions whose rolled-back writer replay changes
+        committed disposal gains against the current ledger (T-126). Rows
+        commit chronologically, so an earlier row can change a later row's set;
+        that row is then held for another review rather than committed.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/ImportRowGainImpact"
     includable_count:
       type: integer
     duplicate_count:
@@ -494,3 +541,14 @@ PreviewCommitResponse:
       type: array
       items:
         $ref: "../../openapi.yaml#/components/schemas/ImportReconciliationIssue"
+ImportRowGainImpact:
+  type: object
+  required: [row_id, row_index, gain_impact]
+  properties:
+    row_id:
+      type: integer
+      format: int64
+    row_index:
+      type: integer
+    gain_impact:
+      $ref: "../../openapi.yaml#/components/schemas/GainImpact"

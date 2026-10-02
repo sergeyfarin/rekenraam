@@ -19,6 +19,15 @@
   import { authSessionQueryOptions } from '$lib/api/auth';
   import { accountsQueryOptions } from '$lib/api/accounts';
   import { currenciesQueryOptions } from '$lib/api/currencies';
+  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
+  import GainImpactList from '$lib/investments/gain-impact-list.svelte';
+  import {
+    gainAcknowledgement,
+    gainImpactCurrency,
+    gainImpactRows,
+    hasGainChanges,
+    type GainImpactRow
+  } from '$lib/investments/gain-impact';
   import { categoriesQueryOptions } from '$lib/api/categories';
   import { tagsQueryOptions } from '$lib/api/tags';
   import {
@@ -29,6 +38,7 @@
     getFullImportBatch,
     patchImportBatch,
     commitImportBatch,
+    previewCommitImportBatch,
     correctTrading212Buy,
     correctTrading212Sale,
     previewTrading212SaleCorrectionReconciliation,
@@ -134,6 +144,14 @@
   let sourceCorrectionPending = $state(false);
   let sourceCorrectionError = $state<unknown>(undefined);
   let sourceCorrectionSuccessID = $state<number | null>(null);
+  let sourceCorrectionAcceptGains = $state(false);
+  // Imported acquisitions that would change committed sale gains are shown
+  // before commit and committed only with per-row acknowledgements (T-126).
+  let gainReview = $state<{
+    rows: GainImpactRow[];
+    acknowledgements: { row_id: number; acknowledgement: string }[];
+    refreshed: boolean;
+  } | null>(null);
   let reviewChangedPending = $state(false);
   let reviewChangedError = $state<unknown>(undefined);
 
@@ -161,6 +179,10 @@
 
   const accounts = $derived(accountsQuery.data?.accounts ?? []);
   const currencies = $derived(currenciesQuery.data?.currencies ?? []);
+  const gainCurrency = $derived(gainImpactCurrency(new Map(currencies.map((currency) => [currency.id, currency]))));
+  const sourceCorrectionGainRows = $derived(sourceCorrectionImpact && hasGainChanges(sourceCorrectionImpact.gain_impact)
+    ? gainImpactRows(sourceCorrectionImpact.gain_impact.changes, gainCurrency, getLocale())
+    : []);
   const categories = $derived(categoriesQuery.data?.categories ?? []);
   const tags = $derived(tagsQuery.data?.tags ?? []);
 
@@ -535,9 +557,12 @@
         return;
       }
       if (sourceCorrectionImpact.affected_checkpoints.length > 0 && !sourceCorrectionOverride) return;
+      if (sourceCorrectionGainRows.length > 0 && !sourceCorrectionAcceptGains) return;
+      const acknowledgement = gainAcknowledgement(sourceCorrectionImpact.gain_impact);
       const result = await (kind === 'sale' ? correctTrading212Sale : correctTrading212Buy)(batchId, rowId, {
         reason: sourceCorrectionReason.trim(),
-        reconciliation_override: sourceCorrectionOverride
+        reconciliation_override: sourceCorrectionOverride,
+        ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
       }, csrfToken);
       sourceCorrectionSuccessID = result.replacement.transaction.id;
       sourceCorrectionRowID = null;
@@ -559,8 +584,11 @@
         // The correction is committed; keep its success link and local row state.
       }
     } catch (err) {
+      // A stale gain acknowledgement clears the preview; the next click
+      // previews the current change set again.
       sourceCorrectionImpact = null;
       sourceCorrectionOverride = false;
+      sourceCorrectionAcceptGains = false;
       sourceCorrectionError = err;
     } finally {
       sourceCorrectionPending = false;
@@ -598,14 +626,67 @@
 
       await patchImportBatch(batchId, patches, csrfToken);
 
-      const result = await commitImportBatch(
-        batchId,
-        { reconciliation_override: reconciliationOverride },
-        csrfToken
-      );
-      commitResult = result;
-      await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
-      step = 'result';
+      if (await reviewImportGains(false)) return;
+      await finishCommit([]);
+    } catch (err) {
+      commitError = err;
+    } finally {
+      committing = false;
+    }
+  }
+
+  // Preview gain changes from imported acquisitions against the current
+  // ledger; any change goes to the user before the batch commits.
+  async function reviewImportGains(refreshed: boolean): Promise<boolean> {
+    if (!batchId) return false;
+    const preview = await previewCommitImportBatch(batchId);
+    if (preview.gain_impacts.length === 0) return false;
+    gainReview = {
+      rows: preview.gain_impacts.flatMap((row) => gainImpactRows(row.gain_impact.changes, gainCurrency, getLocale())
+        .map((gain) => ({ ...gain, key: `${row.row_id}:${gain.key}` }))),
+      acknowledgements: preview.gain_impacts.map((row) => ({
+        row_id: row.row_id, acknowledgement: row.gain_impact.acknowledgement
+      })),
+      refreshed
+    };
+    return true;
+  }
+
+  async function confirmImportGains() {
+    if (!gainReview) return;
+    const { acknowledgements } = gainReview;
+    gainReview = null;
+    committing = true;
+    commitError = undefined;
+    try {
+      await finishCommit(acknowledgements);
+    } catch (err) {
+      commitError = err;
+    } finally {
+      committing = false;
+    }
+  }
+
+  async function finishCommit(acknowledgements: { row_id: number; acknowledgement: string }[]) {
+    if (!batchId) return;
+    const result = await commitImportBatch(
+      batchId,
+      { reconciliation_override: reconciliationOverride, gain_impact_acknowledgements: acknowledgements },
+      csrfToken
+    );
+    commitResult = result;
+    await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
+    step = 'result';
+  }
+
+  // Held rows stay pending in a partially committed batch. An earlier row in
+  // the same run can change their gain set, so they are reviewed again here.
+  async function handleReviewHeldGains() {
+    if (!batchId) return;
+    committing = true;
+    commitError = undefined;
+    try {
+      if (!(await reviewImportGains(true))) await finishCommit([]);
     } catch (err) {
       commitError = err;
     } finally {
@@ -1549,7 +1630,7 @@
                         required
                         bind:value={sourceCorrectionReason}
                         disabled={sourceCorrectionPending}
-                        oninput={() => { sourceCorrectionImpact = null; sourceCorrectionOverride = false; }}
+                        oninput={() => { sourceCorrectionImpact = null; sourceCorrectionOverride = false; sourceCorrectionAcceptGains = false; }}
                         class="w-full rounded-(--radius-control) border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground"
                       />
                       {#if sourceCorrectionImpact}
@@ -1569,14 +1650,23 @@
                             {m.import_commit_reconciliation_override()}
                           </label>
                           <p class="text-sm text-muted">{m.import_commit_reconciliation_override_hint()}</p>
-                        {:else}
+                        {:else if sourceCorrectionGainRows.length === 0}
                           <p class="text-sm text-muted">{m.import_preview_correct_buy_no_impact()}</p>
+                        {/if}
+                        {#if sourceCorrectionGainRows.length > 0}
+                          <div class="rounded-(--radius-control) border border-border bg-background">
+                            <GainImpactList rows={sourceCorrectionGainRows} showHeading />
+                          </div>
+                          <label class="flex items-center gap-2 text-sm text-foreground">
+                            <input type="checkbox" bind:checked={sourceCorrectionAcceptGains} disabled={sourceCorrectionPending} class="h-4 w-4 rounded border-border" />
+                            {m.investments_gain_impact_confirm()}
+                          </label>
                         {/if}
                       {/if}
                       <APIFormError error={sourceCorrectionError} id="source-correction-error" />
                       <button
                         type="submit"
-                        disabled={sourceCorrectionPending || !csrfToken || !sourceCorrectionReason.trim() || (sourceCorrectionImpact !== null && sourceCorrectionImpact.affected_checkpoints.length > 0 && !sourceCorrectionOverride)}
+                        disabled={sourceCorrectionPending || !csrfToken || !sourceCorrectionReason.trim() || (sourceCorrectionImpact !== null && sourceCorrectionImpact.affected_checkpoints.length > 0 && !sourceCorrectionOverride) || (sourceCorrectionGainRows.length > 0 && !sourceCorrectionAcceptGains)}
                         class="rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                       >{sourceCorrectionPending ? (sourceCorrectionImpact ? m.import_preview_correct_buy_pending() : m.import_preview_correct_buy_preview_pending()) : sourceCorrectionImpact ? m.import_preview_correct_buy_submit() : m.import_preview_correct_buy_preview()}</button>
                     </form>
@@ -1680,6 +1770,13 @@
         {#if commitResult.failed_count > 0}
           <p class="text-warning">{m.import_result_failed({ count: commitResult.failed_count })}</p>
         {/if}
+        {#if commitResult.gain_review_row_ids.length > 0}
+          <p class="text-warning">{m.import_result_gain_review({ count: commitResult.gain_review_row_ids.length })}</p>
+          <button type="button" disabled={committing} class="text-sm font-semibold text-foreground underline underline-offset-2 disabled:opacity-60" onclick={() => void handleReviewHeldGains()}>
+            {m.import_result_gain_review_action()}
+          </button>
+          <APIFormError error={commitError} id="gain-review-error" />
+        {/if}
       </div>
 
       <div class="mt-6 flex gap-3">
@@ -1699,4 +1796,15 @@
       </div>
     </Panel>
   </div>
+{/if}
+
+{#if gainReview}
+  <ReconciliationConfirm
+    impacts={[]}
+    gainRows={gainReview.rows}
+    gainRefreshed={gainReview.refreshed}
+    pending={committing}
+    onCancel={() => (gainReview = null)}
+    onConfirm={() => void confirmImportGains()}
+  />
 {/if}

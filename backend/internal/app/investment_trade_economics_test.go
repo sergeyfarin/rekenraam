@@ -203,7 +203,7 @@ func TestNegativeSaleProceedsSurviveLaterReplayAndReplacement(t *testing.T) {
 		later, err := f.investmentService.Sell(ctx, negativeProceedsSale(f, "2026-03-01"))
 		require.NoError(t, err)
 		require.EqualValues(t, -50, later.DisposalDecision.ProceedsValue)
-		_, err = f.investmentService.ReverseSale(ctx, ReverseInvestmentSaleInput{
+		_, err = acknowledgedReverseSale(ctx, f.investmentService, ReverseInvestmentSaleInput{
 			OwnerUserID: f.ownerUserID, TransactionID: older.Transaction.ID, Reason: "duplicate sale",
 		})
 		require.NoError(t, err)
@@ -224,7 +224,7 @@ func TestNegativeSaleProceedsSurviveLaterReplayAndReplacement(t *testing.T) {
 		buyOn(t, f, "2026-01-01", 1, 1000)
 		original, err := f.investmentService.Sell(ctx, sellInput(f, "2026-02-01", 1))
 		require.NoError(t, err)
-		replaced, err := f.investmentService.ReplaceSale(ctx, ReplaceInvestmentSaleInput{
+		replaced, err := acknowledgedReplaceSale(ctx, f.investmentService, ReplaceInvestmentSaleInput{
 			OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
 			Reason:      "minimum commission exceeded gross proceeds",
 			Replacement: negativeProceedsSale(f, "2026-02-01"),

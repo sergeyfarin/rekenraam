@@ -3,6 +3,9 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,4 +69,40 @@ func assertGainCoefficient(t *testing.T, want int64, wantScale int, value *exact
 	require.NotNil(t, value)
 	require.NotNil(t, scale)
 	assert.Zero(t, exact.ScaledIntFromCoefficient(*value, *scale).Cmp(exact.ScaledIntFromInt64(want, wantScale)))
+}
+
+// The import preview and commit always carry the gain-review arrays (T-126),
+// so a client never mistakes an absent list for "nothing to review".
+func TestImportCommitGainReviewWireShape(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, commodityID, checking, groceries := bootstrapImportAPITest(t, handler)
+	started := startQIFImportForSession(t, handler, sessionCookie, csrfToken, "bank.qif",
+		qifRow("06/01/26", "-42.50", "Grocery Store"), http.StatusCreated)
+	patchImportBatchForSession(t, handler, sessionCookie, csrfToken, started.Batch.ID,
+		resolutionPatchBody(t, checking.ID, commodityID, groceries.ID, started.Rows[0].ID), http.StatusNoContent)
+	batchPath := "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10)
+
+	previewReq := httptest.NewRequest(http.MethodPost, batchPath+"/preview-commit", nil)
+	previewReq.AddCookie(sessionCookie)
+	previewRes := httptest.NewRecorder()
+	handler.ServeHTTP(previewRes, previewReq)
+	require.Equal(t, http.StatusOK, previewRes.Code, previewRes.Body.String())
+	var preview map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(previewRes.Body.Bytes(), &preview))
+	assert.JSONEq(t, `[]`, string(preview["gain_impacts"]))
+
+	commitReq := httptest.NewRequest(http.MethodPost, batchPath+"/commit",
+		strings.NewReader(`{"gain_impact_acknowledgements":[{"row_id":1,"acknowledgement":"unused"}]}`))
+	commitReq.Header.Set("Content-Type", "application/json")
+	commitReq.Header.Set(csrfTokenHeader, csrfToken)
+	setSameOrigin(commitReq)
+	commitReq.AddCookie(sessionCookie)
+	commitRes := httptest.NewRecorder()
+	handler.ServeHTTP(commitRes, commitReq)
+	require.Equal(t, http.StatusOK, commitRes.Code, commitRes.Body.String())
+	var commit map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(commitRes.Body.Bytes(), &commit))
+	assert.JSONEq(t, `[]`, string(commit["gain_review_row_ids"]))
+	assert.JSONEq(t, `"committed"`, string(commit["status"]))
 }

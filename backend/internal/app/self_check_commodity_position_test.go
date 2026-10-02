@@ -159,7 +159,7 @@ func TestSelfCheckAcceptsEveryOrdinaryCommodityMovement(t *testing.T) {
 	_, err := f.investmentService.Sell(ctx, sale)
 	require.NoError(t, err)
 	move("2026-02-02", -250000000, 60000) // and all 2.5 BTC back out
-	_, err = f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+	_, err = acknowledgedReinvestedDividend(ctx, f.investmentService, ReinvestedDividendInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01", CommodityID: f.stockCommodityID,
 		HoldingAccountID: f.holdingAccountID, IncomeAccountID: &f.incomeAccountID,
 		QuantityValue: exact.New(1), QuantityScale: 0, AmountValue: 1200, AmountScale: 2,

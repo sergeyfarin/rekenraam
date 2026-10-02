@@ -33,7 +33,7 @@ func TestFinancialLaterAcquisitionRejectsUnrepresentableBasisAtomically(t *testi
 				require.NoError(t, err)
 				before := snapshotFinancialState(t, f)
 				if reinvest {
-					_, err = f.investmentService.ReinvestedDividend(ctx, ReinvestedDividendInput{
+					_, err = acknowledgedReinvestedDividend(ctx, f.investmentService, ReinvestedDividendInput{
 						OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01", CommodityID: f.stockCommodityID,
 						HoldingAccountID: f.holdingAccountID, IncomeAccountID: &f.incomeAccountID,
 						QuantityValue: exact.New(1), AmountValue: 1_000_000_000_000_000, AmountScale: 2, CashCommodityID: f.eurCommodityID,

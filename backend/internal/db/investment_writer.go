@@ -35,6 +35,48 @@ func previewInvestmentWriteTx[T any](ctx context.Context, database *sql.DB, para
 	return journals[0], result, nil
 }
 
+// previewInvestmentWriteWithGuardTx is the rolled-back counterpart of
+// executeInvestmentWriteWithGuardTx: same guard, effects and checkpoint
+// invalidation, then rollback. Only checkpoint refs and gain impact escape.
+func previewInvestmentWriteWithGuardTx[T any](ctx context.Context, database *sql.DB, params CreateTransactionParams,
+	guard func(*sql.Tx) error, effect func(*sql.Tx, TransactionRecord, int64) (T, error),
+) (TransactionRecord, T, error) {
+	journals, result, err := previewInvestmentJournalsWithGuardTx(ctx, database, []CreateTransactionParams{params}, guard,
+		func(tx *sql.Tx, journals []TransactionRecord, auditEventID int64) (T, error) {
+			return effect(tx, journals[0], auditEventID)
+		}, nil)
+	if err != nil {
+		var zero T
+		return TransactionRecord{}, zero, err
+	}
+	return journals[0], result, nil
+}
+
+// SimulatedInvestmentWrite is the durable-ID-free result of a rolled-back
+// investment command: every checkpoint its writer invalidated, once each, and
+// for an opted-in command the committed-disposal gain changes (T-114/T-126).
+type SimulatedInvestmentWrite struct {
+	InvalidatedCheckpointRefs []CheckpointInvalidationRef
+	GainImpact                *InvestmentGainImpact
+}
+
+func simulatedInvestmentWrite(journals ...TransactionRecord) SimulatedInvestmentWrite {
+	var result SimulatedInvestmentWrite
+	seen := make(map[int64]bool)
+	for index, journal := range journals {
+		if index == 0 {
+			result.GainImpact = journal.GainImpact
+		}
+		for _, ref := range journal.InvalidatedCheckpointRefs {
+			if !seen[ref.CheckpointID] {
+				seen[ref.CheckpointID] = true
+				result.InvalidatedCheckpointRefs = append(result.InvalidatedCheckpointRefs, ref)
+			}
+		}
+	}
+	return result
+}
+
 // Correction guards run under the same SQLite write transaction, before a
 // successor journal exists. Checking after insertion would see the command's
 // own successor and incorrectly reject an otherwise effective source.

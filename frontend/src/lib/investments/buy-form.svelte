@@ -4,8 +4,14 @@
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
-  import { APIClientError } from '$lib/api/client';
-  import { gainImpactRows, hasGainChanges } from '$lib/investments/gain-impact';
+  import {
+    gainAcknowledgement,
+    gainImpactCurrency,
+    gainImpactRows,
+    hasGainChanges,
+    impactNeedsReview,
+    isGainAcknowledgementRefusal
+  } from '$lib/investments/gain-impact';
   import { parseTradeAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
   import TradeEconomicsFields from '$lib/investments/trade-economics-fields.svelte';
   import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '$lib/investments/trade-economics';
@@ -103,9 +109,10 @@
   // A backdated buy can land inside a reconciled period. Rather than letting
   // the server refuse it with no way forward, preview the impact and let the
   // user accept the named consequences (T-53).
-  // A backdated buy can also revise the basis and gain of earlier sales
-  // without touching a reconciled balance (T-114). The same confirmation lists
-  // those changes, and the commit echoes the token for exactly that set.
+  // A backdated buy or a buy correction can also revise the basis and gain of
+  // earlier sales without touching a reconciled balance (T-114/T-126). The
+  // same confirmation lists those changes, and the commit echoes the token
+  // for exactly that set.
   let reconciliationModal = $state<{
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
     gainImpact: GainImpact | null;
@@ -114,15 +121,6 @@
     reason: string;
   } | null>(null);
 
-  const gainCodes = new Set(['INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED', 'INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE']);
-  const modalGainRows = $derived(
-    reconciliationModal?.gainImpact
-      ? gainImpactRows(reconciliationModal.gainImpact.changes, (id) => {
-          const currency = currenciesByID.get(id);
-          return { code: currency?.code ?? `#${id}`, standardScale: currency?.standard_scale ?? 0 };
-        }, getLocale())
-      : []
-  );
 
   function todayISO(): string {
     return new Date().toISOString().slice(0, 10);
@@ -158,6 +156,11 @@
     new Map<number, CurrencyResponse>(
       (currenciesQuery.data?.currencies ?? []).map((c: CurrencyResponse) => [c.id, c])
     )
+  );
+  const modalGainRows = $derived(
+    reconciliationModal?.gainImpact
+      ? gainImpactRows(reconciliationModal.gainImpact.changes, gainImpactCurrency(currenciesByID), getLocale())
+      : []
   );
 
   const cashCommodityID = $derived(selectedCashAccount?.default_commodity_id);
@@ -252,8 +255,8 @@
       ? await previewBuyReplacementReconciliation(correction.transaction_id, { reason: correctionReason,
           replacement: { ...payload, charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) } })
       : await buyReconciliationImpact(payload);
+    if (!impactNeedsReview(impact)) return false;
     const gainImpact = hasGainChanges(impact.gain_impact) ? impact.gain_impact : null;
-    if (impact.affected_checkpoints.length === 0 && !gainImpact) return false;
     reconciliationModal = { impacts: impact.affected_checkpoints, gainImpact, gainRefreshed: refreshed && !!gainImpact,
       payload, reason: correctionReason };
     return true;
@@ -262,7 +265,7 @@
   // The server recomputes the change set at commit. When it differs from what
   // the user reviewed, show the current set again instead of a dead-end error.
   async function reviewAfterGainRefusal(err: unknown, payload: InvestmentTradeRequest, correctionReason: string): Promise<boolean> {
-    if (correction || !(err instanceof APIClientError) || !err.code || !gainCodes.has(err.code)) return false;
+    if (!isGainAcknowledgementRefusal(err)) return false;
     return reviewImpact(payload, correctionReason, true);
   }
 
@@ -274,7 +277,7 @@
     formError = undefined;
 
     try {
-      await submitBuy(payload, impacts.length > 0, correctionReason, gainImpact?.acknowledgement ?? '');
+      await submitBuy(payload, impacts.length > 0, correctionReason, gainAcknowledgement(gainImpact));
     } catch (err) {
       try {
         if (!(await reviewAfterGainRefusal(err, payload, correctionReason))) formError = err;
@@ -286,18 +289,20 @@
     }
   }
 
-  async function submitBuy(payload: InvestmentTradeRequest, override: boolean, correctionReason: string, gainAcknowledgement: string) {
+  async function submitBuy(payload: InvestmentTradeRequest, override: boolean, correctionReason: string, acknowledgement: string) {
+    const gainFields = acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {};
     if (correction) {
       await replaceManualBuy(correction.transaction_id, {
         reason: correctionReason,
         replacement: { ...payload, charges: payload.charges?.map((charge) => ({ ...charge, treatment: charge.treatment! })) },
-        reconciliation_override: override
+        reconciliation_override: override,
+        ...gainFields
       }, csrfToken);
     } else {
       await recordBuy({
         ...payload,
         ...(override ? { reconciliation_override: true } : {}),
-        ...(gainAcknowledgement ? { gain_impact_acknowledgement: gainAcknowledgement } : {})
+        ...gainFields
       }, csrfToken);
     }
 
