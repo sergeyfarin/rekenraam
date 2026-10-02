@@ -372,3 +372,31 @@ func TestGainImpactSnapshotDisclosesRemovedAndReplacedDisposals(t *testing.T) {
 	requireScaled(t, 8000, 2, removed.Before.Gain, "removed gain")
 	require.NotEqual(t, db.CompareInvestmentGainSnapshots(after, after).Acknowledgement, impact.Acknowledgement)
 }
+
+func TestBuyGainImpactLeavesRowsUnchangedWhenReplayEvidenceIsMissing(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	february := buyOn(t, f, "2026-02-01", 10, 20000)
+	sale := sellInput(f, "2026-03-01", 5)
+	sale.CashAmountValue = 15000
+	_, err := f.investmentService.Sell(ctx, sale)
+	require.NoError(t, err)
+	input := backdatedBuy(f, "2026-01-01", 10, 2000)
+	input.GainImpactAcknowledgement = previewBuyGainImpact(t, f, input).Acknowledgement
+
+	// Simulate damaged history, which the schema normally forbids: the
+	// February lot loses its immutable opening fact. Replay cannot prove the sale's inputs, so even a valid
+	// acknowledgement must not let any part of the buy survive.
+	_, err = f.database.Exec(`DROP TRIGGER investment_lot_facts_no_delete`)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`DELETE FROM investment_lot_facts WHERE lot_id = ?`, *february.LotID)
+	require.NoError(t, err)
+	before := buyReplacementPreviewSnapshot(t, f.database)
+	_, err = f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactBuy, input)
+	require.Error(t, err)
+	_, err = f.investmentService.Buy(ctx, input)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrGainImpactAcknowledgementStale)
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+}
