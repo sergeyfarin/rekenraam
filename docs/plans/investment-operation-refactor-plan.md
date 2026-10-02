@@ -427,8 +427,13 @@ accepted and flagged, but cannot be silently reclassified as shorts.
 ## Delivery slices and gates
 
 Each slice keeps the app runnable, updates API, export/restore and self-check
-when affected, and has named exact-conservation and rollback tests. Current
-sequence:
+when affected, and has named exact-conservation and rollback tests. Immediate
+focus is #129; #137 is next, then #138 → #132 → #139. Start #141’s existing-path
+rollout after the mechanism, with reinvestment/imported acquisitions first,
+then native reversals/replacements and source revisions. Interleave bounded
+safety slices with new commands; do not turn all of #141 into a split gate.
+Shared checkpoint preview under-reporting #142 is complete; same-day boundary
+and combined-delta behavior remain #135. Current sequence:
 
 1. **Shared gain-impact safety mechanism** — [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129). Buy and reinvestment preview feasibility
    and writer-derived checkpoint sets ship; changed-disposal disclosure remains open.

@@ -130,6 +130,14 @@ and report its actual invalidation set. Shared reconciliation resolution now
 also reports the full write set for generic transactions and other previews
 (T-127 #142); per-boundary date/sequence and net-delta semantics remain #135.
 
+Near-term focus is **#129 now, #137 next**, then #138 → #132 → #139.
+Begin #141’s existing-path safety rollout as soon as #129 is usable, starting
+with reinvestment/imported acquisitions and continuing with native corrections
+and source revisions. Deliver bounded slices alongside new commands; completion
+of the entire rollout is not a prerequisite for splits or pooled transfers.
+Closed #99/#125/#113/#127/#142 are historical evidence, not active gates.
+Priority labels describe urgency; this sequence does not add hard dependencies.
+
 Remaining work, in order:
 
 1. **Shared gain-impact/acknowledgement mechanism [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129).**
