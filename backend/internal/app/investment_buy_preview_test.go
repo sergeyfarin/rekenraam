@@ -46,7 +46,13 @@ func TestBuyPreviewReplaysAndRollsBackReconciledHistory(t *testing.T) {
 	sale.CashAmountValue = 15000
 	_, err := f.investmentService.Sell(ctx, sale)
 	require.NoError(t, err)
+	gainsBefore, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
+	require.NoError(t, err)
+	require.Len(t, gainsBefore, 1)
+	assertMoneyValue(t, 5000, 2, gainsBefore[0].RealizedGainValue, gainsBefore[0].RealizedGainScale, "original FIFO gain before replay")
 	checkpoint := reconcileCash(t, f, "2026-04-01", -50)
+	buyOn(t, f, "2026-05-01", 1, 100)
+	laterCheckpoint := reconcileCash(t, f, "2026-05-10", -51)
 	input := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
@@ -55,16 +61,17 @@ func TestBuyPreviewReplaysAndRollsBackReconciledHistory(t *testing.T) {
 	for range 2 {
 		impact, err := f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactBuy, input)
 		require.NoError(t, err)
-		require.Len(t, impact.AffectedCheckpoints, 1)
-		require.Equal(t, checkpoint, impact.AffectedCheckpoints[0].CheckpointID)
+		require.Len(t, impact.AffectedCheckpoints, 2)
+		require.ElementsMatch(t, []int64{checkpoint, laterCheckpoint}, []int64{impact.AffectedCheckpoints[0].CheckpointID, impact.AffectedCheckpoints[1].CheckpointID})
 		require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
 	}
 	_, err = f.investmentService.Buy(ctx, input)
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
 	input.ReconciliationOverride = true
-	_, err = f.investmentService.Buy(ctx, input)
+	result, err := f.investmentService.Buy(ctx, input)
 	require.NoError(t, err)
+	require.ElementsMatch(t, []int64{checkpoint, laterCheckpoint}, result.Transaction.InvalidatedCheckpointIDs)
 	gains, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
 	require.NoError(t, err)
 	require.Len(t, gains, 1)

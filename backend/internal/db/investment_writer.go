@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 )
 
@@ -139,6 +140,13 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 			return nil, zero, err
 		}
 		journals[index].InvalidatedCheckpointIDs = invalidatedIDs
+		if !persist {
+			refs, err := investmentInvalidatedCheckpointRefsTx(ctx, tx, journal.BookID, invalidatedIDs, journal.CheckpointCandidates)
+			if err != nil {
+				return nil, zero, err
+			}
+			journals[index].InvalidatedCheckpointRefs = refs
+		}
 	}
 	if postWrite != nil {
 		if err := postWrite(tx, journals, auditEventID); err != nil {
@@ -154,4 +162,49 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 	}
 	finished = true
 	return journals, result, nil
+}
+
+// Hydrate only the checkpoint IDs actually invalidated by the writer, while
+// still in its transaction. This does not calculate another boundary decision.
+func investmentInvalidatedCheckpointRefsTx(ctx context.Context, tx *sql.Tx, bookID int64,
+	ids []int64, candidates []PeriodScopedCheckpointRef,
+) ([]CheckpointInvalidationRef, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(ids)
+	if err != nil {
+		return nil, fmt.Errorf("encode invalidated checkpoint IDs: %w", err)
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id, account_id, commodity_id, statement_date, statement_account_sequence
+        FROM reconciliation_checkpoints WHERE book_id = ? AND id IN (SELECT value FROM json_each(?))
+        ORDER BY account_id, commodity_id, statement_date, id`, bookID, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("read investment preview checkpoints: %w", err)
+	}
+	defer rows.Close()
+	var refs []CheckpointInvalidationRef
+	for rows.Next() {
+		var ref CheckpointInvalidationRef
+		if err := rows.Scan(&ref.CheckpointID, &ref.AccountID, &ref.CommodityID, &ref.StatementDate, &ref.StatementAccountSequence); err != nil {
+			return nil, fmt.Errorf("scan investment preview checkpoint: %w", err)
+		}
+		for _, candidate := range candidates {
+			if candidate.AccountID == ref.AccountID && candidate.CommodityID == ref.CommodityID &&
+				(ref.EntryDate == "" || candidate.EntryDate < ref.EntryDate) {
+				ref.EntryDate = candidate.EntryDate
+			}
+		}
+		if ref.EntryDate == "" {
+			return nil, fmt.Errorf("investment preview checkpoint has no affected account/commodity")
+		}
+		refs = append(refs, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate investment preview checkpoints: %w", err)
+	}
+	if len(refs) != len(ids) {
+		return nil, fmt.Errorf("investment preview checkpoint metadata is incomplete")
+	}
+	return refs, nil
 }

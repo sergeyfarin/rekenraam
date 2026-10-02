@@ -1853,11 +1853,14 @@ func (r *InvestmentRepository) CreateTransactionAndLotWithPostWrite(ctx context.
 	return r.createTransactionAndLot(ctx, transactionParams, lotParams, postWrite, false)
 }
 
-// SimulateBuy executes the buy writer, including dependent replay and checkpoint
-// effects, then rolls back without exposing temporary journal or lot IDs.
-func (r *InvestmentRepository) SimulateBuy(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) error {
-	_, _, err := r.createTransactionAndLot(ctx, transactionParams, lotParams, nil, true)
-	return err
+// SimulateLotOpening executes the acquisition writer, replay, prices and
+// checkpoint effects, then rolls back. Only pre-existing checkpoint refs escape.
+func (r *InvestmentRepository) SimulateLotOpening(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) ([]CheckpointInvalidationRef, error) {
+	transaction, _, err := r.createTransactionAndLot(ctx, transactionParams, lotParams, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	return transaction.InvalidatedCheckpointRefs, nil
 }
 
 func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams, postWrite func(*sql.Tx, int64) error, preview bool) (TransactionRecord, InvestmentLotRecord, error) {

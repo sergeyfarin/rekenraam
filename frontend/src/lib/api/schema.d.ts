@@ -14843,7 +14843,7 @@ export interface paths {
         put?: never;
         /**
          * Preview which reconciliation checkpoints a buy would invalidate
-         * @description Returns the active reconciliation checkpoints that would be invalidated if this buy were posted. Plans the same postings the write path would, but persists nothing. Use it to name the affected checkpoints in a confirmation before retrying with reconciliation_override=true.
+         * @description Executes the proposed buy and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
          */
         post: {
             parameters: {
@@ -14880,6 +14880,16 @@ export interface paths {
                 };
                 /** @description Authentication is required */
                 401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Dependent replay cannot complete (INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER) */
+                409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
@@ -15139,7 +15149,7 @@ export interface paths {
         put?: never;
         /**
          * Preview which reconciliation checkpoints a reinvested dividend would invalidate
-         * @description Returns the active reconciliation checkpoints that would be invalidated if this reinvested dividend were posted. Plans the same postings the write path would, but persists nothing. Use it to name the affected checkpoints in a confirmation before retrying with reconciliation_override=true.
+         * @description Executes the proposed reinvested dividend and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
          */
         post: {
             parameters: {
@@ -15176,6 +15186,16 @@ export interface paths {
                 };
                 /** @description Authentication is required */
                 401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Dependent replay cannot complete (INVESTMENT_BUY_DEPENDENCY or INVESTMENT_EVENT_OUT_OF_ORDER) */
+                409: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;

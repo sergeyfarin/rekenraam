@@ -181,8 +181,12 @@ non-trivial diff (yours or reviewed):
     Snapshot durable rows after failure and repeated successful previews; the
     actual write still rechecks dependencies and reconciliation. Named regression:
     `TestBuyReplacementPreviewRejectsDependentDisposalWithoutWriting` and
-    `TestBuyPreviewRejectsChangedInternalTransferBasisWithoutWriting`.
-    Feasibility is separate from disclosing revised gains (T-114 #129).
+    `TestBuyPreviewRejectsChangedInternalTransferBasisWithoutWriting` and
+    `TestReinvestmentPreviewRejectsChangedTransferBasisWithoutWriting`. Return
+    the writer’s actual invalidated checkpoint set, including later checkpoints;
+    a second latest-boundary calculation can underreport it. Pin multiple
+    checkpoints in `TestBuyPreviewReplaysAndRollsBackReconciledHistory`.
+    Feasibility is separate from disclosing revised gains (T-114 #129 / T-126 #141).
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

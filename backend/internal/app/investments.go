@@ -1093,14 +1093,14 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		transactionRecord, lot, err = s.repository.CreateTransactionAndLotWithPostWrite(ctx, transactionParams, lotParams, postWrite)
 	}
 	if err != nil {
-		return InvestmentTradeResult{}, mapBuyWriteError(err)
+		return InvestmentTradeResult{}, mapInvestmentOpeningWriteError(err, "buy")
 	}
 
 	transaction := toTransaction(transactionRecord)
 	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
 }
 
-func mapBuyWriteError(err error) error {
+func mapInvestmentOpeningWriteError(err error, kind string) error {
 	var dependency *db.InvestmentReplayDependencyError
 	if errors.As(err, &dependency) {
 		return InvestmentBuyDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
@@ -1108,7 +1108,7 @@ func mapBuyWriteError(err error) error {
 	if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
 		return err
 	}
-	return fmt.Errorf("create buy transaction and lot: %w", mapTransactionDBError(err))
+	return fmt.Errorf("create %s transaction and lot: %w", kind, mapTransactionDBError(err))
 }
 
 // prepareBuyWrite freezes the same exact journal and lot-opening facts for
@@ -1793,14 +1793,26 @@ func (s *InvestmentService) reinvestedDividendPlan(ctx context.Context, input Re
 }
 
 func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input ReinvestedDividendInput) (InvestmentTradeResult, error) {
-	plan, err := s.reinvestedDividendPlan(ctx, input)
+	transactionParams, lotParams, err := s.prepareReinvestmentWrite(ctx, input)
 	if err != nil {
 		return InvestmentTradeResult{}, err
+	}
+	transactionRecord, lot, err := s.repository.CreateTransactionAndLot(ctx, transactionParams, lotParams)
+	if err != nil {
+		return InvestmentTradeResult{}, mapInvestmentOpeningWriteError(err, "reinvested dividend")
+	}
+	return InvestmentTradeResult{Transaction: toTransaction(transactionRecord), LotID: &lot.ID}, nil
+}
+
+func (s *InvestmentService) prepareReinvestmentWrite(ctx context.Context, input ReinvestedDividendInput) (db.CreateTransactionParams, db.CreateInvestmentLotParams, error) {
+	plan, err := s.reinvestedDividendPlan(ctx, input)
+	if err != nil {
+		return db.CreateTransactionParams{}, db.CreateInvestmentLotParams{}, err
 	}
 	date := plan.Date
 	transactionParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create, plan.AccountRuleDependencies)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return db.CreateTransactionParams{}, db.CreateInvestmentLotParams{}, err
 	}
 	transactionParams.InvestmentComponents = []db.InvestmentComponentSpec{{
 		Kind: "reinvested_distribution", CommodityID: input.CashCommodityID,
@@ -1811,10 +1823,10 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 		transactionParams.TradeImpliedPrice, err = tradePriceSpec(input.CommodityID, input.CashCommodityID,
 			date, input.QuantityValue, input.QuantityScale, input.AmountValue, input.AmountScale, false)
 		if err != nil {
-			return InvestmentTradeResult{}, err
+			return db.CreateTransactionParams{}, db.CreateInvestmentLotParams{}, err
 		}
 	}
-	transactionRecord, lot, err := s.repository.CreateTransactionAndLot(ctx, transactionParams, db.CreateInvestmentLotParams{
+	return transactionParams, db.CreateInvestmentLotParams{
 		BookID:          BookID,
 		AccountID:       input.HoldingAccountID,
 		CommodityID:     input.CommodityID,
@@ -1833,15 +1845,7 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 		Operation:       "investment.lot.create",
 		ChangeReason:    "created lot from reinvested dividend",
 		EventKind:       "reinvested_dividend",
-	})
-	if err != nil {
-		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
-			return InvestmentTradeResult{}, err
-		}
-		return InvestmentTradeResult{}, fmt.Errorf("create reinvested dividend transaction and lot: %w", mapTransactionDBError(err))
-	}
-	transaction := toTransaction(transactionRecord)
-	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
+	}, nil
 }
 
 func (s *InvestmentService) ListLots(ctx context.Context, accountID int64, commodityID int64) ([]InvestmentLot, error) {
@@ -2838,10 +2842,7 @@ func (s *InvestmentService) TradeReconciliationImpact(ctx context.Context, kind 
 		if err != nil {
 			return ReconciliationImpact{}, err
 		}
-		if err := s.repository.SimulateBuy(ctx, transactionParams, lotParams); err != nil {
-			return ReconciliationImpact{}, mapBuyWriteError(err)
-		}
-		return s.transactionService.reconciliationImpactForPreparedCreate(ctx, transactionParams.Spec)
+		return s.openingReconciliationImpact(ctx, transactionParams, lotParams, "buy")
 	case InvestmentImpactSell:
 		plan, err = s.sellPlan(ctx, input)
 	case InvestmentImpactWriteOff:
@@ -2868,11 +2869,23 @@ func (s *InvestmentService) DividendReconciliationImpact(ctx context.Context, in
 // ReinvestedDividendReconciliationImpact is TradeReconciliationImpact for a
 // reinvested dividend.
 func (s *InvestmentService) ReinvestedDividendReconciliationImpact(ctx context.Context, input ReinvestedDividendInput) (ReconciliationImpact, error) {
-	plan, err := s.reinvestedDividendPlan(ctx, input)
+	input.ReconciliationOverride = true
+	transactionParams, lotParams, err := s.prepareReinvestmentWrite(ctx, input)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	return s.reconciliationImpactForPlan(ctx, plan)
+	return s.openingReconciliationImpact(ctx, transactionParams, lotParams, "reinvested dividend")
+}
+
+func (s *InvestmentService) openingReconciliationImpact(ctx context.Context, transactionParams db.CreateTransactionParams, lotParams db.CreateInvestmentLotParams, kind string) (ReconciliationImpact, error) {
+	refs, err := s.repository.SimulateLotOpening(ctx, transactionParams, lotParams)
+	if err != nil {
+		return ReconciliationImpact{}, mapInvestmentOpeningWriteError(err, kind)
+	}
+	if err := s.transactionService.enrichCheckpointRefs(ctx, refs); err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
 }
 
 func (s *InvestmentService) reconciliationImpactForPlan(ctx context.Context, plan investmentTransactionPlan) (ReconciliationImpact, error) {

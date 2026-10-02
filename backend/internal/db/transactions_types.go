@@ -89,6 +89,8 @@ type TransactionRecord struct {
 	TagIDs                    []int64
 	JournalEntries            []JournalEntryRecord
 	InvalidatedCheckpointIDs  []int64
+	// Preview-only metadata for the exact writer invalidations; no temporary IDs.
+	InvalidatedCheckpointRefs []CheckpointInvalidationRef
 }
 
 type AccountRegisterEntryRecord struct {
