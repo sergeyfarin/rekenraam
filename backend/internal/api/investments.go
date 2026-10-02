@@ -164,6 +164,9 @@ type investmentTradeRequest struct {
 	// honoured it; without it on the wire a buy, sell, or write-off dated
 	// before a checkpoint was simply unreachable (T-53).
 	ReconciliationOverride bool `json:"reconciliation_override"`
+	// GainImpactAcknowledgement echoes the preview token for the committed
+	// disposal gain changes the user accepted (T-114).
+	GainImpactAcknowledgement string `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type externalTransferInRequest struct {
@@ -1312,7 +1315,12 @@ func investmentTradeReconciliationImpact(logger *slog.Logger, authService *app.A
 			writeInvestmentServiceError(w, r, logger, "investment reconciliation impact", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toReconciliationImpactResponse(impact))
+		response := toReconciliationImpactResponse(impact)
+		if response.GainImpact, err = toGainImpactResponse(impact.GainImpact); err != nil {
+			writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+			return
+		}
+		writeJSON(w, http.StatusOK, response)
 	}
 }
 
@@ -1692,6 +1700,10 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_BUY_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentBuyDependency):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_BUY_DEPENDENCY", err.Error())
+	case errors.Is(err, app.ErrGainImpactAcknowledgementRequired):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED", err.Error())
+	case errors.Is(err, app.ErrGainImpactAcknowledgementStale):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
 	// Every investment trade goes through the transaction write guard, so a
@@ -1754,7 +1766,8 @@ func toInvestmentTradeInput(owner app.Owner, r *http.Request, request investment
 		SettlementDate: request.SettlementDate, Charges: charges,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
 		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
-		ReconciliationOverride: request.ReconciliationOverride,
+		ReconciliationOverride:    request.ReconciliationOverride,
+		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 	}
 }
 

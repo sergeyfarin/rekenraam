@@ -106,6 +106,16 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 			rollbackTx(ctx, tx)
 		}
 	}()
+	// Capture the effective disposals before any guard, journal or corrective
+	// intent can change them; comparing inside replay persistence alone would
+	// miss reversed and superseded disposals.
+	gainPolicy := params[0].GainImpact
+	var gainsBefore map[InvestmentGainIdentity]investmentGainSnapshotEntry
+	if gainPolicy != nil {
+		if gainsBefore, err = investmentGainSnapshotTx(ctx, tx, params[0].BookID); err != nil {
+			return nil, zero, err
+		}
+	}
 	if guard != nil {
 		if err := guard(tx); err != nil {
 			return nil, zero, err
@@ -133,6 +143,19 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 	result, err := effect(tx, journals, auditEventID)
 	if err != nil {
 		return nil, zero, err
+	}
+	if gainPolicy != nil {
+		gainsAfter, err := investmentGainSnapshotTx(ctx, tx, params[0].BookID)
+		if err != nil {
+			return nil, zero, err
+		}
+		impact := compareInvestmentGainSnapshots(gainsBefore, gainsAfter)
+		if persist {
+			if err := requireInvestmentGainAcknowledgement(*gainPolicy, impact); err != nil {
+				return nil, zero, err
+			}
+		}
+		journals[0].GainImpact = &impact
 	}
 	for index, journal := range params {
 		invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, journal, auditEventID)

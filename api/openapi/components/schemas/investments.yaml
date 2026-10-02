@@ -454,6 +454,17 @@ InvestmentTradeRequest:
         Allows a backdated trade to proceed into a reconciled period,
         invalidating the affected checkpoints. Without it such a trade is
         refused with a 409 CONFLICT.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token returned by this command's
+        preview for the committed-disposal gain changes the user accepted.
+        Honoured only by commands opted into replay gain disclosure (currently
+        manual buys). Commit recomputes the change set in its write
+        transaction; a non-empty set without this token is refused with
+        INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, and a token for any
+        other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. An empty
+        set needs no token and ignores one.
 
 InvestmentTradeChargeRequest:
   type: object
@@ -1792,3 +1803,130 @@ InvestmentGainsResponse:
       description: Pre-aggregated totals by cost commodity, suitable for display.
       items:
         $ref: "#/RealizedGainTotal"
+
+GainImpact:
+  type: object
+  description: >-
+    Replay gain disclosure (T-114). Lists every committed disposal whose
+    effective operational basis, proceeds, gain, knowledge, date, position or
+    method the command would change, compared inside the command's own
+    rolled-back write transaction. Disposals the command itself creates under
+    a new correction root are not listed. Re-selected allocations with
+    identical totals are not a change. Present only for commands opted into
+    disclosure; an omitted gain_impact is not a claim that no gain changes.
+  required:
+    - changes
+    - acknowledgement
+  properties:
+    changes:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/GainImpactChange"
+    acknowledgement:
+      type: string
+      description: >-
+        Opaque token binding an acknowledgement to exactly this change set.
+        Empty when changes is empty. Echo it as gain_impact_acknowledgement.
+GainImpactChange:
+  type: object
+  required:
+    - change_kind
+    - root_operation_id
+    - decision_seq
+    - operation_id
+    - decision_id
+    - transaction_id
+    - before
+    - after
+  properties:
+    change_kind:
+      type: string
+      enum: [revised, replaced, removed]
+      description: >-
+        revised - the same decision gets a new effective result; replaced - a
+        correction supersedes the decision; removed - a reversal leaves no
+        effective decision.
+    root_operation_id:
+      type: integer
+      format: int64
+      description: Correction-root operation; with decision_seq, the stable identity.
+    decision_seq:
+      type: integer
+    operation_id:
+      type: integer
+      format: int64
+      description: Committed operation of the disclosed decision.
+    decision_id:
+      type: integer
+      format: int64
+      description: Committed disposal decision. Never a preview-only ID.
+    transaction_id:
+      type: integer
+      format: int64
+      description: Committed transaction linked to the disclosed decision.
+    before:
+      $ref: "../../openapi.yaml#/components/schemas/GainImpactState"
+    after:
+      description: Effective result after the command; null when removed. Carries no IDs.
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/GainImpactState"
+        - type: "null"
+GainImpactState:
+  type: object
+  required:
+    - account_id
+    - commodity_id
+    - cost_commodity_id
+    - disposal_date
+    - cost_basis_method
+    - quantity_value
+    - quantity_scale
+    - basis_knowledge
+    - disposed_basis_value
+    - disposed_basis_scale
+    - proceeds_value
+    - proceeds_scale
+    - realized_gain_value
+    - realized_gain_scale
+  properties:
+    account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    cost_commodity_id:
+      type: integer
+      format: int64
+      description: Cost currency of basis, proceeds and gain.
+    disposal_date:
+      type: string
+      format: date
+    cost_basis_method:
+      $ref: "#/CostBasisMethod"
+    quantity_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+    quantity_scale:
+      type: integer
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+    disposed_basis_value:
+      type: [string, "null"]
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Null when basis_knowledge is unknown; never a fabricated zero.
+    disposed_basis_scale:
+      type: [integer, "null"]
+    proceeds_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: Signed operational proceeds; may be negative.
+    proceeds_scale:
+      type: integer
+    realized_gain_value:
+      type: [string, "null"]
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+      description: proceeds minus disposed basis; null when basis is unknown.
+    realized_gain_scale:
+      type: [integer, "null"]

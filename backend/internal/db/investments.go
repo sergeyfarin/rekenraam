@@ -1854,13 +1854,21 @@ func (r *InvestmentRepository) CreateTransactionAndLotWithPostWrite(ctx context.
 }
 
 // SimulateLotOpening executes the acquisition writer, replay, prices and
-// checkpoint effects, then rolls back. Only pre-existing checkpoint refs escape.
-func (r *InvestmentRepository) SimulateLotOpening(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) ([]CheckpointInvalidationRef, error) {
+// checkpoint effects, then rolls back. Only pre-existing checkpoint refs and,
+// for an opted-in command, the committed-disposal gain changes escape.
+func (r *InvestmentRepository) SimulateLotOpening(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) (SimulatedLotOpening, error) {
 	transaction, _, err := r.createTransactionAndLot(ctx, transactionParams, lotParams, nil, true)
 	if err != nil {
-		return nil, err
+		return SimulatedLotOpening{}, err
 	}
-	return transaction.InvalidatedCheckpointRefs, nil
+	return SimulatedLotOpening{InvalidatedCheckpointRefs: transaction.InvalidatedCheckpointRefs,
+		GainImpact: transaction.GainImpact}, nil
+}
+
+// SimulatedLotOpening is the durable-ID-free result of a rolled-back opening.
+type SimulatedLotOpening struct {
+	InvalidatedCheckpointRefs []CheckpointInvalidationRef
+	GainImpact                *InvestmentGainImpact
 }
 
 func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams, postWrite func(*sql.Tx, int64) error, preview bool) (TransactionRecord, InvestmentLotRecord, error) {

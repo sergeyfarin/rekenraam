@@ -116,3 +116,22 @@ function endsAlphanumeric(label: string): boolean {
 export function formatMoney(value: string, scale: number, standardScale: number, locale: string): string {
 	return formatQuantity(roundAmountForDisplay(value, scale, standardScale), standardScale, locale);
 }
+
+/** Exact money display for disclosures that must never round: drops only the
+ * trailing zeros below the coefficient's own scale, keeping at least the
+ * currency's standard scale. A replay result stored at scale 6 shows `50.00`,
+ * while a genuine `50.004` still shows every digit (T-114). */
+export function formatExactMoney(value: string, scale: number, standardScale: number, locale: string): string {
+	if (/^-?0+$/.test(value)) return formatQuantity('0', standardScale, locale);
+	let coefficient = value;
+	let displayScale = scale;
+	while (displayScale > standardScale && coefficient.endsWith('0')) {
+		coefficient = coefficient.slice(0, -1);
+		displayScale--;
+	}
+	if (displayScale < standardScale) {
+		coefficient += '0'.repeat(standardScale - displayScale);
+		displayScale = standardScale;
+	}
+	return formatQuantity(coefficient, displayScale, locale);
+}

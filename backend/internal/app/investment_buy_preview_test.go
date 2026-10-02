@@ -69,6 +69,12 @@ func TestBuyPreviewReplaysAndRollsBackReconciledHistory(t *testing.T) {
 	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
 	input.ReconciliationOverride = true
+	_, err = f.investmentService.Buy(ctx, input)
+	require.ErrorIs(t, err, ErrGainImpactAcknowledgementRequired)
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+	impact, err := f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactBuy, input)
+	require.NoError(t, err)
+	input.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
 	result, err := f.investmentService.Buy(ctx, input)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []int64{checkpoint, laterCheckpoint}, result.Transaction.InvalidatedCheckpointIDs)

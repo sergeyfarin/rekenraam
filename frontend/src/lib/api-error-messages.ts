@@ -26,6 +26,8 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   INVESTMENT_IMPORTED_BUY: () => m.api_error_investment_imported_buy(),
   INVESTMENT_BUY_CHANGED: () => m.api_error_investment_buy_changed(),
   INVESTMENT_BUY_DEPENDENCY: () => m.api_error_investment_buy_dependency(),
+  INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED: () => m.api_error_investment_gain_impact_acknowledgement_required(),
+  INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE: () => m.api_error_investment_gain_impact_acknowledgement_stale(),
   TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   TRANSACTION_VERSION_STALE: () => m.api_error_transaction_version_stale(),
   POSTING_ACCOUNT_VERSION_STALE: () => m.api_error_posting_account_version_stale(),

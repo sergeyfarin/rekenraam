@@ -91,6 +91,9 @@ type TransactionRecord struct {
 	InvalidatedCheckpointIDs  []int64
 	// Preview-only metadata for the exact writer invalidations; no temporary IDs.
 	InvalidatedCheckpointRefs []CheckpointInvalidationRef
+	// GainImpact is the committed-disposal change set of an opted-in
+	// investment command, compared inside its write transaction.
+	GainImpact *InvestmentGainImpact
 }
 
 type AccountRegisterEntryRecord struct {
@@ -240,6 +243,9 @@ type CreateTransactionParams struct {
 	InvestmentCorrectionOfOperationID int64
 	InvestmentCorrectionMode          string
 	InvestmentCorrectionReason        string
+	// GainImpact opts an investment command into replay gain disclosure
+	// (T-114). Only the command's first journal carries it.
+	GainImpact *GainImpactPolicy
 }
 
 // InvestmentComponentSpec is an exact source fact, signed from the owner's

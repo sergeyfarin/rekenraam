@@ -8,16 +8,13 @@ tracks actionable work; the [backlog](backlog.md) maps local IDs, and
 
 Last reconciled: 2026-10-02.
 
-## Now: shared replay gain safety
+Done: [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129) shared gain-impact mechanism and
+manual-buy API/UI pilot (see [implemented](implemented.md)). Other existing
+replay paths are not yet protected; see #141 below.
 
-- [ ] Complete [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129): effective before-state capture,
-  exact changed-disposal comparison, acknowledgement and commit-time revalidation.
-  Deliver one manual-buy API/UI pilot with stale-acknowledgement and rollback cases.
-  Gain disclosure is still missing even though checkpoint previews are fixed.
+## Now: splits, then remaining replay gaps
 
-## Next: splits, then remaining replay gaps
-
-1. [ ] Deliver manual split/reverse split [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137), integrating #129 and the
+1. [ ] Deliver manual split/reverse split [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137), opting into the #129 gain-impact policy and the
    slice 5 exact-conservation contract. Follow with verified Trading 212 mapping;
    insufficient evidence remains in review with manual-link/deduplication support.
 2. [ ] Support pooled average-cost internal transfers [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).
@@ -47,12 +44,12 @@ This is execution order, not an extra dependency chain. New commands integrate
 preview selection are complete within their bounded scopes. History belongs
 in [implemented](implemented.md) and dated reviews. Provider execution cancellation [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) remains blocked on
 verified evidence; cancelled order status is insufficient. Buy and reinvestment
-previews now replay and return the writer’s actual checkpoint set; gain disclosure is still open.
+previews now replay and return the writer’s actual checkpoint set; only manual buys disclose revised gains so far.
 
 ## Parallel trust work
 
 - [ ] Roll out gain acknowledgement across existing replay paths
-  [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141) after the shared mechanism, as P1 safety work alongside new commands.
+  [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141) now that the shared mechanism ships, as P1 safety work alongside new commands.
   Start with reinvestment/imported acquisitions, then native reversals/replacements
   and Trading 212 source revisions in bounded slices. Credit #129’s manual-buy pilot.
   Finish the coverage matrix before claiming universal protection.

@@ -9,6 +9,9 @@ import (
 
 type reconciliationImpactResponse struct {
 	AffectedCheckpoints []checkpointImpactResponse `json:"affected_checkpoints"`
+	// GainImpact is present only for commands opted into replay gain
+	// disclosure; its absence is not a claim that no gain changes.
+	GainImpact *gainImpactResponse `json:"gain_impact,omitempty"`
 }
 
 type checkpointImpactResponse struct {

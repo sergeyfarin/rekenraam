@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatQuantity, formatMoney, joinCommodityAmount } from './format';
+import { formatExactMoney, formatQuantity, formatMoney, joinCommodityAmount } from './format';
 import { formatLedgerAmount, parseDecimalAmount } from './amount';
 
 describe('formatQuantity', () => {
@@ -145,4 +145,20 @@ describe('currency summary display', () => {
     expect(formatQuantity('1666667', 6, 'en-US')).toBe('1.666667');
     expect(formatMoney('1666667', 6, 2, 'en-US')).toBe('1.67');
   });
+});
+
+describe('formatExactMoney', () => {
+	it('drops replay scale padding down to the currency standard scale', () => {
+		expect(formatExactMoney('50000000', 6, 2, 'en-US')).toBe('50.00');
+		expect(formatExactMoney('-20500000', 6, 2, 'en-US')).toBe('-20.50');
+	});
+
+	it('never rounds away a significant digit', () => {
+		expect(formatExactMoney('50004000', 6, 2, 'en-US')).toBe('50.004');
+	});
+
+	it('pads a shallower value up to the standard scale and keeps zero plain', () => {
+		expect(formatExactMoney('5', 0, 2, 'en-US')).toBe('5.00');
+		expect(formatExactMoney('0', 6, 2, 'en-US')).toBe('0.00');
+	});
 });

@@ -289,6 +289,10 @@ type ReconciliationImpact struct {
 	// AffectedCheckpoints holds refs for each checkpoint that would be
 	// invalidated by this create or update.
 	AffectedCheckpoints []db.CheckpointInvalidationRef
+	// GainImpact lists committed disposals whose operational basis or gain
+	// the command would change, with the token that acknowledges exactly that
+	// set. Nil means the command has not opted into gain disclosure (T-126).
+	GainImpact *db.InvestmentGainImpact
 }
 
 type CreateReconciliationImpactInput struct {

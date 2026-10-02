@@ -50,6 +50,22 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: >
+        The buy conflicts with current state: reconciliation override required
+        (CONFLICT), dependent disposal or transfer cannot replay
+        (INVESTMENT_BUY_DEPENDENCY), committed disposal gains change without an
+        acknowledgement (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED), or
+        the acknowledgement names a different change set
+        (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE). Nothing is written;
+        re-run the reconciliation-impact preview and review again.
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "500":
       description: Internal server error
       headers:

@@ -118,6 +118,55 @@ test('a backdated buy names the reconciliation it would invalidate, then proceed
   await expect.poll(() => activeCheckpointCount(page, cash.id)).toBe(0);
 });
 
+/**
+ * T-114: an earlier buy can revise the gain of a sale already recorded, with no
+ * reconciliation involved. The user must see the old and new gain and accept
+ * them; the issue's FIFO case moves the sale's gain from 50.00 to 140.00.
+ */
+test('a backdated buy discloses the earlier sale gain it revises before proceeding', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const openedOn = daysFromTodayISO(-30);
+  const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: `Gain brokerage cash ${suffix}`, account_class: 'asset', account_kind: 'brokerage_cash',
+    default_commodity_id: currencyID, allows_postings: true, opened_on: openedOn, effective_from: openedOn
+  });
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: `GN${suffix}`, instrument_type: 'stock', display_name: `Gain Equity ${suffix}`,
+    symbol: `GN${suffix}`, quote_commodity_id: currencyID, trading_commodity_id: currencyID,
+    quantity_scale: 3, price_scale: 2, effective_from: openedOn
+  });
+  const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: `Gain holding ${suffix}`, opened_on: openedOn, effective_from: openedOn
+  });
+  const trade = (date: string, quantity: string, cash_amount_value: string) => ({
+    transaction_date: date, commodity_id: instrument.commodity_id, holding_account_id: holding.id,
+    cash_account_id: cash.id, quantity_value: quantity, quantity_scale: 0,
+    cash_amount_value, cash_amount_scale: 2, cash_commodity_id: currencyID
+  });
+  await apiJSON(page, 'POST', '/api/v1/investments/buy', csrfToken, trade(daysFromTodayISO(-10), '10', '20000'));
+  await apiJSON(page, 'POST', '/api/v1/investments/sell', csrfToken, trade(daysFromTodayISO(-5), '5', '15000'));
+
+  await recordBuy(page, {
+    instrument: `Gain Equity ${suffix}`, holdingID: holding.id, cashID: cash.id,
+    date: daysFromTodayISO(-20), quantity: '10.000', cost: '20.00'
+  });
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('This changes gains on earlier sales');
+  await expect(dialog).toContainText('50.00 → 140.00');
+
+  await dialog.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(async () => {
+    const gains = await apiJSON<{ realized: Array<{ commodity_id: number; realized_gain_value: string; realized_gain_scale: number }> }>(
+      page, 'GET', '/api/v1/investments/gains');
+    const sale = gains.realized.find((gain) => gain.commodity_id === instrument.commodity_id);
+    // Replay may store the gain at a wider scale; compare the exact value.
+    return sale ? BigInt(sale.realized_gain_value) * 100n === 14000n * 10n ** BigInt(sale.realized_gain_scale) : false;
+  }).toBe(true);
+});
+
 async function activeCheckpointCount(page: Page, accountID: number): Promise<number> {
   const body = await apiJSON<{ checkpoints: Array<{ status: string }> }>(
     page,

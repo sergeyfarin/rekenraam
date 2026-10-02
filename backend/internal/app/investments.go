@@ -40,6 +40,11 @@ var (
 	ErrInvestmentSuggestionNotFound   = errors.New("investment event suggestion not found")
 	ErrInvestmentSuggestionNotPending = errors.New("investment event suggestion is not pending")
 	ErrAutomationRuleNotFound         = errors.New("investment automation rule not found")
+	// ErrGainImpactAcknowledgementRequired and ErrGainImpactAcknowledgementStale
+	// refuse an opted-in command whose replay changes committed disposal gains
+	// without, or with a different, acknowledgement. Every write rolls back.
+	ErrGainImpactAcknowledgementRequired = db.ErrGainImpactAcknowledgementRequired
+	ErrGainImpactAcknowledgementStale    = db.ErrGainImpactAcknowledgementStale
 )
 
 type InstrumentSearchProvider interface {
@@ -266,6 +271,11 @@ type InvestmentTradeInput struct {
 	// ReconciliationOverride allows backdated investment trades to invalidate
 	// affected checkpoints through the normal transaction write guard.
 	ReconciliationOverride bool
+	// GainImpactAcknowledgement is the token a preview returned for the
+	// committed-disposal gain changes the user accepted (T-114). Commands that
+	// opt into gain disclosure refuse a non-empty change set without the exact
+	// token; an empty change set needs none.
+	GainImpactAcknowledgement string
 	// WriteOff records a disposal at zero proceeds: a fund closure, a worthless
 	// delisting, any total loss. It is set only by WriteOff() — never by the
 	// sell endpoint — so a mistyped sell amount can never become a write-off.
@@ -1088,6 +1098,9 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 	var transactionRecord db.TransactionRecord
 	var lot db.InvestmentLotRecord
 	if postWrite == nil {
+		// Manual buys are the gain-disclosure pilot. Import acquisitions
+		// (postWrite) are not yet migrated; T-126 owns that rollout.
+		transactionParams.GainImpact = &db.GainImpactPolicy{Acknowledgement: input.GainImpactAcknowledgement}
 		transactionRecord, lot, err = s.repository.CreateTransactionAndLot(ctx, transactionParams, lotParams)
 	} else {
 		transactionRecord, lot, err = s.repository.CreateTransactionAndLotWithPostWrite(ctx, transactionParams, lotParams, postWrite)
@@ -1105,7 +1118,8 @@ func mapInvestmentOpeningWriteError(err error, kind string) error {
 	if errors.As(err, &dependency) {
 		return InvestmentBuyDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
 	}
-	if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
+	if errors.Is(err, db.ErrOutOfOrderPositionEvent) || errors.Is(err, db.ErrGainImpactAcknowledgementRequired) ||
+		errors.Is(err, db.ErrGainImpactAcknowledgementStale) {
 		return err
 	}
 	return fmt.Errorf("create %s transaction and lot: %w", kind, mapTransactionDBError(err))
@@ -2842,6 +2856,7 @@ func (s *InvestmentService) TradeReconciliationImpact(ctx context.Context, kind 
 		if err != nil {
 			return ReconciliationImpact{}, err
 		}
+		transactionParams.GainImpact = &db.GainImpactPolicy{}
 		return s.openingReconciliationImpact(ctx, transactionParams, lotParams, "buy")
 	case InvestmentImpactSell:
 		plan, err = s.sellPlan(ctx, input)
@@ -2878,14 +2893,15 @@ func (s *InvestmentService) ReinvestedDividendReconciliationImpact(ctx context.C
 }
 
 func (s *InvestmentService) openingReconciliationImpact(ctx context.Context, transactionParams db.CreateTransactionParams, lotParams db.CreateInvestmentLotParams, kind string) (ReconciliationImpact, error) {
-	refs, err := s.repository.SimulateLotOpening(ctx, transactionParams, lotParams)
+	simulated, err := s.repository.SimulateLotOpening(ctx, transactionParams, lotParams)
 	if err != nil {
 		return ReconciliationImpact{}, mapInvestmentOpeningWriteError(err, kind)
 	}
+	refs := simulated.InvalidatedCheckpointRefs
 	if err := s.transactionService.enrichCheckpointRefs(ctx, refs); err != nil {
 		return ReconciliationImpact{}, err
 	}
-	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
+	return ReconciliationImpact{AffectedCheckpoints: refs, GainImpact: simulated.GainImpact}, nil
 }
 
 func (s *InvestmentService) reconciliationImpactForPlan(ctx context.Context, plan investmentTransactionPlan) (ReconciliationImpact, error) {

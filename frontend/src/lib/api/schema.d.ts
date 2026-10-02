@@ -13139,6 +13139,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description The buy conflicts with current state: reconciliation override required (CONFLICT), dependent disposal or transfer cannot replay (INVESTMENT_BUY_DEPENDENCY), committed disposal gains change without an acknowledgement (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED), or the acknowledgement names a different change set (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE). Nothing is written; re-run the reconciliation-impact preview and review again. */
+                409: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -14856,7 +14866,7 @@ export interface paths {
         put?: never;
         /**
          * Preview which reconciliation checkpoints a buy would invalidate
-         * @description Executes the proposed buy and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY, the stable acquisition replay conflict code also used for reinvestment. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation. Revised gains are not yet disclosed.
+         * @description Executes the proposed buy and dependent replay through the actual writer in a rolled-back transaction. Returns every active checkpoint the writer would invalidate, including later checkpoints. Impossible dependent disposals or changed carried-basis transfers return INVESTMENT_BUY_DEPENDENCY, the stable acquisition replay conflict code also used for reinvestment. No durable changes or temporary operation/lot IDs escape. Review the named checkpoints before committing with reconciliation_override=true; commit rechecks dependencies and reconciliation. gain_impact lists committed disposals whose operational basis or gain the replay would change (T-114); commit with its acknowledgement token when non-empty.
          */
         post: {
             parameters: {
@@ -17935,6 +17945,7 @@ export interface components {
                  */
                 entry_date: string;
             }[];
+            gain_impact?: components["schemas"]["GainImpact"];
         };
         DeletedTransactionResponse: components["schemas"]["TransactionResponse"] & {
             /** @description Reason recorded at soft-delete time. */
@@ -18715,6 +18726,72 @@ export interface components {
             cost_basis_method?: components["schemas"]["CostBasisMethod"];
             /** @description Allows a backdated trade to proceed into a reconciled period, invalidating the affected checkpoints. Without it such a trade is refused with a 409 CONFLICT. */
             reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token returned by this command's preview for the committed-disposal gain changes the user accepted. Honoured only by commands opted into replay gain disclosure (currently manual buys). Commit recomputes the change set in its write transaction; a non-empty set without this token is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, and a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. An empty set needs no token and ignores one. */
+            gain_impact_acknowledgement?: string;
+        };
+        /** @description Replay gain disclosure (T-114). Lists every committed disposal whose effective operational basis, proceeds, gain, knowledge, date, position or method the command would change, compared inside the command's own rolled-back write transaction. Disposals the command itself creates under a new correction root are not listed. Re-selected allocations with identical totals are not a change. Present only for commands opted into disclosure; an omitted gain_impact is not a claim that no gain changes. */
+        GainImpact: {
+            changes: components["schemas"]["GainImpactChange"][];
+            /** @description Opaque token binding an acknowledgement to exactly this change set. Empty when changes is empty. Echo it as gain_impact_acknowledgement. */
+            acknowledgement: string;
+        };
+        GainImpactChange: {
+            /**
+             * @description revised - the same decision gets a new effective result; replaced - a correction supersedes the decision; removed - a reversal leaves no effective decision.
+             * @enum {string}
+             */
+            change_kind: "revised" | "replaced" | "removed";
+            /**
+             * Format: int64
+             * @description Correction-root operation; with decision_seq, the stable identity.
+             */
+            root_operation_id: number;
+            decision_seq: number;
+            /**
+             * Format: int64
+             * @description Committed operation of the disclosed decision.
+             */
+            operation_id: number;
+            /**
+             * Format: int64
+             * @description Committed disposal decision. Never a preview-only ID.
+             */
+            decision_id: number;
+            /**
+             * Format: int64
+             * @description Committed transaction linked to the disclosed decision.
+             */
+            transaction_id: number;
+            before: components["schemas"]["GainImpactState"];
+            /** @description Effective result after the command; null when removed. Carries no IDs. */
+            after: components["schemas"]["GainImpactState"] | null;
+        };
+        GainImpactState: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /**
+             * Format: int64
+             * @description Cost currency of basis, proceeds and gain.
+             */
+            cost_commodity_id: number;
+            /** Format: date */
+            disposal_date: string;
+            cost_basis_method: components["schemas"]["CostBasisMethod"];
+            quantity_value: string;
+            quantity_scale: number;
+            /** @enum {string} */
+            basis_knowledge: "known" | "unknown";
+            /** @description Null when basis_knowledge is unknown; never a fabricated zero. */
+            disposed_basis_value: string | null;
+            disposed_basis_scale: number | null;
+            /** @description Signed operational proceeds; may be negative. */
+            proceeds_value: string;
+            proceeds_scale: number;
+            /** @description proceeds minus disposed basis; null when basis is unknown. */
+            realized_gain_value: string | null;
+            realized_gain_scale: number | null;
         };
         /** @description A zero-proceeds disposal. Deliberately has no cash account, cash commodity or amount — those fields are what make a sale a sale. */
         InvestmentWriteOffRequest: {
@@ -19372,7 +19449,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

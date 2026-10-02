@@ -243,13 +243,7 @@ func TestBackdatedPurchaseReplaysLaterAverageCostSale(t *testing.T) {
 	_, err := f.investmentService.Sell(ctx, sale)
 	require.NoError(t, err)
 
-	backdated, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
-		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01",
-		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
-		CashAccountID: f.cashAccountID, QuantityValue: exact.New(10),
-		CashAmountValue: 30000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
-	})
-	require.NoError(t, err)
+	backdated := acknowledgedBuy(t, f, backdatedBuy(f, "2026-03-01", 10, 30000))
 	require.NotNil(t, backdated.LotID)
 
 	lots, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
@@ -284,7 +278,7 @@ func TestBackdatedPurchasePreservesRecordedDisposalMethods(t *testing.T) {
 			}
 			_, err := f.investmentService.Sell(ctx, sale)
 			require.NoError(t, err)
-			buyOn(t, f, "2026-03-01", 10, 30000)
+			acknowledgedBuy(t, f, backdatedBuy(f, "2026-03-01", 10, 30000))
 			gains, err := f.investmentService.ListRealizedGains(ctx, GainsReportParams{})
 			require.NoError(t, err)
 			require.Len(t, gains, 1)

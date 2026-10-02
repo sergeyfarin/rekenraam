@@ -532,6 +532,8 @@ ReconciliationImpactResponse:
             type: string
             format: date
             description: The affected posting's entry date that falls within this checkpoint's reconciled period.
+    gain_impact:
+      $ref: "../../openapi.yaml#/components/schemas/GainImpact"
 DeletedTransactionResponse:
   allOf:
     - $ref: "../../openapi.yaml#/components/schemas/TransactionResponse"

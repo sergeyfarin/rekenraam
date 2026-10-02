@@ -100,6 +100,17 @@ When a feature introduces a durable new rule, update one of those documents in t
   cost may redistribute only the remaining-basis projection. While the runtime has
   one operational projection, reject switching into or out of average cost after
   a partial disposal until the position closes and starts a new method epoch.
+- Replay that changes a committed disposal's effective basis, proceeds, gain,
+  knowledge, date, position or method must be disclosed, even when no reconciled
+  balance changes (T-114). A command opts in by setting `GainImpactPolicy` on its
+  first journal: the shared investment writer snapshots every effective disposal
+  before guards and journals run, compares the effective set after its domain
+  effects in the same SQLite transaction, and refuses a non-empty change set
+  unless the caller echoes the preview's exact acknowledgement token. Removal and
+  replacement are compared by correction root and decision sequence, never by
+  preview-only IDs. New replaying commands must opt in as part of their own
+  acceptance; existing paths not yet opted in are tracked in T-126 #141 and must
+  not be described as protected.
 - Realized/unrealized gains are server-computed read models with named policy.
   Reproducible investment reports state their `as_of` date, price-knowledge
   cutoff, valuation/FX method, staleness policy, reporting currency, basis profile,

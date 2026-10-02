@@ -946,6 +946,12 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentLotAllocationRequest"
     InvestmentTradeRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentTradeRequest"
+    GainImpact:
+      $ref: "./components/schemas/investments.yaml#/GainImpact"
+    GainImpactChange:
+      $ref: "./components/schemas/investments.yaml#/GainImpactChange"
+    GainImpactState:
+      $ref: "./components/schemas/investments.yaml#/GainImpactState"
     InvestmentWriteOffRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentWriteOffRequest"
     InvestmentLotDisposalResponse:
