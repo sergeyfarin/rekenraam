@@ -1,7 +1,9 @@
 # R12a Investment Integrity Correction Plan
 
-Status: R12a complete 2026-08-30. T-76 complete 2026-09-10; T-75b remains a
-scheduled follow-up.
+Status: R12a complete 2026-08-30; T-76 complete 2026-09-10. As of 2026-10-02,
+T-75b #99 is complete for long-buy/sale correction. Remaining families have
+separate issues in the [active R16 contract](investment-operation-refactor-plan.md).
+The follow-up requirements below preserve the original design context.
 
 This plan records the immediate correctness gate and its scheduled investment
 follow-ups. It does not add multi-basis tax reporting. ADR 0012 governs the
@@ -155,8 +157,11 @@ Build on the fence rather than removing it.
 - Keep generic investment mutation fenced after this ships; the supported path is
   the domain command.
 
-**Exit:** named tests correct and reverse a buy, partial sale, full sale, and
-write-off with later dependent activity. Success leaves journal, lots, gains,
+**Original exit (now split into bounded issues):** named tests correct and
+reverse a buy, partial sale, full sale, and write-off with later dependent
+activity. Long-buy/sale commands are delivered in #99; write-off correction is
+[T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133). Other outstanding
+families and gain-impact safeguards are indexed in the active R16 contract. Success leaves journal, lots, gains,
 prices, audit, import identity, and reconciliation coherent; injected failures at
 each post-write boundary roll everything back.
 

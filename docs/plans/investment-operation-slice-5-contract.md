@@ -183,13 +183,15 @@ that allocation rather than rewriting the 8.00 EUR receipt.
    unknown-basis replay and sourced resolution propagate that state end to end.
    Split ratio/eligibility and basis-action links
    are likewise prerequisites for their respective commands.
-2. Ship manual known-basis external inbound transfer, then explicit-lot
-   internal transfer, outbound transfer and unknown-basis resolution. Prove
-   bridge change/refusal and reconciliation behavior with named tests.
-3. Ship return of capital, split/reverse split, then linked cash in lieu.
-   Prove exact conservation and dependent replay with named tests. Provider
-   suggestions remain in review until the matching manual command and import
-   mapping are complete.
+2. Known-basis external inbound and explicit-lot internal transfers are shipped.
+   After gain-impact safeguards, ship manual split/reverse split and verified
+   provider mapping ([T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137)), then pooled internal transfer allocation
+   ([T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138)) and broader transfer-in/disposal backdating ([T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132)).
+3. Decide cross-position replay ([T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139)) before outbound transfers,
+   then deliver unknown-basis resolution, return of capital and linked cash in
+   lieu. Prove bridge adjustment/refusal, exact conservation, dependent replay
+   and reconciliation with named tests. Provider suggestions stay in review
+   until their command and mapping are supported.
 4. Add mobile entry and read-side labels for unresolved basis and action
    provenance before calling the family complete. Update the feature ledger
    for each shipped command, not merely for the schema.

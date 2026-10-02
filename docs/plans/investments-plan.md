@@ -30,11 +30,12 @@ Current-status notes reconciled 2026-08-31; original delivery was 2026-07-03.
 >   deliberate scope cut (no confirmation UI for linking to a pre-existing
 >   holding account — always creates a new one instead).
 >
-> **Current integrity status (2026-08-31).** R12a closed on 2026-08-30:
+> **Current integrity status (2026-10-02).** R12a closed on 2026-08-30:
 > average-cost pool conservation (T-74) is fixed, and unsafe generic investment
-> lifecycle mutations are fenced off (T-75a). Investment-native correction and
-> reversal remain R16 work (T-75b); durable disposal-policy provenance (T-76)
-> shipped 2026-09-10 before v0.1/schema freeze and R16/R18.
+> lifecycle mutations are fenced off (T-75a). Long-buy/sale native correction
+> and reversal are delivered in T-75b #99; remaining operation families and
+> gain-impact safety have separate issues in the active R16 operation plan.
+> Durable disposal-policy provenance (T-76) shipped 2026-09-10.
 > ADR 0012 and R18 govern future reproducible reporting. See
 > `docs/plans/investment-integrity-plan.md` for the acceptance evidence.
 

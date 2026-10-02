@@ -10,7 +10,7 @@ The [GitHub roadmap index](https://github.com/sergeyfarin/rekenraam/issues/120)
 links current slices to their actionable tickets; this file remains the
 ordered product plan.
 
-Last reviewed: 2026-10-01. The current order is R16,
+Last reviewed: 2026-10-02. The current order is R16,
 R11 price management, R17 quotes and crypto, R18 gains projections, then R13
 returns analytics. Cross-border input and date correctness run in parallel.
 Prior roadmap detail is retained in the
@@ -102,7 +102,12 @@ Do not start a new roadmap initiative until the current one has met its
 acceptance criteria. Feature-specific design documents may clarify a slice, but
 must not create a competing sequence.
 
-The reusable application runtime ([#113](https://github.com/sergeyfarin/rekenraam/issues/113)) is complete: `internal/appruntime` owns services, workers and databases, while `serve` owns the listener and signals. Investment-native correction [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is in progress: transaction detail offers long-buy and long-sale reversal and prefilled replacement of manual or source-linked imported buys and sales. Old buys and sales replay dependent allocations in one audited transaction; buy reversal refuses any dependent disposal it cannot satisfy. New backdated long buys use the same replay and atomic writer. A committed import source identity remains attached to its original fill after manual replacement or terminal reversal, so retries remain deduplicated. Changed Trading 212 fills are compared with the latest accepted source payload, flagged in import review, and skipped by ordinary batch commit. Import review now accepts revised buy and sale quantity/net settlement through an audited atomic source correction, with dependent replay and a read-only reconciliation-impact preview before explicit override; buy replacement/source previews now prove dependent replay through the rolled-back writer and reject impossible sales/transfers; changed date, instrument, account, or currency remains unsupported. Source sale revisions retain the recorded basis method; specific-lot quantity changes require manual explicit election. Cancellation source revisions, broader source scope and other operation corrections remain. T-110 slice 2a integrity is complete; T-75b correction gates remain before further transfer and basis-action commands; buy/sale reversals, compound replacements and source acceptance now share investment writer orchestration.
+The reusable application runtime [#113](https://github.com/sergeyfarin/rekenraam/issues/113)
+and operation integrity [#125](https://github.com/sergeyfarin/rekenraam/issues/125)
+are complete. Long buy/sale correction has shipped within #99's now-bounded
+scope; remaining correction families have separate acceptance issues.
+The [2026-10-02 review](reviews/investment-review-2026-10-02.md) explains the
+revised order and qualified findings.
 
 ### Completed initiatives through R10
 
@@ -114,129 +119,56 @@ for the original scope and acceptance notes.
 
 ### R16 — investment lifecycle completeness
 
-ADR 0013 now defines the named operation and long/short position foundation.
-The implementation sequence and data contract are in
-`docs/plans/investment-operation-refactor-plan.md`; the plan governs the
-remaining delivery gates.
-R16 slice 1's equations, posting matrices, fee policy and cross-currency
-admission rules are specified in
-`docs/plans/investment-operation-slice-1-contract.md`. A fresh/seeded export
-contract test pins the current investment bundle before the 2a rewrite; this
-design gate adds no user-facing command. Slice 2a now records operation links,
-typed dates, exact source components and lot-opening facts, side-keyed basis
-state, and atomic trade prices with one audit event. The investment bundle is
-version 2 and preserves the new evidence. Slice 2b now records ordered
-operation/transaction effects per import identity, keeps the book-wide
-fingerprint rule, and exposes those effects in staged-row results and bundle
-exports. Slice 3 now records signed gross, typed charges, net cash and
-settlement dates for manual buy/sell commands. Fee elections are snapshotted;
-disposal decisions store clearing-based proceeds, and gross-derived prices
-outrank approximate net-derived prices on the same date. Trading 212 currently
-provides net-only fills, so its source gross remains unknown.
+ADR 0013 defines the named operation/side foundation. The
+[active operation plan](plans/investment-operation-refactor-plan.md) contains
+the contract and gates; [implemented](implemented.md) records shipped commands.
+The foundation, trade economics, long-buy/sale reversal/replacement, backdated
+buy replay and Trading 212 quantity/net source corrections ship. Their writer
+convergence and operation-integrity gates are complete. Correction preview for
+plain buys now proves replay feasibility through the rolled-back writer.
 
-The schema and existing-command operation identity have landed in the unused
-v0.1 candidate baseline. Full native replay, side-aware reads/self-checks and the
-short-sale/cover commands remain before T-108 is usable. The next execution
-order is native correction. Immutable intents,
-reversible long-position simulation, append-only effective revision storage,
-and realized-gains, self-check, and export readers support manual long-sale
-reversal, old-sale replacement and old-buy replacement. Transaction detail
-offers sale reversal and prefilled buy and sale replacement. The sale form uses
-pre-sale available lots for specific-lot correction, and old sales replay
-dependent disposals. New backdated long buys replay dependent sales; imported
-fills with a committed identity can be manually replaced. Trading 212 BUY and
-SALE source quantity/net-settlement corrections and their
-reconciliation previews are shipped. Slice 4af preserves provider fill taxonomy
-and holds unsupported or missing fill types before ordinary trade/cash writes
-and source corrections ([T-112 #127](https://github.com/sergeyfarin/rekenraam/issues/127)).
-Order lifecycle status is advisory, never execution-cancellation evidence.
-Native BUY/SALE reversals now share investment transaction orchestration
-(slice 4ag), including source checks before journal creation and tested late
-failure rollback. Compound replacement orchestration, source cancellations,
-broader source correction scope and other backdated operation families remain.
-The completed [operation integrity gate T-110](https://github.com/sergeyfarin/rekenraam/issues/125)
-now links journal-backed trade components to their exact posting lines and
-checks both missing links and unlinked trade cash, expense or charge-clearing legs.
-Sell/write-off proceeds checking now covers multiple decisions by operation,
-pinned journal version and cost currency, counting shared clearing legs once;
-unlinked decision provenance is reported even for equal-valued journals.
-The lot check also conserves quantity, basis and signed proceeds for every
-original disposal allocation set and replay revision, including superseded
-audit snapshots, and reports missing/invalid allocations before projection math.
-Individual decisions now attribute signed exact proceeds portions to immutable
-clearing posting versions. Self-check conserves each decision and each shared
-leg independently, including restored link damage and offsetting allocation
-errors. Current writers remain single-disposal commands; future compound
-commands must supply explicit portions. Bundle schema 4 exports these links.
-Nullable projected basis now has explicit known/unknown state. API and bundle
-schema 5 retain quantities and NULL/empty unknown amounts; known zero stays
-explicit. One unknown lot makes position basis/gain unavailable while retaining
-priced market value. Self-check still verifies quantities and reports unresolved
-or inconsistent basis knowledge. Current known-basis writers refuse unresolved
-positions; current replay reconstructs from known source evidence atomically.
-Unknown opening/event/disposal knowledge and sourced resolution replay remain
-gates for slice 5's unknown-basis commands. T-75b buy/sale writer convergence is complete; verified source cancellation,
-wider source revisions and remaining correction families remain P0 work.
-The consolidated baseline separates immutable lot identity/opening facts from
-`investment_lot_state`; replay reconstructs the state atomically, self-check
-reports missing/corrupt state and bundle schema 3 exports both layers.
-Correction history, trade source facts, and buy/sale correction admission now use journal
-links. Export summaries and import effect inference now also use primary links;
-writer bootstrap passes the inserted operation ID directly and subsequent lot
-writes use primary links. The compatibility column is retired from the baseline
-and frozen seed; seeded operation export summaries retain their CSV contract.
-Transfers and basis actions, including manual splits, follow;
-then short-sale/cover, then compound corporate actions. Return-of-capital and
-cash-in-lieu suggestions are currently refused as dividend income (T-109) until
-their lot-basis treatment ships.
-The [slice 5 contract](plans/investment-operation-slice-5-contract.md) fixes
-the per-kind posting, dated basis, replay and reconciliation rules. A
-known-basis external inbound transfer now has an API command, reconciliation
-preview, mobile entry screen, typed lot source, export and self-check. An
-internal transfer now moves selected long lots with conserved carried basis,
-typed lineage, reconciliation preview, self-check and a mobile entry screen.
-Selected-lot transfer under an average-cost source policy or open average-cost
-lock is refused until pooled basis allocation is implemented; a permitted
-lot-specific move locks the source position to individual-lot basis. Outbound
-and unknown-basis transfers, return of capital, split and cash in lieu remain.
+Remaining work, in order:
 
-Decided 2026-08-05 (review §3e). The maintained
-`competitor-comparison.md` now marks corporate actions as missing; manual
-splits and mergers still have no implementation. This slice closes that gap
-one specified operation at a time. Sequenced after R5, and
-split by risk:
+1. **Realized-gain restatement preview and acknowledgement [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129).**
+   Replay may revise prior basis and gains even with no affected checkpoint.
+   Apply the same impact contract to manual and import paths. R18 retains
+   historical reporting and tax profiles; no permanent filed-through date has
+   been adopted.
+2. **Manual split/reverse split plus verified Trading 212 mapping [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137).**
+   Missing split effects can block later sales in instrument migration. Follow
+   the existing exact-ratio/basis-conservation contract; hold insufficient
+   provider evidence in review.
+3. **Pooled average-cost internal transfer [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).** Explicit-lot
+   internal transfers and known-basis external inbound already ship. Average
+   pools remain refused until exact carried-basis allocation is implemented.
+4. **Broader backdated replay [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132).** Transfer-in behind
+   later sales and earlier disposal replay. Reinvestment already admits earlier
+   openings; its preview parity belongs to T-114. Current earlier sales without
+   a later disposal remain supported.
+5. **Cross-position replay decision and effective-reader consolidation [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).**
+   Settle before outbound transfers and compound actions. Full rebuild and
+   affected dependency closure both need durable elections, dated bridges and
+   atomic rollback; rebuilding alone cannot eliminate legitimate refusals.
+6. **Remaining lifecycle families.** Dividend/reinvestment correction
+   [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130); trade field correction [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131); write-off correction
+   [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133); transfer correction [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134); correction-chain register
+   and net checkpoint impact [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135). Provider cancellation/wider source
+   revision [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) is evidence-blocked, not an active P0 gate.
+7. **Outbound/unknown transfers, return of capital and cash in lieu**, under
+   [#114](https://github.com/sergeyfarin/rekenraam/issues/114) and the
+   [slice 5 contract](plans/investment-operation-slice-5-contract.md), then
+   **short sale/cover [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103)**,
+   then **compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115)**.
+   Keep each command independently runnable and audited. Negative holdings
+   without named short events remain unclassified warnings.
 
-1. **Now — independent and small, and done.** Zero-proceeds write-off (T-38 —
-   **done 2026-08-06**, dedicated `InvestmentWriteOffInput` type with a
-   required reason and its own preview endpoint, backend only) and price
-   observation voiding (T-37 — **done 2026-08-06**, cascades to every rate
-   triangulated from the voided observation; backend endpoint only, the
-   operator-facing surface still belongs to R11) are both shipped. T-38 also
-   gained its own reconciliation-impact preview (T-53) so a backdated
-   write-off can proceed deliberately, the same as buy, sell, and dividend.
-   The write-off UI and price-void operator surface remain separate follow-ups.
-2. **Foundation and exact trade economics — partial.** Operation links,
-   source components, import identity, lot-opening facts and gross/charge/net
-   trade terms are shipped. The completed T-110 integrity gate covers posting
-   links, proceeds/journal reconciliation, authoritative operation journal
-   links and the lot-state projection split. ADR 0013 governs the unused
-   pre-release baseline redesign.
-3. **Investment-native correction/reversal (T-75b).** Build domain commands that
-   change journal and subledger atomically, preserve original events, replay
-   effective allocations under each recorded method, and retain the generic
-   mutation fence. T-76 disposal provenance is already present.
-4. **Transfers and basis actions, after correction and integrity.** Add in-kind
-   broker transfers, return of capital, manual split/reverse-split, and cash in
-   lieu with dated lot effects.
-   These fulfill the earlier manual-split design gate: a migrant's first AAPL
-   split must not require deleting and re-entering lots.
-5. **Short sale/cover (T-108), then compound corporate actions.** Finish
-   side-aware commands and reporting before accepting intentional shorts;
-   then extend the same operation model to mergers and spin-offs.
-
-The investment monetary JSON precision boundary (T-107) was closed ahead of
-the remaining R16 lifecycle work: requests and read models now carry exact
-decimal coefficient strings while the backend keeps its int64 admission range.
+Zero-proceeds write-off and price observation voiding ship as backend commands;
+write-off UI and the R11 price operator surface remain follow-ups. Provider
+return-of-capital/cash-in-lieu suggestions stay review-only until supported.
+The exact monetary JSON boundary and bundle schema 5 are shipped; changes to
+baseline/export contracts require fresh and seeded validation under ADR 0013.
+Race-gate performance improvement [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140) is independent trust work;
+retain all financial and race coverage while measuring safe scheduling changes.
 
 ### R11 — price and FX management UI, promoted after R16
 

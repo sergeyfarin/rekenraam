@@ -17,12 +17,28 @@ the existing local IDs resolvable; it is not a second task list.
 | T-63 | [#107 — Account-version-gap message](https://github.com/sergeyfarin/rekenraam/issues/107) |
 | T-72 | [#105 — Two-process SQLite tests](https://github.com/sergeyfarin/rekenraam/issues/105) |
 | T-73 | [#108 — Large-book export and self-check](https://github.com/sergeyfarin/rekenraam/issues/108) |
-| T-75b | [#99 — Investment-native correction](https://github.com/sergeyfarin/rekenraam/issues/99) |
 | T-80 | [#102 — Translation catalog parity](https://github.com/sergeyfarin/rekenraam/issues/102) |
 | T-87 | [#101 — Owner-local dates](https://github.com/sergeyfarin/rekenraam/issues/101) |
 | T-108 | [#103 — Short sale and cover](https://github.com/sergeyfarin/rekenraam/issues/103) |
 | T-112 | [#127 — Trading 212 fill taxonomy admission](https://github.com/sergeyfarin/rekenraam/issues/127) |
 | T-113 | [#128 — SQLite fixture URI path escaping](https://github.com/sergeyfarin/rekenraam/issues/128) |
+| T-114 | [#129 — Preview and acknowledge realized-gain restatements from replay](https://github.com/sergeyfarin/rekenraam/issues/129) |
+| T-115 | [#130 — Correct cash dividends and reinvested dividends](https://github.com/sergeyfarin/rekenraam/issues/130) |
+| T-116 | [#131 — Correct trade date, holding account, instrument or cost currency](https://github.com/sergeyfarin/rekenraam/issues/131) |
+| T-117 | [#132 — Admit backdated transfer-in and replay earlier disposals](https://github.com/sergeyfarin/rekenraam/issues/132) |
+| T-118 | [#133 — Reverse or replace an investment write-off](https://github.com/sergeyfarin/rekenraam/issues/133) |
+| T-119 | [#134 — Correct in-kind transfers across dependent positions](https://github.com/sergeyfarin/rekenraam/issues/134) |
+| T-120 | [#135 — Group correction chains and reconcile their net balance impact](https://github.com/sergeyfarin/rekenraam/issues/135) |
+| T-121 | [#136 — Verify provider execution cancellation before broader source revisions](https://github.com/sergeyfarin/rekenraam/issues/136) |
+| T-122 | [#137 — Post manual stock splits and map Trading 212 split review](https://github.com/sergeyfarin/rekenraam/issues/137) |
+| T-123 | [#138 — Carry pooled average-cost basis through internal transfers](https://github.com/sergeyfarin/rekenraam/issues/138) |
+| T-124 | [#139 — Decide cross-position replay scope and consolidate effective investment reads](https://github.com/sergeyfarin/rekenraam/issues/139) |
+| T-125 | [#140 — Measure and shorten the complete backend race gate](https://github.com/sergeyfarin/rekenraam/issues/140) |
+
+T-75b [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is closed for
+its delivered long-buy/sale scope; the [2026-10-02 review](reviews/investment-review-2026-10-02.md)
+maps the remaining correction families above. Local `T-nn` IDs and GitHub
+`#nn` numbers are distinct identifiers; include both when discussing a ticket.
 
 The [roadmap](roadmap.md) owns product order; its
 [GitHub index](https://github.com/sergeyfarin/rekenraam/issues/120) links current

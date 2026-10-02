@@ -6,75 +6,38 @@ R16 acceptance criteria. [GitHub Issues](https://github.com/sergeyfarin/rekenraa
 tracks actionable work; the [backlog](backlog.md) maps local IDs, and
 [implemented](implemented.md) records shipped behavior.
 
-Last reconciled: 2026-10-01.
+Last reconciled: 2026-10-02.
 
-## Current: R16 correction
+## Current: R16 gain-impact safety
 
-- [ ] Finish slice 4: add the investment-native
-  correction/reversal command
-  ([T-75b #99](https://github.com/sergeyfarin/rekenraam/issues/99)). A posted
-  reversal and replacement must update journal, effective lots and gains,
-  prices, audit links, and reconciliation impact together. Keep backdated
-  writes fenced until the dependency and rollback tests pass.
-- [x] Validate old manual buy and sale corrections through dependent disposals
-  under all four methods, with rollback and effective allocation revisions.
-  See the [feature ledger](implemented.md)
-  and [slice 4 plan](plans/investment-operation-refactor-plan.md) for the
-  shipped sub-slices. Trading 212 BUY and SALE source replacement and their
-  dedicated reconciliation previews are also shipped. Terminal native buy/sale
-  reversal is shipped. Source cancellation, broader backdated admission, other
-  operation corrections remain open.
-- [x] Converge native BUY/SALE reversal transaction orchestration onto the
-  existing investment writer (slice 4ag), with source guard before journal
-  insertion and late checkpoint-failure rollback coverage. Compound
-  replacements and source acceptance converge in slice 4ah below.
-- [x] Converge compound BUY/SALE replacement orchestration and source acceptance
-  onto the shared investment writer (slice 4ah), with guards before either
-  journal and late checkpoint/acceptance rollback plus stale-command coverage.
-  Verified source execution cancellation, wider source revisions and other
-  operation correction/backdating gates remain in #99.
-- [x] Prove dependent replay in manual/source-linked and Trading 212 buy
-  replacement reconciliation previews (slice 4ai). Preview uses the actual
-  writer in a rolled-back transaction, refuses named disposal/transfer conflicts,
-  and preserves exact durable rows. The commit still rechecks and requires
-  explicit checkpoint override.
-- [x] Preserve Trading 212 fill taxonomy and hold unsupported or missing
-  types before any trade/cash import or source correction (slice 4af,
-  [T-112 #127](https://github.com/sergeyfarin/rekenraam/issues/127)). Source
-  execution cancellation still needs verified provider evidence; cancelled
-  order status and FOP_CORRECTION are insufficient to reverse an execution.
-- [x] Complete [T-110 #125](https://github.com/sergeyfarin/rekenraam/issues/125)'s
-  reopened slice 2a integrity gates: pinned component posting links,
-  independent decision/clearing attribution, authoritative operation journal
-  links, immutable lot identity/current-state separation, reconstruction,
-  explicit nullable projected-basis knowledge, export and mutation/seeded tests.
-  Current commands require known source basis; unknown immutable facts and
-  resolution replay remain slice 5 gates. Sharing correction transaction
-  orchestration is complete in T-75b slices 4ag–4ah; its remaining correction
-  gates stay in #99.
+- [ ] Deliver replay gain restatement preview and explicit acknowledgement
+  [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129); cover manual and imported replay, stale preview and rollback.
+- [ ] Deliver manual split/reverse split and verified Trading 212 review mapping
+  [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137) using the slice 5 exact-conservation contract.
+- [ ] Support pooled average-cost internal transfers [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).
+- [ ] Extend backdating to transfer-in and dependent disposals
+  [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132); preserve recorded methods and original acquisition dates.
+- [ ] Decide cross-position replay and consolidate effective readers
+  [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139) before outbound transfers and compound actions.
 
 ## Then, within R16
 
-- [ ] Specify and deliver
-  [in-kind transfers and basis actions](https://github.com/sergeyfarin/rekenraam/issues/114)
-  (return of capital, manual splits, cash in lieu), one validated operation at a time.
-  The [slice 5 contract](plans/investment-operation-slice-5-contract.md)
-  fixes posting, allocation, date, reconciliation and unknown-basis behavior.
-  Typed transfer facts and the first known-basis external transfer-in API
-  command and mobile entry screen are complete. The internal transfer API
-  now moves explicitly selected long lots between holding accounts with
-  carried basis, reconciliation review and a mobile entry screen. Next:
-  pooled-basis allocation for internal transfers from open average-cost
-  positions, outbound transfers and cross-account carried-basis replay after
-  the correction and integrity gates. Keep basis-affecting
-  provider suggestions in review until their operation exists.
-- [ ] Add [named short sale and cover T-108](https://github.com/sergeyfarin/rekenraam/issues/103)
-  with side-aware gains, dated positions, self-check, export, API, and mobile
-  entry. An ordinary negative
-  holding stays flagged as unclassified until corrected or explicitly entered
-  as a short.
-- [ ] Specify [compound corporate actions](https://github.com/sergeyfarin/rekenraam/issues/115)
-  after the common operations work.
+- [ ] Deliver dividend/reinvestment correction [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130), trade field
+  correction [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131), write-off correction [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133), transfer
+  correction [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134), and correction grouping/net checkpoint impact
+  [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135), one bounded family at a time.
+- [ ] Complete [#114 transfers and basis actions](https://github.com/sergeyfarin/rekenraam/issues/114):
+  outbound/unknown transfers, sourced basis resolution, return of capital and
+  linked cash in lieu. The [slice 5 contract](plans/investment-operation-slice-5-contract.md)
+  governs postings, dates, reconciliation and basis knowledge.
+- [ ] Add [named short sale/cover T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103),
+  then [compound corporate actions #115](https://github.com/sergeyfarin/rekenraam/issues/115).
+
+#99 long-buy/sale correction and #125 integrity are complete within their
+bounded scopes. History belongs in [implemented](implemented.md) and dated
+reviews. Provider execution cancellation [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) remains blocked on
+verified evidence; cancelled order status is insufficient. The plain-buy
+preview replay fix is shipped by this review; gain disclosure is still open.
 
 ## Parallel trust work
 
@@ -84,6 +47,9 @@ Last reconciled: 2026-10-01.
 - [ ] Fill [T-80](https://github.com/sergeyfarin/rekenraam/issues/102)'s 65
   missing keys per non-English locale, add catalog parity validation, and
   arrange native review before calling the catalogs complete.
+
+- [ ] Measure and shorten the backend race gate [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140) without reducing
+  meaningful coverage.
 
 ## Following R16
 
