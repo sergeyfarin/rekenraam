@@ -1093,17 +1093,22 @@ func (s *InvestmentService) buy(ctx context.Context, input InvestmentTradeInput,
 		transactionRecord, lot, err = s.repository.CreateTransactionAndLotWithPostWrite(ctx, transactionParams, lotParams, postWrite)
 	}
 	if err != nil {
-		var dependency *db.InvestmentReplayDependencyError
-		if errors.As(err, &dependency) {
-			return InvestmentTradeResult{}, InvestmentBuyDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
-		}
-		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
-			return InvestmentTradeResult{}, err
-		}
-		return InvestmentTradeResult{}, fmt.Errorf("create buy transaction and lot: %w", mapTransactionDBError(err))
+		return InvestmentTradeResult{}, mapBuyWriteError(err)
 	}
+
 	transaction := toTransaction(transactionRecord)
 	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
+}
+
+func mapBuyWriteError(err error) error {
+	var dependency *db.InvestmentReplayDependencyError
+	if errors.As(err, &dependency) {
+		return InvestmentBuyDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
+	}
+	if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
+		return err
+	}
+	return fmt.Errorf("create buy transaction and lot: %w", mapTransactionDBError(err))
 }
 
 // prepareBuyWrite freezes the same exact journal and lot-opening facts for
@@ -2821,14 +2826,22 @@ const (
 
 // TradeReconciliationImpact returns the active checkpoints a buy, sell, or
 // write-off would invalidate, without persisting anything. It plans the trade
-// through the same builder the write path uses, so the checkpoints it names are
-// the checkpoints the write would actually invalidate (T-53).
+// through the same builder the write path uses. Buys also execute the writer
+// and dependent replay in a rolled-back transaction before returning impact.
 func (s *InvestmentService) TradeReconciliationImpact(ctx context.Context, kind InvestmentImpactKind, input InvestmentTradeInput) (ReconciliationImpact, error) {
 	var plan investmentTransactionPlan
 	var err error
 	switch kind {
 	case InvestmentImpactBuy:
-		plan, err = s.buyPlan(ctx, input)
+		input.ReconciliationOverride = true
+		transactionParams, lotParams, err := s.prepareBuyWrite(ctx, input)
+		if err != nil {
+			return ReconciliationImpact{}, err
+		}
+		if err := s.repository.SimulateBuy(ctx, transactionParams, lotParams); err != nil {
+			return ReconciliationImpact{}, mapBuyWriteError(err)
+		}
+		return s.transactionService.reconciliationImpactForPreparedCreate(ctx, transactionParams.Spec)
 	case InvestmentImpactSell:
 		plan, err = s.sellPlan(ctx, input)
 	case InvestmentImpactWriteOff:

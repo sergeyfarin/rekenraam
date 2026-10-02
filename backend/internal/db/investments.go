@@ -1843,18 +1843,29 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 }
 
 func (r *InvestmentRepository) CreateTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) (TransactionRecord, InvestmentLotRecord, error) {
-	return r.createTransactionAndLot(ctx, transactionParams, lotParams, nil)
+	return r.createTransactionAndLot(ctx, transactionParams, lotParams, nil, false)
 }
 
 // CreateTransactionAndLotWithPostWrite invokes postWrite in the same SQLite
 // transaction as the ledger transaction and lot. This keeps import identity
 // recording crash-safe: a failure rolls back all three writes together.
 func (r *InvestmentRepository) CreateTransactionAndLotWithPostWrite(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, InvestmentLotRecord, error) {
-	return r.createTransactionAndLot(ctx, transactionParams, lotParams, postWrite)
+	return r.createTransactionAndLot(ctx, transactionParams, lotParams, postWrite, false)
 }
 
-func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, InvestmentLotRecord, error) {
-	return executeInvestmentWriteTx(ctx, r.database, transactionParams,
+// SimulateBuy executes the buy writer, including dependent replay and checkpoint
+// effects, then rolls back without exposing temporary journal or lot IDs.
+func (r *InvestmentRepository) SimulateBuy(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams) error {
+	_, _, err := r.createTransactionAndLot(ctx, transactionParams, lotParams, nil, true)
+	return err
+}
+
+func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, transactionParams CreateTransactionParams, lotParams CreateInvestmentLotParams, postWrite func(*sql.Tx, int64) error, preview bool) (TransactionRecord, InvestmentLotRecord, error) {
+	write := executeInvestmentWriteTx[InvestmentLotRecord]
+	if preview {
+		write = previewInvestmentWriteTx[InvestmentLotRecord]
+	}
+	return write(ctx, r.database, transactionParams,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (InvestmentLotRecord, error) {
 			lotParams.SourceTransactionID = transaction.ID
 			latest, err := latestPositionRewriteDateTx(ctx, tx, lotParams.BookID, lotParams.AccountID, lotParams.CommodityID)

@@ -14,6 +14,26 @@ func executeInvestmentWriteTx[T any](ctx context.Context, database *sql.DB, para
 	return executeInvestmentWriteWithGuardTx(ctx, database, params, nil, effect, postWrite)
 }
 
+// previewInvestmentWriteTx is the single-journal counterpart to the shared
+// compound preview writer. It uses the same effects and rollback boundary.
+func previewInvestmentWriteTx[T any](ctx context.Context, database *sql.DB, params CreateTransactionParams,
+	effect func(*sql.Tx, TransactionRecord, int64) (T, error), postWrite func(*sql.Tx, int64) error,
+) (TransactionRecord, T, error) {
+	if postWrite != nil {
+		var zero T
+		return TransactionRecord{}, zero, fmt.Errorf("investment preview cannot accept source evidence")
+	}
+	journals, result, err := previewInvestmentJournalsWithGuardTx(ctx, database, []CreateTransactionParams{params}, nil,
+		func(tx *sql.Tx, journals []TransactionRecord, auditEventID int64) (T, error) {
+			return effect(tx, journals[0], auditEventID)
+		}, nil)
+	if err != nil {
+		var zero T
+		return TransactionRecord{}, zero, err
+	}
+	return journals[0], result, nil
+}
+
 // Correction guards run under the same SQLite write transaction, before a
 // successor journal exists. Checking after insertion would see the command's
 // own successor and incorrectly reject an otherwise effective source.
