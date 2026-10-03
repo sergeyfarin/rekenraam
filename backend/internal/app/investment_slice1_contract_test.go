@@ -88,7 +88,7 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				"investment-transfer-lot-links.csv":      {"operation_id", "link_seq", "source_lot_id", "destination_lot_id", "quantity_value", "quantity_scale", "basis_knowledge", "carried_basis_value", "carried_basis_scale", "cost_commodity_id", "original_date_knowledge", "original_acquired_on", "source_evidence_json"},
 				"investment-transfer-link-revisions.csv": {"revision_id", "operation_id", "link_seq", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "source_lot_id", "carried_basis_value", "carried_basis_scale", "created_at", "audit_event_id"},
 				"investment-split-facts.csv":             {"operation_id", "account_id", "commodity_id", "effective_on", "ratio_numerator", "ratio_denominator", "source_evidence_json", "audit_event_id"},
-				"investment-split-revisions.csv":         {"revision_id", "operation_id", "cost_commodity_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "created_at", "audit_event_id"},
+				"investment-split-revisions.csv":         {"revision_id", "operation_id", "cost_commodity_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "created_at", "audit_event_id", "adjustment_transaction_version_id"},
 				"investment-split-revision-effects.csv":  {"revision_id", "effect_seq", "lot_id", "quantity_delta_value", "quantity_delta_scale"},
 				"investment-fee-policies.csv":            {"policy_id", "account_id", "charge_kind", "created_at", "audit_event_id"},
 				"investment-fee-policy-versions.csv":     {"version_id", "policy_id", "version_seq", "effective_from", "treatment", "charge_account_id", "recorded_at", "audit_event_id"},

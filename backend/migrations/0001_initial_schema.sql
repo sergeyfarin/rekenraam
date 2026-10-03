@@ -1721,6 +1721,10 @@ CREATE TABLE IF NOT EXISTS investment_split_revisions (
   supersedes_revision_id INTEGER REFERENCES investment_split_revisions(id) ON DELETE RESTRICT,
   created_at TEXT NOT NULL,
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  -- A revision whose effects move a different aggregate quantity than its
+  -- predecessor posts the difference as an adjustment journal dated to the
+  -- split, linked to the split operation as 'split_adjustment' (T-129).
+  adjustment_transaction_version_id INTEGER UNIQUE REFERENCES transaction_versions(id) ON DELETE RESTRICT,
   UNIQUE (operation_id, cost_commodity_id, revision_seq),
   CHECK ((revision_seq = 2) = (supersedes_revision_id IS NULL))
 );
@@ -1770,6 +1774,12 @@ WHEN NOT EXISTS (
           AND previous.book_id = NEW.book_id AND previous.operation_id = NEW.operation_id
           AND previous.cost_commodity_id = NEW.cost_commodity_id
           AND previous.revision_seq = NEW.revision_seq - 1))
+    AND (NEW.adjustment_transaction_version_id IS NULL OR EXISTS (
+      SELECT 1 FROM investment_operation_journal_links link
+      JOIN transaction_versions v ON v.id = link.transaction_version_id
+      WHERE link.transaction_version_id = NEW.adjustment_transaction_version_id
+        AND link.operation_id = NEW.operation_id AND link.book_id = NEW.book_id
+        AND link.role = 'split_adjustment' AND v.change_audit_event_id = NEW.created_audit_event_id))
 )
 BEGIN SELECT RAISE(ABORT, 'investment split revision chain is invalid'); END;
 -- +goose StatementEnd

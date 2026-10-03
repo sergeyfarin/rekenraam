@@ -36,7 +36,8 @@ type InvestmentReplayIntent struct {
 	DecisionID     int64 // disposal only
 	// QuantityValue is the opening, disposal or transfer quantity. For a split
 	// it is the signed holding delta the split's effective effects moved in
-	// this cost currency, which replay must reproduce exactly.
+	// this cost currency; replay may move a different one, which persisting
+	// posts as an adjustment journal (T-129).
 	QuantityValue    exact.Coefficient
 	QuantityScale    int
 	RatioNumerator   int64 // split only
@@ -418,8 +419,7 @@ type transferSourceOpening struct {
 }
 
 // investmentReplaySplitIntentsQuery reads the effective splits of a holding.
-// Each carries the delta its effective effects moved in this cost currency;
-// a replay that would move a different quantity is a named dependency.
+// Each carries the delta its effective effects moved in this cost currency.
 func investmentReplaySplitIntentsQuery(ctx context.Context, reader queryer, bookID, accountID, commodityID, costCommodityID int64) ([]InvestmentReplayIntent, error) {
 	rows, err := reader.QueryContext(ctx, `
 		SELECT f.operation_id, o.operation_kind, f.effective_on, f.ratio_numerator, f.ratio_denominator,

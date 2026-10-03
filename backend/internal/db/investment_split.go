@@ -22,6 +22,12 @@ import (
 // and its opposite to commodity_trading in the security commodity; no cash is
 // posted. Fractions the security's scale cannot represent are refused, never
 // rounded: whole-share brokers settle them with a separate cash-in-lieu event.
+//
+// History that changes how many shares a split multiplied (a quantity
+// correction, backdated acquisition or reversal before it) replays the split
+// and appends a revision; when the revision's aggregate delta differs from its
+// predecessor, the difference e posts as an adjustment journal dated to the
+// split (H +e, T -e), linked to the split operation and the revision (T-129).
 
 var (
 	// ErrSplitNoEligibleHoldings means no lot is open on the effective date, so
@@ -34,10 +40,6 @@ var (
 	// ErrSplitPositionChanged means the position changed between planning the
 	// split journal and committing it; the planned quantity delta is stale.
 	ErrSplitPositionChanged = errors.New("the position changed after the split was planned")
-	// ErrSplitQuantityDependency means a correction or backdated acquisition
-	// would change the quantity a posted split moved. The split's journal
-	// delta cannot be revised yet, so the triggering command is refused.
-	ErrSplitQuantityDependency = errors.New("a posted split's quantity change would be revised")
 )
 
 // CreateSplitParams are the sourced split terms. The ratio must already be
@@ -462,9 +464,11 @@ func canonicalSplitEffects(effects []SplitLotEffect) string {
 }
 
 // persistSplitRevisionTx appends an effective revision only when replay moved
-// a split's per-lot effects; an unchanged replay adds no audit noise. The
-// aggregate is already pinned to the posted journal by replay's delta check.
-func persistSplitRevisionTx(ctx context.Context, tx *sql.Tx, bookID, costCommodityID, causedByOperationID, auditEventID int64,
+// a split's per-lot effects; an unchanged replay adds no audit noise. A
+// revision whose effects move a different aggregate quantity than the current
+// ones posts the difference as an adjustment journal, so the split's linked
+// journals always sum to its effective effects (T-129).
+func persistSplitRevisionTx(ctx context.Context, tx *sql.Tx, bookID, costCommodityID, causedByOperationID, auditEventID, actorUserID int64,
 	createdAt string, split InvestmentReplaySplit) error {
 	current, priorID, priorSeq, err := effectiveSplitEffectsQuery(ctx, tx, bookID, split.OperationID, costCommodityID)
 	if err != nil {
@@ -476,11 +480,20 @@ func persistSplitRevisionTx(ctx context.Context, tx *sql.Tx, bookID, costCommodi
 	if priorSeq == 0 {
 		priorSeq = 1
 	}
+	delta := sumSplitEffects(split.Effects)
+	delta.SubScaled(sumSplitEffects(current))
+	var adjustmentVersionID int64
+	if delta.Sign() != 0 {
+		if adjustmentVersionID, err = postSplitAdjustmentJournalTx(ctx, tx, bookID, split.OperationID,
+			delta.Normalized(), auditEventID, actorUserID, createdAt); err != nil {
+			return err
+		}
+	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO investment_split_revisions (
 		book_id, operation_id, cost_commodity_id, revision_seq, caused_by_operation_id,
-		supersedes_revision_id, created_at, created_audit_event_id
-	) VALUES (?, ?, ?, ?, ?, NULLIF(?, 0), ?, ?)`, bookID, split.OperationID, costCommodityID,
-		priorSeq+1, causedByOperationID, priorID, createdAt, auditEventID)
+		supersedes_revision_id, created_at, created_audit_event_id, adjustment_transaction_version_id
+	) VALUES (?, ?, ?, ?, ?, NULLIF(?, 0), ?, ?, NULLIF(?, 0))`, bookID, split.OperationID, costCommodityID,
+		priorSeq+1, causedByOperationID, priorID, createdAt, auditEventID, adjustmentVersionID)
 	if err != nil {
 		return fmt.Errorf("append split revision for operation %d: %w", split.OperationID, err)
 	}
@@ -497,4 +510,54 @@ func persistSplitRevisionTx(ctx context.Context, tx *sql.Tx, bookID, costCommodi
 		}
 	}
 	return nil
+}
+
+// postSplitAdjustmentJournalTx posts a split's revised quantity delta e as a
+// journal dated to the split: H +e to the holding and T -e to
+// commodity_trading, in the security, under the enclosing command's audit
+// event. The journal is linked to the split operation as 'split_adjustment';
+// the investment writer applies the reconciliation guard to it after the
+// domain effects (splitAdjustmentCheckpointCandidatesTx).
+func postSplitAdjustmentJournalTx(ctx context.Context, tx *sql.Tx, bookID, splitOperationID int64, delta *exact.ScaledInt,
+	auditEventID, actorUserID int64, createdAt string) (int64, error) {
+	var accountID, commodityID, tradingID int64
+	var effectiveOn string
+	if err := tx.QueryRowContext(ctx, `SELECT f.account_id, f.commodity_id, f.effective_on, trading.id
+		FROM investment_split_facts f
+		JOIN accounts trading ON trading.book_id = f.book_id AND trading.system_role = 'commodity_trading'
+		WHERE f.operation_id = ? AND f.book_id = ?`, splitOperationID, bookID).Scan(
+		&accountID, &commodityID, &effectiveOn, &tradingID); err != nil {
+		return 0, fmt.Errorf("read split %d adjustment accounts: %w", splitOperationID, err)
+	}
+	value, err := delta.Coefficient()
+	if err != nil {
+		return 0, err
+	}
+	posting := func(key string, account int64, quantity exact.Coefficient) PostingSpec {
+		return PostingSpec{LineKey: key, AccountID: account, QuantityValue: quantity, QuantityScale: delta.Scale(),
+			CommodityID: commodityID, ReconciliationStatus: "uncleared", MetadataJSON: "{}"}
+	}
+	record, err := insertTransactionWithAuditEventTx(ctx, tx, CreateTransactionParams{
+		BookID: bookID, ActorUserID: actorUserID, CreatedAt: createdAt,
+		Spec: TransactionSpec{
+			Status: "posted", TransactionKind: "investment", TransactionDate: effectiveOn,
+			MetadataJSON: fmt.Sprintf(`{"split_adjustment_of_operation_id":%d}`, splitOperationID),
+			JournalEntries: []JournalEntrySpec{{EntryDate: effectiveOn, EntryKind: "investment", MetadataJSON: "{}",
+				Postings: []PostingSpec{
+					posting("split-adjustment-holding", accountID, value),
+					posting("split-adjustment-trading", tradingID, value.Negated()),
+				}}},
+		},
+	}, auditEventID)
+	if err != nil {
+		return 0, fmt.Errorf("post split %d adjustment journal: %w", splitOperationID, err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
+		(book_id, operation_id, transaction_version_id, link_seq, role)
+		SELECT ?, ?, ?, COALESCE(MAX(link_seq), 0) + 1, 'split_adjustment'
+		FROM investment_operation_journal_links WHERE operation_id = ?`,
+		bookID, splitOperationID, record.VersionID, splitOperationID); err != nil {
+		return 0, fmt.Errorf("link split %d adjustment journal: %w", splitOperationID, err)
+	}
+	return record.VersionID, nil
 }

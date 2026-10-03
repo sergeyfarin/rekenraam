@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 )
 
 // executeInvestmentWriteTx commits an investment journal, its domain effects,
@@ -213,6 +214,29 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 			journals[index].InvalidatedCheckpointRefs = refs
 		}
 	}
+	// Replay may have posted split adjustment journals the caller could not
+	// name in advance (T-129). They meet the same guard, override and reason
+	// as the command's own journals, and a preview reports what they touch.
+	adjustments, err := splitAdjustmentCheckpointCandidatesTx(ctx, tx, params[0].BookID, auditEventID)
+	if err != nil {
+		return nil, zero, err
+	}
+	if len(adjustments) > 0 {
+		guarded := params[0]
+		guarded.CheckpointCandidates = adjustments
+		invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, guarded, auditEventID)
+		if err != nil {
+			return nil, zero, err
+		}
+		journals[0].InvalidatedCheckpointIDs = append(journals[0].InvalidatedCheckpointIDs, invalidatedIDs...)
+		if !persist {
+			refs, err := investmentInvalidatedCheckpointRefsTx(ctx, tx, guarded.BookID, invalidatedIDs, adjustments)
+			if err != nil {
+				return nil, zero, err
+			}
+			journals[0].InvalidatedCheckpointRefs = append(journals[0].InvalidatedCheckpointRefs, refs...)
+		}
+	}
 	if postWrite != nil {
 		if err := postWrite(tx, journals, auditEventID); err != nil {
 			return nil, zero, err
@@ -272,4 +296,32 @@ func investmentInvalidatedCheckpointRefsTx(ctx context.Context, tx *sql.Tx, book
 		return nil, fmt.Errorf("investment preview checkpoint metadata is incomplete")
 	}
 	return refs, nil
+}
+
+// splitAdjustmentCheckpointCandidatesTx lists every position touched by a
+// split adjustment journal posted under this audit event. Replay decides those
+// journals inside the domain effects, so they are found afterwards.
+func splitAdjustmentCheckpointCandidatesTx(ctx context.Context, tx *sql.Tx, bookID, auditEventID int64) ([]PeriodScopedCheckpointRef, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT pv.account_id, pv.commodity_id, je.entry_date
+		FROM investment_split_revisions r
+		JOIN posting_versions pv ON pv.transaction_version_id = r.adjustment_transaction_version_id
+		JOIN journal_entries je ON je.id = pv.journal_entry_id
+		WHERE r.book_id = ? AND r.created_audit_event_id = ?
+		ORDER BY pv.id`, bookID, auditEventID)
+	if err != nil {
+		return nil, fmt.Errorf("read split adjustment positions: %w", err)
+	}
+	defer rows.Close()
+	var candidates []PeriodScopedCheckpointRef
+	for rows.Next() {
+		candidate := PeriodScopedCheckpointRef{AccountDaySequence: math.MaxInt64}
+		if err := rows.Scan(&candidate.AccountID, &candidate.CommodityID, &candidate.EntryDate); err != nil {
+			return nil, fmt.Errorf("scan split adjustment position: %w", err)
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate split adjustment positions: %w", err)
+	}
+	return candidates, nil
 }

@@ -149,7 +149,7 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 			}
 		}
 		if err := persistSplitRevisionTx(ctx, tx, bookID, costCommodityID, causedByOperationID,
-			auditEventID, createdAt, split); err != nil {
+			auditEventID, actorUserID, createdAt, split); err != nil {
 			return err
 		}
 	}

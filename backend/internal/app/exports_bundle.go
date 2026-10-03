@@ -217,7 +217,7 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "split-facts", []string{"operation_id", "account_id", "commodity_id", "effective_on", "ratio_numerator", "ratio_denominator", "source_evidence_json", "audit_event_id"})
 		}},
 		{"investment-split-revisions.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "split-revisions", []string{"revision_id", "operation_id", "cost_commodity_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "created_at", "audit_event_id"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "split-revisions", []string{"revision_id", "operation_id", "cost_commodity_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "created_at", "audit_event_id", "adjustment_transaction_version_id"})
 		}},
 		{"investment-split-revision-effects.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "split-revision-effects", []string{"revision_id", "effect_seq", "lot_id", "quantity_delta_value", "quantity_delta_scale"})
@@ -892,7 +892,7 @@ value in this archive was ever a floating-point number.`,
   investment-transfer-lot-links.csv  sourced lot lineage, dates, and basis knowledge
   investment-transfer-link-revisions.csv  replayed carried basis of internal transfer links
   investment-split-facts.csv  sourced split and reverse-split ratios and dates
-  investment-split-revisions.csv  replay revisions of split lot effects per cost currency
+  investment-split-revisions.csv  replay revisions of split lot effects per cost currency, with any adjustment journal
   investment-split-revision-effects.csv  per-lot quantity changes for those revisions
   investment-fee-policies.csv  book and account charge policy identities
   investment-fee-policy-versions.csv  dated, immutable charge policy versions

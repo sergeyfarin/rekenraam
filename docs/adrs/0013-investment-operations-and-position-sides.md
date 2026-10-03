@@ -233,3 +233,19 @@ successor. The duplicate `investment_lot_facts` table is merged into
 immutability; `source_transaction_id` stays as journal provenance and disposal
 decisions keep their transaction/version links. Repeated typed-date sequence
 remains a gate for the first compound kind (#115) rather than unused schema.
+
+## Split Journal-Delta Adjustment Refinement (2026-10-03, T-129)
+
+This supersedes the example above that lists "a split whose posted quantity
+would change" as a standing refusal. A journal-bearing operation whose replayed
+quantity differs from what its journals posted is reconciled by an
+**adjustment journal**, not by refusal and not by rewriting the original: the
+difference posts under the triggering command's audit event, dated to the
+operation, linked to it with a non-primary journal-link role, and recorded on
+the revision that introduced the difference. The operation's primary plus
+adjustment journals must equal its effective effects, and self-check verifies
+that per operation. Splits are the first such operation (role
+`split_adjustment`). The investment writer applies the reconciliation guard to
+adjustment journals discovered during domain effects. Native correction
+admission and the operation-for-transaction lookup continue to read only
+`primary` links, so an adjustment journal cannot be corrected on its own.

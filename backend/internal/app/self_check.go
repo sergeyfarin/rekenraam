@@ -462,6 +462,16 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			OR EXISTS (SELECT 1 FROM investment_operation_lot_effects x
 				JOIN investment_lot_events e ON e.id = x.lot_event_id
 				WHERE x.operation_id = o.id AND e.event_kind <> 'split_adjustment'))`},
+		{"split adjustment journal not recorded by a split revision on the split date", `
+			SELECT link.id FROM investment_operation_journal_links link
+			WHERE link.book_id = ? AND link.role = 'split_adjustment'
+			AND NOT EXISTS (SELECT 1 FROM investment_split_revisions r
+				JOIN investment_split_facts f ON f.operation_id = r.operation_id
+				JOIN transaction_versions v ON v.id = r.adjustment_transaction_version_id
+				WHERE r.adjustment_transaction_version_id = link.transaction_version_id
+					AND r.operation_id = link.operation_id AND v.transaction_date = f.effective_on
+					AND NOT EXISTS (SELECT 1 FROM journal_entries je
+						WHERE je.transaction_version_id = v.id AND je.entry_date <> f.effective_on))`},
 		{"posted long disposal missing proceeds decision", `
 			SELECT o.id FROM investment_operations o
 			WHERE o.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
@@ -491,7 +501,8 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		switch check.label {
 		case "completed setup missing transfer equity account", "completed setup missing commission default":
 			kind = "book"
-		case "operation journal link is not posted in its book":
+		case "operation journal link is not posted in its book",
+			"split adjustment journal not recorded by a split revision on the split date":
 			kind = "journal link"
 		case "operation lot missing immutable source facts":
 			kind = "lot"
@@ -552,6 +563,29 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		result.Status = SelfCheckFailed
 		result.FindingCount += componentMismatch
 		summaries = append(summaries, fmt.Sprintf("%d source components disagree with posted journal legs", componentMismatch))
+	}
+	// A split's primary journal plus its adjustments must post exactly what its
+	// effective lot effects moved; otherwise the holding and its lots disagree
+	// in a way the aggregate holding check can net away across splits (T-129).
+	splitDeltas, err := s.repository.SelfCheckSplitDeltas(ctx, snapshot, BookID)
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	var splitMismatch int64
+	for _, split := range splitDeltas {
+		if split.Journal.Cmp(split.Effects) == 0 {
+			continue
+		}
+		splitMismatch++
+		if len(result.Sample) < db.SelfCheckSampleLimit {
+			result.Sample = append(result.Sample, split.OperationID)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("operation #%d", split.OperationID))
+		}
+	}
+	if splitMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += splitMismatch
+		summaries = append(summaries, fmt.Sprintf("%d splits post a different journal delta than their effective lot effects", splitMismatch))
 	}
 	type clearingKey struct {
 		operationID, versionID, currencyID int64

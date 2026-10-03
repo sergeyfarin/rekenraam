@@ -59,7 +59,8 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 			f.ratio_numerator, f.ratio_denominator, f.source_evidence_json, f.created_audit_event_id
 			FROM investment_split_facts f WHERE f.book_id = ? ORDER BY f.operation_id`,
 		"split-revisions": `SELECT r.id, r.operation_id, r.cost_commodity_id, r.revision_seq,
-			r.caused_by_operation_id, r.supersedes_revision_id, r.created_at, r.created_audit_event_id
+			r.caused_by_operation_id, r.supersedes_revision_id, r.created_at, r.created_audit_event_id,
+			r.adjustment_transaction_version_id
 			FROM investment_split_revisions r WHERE r.book_id = ?
 			ORDER BY r.operation_id, r.cost_commodity_id, r.revision_seq`,
 		"split-revision-effects": `SELECT e.revision_id, e.effect_seq, e.lot_id,

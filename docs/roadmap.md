@@ -130,6 +130,7 @@ below is execution order, not a chain of hard dependencies.
    [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103), then compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
 
 **Placed, not sequenced:** zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146) after #144;
+split adjustment journal labels [T-136 #151](https://github.com/sergeyfarin/rekenraam/issues/151) with #144's correction UI or after;
 lot-opening `NOT NULL` [T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) before the v0.1.0 tag; race-gate
 runtime [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140) any time without reducing coverage. Blocked on
 provider evidence: [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145), [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136).

@@ -441,8 +441,9 @@ notes record design decisions per area; they carry no status or order.
   manual command with replay admission. `STOCK_SPLIT` alone supplies no ratio
   or entitlement, so provider rows only link to a recorded split until
   verified payload evidence defines a mapping. A history change that alters a
-  split's quantity is refused with the split named until a guarded
-  journal-delta adjustment exists (T-129).
+  split's quantity posts the difference as a guarded adjustment journal dated
+  to the split, linked to the split and its revision (T-129); see the slice 5
+  contract.
 - **Pooled internal transfers** (T-123). The source's method lock, else its
   resolved default, chooses selected-lot or pooled allocation. A pooled move
   reuses the sale's dated pool depletion (FIFO lot links for lineage, exact

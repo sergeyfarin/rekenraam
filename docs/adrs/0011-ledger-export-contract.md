@@ -289,3 +289,14 @@ basis; the highest `revision_seq` per `(operation_id, link_seq)` is the basis
 the destination lot currently carries and the source lot it is taken from.
 Quantity, destination lot and original date are only in the link file. Existing
 files and columns are unchanged.
+
+### Split adjustment journals (2026-10-03, T-129)
+
+`investment-split-revisions.csv` appends `adjustment_transaction_version_id`.
+It names the adjustment journal a revision posted when its effects move a
+different aggregate quantity than the previous effective effects; it is empty
+when the aggregate is unchanged. The journal appears in the ledger files like
+any posted journal and in `investment-operation-journal-links.csv` with role
+`split_adjustment`. A split's `primary` plus `split_adjustment` journals sum to
+its effective effects. The manifest stays at schema version 7; existing columns
+keep their order.

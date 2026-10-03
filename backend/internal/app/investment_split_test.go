@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
 
@@ -301,41 +302,264 @@ func TestEarlierAcquisitionBasisCorrectionReplaysThroughSplit(t *testing.T) {
 	requireSelfCheckPasses(t, f)
 }
 
-func TestAcquisitionChangingSplitEntitlementIsRefusedWithSplitNamed(t *testing.T) {
+// splitAdjustment is one adjustment journal a split revision posted.
+type splitAdjustment struct {
+	date             string
+	holding, trading string
+	causedBy         int64
+}
+
+// splitAdjustments lists every split adjustment journal in posting order with
+// its signed holding and trading quantities, read through its split revision
+// and its 'split_adjustment' journal link.
+func splitAdjustments(t *testing.T, f *investmentsTestFixture) []splitAdjustment {
+	t.Helper()
+	rows, err := f.database.Query(`SELECT v.transaction_date, h.quantity_value, h.quantity_scale,
+			tr.quantity_value, tr.quantity_scale, r.caused_by_operation_id
+		FROM investment_split_revisions r
+		JOIN investment_operation_journal_links link ON link.transaction_version_id = r.adjustment_transaction_version_id
+			AND link.operation_id = r.operation_id AND link.role = 'split_adjustment'
+		JOIN transaction_versions v ON v.id = r.adjustment_transaction_version_id
+		JOIN posting_versions h ON h.transaction_version_id = v.id AND h.account_id = ?
+		JOIN posting_versions tr ON tr.transaction_version_id = v.id AND tr.account_id <> ?
+		ORDER BY r.id`, f.holdingAccountID, f.holdingAccountID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var adjustments []splitAdjustment
+	for rows.Next() {
+		var adjustment splitAdjustment
+		var holding, trading exact.Coefficient
+		var holdingScale, tradingScale int
+		require.NoError(t, rows.Scan(&adjustment.date, &holding, &holdingScale, &trading, &tradingScale, &adjustment.causedBy))
+		adjustment.holding = wholeQuantity(t, holding, holdingScale)
+		adjustment.trading = wholeQuantity(t, trading, tradingScale)
+		adjustments = append(adjustments, adjustment)
+	}
+	require.NoError(t, rows.Err())
+	return adjustments
+}
+
+// wholeQuantity renders a whole-unit quantity at any stored scale.
+func wholeQuantity(t *testing.T, value exact.Coefficient, scale int) string {
+	t.Helper()
+	normalized := exact.ScaledIntFromCoefficient(value, scale).Normalized()
+	require.Zero(t, normalized.Scale())
+	coefficient, err := normalized.Coefficient()
+	require.NoError(t, err)
+	return coefficient.String()
+}
+
+func operationOf(t *testing.T, f *investmentsTestFixture, transactionID int64) int64 {
+	t.Helper()
+	var operationID int64
+	require.NoError(t, f.database.QueryRow(`SELECT link.operation_id FROM investment_operation_journal_links link
+		JOIN transaction_versions v ON v.id = link.transaction_version_id
+		WHERE v.transaction_id = ? AND link.role = 'primary'`, transactionID).Scan(&operationID))
+	return operationID
+}
+
+func TestQuantityCorrectionBeforeSplitPostsAdjustmentJournal(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buy := buyOn(t, f, "2026-01-10", 10, 10000)
-	split, err := f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
+	_, err := f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
 	require.NoError(t, err)
-	var splitOperation int64
-	require.NoError(t, f.database.QueryRow(`SELECT operation_id FROM investment_split_facts`).Scan(&splitOperation))
-	before := countSplitRows(t, f.database)
 
-	// A quantity correction before the split would change the shares it
-	// multiplied and therefore its posted journal delta.
+	// Twelve shares, not ten, were bought: the split multiplied two more.
 	replacement := InvestmentTradeInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-10", CommodityID: f.stockCommodityID,
 		HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 		QuantityValue: exact.New(12), CashAmountValue: 12000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
 	}
-	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
+	corrected, err := acknowledgedReplaceBuy(ctx, f.investmentService, ReplaceInvestmentBuyInput{
 		OwnerUserID: f.ownerUserID, TransactionID: buy.Transaction.ID, Reason: "quantity correction",
 		Replacement: replacement,
 	})
-	var buyDependency InvestmentBuyDependencyError
-	require.ErrorAs(t, err, &buyDependency)
-	assert.Equal(t, splitOperation, buyDependency.OperationID)
+	require.NoError(t, err)
+	assert.Equal(t, []splitAdjustment{{date: "2026-03-01", holding: "2", trading: "-2",
+		causedBy: operationOf(t, f, corrected.Replacement.Transaction.ID)}}, splitAdjustments(t, f))
+	assert.Zero(t, holdingQuantity(t, f).Cmp(scaled(24, 0)))
+	assert.Zero(t, holdingBasis(t, f).Cmp(scaled(12000, 2)))
+	requireSelfCheckPasses(t, f)
+}
 
-	// So would a backdated acquisition entitled to the split.
-	_, err = f.investmentService.Buy(ctx, InvestmentTradeInput{
+func TestBackdatedBuyBeforeSplitPostsAdjustmentAndRevisesLaterGain(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-10", 10, 10000)
+	_, err := f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
+	require.NoError(t, err)
+	saleInput := sellInput(f, "2026-07-01", 20)
+	saleInput.CostBasisMethod = "lifo"
+	sale, err := f.investmentService.Sell(ctx, saleInput)
+	require.NoError(t, err)
+	assert.Zero(t, effectiveDisposedBasis(t, f.database, sale.Transaction.ID).Cmp(scaled(10000, 2)))
+
+	// Three backdated shares are entitled to the split and become six. The
+	// later LIFO sale takes those six split February shares (60.00)
+	// before fourteen January ones (70.00), so its committed gain is revised.
+	backdated := InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
+		HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(3), CashAmountValue: 6000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	}
+	_, err = f.investmentService.Buy(ctx, backdated)
+	require.Error(t, err, "a revised committed gain needs acknowledgement")
+	preview, err := f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactBuy, backdated)
+	require.NoError(t, err)
+	require.NotNil(t, preview.GainImpact)
+	backdated.GainImpactAcknowledgement = preview.GainImpact.Acknowledgement
+	bought, err := f.investmentService.Buy(ctx, backdated)
+	require.NoError(t, err)
+
+	// Doubling three shares adds three to the split's delta.
+	assert.Equal(t, []splitAdjustment{{date: "2026-03-01", holding: "3", trading: "-3",
+		causedBy: operationOf(t, f, bought.Transaction.ID)}}, splitAdjustments(t, f))
+	assert.Zero(t, effectiveDisposedBasis(t, f.database, sale.Transaction.ID).Cmp(scaled(13000, 2)))
+	assert.Zero(t, holdingQuantity(t, f).Cmp(scaled(6, 0)))
+	assert.Zero(t, holdingBasis(t, f).Cmp(scaled(3000, 2)))
+	requireSelfCheckPasses(t, f)
+}
+
+func TestReversalsBeforeSplitPostAdjustmentJournals(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buy := buyOn(t, f, "2026-01-10", 10, 10000)
+	sale, err := f.investmentService.Sell(ctx, sellInput(f, "2026-02-01", 4))
+	require.NoError(t, err)
+	_, err = f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
+	require.NoError(t, err)
+	assert.Zero(t, holdingQuantity(t, f).Cmp(scaled(12, 0)))
+
+	// Reversing the sale leaves ten shares, not six, for the split to double.
+	_, err = acknowledgedReverseSale(ctx, f.investmentService, ReverseInvestmentSaleInput{
+		OwnerUserID: f.ownerUserID, TransactionID: sale.Transaction.ID, Reason: "entered twice"})
+	require.NoError(t, err)
+	assert.Zero(t, holdingQuantity(t, f).Cmp(scaled(20, 0)))
+	requireSelfCheckPasses(t, f)
+
+	// Reversing the purchase leaves nothing for the split to multiply: the
+	// second adjustment cancels its remaining delta exactly.
+	_, err = acknowledgedReverseBuy(ctx, f.investmentService, ReverseInvestmentBuyInput{
+		OwnerUserID: f.ownerUserID, TransactionID: buy.Transaction.ID, Reason: "entered twice"})
+	require.NoError(t, err)
+	adjustments := splitAdjustments(t, f)
+	require.Len(t, adjustments, 2)
+	assert.Equal(t, []string{"4", "-10"}, []string{adjustments[0].holding, adjustments[1].holding})
+	assert.Equal(t, []string{"-4", "10"}, []string{adjustments[0].trading, adjustments[1].trading})
+	assert.Zero(t, holdingQuantity(t, f).Cmp(scaled(0, 0)))
+	requireSelfCheckPasses(t, f)
+}
+
+func TestSplitAdjustmentIntoReconciledPeriodNeedsOverride(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-10", 10, 10000)
+	_, err := f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
+	require.NoError(t, err)
+	reconcileHoldingThrough(t, f, "2026-04-30", 20)
+	backdated := InvestmentTradeInput{
 		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
 		HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
 		QuantityValue: exact.New(3), CashAmountValue: 3000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
-	})
-	require.ErrorAs(t, err, &buyDependency)
-	assert.Equal(t, splitOperation, buyDependency.OperationID)
+	}
+	preview, err := f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactBuy, backdated)
+	require.NoError(t, err)
+	require.Len(t, preview.AffectedCheckpoints, 1)
+	assert.Equal(t, f.holdingAccountID, preview.AffectedCheckpoints[0].AccountID)
+	before := countSplitRows(t, f.database)
+	_, err = f.investmentService.Buy(ctx, backdated)
+	require.ErrorIs(t, err, ErrReconciliationOverrideRequired)
 	assert.Equal(t, before, countSplitRows(t, f.database))
-	assert.NotZero(t, split.Transaction.ID)
+	backdated.ReconciliationOverride = true
+	_, err = f.investmentService.Buy(ctx, backdated)
+	require.NoError(t, err)
+	assert.Len(t, splitAdjustments(t, f), 1)
+	var status string
+	require.NoError(t, f.database.QueryRow(`SELECT status FROM reconciliation_checkpoints`).Scan(&status))
+	assert.NotEqual(t, "active", status)
+	requireSelfCheckPasses(t, f)
+}
+
+// TestSplitAdjustmentJournalMeetsCheckpointGuardOnItsOwn isolates the
+// writer's guard over adjustment journals. Every current command also posts
+// its own journal earlier in the same holding, which would reach the
+// checkpoint first; with those positions removed from the triggering journal,
+// only the adjustment the replay posts on the split date can reach it.
+func TestSplitAdjustmentJournalMeetsCheckpointGuardOnItsOwn(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-10", 10, 10000)
+	_, err := f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
+	require.NoError(t, err)
+	reconcileHoldingThrough(t, f, "2026-04-30", 20)
+	journal, lot, err := f.investmentService.prepareBuyWrite(ctx, InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
+		HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(3), CashAmountValue: 3000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+		ReconciliationOverride: true,
+	})
+	require.NoError(t, err)
+	journal.CheckpointCandidates = nil
+
+	// The preview reports the checkpoint at the adjustment's date.
+	journal.GainImpact = gainImpactPolicy("")
+	simulated, err := f.investmentService.repository.SimulateLotOpening(ctx, journal, lot)
+	require.NoError(t, err)
+	require.Len(t, simulated.InvalidatedCheckpointRefs, 1)
+	assert.Equal(t, f.holdingAccountID, simulated.InvalidatedCheckpointRefs[0].AccountID)
+	assert.Equal(t, "2026-03-01", simulated.InvalidatedCheckpointRefs[0].EntryDate)
+
+	// Without an override the commit is refused and leaves nothing behind.
+	before := countSplitRows(t, f.database)
+	journal.ReconciliationOverride = false
+	_, _, err = f.investmentService.repository.CreateTransactionAndLot(ctx, journal, lot)
+	require.ErrorIs(t, err, db.ErrReconciliationOverrideRequired)
+	assert.Equal(t, before, countSplitRows(t, f.database))
+
+	// With it, the checkpoint the adjustment reaches is invalidated.
+	journal.ReconciliationOverride = true
+	_, _, err = f.investmentService.repository.CreateTransactionAndLot(ctx, journal, lot)
+	require.NoError(t, err)
+	var status string
+	require.NoError(t, f.database.QueryRow(`SELECT status FROM reconciliation_checkpoints`).Scan(&status))
+	assert.NotEqual(t, "active", status)
+	requireSelfCheckPasses(t, f)
+}
+
+func TestSplitAdjustmentRollsBackWithItsCommand(t *testing.T) {
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-01-10", 10, 10000)
+	_, err := f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
+	require.NoError(t, err)
+	before := countSplitRows(t, f.database)
+	beforeHolding := holdingQuantity(t, f)
+	// Fail after the adjustment journal, its link and its revision are written.
+	_, err = f.database.Exec(`CREATE TRIGGER reject_split_adjustment AFTER INSERT ON investment_split_revisions
+		WHEN NEW.adjustment_transaction_version_id IS NOT NULL
+		BEGIN SELECT RAISE(ABORT, 'forced split adjustment failure'); END`)
+	require.NoError(t, err)
+	backdated := InvestmentTradeInput{
+		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
+		HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+		QuantityValue: exact.New(3), CashAmountValue: 3000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
+	}
+	_, err = f.investmentService.Buy(ctx, backdated)
+	require.ErrorContains(t, err, "forced split adjustment failure")
+	assert.Equal(t, before, countSplitRows(t, f.database))
+	assert.Zero(t, holdingQuantity(t, f).Cmp(beforeHolding))
+	var links int
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_operation_journal_links
+		WHERE role = 'split_adjustment'`).Scan(&links))
+	assert.Zero(t, links)
+	requireSelfCheckPasses(t, f)
+
+	_, err = f.database.Exec(`DROP TRIGGER reject_split_adjustment`)
+	require.NoError(t, err)
+	_, err = f.investmentService.Buy(ctx, backdated)
+	require.NoError(t, err)
+	assert.Zero(t, holdingQuantity(t, f).Cmp(scaled(26, 0)))
 	requireSelfCheckPasses(t, f)
 }
 
@@ -440,36 +664,4 @@ func TestSplitThenAverageCostAndSpecificLotSalesUseConservedBasis(t *testing.T) 
 			requireSelfCheckPasses(t, f)
 		})
 	}
-}
-
-func TestReversalsBeforeSplitAreRefusedWithSplitNamed(t *testing.T) {
-	f := newInvestmentsTestFixture(t)
-	ctx := context.Background()
-	buyOn(t, f, "2026-01-10", 10, 10000)
-	sale, err := f.investmentService.Sell(ctx, sellInput(f, "2026-02-01", 4))
-	require.NoError(t, err)
-	_, err = f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
-	require.NoError(t, err)
-	before := countSplitRows(t, f.database)
-	// Reversing the sale would leave ten shares, not six, to multiply.
-	_, err = acknowledgedReverseSale(ctx, f.investmentService, ReverseInvestmentSaleInput{
-		OwnerUserID: f.ownerUserID, TransactionID: sale.Transaction.ID, Reason: "entered twice"})
-	var dependency InvestmentSaleDependencyError
-	require.ErrorAs(t, err, &dependency)
-	var splitOperation int64
-	require.NoError(t, f.database.QueryRow(`SELECT operation_id FROM investment_split_facts`).Scan(&splitOperation))
-	assert.Equal(t, splitOperation, dependency.OperationID)
-	assert.Equal(t, before, countSplitRows(t, f.database))
-
-	// Reversing the purchase the split multiplied is refused the same way.
-	buys, err := f.investmentService.ListLots(ctx, f.holdingAccountID, f.stockCommodityID)
-	require.NoError(t, err)
-	require.Len(t, buys, 1)
-	var buyTransaction int64
-	require.NoError(t, f.database.QueryRow(`SELECT source_transaction_id FROM investment_lots WHERE id = ?`, buys[0].ID).Scan(&buyTransaction))
-	_, err = acknowledgedReverseBuy(ctx, f.investmentService, ReverseInvestmentBuyInput{
-		OwnerUserID: f.ownerUserID, TransactionID: buyTransaction, Reason: "entered twice"})
-	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	assert.Equal(t, before, countSplitRows(t, f.database))
-	requireSelfCheckPasses(t, f)
 }

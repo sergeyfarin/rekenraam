@@ -361,6 +361,11 @@ checksum changed. Stop the app and reset the same disposable `DATABASE_URL`
 database and sidecars using the command above before restarting. No installed
 v0.1 database exists.
 
+**BREAKING DEV DATABASE, split adjustments (T-129, 2026-10-03):** `0001`
+adds `investment_split_revisions.adjustment_transaction_version_id` and its
+trigger guard. The checksum changed. Reset the disposable `DATABASE_URL`
+database and sidecars the same way before restarting.
+
 **BREAKING DEV DATABASE, R16 transfer basis propagation (T-132, 2026-10-03):**
 `0001` adds `investment_transfer_link_revisions` and its latest-revision view,
 and the effective lot-event view now excludes revised transfer events. The

@@ -168,12 +168,29 @@ A split dated before a later depletion is admitted through position replay
 under the T-114 gain-impact policy; an impossible later disposal is refused
 with it named (`INVESTMENT_SPLIT_DEPENDENCY`). Replay of a later correction
 re-derives each split's per-lot effects and appends a per-cost-currency
-revision only when they change. Because a split's journal delta cannot yet be
-revised, replay refuses (naming the split, as a dependency of the triggering
-command) any history change that would alter the quantity it multiplied — a
-quantity correction or backdated acquisition before it. Basis-only corrections
-replay through it. Deferred: split correction/reversal and guarded delta
-adjustments ([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)), zero-delta splits (no eligible holdings, refused
+revision only when they change. Basis-only corrections replay through it.
+
+**Journal-delta adjustment (T-129 #144).** History that changes the quantity
+a split multiplied — a quantity correction, backdated acquisition, or a buy or
+sale reversal dated before it — no longer refuses. When a replayed split
+revision's effects move a different aggregate quantity than the current
+effective effects (per cost currency), the difference `e` posts as an
+adjustment journal dated to the split, `H +e`, `T −e` in the security, under
+the triggering command's audit event. It is linked to the split operation
+(journal-link role `split_adjustment`) and to the revision
+(`investment_split_revisions.adjustment_transaction_version_id`); the revision
+records the triggering operation and supersedes the previous revision. A
+split whose remaining eligible lots disappear keeps its facts and is fully
+offset by its adjustment. The investment writer applies the reconciliation
+guard, override and preview reporting to adjustment journals after the domain
+effects, at the split's date. Gain disclosure follows the triggering command's
+T-114 policy. Self-check requires each split's `primary` plus
+`split_adjustment` journals to equal its effective effects, and every
+adjustment link to belong to a revision dated to the split. A fraction the
+security cannot represent still refuses with the split named.
+
+Deferred: native split reversal and replacement
+([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)), zero-delta splits (no eligible holdings, refused
 with `INVESTMENT_SPLIT_NO_HOLDINGS` because a journal-free operation path does
 not exist; [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)), verified Trading 212 mapping ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)), and linked
 cash in lieu.

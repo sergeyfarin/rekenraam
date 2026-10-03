@@ -256,14 +256,8 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 			if err != nil {
 				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{OperationID: intent.OperationID, Cause: err}
 			}
-			// The posted split journal moved exactly its recorded delta. Until a
-			// split's journal can be revised, history that changes how many
-			// shares it multiplied is refused with the split named.
-			if !intent.SplitIsSubject && sumSplitEffects(effects).Cmp(
-				exact.ScaledIntFromCoefficient(intent.QuantityValue, intent.QuantityScale)) != 0 {
-				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{OperationID: intent.OperationID,
-					Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, ErrSplitQuantityDependency)}
-			}
+			// History may change how many shares the split multiplied; persisting
+			// the projection posts that difference as an adjustment journal.
 			projection.Splits = append(projection.Splits, InvestmentReplaySplit{
 				OperationID: intent.OperationID, Subject: intent.SplitIsSubject, Effects: effects})
 		default:

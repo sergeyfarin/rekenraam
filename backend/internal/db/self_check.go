@@ -926,3 +926,85 @@ func (r *SelfCheckRepository) SelfCheckResults(ctx context.Context, runID int64)
 	}
 	return results, nil
 }
+
+// SelfCheckSplitDelta compares what a split's linked journals posted to its
+// holding with what its effective lot effects moved, across cost currencies.
+type SelfCheckSplitDelta struct {
+	OperationID int64
+	Journal     *exact.ScaledInt
+	Effects     *exact.ScaledInt
+}
+
+// SelfCheckSplitDeltas reads every split's primary and adjustment journal
+// postings on its holding and security, and its effective per-lot effects:
+// the latest revision per cost currency, else the original events (T-129).
+func (r *SelfCheckRepository) SelfCheckSplitDeltas(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckSplitDelta, error) {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT f.operation_id, pv.quantity_value, pv.quantity_scale
+		FROM investment_split_facts f
+		LEFT JOIN investment_operation_journal_links link ON link.operation_id = f.operation_id
+			AND link.book_id = f.book_id AND link.role IN ('primary', 'split_adjustment')
+		LEFT JOIN posting_versions pv ON pv.transaction_version_id = link.transaction_version_id
+			AND pv.account_id = f.account_id AND pv.commodity_id = f.commodity_id
+		WHERE f.book_id = ?
+		ORDER BY f.operation_id`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read self-check split journals: %w", err)
+	}
+	var deltas []SelfCheckSplitDelta
+	for rows.Next() {
+		var operationID int64
+		var value sql.NullString
+		var scale sql.NullInt64
+		if err := rows.Scan(&operationID, &value, &scale); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan self-check split journal: %w", err)
+		}
+		if len(deltas) == 0 || deltas[len(deltas)-1].OperationID != operationID {
+			deltas = append(deltas, SelfCheckSplitDelta{OperationID: operationID,
+				Journal: exact.NewScaledInt(), Effects: exact.NewScaledInt()})
+		}
+		if value.Valid {
+			quantity, err := exact.Parse(value.String)
+			if err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("parse self-check split journal posting: %w", err)
+			}
+			deltas[len(deltas)-1].Journal.AddCoefficient(quantity, int(scale.Int64))
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, fmt.Errorf("read self-check split journals: %w", err)
+	}
+	for index := range deltas {
+		currencies, err := transaction.QueryContext(ctx, `
+			SELECT l.cost_commodity_id FROM investment_operation_lot_effects x
+			JOIN investment_lot_events e ON e.id = x.lot_event_id
+			JOIN investment_lots l ON l.id = e.lot_id WHERE x.operation_id = ?
+			UNION SELECT cost_commodity_id FROM investment_split_revisions WHERE operation_id = ?`,
+			deltas[index].OperationID, deltas[index].OperationID)
+		if err != nil {
+			return nil, fmt.Errorf("read self-check split currencies: %w", err)
+		}
+		var costIDs []int64
+		for currencies.Next() {
+			var id int64
+			if err := currencies.Scan(&id); err != nil {
+				currencies.Close()
+				return nil, fmt.Errorf("scan self-check split currency: %w", err)
+			}
+			costIDs = append(costIDs, id)
+		}
+		if err := errors.Join(currencies.Err(), currencies.Close()); err != nil {
+			return nil, fmt.Errorf("read self-check split currencies: %w", err)
+		}
+		for _, costID := range costIDs {
+			effects, _, _, err := effectiveSplitEffectsQuery(ctx, transaction, bookID, deltas[index].OperationID, costID)
+			if err != nil {
+				return nil, err
+			}
+			deltas[index].Effects.AddScaled(sumSplitEffects(effects))
+		}
+	}
+	return deltas, nil
+}
