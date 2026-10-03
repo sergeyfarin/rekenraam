@@ -1124,5 +1124,17 @@
   "api_error_investment_split_fraction_unrepresentable": "La division laisserait une fraction que ce titre ne peut pas enregistrer exactement. Une division n'est jamais arrondie.",
   "api_error_investment_split_changed": "La position a changé après la prévisualisation. Prévisualisez de nouveau la division.",
   "api_error_investment_split_dependency": "Une vente ou un transfert ultérieur ne serait plus possible après cette division.",
-  "api_error_import_split_link_unavailable": "Cette ligne ne peut plus être liée à cette division. Elle est peut-être déjà liée, ou la division ne concerne plus ce titre."
+  "api_error_import_split_link_unavailable": "Cette ligne ne peut plus être liée à cette division. Elle est peut-être déjà liée, ou la division ne concerne plus ce titre.",
+  "transactions_investment_reverse_split_action": "Contrepasser la division…",
+  "transactions_investment_reverse_split_title": "Contrepasser cette division",
+  "transactions_investment_reverse_split_copy": "Cela comptabilise une transaction inverse à la date de la division et recalcule sans elle les affectations de lots ultérieures. Si une vente ultérieure ne peut plus être couverte sans la division, la contrepassation est refusée. La division d’origine reste dans l’historique.",
+  "transactions_investment_replace_split_action": "Corriger la division…",
+  "transactions_investment_replace_split_title": "Corriger cette division",
+  "transactions_investment_split_adjustment_note": "Cette transaction ajuste la division ci-dessus : une écriture antérieure a modifié le nombre d’actions qu’elle a multipliées.",
+  "investments_split_replace_help": "Modifiez la date ou le rapport. La division d’origine est contrepassée et la division corrigée est enregistrée à la même place dans la journée ; les ventes ultérieures sont recalculées.",
+  "investments_split_replace_reason": "Motif de la correction",
+  "investments_split_replace_submit": "Corriger la division",
+  "transactions_system_label_split_adjustment": "Ajustement de division",
+  "api_error_investment_split_already_corrected": "Cette division a déjà été corrigée. Consultez son historique pour voir la dernière opération.",
+  "api_error_investment_imported_split": "Cette division est liée à une ligne d’importation qui ne la désigne plus. Vérifiez l’importation avant de la corriger."
 }

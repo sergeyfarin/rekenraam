@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { transactionTitle } from '$lib/transactions/transaction-title';
+  import { systemLabelText } from '$lib/transactions/system-label';
   import { createInfiniteQuery } from '@tanstack/svelte-query';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
@@ -122,7 +124,7 @@
   {#snippet payeeCell(tx: TransactionResponse)}
     <div class="min-w-0">
       <span class="block truncate font-medium text-foreground">
-        {tx.payee_name || tx.description || '—'}
+        {transactionTitle(tx, systemLabelText, '—')}
       </span>
       {#if tx.needs_review}
         <span class="mt-0.5 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-accent/40 text-accent">

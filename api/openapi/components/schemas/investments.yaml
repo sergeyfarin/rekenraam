@@ -905,6 +905,75 @@ InvestmentSplitResponse:
     plan:
       $ref: "../schemas/investments.yaml#/InvestmentSplitPlan"
 
+InvestmentSplitReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, effective_on, ratio_numerator, ratio_denominator]
+  description: Corrected terms for the same holding account and security (T-129).
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted split is being corrected.
+    effective_on:
+      type: string
+      format: date
+    ratio_numerator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+    ratio_denominator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+      description: Token from the preview's impact.gain_impact, accepting the committed-disposal gain changes it disclosed.
+
+InvestmentSplitReplacementResponse:
+  type: object
+  required: [inverse, replacement, plan, corrected_transaction_id]
+  properties:
+    inverse:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    replacement:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    plan:
+      $ref: "../schemas/investments.yaml#/InvestmentSplitPlan"
+    corrected_transaction_id:
+      type: integer
+      format: int64
+
+InvestmentCorrectionSplitTerms:
+  type: object
+  description: The effective split's current terms, for pre-filling a replacement.
+  required: [holding_account_id, commodity_id, effective_on, ratio_numerator, ratio_denominator]
+  properties:
+    holding_account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    effective_on:
+      type: string
+      format: date
+    ratio_numerator:
+      type: integer
+      format: int64
+    ratio_denominator:
+      type: integer
+      format: int64
+
 InvestmentSaleReversalRequest:
   type: object
   additionalProperties: false
@@ -1085,7 +1154,7 @@ InvestmentBuyReplacementResponse:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1106,6 +1175,11 @@ InvestmentCorrectionChainResponse:
     can_reverse_buy:
       type: boolean
       description: Whether the effective posted long buy can attempt reversal. Dependent replay may still refuse the command; imported lineage requires a committed source identity.
+    can_correct_split:
+      type: boolean
+      description: Whether the effective posted split can be reversed or replaced (T-129). Dependent replay may still refuse the command.
+    effective_split:
+      $ref: '#/InvestmentCorrectionSplitTerms'
     operations:
       type: array
       minItems: 1

@@ -25,6 +25,9 @@ export type InvestmentSplitRequest = components['schemas']['InvestmentSplitReque
 export type InvestmentSplitPlan = components['schemas']['InvestmentSplitPlan'];
 export type InvestmentSplitPreviewResponse = components['schemas']['InvestmentSplitPreviewResponse'];
 export type InvestmentSplitResponse = components['schemas']['InvestmentSplitResponse'];
+export type InvestmentSplitReplacementRequest = components['schemas']['InvestmentSplitReplacementRequest'];
+export type InvestmentSplitReplacementResponse = components['schemas']['InvestmentSplitReplacementResponse'];
+export type InvestmentCorrectionSplitTerms = components['schemas']['InvestmentCorrectionSplitTerms'];
 export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
 export type ReinvestedDividendRequest = components['schemas']['ReinvestedDividendRequest'];
@@ -882,6 +885,79 @@ export async function writeOffReconciliationImpact(
       throw error;
     }
 
+    throw toNetworkError(error);
+  }
+}
+
+// Split reversal and replacement (T-129). Both previews run the actual
+// writer in a rolled-back transaction, so they report the commit's own
+// checkpoints and gain changes.
+export async function previewSplitReversalReconciliation(
+  transactionID: number,
+  input: InvestmentSaleReversalRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-split/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseSplit(
+  transactionID: number,
+  input: InvestmentSaleReversalRequest,
+  csrfToken: string
+): Promise<InvestmentSaleReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-split',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewSplitReplacement(
+  transactionID: number,
+  input: InvestmentSplitReplacementRequest
+): Promise<InvestmentSplitPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-split/preview',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceSplit(
+  transactionID: number,
+  input: InvestmentSplitReplacementRequest,
+  csrfToken: string
+): Promise<InvestmentSplitReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-split',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
     throw toNetworkError(error);
   }
 }

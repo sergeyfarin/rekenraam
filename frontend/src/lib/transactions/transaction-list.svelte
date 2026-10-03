@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { transactionTitle } from '$lib/transactions/transaction-title';
+  import { systemLabelText } from '$lib/transactions/system-label';
   import { joinCommodityAmount } from '$lib/money/format';
   import { untrack } from 'svelte';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -154,7 +156,7 @@
   {/snippet}
 
   {#snippet payeeCell(tx: TransactionResponse)}
-    <span class="font-medium text-foreground">{tx.payee_name || tx.description || '—'}</span>
+    <span class="font-medium text-foreground">{transactionTitle(tx, systemLabelText, '—')}</span>
     {#if tx.needs_review}
       <span class="ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-accent/40 text-accent">
         {m.transactions_needs_review()}

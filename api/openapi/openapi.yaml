@@ -311,6 +311,14 @@ paths:
     $ref: "./paths/investments-reverse-sale.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-sale/reconciliation-impact:
     $ref: "./paths/investments-reverse-sale-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-split:
+    $ref: "./paths/investments-reverse-split.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-split/reconciliation-impact:
+    $ref: "./paths/investments-reverse-split-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-split:
+    $ref: "./paths/investments-replace-split.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-split/preview:
+    $ref: "./paths/investments-replace-split-preview.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-buy:
     $ref: "./paths/investments-reverse-buy.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-buy/reconciliation-impact:
@@ -1002,6 +1010,12 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitPreviewResponse"
     InvestmentSplitResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitResponse"
+    InvestmentSplitReplacementRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentSplitReplacementRequest"
+    InvestmentSplitReplacementResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentSplitReplacementResponse"
+    InvestmentCorrectionSplitTerms:
+      $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionSplitTerms"
     InvestmentSaleReversalRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReversalRequest"
     InvestmentSaleReversalResponse:

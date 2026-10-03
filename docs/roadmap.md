@@ -109,28 +109,25 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Split correction and journal-delta adjustment — [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144).
-   A mistaken split, or a mistaken trade before one, has no recovery path.
-2. Alongside: API and browser evidence for import gain review and Trading 212
-   source revisions — [T-128 #143](https://github.com/sergeyfarin/rekenraam/issues/143).
+1. API and browser evidence for import gain review and Trading 212 source
+   revisions — [T-128 #143](https://github.com/sergeyfarin/rekenraam/issues/143).
 
 **Next, in order**
 
-3. Dividend/reinvestment correction — [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130).
-4. Trade date/account/instrument/currency correction — [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131).
-5. Write-off correction — [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133).
-6. Pooled-lineage decision [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) and replay-equivalence
+2. Dividend/reinvestment correction — [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130).
+3. Trade date/account/instrument/currency correction — [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131).
+4. Write-off correction — [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133).
+5. Pooled-lineage decision [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) and replay-equivalence
    self-check [T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149). Both precede transfer correction:
    it would otherwise hit the lineage refusal, and every replaying command
    increases the stored projection's exposure to a skipped-replay bug.
-7. Transfer correction — [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134).
-8. Correction-chain register and net checkpoint impact — [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135).
-9. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
+6. Transfer correction — [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134).
+7. Correction-chain register and net checkpoint impact — [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135).
+8. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
    return of capital, cash in lieu), then short sale/cover
    [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103), then compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
 
-**Placed, not sequenced:** zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146) after #144;
-split adjustment journal labels [T-136 #151](https://github.com/sergeyfarin/rekenraam/issues/151) with #144's correction UI or after;
+**Placed, not sequenced:** zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146);
 lot-opening `NOT NULL` [T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) before the v0.1.0 tag; race-gate
 runtime [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140) any time without reducing coverage. Blocked on
 provider evidence: [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145), [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136).
@@ -156,7 +153,7 @@ events remain unclassified warnings. The
 [slice 5 contract](plans/investment-operation-slice-5-contract.md) govern
 design; [implemented](implemented.md) records the shipped boundary.
 
-R16 is complete when focus items 1–9 above are closed. Write-off UI and
+R16 is complete when focus items 1–8 above are closed. Write-off UI and
 provider return-of-capital/cash-in-lieu suggestions remain follow-ups outside
 that bar.
 

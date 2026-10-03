@@ -1124,5 +1124,17 @@
   "api_error_investment_split_fraction_unrepresentable": "De splitsing zou een fractie opleveren die dit effect niet exact kan vastleggen. Splitsingen worden nooit afgerond.",
   "api_error_investment_split_changed": "De positie is na het voorbeeld gewijzigd. Bekijk de splitsing opnieuw.",
   "api_error_investment_split_dependency": "Een latere verkoop of overboeking zou na deze splitsing niet meer mogelijk zijn.",
-  "api_error_import_split_link_unavailable": "Deze rij kan niet meer aan die splitsing worden gekoppeld. Mogelijk is hij al gekoppeld of hoort de splitsing niet bij dit effect."
+  "api_error_import_split_link_unavailable": "Deze rij kan niet meer aan die splitsing worden gekoppeld. Mogelijk is hij al gekoppeld of hoort de splitsing niet bij dit effect.",
+  "transactions_investment_reverse_split_action": "Splitsing terugboeken…",
+  "transactions_investment_reverse_split_title": "Deze splitsing terugboeken",
+  "transactions_investment_reverse_split_copy": "Dit boekt een tegengestelde transactie op de splitsingsdatum en berekent latere lottoewijzingen opnieuw zonder de splitsing. Als een latere verkoop zonder de splitsing niet kan worden gedekt, wordt de terugboeking geweigerd. De oorspronkelijke splitsing blijft in de geschiedenis.",
+  "transactions_investment_replace_split_action": "Splitsing corrigeren…",
+  "transactions_investment_replace_split_title": "Deze splitsing corrigeren",
+  "transactions_investment_split_adjustment_note": "Deze transactie past de splitsing hierboven aan: een eerdere boeking veranderde hoeveel aandelen ermee werden vermenigvuldigd.",
+  "investments_split_replace_help": "Wijzig de datum of de verhouding. De oorspronkelijke splitsing wordt teruggeboekt en de gecorrigeerde wordt op dezelfde plek op die dag vastgelegd; latere verkopen worden opnieuw berekend.",
+  "investments_split_replace_reason": "Reden voor correctie",
+  "investments_split_replace_submit": "Splitsing corrigeren",
+  "transactions_system_label_split_adjustment": "Correctie op splitsing",
+  "api_error_investment_split_already_corrected": "Deze splitsing is al gecorrigeerd. Open de correctiegeschiedenis om de laatste boeking te zien.",
+  "api_error_investment_imported_split": "Deze splitsing is gekoppeld aan een importregel die er niet meer naar verwijst. Controleer de import voordat u de splitsing corrigeert."
 }

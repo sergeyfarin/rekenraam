@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { transactionTitle } from '$lib/transactions/transaction-title';
+  import { systemLabelText } from '$lib/transactions/system-label';
   import X from '@lucide/svelte/icons/x';
   import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
   import { m } from '$lib/paraglide/messages.js';
@@ -386,7 +388,7 @@
   <div class="flex items-start justify-between gap-3">
     <div class="min-w-0">
       <h2 class="text-base font-semibold text-foreground">
-        {transaction.payee_name || transaction.description || String(transaction.id)}
+        {transactionTitle(transaction, systemLabelText, String(transaction.id))}
       </h2>
       <div class="mt-1 flex items-center gap-2">
         <StatusBadge tone={statusTone(transaction.status)}>
@@ -472,7 +474,7 @@
   {/if}
 
   {#if isInvestment}
-    <InvestmentCorrectionSection transactionID={transaction.id} {csrfToken} {onRefresh} />
+    <InvestmentCorrectionSection transactionID={transaction.id} {csrfToken} {onRefresh} systemLabel={transaction.system_label} />
   {/if}
 
   <!-- Action buttons -->

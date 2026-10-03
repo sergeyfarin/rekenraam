@@ -219,8 +219,12 @@ non-trivial diff (yours or reviewed):
     operation and revision under the command's audit and checkpoint guard
     (T-129 does this for splits, ADR 0013 refinement); its per-lot replay
     output must be revisioned, and self-check must reconcile the operation's
-    journals with its effective effects, not the originals. Named regressions:
+    journals with its effective effects, not the originals. Once such an
+    operation can be reversed or replaced, every reader of its latest
+    revision must also filter to effective operations, and the self-check
+    must count the successor's inverse journal (T-129). Named regressions:
     `TestQuantityCorrectionBeforeSplitPostsAdjustmentJournal`,
+    `TestSplitReversalInvertsPrimaryPlusAdjustmentDelta`,
     `TestReversalsBeforeSplitPostAdjustmentJournals`,
     `TestEarlierAcquisitionBasisCorrectionReplaysThroughSplit`.
 

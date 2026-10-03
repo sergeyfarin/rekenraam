@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { transactionTitle } from '$lib/transactions/transaction-title';
+  import { systemLabelText } from '$lib/transactions/system-label';
   import type { Snippet } from 'svelte';
   import { tagsQueryOptions } from '$lib/api/tags';
   import Plus from '@lucide/svelte/icons/plus';
@@ -721,7 +723,7 @@
       <h2 class="text-base font-semibold text-foreground">{title}</h2>
       {#if mode === 'edit' && transaction}
         <p class="mt-1 truncate text-sm text-muted">
-          {transaction.payee_name || transaction.description || String(transaction.id)}
+          {transactionTitle(transaction, systemLabelText, String(transaction.id))}
         </p>
       {/if}
     </div>

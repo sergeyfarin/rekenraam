@@ -503,6 +503,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		SELECT effect.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
 			effect.quantity_delta_value, effect.quantity_delta_scale
 		FROM latest_investment_split_revisions revision
+		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
 		JOIN investment_split_revision_effects effect ON effect.revision_id = revision.id
 		JOIN current_investment_lots l ON l.id = effect.lot_id
 		WHERE revision.book_id = ?
@@ -936,14 +937,21 @@ type SelfCheckSplitDelta struct {
 }
 
 // SelfCheckSplitDeltas reads every split's primary and adjustment journal
-// postings on its holding and security, and its effective per-lot effects:
-// the latest revision per cost currency, else the original events (T-129).
+// postings on its holding and security, plus the inverse journal of a
+// reversal or replacement, and its effective per-lot effects: the latest
+// revision per cost currency, else the original events, or nothing once the
+// split is no longer effective (T-129).
 func (r *SelfCheckRepository) SelfCheckSplitDeltas(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckSplitDelta, error) {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT f.operation_id, pv.quantity_value, pv.quantity_scale
+		SELECT f.operation_id, pv.quantity_value, pv.quantity_scale,
+			EXISTS (SELECT 1 FROM effective_investment_operations e WHERE e.id = f.operation_id)
 		FROM investment_split_facts f
-		LEFT JOIN investment_operation_journal_links link ON link.operation_id = f.operation_id
-			AND link.book_id = f.book_id AND link.role IN ('primary', 'split_adjustment')
+		LEFT JOIN investment_operation_journal_links link ON link.book_id = f.book_id
+			AND ((link.operation_id = f.operation_id AND link.role IN ('primary', 'split_adjustment'))
+				OR EXISTS (SELECT 1 FROM investment_operations successor
+					WHERE successor.id = link.operation_id AND successor.correction_of_operation_id = f.operation_id
+						AND ((successor.correction_mode = 'reverse' AND link.role = 'primary')
+							OR (successor.correction_mode = 'replace' AND link.role = 'reversal'))))
 		LEFT JOIN posting_versions pv ON pv.transaction_version_id = link.transaction_version_id
 			AND pv.account_id = f.account_id AND pv.commodity_id = f.commodity_id
 		WHERE f.book_id = ?
@@ -952,17 +960,20 @@ func (r *SelfCheckRepository) SelfCheckSplitDeltas(ctx context.Context, transact
 		return nil, fmt.Errorf("read self-check split journals: %w", err)
 	}
 	var deltas []SelfCheckSplitDelta
+	effective := map[int64]bool{}
 	for rows.Next() {
 		var operationID int64
 		var value sql.NullString
 		var scale sql.NullInt64
-		if err := rows.Scan(&operationID, &value, &scale); err != nil {
+		var isEffective bool
+		if err := rows.Scan(&operationID, &value, &scale, &isEffective); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan self-check split journal: %w", err)
 		}
 		if len(deltas) == 0 || deltas[len(deltas)-1].OperationID != operationID {
 			deltas = append(deltas, SelfCheckSplitDelta{OperationID: operationID,
 				Journal: exact.NewScaledInt(), Effects: exact.NewScaledInt()})
+			effective[operationID] = isEffective
 		}
 		if value.Valid {
 			quantity, err := exact.Parse(value.String)
@@ -977,6 +988,9 @@ func (r *SelfCheckRepository) SelfCheckSplitDeltas(ctx context.Context, transact
 		return nil, fmt.Errorf("read self-check split journals: %w", err)
 	}
 	for index := range deltas {
+		if !effective[deltas[index].OperationID] {
+			continue
+		}
 		currencies, err := transaction.QueryContext(ctx, `
 			SELECT l.cost_commodity_id FROM investment_operation_lot_effects x
 			JOIN investment_lot_events e ON e.id = x.lot_event_id

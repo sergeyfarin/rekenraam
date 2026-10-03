@@ -31,6 +31,7 @@ type transactionResponse struct {
 	UpdatedAt                 string                 `json:"updated_at"`
 	DeletedAt                 string                 `json:"deleted_at,omitempty"`
 	ChangeReason              string                 `json:"change_reason"`
+	SystemLabel               string                 `json:"system_label,omitempty"`
 	InvalidatedCheckpointIDs  []int64                `json:"invalidated_checkpoint_ids"`
 }
 
@@ -117,6 +118,7 @@ type accountRegisterEntryResponse struct {
 	CreatedAt                 string                  `json:"created_at"`
 	UpdatedAt                 string                  `json:"updated_at"`
 	ChangeReason              string                  `json:"change_reason"`
+	SystemLabel               string                  `json:"system_label,omitempty"`
 }
 
 type transactionRequest struct {
@@ -274,6 +276,7 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 		UpdatedAt:                 transaction.UpdatedAt,
 		DeletedAt:                 transaction.DeletedAt,
 		ChangeReason:              transaction.ChangeReason,
+		SystemLabel:               transaction.SystemLabel,
 		InvalidatedCheckpointIDs:  invalidatedCheckpointIDs,
 	}
 }
@@ -337,6 +340,7 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 			CreatedAt:      entry.CreatedAt,
 			UpdatedAt:      entry.UpdatedAt,
 			ChangeReason:   entry.ChangeReason,
+			SystemLabel:    entry.SystemLabel,
 		})
 	}
 	return responses

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { accountsQueryOptions } from '$lib/api/accounts';
@@ -8,7 +9,8 @@
   import {
     investmentGainsQueryKey, investmentInstrumentsQueryOptions, investmentLotsQueryKey,
     investmentPositionsQueryKey, investmentPositionsQueryOptions, previewInvestmentSplit,
-    recordInvestmentSplit, type GainImpact, type InvestmentSplitPlan, type InvestmentSplitRequest,
+    previewSplitReplacement, recordInvestmentSplit, replaceSplit, type GainImpact,
+    type InvestmentCorrectionSplitTerms, type InvestmentSplitPlan, type InvestmentSplitRequest,
     type ReconciliationImpactResponse
   } from '$lib/api/investments';
   import {
@@ -23,10 +25,13 @@
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
 
-  let { csrfToken, onSaved, onCancel }: {
+  // With correction set, the form replaces that posted split (T-129): the
+  // holding is fixed, the current terms are pre-filled and a reason is required.
+  let { csrfToken, onSaved, onCancel, correction }: {
     csrfToken: string;
     onSaved: () => void;
     onCancel: () => void;
+    correction?: { transactionID: number; terms: InvestmentCorrectionSplitTerms };
   } = $props();
 
   const queryClient = useQueryClient();
@@ -35,10 +40,13 @@
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
-  let effectiveOn = $state('');
-  let holdingKey = $state('');
-  let newUnits = $state('');
-  let oldUnits = $state('');
+  // Pre-fill once from the split being corrected; later edits are the user's.
+  const initialTerms = untrack(() => correction?.terms);
+  let effectiveOn = $state(initialTerms?.effective_on ?? '');
+  let holdingKey = $state(initialTerms ? `${initialTerms.holding_account_id}:${initialTerms.commodity_id}` : '');
+  let newUnits = $state(initialTerms ? String(initialTerms.ratio_numerator) : '');
+  let oldUnits = $state(initialTerms ? String(initialTerms.ratio_denominator) : '');
+  let reason = $state('');
   let sourceReference = $state('');
   let memo = $state('');
   let pending = $state(false);
@@ -71,7 +79,10 @@
     }
     return [...seen.entries()].map(([key, value]) => ({ key, ...value }));
   });
-  const selectedHolding = $derived(holdings.find((holding) => holding.key === holdingKey));
+  // A corrected split's holding may since have been sold out; it stays fixed.
+  const selectedHolding = $derived(correction
+    ? { key: holdingKey, accountID: correction.terms.holding_account_id, commodityID: correction.terms.commodity_id }
+    : holdings.find((holding) => holding.key === holdingKey));
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(
     (currenciesQuery.data?.currencies ?? []).map((currency) => [currency.id, currency])));
   const instrumentLabel = (commodityID: number) => {
@@ -83,7 +94,7 @@
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
   const canPreview = $derived(!loading && !loadError && !!effectiveOn && !!selectedHolding &&
-    !!newUnits.trim() && !!oldUnits.trim());
+    !!newUnits.trim() && !!oldUnits.trim() && (!correction || !!reason.trim()));
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
     : []);
@@ -100,8 +111,18 @@
     formError = undefined;
   }
 
+  function replacementRequest(payload: InvestmentSplitRequest) {
+    return {
+      reason: reason.trim(), effective_on: payload.effective_on,
+      ratio_numerator: payload.ratio_numerator, ratio_denominator: payload.ratio_denominator,
+      source_evidence: payload.source_evidence, memo: payload.memo
+    };
+  }
+
   async function runPreview(payload: InvestmentSplitRequest): Promise<void> {
-    const result = await previewInvestmentSplit(payload);
+    const result = correction
+      ? await previewSplitReplacement(correction.transactionID, replacementRequest(payload))
+      : await previewInvestmentSplit(payload);
     preview = {
       plan: result.plan,
       impacts: result.impact.affected_checkpoints,
@@ -141,11 +162,15 @@
   async function record(override: boolean) {
     if (!preview) return;
     const acknowledgement = gainAcknowledgement(preview.gainImpact);
-    await recordInvestmentSplit({
-      ...preview.payload,
+    const confirmations = {
       ...(override ? { reconciliation_override: true } : {}),
       ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
-    }, csrfToken);
+    };
+    if (correction) {
+      await replaceSplit(correction.transactionID, { ...replacementRequest(preview.payload), ...confirmations }, csrfToken);
+    } else {
+      await recordInvestmentSplit({ ...preview.payload, ...confirmations }, csrfToken);
+    }
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey }),
       queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey }),
@@ -208,18 +233,26 @@
 {/if}
 
 <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
-  <h2 id="split-title" class="text-base font-semibold text-foreground">{m.investments_split_title()}</h2>
-  <p class="text-sm text-muted">{m.investments_split_help()}</p>
+  <h2 id="split-title" class="text-base font-semibold text-foreground">
+    {correction ? m.transactions_investment_replace_split_title() : m.investments_split_title()}
+  </h2>
+  <p class="text-sm text-muted">{correction ? m.investments_split_replace_help() : m.investments_split_help()}</p>
   {#if loading}
     <p class="text-sm text-muted" role="status">{m.investments_loading()}</p>
   {:else if loadError}
     <p class="text-sm text-danger" role="alert">{m.investments_split_load_error()}</p>
   {:else}
-    {#if holdings.length === 0}
+    {#if holdings.length === 0 && !correction}
       <p class="text-sm text-muted" role="status">{m.investments_split_empty()}</p>
     {/if}
     <div>
       <label for="split-holding" class="mb-1 block text-sm font-medium text-foreground">{m.investments_split_holding()}</label>
+      {#if correction}
+        <p id="split-holding" class="rounded-(--radius-control) border border-border bg-surface px-3 py-2 text-sm text-foreground">
+          {accounts.find((account) => account.id === correction.terms.holding_account_id)?.name ?? `#${correction.terms.holding_account_id}`}
+          · {instrumentLabel(correction.terms.commodity_id)}
+        </p>
+      {:else}
       <select id="split-holding" bind:value={holdingKey} required onchange={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_split_select_holding()}</option>
@@ -229,6 +262,7 @@
           </option>
         {/each}
       </select>
+      {/if}
     </div>
     <div>
       <label for="split-date" class="mb-1 block text-sm font-medium text-foreground">{m.investments_split_effective_date()}</label>
@@ -258,6 +292,13 @@
       <input id="split-reference" type="text" bind:value={sourceReference} maxlength="500" oninput={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
     </div>
+    {#if correction}
+      <div>
+        <label for="split-reason" class="mb-1 block text-sm font-medium text-foreground">{m.investments_split_replace_reason()}</label>
+        <input id="split-reason" type="text" bind:value={reason} maxlength="500" required oninput={discardPreview}
+          class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
+      </div>
+    {/if}
     <div>
       <label for="split-memo" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_memo()}</label>
       <input id="split-memo" type="text" bind:value={memo} maxlength="500" oninput={discardPreview}
@@ -294,7 +335,7 @@
     {#if preview}
       <button type="button" onclick={handleRecord} disabled={pending || !csrfToken}
         class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-        {pending ? m.investments_split_pending() : m.investments_split_submit()}
+        {pending ? m.investments_split_pending() : correction ? m.investments_split_replace_submit() : m.investments_split_submit()}
       </button>
     {:else}
       <button type="submit" disabled={!canPreview || pending}

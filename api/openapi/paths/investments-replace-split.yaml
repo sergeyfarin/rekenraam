@@ -1,0 +1,67 @@
+post:
+  summary: Correct a posted split's date, ratio or source evidence
+  description: >-
+    Posts the inverse of the split's current journal delta and a replacement
+    split with corrected terms for the same holding and security, in one
+    audited database transaction (T-129). The replacement takes the replaced
+    split's correction-root same-day slot; per-lot effects and any dependent
+    disposals are replayed. Unchanged terms are refused. A non-empty gain
+    change set requires the preview's exact gain_impact_acknowledgement.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSplitReplacementRequest"
+  responses:
+    "201":
+      description: Split replaced and holding replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSplitReplacementResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted split not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected, unlinked import, changed, no eligible holdings, later disposal impossible, reconciliation override required, or gain changes not acknowledged
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Corrected ratio not representable at the security's scale (INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

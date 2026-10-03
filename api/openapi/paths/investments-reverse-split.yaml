@@ -1,0 +1,63 @@
+post:
+  summary: Reverse a posted split
+  description: >-
+    Posts the exact inverse of everything the split's journals currently move
+    (its primary journal plus every split_adjustment journal), dated to the
+    split, removes the split from effective history and replays every cost
+    currency of the holding in one audited database transaction (T-129). The
+    original split stays posted history. A later disposal the unsplit holding
+    cannot satisfy refuses the command with INVESTMENT_SPLIT_DEPENDENCY,
+    naming that disposal, and nothing is written. A non-empty gain change set
+    requires the preview's exact gain_impact_acknowledgement.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalRequest"
+  responses:
+    "201":
+      description: Split reversed and holding replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted split not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected (INVESTMENT_SPLIT_ALREADY_CORRECTED), unlinked import (INVESTMENT_IMPORTED_SPLIT), changed (INVESTMENT_SPLIT_CHANGED), later disposal impossible (INVESTMENT_SPLIT_DEPENDENCY), reconciliation override required, or gain changes not acknowledged
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

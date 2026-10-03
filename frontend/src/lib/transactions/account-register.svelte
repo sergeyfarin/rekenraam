@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { transactionTitle } from '$lib/transactions/transaction-title';
+  import { systemLabelText } from '$lib/transactions/system-label';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
   import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
   import CheckCircle from '@lucide/svelte/icons/check-circle';
@@ -114,7 +116,7 @@
   {#snippet payeeCell(entry: AccountRegisterEntryResponse)}
     <div class="min-w-0">
       <span class="block truncate font-medium text-foreground">
-        {entry.payee_name || entry.description || '—'}
+        {transactionTitle(entry, systemLabelText, '—')}
       </span>
       {#if entry.status === 'voided'}
         <span class="mt-0.5 inline-block">

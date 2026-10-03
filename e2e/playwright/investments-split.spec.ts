@@ -6,7 +6,9 @@ import { todayISO } from './support/dates';
 /**
  * T-122: a split is entered on a phone-sized screen, previewed with its exact
  * per-lot effect, and — when dated before a later sale — committed only after
- * the user accepts the sale gain it revises.
+ * the user accepts the sale gain it revises. T-129/T-136: a backdated purchase
+ * before a split shows a labelled adjustment, and a posted split is corrected
+ * or reversed from its transaction.
  */
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -40,7 +42,12 @@ async function setup(page: Page) {
       cash_account_id: cash.id, quantity_value: quantity, quantity_scale: 0, cash_amount_value: amount,
       cash_amount_scale: 2, cash_commodity_id: currencyID, cost_basis_method: 'fifo'
     });
-  return { commodityID: instrument.commodity_id, holdingLabel: `${holdingName} · ${name}`, trade };
+  const split = (daysAgo: number, numerator: number, denominator: number) =>
+    apiJSON<{ transaction: { id: number } }>(page, 'POST', '/api/v1/investments/splits', csrfToken, {
+      effective_on: daysFromTodayISO(-daysAgo), holding_account_id: holding.id, commodity_id: instrument.commodity_id,
+      ratio_numerator: numerator, ratio_denominator: denominator
+    });
+  return { commodityID: instrument.commodity_id, holdingID: holding.id, holdingLabel: `${holdingName} · ${name}`, trade, split };
 }
 
 async function gainsFor(page: Page, commodityID: number): Promise<string[]> {
@@ -88,4 +95,46 @@ test('an unrepresentable reverse split is refused with a translated reason', asy
   await page.getByLabel('For old shares').fill('7');
   await page.getByRole('button', { name: 'Preview split' }).click();
   await expect(page.getByRole('alert')).toContainText('Splits are never rounded');
+});
+
+test('a split adjustment is labelled and correcting the split revises the later sale gain', async ({ page }) => {
+  const s = await setup(page);
+  await s.trade('buy', 30, '10', '10000'); // 10.00 per share
+  const split = await s.split(20, 2, 1);
+  await s.trade('sell', 5, '10', '10000'); // FIFO: 10 of 20 split shares, basis 50.00, gain 50.00
+  await s.trade('buy', 25, '2', '2000'); // entitled to the split: an adjustment of +2
+
+  await page.goto(`/app/accounts/${s.holdingID}/register`);
+  await expect(page.getByText('Split adjustment')).toBeVisible();
+
+  await page.goto(`/app/transactions?transaction_id=${split.transaction.id}`);
+  await page.getByRole('button', { name: 'Correct split…' }).click();
+  const form = page.getByRole('dialog', { name: 'Correct this split' });
+  await expect(form.getByLabel('New shares')).toHaveValue('2');
+  await form.getByLabel('Reason for correction').fill('it was a 3-for-1');
+  await form.getByLabel('New shares').fill('3');
+  await form.getByRole('button', { name: 'Preview split' }).click();
+  await expect(form.getByRole('region', { name: 'What changes' })).toContainText('Holding change: 24');
+  await form.getByRole('button', { name: 'Correct split' }).click();
+
+  const review = page.getByRole('alertdialog');
+  await expect(review).toContainText(`Sale on ${daysFromTodayISO(-5)}: basis 50.00 → 33.33`);
+  await review.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(form).toBeHidden();
+  // Basis is a third of 100.00, kept at its finer allocation scale; the
+  // helper truncates the 66.6667 gain to cents.
+  await expect.poll(() => gainsFor(page, s.commodityID)).toEqual(['6666']);
+});
+
+test('reversing a split a later sale depends on is refused with a translated reason', async ({ page }) => {
+  const s = await setup(page);
+  await s.trade('buy', 30, '10', '10000');
+  const split = await s.split(20, 2, 1);
+  await s.trade('sell', 5, '15', '15000'); // only possible after the split
+
+  await page.goto(`/app/transactions?transaction_id=${split.transaction.id}`);
+  await page.getByRole('button', { name: 'Reverse split…' }).click();
+  await page.getByLabel('Reason for reversal').fill('no split happened');
+  await page.getByRole('button', { name: 'Review and reverse' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('would no longer be possible after this split');
 });

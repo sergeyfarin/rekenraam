@@ -7,6 +7,7 @@
   import APIFormError from '$lib/components/api-form-error.svelte';
   import BuyForm from '$lib/investments/buy-form.svelte';
   import SellForm from '$lib/investments/sell-form.svelte';
+  import SplitForm from '$lib/investments/split-form.svelte';
   import GainImpactList from '$lib/investments/gain-impact-list.svelte';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import {
@@ -23,8 +24,10 @@
     investmentCorrectionChainQueryKey,
     previewBuyReversalReconciliation,
     previewSaleReversalReconciliation,
+    previewSplitReversalReconciliation,
     reverseManualBuy,
     reverseManualSale,
+    reverseSplit,
     type GainImpact,
     type ReconciliationImpactResponse
   } from '$lib/api/investments';
@@ -32,11 +35,14 @@
   let {
     transactionID,
     csrfToken,
-    onRefresh
+    onRefresh,
+    systemLabel
   }: {
     transactionID: number;
     csrfToken?: string;
     onRefresh?: () => void;
+    // A split adjustment journal shows the chain of the split it adjusts (T-136).
+    systemLabel?: string;
   } = $props();
 
   const chainQuery = createQuery(() => ({
@@ -45,19 +51,23 @@
     enabled: transactionID > 0
   }));
 
-  let replacementKind = $state<'buy' | 'sell' | null>(null);
+  let replacementKind = $state<'buy' | 'sell' | 'split' | null>(null);
+  // Splits pre-fill from the chain's effective_split; only trades need the
+  // separate source-facts read.
   const replacementQuery = createQuery(() => ({
     queryKey: [...investmentCorrectionChainQueryKey, 'source', transactionID],
     queryFn: () => getInvestmentTradeCorrectionContext(transactionID),
-    enabled: replacementKind !== null && transactionID > 0
+    enabled: (replacementKind === 'buy' || replacementKind === 'sell') && transactionID > 0
   }));
+  const splitCorrectable = $derived(chainQuery.data?.can_correct_split === true &&
+    chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_split);
 
   const sourceLinkedEffectiveBuy = $derived(
     chainQuery.data?.can_reverse_buy === true && chainQuery.data.effective_transaction_id === transactionID
   );
 
   let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
-  let reversalKind = $state<'buy' | 'sale'>('sale');
+  let reversalKind = $state<'buy' | 'sale' | 'split'>('sale');
   let reason = $state('');
   let pending = $state(false);
   let actionError = $state<unknown>(undefined);
@@ -106,7 +116,9 @@
   async function previewReversal(refreshed: boolean): Promise<boolean> {
     const preview = reversalKind === 'buy'
       ? await previewBuyReversalReconciliation(transactionID, { reason: reason.trim() })
-      : await previewSaleReversalReconciliation(transactionID, { reason: reason.trim() });
+      : reversalKind === 'split'
+        ? await previewSplitReversalReconciliation(transactionID, { reason: reason.trim() })
+        : await previewSaleReversalReconciliation(transactionID, { reason: reason.trim() });
     if (!impactNeedsReview(preview)) return false;
     impacts = preview.affected_checkpoints;
     gainImpact = hasGainChanges(preview.gain_impact) ? preview.gain_impact : null;
@@ -125,6 +137,8 @@
     };
     if (reversalKind === 'buy') {
       await reverseManualBuy(transactionID, body, csrfToken);
+    } else if (reversalKind === 'split') {
+      await reverseSplit(transactionID, body, csrfToken);
     } else {
       await reverseManualSale(transactionID, body, csrfToken);
     }
@@ -222,6 +236,27 @@
     {#if chainQuery.data.operations.some((node) => node.imported)}
       <p class="text-xs text-muted">{m.transactions_investment_history_imported()}</p>
     {/if}
+    {#if systemLabel === 'split_adjustment'}
+      <p class="text-xs text-muted">{m.transactions_investment_split_adjustment_note()}</p>
+    {/if}
+    {#if splitCorrectable}
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+          disabled={!csrfToken || pending}
+          onclick={() => { reversalKind = 'split'; reason = ''; actionError = undefined; modal = 'reason'; }}
+        >
+          {m.transactions_investment_reverse_split_action()}
+        </button>
+        <button type="button"
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+          disabled={!csrfToken}
+          onclick={() => { replacementKind = 'split'; }}>
+          {m.transactions_investment_replace_split_action()}
+        </button>
+      </div>
+    {/if}
     {#if chainQuery.data.can_reverse_sale && chainQuery.data.effective_transaction_id === transactionID}
       <button
         type="button"
@@ -265,7 +300,16 @@
   {/if}
 </section>
 
-{#if replacementKind !== null}
+{#if replacementKind === 'split' && csrfToken && chainQuery.data?.effective_split}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
+    role="presentation">
+    <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
+      role="dialog" aria-modal="true" aria-label={m.transactions_investment_replace_split_title()}>
+      <SplitForm {csrfToken} correction={{ transactionID, terms: chainQuery.data.effective_split }}
+        onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+    </div>
+  </div>
+{:else if replacementKind === 'buy' || replacementKind === 'sell'}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
     role="presentation">
     <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
@@ -298,13 +342,17 @@
       <div class="border-b border-border px-4 py-3">
         <h3 id="investment-reversal-title" class="text-sm font-semibold text-foreground">
           {modal === 'reason'
-            ? reversalKind === 'buy' ? m.transactions_investment_reverse_buy_title() : m.transactions_investment_reverse_title()
+            ? reversalKind === 'buy' ? m.transactions_investment_reverse_buy_title()
+              : reversalKind === 'split' ? m.transactions_investment_reverse_split_title()
+              : m.transactions_investment_reverse_title()
             : impacts.length > 0 ? m.transactions_reconciliation_warning_title() : m.investments_gain_impact_title()}
         </h3>
         {#if modal === 'reason' || impacts.length > 0}
           <p class="mt-1 text-xs leading-5 text-muted">
             {modal === 'reason'
-              ? reversalKind === 'buy' ? m.transactions_investment_reverse_buy_copy() : m.transactions_investment_reverse_copy()
+              ? reversalKind === 'buy' ? m.transactions_investment_reverse_buy_copy()
+                : reversalKind === 'split' ? m.transactions_investment_reverse_split_copy()
+                : m.transactions_investment_reverse_copy()
               : m.transactions_reconciliation_warning_copy()}
           </p>
         {/if}

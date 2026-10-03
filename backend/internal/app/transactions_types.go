@@ -58,7 +58,10 @@ type Transaction struct {
 	UpdatedAt                 string
 	DeletedAt                 string
 	ChangeReason              string
-	InvalidatedCheckpointIDs  []int64
+	// SystemLabel is a stable code for a journal the system posted without
+	// user text, such as "split_adjustment"; empty otherwise (T-136).
+	SystemLabel              string
+	InvalidatedCheckpointIDs []int64
 }
 
 type JournalEntry struct {
@@ -123,6 +126,7 @@ type AccountRegisterEntry struct {
 	CreatedAt                 string
 	UpdatedAt                 string
 	ChangeReason              string
+	SystemLabel               string
 }
 
 type ListTransactionsInput struct {

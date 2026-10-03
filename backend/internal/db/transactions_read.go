@@ -466,7 +466,11 @@ func transactionVersionSelect(source string, extraConditions string) string {
 			tv.needs_review,
 			tv.recorded_at,
 			tv.changed_by_user_id,
-			tv.change_reason
+			tv.change_reason,
+			-- A stable code for journals the system posts without user text
+			-- (T-136); the frontend localizes it.
+			COALESCE((SELECT link.role FROM investment_operation_journal_links link
+				WHERE link.transaction_version_id = tv.id AND link.role = 'split_adjustment'), '')
 		FROM transactions t
 		JOIN ` + source + ` tv ON tv.transaction_id = t.id
 	` + extraConditions
@@ -498,6 +502,10 @@ func accountRegisterSelect(extraConditions string) string {
 			tv.recorded_at,
 			tv.changed_by_user_id,
 			tv.change_reason,
+			-- A stable code for journals the system posts without user text
+			-- (T-136); the frontend localizes it.
+			COALESCE((SELECT link.role FROM investment_operation_journal_links link
+				WHERE link.transaction_version_id = tv.id AND link.role = 'split_adjustment'), ''),
 			je.id,
 			je.book_id,
 			je.transaction_version_id,
@@ -587,6 +595,7 @@ func scanTransactionRecord(scanner interface{ Scan(dest ...any) error }, record 
 		&record.RecordedAt,
 		&record.ChangedByUserID,
 		&record.ChangeReason,
+		&record.SystemLabel,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
@@ -622,6 +631,7 @@ func scanAccountRegisterEntry(scanner interface{ Scan(dest ...any) error }, entr
 		&entry.Transaction.RecordedAt,
 		&entry.Transaction.ChangedByUserID,
 		&entry.Transaction.ChangeReason,
+		&entry.Transaction.SystemLabel,
 		&entry.JournalEntry.ID,
 		&entry.JournalEntry.BookID,
 		&entry.JournalEntry.TransactionVersionID,

@@ -236,6 +236,10 @@ TransactionResponse:
       description: Present only while the transaction is soft-deleted.
     change_reason:
       type: string
+    system_label:
+      type: string
+      enum: [split_adjustment]
+      description: Stable code for a journal the system posted without user text (T-136); the client localizes it. Absent for ordinary journals.
     invalidated_checkpoint_ids:
       type: array
       items:
@@ -347,6 +351,10 @@ AccountRegisterEntryResponse:
       format: date-time
     change_reason:
       type: string
+    system_label:
+      type: string
+      enum: [split_adjustment]
+      description: Stable code for a journal the system posted without user text (T-136); the client localizes it. Absent for ordinary journals.
 AccountRegisterResponse:
   type: object
   required:

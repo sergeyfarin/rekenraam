@@ -442,8 +442,8 @@ notes record design decisions per area; they carry no status or order.
   or entitlement, so provider rows only link to a recorded split until
   verified payload evidence defines a mapping. A history change that alters a
   split's quantity posts the difference as a guarded adjustment journal dated
-  to the split, linked to the split and its revision (T-129); see the slice 5
-  contract.
+  to the split, linked to the split and its revision; a posted split is
+  reversed or replaced like a trade (T-129). See the slice 5 contract.
 - **Pooled internal transfers** (T-123). The source's method lock, else its
   resolved default, chooses selected-lot or pooled allocation. A pooled move
   reuses the sale's dated pool depletion (FIFO lot links for lineage, exact

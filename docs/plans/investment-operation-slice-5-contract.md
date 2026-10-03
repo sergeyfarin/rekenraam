@@ -189,8 +189,19 @@ T-114 policy. Self-check requires each split's `primary` plus
 adjustment link to belong to a revision dated to the split. A fraction the
 security cannot represent still refuses with the split named.
 
-Deferred: native split reversal and replacement
-([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)), zero-delta splits (no eligible holdings, refused
+**Reversal and replacement (T-129 #144).** A split is corrected like a trade:
+reversal posts one inverse journal dated to the split that negates its primary
+plus adjustment journals on the holding, as a `reversal` operation correcting
+the split; replacement posts that inverse (linked to the successor as
+`reversal`) and a new split operation (`correction_mode = 'replace'`) with
+corrected date, ratio or evidence for the same holding and security, planned
+without the replaced split and ordered at its correction-root same-day slot.
+Both replay every cost currency of the holding in the command transaction,
+refuse an impossible later disposal with it named, and use the shared
+correction fences, gain acknowledgement and checkpoint guard. A corrected
+split's facts, effects, revisions and journals stay immutable; self-check
+includes its inverse journal and expects no effects from a split that is no
+longer effective. Deferred: zero-delta splits (no eligible holdings, refused
 with `INVESTMENT_SPLIT_NO_HOLDINGS` because a journal-free operation path does
 not exist; [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)), verified Trading 212 mapping ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)), and linked
 cash in lieu.

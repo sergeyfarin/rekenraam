@@ -1152,5 +1152,17 @@
   "api_error_investment_split_fraction_unrepresentable": "The split would leave a fraction this security cannot record exactly. Splits are never rounded.",
   "api_error_investment_split_changed": "The holding changed after the preview. Preview the split again.",
   "api_error_investment_split_dependency": "A later sale or transfer would no longer be possible after this split.",
-  "api_error_import_split_link_unavailable": "This row can no longer be linked to that split. It may already be linked, or the split no longer applies to this security."
+  "api_error_import_split_link_unavailable": "This row can no longer be linked to that split. It may already be linked, or the split no longer applies to this security.",
+  "transactions_investment_reverse_split_action": "Reverse split…",
+  "transactions_investment_reverse_split_title": "Reverse this split",
+  "transactions_investment_reverse_split_copy": "This posts an inverse transaction dated to the split and recalculates later lot allocations without it. A later sale that the unsplit holding cannot cover will block the reversal. The original split stays in history.",
+  "transactions_investment_replace_split_action": "Correct split…",
+  "transactions_investment_replace_split_title": "Correct this split",
+  "transactions_investment_split_adjustment_note": "This transaction adjusts the split above: an earlier entry changed how many shares it multiplied.",
+  "investments_split_replace_help": "Change the date or ratio. The original split is reversed and the corrected one is recorded at the same place in that day; later sales are recalculated.",
+  "investments_split_replace_reason": "Reason for correction",
+  "investments_split_replace_submit": "Correct split",
+  "transactions_system_label_split_adjustment": "Split adjustment",
+  "api_error_investment_split_already_corrected": "This split has already been corrected. Open its correction history to see the latest entry.",
+  "api_error_investment_imported_split": "This split is linked to an import row that no longer refers to it. Review the import before correcting the split."
 }

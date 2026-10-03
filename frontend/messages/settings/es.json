@@ -1124,5 +1124,17 @@
   "api_error_investment_split_fraction_unrepresentable": "El desdoblamiento dejaría una fracción que este valor no puede registrar con exactitud. Nunca se redondea.",
   "api_error_investment_split_changed": "La posición cambió tras la previsualización. Vuelve a previsualizar el desdoblamiento.",
   "api_error_investment_split_dependency": "Una venta o transferencia posterior dejaría de ser posible tras este desdoblamiento.",
-  "api_error_import_split_link_unavailable": "Esta fila ya no se puede vincular a ese desdoblamiento. Puede que ya esté vinculada o que el desdoblamiento no corresponda a este valor."
+  "api_error_import_split_link_unavailable": "Esta fila ya no se puede vincular a ese desdoblamiento. Puede que ya esté vinculada o que el desdoblamiento no corresponda a este valor.",
+  "transactions_investment_reverse_split_action": "Revertir desdoblamiento…",
+  "transactions_investment_reverse_split_title": "Revertir este desdoblamiento",
+  "transactions_investment_reverse_split_copy": "Esto registra una transacción inversa con la fecha del desdoblamiento y recalcula sin él las asignaciones de lotes posteriores. Si una venta posterior no puede cubrirse sin el desdoblamiento, la reversión se rechaza. El desdoblamiento original permanece en el historial.",
+  "transactions_investment_replace_split_action": "Corregir desdoblamiento…",
+  "transactions_investment_replace_split_title": "Corregir este desdoblamiento",
+  "transactions_investment_split_adjustment_note": "Esta transacción ajusta el desdoblamiento anterior: una operación previa cambió cuántas acciones multiplicó.",
+  "investments_split_replace_help": "Cambie la fecha o la proporción. El desdoblamiento original se revierte y el corregido se registra en la misma posición de ese día; las ventas posteriores se recalculan.",
+  "investments_split_replace_reason": "Motivo de la corrección",
+  "investments_split_replace_submit": "Corregir desdoblamiento",
+  "transactions_system_label_split_adjustment": "Ajuste de desdoblamiento",
+  "api_error_investment_split_already_corrected": "Este desdoblamiento ya se corrigió. Abra el historial de correcciones para ver la última operación.",
+  "api_error_investment_imported_split": "Este desdoblamiento está vinculado a una fila de importación que ya no lo identifica. Revise la importación antes de corregirlo."
 }

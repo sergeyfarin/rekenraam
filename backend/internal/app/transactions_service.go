@@ -420,6 +420,7 @@ func toAccountRegisterEntries(records []db.AccountRegisterEntryRecord, runningBa
 			CreatedAt:                 transaction.CreatedAt,
 			UpdatedAt:                 transaction.UpdatedAt,
 			ChangeReason:              transaction.ChangeReason,
+			SystemLabel:               transaction.SystemLabel,
 		})
 	}
 	return entries
@@ -482,6 +483,7 @@ func toTransaction(record db.TransactionRecord) Transaction {
 		UpdatedAt:                 record.RecordedAt,
 		DeletedAt:                 nullableString(record.DeletedAt),
 		ChangeReason:              record.ChangeReason,
+		SystemLabel:               record.SystemLabel,
 		InvalidatedCheckpointIDs:  record.InvalidatedCheckpointIDs,
 	}
 }

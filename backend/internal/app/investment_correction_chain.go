@@ -30,7 +30,20 @@ type InvestmentCorrectionChain struct {
 	CanReverseManualBuy    bool
 	CanReverseSale         bool
 	CanReverseBuy          bool
-	Operations             []InvestmentCorrectionNode
+	// CanCorrectSplit allows native split reversal and replacement (T-129);
+	// EffectiveSplit then carries the split's terms for a replacement form.
+	CanCorrectSplit bool
+	EffectiveSplit  *InvestmentCorrectionSplitTerms
+	Operations      []InvestmentCorrectionNode
+}
+
+// InvestmentCorrectionSplitTerms are an effective split's current terms.
+type InvestmentCorrectionSplitTerms struct {
+	HoldingAccountID int64
+	CommodityID      int64
+	EffectiveOn      string
+	RatioNumerator   int64
+	RatioDenominator int64
 }
 
 // CorrectionChain explains immutable investment history by transaction ID.
@@ -87,6 +100,18 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {
 			chain.CanReverseSale = true
 			chain.CanReverseManualSale = !importedLineage
+		}
+		if effective && record.OperationKind == "split" && (!importedLineage || committedSource) &&
+			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {
+			chain.CanCorrectSplit = true
+			split, err := s.repository.SplitOperationByTransactionID(ctx, BookID, record.TransactionID.Int64)
+			if err != nil {
+				return InvestmentCorrectionChain{}, mapSplitCorrectionError(err)
+			}
+			chain.EffectiveSplit = &InvestmentCorrectionSplitTerms{
+				HoldingAccountID: split.AccountID, CommodityID: split.CommodityID, EffectiveOn: split.EventDate,
+				RatioNumerator: split.RatioNumerator, RatioDenominator: split.RatioDenominator,
+			}
 		}
 		if effective && record.OperationKind == "buy" && (!importedLineage || committedSource) &&
 			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {

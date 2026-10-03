@@ -296,6 +296,8 @@ type investmentCorrectionChainResponse struct {
 	CanReverseManualBuy    bool                               `json:"can_reverse_manual_buy"`
 	CanReverseSale         bool                               `json:"can_reverse_sale"`
 	CanReverseBuy          bool                               `json:"can_reverse_buy"`
+	CanCorrectSplit        bool                               `json:"can_correct_split"`
+	EffectiveSplit         *investmentCorrectionSplitTerms    `json:"effective_split,omitempty"`
 	Operations             []investmentCorrectionNodeResponse `json:"operations"`
 }
 
@@ -1103,6 +1105,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			RootOperationID: chain.RootOperationID, EffectiveTransactionID: chain.EffectiveTransactionID,
 			CanReverseManualSale: chain.CanReverseManualSale, CanReverseManualBuy: chain.CanReverseManualBuy,
 			CanReverseSale: chain.CanReverseSale, CanReverseBuy: chain.CanReverseBuy,
+			CanCorrectSplit: chain.CanCorrectSplit, EffectiveSplit: toInvestmentCorrectionSplitTerms(chain.EffectiveSplit),
 			Operations: operations,
 		})
 	}
@@ -1803,6 +1806,12 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentSplitDependency):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_DEPENDENCY", err.Error())
+	case errors.Is(err, app.ErrInvestmentSplitNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment split operation not found")
+	case errors.Is(err, app.ErrInvestmentSplitAlreadyCorrected):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_ALREADY_CORRECTED", err.Error())
+	case errors.Is(err, app.ErrInvestmentImportedSplit):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_IMPORTED_SPLIT", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
 	// Every investment trade goes through the transaction write guard, so a
@@ -2346,4 +2355,169 @@ func investmentSplitPreview(logger *slog.Logger, authService *app.AuthService, i
 			Plan: toInvestmentSplitPlanResponse(preview.Plan), Impact: impact,
 		})
 	}
+}
+
+// Split correction (T-129). Reversal reuses the sale-reversal request and
+// response; replacement carries corrected terms for the same holding.
+type investmentSplitReplacementRequest struct {
+	Reason                    string          `json:"reason"`
+	EffectiveOn               string          `json:"effective_on"`
+	RatioNumerator            int64           `json:"ratio_numerator"`
+	RatioDenominator          int64           `json:"ratio_denominator"`
+	SourceEvidence            json.RawMessage `json:"source_evidence,omitempty"`
+	Memo                      string          `json:"memo"`
+	ReconciliationOverride    bool            `json:"reconciliation_override"`
+	GainImpactAcknowledgement string          `json:"gain_impact_acknowledgement,omitempty"`
+}
+
+type investmentSplitReplacementResponse struct {
+	Inverse                transactionResponse         `json:"inverse"`
+	Replacement            transactionResponse         `json:"replacement"`
+	Plan                   investmentSplitPlanResponse `json:"plan"`
+	CorrectedTransactionID int64                       `json:"corrected_transaction_id"`
+}
+
+func investmentSplitReplacementInput(owner app.Owner, r *http.Request, transactionID int64, request investmentSplitReplacementRequest) app.ReplaceInvestmentSplitInput {
+	evidence := rawJSONText(request.SourceEvidence)
+	if evidence == "null" {
+		evidence = ""
+	}
+	return app.ReplaceInvestmentSplitInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		TransactionID: transactionID, Reason: request.Reason, EffectiveOn: request.EffectiveOn,
+		RatioNumerator: request.RatioNumerator, RatioDenominator: request.RatioDenominator,
+		SourceEvidenceJSON: evidence, Memo: request.Memo,
+		ReconciliationOverride:    request.ReconciliationOverride,
+		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+	}
+}
+
+func reverseInvestmentSplit(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		transaction, err := investmentService.ReverseSplit(r.Context(), app.ReverseInvestmentSplitInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			TransactionID: transactionID, Reason: request.Reason,
+			ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "reverse investment split", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSaleReversalResponse{Transaction: toTransactionResponse(transaction), CorrectedTransactionID: transactionID})
+	}))
+}
+
+func reverseInvestmentSplitReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReverseSplitReconciliationImpact(r.Context(), app.ReverseInvestmentSplitInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview split reversal reconciliation impact", err)
+			return
+		}
+		writeReconciliationImpact(w, impact)
+	}
+}
+
+func replaceInvestmentSplit(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSplitReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.ReplaceSplit(r.Context(), investmentSplitReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "replace investment split", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSplitReplacementResponse{
+			Inverse: toTransactionResponse(result.Inverse), Replacement: toTransactionResponse(result.Replacement),
+			Plan: toInvestmentSplitPlanResponse(result.Plan), CorrectedTransactionID: result.CorrectedTransactionID,
+		})
+	}))
+}
+
+func replaceInvestmentSplitPreview(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSplitReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		preview, err := investmentService.PreviewSplitReplacement(r.Context(), investmentSplitReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview split replacement", err)
+			return
+		}
+		impact := toReconciliationImpactResponse(preview.Impact)
+		gainImpact, err := toGainImpactResponse(preview.Impact.GainImpact)
+		if err != nil {
+			writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+			return
+		}
+		impact.GainImpact = gainImpact
+		writeJSON(w, http.StatusOK, investmentSplitPreviewResponse{
+			Plan: toInvestmentSplitPlanResponse(preview.Plan), Impact: impact,
+		})
+	}
+}
+
+type investmentCorrectionSplitTerms struct {
+	HoldingAccountID int64  `json:"holding_account_id"`
+	CommodityID      int64  `json:"commodity_id"`
+	EffectiveOn      string `json:"effective_on"`
+	RatioNumerator   int64  `json:"ratio_numerator"`
+	RatioDenominator int64  `json:"ratio_denominator"`
+}
+
+func toInvestmentCorrectionSplitTerms(terms *app.InvestmentCorrectionSplitTerms) *investmentCorrectionSplitTerms {
+	if terms == nil {
+		return nil
+	}
+	return &investmentCorrectionSplitTerms{HoldingAccountID: terms.HoldingAccountID, CommodityID: terms.CommodityID,
+		EffectiveOn: terms.EffectiveOn, RatioNumerator: terms.RatioNumerator, RatioDenominator: terms.RatioDenominator}
 }

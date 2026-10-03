@@ -86,9 +86,12 @@ type TransactionRecord struct {
 	RecordedAt                string
 	ChangedByUserID           int64
 	ChangeReason              string
-	TagIDs                    []int64
-	JournalEntries            []JournalEntryRecord
-	InvalidatedCheckpointIDs  []int64
+	// SystemLabel names a journal the system posted without user text, such
+	// as "split_adjustment" (T-136); empty otherwise.
+	SystemLabel              string
+	TagIDs                   []int64
+	JournalEntries           []JournalEntryRecord
+	InvalidatedCheckpointIDs []int64
 	// Preview-only metadata for the exact writer invalidations; no temporary IDs.
 	InvalidatedCheckpointRefs []CheckpointInvalidationRef
 	// GainImpact is the committed-disposal change set of an opted-in

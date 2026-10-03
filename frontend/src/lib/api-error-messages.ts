@@ -33,6 +33,8 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE: () => m.api_error_investment_split_fraction_unrepresentable(),
   INVESTMENT_SPLIT_CHANGED: () => m.api_error_investment_split_changed(),
   INVESTMENT_SPLIT_DEPENDENCY: () => m.api_error_investment_split_dependency(),
+  INVESTMENT_SPLIT_ALREADY_CORRECTED: () => m.api_error_investment_split_already_corrected(),
+  INVESTMENT_IMPORTED_SPLIT: () => m.api_error_investment_imported_split(),
   IMPORT_SPLIT_LINK_UNAVAILABLE: () => m.api_error_import_split_link_unavailable(),
   TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   TRANSACTION_VERSION_STALE: () => m.api_error_transaction_version_stale(),

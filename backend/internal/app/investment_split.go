@@ -101,6 +101,12 @@ type InvestmentSplitResult struct {
 }
 
 func (s *InvestmentService) prepareSplitWrite(ctx context.Context, input InvestmentSplitInput) (db.CreateTransactionParams, db.CreateSplitParams, InvestmentSplitPlan, error) {
+	return s.prepareSplitWriteWith(ctx, input, 0)
+}
+
+// prepareSplitWriteWith plans a split journal. replacesOperationID names the
+// split a replacement supersedes (T-129): the plan then replays without it.
+func (s *InvestmentService) prepareSplitWriteWith(ctx context.Context, input InvestmentSplitInput, replacesOperationID int64) (db.CreateTransactionParams, db.CreateSplitParams, InvestmentSplitPlan, error) {
 	fail := func(err error) (db.CreateTransactionParams, db.CreateSplitParams, InvestmentSplitPlan, error) {
 		return db.CreateTransactionParams{}, db.CreateSplitParams{}, InvestmentSplitPlan{}, err
 	}
@@ -146,7 +152,7 @@ func (s *InvestmentService) prepareSplitWrite(ctx context.Context, input Investm
 	split := db.CreateSplitParams{
 		BookID: BookID, AccountID: input.HoldingAccountID, CommodityID: input.CommodityID,
 		EffectiveOn: date, RatioNumerator: numerator, RatioDenominator: denominator,
-		SourceEvidenceJSON: evidence,
+		SourceEvidenceJSON: evidence, ReplacesOperationID: replacesOperationID,
 	}
 	planned, err := s.repository.PlanSplit(ctx, split, input.OwnerUserID)
 	if err != nil {

@@ -56,6 +56,9 @@ type CreateSplitParams struct {
 	// writer recomputes it inside its transaction and refuses a mismatch.
 	ExpectedDeltaValue exact.Coefficient
 	ExpectedDeltaScale int
+	// ReplacesOperationID is the split a replacement supersedes. Its plan
+	// replays without that split, at its correction root's same-day slot.
+	ReplacesOperationID int64
 }
 
 // SplitLotEffect is one lot's exact quantity change. New and delta share a
@@ -219,7 +222,10 @@ func sumSplitEffects(effects []SplitLotEffect) *exact.ScaledInt {
 // of the holding. When a later depletion exists it replays the position with
 // the split inserted; the caller persists that replay. operationID is zero for
 // a plan that has no operation yet; it then sorts after every same-day event,
-// exactly where the committed operation (the newest ID) will sort.
+// exactly where the committed operation (the newest ID) will sort. A
+// replacement always replays, without the split it replaces and at that
+// split's correction-root slot, which is what replay sees once the inverse
+// journal has made the replaced split ineffective.
 func planSplitTx(ctx context.Context, tx *sql.Tx, params CreateSplitParams, operationID, auditEventID, actorUserID int64, at string) (splitWritePlan, error) {
 	if params.BookID <= 0 || params.AccountID <= 0 || params.CommodityID <= 0 ||
 		!isDisposalCalendarDate(params.EffectiveOn) || params.RatioNumerator <= 0 ||
@@ -230,7 +236,8 @@ func planSplitTx(ctx context.Context, tx *sql.Tx, params CreateSplitParams, oper
 	if err != nil {
 		return splitWritePlan{}, err
 	}
-	plan := splitWritePlan{SplitPlan: SplitPlan{Replayed: latest != "" && params.EffectiveOn < latest}}
+	replacing := params.ReplacesOperationID > 0
+	plan := splitWritePlan{SplitPlan: SplitPlan{Replayed: replacing || latest != "" && params.EffectiveOn < latest}}
 	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT cost_commodity_id FROM investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND position_side = 'long'
 		ORDER BY cost_commodity_id`, params.BookID, params.AccountID, params.CommodityID)
@@ -253,6 +260,15 @@ func planSplitTx(ctx context.Context, tx *sql.Tx, params CreateSplitParams, oper
 	if orderID <= 0 {
 		orderID = math.MaxInt64
 	}
+	if replacing {
+		roots, err := investmentReplayOrderOperationIDsQuery(ctx, tx, params.BookID)
+		if err != nil {
+			return splitWritePlan{}, err
+		}
+		if orderID = roots[params.ReplacesOperationID]; orderID <= 0 {
+			return splitWritePlan{}, fmt.Errorf("%w: replaced split %d has no correction root", ErrInvalidDisposalParams, params.ReplacesOperationID)
+		}
+	}
 	for _, costID := range costIDs {
 		position := splitPositionPlan{costCommodityID: costID}
 		if !plan.Replayed {
@@ -266,6 +282,9 @@ func planSplitTx(ctx context.Context, tx *sql.Tx, params CreateSplitParams, oper
 			if err != nil {
 				return splitWritePlan{}, err
 			}
+			intents = slices.DeleteFunc(intents, func(intent InvestmentReplayIntent) bool {
+				return replacing && intent.OperationID == params.ReplacesOperationID
+			})
 			intents = append(intents, InvestmentReplayIntent{
 				OperationID: operationID, OrderOperationID: orderID, OperationKind: "split",
 				EffectSeq: 1, EventDate: params.EffectiveOn, Kind: "split",
@@ -341,64 +360,72 @@ func (r *InvestmentRepository) createSplit(ctx context.Context, journal CreateTr
 		write = previewInvestmentWriteTx[SplitPlan]
 	}
 	return write(ctx, r.database, journal, func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (SplitPlan, error) {
-		operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
-		if err != nil {
-			return SplitPlan{}, err
-		}
-		plan, err := planSplitTx(ctx, tx, params, operationID, auditEventID, journal.ActorUserID, journal.CreatedAt)
-		if err != nil {
-			return SplitPlan{}, err
-		}
-		// Recomputed at the slot inside this write: a position that moved since
-		// the journal was planned must not commit a stale holding delta.
-		if exact.ScaledIntFromCoefficient(plan.DeltaValue, plan.DeltaScale).Cmp(
-			exact.ScaledIntFromCoefficient(params.ExpectedDeltaValue, params.ExpectedDeltaScale)) != 0 {
-			return SplitPlan{}, ErrSplitPositionChanged
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO investment_split_facts
-			(operation_id, book_id, account_id, commodity_id, effective_on, ratio_numerator,
-			 ratio_denominator, source_evidence_json, created_audit_event_id)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, operationID, params.BookID, params.AccountID,
-			params.CommodityID, params.EffectiveOn, params.RatioNumerator, params.RatioDenominator,
-			params.SourceEvidenceJSON, auditEventID); err != nil {
-			return SplitPlan{}, fmt.Errorf("record split fact: %w", err)
-		}
-		for _, effect := range plan.Effects {
-			result, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_events (
-				book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
-				cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id
-			) VALUES (?, ?, 'split_adjustment', ?, ?, ?, ?, '0', 0, ?, ?, ?, ?)`,
-				params.BookID, effect.LotID, transaction.ID, params.EffectiveOn, effect.DeltaValue,
-				effect.DeltaScale, fmt.Sprintf(`{"ratio_numerator":%d,"ratio_denominator":%d}`,
-					params.RatioNumerator, params.RatioDenominator),
-				journal.CreatedAt, journal.ActorUserID, auditEventID)
-			if err != nil {
-				return SplitPlan{}, fmt.Errorf("record split lot event: %w", err)
-			}
-			eventID, err := result.LastInsertId()
-			if err != nil {
-				return SplitPlan{}, fmt.Errorf("read split lot event id: %w", err)
-			}
-			if err := linkLotEffectTx(ctx, tx, operationID, eventID); err != nil {
-				return SplitPlan{}, err
-			}
-		}
-		for _, position := range plan.positions {
-			if position.projection == nil {
-				if err := applySplitEffectsTx(ctx, tx, params.BookID, position.effects,
-					journal.CreatedAt, journal.ActorUserID, auditEventID); err != nil {
-					return SplitPlan{}, err
-				}
-				continue
-			}
-			if err := persistInvestmentReplayProjectionTx(ctx, tx, params.BookID, params.AccountID,
-				params.CommodityID, position.costCommodityID, operationID, auditEventID,
-				journal.ActorUserID, journal.CreatedAt, position.intents, *position.projection); err != nil {
-				return SplitPlan{}, err
-			}
-		}
-		return plan.SplitPlan, nil
+		return writeSplitEffectsTx(ctx, tx, params, transaction, auditEventID, journal.ActorUserID, journal.CreatedAt)
 	}, nil)
+}
+
+// writeSplitEffectsTx records a split whose journal the enclosing writer just
+// posted: it recomputes the plan at the slot, refuses a stale journal delta,
+// then writes the sourced terms, per-lot effects and any dependent replay.
+func writeSplitEffectsTx(ctx context.Context, tx *sql.Tx, params CreateSplitParams, transaction TransactionRecord,
+	auditEventID, actorUserID int64, createdAt string) (SplitPlan, error) {
+	operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
+	if err != nil {
+		return SplitPlan{}, err
+	}
+	plan, err := planSplitTx(ctx, tx, params, operationID, auditEventID, actorUserID, createdAt)
+	if err != nil {
+		return SplitPlan{}, err
+	}
+	// Recomputed at the slot inside this write: a position that moved since
+	// the journal was planned must not commit a stale holding delta.
+	if exact.ScaledIntFromCoefficient(plan.DeltaValue, plan.DeltaScale).Cmp(
+		exact.ScaledIntFromCoefficient(params.ExpectedDeltaValue, params.ExpectedDeltaScale)) != 0 {
+		return SplitPlan{}, ErrSplitPositionChanged
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_split_facts
+		(operation_id, book_id, account_id, commodity_id, effective_on, ratio_numerator,
+		 ratio_denominator, source_evidence_json, created_audit_event_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, operationID, params.BookID, params.AccountID,
+		params.CommodityID, params.EffectiveOn, params.RatioNumerator, params.RatioDenominator,
+		params.SourceEvidenceJSON, auditEventID); err != nil {
+		return SplitPlan{}, fmt.Errorf("record split fact: %w", err)
+	}
+	for _, effect := range plan.Effects {
+		result, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_events (
+			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
+			cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id
+		) VALUES (?, ?, 'split_adjustment', ?, ?, ?, ?, '0', 0, ?, ?, ?, ?)`,
+			params.BookID, effect.LotID, transaction.ID, params.EffectiveOn, effect.DeltaValue,
+			effect.DeltaScale, fmt.Sprintf(`{"ratio_numerator":%d,"ratio_denominator":%d}`,
+				params.RatioNumerator, params.RatioDenominator),
+			createdAt, actorUserID, auditEventID)
+		if err != nil {
+			return SplitPlan{}, fmt.Errorf("record split lot event: %w", err)
+		}
+		eventID, err := result.LastInsertId()
+		if err != nil {
+			return SplitPlan{}, fmt.Errorf("read split lot event id: %w", err)
+		}
+		if err := linkLotEffectTx(ctx, tx, operationID, eventID); err != nil {
+			return SplitPlan{}, err
+		}
+	}
+	for _, position := range plan.positions {
+		if position.projection == nil {
+			if err := applySplitEffectsTx(ctx, tx, params.BookID, position.effects,
+				createdAt, actorUserID, auditEventID); err != nil {
+				return SplitPlan{}, err
+			}
+			continue
+		}
+		if err := persistInvestmentReplayProjectionTx(ctx, tx, params.BookID, params.AccountID,
+			params.CommodityID, position.costCommodityID, operationID, auditEventID,
+			actorUserID, createdAt, position.intents, *position.projection); err != nil {
+			return SplitPlan{}, err
+		}
+	}
+	return plan.SplitPlan, nil
 }
 
 // effectiveSplitEffectsQuery returns a split's current per-lot effects for

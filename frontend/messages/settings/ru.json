@@ -1124,5 +1124,17 @@
   "api_error_investment_split_fraction_unrepresentable": "Сплит оставил бы дробную часть, которую эта бумага не может записать точно. Сплит никогда не округляется.",
   "api_error_investment_split_changed": "Позиция изменилась после предпросмотра. Повторите предпросмотр сплита.",
   "api_error_investment_split_dependency": "После этого сплита более поздняя продажа или перенос станут невозможны.",
-  "api_error_import_split_link_unavailable": "Эту строку больше нельзя связать с этим сплитом. Возможно, она уже связана или сплит не относится к этой бумаге."
+  "api_error_import_split_link_unavailable": "Эту строку больше нельзя связать с этим сплитом. Возможно, она уже связана или сплит не относится к этой бумаге.",
+  "transactions_investment_reverse_split_action": "Отменить сплит…",
+  "transactions_investment_reverse_split_title": "Отменить этот сплит",
+  "transactions_investment_reverse_split_copy": "Будет проведена обратная транзакция датой сплита, а последующие распределения по лотам будут пересчитаны без него. Если более позднюю продажу без сплита покрыть нельзя, отмена будет отклонена. Исходный сплит останется в истории.",
+  "transactions_investment_replace_split_action": "Исправить сплит…",
+  "transactions_investment_replace_split_title": "Исправить этот сплит",
+  "transactions_investment_split_adjustment_note": "Эта транзакция корректирует сплит выше: более ранняя запись изменила количество акций, к которым он применён.",
+  "investments_split_replace_help": "Измените дату или коэффициент. Исходный сплит будет отменён, а исправленный записан на том же месте в течение дня; последующие продажи будут пересчитаны.",
+  "investments_split_replace_reason": "Причина исправления",
+  "investments_split_replace_submit": "Исправить сплит",
+  "transactions_system_label_split_adjustment": "Корректировка сплита",
+  "api_error_investment_split_already_corrected": "Этот сплит уже исправлен. Последнюю запись можно увидеть в истории исправлений.",
+  "api_error_investment_imported_split": "Этот сплит связан со строкой импорта, которая больше на него не ссылается. Проверьте импорт, прежде чем исправлять сплит."
 }

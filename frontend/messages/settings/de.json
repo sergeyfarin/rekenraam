@@ -1124,5 +1124,17 @@
   "api_error_investment_split_fraction_unrepresentable": "Der Split ergäbe einen Bruchteil, den dieses Wertpapier nicht exakt erfassen kann. Splits werden nie gerundet.",
   "api_error_investment_split_changed": "Der Bestand hat sich nach der Vorschau geändert. Bitte den Split erneut prüfen.",
   "api_error_investment_split_dependency": "Ein späterer Verkauf oder Übertrag wäre nach diesem Split nicht mehr möglich.",
-  "api_error_import_split_link_unavailable": "Diese Zeile kann nicht mehr mit diesem Split verknüpft werden. Sie ist möglicherweise bereits verknüpft, oder der Split gehört nicht zu diesem Wertpapier."
+  "api_error_import_split_link_unavailable": "Diese Zeile kann nicht mehr mit diesem Split verknüpft werden. Sie ist möglicherweise bereits verknüpft, oder der Split gehört nicht zu diesem Wertpapier.",
+  "transactions_investment_reverse_split_action": "Split rückgängig machen…",
+  "transactions_investment_reverse_split_title": "Diesen Split rückgängig machen",
+  "transactions_investment_reverse_split_copy": "Dies bucht eine gegenläufige Transaktion zum Datum des Splits und berechnet spätere Lot-Zuordnungen ohne ihn neu. Wenn ein späterer Verkauf ohne den Split nicht gedeckt ist, wird die Rückbuchung abgelehnt. Der ursprüngliche Split bleibt im Verlauf.",
+  "transactions_investment_replace_split_action": "Split korrigieren…",
+  "transactions_investment_replace_split_title": "Diesen Split korrigieren",
+  "transactions_investment_split_adjustment_note": "Diese Buchung passt den obigen Split an: Ein früherer Eintrag hat geändert, wie viele Anteile er vervielfacht hat.",
+  "investments_split_replace_help": "Ändern Sie Datum oder Verhältnis. Der ursprüngliche Split wird rückgängig gemacht und der korrigierte an derselben Stelle des Tages erfasst; spätere Verkäufe werden neu berechnet.",
+  "investments_split_replace_reason": "Grund für die Korrektur",
+  "investments_split_replace_submit": "Split korrigieren",
+  "transactions_system_label_split_adjustment": "Split-Anpassung",
+  "api_error_investment_split_already_corrected": "Dieser Split wurde bereits korrigiert. Die letzte Buchung steht im Korrekturverlauf.",
+  "api_error_investment_imported_split": "Dieser Split ist mit einer Importzeile verknüpft, die nicht mehr auf ihn verweist. Prüfen Sie den Import, bevor Sie den Split korrigieren."
 }
