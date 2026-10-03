@@ -18,6 +18,7 @@
   import DividendForm from '$lib/investments/dividend-form.svelte';
   import ExternalTransferInForm from '$lib/investments/external-transfer-in-form.svelte';
   import InternalTransferForm from '$lib/investments/internal-transfer-form.svelte';
+  import SplitForm from '$lib/investments/split-form.svelte';
   import GainsReport from '$lib/investments/gains-report.svelte';
   import EventSuggestions from '$lib/investments/event-suggestions.svelte';
   import { parseISO } from 'date-fns';
@@ -88,7 +89,7 @@
   const openPositions = $derived(positions.filter((p) => coefficientSign(p.quantity_value) !== 0));
 
   // Trade form modal
-  type TradeModal = 'buy' | 'sell' | 'dividend' | 'reinvested' | 'external-transfer-in' | 'internal-transfer' | null;
+  type TradeModal = 'buy' | 'sell' | 'dividend' | 'reinvested' | 'external-transfer-in' | 'internal-transfer' | 'split' | null;
   let activeModal = $state<TradeModal>(null);
 
   function openModal(modal: TradeModal) {
@@ -190,6 +191,13 @@
         class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       >
         {m.investments_record_internal_transfer()}
+      </button>
+      <button
+        type="button"
+        onclick={() => openModal('split')}
+        class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      >
+        {m.investments_record_split()}
       </button>
     </div>
 
@@ -365,7 +373,7 @@
     class="fixed inset-x-4 bottom-0 z-50 max-h-[90vh] overflow-y-auto rounded-t-(--radius-panel) border border-border bg-surface shadow-(--shadow-panel) sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-(--radius-panel)"
     role="dialog"
     aria-modal="true"
-    aria-labelledby={activeModal === 'external-transfer-in' ? 'external-transfer-in-title' : activeModal === 'internal-transfer' ? 'internal-transfer-title' : undefined}
+    aria-labelledby={activeModal === 'external-transfer-in' ? 'external-transfer-in-title' : activeModal === 'internal-transfer' ? 'internal-transfer-title' : activeModal === 'split' ? 'split-title' : undefined}
   >
     <div class="p-6">
       {#if activeModal === 'buy'}
@@ -380,6 +388,8 @@
         <ExternalTransferInForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {:else if activeModal === 'internal-transfer'}
         <InternalTransferForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
+      {:else if activeModal === 'split'}
+        <SplitForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {/if}
     </div>
   </div>

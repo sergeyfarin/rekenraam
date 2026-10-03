@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ImportStagedRow } from '$lib/api/imports';
-import { sourceCorrectionKind, unsupportedSourceFill } from './source-correction';
+import { linkableSplitFill, sourceCorrectionKind, unsupportedSourceFill } from './source-correction';
 
 function row(changes: Partial<ImportStagedRow> = {}): ImportStagedRow {
   return {
@@ -47,5 +47,17 @@ describe('unsupportedSourceFill', () => {
     expect(unsupportedSourceFill(trade)).toBe(false);
     expect(sourceCorrectionKind(trade)).toBe('sale');
     expect(unsupportedSourceFill(row({ raw: '{"kind":"cash"}' }))).toBe(false);
+  });
+});
+
+describe('linkableSplitFill', () => {
+  const split = '{"kind":"trading212_order_fill","fill_type":"STOCK_SPLIT","side":"BUY"}';
+  it('offers linking for a pending or skipped split fill only', () => {
+    expect(linkableSplitFill(row({ raw: split }))).toBe(true);
+    expect(linkableSplitFill(row({ raw: split, commit_status: 'skipped' }))).toBe(true);
+    expect(linkableSplitFill(row({ raw: split, commit_status: 'committed' }))).toBe(false);
+    expect(linkableSplitFill(row({ raw: split, dedupe_status: 'duplicate' }))).toBe(false);
+    expect(linkableSplitFill(row())).toBe(false);
+    expect(linkableSplitFill(row({ raw: 'not json' }))).toBe(false);
   });
 });

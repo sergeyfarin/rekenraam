@@ -1,0 +1,52 @@
+post:
+  summary: Preview a split or reverse split
+  description: >
+    Plans the split at its slot and runs its complete writer, including any
+    dependent replay, in a rolled-back transaction. Returns each eligible lot's
+    exact quantity before and after, the holding delta the journal would post,
+    every active checkpoint the writer would invalidate, and gain_impact for
+    committed disposals whose operational result would change. No durable change
+    or temporary ID escapes; commit rechecks everything.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSplitRequest"
+  responses:
+    "200":
+      description: Split preview computed (no mutation)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSplitPreviewResponse"
+    "400":
+      description: Invalid split facts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: INVESTMENT_SPLIT_NO_HOLDINGS or INVESTMENT_SPLIT_DEPENDENCY
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

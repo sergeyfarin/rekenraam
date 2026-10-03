@@ -610,5 +610,16 @@
   "import_preview_correct_sale_scope": "Aplica la cantidad revisada y el importe neto positivo del proveedor conservando el método de coste de adquisición registrado. Los cambios de fecha, instrumento, cuenta o moneda requieren otra corrección. Los cambios de cantidad de lotes seleccionados explícitamente requieren una corrección manual.",
   "import_preview_source_corrected": "Operación de origen corregida",
   "import_result_gain_review": "{count} compras importadas cambiarían las ganancias de ventas anteriores y aún no se registraron.",
-  "import_result_gain_review_action": "Revisar ganancias modificadas"
+  "import_result_gain_review_action": "Revisar ganancias modificadas",
+  "import_preview_split_link": "Vincular a desdoblamiento registrado",
+  "import_preview_split_link_scope": "Trading 212 no informa la proporción del desdoblamiento, así que esta fila nunca se contabiliza. Registra el desdoblamiento en la pantalla Inversiones y vincula esta fila para que una descarga posterior no la vuelva a contabilizar.",
+  "import_preview_split_link_loading": "Cargando desdoblamientos registrados…",
+  "import_preview_split_link_empty": "Aún no se ha registrado ningún desdoblamiento de este valor.",
+  "import_preview_split_link_record": "Registrar el desdoblamiento",
+  "import_preview_split_link_choose": "Desdoblamiento registrado",
+  "import_preview_split_link_option": "{date} · {ratio} · {account}",
+  "import_preview_split_link_already": "Ya vinculado a otra fila de importación",
+  "import_preview_split_link_submit": "Vincular fila",
+  "import_preview_split_link_pending": "Vinculando…",
+  "import_preview_split_linked": "Vinculada a desdoblamiento registrado"
 }

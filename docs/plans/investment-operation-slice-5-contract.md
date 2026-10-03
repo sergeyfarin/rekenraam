@@ -4,7 +4,8 @@ Status: accepted implementation contract, 2026-09-28. ADR 0012 and ADR 0013
 govern. This document fixes the journal, lot, date, and reconciliation rules
 that each slice 5 command must satisfy. The known-basis external inbound API
 command shipped in slice 5b, its entry screen in 5c, the explicit-lot
-internal transfer API in 5d, and its entry screen in 5e. The remaining
+internal transfer API in 5d, and its entry screen in 5e. The manual split /
+reverse split command shipped under T-122 #137 (see below). The remaining
 commands are unimplemented.
 
 ## Common rules
@@ -151,6 +152,32 @@ Example: a 3-for-2 split of 5 shares changes the holding to 7.5. Post
 `H +2.5`, `T −2.5`; a 100.00 EUR aggregate basis remains 100.00 EUR. If the
 broker pays cash for 0.5 share, post the separate cash-in-lieu event below.
 
+**First command (T-122 #137).** `POST /api/v1/investments/splits` (and
+`/preview`) takes one holding account, security, effective date and ratio; a
+ratio is reduced to lowest terms and 1:1 is refused. Eligibility is derived,
+not listed: every long lot open at the operation's slot with `opened_on` on or
+before the effective date, across all cost currencies. Each lot's new quantity
+widens scale only as needed up to the security's `max_quantity_scale` (capped
+by commodity kind); anything finer is refused with
+`INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE`, never rounded. Original per-lot
+effects are `split_adjustment` lot events with signed quantity deltas and zero
+basis, linked to the operation; `investment_split_facts` holds the sourced
+terms. The service plans the delta before the write; the writer recomputes it
+inside its transaction and refuses a mismatch (`INVESTMENT_SPLIT_CHANGED`).
+A split dated before a later depletion is admitted through position replay
+under the T-114 gain-impact policy; an impossible later disposal is refused
+with it named (`INVESTMENT_SPLIT_DEPENDENCY`). Replay of a later correction
+re-derives each split's per-lot effects and appends a per-cost-currency
+revision only when they change. Because a split's journal delta cannot yet be
+revised, replay refuses (naming the split, as a dependency of the triggering
+command) any history change that would alter the quantity it multiplied — a
+quantity correction or backdated acquisition before it. Basis-only corrections
+replay through it. Deferred: split correction/reversal and guarded delta
+adjustments ([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)), zero-delta splits (no eligible holdings, refused
+with `INVESTMENT_SPLIT_NO_HOLDINGS` because a journal-free operation path does
+not exist; [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)), verified Trading 212 mapping ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)), and linked
+cash in lieu.
+
 ## Cash in lieu
 
 Record a linked long disposal for the exact fractional quantity `f` on its
@@ -184,8 +211,8 @@ that allocation rather than rewriting the 8.00 EUR receipt.
    Split ratio/eligibility and basis-action links
    are likewise prerequisites for their respective commands.
 2. Known-basis external inbound and explicit-lot internal transfers are shipped.
-   After gain-impact safeguards, ship manual split/reverse split and verified
-   provider mapping ([T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137)), then pooled internal transfer allocation
+   Manual split/reverse split with Trading 212 split-row linking shipped
+   ([T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137)); next pooled internal transfer allocation
    ([T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138)) and broader transfer-in/disposal backdating ([T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132)).
 3. Decide cross-position replay ([T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139)) before outbound transfers,
    then deliver unknown-basis resolution, return of capital and linked cash in

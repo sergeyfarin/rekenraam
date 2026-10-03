@@ -119,6 +119,26 @@ func persistInvestmentReplayProjectionTx(ctx context.Context, tx *sql.Tx, bookID
 			}
 		}
 	}
+	splits := 0
+	for _, intent := range intents {
+		if intent.Kind == "split" {
+			splits++
+		}
+	}
+	if splits != len(projection.Splits) {
+		return fmt.Errorf("%w: replay split output does not cover its intents", ErrInvalidDisposalParams)
+	}
+	for _, split := range projection.Splits {
+		for _, effect := range split.Effects {
+			if !lotIDs[effect.LotID] || effect.CostCommodityID != costCommodityID {
+				return fmt.Errorf("%w: replay split effect is outside its position", ErrInvalidDisposalParams)
+			}
+		}
+		if err := persistSplitRevisionTx(ctx, tx, bookID, costCommodityID, causedByOperationID,
+			auditEventID, createdAt, split); err != nil {
+			return err
+		}
+	}
 	for _, lot := range projection.Lots {
 		result, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_state (status,
 		remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale,

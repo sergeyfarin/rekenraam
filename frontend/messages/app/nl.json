@@ -610,5 +610,16 @@
   "import_preview_correct_sale_scope": "Past het gewijzigde aantal en positieve nettobedrag van de aanbieder toe met behoud van de vastgelegde kostprijsmethode. Wijzigingen in datum, instrument, rekening en valuta vereisen een andere correctie. Aantalwijzigingen voor expliciet geselecteerde partijen vereisen een handmatige correctie.",
   "import_preview_source_corrected": "Transactie vanuit bron gecorrigeerd",
   "import_result_gain_review": "{count} geïmporteerde aankopen zouden winsten van eerdere verkopen wijzigen en zijn nog niet geboekt.",
-  "import_result_gain_review_action": "Gewijzigde winsten controleren"
+  "import_result_gain_review_action": "Gewijzigde winsten controleren",
+  "import_preview_split_link": "Koppelen aan vastgelegde splitsing",
+  "import_preview_split_link_scope": "Trading 212 meldt geen splitsingsverhouding, dus deze rij wordt nooit geboekt. Leg de splitsing vast op het scherm Beleggingen en koppel deze rij eraan, zodat een latere ophaalactie hem niet opnieuw boekt.",
+  "import_preview_split_link_loading": "Vastgelegde splitsingen laden…",
+  "import_preview_split_link_empty": "Er is nog geen splitsing van dit effect vastgelegd.",
+  "import_preview_split_link_record": "Splitsing vastleggen",
+  "import_preview_split_link_choose": "Vastgelegde splitsing",
+  "import_preview_split_link_option": "{date} · {ratio} · {account}",
+  "import_preview_split_link_already": "Al gekoppeld aan een andere importrij",
+  "import_preview_split_link_submit": "Rij koppelen",
+  "import_preview_split_link_pending": "Bezig met koppelen…",
+  "import_preview_split_linked": "Gekoppeld aan vastgelegde splitsing"
 }

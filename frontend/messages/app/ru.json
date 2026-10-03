@@ -610,5 +610,16 @@
   "import_preview_correct_sale_scope": "Применяет изменённое количество и положительную чистую сумму поставщика, сохраняя записанный метод себестоимости. Изменения даты, инструмента, счёта и валюты требуют другого исправления. Изменение количества явно выбранных лотов требует ручного исправления.",
   "import_preview_source_corrected": "Операция источника исправлена",
   "import_result_gain_review": "Импортированные покупки ({count}) изменили бы прибыль по прошлым продажам и ещё не проведены.",
-  "import_result_gain_review_action": "Проверить изменённую прибыль"
+  "import_result_gain_review_action": "Проверить изменённую прибыль",
+  "import_preview_split_link": "Связать с записанным сплитом",
+  "import_preview_split_link_scope": "Trading 212 не сообщает коэффициент сплита, поэтому эта строка никогда не проводится. Запишите сплит на экране «Инвестиции» и свяжите с ним эту строку, чтобы последующая загрузка не провела её повторно.",
+  "import_preview_split_link_loading": "Загрузка записанных сплитов…",
+  "import_preview_split_link_empty": "Для этой бумаги ещё не записан ни один сплит.",
+  "import_preview_split_link_record": "Записать сплит",
+  "import_preview_split_link_choose": "Записанный сплит",
+  "import_preview_split_link_option": "{date} · {ratio} · {account}",
+  "import_preview_split_link_already": "Уже связан с другой строкой импорта",
+  "import_preview_split_link_submit": "Связать строку",
+  "import_preview_split_link_pending": "Связывание…",
+  "import_preview_split_linked": "Связана с записанным сплитом"
 }

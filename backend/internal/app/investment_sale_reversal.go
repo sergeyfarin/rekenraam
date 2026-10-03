@@ -139,6 +139,12 @@ func invertedInvestmentTransactionSpec(original Transaction) TransactionInput {
 }
 
 func mapReverseSaleError(err error) error {
+	// Restoring sold units can change a later split's multiplied quantity or a
+	// later transfer's carried basis; name that operation instead of a 500.
+	var dependency *db.InvestmentReplayDependencyError
+	if errors.As(err, &dependency) {
+		return InvestmentSaleDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
+	}
 	switch {
 	case errors.Is(err, db.ErrNotFound):
 		return ErrInvestmentSaleNotFound

@@ -610,5 +610,16 @@
   "import_preview_correct_sale_scope": "Übernimmt die geänderte Menge und den positiven Nettobetrag des Anbieters mit der gespeicherten Anschaffungskostenmethode. Änderungen an Datum, Instrument, Konto und Währung erfordern eine andere Korrektur. Mengenänderungen für ausdrücklich ausgewählte Lose erfordern eine manuelle Korrektur.",
   "import_preview_source_corrected": "Quelltransaktion korrigiert",
   "import_result_gain_review": "{count} importierte Käufe würden Gewinne früherer Verkäufe ändern und wurden noch nicht gebucht.",
-  "import_result_gain_review_action": "Geänderte Gewinne prüfen"
+  "import_result_gain_review_action": "Geänderte Gewinne prüfen",
+  "import_preview_split_link": "Mit erfasstem Split verknüpfen",
+  "import_preview_split_link_scope": "Trading 212 meldet kein Split-Verhältnis, daher wird diese Zeile nie gebucht. Erfassen Sie den Split auf der Seite Investments und verknüpfen Sie diese Zeile damit, damit ein späterer Abruf sie nicht erneut bucht.",
+  "import_preview_split_link_loading": "Erfasste Splits werden geladen…",
+  "import_preview_split_link_empty": "Für dieses Wertpapier wurde noch kein Split erfasst.",
+  "import_preview_split_link_record": "Split erfassen",
+  "import_preview_split_link_choose": "Erfasster Split",
+  "import_preview_split_link_option": "{date} · {ratio} · {account}",
+  "import_preview_split_link_already": "Bereits mit einer anderen Importzeile verknüpft",
+  "import_preview_split_link_submit": "Zeile verknüpfen",
+  "import_preview_split_link_pending": "Wird verknüpft…",
+  "import_preview_split_linked": "Mit erfasstem Split verknüpft"
 }

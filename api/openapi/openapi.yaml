@@ -213,6 +213,10 @@ paths:
     $ref: "./paths/import-preview-commit.yaml"
   /api/v1/imports/{batch_id}/commit:
     $ref: "./paths/import-commit.yaml"
+  /api/v1/imports/{batch_id}/rows/{row_id}/split-candidates:
+    $ref: "./paths/import-row-split-candidates.yaml"
+  /api/v1/imports/{batch_id}/rows/{row_id}/link-split:
+    $ref: "./paths/import-row-link-split.yaml"
   /api/v1/imports/{batch_id}/rows/{row_id}/correct-buy:
     $ref: "./paths/import-correct-buy.yaml"
   /api/v1/imports/{batch_id}/rows/{row_id}/correct-buy/reconciliation-impact:
@@ -293,6 +297,10 @@ paths:
     $ref: "./paths/investments-internal-transfer.yaml"
   /api/v1/investments/transfers/internal/reconciliation-impact:
     $ref: "./paths/investments-internal-transfer-impact.yaml"
+  /api/v1/investments/splits:
+    $ref: "./paths/investments-split.yaml"
+  /api/v1/investments/splits/preview:
+    $ref: "./paths/investments-split-preview.yaml"
   /api/v1/investments/transactions/{transaction_id}/correction-chain:
     $ref: "./paths/investments-correction-chain.yaml"
   /api/v1/investments/transactions/{transaction_id}/trade-correction-context:
@@ -850,6 +858,12 @@ components:
       $ref: "./components/schemas/imports.yaml#/PatchImportBatchRequest"
     CommitImportBatchRequest:
       $ref: "./components/schemas/imports.yaml#/CommitImportBatchRequest"
+    ImportLinkSplitRequest:
+      $ref: "./components/schemas/imports.yaml#/ImportLinkSplitRequest"
+    ImportSplitCandidate:
+      $ref: "./components/schemas/imports.yaml#/ImportSplitCandidate"
+    ImportSplitCandidatesResponse:
+      $ref: "./components/schemas/imports.yaml#/ImportSplitCandidatesResponse"
     ImportRowGainImpactAcknowledgement:
       $ref: "./components/schemas/imports.yaml#/ImportRowGainImpactAcknowledgement"
     ImportRowGainImpact:
@@ -970,6 +984,16 @@ components:
       $ref: "./components/schemas/investments.yaml#/InternalTransferRequest"
     InternalTransferResponse:
       $ref: "./components/schemas/investments.yaml#/InternalTransferResponse"
+    InvestmentSplitRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentSplitRequest"
+    InvestmentSplitLotEffect:
+      $ref: "./components/schemas/investments.yaml#/InvestmentSplitLotEffect"
+    InvestmentSplitPlan:
+      $ref: "./components/schemas/investments.yaml#/InvestmentSplitPlan"
+    InvestmentSplitPreviewResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentSplitPreviewResponse"
+    InvestmentSplitResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentSplitResponse"
     InvestmentSaleReversalRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReversalRequest"
     InvestmentSaleReversalResponse:

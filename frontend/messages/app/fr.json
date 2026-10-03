@@ -610,5 +610,16 @@
   "import_preview_correct_sale_scope": "Applique la quantité révisée et le montant net positif du fournisseur en conservant la méthode de prix de revient enregistrée. Les changements de date, d’instrument, de compte ou de devise nécessitent une autre correction. Les changements de quantité des lots explicitement sélectionnés nécessitent une correction manuelle.",
   "import_preview_source_corrected": "Transaction source corrigée",
   "import_result_gain_review": "{count} achats importés modifieraient les plus-values de ventes antérieures et ne sont pas encore comptabilisés.",
-  "import_result_gain_review_action": "Vérifier les plus-values modifiées"
+  "import_result_gain_review_action": "Vérifier les plus-values modifiées",
+  "import_preview_split_link": "Lier à une division enregistrée",
+  "import_preview_split_link_scope": "Trading 212 n'indique pas le rapport de division : cette ligne n'est donc jamais comptabilisée. Enregistrez la division dans l'écran Investissements, puis liez-y cette ligne pour qu'une récupération ultérieure ne la comptabilise pas à nouveau.",
+  "import_preview_split_link_loading": "Chargement des divisions enregistrées…",
+  "import_preview_split_link_empty": "Aucune division de ce titre n'a encore été enregistrée.",
+  "import_preview_split_link_record": "Enregistrer la division",
+  "import_preview_split_link_choose": "Division enregistrée",
+  "import_preview_split_link_option": "{date} · {ratio} · {account}",
+  "import_preview_split_link_already": "Déjà liée à une autre ligne d'import",
+  "import_preview_split_link_submit": "Lier la ligne",
+  "import_preview_split_link_pending": "Liaison…",
+  "import_preview_split_linked": "Liée à une division enregistrée"
 }

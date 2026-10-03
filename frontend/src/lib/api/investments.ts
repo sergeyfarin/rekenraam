@@ -19,6 +19,10 @@ export type ExternalTransferInRequest = components['schemas']['ExternalTransferI
 export type ExternalTransferInResponse = components['schemas']['ExternalTransferInResponse'];
 export type InternalTransferRequest = components['schemas']['InternalTransferRequest'];
 export type InternalTransferResponse = components['schemas']['InternalTransferResponse'];
+export type InvestmentSplitRequest = components['schemas']['InvestmentSplitRequest'];
+export type InvestmentSplitPlan = components['schemas']['InvestmentSplitPlan'];
+export type InvestmentSplitPreviewResponse = components['schemas']['InvestmentSplitPreviewResponse'];
+export type InvestmentSplitResponse = components['schemas']['InvestmentSplitResponse'];
 export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
 export type ReinvestedDividendRequest = components['schemas']['ReinvestedDividendRequest'];
@@ -261,6 +265,36 @@ export async function recordInternalTransfer(
 ): Promise<InternalTransferResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/transfers/internal', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewInvestmentSplit(
+  input: InvestmentSplitRequest
+): Promise<InvestmentSplitPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/splits/preview', { body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordInvestmentSplit(
+  input: InvestmentSplitRequest,
+  csrfToken: string
+): Promise<InvestmentSplitResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/splits', {
       params: { header: { 'X-CSRF-Token': csrfToken } },
       body: input
     });

@@ -1,0 +1,68 @@
+post:
+  summary: Record a split or reverse split of one holding
+  description: >
+    Multiplies the remaining quantity of every long lot open on effective_on, at
+    the operation's same-day slot, by ratio_numerator/ratio_denominator exactly.
+    Remaining basis is unchanged, so aggregate basis is conserved and only
+    per-share basis moves. The journal posts the aggregate quantity delta to the
+    holding account and its opposite to commodity_trading in the security; no cash
+    is posted. A split dated before later disposals replays them; when that
+    changes a committed disposal's operational basis or gain, the preview's
+    gain_impact acknowledgement token is required (T-114).
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSplitRequest"
+  responses:
+    "201":
+      description: Split journal, sourced ratio, lot effects and any dependent replay recorded atomically
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSplitResponse"
+    "400":
+      description: Invalid split facts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: >
+        INVESTMENT_SPLIT_NO_HOLDINGS, INVESTMENT_SPLIT_CHANGED (preview again),
+        INVESTMENT_SPLIT_DEPENDENCY (a later operation becomes impossible),
+        reconciliation override or gain-impact acknowledgement required or stale
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE — a lot's split quantity needs more decimals than the security permits; the split is never rounded
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -355,6 +355,12 @@ the sole relationship. The checksum and frozen seed changed together. Stop the
 app and reset the same disposable `DATABASE_URL` database and sidecars using
 the command above before restarting. No installed v0.1 database exists.
 
+**BREAKING DEV DATABASE, R16 splits (T-122, 2026-10-03):** `0001` now
+records sourced split ratios and append-only split effect revisions. The
+checksum changed. Stop the app and reset the same disposable `DATABASE_URL`
+database and sidecars using the command above before restarting. No installed
+v0.1 database exists.
+
 **BREAKING DEV DATABASE, consolidated baseline (2026-09-30):** no legacy
 or installed databases exist. Source revision tables and lot opening guards
 are folded into `0001`, with an updated checksum. The embedded migration head

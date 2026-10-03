@@ -1126,3 +1126,94 @@ func rawJSONString(s string) string {
 	}
 	return s
 }
+
+type importLinkSplitRequest struct {
+	OperationID int64 `json:"operation_id"`
+}
+
+type importSplitCandidateResponse struct {
+	OperationID      int64  `json:"operation_id"`
+	TransactionID    int64  `json:"transaction_id"`
+	HoldingAccountID int64  `json:"holding_account_id"`
+	EffectiveOn      string `json:"effective_on"`
+	RatioNumerator   int64  `json:"ratio_numerator"`
+	RatioDenominator int64  `json:"ratio_denominator"`
+	Linked           bool   `json:"linked"`
+}
+
+type importSplitCandidatesResponse struct {
+	Candidates []importSplitCandidateResponse `json:"candidates"`
+}
+
+func writeImportSplitLinkError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, action string, err error) {
+	switch {
+	case errors.Is(err, app.ErrImportBatchNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "import batch not found")
+	case errors.Is(err, app.ErrImportSplitLinkUnavailable):
+		writeAPIError(w, http.StatusConflict, "IMPORT_SPLIT_LINK_UNAVAILABLE", err.Error())
+	default:
+		writeInvestmentServiceError(w, r, logger, action, err)
+	}
+}
+
+func importSplitCandidates(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		batchID, ok := readImportBatchID(w, r)
+		if !ok {
+			return
+		}
+		rowID, ok := readPathInt64(w, r, "row_id", "row id")
+		if !ok {
+			return
+		}
+		candidates, err := importService.Trading212SplitCandidates(r.Context(), app.Trading212SplitRowInput{
+			OwnerUserID: owner.ID, BatchID: batchID, RowID: rowID,
+		})
+		if err != nil {
+			writeImportSplitLinkError(w, r, logger, "list import split candidates", err)
+			return
+		}
+		response := importSplitCandidatesResponse{Candidates: make([]importSplitCandidateResponse, 0, len(candidates))}
+		for _, candidate := range candidates {
+			response.Candidates = append(response.Candidates, importSplitCandidateResponse(candidate))
+		}
+		writeJSON(w, http.StatusOK, response)
+	}
+}
+
+func linkImportSplit(logger *slog.Logger, authService *app.AuthService, importService *app.ImportService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		batchID, ok := readImportBatchID(w, r)
+		if !ok {
+			return
+		}
+		rowID, ok := readPathInt64(w, r, "row_id", "row id")
+		if !ok {
+			return
+		}
+		var request importLinkSplitRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		if err := importService.LinkTrading212Split(r.Context(), app.LinkTrading212SplitInput{
+			Trading212SplitRowInput: app.Trading212SplitRowInput{
+				OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
+				RequestID: RequestIDFromContext(r.Context()), BatchID: batchID, RowID: rowID,
+			},
+			OperationID: request.OperationID,
+		}); err != nil {
+			writeImportSplitLinkError(w, r, logger, "link import split", err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+}

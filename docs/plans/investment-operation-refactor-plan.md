@@ -18,7 +18,7 @@ and priority. Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
 | Long buy/sale correction (4a–4ai, #99) | Reversal, replacement, recorded-method replay, backdated buys, Trading 212 quantity/net revisions, shared writer | Gain-impact disclosure and remaining families have separate bounded issues |
 | Preview feasibility | Buy/source replacements, plain buys and reinvestment run rolled-back writer replay; openings return actual checkpoint sets | Disclosure shipped for every existing replay path (#129, #141); new commands opt in |
 | Transfers (5b/5d) | Known-basis external inbound; explicit-lot internal, with carried-basis dependency fence | Pooled allocation and cross-position replay; unknown immutable facts/resolution |
-| Split / basis actions (5) | Contract specified; commands missing | Manual split/reverse split and verified import mapping first |
+| Split / basis actions (5) | Manual split/reverse split with replay, gain disclosure, export, self-check, mobile entry and Trading 212 split-row linking (T-122) | Split correction and guarded journal-delta adjustment; return of capital, cash in lieu |
 | Shorts / compound actions (6–7) | Operation/side foundation only | Side-aware commands; compound date/effect cardinality and replay |
 
 ## Outcome and boundaries
@@ -428,7 +428,7 @@ accepted and flagged, but cannot be silently reclassified as shorts.
 
 Each slice keeps the app runnable, updates API, export/restore and self-check
 when affected, and has named exact-conservation and rollback tests. Immediate
-focus is #137 (the #129 mechanism and #141 rollout shipped), then #138 → #132 → #139. #141 covered
+focus is #138 (#129, #141 and #137 shipped), then #132 → #139. #141 covered
 reinvestment, imported acquisitions, native reversals/replacements and source
 revisions; new commands opt into the same policy themselves.
 Shared checkpoint preview under-reporting #142 is complete; same-day boundary
@@ -446,10 +446,14 @@ and combined-delta behavior remain #135. Current sequence:
    not a new book rule. R18 still owns reproducible historical/tax reporting.
 2. **Split/reverse split** — [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137), under
    [#114](https://github.com/sergeyfarin/rekenraam/issues/114) and the
-   [slice 5 contract](investment-operation-slice-5-contract.md). Deliver manual
-   exact-ratio commands, mobile entry and verified provider review mapping
-   before remaining source correction families. Keep unsupported payloads
-   in review; `STOCK_SPLIT` alone cannot supply a ratio or entitlement.
+   [slice 5 contract](investment-operation-slice-5-contract.md). **Shipped**
+   (2026-10-03): manual exact-ratio command with replay admission, gain
+   disclosure, mobile entry, export/self-check, and Trading 212 split-row
+   linking without double posting. `STOCK_SPLIT` alone supplies no ratio or
+   entitlement, so automatic mapping stays blocked on verified payload evidence
+   ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)). Split correction and a guarded journal-delta adjustment
+   ([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)) and zero-delta splits ([T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)) remain; until then a
+   history change that alters a split's quantity is refused with the split named.
 3. **Pooled internal transfers** — [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138). Conserve aggregate dated
    pool basis with exact allocation/remainder, preserve lot lineage, and define
    destination integration. This is operational average cost, not tax-policy

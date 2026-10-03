@@ -421,15 +421,25 @@ type SelfCheckLotEventRecord struct {
 	QuantityScale   int
 	CostBasisValue  int64
 	CostBasisScale  int
+	// IsSplit marks an effective split quantity change, which may raise a
+	// lot above the quantity it opened with.
+	IsSplit bool
 }
 
 func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckLotEventRecord, error) {
 	rows, err := transaction.QueryContext(ctx, `
 		SELECT le.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
-			le.quantity_value, le.quantity_scale, le.cost_basis_value, le.cost_basis_scale
+			le.quantity_value, le.quantity_scale, le.cost_basis_value, le.cost_basis_scale,
+			le.event_kind = 'split_adjustment'
 		FROM investment_lot_events le
 		JOIN current_investment_lots l ON l.id = le.lot_id
 		WHERE le.book_id = ?
+			AND NOT EXISTS (
+				SELECT 1 FROM investment_operation_lot_effects effect
+				JOIN investment_split_revisions revision ON revision.operation_id = effect.operation_id
+					AND revision.cost_commodity_id = l.cost_commodity_id
+				WHERE effect.lot_event_id = le.id AND le.event_kind = 'split_adjustment'
+			)
 			AND NOT EXISTS (
 				SELECT 1 FROM investment_operation_lot_effects effect
 				JOIN investment_operations successor ON successor.correction_of_operation_id = effect.operation_id
@@ -449,7 +459,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	for rows.Next() {
 		var event SelfCheckLotEventRecord
 		if err := rows.Scan(&event.LotID, &event.AccountID, &event.CommodityID, &event.CostCommodityID,
-			&event.QuantityValue, &event.QuantityScale, &event.CostBasisValue, &event.CostBasisScale); err != nil {
+			&event.QuantityValue, &event.QuantityScale, &event.CostBasisValue, &event.CostBasisScale, &event.IsSplit); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan self-check lot event: %w", err)
 		}
@@ -505,6 +515,38 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	}
 	if err := revised.Close(); err != nil {
 		return nil, fmt.Errorf("close effective self-check allocations: %w", err)
+	}
+	// A replayed split's original events are superseded per cost currency by
+	// its latest revision, exactly as replayed disposal allocations are.
+	splits, err := transaction.QueryContext(ctx, `
+		SELECT effect.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
+			effect.quantity_delta_value, effect.quantity_delta_scale
+		FROM investment_split_revisions revision
+		JOIN investment_split_revision_effects effect ON effect.revision_id = revision.id
+		JOIN current_investment_lots l ON l.id = effect.lot_id
+		WHERE revision.book_id = ? AND revision.revision_seq = (
+			SELECT MAX(latest.revision_seq) FROM investment_split_revisions latest
+			WHERE latest.operation_id = revision.operation_id
+				AND latest.cost_commodity_id = revision.cost_commodity_id)
+		ORDER BY revision.id, effect.effect_seq`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read effective self-check split effects: %w", err)
+	}
+	for splits.Next() {
+		event := SelfCheckLotEventRecord{IsSplit: true}
+		if err := splits.Scan(&event.LotID, &event.AccountID, &event.CommodityID,
+			&event.CostCommodityID, &event.QuantityValue, &event.QuantityScale); err != nil {
+			splits.Close()
+			return nil, fmt.Errorf("scan effective self-check split effect: %w", err)
+		}
+		events = append(events, event)
+	}
+	if err := splits.Err(); err != nil {
+		splits.Close()
+		return nil, fmt.Errorf("iterate effective self-check split effects: %w", err)
+	}
+	if err := splits.Close(); err != nil {
+		return nil, fmt.Errorf("close effective self-check split effects: %w", err)
 	}
 	return events, nil
 }

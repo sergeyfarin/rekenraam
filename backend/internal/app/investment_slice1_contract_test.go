@@ -68,7 +68,7 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				} `json:"files"`
 			}
 			require.NoError(t, json.Unmarshal(files["manifest.json"], &manifest))
-			require.Equal(t, 5, manifest.SchemaVersion)
+			require.Equal(t, 6, manifest.SchemaVersion)
 			manifestRows := map[string]int64{}
 			for _, file := range manifest.Files {
 				manifestRows[file.Name] = file.Rows
@@ -86,6 +86,9 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				"investment-lot-effects.csv":             {"operation_id", "effect_seq", "lot_event_id"},
 				"investment-transfer-facts.csv":          {"operation_id", "transfer_kind", "effective_on", "commodity_id", "source_account_id", "destination_account_id", "source_evidence_json", "audit_event_id"},
 				"investment-transfer-lot-links.csv":      {"operation_id", "link_seq", "source_lot_id", "destination_lot_id", "quantity_value", "quantity_scale", "basis_knowledge", "carried_basis_value", "carried_basis_scale", "cost_commodity_id", "original_date_knowledge", "original_acquired_on", "source_evidence_json"},
+				"investment-split-facts.csv":             {"operation_id", "account_id", "commodity_id", "effective_on", "ratio_numerator", "ratio_denominator", "source_evidence_json", "audit_event_id"},
+				"investment-split-revisions.csv":         {"revision_id", "operation_id", "cost_commodity_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "created_at", "audit_event_id"},
+				"investment-split-revision-effects.csv":  {"revision_id", "effect_seq", "lot_id", "quantity_delta_value", "quantity_delta_scale"},
 				"investment-fee-policies.csv":            {"policy_id", "account_id", "charge_kind", "created_at", "audit_event_id"},
 				"investment-fee-policy-versions.csv":     {"version_id", "policy_id", "version_seq", "effective_from", "treatment", "charge_account_id", "recorded_at", "audit_event_id"},
 				"disposal-decisions.csv":                 {"decision_id", "decision_seq", "transaction_id", "transaction_version_id", "account_id", "commodity_id", "cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method", "resolution_tier", "account_version_id", "profile_id", "profile_version_id", "source_effective_from", "source_recorded_at", "created_at", "audit_event_id", "operation_id", "position_side", "proceeds_value", "proceeds_scale"},

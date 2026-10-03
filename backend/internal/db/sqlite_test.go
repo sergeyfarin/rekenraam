@@ -1253,8 +1253,8 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	}
 	assert.Equal(t, map[string]int{
 		"index":   105,
-		"table":   99,
-		"trigger": 107,
+		"table":   102,
+		"trigger": 116,
 		"view":    7,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.Equal(t, "table", objects["import_source_revisions"])
@@ -1265,6 +1265,12 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 	assert.Equal(t, "table", objects["investment_transfer_lot_links"])
 	assert.Equal(t, "trigger", objects["investment_transfer_facts_valid"])
 	assert.Equal(t, "trigger", objects["investment_transfer_lot_links_valid"])
+	assert.Equal(t, "table", objects["investment_split_facts"])
+	assert.Equal(t, "table", objects["investment_split_revisions"])
+	assert.Equal(t, "table", objects["investment_split_revision_effects"])
+	assert.Equal(t, "trigger", objects["investment_split_facts_valid"])
+	assert.Equal(t, "trigger", objects["investment_split_revisions_valid"])
+	assert.Equal(t, "trigger", objects["investment_split_revision_effects_valid"])
 
 	// A sample across every area of the schema. The exact object counts above
 	// catch omissions; these names make a failure identify the missing feature.

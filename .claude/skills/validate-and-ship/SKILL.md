@@ -209,6 +209,17 @@ non-trivial diff (yours or reviewed):
     `TestBuyGainImpactRejectsAcknowledgementOfAnEarlierChangeSet`,
     `TestGainImpactSnapshotDisclosesRemovedAndReplacedDisposals`.
 
+24. **A new replay intent kind that moves quantity without pinning its
+    journal** — replay rebuilds lot state from intents, but a posted journal
+    leg does not move with it. A split replayed under a corrected history can
+    multiply a different number of shares than its posted `H +d`; holdings and
+    lots then disagree. Each journal-bearing intent must re-check its posted
+    quantity in replay and refuse with itself named (T-122 does this for
+    splits), and its per-lot replay output must be revisioned so self-check
+    reconciles the effective effects, not the originals. Named regressions:
+    `TestAcquisitionChangingSplitEntitlementIsRefusedWithSplitNamed`,
+    `TestEarlierAcquisitionBasisCorrectionReplaysThroughSplit`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

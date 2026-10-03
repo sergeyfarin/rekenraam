@@ -548,7 +548,9 @@ func (s *ImportService) stageParseResult(ctx context.Context, batchID int64, par
 			dedupeStatus = "needs_attention"
 		}
 		seenInBatch[row.DedupeFingerprint] = true
-		if unsupportedTrading212Fill(row.Raw) {
+		// An unsupported fill never posts, so it needs review — unless its
+		// unchanged identity was already linked to a recorded action (T-122).
+		if unsupportedTrading212Fill(row.Raw) && dedupeStatus != "duplicate" {
 			dedupeStatus = "needs_attention"
 		}
 

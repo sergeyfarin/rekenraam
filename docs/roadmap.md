@@ -134,7 +134,7 @@ The shared gain-impact mechanism (T-114 #129) and its rollout to every existing
 replay path (T-126 #141) ship: manual and imported acquisitions, reinvestment,
 native reversals/replacements and Trading 212 source revisions disclose and
 require acknowledgement of revised committed gains.
-Near-term focus is **#137 now**, then #138 → #132 → #139.
+Manual splits (#137) ship; near-term focus is **#138 now**, then #132 → #139.
 New replaying commands opt into the same disclosure in their own acceptance.
 Closed #99/#125/#113/#127/#129/#141/#142 are historical evidence, not active gates.
 Priority labels describe urgency; this sequence does not add hard dependencies.
@@ -146,9 +146,11 @@ Remaining work, in order:
    acceptance. R18 retains historical reporting and tax profiles; no permanent
    filed-through date has been adopted.
 2. **Manual split/reverse split plus verified Trading 212 mapping [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137).**
-   Missing split effects can block later sales in instrument migration. Follow
-   the existing exact-ratio/basis-conservation contract; hold insufficient
-   provider evidence in review.
+   **Shipped 2026-10-03**: exact-ratio command, replay with gain disclosure,
+   mobile entry, and Trading 212 split rows linked to recorded splits without
+   double posting. Automatic provider mapping waits for verified ratio evidence
+   ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)); split correction and journal-delta adjustment
+   ([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)) and zero-delta splits ([T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)) are follow-ups.
 3. **Pooled average-cost internal transfer [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).** Explicit-lot
    internal transfers and known-basis external inbound already ship. Average
    pools remain refused until exact carried-basis allocation is implemented.

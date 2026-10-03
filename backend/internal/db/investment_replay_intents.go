@@ -23,20 +23,29 @@ type InvestmentReplayIntent struct {
 	OperationKind    string
 	EffectSeq        int
 	EventDate        string
-	Kind             string // opening, disposal or transfer_out
+	Kind             string // opening, disposal, transfer_out or split
 	LotID            int64  // opening or transfer_out
 	DecisionID       int64  // disposal only
+	// QuantityValue is the opening, disposal or transfer quantity. For a split
+	// it is the signed holding delta the split's effective effects moved in
+	// this cost currency, which replay must reproduce exactly.
 	QuantityValue    exact.Coefficient
 	QuantityScale    int
-	AmountValue      exact.Coefficient // opening consideration or disposal proceeds
-	AmountScale      int
-	CostBasisMethod  string
-	DecisionSource   DisposalDecisionSource
-	SpecificLots     []LotAllocation
-	TransactionID    int64
-	AuditEventID     int64
-	CreatedByUserID  int64
-	CreatedAt        string
+	RatioNumerator   int64 // split only
+	RatioDenominator int64 // split only
+	// SplitIsSubject marks the split the current command is creating. It has
+	// no recorded effects yet, so replay reports its effects instead of
+	// checking them.
+	SplitIsSubject  bool
+	AmountValue     exact.Coefficient // opening consideration or disposal proceeds
+	AmountScale     int
+	CostBasisMethod string
+	DecisionSource  DisposalDecisionSource
+	SpecificLots    []LotAllocation
+	TransactionID   int64
+	AuditEventID    int64
+	CreatedByUserID int64
+	CreatedAt       string
 }
 
 func (r *InvestmentRepository) ListInvestmentReplayIntents(ctx context.Context, bookID, accountID, commodityID, costCommodityID int64, side string) ([]InvestmentReplayIntent, error) {
@@ -205,6 +214,12 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		return nil, fmt.Errorf("close replay transfer depletions: %w", err)
 	}
 
+	splits, err := investmentReplaySplitIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
+	if err != nil {
+		return nil, err
+	}
+	intents = append(intents, splits...)
+
 	selected, err := reader.QueryContext(ctx, `
 		SELECT a.decision_id, a.lot_id, a.quantity_value, a.quantity_scale,
 			source.operation_id
@@ -291,6 +306,59 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		}
 	}
 	sortInvestmentReplayIntents(intents)
+	return intents, nil
+}
+
+// investmentReplaySplitIntentsQuery reads the effective splits of a holding.
+// Each carries the delta its effective effects moved in this cost currency;
+// a replay that would move a different quantity is a named dependency.
+func investmentReplaySplitIntentsQuery(ctx context.Context, reader queryer, bookID, accountID, commodityID, costCommodityID int64) ([]InvestmentReplayIntent, error) {
+	rows, err := reader.QueryContext(ctx, `
+		SELECT f.operation_id, o.operation_kind, f.effective_on, f.ratio_numerator, f.ratio_denominator,
+			f.created_audit_event_id, e.transaction_id, e.created_by_user_id, e.created_at
+		FROM investment_split_facts f
+		JOIN investment_operations o ON o.id = f.operation_id
+		JOIN investment_lot_events e ON e.id = (SELECT x.lot_event_id FROM investment_operation_lot_effects x
+			WHERE x.operation_id = f.operation_id ORDER BY x.effect_seq LIMIT 1)
+		WHERE f.book_id = ? AND f.account_id = ? AND f.commodity_id = ?
+			AND o.correction_mode IS NOT 'reverse'
+			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+				WHERE successor.correction_of_operation_id = o.id)
+		ORDER BY f.operation_id`, bookID, accountID, commodityID)
+	if err != nil {
+		return nil, fmt.Errorf("read replay splits: %w", err)
+	}
+	var intents []InvestmentReplayIntent
+	for rows.Next() {
+		intent := InvestmentReplayIntent{Kind: "split", EffectSeq: 1}
+		var transactionID sql.NullInt64
+		if err := rows.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
+			&intent.RatioNumerator, &intent.RatioDenominator, &intent.AuditEventID,
+			&transactionID, &intent.CreatedByUserID, &intent.CreatedAt); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan replay split: %w", err)
+		}
+		intent.TransactionID = transactionID.Int64
+		intents = append(intents, intent)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("iterate replay splits: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close replay splits: %w", err)
+	}
+	for index := range intents {
+		effects, _, _, err := effectiveSplitEffectsQuery(ctx, reader, bookID, intents[index].OperationID, costCommodityID)
+		if err != nil {
+			return nil, err
+		}
+		recorded := sumSplitEffects(effects)
+		if intents[index].QuantityValue, err = recorded.Coefficient(); err != nil {
+			return nil, err
+		}
+		intents[index].QuantityScale = recorded.Scale()
+	}
 	return intents, nil
 }
 

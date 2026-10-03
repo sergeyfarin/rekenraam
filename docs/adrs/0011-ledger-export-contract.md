@@ -234,6 +234,18 @@ posting. The links remain original audit evidence after basis replay or
 correction; replacement decisions have their own links. A zero-proceeds
 write-off may have no cost-currency portion. Existing CSV columns are retained.
 
+### Split refinement (2026-10-03)
+
+Manifest schema version 6 adds `investment-split-facts.csv` (operation,
+holding account, security, effective date, lowest-terms ratio, source evidence,
+audit), `investment-split-revisions.csv` and
+`investment-split-revision-effects.csv`. A split's first committed per-lot
+quantity changes are `split_adjustment` rows in `investment-lot-events.csv`
+with signed deltas and zero basis. Replay appends a revision per split and cost
+currency only when those per-lot effects change; the highest revision supplies
+the current effect, and its sum equals the original aggregate pinned by the
+posted journal. Existing files and columns are unchanged.
+
 ### Projected-basis knowledge refinement (2026-10-01)
 
 Manifest schema version 5 appends `basis_knowledge` to `lots.csv` and

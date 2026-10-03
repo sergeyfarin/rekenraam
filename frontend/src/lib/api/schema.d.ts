@@ -9839,6 +9839,184 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/imports/{batch_id}/rows/{row_id}/split-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List recorded splits a staged Trading 212 split row can be linked to
+         * @description A Trading 212 STOCK_SPLIT fill carries no verified ratio or entitlement and never posts. This lists effective recorded splits of the row's security, newest first; linked=true marks a split already evidenced by another source row. The security is looked up, never created. An unknown security has no candidates.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    batch_id: number;
+                    row_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Candidate splits (no mutation) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ImportSplitCandidatesResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description IMPORT_SPLIT_LINK_UNAVAILABLE — the row is not a pending Trading 212 split fill in this batch */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/{batch_id}/rows/{row_id}/link-split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link a staged Trading 212 split row to a recorded split
+         * @description Admits the row's dedupe identity with the chosen recorded split operation as its only effect and marks the row committed, under one audit event. No journal or lot row is written, so the split cannot be posted twice; a retry or re-fetch of the same fill is a duplicate. The split must be effective, belong to the row's security and not already be linked to another source row.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    batch_id: number;
+                    row_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ImportLinkSplitRequest"];
+                };
+            };
+            responses: {
+                /** @description Row linked to the recorded split */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Import batch not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description IMPORT_SPLIT_LINK_UNAVAILABLE — the row or split can no longer be linked */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports/{batch_id}/rows/{row_id}/correct-buy": {
         parameters: {
             query?: never;
@@ -13560,6 +13738,193 @@ export interface paths {
                 };
                 /** @description Authentication required */
                 401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/splits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a split or reverse split of one holding
+         * @description Multiplies the remaining quantity of every long lot open on effective_on, at the operation's same-day slot, by ratio_numerator/ratio_denominator exactly. Remaining basis is unchanged, so aggregate basis is conserved and only per-share basis moves. The journal posts the aggregate quantity delta to the holding account and its opposite to commodity_trading in the security; no cash is posted. A split dated before later disposals replays them; when that changes a committed disposal's operational basis or gain, the preview's gain_impact acknowledgement token is required (T-114).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentSplitRequest"];
+                };
+            };
+            responses: {
+                /** @description Split journal, sourced ratio, lot effects and any dependent replay recorded atomically */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentSplitResponse"];
+                    };
+                };
+                /** @description Invalid split facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description INVESTMENT_SPLIT_NO_HOLDINGS, INVESTMENT_SPLIT_CHANGED (preview again), INVESTMENT_SPLIT_DEPENDENCY (a later operation becomes impossible), reconciliation override or gain-impact acknowledgement required or stale */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE — a lot's split quantity needs more decimals than the security permits; the split is never rounded */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/splits/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a split or reverse split
+         * @description Plans the split at its slot and runs its complete writer, including any dependent replay, in a rolled-back transaction. Returns each eligible lot's exact quantity before and after, the holding delta the journal would post, every active checkpoint the writer would invalidate, and gain_impact for committed disposals whose operational result would change. No durable change or temporary ID escapes; commit rechecks everything.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentSplitRequest"];
+                };
+            };
+            responses: {
+                /** @description Split preview computed (no mutation) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentSplitPreviewResponse"];
+                    };
+                };
+                /** @description Invalid split facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description INVESTMENT_SPLIT_NO_HOLDINGS or INVESTMENT_SPLIT_DEPENDENCY */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -18143,6 +18508,32 @@ export interface components {
             /** @description One preview-commit gain_impacts acknowledgement per imported acquisition the user accepted (T-126). A row whose current change set is missing or differs is held pending and listed in gain_review_row_ids; it is never skipped. */
             gain_impact_acknowledgements?: components["schemas"]["ImportRowGainImpactAcknowledgement"][];
         };
+        ImportLinkSplitRequest: {
+            /**
+             * Format: int64
+             * @description The recorded split operation this provider row evidences.
+             */
+            operation_id: number;
+        };
+        ImportSplitCandidate: {
+            /** Format: int64 */
+            operation_id: number;
+            /** Format: int64 */
+            transaction_id: number;
+            /** Format: int64 */
+            holding_account_id: number;
+            /** Format: date */
+            effective_on: string;
+            /** Format: int64 */
+            ratio_numerator: number;
+            /** Format: int64 */
+            ratio_denominator: number;
+            /** @description Already evidenced by another source row; it cannot be linked again. */
+            linked: boolean;
+        };
+        ImportSplitCandidatesResponse: {
+            candidates: components["schemas"]["ImportSplitCandidate"][];
+        };
         ImportRowGainImpactAcknowledgement: {
             /** Format: int64 */
             row_id: number;
@@ -18926,6 +19317,65 @@ export interface components {
             transaction: components["schemas"]["TransactionResponse"];
             destination_lot_ids: number[];
         };
+        InvestmentSplitRequest: {
+            /**
+             * Format: date
+             * @description Date on which entitled lots are split; lots opened later are not.
+             */
+            effective_on: string;
+            /** Format: int64 */
+            holding_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /**
+             * Format: int64
+             * @description New units received for ratio_denominator old units (3 for a 3-for-2 split; 1 for a 1-for-10 reverse split).
+             */
+            ratio_numerator: number;
+            /**
+             * Format: int64
+             * @description Old units surrendered. The ratio is stored in lowest terms and may not be 1:1.
+             */
+            ratio_denominator: number;
+            source_evidence?: {
+                [key: string]: unknown;
+            };
+            memo?: string;
+            change_reason?: string;
+            reconciliation_override?: boolean;
+            /** @description Token from the preview's gain_impact, accepting the committed-disposal gain changes it disclosed. */
+            gain_impact_acknowledgement?: string;
+        };
+        InvestmentSplitLotEffect: {
+            /** Format: int64 */
+            lot_id: number;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            quantity_before_value: string;
+            quantity_before_scale: number;
+            quantity_after_value: string;
+            quantity_after_scale: number;
+        };
+        InvestmentSplitPlan: {
+            /** Format: int64 */
+            ratio_numerator: number;
+            /** Format: int64 */
+            ratio_denominator: number;
+            effects: components["schemas"]["InvestmentSplitLotEffect"][];
+            /** @description Signed holding change the journal posts; negative for a reverse split. */
+            quantity_delta_value: string;
+            quantity_delta_scale: number;
+            /** @description True when later disposals were replayed because the split is dated before them. */
+            replayed: boolean;
+        };
+        InvestmentSplitPreviewResponse: {
+            plan: components["schemas"]["InvestmentSplitPlan"];
+            impact: components["schemas"]["ReconciliationImpactResponse"];
+        };
+        InvestmentSplitResponse: {
+            transaction: components["schemas"]["TransactionResponse"];
+            plan: components["schemas"]["InvestmentSplitPlan"];
+        };
         InvestmentSaleReversalRequest: {
             /** @description Why the posted manual long sale is being reversed. */
             reason: string;
@@ -19484,7 +19934,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

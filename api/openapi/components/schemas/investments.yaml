@@ -721,6 +721,106 @@ InternalTransferResponse:
         type: integer
         format: int64
 
+InvestmentSplitRequest:
+  type: object
+  additionalProperties: false
+  required: [effective_on, holding_account_id, commodity_id, ratio_numerator, ratio_denominator]
+  properties:
+    effective_on:
+      type: string
+      format: date
+      description: Date on which entitled lots are split; lots opened later are not.
+    holding_account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    ratio_numerator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+      description: New units received for ratio_denominator old units (3 for a 3-for-2 split; 1 for a 1-for-10 reverse split).
+    ratio_denominator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+      description: Old units surrendered. The ratio is stored in lowest terms and may not be 1:1.
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    change_reason:
+      type: string
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+      description: Token from the preview's gain_impact, accepting the committed-disposal gain changes it disclosed.
+
+InvestmentSplitLotEffect:
+  type: object
+  required: [lot_id, cost_commodity_id, quantity_before_value, quantity_before_scale, quantity_after_value, quantity_after_scale]
+  properties:
+    lot_id:
+      type: integer
+      format: int64
+    cost_commodity_id:
+      type: integer
+      format: int64
+    quantity_before_value:
+      type: string
+    quantity_before_scale:
+      type: integer
+    quantity_after_value:
+      type: string
+    quantity_after_scale:
+      type: integer
+
+InvestmentSplitPlan:
+  type: object
+  required: [ratio_numerator, ratio_denominator, effects, quantity_delta_value, quantity_delta_scale, replayed]
+  properties:
+    ratio_numerator:
+      type: integer
+      format: int64
+    ratio_denominator:
+      type: integer
+      format: int64
+    effects:
+      type: array
+      items:
+        $ref: "../schemas/investments.yaml#/InvestmentSplitLotEffect"
+    quantity_delta_value:
+      type: string
+      description: Signed holding change the journal posts; negative for a reverse split.
+    quantity_delta_scale:
+      type: integer
+    replayed:
+      type: boolean
+      description: True when later disposals were replayed because the split is dated before them.
+
+InvestmentSplitPreviewResponse:
+  type: object
+  required: [plan, impact]
+  properties:
+    plan:
+      $ref: "../schemas/investments.yaml#/InvestmentSplitPlan"
+    impact:
+      $ref: "../schemas/transactions.yaml#/ReconciliationImpactResponse"
+
+InvestmentSplitResponse:
+  type: object
+  required: [transaction, plan]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    plan:
+      $ref: "../schemas/investments.yaml#/InvestmentSplitPlan"
+
 InvestmentSaleReversalRequest:
   type: object
   additionalProperties: false

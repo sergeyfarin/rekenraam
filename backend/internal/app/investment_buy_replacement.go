@@ -44,7 +44,7 @@ type InvestmentBuyDependencyError struct {
 
 func (e InvestmentBuyDependencyError) Error() string {
 	if e.DecisionID == 0 {
-		return fmt.Sprintf("investment buy cannot satisfy later transfer operation %d", e.OperationID)
+		return fmt.Sprintf("investment buy cannot satisfy later transfer or split operation %d", e.OperationID)
 	}
 	return fmt.Sprintf("investment buy cannot satisfy later operation %d disposal decision %d", e.OperationID, e.DecisionID)
 }

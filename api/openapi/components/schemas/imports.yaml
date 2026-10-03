@@ -552,3 +552,48 @@ ImportRowGainImpact:
       type: integer
     gain_impact:
       $ref: "../../openapi.yaml#/components/schemas/GainImpact"
+
+ImportLinkSplitRequest:
+  type: object
+  additionalProperties: false
+  required: [operation_id]
+  properties:
+    operation_id:
+      type: integer
+      format: int64
+      description: The recorded split operation this provider row evidences.
+
+ImportSplitCandidate:
+  type: object
+  required: [operation_id, transaction_id, holding_account_id, effective_on, ratio_numerator, ratio_denominator, linked]
+  properties:
+    operation_id:
+      type: integer
+      format: int64
+    transaction_id:
+      type: integer
+      format: int64
+    holding_account_id:
+      type: integer
+      format: int64
+    effective_on:
+      type: string
+      format: date
+    ratio_numerator:
+      type: integer
+      format: int64
+    ratio_denominator:
+      type: integer
+      format: int64
+    linked:
+      type: boolean
+      description: Already evidenced by another source row; it cannot be linked again.
+
+ImportSplitCandidatesResponse:
+  type: object
+  required: [candidates]
+  properties:
+    candidates:
+      type: array
+      items:
+        $ref: "../schemas/imports.yaml#/ImportSplitCandidate"

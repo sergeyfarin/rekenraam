@@ -1,0 +1,48 @@
+get:
+  summary: List recorded splits a staged Trading 212 split row can be linked to
+  description: >
+    A Trading 212 STOCK_SPLIT fill carries no verified ratio or entitlement and
+    never posts. This lists effective recorded splits of the row's security,
+    newest first; linked=true marks a split already evidenced by another source
+    row. The security is looked up, never created. An unknown security has no
+    candidates.
+  parameters:
+    - in: path
+      name: batch_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: path
+      name: row_id
+      required: true
+      schema: { type: integer, format: int64 }
+  responses:
+    "200":
+      description: Candidate splits (no mutation)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ImportSplitCandidatesResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Import batch not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: IMPORT_SPLIT_LINK_UNAVAILABLE — the row is not a pending Trading 212 split fill in this batch
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

@@ -16,7 +16,16 @@ import (
 type InvestmentReplayProjection struct {
 	Lots         []InvestmentReplayLotState
 	Disposals    []InvestmentReplayDisposal
+	Splits       []InvestmentReplaySplit
 	MethodFamily string
+}
+
+// InvestmentReplaySplit is a split's per-lot effect at its replay slot.
+// Subject marks the split the current command is creating.
+type InvestmentReplaySplit struct {
+	OperationID int64
+	Subject     bool
+	Effects     []SplitLotEffect
 }
 
 type InvestmentReplayLotState struct {
@@ -197,6 +206,25 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 					OperationID: intent.OperationID,
 					Cause:       fmt.Errorf("%w: transfer carried basis changed", ErrInvestmentCorrectionDependency)}
 			}
+		case "split":
+			effects, err := splitEffectsForPositionTx(ctx, tx, bookID, accountID, commodityID, costCommodityID,
+				intent.EventDate, intent.RatioNumerator, intent.RatioDenominator)
+			if err == nil {
+				err = applySplitEffectsTx(ctx, tx, bookID, effects, intent.CreatedAt, intent.CreatedByUserID, intent.AuditEventID)
+			}
+			if err != nil {
+				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{OperationID: intent.OperationID, Cause: err}
+			}
+			// The posted split journal moved exactly its recorded delta. Until a
+			// split's journal can be revised, history that changes how many
+			// shares it multiplied is refused with the split named.
+			if !intent.SplitIsSubject && sumSplitEffects(effects).Cmp(
+				exact.ScaledIntFromCoefficient(intent.QuantityValue, intent.QuantityScale)) != 0 {
+				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{OperationID: intent.OperationID,
+					Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, ErrSplitQuantityDependency)}
+			}
+			projection.Splits = append(projection.Splits, InvestmentReplaySplit{
+				OperationID: intent.OperationID, Subject: intent.SplitIsSubject, Effects: effects})
 		default:
 			return InvestmentReplayProjection{}, fmt.Errorf("%w: replay intent kind %q is unsupported", ErrInvalidDisposalParams, intent.Kind)
 		}

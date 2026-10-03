@@ -646,5 +646,16 @@
   "import_preview_correct_sale_scope": "Applies the provider's revised quantity and positive net amount, keeping the recorded basis method. Date, instrument, account, and currency changes need another correction workflow. Quantity changes for explicitly selected lots need a manual correction.",
   "import_preview_source_corrected": "Source trade corrected",
   "import_result_gain_review": "{count} imported purchases would change gains on earlier sales and were not committed yet.",
-  "import_result_gain_review_action": "Review changed gains"
+  "import_result_gain_review_action": "Review changed gains",
+  "import_preview_split_link": "Link to recorded split",
+  "import_preview_split_link_scope": "Trading 212 does not report a split ratio, so this row never posts. Record the split on the Investments screen, then link this row to it so a later fetch cannot post it again.",
+  "import_preview_split_link_loading": "Loading recorded splits…",
+  "import_preview_split_link_empty": "No split of this security has been recorded yet.",
+  "import_preview_split_link_record": "Record the split",
+  "import_preview_split_link_choose": "Recorded split",
+  "import_preview_split_link_option": "{date} · {ratio} · {account}",
+  "import_preview_split_link_already": "Already linked to another import row",
+  "import_preview_split_link_submit": "Link row",
+  "import_preview_split_link_pending": "Linking…",
+  "import_preview_split_linked": "Linked to recorded split"
 }

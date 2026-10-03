@@ -442,6 +442,20 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 						AND (source_event.cost_basis_value = '-' || x.carried_basis_value
 							OR (source_event.cost_basis_value = '0' AND x.carried_basis_value = '0'))
 				)))`},
+		{"split missing its sourced ratio or lot effects", `
+			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
+			AND o.operation_kind = 'split'
+			AND (NOT EXISTS (SELECT 1 FROM investment_split_facts f
+				WHERE f.operation_id = o.id AND f.book_id = o.book_id AND f.effective_on = o.event_date)
+			OR NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+				JOIN investment_lot_events e ON e.id = x.lot_event_id AND e.event_kind = 'split_adjustment'
+				JOIN investment_lots l ON l.id = e.lot_id
+				JOIN investment_split_facts f ON f.operation_id = o.id
+				WHERE x.operation_id = o.id AND e.event_date = f.effective_on
+					AND l.account_id = f.account_id AND l.commodity_id = f.commodity_id)
+			OR EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+				JOIN investment_lot_events e ON e.id = x.lot_event_id
+				WHERE x.operation_id = o.id AND e.event_kind <> 'split_adjustment'))`},
 		{"posted long disposal missing proceeds decision", `
 			SELECT o.id FROM investment_operations o
 			WHERE o.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
@@ -863,9 +877,24 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 	var summaries []string
 	var negative, overConsumed, negativeBasis, unknown, invalidBasis int64
 
+	// A forward split legitimately leaves a lot holding more units than it
+	// opened with; the ceiling is the opening plus every effective increase.
+	splitIncrease := map[int64]*exact.ScaledInt{}
+	for _, event := range events {
+		if event.IsSplit && event.QuantityValue.Sign() > 0 {
+			if splitIncrease[event.LotID] == nil {
+				splitIncrease[event.LotID] = exact.NewScaledInt()
+			}
+			splitIncrease[event.LotID].AddCoefficient(event.QuantityValue, event.QuantityScale)
+		}
+	}
+
 	for _, lot := range lots {
 		remainingValue := exact.ScaledIntFromCoefficient(lot.RemainingQuantityValue, lot.RemainingQuantityScale)
 		originalValue := exact.ScaledIntFromCoefficient(lot.QuantityValue, lot.QuantityScale)
+		if increase := splitIncrease[lot.LotID]; increase != nil {
+			originalValue.AddScaled(increase)
+		}
 
 		if remainingValue.Sign() < 0 {
 			negative++

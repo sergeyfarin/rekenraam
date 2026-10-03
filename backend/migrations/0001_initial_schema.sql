@@ -1608,6 +1608,132 @@ BEFORE DELETE ON investment_transfer_lot_links
 BEGIN SELECT RAISE(ABORT, 'investment transfer lot links are immutable'); END;
 -- +goose StatementEnd
 
+-- Sourced split / reverse split terms (slice 5, T-122). The ratio is in
+-- lowest terms, validated by the service. The first committed per-lot effects
+-- are split_adjustment lot events linked through investment_operation_lot_effects;
+-- replay appends an effective revision per cost currency only when they change.
+CREATE TABLE IF NOT EXISTS investment_split_facts (
+  operation_id INTEGER PRIMARY KEY REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  effective_on TEXT NOT NULL CHECK (effective_on GLOB '????-??-??'),
+  ratio_numerator INTEGER NOT NULL CHECK (ratio_numerator BETWEEN 1 AND 1000000000),
+  ratio_denominator INTEGER NOT NULL CHECK (ratio_denominator BETWEEN 1 AND 1000000000),
+  source_evidence_json TEXT NOT NULL DEFAULT '{}',
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  CHECK (ratio_numerator <> ratio_denominator)
+);
+
+CREATE TABLE IF NOT EXISTS investment_split_revisions (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  operation_id INTEGER NOT NULL REFERENCES investment_split_facts(operation_id) ON DELETE RESTRICT,
+  cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  revision_seq INTEGER NOT NULL CHECK (revision_seq >= 2),
+  caused_by_operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  supersedes_revision_id INTEGER REFERENCES investment_split_revisions(id) ON DELETE RESTRICT,
+  created_at TEXT NOT NULL,
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (operation_id, cost_commodity_id, revision_seq),
+  CHECK ((revision_seq = 2) = (supersedes_revision_id IS NULL))
+);
+
+CREATE TABLE IF NOT EXISTS investment_split_revision_effects (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  revision_id INTEGER NOT NULL REFERENCES investment_split_revisions(id) ON DELETE RESTRICT,
+  effect_seq INTEGER NOT NULL CHECK (effect_seq > 0),
+  lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  quantity_delta_value TEXT NOT NULL CHECK (length(quantity_delta_value) BETWEEN 1 AND 39
+    AND quantity_delta_value <> '0' AND quantity_delta_value <> '-0'),
+  quantity_delta_scale INTEGER NOT NULL CHECK (quantity_delta_scale BETWEEN 0 AND 24),
+  UNIQUE (revision_id, effect_seq),
+  UNIQUE (revision_id, lot_id)
+);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_split_facts_valid
+BEFORE INSERT ON investment_split_facts
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_operations o JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  JOIN commodities c ON c.id = NEW.commodity_id
+  JOIN accounts h ON h.id = NEW.account_id
+  WHERE o.id = NEW.operation_id AND o.book_id = NEW.book_id AND o.event_date = NEW.effective_on
+    AND o.operation_kind = 'split' AND a.book_id = NEW.book_id AND a.id = o.created_audit_event_id
+    AND c.book_id = NEW.book_id AND h.book_id = NEW.book_id
+)
+BEGIN SELECT RAISE(ABORT, 'investment split fact is outside its operation or book'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_split_revisions_valid
+BEFORE INSERT ON investment_split_revisions
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_split_facts f
+  JOIN investment_operations o ON o.id = NEW.caused_by_operation_id
+  JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  JOIN commodities c ON c.id = NEW.cost_commodity_id
+  WHERE f.operation_id = NEW.operation_id AND f.book_id = NEW.book_id
+    AND o.book_id = NEW.book_id AND a.book_id = NEW.book_id AND c.book_id = NEW.book_id
+    AND o.created_audit_event_id = NEW.created_audit_event_id
+    AND ((NEW.revision_seq = 2 AND NEW.supersedes_revision_id IS NULL)
+      OR EXISTS (
+        SELECT 1 FROM investment_split_revisions previous
+        WHERE previous.id = NEW.supersedes_revision_id
+          AND previous.book_id = NEW.book_id AND previous.operation_id = NEW.operation_id
+          AND previous.cost_commodity_id = NEW.cost_commodity_id
+          AND previous.revision_seq = NEW.revision_seq - 1))
+)
+BEGIN SELECT RAISE(ABORT, 'investment split revision chain is invalid'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_split_revision_effects_valid
+BEFORE INSERT ON investment_split_revision_effects
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_split_revisions r
+  JOIN investment_split_facts f ON f.operation_id = r.operation_id
+  JOIN investment_lots l ON l.id = NEW.lot_id
+  WHERE r.id = NEW.revision_id AND r.book_id = NEW.book_id
+    AND l.book_id = NEW.book_id AND l.account_id = f.account_id
+    AND l.commodity_id = f.commodity_id AND l.cost_commodity_id = r.cost_commodity_id
+    AND l.position_side = 'long'
+)
+BEGIN SELECT RAISE(ABORT, 'investment split revision effect is outside its position'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_split_facts_no_update
+BEFORE UPDATE ON investment_split_facts
+BEGIN SELECT RAISE(ABORT, 'investment split facts are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_split_facts_no_delete
+BEFORE DELETE ON investment_split_facts
+BEGIN SELECT RAISE(ABORT, 'investment split facts are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_split_revisions_no_update
+BEFORE UPDATE ON investment_split_revisions
+BEGIN SELECT RAISE(ABORT, 'investment split revisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_split_revisions_no_delete
+BEFORE DELETE ON investment_split_revisions
+BEGIN SELECT RAISE(ABORT, 'investment split revisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_split_revision_effects_no_update
+BEFORE UPDATE ON investment_split_revision_effects
+BEGIN SELECT RAISE(ABORT, 'investment split revision effects are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_split_revision_effects_no_delete
+BEFORE DELETE ON investment_split_revision_effects
+BEGIN SELECT RAISE(ABORT, 'investment split revision effects are immutable'); END;
+-- +goose StatementEnd
+
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_operation_links_valid
 BEFORE INSERT ON investment_operation_journal_links
@@ -3753,6 +3879,15 @@ DROP TRIGGER IF EXISTS investment_operation_dates_no_delete;
 DROP TRIGGER IF EXISTS investment_operation_dates_no_update;
 DROP TRIGGER IF EXISTS investment_operation_lot_effects_no_delete;
 DROP TRIGGER IF EXISTS investment_operation_lot_effects_no_update;
+DROP TRIGGER IF EXISTS investment_split_revision_effects_no_delete;
+DROP TRIGGER IF EXISTS investment_split_revision_effects_no_update;
+DROP TRIGGER IF EXISTS investment_split_revisions_no_delete;
+DROP TRIGGER IF EXISTS investment_split_revisions_no_update;
+DROP TRIGGER IF EXISTS investment_split_facts_no_delete;
+DROP TRIGGER IF EXISTS investment_split_facts_no_update;
+DROP TRIGGER IF EXISTS investment_split_revision_effects_valid;
+DROP TRIGGER IF EXISTS investment_split_revisions_valid;
+DROP TRIGGER IF EXISTS investment_split_facts_valid;
 DROP TRIGGER IF EXISTS investment_transfer_lot_links_no_delete;
 DROP TRIGGER IF EXISTS investment_transfer_lot_links_no_update;
 DROP TRIGGER IF EXISTS investment_transfer_facts_no_delete;
@@ -3776,6 +3911,9 @@ DROP TRIGGER IF EXISTS investment_disposal_decisions_same_book;
 DROP TRIGGER IF EXISTS investment_lot_facts_same_book;
 DROP TRIGGER IF EXISTS investment_components_same_book;
 DROP TRIGGER IF EXISTS investment_operation_links_valid;
+DROP TABLE IF EXISTS investment_split_revision_effects;
+DROP TABLE IF EXISTS investment_split_revisions;
+DROP TABLE IF EXISTS investment_split_facts;
 DROP TABLE IF EXISTS investment_transfer_lot_links;
 DROP TABLE IF EXISTS investment_transfer_facts;
 DROP TABLE IF EXISTS investment_operation_lot_effects;

@@ -6,17 +6,18 @@ R16 acceptance criteria. [GitHub Issues](https://github.com/sergeyfarin/rekenraa
 tracks actionable work; the [backlog](backlog.md) maps local IDs, and
 [implemented](implemented.md) records shipped behavior.
 
-Last reconciled: 2026-10-02.
+Last reconciled: 2026-10-03.
 
 Done: [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129) shared gain-impact mechanism and
 [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141) rollout to every existing replay path (see
 [implemented](implemented.md) for the coverage matrix).
 
-## Now: splits, then remaining replay gaps
+## Now: remaining replay gaps (splits shipped)
 
-1. [ ] Deliver manual split/reverse split [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137), opting into the #129 gain-impact policy and the
-   slice 5 exact-conservation contract. Follow with verified Trading 212 mapping;
-   insufficient evidence remains in review with manual-link/deduplication support.
+1. [x] Manual split/reverse split [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137) with replay, gain disclosure, mobile entry and
+   Trading 212 split-row linking. Follow-ups: split correction/journal-delta adjustment
+   [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) (P2), verified provider mapping [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145) (blocked),
+   zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146).
 2. [ ] Support pooled average-cost internal transfers [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).
 3. [ ] Extend backdating [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132): known-basis transfer-in behind later sales first,
    then earlier sales/write-offs. Preserve recorded methods and original dates.

@@ -6,6 +6,8 @@ export type NormalizedRow = components['schemas']['ImportNormalizedRow'];
 export type StagedSplit = components['schemas']['ImportStagedSplit'];
 export type ImportResolution = components['schemas']['ImportResolution'];
 export type ImportStagedRow = components['schemas']['ImportStagedRowResponse'];
+export type ImportSplitCandidate = components['schemas']['ImportSplitCandidate'];
+export type ImportSplitCandidatesResponse = components['schemas']['ImportSplitCandidatesResponse'];
 export type ParseWarning = components['schemas']['ParseWarning'];
 export type SourceMeta = components['schemas']['ImportSourceMeta'];
 export type StartImportResponse = components['schemas']['StartImportResponse'];
@@ -346,3 +348,17 @@ export function parseResolution(row: ImportStagedRow): ImportResolution {
 export const importBatchesQueryKey = ['api', 'imports'] as const;
 export const importBatchQueryKey = (batchId: number) => ['api', 'imports', batchId] as const;
 export const importProfilesQueryKey = ['api', 'import-profiles'] as const;
+
+export const importSplitCandidatesQueryKey = ['imports', 'split-candidates'] as const;
+
+export async function importSplitCandidates(batchId: number, rowId: number): Promise<ImportSplitCandidatesResponse> {
+  return apiFetch<ImportSplitCandidatesResponse>(`/api/v1/imports/${batchId}/rows/${rowId}/split-candidates`);
+}
+
+export async function linkImportSplit(batchId: number, rowId: number, operationId: number, csrfToken: string): Promise<void> {
+  await apiFetch<null>(`/api/v1/imports/${batchId}/rows/${rowId}/link-split`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    body: JSON.stringify({ operation_id: operationId })
+  });
+}

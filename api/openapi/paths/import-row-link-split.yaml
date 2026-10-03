@@ -1,0 +1,66 @@
+post:
+  summary: Link a staged Trading 212 split row to a recorded split
+  description: >
+    Admits the row's dedupe identity with the chosen recorded split operation as
+    its only effect and marks the row committed, under one audit event. No
+    journal or lot row is written, so the split cannot be posted twice; a retry
+    or re-fetch of the same fill is a duplicate. The split must be effective,
+    belong to the row's security and not already be linked to another source row.
+  parameters:
+    - in: path
+      name: batch_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: path
+      name: row_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/ImportLinkSplitRequest"
+  responses:
+    "204":
+      description: Row linked to the recorded split
+    "400":
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Import batch not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: IMPORT_SPLIT_LINK_UNAVAILABLE — the row or split can no longer be linked
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

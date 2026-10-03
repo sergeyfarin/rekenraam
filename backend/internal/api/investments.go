@@ -1705,6 +1705,14 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED", err.Error())
 	case errors.Is(err, app.ErrGainImpactAcknowledgementStale):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE", err.Error())
+	case errors.Is(err, app.ErrInvestmentSplitNoHoldings):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_NO_HOLDINGS", err.Error())
+	case errors.Is(err, app.ErrInvestmentSplitFraction):
+		writeAPIError(w, http.StatusUnprocessableEntity, "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE", err.Error())
+	case errors.Is(err, app.ErrInvestmentSplitChanged):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_CHANGED", err.Error())
+	case errors.Is(err, app.ErrInvestmentSplitDependency):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_DEPENDENCY", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
 	// Every investment trade goes through the transaction write guard, so a
@@ -2125,4 +2133,126 @@ func projectedBasisScale(scale int, knowledge string) *int {
 		return nil
 	}
 	return &scale
+}
+
+type investmentSplitRequest struct {
+	EffectiveOn               string          `json:"effective_on"`
+	HoldingAccountID          int64           `json:"holding_account_id"`
+	CommodityID               int64           `json:"commodity_id"`
+	RatioNumerator            int64           `json:"ratio_numerator"`
+	RatioDenominator          int64           `json:"ratio_denominator"`
+	SourceEvidence            json.RawMessage `json:"source_evidence,omitempty"`
+	Memo                      string          `json:"memo"`
+	ChangeReason              string          `json:"change_reason"`
+	ReconciliationOverride    bool            `json:"reconciliation_override"`
+	GainImpactAcknowledgement string          `json:"gain_impact_acknowledgement,omitempty"`
+}
+
+type investmentSplitLotEffectResponse struct {
+	LotID               int64             `json:"lot_id"`
+	CostCommodityID     int64             `json:"cost_commodity_id"`
+	QuantityBeforeValue exact.Coefficient `json:"quantity_before_value"`
+	QuantityBeforeScale int               `json:"quantity_before_scale"`
+	QuantityAfterValue  exact.Coefficient `json:"quantity_after_value"`
+	QuantityAfterScale  int               `json:"quantity_after_scale"`
+}
+
+type investmentSplitPlanResponse struct {
+	RatioNumerator     int64                              `json:"ratio_numerator"`
+	RatioDenominator   int64                              `json:"ratio_denominator"`
+	Effects            []investmentSplitLotEffectResponse `json:"effects"`
+	QuantityDeltaValue exact.Coefficient                  `json:"quantity_delta_value"`
+	QuantityDeltaScale int                                `json:"quantity_delta_scale"`
+	Replayed           bool                               `json:"replayed"`
+}
+
+type investmentSplitPreviewResponse struct {
+	Plan   investmentSplitPlanResponse  `json:"plan"`
+	Impact reconciliationImpactResponse `json:"impact"`
+}
+
+type investmentSplitResponse struct {
+	Transaction transactionResponse         `json:"transaction"`
+	Plan        investmentSplitPlanResponse `json:"plan"`
+}
+
+func investmentSplitInput(owner app.Owner, r *http.Request, request investmentSplitRequest) app.InvestmentSplitInput {
+	evidence := rawJSONText(request.SourceEvidence)
+	if evidence == "null" {
+		evidence = ""
+	}
+	return app.InvestmentSplitInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
+		RequestID: RequestIDFromContext(r.Context()), EffectiveOn: request.EffectiveOn,
+		HoldingAccountID: request.HoldingAccountID, CommodityID: request.CommodityID,
+		RatioNumerator: request.RatioNumerator, RatioDenominator: request.RatioDenominator,
+		SourceEvidenceJSON: evidence, Memo: request.Memo, ChangeReason: request.ChangeReason,
+		ReconciliationOverride:    request.ReconciliationOverride,
+		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+	}
+}
+
+func toInvestmentSplitPlanResponse(plan app.InvestmentSplitPlan) investmentSplitPlanResponse {
+	out := investmentSplitPlanResponse{RatioNumerator: plan.RatioNumerator, RatioDenominator: plan.RatioDenominator,
+		QuantityDeltaValue: plan.DeltaValue, QuantityDeltaScale: plan.DeltaScale, Replayed: plan.Replayed,
+		Effects: make([]investmentSplitLotEffectResponse, 0, len(plan.Effects))}
+	for _, effect := range plan.Effects {
+		out.Effects = append(out.Effects, investmentSplitLotEffectResponse{
+			LotID: effect.LotID, CostCommodityID: effect.CostCommodityID,
+			QuantityBeforeValue: effect.BeforeValue, QuantityBeforeScale: effect.BeforeScale,
+			QuantityAfterValue: effect.AfterValue, QuantityAfterScale: effect.AfterScale,
+		})
+	}
+	return out
+}
+
+func investmentSplit(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		var request investmentSplitRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.Split(r.Context(), investmentSplitInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "investment split", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSplitResponse{
+			Transaction: toTransactionResponse(result.Transaction), Plan: toInvestmentSplitPlanResponse(result.Plan),
+		})
+	}))
+}
+
+func investmentSplitPreview(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request investmentSplitRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		preview, err := investmentService.PreviewSplit(r.Context(), investmentSplitInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "investment split preview", err)
+			return
+		}
+		impact := toReconciliationImpactResponse(preview.Impact)
+		gainImpact, err := toGainImpactResponse(preview.Impact.GainImpact)
+		if err != nil {
+			writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+			return
+		}
+		impact.GainImpact = gainImpact
+		writeJSON(w, http.StatusOK, investmentSplitPreviewResponse{
+			Plan: toInvestmentSplitPlanResponse(preview.Plan), Impact: impact,
+		})
+	}
 }

@@ -613,6 +613,8 @@ func TestImportBatchEndpoints_RequireAuthentication(t *testing.T) {
 		{"commit", http.MethodPost, "/api/v1/imports/1/commit"},
 		{"correct-buy", http.MethodPost, "/api/v1/imports/1/rows/1/correct-buy"},
 		{"correct-buy-impact", http.MethodPost, "/api/v1/imports/1/rows/1/correct-buy/reconciliation-impact"},
+		{"split-candidates", http.MethodGet, "/api/v1/imports/1/rows/1/split-candidates"},
+		{"link-split", http.MethodPost, "/api/v1/imports/1/rows/1/link-split"},
 		{"discard", http.MethodPost, "/api/v1/imports/1/discard"},
 	}
 	for _, tc := range cases {
@@ -641,6 +643,7 @@ func TestImportBatchMutations_RequireCSRFToken(t *testing.T) {
 		{"patch", http.MethodPatch, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10), resolutionPatchBody(t, checking.ID, commodityID, groceries.ID, started.Rows[0].ID)},
 		{"commit", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/commit", "{}"},
 		{"correct-buy", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/rows/" + strconv.FormatInt(started.Rows[0].ID, 10) + "/correct-buy", `{"reason":"provider correction"}`},
+		{"link-split", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/rows/" + strconv.FormatInt(started.Rows[0].ID, 10) + "/link-split", `{"operation_id":1}`},
 		{"discard", http.MethodPost, "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/discard", ""},
 		{"analyze", http.MethodPost, "/api/v1/imports/analyze", ""},
 	}
@@ -1013,4 +1016,31 @@ func TestImportSaleSourceCorrectionImpactIsReadOnlyAndRequiresEligibleSource(t *
 	var after int
 	require.NoError(t, database.QueryRow("SELECT count(*) FROM audit_events").Scan(&after))
 	require.Equal(t, before, after)
+}
+
+// A QIF bank row is not a Trading 212 split fill: candidates and linking
+// refuse it with the stable code, and nothing is written.
+func TestImportSplitLinkRefusesNonSplitRows(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	sessionCookie, csrfToken, _, _, _ := bootstrapImportAPITest(t, handler)
+	started := startQIFImportForSession(t, handler, sessionCookie, csrfToken, "bank.qif", qifRow("06/01/26", "-10.00", "Coffee"), http.StatusCreated)
+	base := "/api/v1/imports/" + strconv.FormatInt(started.Batch.ID, 10) + "/rows/" + strconv.FormatInt(started.Rows[0].ID, 10)
+
+	req := httptest.NewRequest(http.MethodGet, base+"/split-candidates", nil)
+	req.AddCookie(sessionCookie)
+	res := httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	assert.Equal(t, http.StatusConflict, res.Code)
+	assert.Contains(t, res.Body.String(), "IMPORT_SPLIT_LINK_UNAVAILABLE")
+
+	req = httptest.NewRequest(http.MethodPost, base+"/link-split", strings.NewReader(`{"operation_id":1}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-CSRF-Token", csrfToken)
+	setSameOrigin(req)
+	req.AddCookie(sessionCookie)
+	res = httptest.NewRecorder()
+	handler.ServeHTTP(res, req)
+	assert.Equal(t, http.StatusConflict, res.Code)
+	assert.Contains(t, res.Body.String(), "IMPORT_SPLIT_LINK_UNAVAILABLE")
 }
