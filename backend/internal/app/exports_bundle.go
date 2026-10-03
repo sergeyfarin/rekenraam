@@ -22,7 +22,7 @@ import (
 // BundleSchemaVersion is the archive's own version, carried in manifest.json.
 // Columns are appended within a version; a change that cannot be made by
 // appending increments this and needs an ADR (ADR 0011).
-const BundleSchemaVersion = 6
+const BundleSchemaVersion = 7
 
 // bundleFile is one entry of the archive, recorded in the manifest with the
 // checksum computed while it was written.
@@ -209,6 +209,9 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		}},
 		{"investment-transfer-lot-links.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-lot-links", []string{"operation_id", "link_seq", "source_lot_id", "destination_lot_id", "quantity_value", "quantity_scale", "basis_knowledge", "carried_basis_value", "carried_basis_scale", "cost_commodity_id", "original_date_knowledge", "original_acquired_on", "source_evidence_json"})
+		}},
+		{"investment-transfer-link-revisions.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-link-revisions", []string{"revision_id", "operation_id", "link_seq", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "source_lot_id", "carried_basis_value", "carried_basis_scale", "created_at", "audit_event_id"})
 		}},
 		{"investment-split-facts.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "split-facts", []string{"operation_id", "account_id", "commodity_id", "effective_on", "ratio_numerator", "ratio_denominator", "source_evidence_json", "audit_event_id"})
@@ -887,6 +890,7 @@ value in this archive was ever a floating-point number.`,
   investment-lot-effects.csv  direct operation-to-event links
   investment-transfer-facts.csv  typed in-kind transfer sources and account endpoints
   investment-transfer-lot-links.csv  sourced lot lineage, dates, and basis knowledge
+  investment-transfer-link-revisions.csv  replayed carried basis of internal transfer links
   investment-split-facts.csv  sourced split and reverse-split ratios and dates
   investment-split-revisions.csv  replay revisions of split lot effects per cost currency
   investment-split-revision-effects.csv  per-lot quantity changes for those revisions
@@ -964,7 +968,12 @@ calculation even after defaults or dated history change.
 disposal-clearing-allocations.csv preserves each decision's signed portions of
 its original journal clearing legs; basis replay does not rewrite these links.
 The highest revision_seq per decision in disposal-revisions.csv and its allocation rows
-are the current effective calculation; earlier revisions remain audit history.`,
+are the current effective calculation; earlier revisions remain audit history.
+investment-transfer-lot-links.csv keeps each internal transfer's first carried
+basis. When corrected history changes it, the highest revision_seq per link in
+investment-transfer-link-revisions.csv is the basis the destination lot now
+carries and the source lot it is taken from (the corrected successor of a
+replaced acquisition); units, destination lots and original dates do not change.`,
 	}
 
 	if filter.From != "" || filter.To != "" || len(filter.AccountIDs) > 0 || len(filter.CommodityIDs) > 0 {

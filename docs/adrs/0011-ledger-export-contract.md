@@ -277,3 +277,15 @@ columns, order and values: one row per operation-opened lot, with
 `consideration_value`/`consideration_scale` taken from the lot's opening
 basis. The manifest stays at schema version 6. A lot with no opening
 operation is not an opening fact and is not listed, exactly as before.
+
+### Transfer link revisions (2026-10-03, T-132)
+
+Manifest schema version 7 adds `investment-transfer-link-revisions.csv`:
+`revision_id`, `operation_id`, `link_seq`, `revision_seq`,
+`caused_by_operation_id`, `supersedes_revision_id`, `source_lot_id`,
+`carried_basis_value`, `carried_basis_scale`, `created_at`, `audit_event_id`.
+`investment-transfer-lot-links.csv` keeps each link's first committed carried
+basis; the highest `revision_seq` per `(operation_id, link_seq)` is the basis
+the destination lot currently carries and the source lot it is taken from.
+Quantity, destination lot and original date are only in the link file. Existing
+files and columns are unchanged.

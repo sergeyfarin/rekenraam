@@ -43,6 +43,7 @@ the existing local IDs resolvable; it is not a second task list.
 | T-132 | [#147 — Replay the cross-position dependency closure as one dated stream](https://github.com/sergeyfarin/rekenraam/issues/147) |
 | T-133 | [#148 — Require an opening operation on every investment lot](https://github.com/sergeyfarin/rekenraam/issues/148) |
 | T-134 | [#149 — Self-check full replay equivalence of investment projections](https://github.com/sergeyfarin/rekenraam/issues/149) |
+| T-135 | [#150 — Admit changed pooled-transfer lineage under replay](https://github.com/sergeyfarin/rekenraam/issues/150) |
 
 T-75b [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is closed for
 its delivered long-buy/sale scope; the [2026-10-02 review](reviews/investment-review-2026-10-02.md)

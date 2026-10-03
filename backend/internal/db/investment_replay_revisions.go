@@ -11,8 +11,22 @@ import (
 // persistInvestmentReplayProjectionTx appends the effective allocation sets
 // and installs the current lot projection in the same transaction as the
 // operation that caused replay. The original decision, allocations and lot
-// events are immutable evidence of the first posting.
+// events are immutable evidence of the first posting. When the replay changed
+// a carried internal-transfer basis, every dependent destination is replayed
+// too before the caller's transaction can commit (T-132).
 func persistInvestmentReplayProjectionTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID,
+	causedByOperationID, auditEventID, actorUserID int64, createdAt string,
+	intents []InvestmentReplayIntent, projection InvestmentReplayProjection) error {
+	if err := persistInvestmentReplayPositionTx(ctx, tx, bookID, accountID, commodityID, costCommodityID,
+		causedByOperationID, auditEventID, actorUserID, createdAt, intents, projection); err != nil {
+		return err
+	}
+	return propagateInvestmentTransferRevisionsTx(ctx, tx, bookID, causedByOperationID, auditEventID,
+		actorUserID, createdAt, projection.TransferRevisions)
+}
+
+// persistInvestmentReplayPositionTx installs one position's replay output.
+func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID,
 	causedByOperationID, auditEventID, actorUserID int64, createdAt string,
 	intents []InvestmentReplayIntent, projection InvestmentReplayProjection) error {
 	if bookID <= 0 || accountID <= 0 || commodityID <= 0 || costCommodityID <= 0 ||

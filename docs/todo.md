@@ -23,8 +23,9 @@ Done: [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129) shared g
    then earlier sales/write-offs. Preserve recorded methods and original dates.
 4. [x] Decide cross-position replay and consolidate effective readers
    [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139): dependency closure chosen; effective views; lot facts merged.
-5. [ ] Replay the dependency closure as one dated stream
-   [T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147) before transfer correction (#134) and outbound transfers.
+5. [x] Propagate changed internal-transfer basis through the dependency closure
+   [T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147). Follow-up: changed pooled lineage
+   [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) (P3).
 
 This is execution order, not an extra dependency chain. New commands integrate
 the #129 gain-impact policy themselves.

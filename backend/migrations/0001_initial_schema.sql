@@ -1628,6 +1628,72 @@ BEFORE DELETE ON investment_transfer_lot_links
 BEGIN SELECT RAISE(ABORT, 'investment transfer lot links are immutable'); END;
 -- +goose StatementEnd
 
+-- Replay output for an internal transfer (T-132). The link above is the
+-- immutable first commit (revision 1). When replay depletes the source with a
+-- different basis, or from the corrected successor of the same acquisition
+-- (a buy replacement opens a new lot for the same correction root), a numbered
+-- effective depletion is appended and the destination lot replays from it.
+-- Quantity, destination lot and original acquisition date never change here:
+-- a replay that would move other units or alter that date is refused with the
+-- transfer named.
+CREATE TABLE IF NOT EXISTS investment_transfer_link_revisions (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  operation_id INTEGER NOT NULL,
+  link_seq INTEGER NOT NULL,
+  revision_seq INTEGER NOT NULL CHECK (revision_seq >= 2),
+  caused_by_operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  supersedes_revision_id INTEGER REFERENCES investment_transfer_link_revisions(id) ON DELETE RESTRICT,
+  source_lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  carried_basis_value TEXT NOT NULL CHECK (length(carried_basis_value) BETWEEN 1 AND 38
+    AND carried_basis_value NOT GLOB '*[^0-9]*'
+    AND (carried_basis_value = '0' OR substr(carried_basis_value, 1, 1) BETWEEN '1' AND '9')),
+  carried_basis_scale INTEGER NOT NULL CHECK (carried_basis_scale BETWEEN 0 AND 12),
+  created_at TEXT NOT NULL,
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  FOREIGN KEY (operation_id, link_seq) REFERENCES investment_transfer_lot_links(operation_id, link_seq) ON DELETE RESTRICT,
+  UNIQUE (operation_id, link_seq, revision_seq),
+  CHECK ((revision_seq = 2) = (supersedes_revision_id IS NULL))
+);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_transfer_link_revisions_valid
+BEFORE INSERT ON investment_transfer_link_revisions
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_transfer_lot_links x
+  JOIN investment_transfer_facts f ON f.operation_id = x.operation_id
+  JOIN investment_operations o ON o.id = NEW.caused_by_operation_id
+  JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  JOIN investment_lots source ON source.id = NEW.source_lot_id
+  JOIN investment_lots original ON original.id = x.source_lot_id
+  WHERE x.operation_id = NEW.operation_id AND x.link_seq = NEW.link_seq
+    AND f.book_id = NEW.book_id AND f.transfer_kind = 'internal' AND x.basis_knowledge = 'known'
+    AND source.book_id = NEW.book_id AND source.account_id = f.source_account_id
+    AND source.commodity_id = f.commodity_id AND source.cost_commodity_id = x.cost_commodity_id
+    AND source.opened_on = original.opened_on
+    AND o.book_id = NEW.book_id AND a.book_id = NEW.book_id
+    AND o.created_audit_event_id = NEW.created_audit_event_id
+    AND ((NEW.revision_seq = 2 AND NEW.supersedes_revision_id IS NULL)
+      OR EXISTS (
+        SELECT 1 FROM investment_transfer_link_revisions previous
+        WHERE previous.id = NEW.supersedes_revision_id AND previous.book_id = NEW.book_id
+          AND previous.operation_id = NEW.operation_id AND previous.link_seq = NEW.link_seq
+          AND previous.revision_seq = NEW.revision_seq - 1))
+)
+BEGIN SELECT RAISE(ABORT, 'investment transfer link revision is outside its link or chain'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_transfer_link_revisions_no_update
+BEFORE UPDATE ON investment_transfer_link_revisions
+BEGIN SELECT RAISE(ABORT, 'investment transfer link revisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_transfer_link_revisions_no_delete
+BEFORE DELETE ON investment_transfer_link_revisions
+BEGIN SELECT RAISE(ABORT, 'investment transfer link revisions are immutable'); END;
+-- +goose StatementEnd
+
 -- Sourced split / reverse split terms (slice 5, T-122). The ratio is in
 -- lowest terms, validated by the service. The first committed per-lot effects
 -- are split_adjustment lot events linked through investment_operation_lot_effects;
@@ -1728,6 +1794,13 @@ SELECT r.* FROM investment_disposal_revisions r
 WHERE NOT EXISTS (SELECT 1 FROM investment_disposal_revisions later
   WHERE later.decision_id = r.decision_id AND later.revision_seq > r.revision_seq);
 
+-- The current replay revision of an internal transfer link's carried basis.
+CREATE VIEW latest_investment_transfer_link_revisions AS
+SELECT r.* FROM investment_transfer_link_revisions r
+WHERE NOT EXISTS (SELECT 1 FROM investment_transfer_link_revisions later
+  WHERE later.operation_id = r.operation_id AND later.link_seq = r.link_seq
+    AND later.revision_seq > r.revision_seq);
+
 -- The current replay revision of a split's effects in each cost currency.
 CREATE VIEW latest_investment_split_revisions AS
 SELECT r.* FROM investment_split_revisions r
@@ -1737,8 +1810,9 @@ WHERE NOT EXISTS (SELECT 1 FROM investment_split_revisions later
 
 -- Lot events that still describe current state: not owned by a corrected
 -- operation, not an original disposal allocation a replay revision replaced,
--- and not a split effect revised in the lot's cost currency. Revised outputs
--- come from the latest revision rows above.
+-- not a split effect revised in the lot's cost currency, and not either end of
+-- an internal transfer whose carried basis was revised. Revised outputs come
+-- from the latest revision rows above.
 CREATE VIEW effective_investment_lot_events AS
 SELECT e.* FROM investment_lot_events e
 JOIN investment_lots l ON l.id = e.lot_id AND l.book_id = e.book_id
@@ -1754,6 +1828,14 @@ WHERE NOT EXISTS (
     SELECT 1 FROM investment_operation_lot_effects effect
     JOIN investment_split_revisions revision ON revision.operation_id = effect.operation_id
       AND revision.cost_commodity_id = l.cost_commodity_id
+    WHERE effect.lot_event_id = e.id))
+  AND NOT (e.event_kind IN ('transfer_out', 'transfer_in') AND EXISTS (
+    SELECT 1 FROM investment_operation_lot_effects effect
+    JOIN investment_transfer_lot_links link ON link.operation_id = effect.operation_id
+      AND ((e.event_kind = 'transfer_out' AND link.source_lot_id = e.lot_id)
+        OR (e.event_kind = 'transfer_in' AND link.destination_lot_id = e.lot_id))
+    JOIN investment_transfer_link_revisions revision ON revision.operation_id = link.operation_id
+      AND revision.link_seq = link.link_seq
     WHERE effect.lot_event_id = e.id));
 
 -- +goose StatementBegin
@@ -3750,11 +3832,16 @@ DROP TRIGGER IF EXISTS investment_operation_links_valid;
 DROP TABLE IF EXISTS investment_split_revision_effects;
 DROP TABLE IF EXISTS investment_split_revisions;
 DROP TABLE IF EXISTS investment_split_facts;
+DROP TRIGGER IF EXISTS investment_transfer_link_revisions_valid;
+DROP TRIGGER IF EXISTS investment_transfer_link_revisions_no_update;
+DROP TRIGGER IF EXISTS investment_transfer_link_revisions_no_delete;
+DROP TABLE IF EXISTS investment_transfer_link_revisions;
 DROP TABLE IF EXISTS investment_transfer_lot_links;
 DROP TABLE IF EXISTS investment_transfer_facts;
 DROP TABLE IF EXISTS investment_operation_lot_effects;
 DROP VIEW IF EXISTS effective_investment_lot_events;
 DROP VIEW IF EXISTS latest_investment_split_revisions;
+DROP VIEW IF EXISTS latest_investment_transfer_link_revisions;
 DROP VIEW IF EXISTS latest_investment_disposal_revisions;
 DROP VIEW IF EXISTS effective_investment_operations;
 DROP TABLE IF EXISTS investment_operation_components;

@@ -420,7 +420,7 @@ func TestPooledTransferReplaysUnchangedAfterLaterSaleReversal(t *testing.T) {
 	assert.Equal(t, SelfCheckPassed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
 }
 
-func TestBackdatedBuyRefusesChangedPooledTransferBasisWithoutWriting(t *testing.T) {
+func TestBackdatedBuyRefusesChangedPooledTransferLineageWithoutWriting(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -429,8 +429,10 @@ func TestBackdatedBuyRefusesChangedPooledTransferBasisWithoutWriting(t *testing.
 	transfer, err := f.investmentService.InternalTransfer(ctx,
 		pooledTransferInput(f, destinationID, "2026-03-01", exact.New(1), 0))
 	require.NoError(t, err)
-	// A January purchase joins the March pool and would change the basis the
-	// destination lot already carries; it is refused with the transfer named.
+	// A January purchase becomes the pool's first FIFO lot, so the March
+	// transfer would deplete a different source lot than the destination is
+	// linked to (and dated from). That lineage change cannot be a basis
+	// revision (T-132); it is refused with the transfer named.
 	input := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,

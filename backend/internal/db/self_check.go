@@ -526,6 +526,51 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	if err := splits.Close(); err != nil {
 		return nil, fmt.Errorf("close effective self-check split effects: %w", err)
 	}
+	// A revised internal transfer moves the same units at its latest carried
+	// basis: out of its effective source lot (the corrected successor of the
+	// original acquisition, when replaced) and into the destination (T-132).
+	transfers, err := transaction.QueryContext(ctx, `
+		SELECT revision.source_lot_id, source.account_id, source.commodity_id, source.cost_commodity_id,
+			link.destination_lot_id, destination.account_id, destination.commodity_id, destination.cost_commodity_id,
+			link.quantity_value, link.quantity_scale, revision.carried_basis_value, revision.carried_basis_scale
+		FROM latest_investment_transfer_link_revisions revision
+		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
+			AND link.link_seq = revision.link_seq
+		JOIN current_investment_lots source ON source.id = revision.source_lot_id
+		JOIN current_investment_lots destination ON destination.id = link.destination_lot_id
+		WHERE revision.book_id = ?
+		ORDER BY revision.operation_id, revision.link_seq`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read effective self-check transfer revisions: %w", err)
+	}
+	for transfers.Next() {
+		var out, in SelfCheckLotEventRecord
+		var quantity exact.Coefficient
+		var scale int
+		var basis exact.Coefficient
+		var basisScale int
+		if err := transfers.Scan(&out.LotID, &out.AccountID, &out.CommodityID, &out.CostCommodityID,
+			&in.LotID, &in.AccountID, &in.CommodityID, &in.CostCommodityID,
+			&quantity, &scale, &basis, &basisScale); err != nil {
+			transfers.Close()
+			return nil, fmt.Errorf("scan effective self-check transfer revision: %w", err)
+		}
+		value, err := exact.ScaledIntFromCoefficient(basis, basisScale).Int64()
+		if err != nil || value < 0 || quantity.Sign() <= 0 {
+			transfers.Close()
+			return nil, fmt.Errorf("invalid effective self-check transfer revision for lot %d", in.LotID)
+		}
+		in.QuantityValue, in.QuantityScale, in.CostBasisValue, in.CostBasisScale = quantity, scale, value, basisScale
+		out.QuantityValue, out.QuantityScale, out.CostBasisValue, out.CostBasisScale = quantity.Negated(), scale, -value, basisScale
+		events = append(events, out, in)
+	}
+	if err := transfers.Err(); err != nil {
+		transfers.Close()
+		return nil, fmt.Errorf("iterate effective self-check transfer revisions: %w", err)
+	}
+	if err := transfers.Close(); err != nil {
+		return nil, fmt.Errorf("close effective self-check transfer revisions: %w", err)
+	}
 	return events, nil
 }
 

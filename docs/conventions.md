@@ -133,9 +133,11 @@ When a feature introduces a durable new rule, update one of those documents in t
   base tables, so an effective view never hides damaged history. An
   operation-opened lot row is that operation's immutable opening fact.
 - Replay that crosses positions through internal transfers is scoped to the
-  affected-position dependency closure and replayed as one dated stream, not
-  a whole-book rebuild (ADR 0013 refinement). Until that propagation ships
-  (T-132), a changed carried basis is a named, atomic refusal.
+  affected-position dependency closure, not a whole-book rebuild (ADR 0013
+  refinement). A changed carried basis or corrected source lot appends a
+  transfer link revision and replays each destination in the same command
+  until nothing changes (T-132); units, destination lots and original dates
+  never change, and a replay that would change them is refused by name.
 - Realized/unrealized gains are server-computed read models with named policy.
   Reproducible investment reports state their `as_of` date, price-knowledge
   cutoff, valuation/FX method, staleness policy, reporting currency, basis profile,

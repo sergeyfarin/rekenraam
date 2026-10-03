@@ -181,8 +181,9 @@ non-trivial diff (yours or reviewed):
     Snapshot durable rows after failure and repeated successful previews; the
     actual write still rechecks dependencies and reconciliation. Named regression:
     `TestBuyReplacementPreviewRejectsDependentDisposalWithoutWriting` and
-    `TestBuyPreviewRejectsChangedInternalTransferBasisWithoutWriting` and
-    `TestReinvestmentPreviewRejectsChangedTransferBasisWithoutWriting`. Return
+    `TestBuyPreviewMatchesCommitWhenTransferBasisPropagates` and
+    `TestReinvestmentPreviewPropagatesTransferBasisWithoutWriting` (since T-132
+    a changed transfer basis propagates rather than refuses). Return
     the writer’s actual invalidated checkpoint set, including later checkpoints;
     a second latest-boundary calculation can underreport it. Pin multiple
     checkpoints in `TestBuyPreviewReplaysAndRollsBackReconciledHistory`.

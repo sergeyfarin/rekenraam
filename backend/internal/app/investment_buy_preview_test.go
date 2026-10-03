@@ -8,7 +8,10 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-func TestBuyPreviewRejectsChangedInternalTransferBasisWithoutWriting(t *testing.T) {
+// A rounding remainder after a partial FIFO sale: an earlier buy changes
+// which opening funds that sale, so the transfer now carries a different
+// basis. Preview runs the same propagation as commit and writes nothing.
+func TestBuyPreviewMatchesCommitWhenTransferBasisPropagates(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
@@ -18,23 +21,24 @@ func TestBuyPreviewRejectsChangedInternalTransferBasisWithoutWriting(t *testing.
 	destination := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
 	transfer, err := f.investmentService.InternalTransfer(ctx, internalTransferFromLot(f, destination, *source.LotID, exact.New(1), 0))
 	require.NoError(t, err)
+	original, _ := effectiveTransferBasis(t, f, transfer.Transaction.ID, 1)
 	input := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
 		QuantityValue: exact.New(2), CashAmountValue: 100, CashAmountScale: 2}
 	before := buyReplacementPreviewSnapshot(t, f.database)
+	input.GainImpactAcknowledgement = previewBuyGainImpact(t, f, input).Acknowledgement
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database), "preview writes nothing")
 	_, err = f.investmentService.Buy(ctx, input)
-	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
-	_, err = f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactBuy, input)
-	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	var dependency InvestmentBuyDependencyError
-	require.ErrorAs(t, err, &dependency)
-	var operationID int64
-	require.NoError(t, f.database.QueryRow(`SELECT l.operation_id FROM investment_operation_journal_links l JOIN transaction_versions v ON v.id = l.transaction_version_id WHERE v.transaction_id = ?`, transfer.Transaction.ID).Scan(&operationID))
-	require.Equal(t, operationID, dependency.OperationID)
-	require.Zero(t, dependency.DecisionID)
-	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+	require.NoError(t, err)
+	revised, revisions := effectiveTransferBasis(t, f, transfer.Transaction.ID, 1)
+	require.Equal(t, 1, revisions)
+	require.NotZero(t, revised.Cmp(original), "the carried basis changed")
+	require.Zero(t, revised.Cmp(lotRemainingBasis(t, f, transfer.DestinationLotIDs[0])))
+	conserved := lotRemainingBasis(t, f, *source.LotID)
+	conserved.AddScaled(revised)
+	requireScaled(t, 1000, 2, conserved, "source plus destination keep the February basis")
+	requireInvestmentSelfCheckPasses(t, f)
 }
 
 func TestBuyPreviewReplaysAndRollsBackReconciledHistory(t *testing.T) {

@@ -153,7 +153,10 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   `latest_investment_disposal_revisions`, `latest_investment_split_revisions`
   and `effective_investment_lot_events`; never re-inline those predicates, and
   never route an audit through them. Cross-position replay is scoped to the
-  dependency closure (`InvestmentReplayClosure`, ADR 0013 T-124 refinement).
+  dependency closure (`InvestmentReplayClosure`, ADR 0013 T-124 refinement):
+  `persistInvestmentReplayProjectionTx` appends transfer link revisions and
+  replays destinations to a fixed point (T-132). Any new reader of a
+  transferred lot's basis must use the latest link revision, not the link.
 
 ## Dates and times
 

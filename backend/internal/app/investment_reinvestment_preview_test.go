@@ -8,7 +8,7 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-func TestReinvestmentPreviewRejectsChangedTransferBasisWithoutWriting(t *testing.T) {
+func TestReinvestmentPreviewPropagatesTransferBasisWithoutWriting(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
@@ -23,19 +23,16 @@ func TestReinvestmentPreviewRejectsChangedTransferBasisWithoutWriting(t *testing
 		IncomeAccountID: &f.incomeAccountID, CashCommodityID: f.eurCommodityID,
 		QuantityValue: exact.New(2), AmountValue: 100, AmountScale: 2}
 	before := buyReplacementPreviewSnapshot(t, f.database)
-	_, err = acknowledgedReinvestedDividend(ctx, f.investmentService, input)
-	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
-	_, err = f.investmentService.ReinvestedDividendReconciliationImpact(ctx, input)
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	var dependency InvestmentBuyDependencyError
-	require.ErrorAs(t, err, &dependency)
-	var operationID int64
-	require.NoError(t, f.database.QueryRow(`SELECT l.operation_id FROM investment_operation_journal_links l JOIN transaction_versions v ON v.id = l.transaction_version_id WHERE v.transaction_id = ?`, transfer.Transaction.ID).Scan(&operationID))
-	require.Equal(t, operationID, dependency.OperationID)
-	require.Zero(t, dependency.DecisionID)
-	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+	impact, err := f.investmentService.ReinvestedDividendReconciliationImpact(ctx, input)
+	require.NoError(t, err)
+	require.NotNil(t, impact.GainImpact)
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database), "preview writes nothing")
+	input.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	_, err = f.investmentService.ReinvestedDividend(ctx, input)
+	require.NoError(t, err)
+	_, revisions := effectiveTransferBasis(t, f, transfer.Transaction.ID, 1)
+	require.Equal(t, 1, revisions)
+	requireInvestmentSelfCheckPasses(t, f)
 }
 
 func TestReinvestmentPreviewReplaysAndRollsBackReconciledHolding(t *testing.T) {

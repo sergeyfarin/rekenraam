@@ -191,10 +191,34 @@ A full rebuild remains useful as an offline self-check verifier
 ([T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149)).
 
 **Status.** The closure is implemented and tested
-(`InvestmentReplayClosure`); merged-stream propagation is
-[T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147). Until it
-lands, decision 6's named refusal stays in force, now pinned along transfer
-chains with specific-lot lineage (`TestChainedTransferBasisChangeIsRefusedAtomicallyWithLineageIntact`).
+(`InvestmentReplayClosure`); propagation shipped in
+[T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147), below.
+
+**Propagation (2026-10-03, T-132).** This supersedes decision 6's refusal of a
+changed internal carried basis. A transfer's units, destination lot and
+original acquisition date are fixed facts, so the only input one position
+gives another is the basis a link carries and which source lot it is taken
+from. The merged stream is therefore computed exactly by replaying a position,
+recording each link whose replayed depletion differs from its effective one,
+appending an `investment_transfer_link_revisions` row, and replaying each
+destination from that effective link, repeating until nothing changes. A
+source's depletion at a transfer's slot depends only on its own earlier
+history, so a cycle settles; a position in a cycle may be replayed (and its
+disposals revised) twice in one command, and the last revision is current.
+Positions reached are the subset of the closure whose links actually moved.
+
+- A transfer from a replaced acquisition depletes the replacement lot of the
+  same correction root, as a specific-lot election does; the revision records
+  that effective source lot. A successor opened on another date is not
+  followed, because the link's original date orders the destination.
+- The first committed link and destination lot opening stay immutable
+  evidence. Effective reads and self-check use the latest link revision for
+  both ends; an in-book transfer posts no basis, so no journal changes.
+- Still refused with the transfer named: removing the transferred acquisition
+  (reversal), and an average-cost pool that would now deplete different
+  source lots or quantities ([T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150)).
+  A future transfer correction (T-119 #134) must also seed propagation with
+  the destinations of edges it removes or replaces.
 
 **Effective reads and opening facts.** Effective selection lives in SQL views:
 `effective_investment_operations` (the end of each correction chain; a pure

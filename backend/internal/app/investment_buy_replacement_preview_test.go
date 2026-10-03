@@ -105,6 +105,7 @@ func buyReplacementPreviewSnapshot(t *testing.T, database *sql.DB) map[string][]
 		"investment_lots", "investment_lot_state", "investment_lot_events", "investment_operation_lot_effects",
 		"investment_position_basis_state", "investment_disposal_decisions", "investment_disposal_allocations", "investment_disposal_clearing_allocations",
 		"investment_disposal_revisions", "investment_disposal_revision_allocations", "investment_transfer_facts", "investment_transfer_lot_links",
+		"investment_transfer_link_revisions",
 		"price_series", "price_observations", "reconciliation_checkpoints", "reconciliation_checkpoint_postings",
 		"background_work_items", "import_batches", "import_staged_rows", "import_commit_identities", "import_commit_identity_effects", "import_source_revisions",
 	} {
@@ -159,13 +160,15 @@ func TestBuyReplacementPreviewPreservesSameDayRootOrder(t *testing.T) {
 	require.Zero(t, exact.ScaledIntFromInt64(gains[0].DisposedBasisValue, gains[0].DisposedBasisScale).Cmp(exact.ScaledIntFromInt64(-8000, 2)))
 }
 
-func TestBuyReplacementPreviewNamesInternalTransferDependency(t *testing.T) {
+// Correcting a transferred acquisition propagates its basis (T-132). The
+// preview runs that propagation and leaves no row behind.
+func TestBuyReplacementPreviewPropagatesTransferBasisWithoutWriting(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	destination := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
 	target := buyOn(t, f, "2026-05-01", 3, 1000)
-	transfer, err := f.investmentService.InternalTransfer(ctx, internalTransferFromLot(f, destination, *target.LotID, exact.New(1), 0))
+	_, err := f.investmentService.InternalTransfer(ctx, internalTransferFromLot(f, destination, *target.LotID, exact.New(1), 0))
 	require.NoError(t, err)
 	input := ReplaceInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: target.Transaction.ID,
 		Reason: "correct transferred acquisition", Replacement: InvestmentTradeInput{
@@ -175,16 +178,13 @@ func TestBuyReplacementPreviewNamesInternalTransferDependency(t *testing.T) {
 		}}
 	before := buyReplacementPreviewSnapshot(t, f.database)
 	_, err = f.investmentService.ReplaceBuyReconciliationImpact(ctx, input)
-	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	var dependency InvestmentBuyDependencyError
-	require.ErrorAs(t, err, &dependency)
-	var operationID int64
-	require.NoError(t, f.database.QueryRow(`SELECT link.operation_id FROM investment_operation_journal_links link
-  JOIN transaction_versions version ON version.id = link.transaction_version_id
-  WHERE version.transaction_id = ? AND link.role = 'primary'`, transfer.Transaction.ID).Scan(&operationID))
-	require.Equal(t, operationID, dependency.OperationID)
-	require.Zero(t, dependency.DecisionID)
+	require.NoError(t, err)
 	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, input)
+	require.NoError(t, err)
+	var revisions int
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_transfer_link_revisions`).Scan(&revisions))
+	require.Equal(t, 1, revisions)
 }
 
 func TestTrading212BuyReplacementPreviewChecksReplayWithoutAcceptingSource(t *testing.T) {

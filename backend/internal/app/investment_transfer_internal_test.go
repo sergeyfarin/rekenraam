@@ -229,36 +229,6 @@ func TestInternalTransferLocksIndividualLotMethodBeforeFirstSale(t *testing.T) {
 	require.ErrorContains(t, err, "cannot switch into or out of average_cost")
 }
 
-func TestBuyCorrectionRefusesChangedBasisOfLinkedInternalTransfer(t *testing.T) {
-	f := newInvestmentsTestFixture(t)
-	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
-	buy := buyOn(t, f, "2026-05-01", 3, 1000)
-	transfer, err := f.investmentService.InternalTransfer(context.Background(),
-		internalTransferFromLot(f, destinationID, *buy.LotID, exact.New(1), 0))
-	require.NoError(t, err)
-	before := f.transactionCount(t)
-	_, err = acknowledgedReplaceBuy(context.Background(), f.investmentService, ReplaceInvestmentBuyInput{
-		OwnerUserID: f.ownerUserID, TransactionID: buy.Transaction.ID,
-		Reason: "broker correction", Replacement: InvestmentTradeInput{
-			TransactionDate: "2026-05-01", CommodityID: f.stockCommodityID,
-			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
-			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(3),
-			CashAmountValue: 1100, CashAmountScale: 2,
-		},
-	})
-	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	var dependency InvestmentBuyDependencyError
-	require.ErrorAs(t, err, &dependency)
-	var transferOperationID int64
-	require.NoError(t, f.database.QueryRow(`SELECT id FROM investment_operations WHERE id IN (SELECT link.operation_id FROM investment_operation_journal_links link JOIN transaction_versions version ON version.id = link.transaction_version_id WHERE version.transaction_id = ? AND link.role = 'primary')`,
-		transfer.Transaction.ID).Scan(&transferOperationID))
-	assert.Equal(t, transferOperationID, dependency.OperationID)
-	assert.Equal(t, before, f.transactionCount(t))
-	var revisions int
-	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_disposal_revisions`).Scan(&revisions))
-	assert.Zero(t, revisions)
-}
-
 func TestInternalTransferDepletionSurvivesLaterSaleReversalReplay(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")

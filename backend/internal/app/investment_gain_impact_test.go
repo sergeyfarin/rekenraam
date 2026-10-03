@@ -307,15 +307,15 @@ func TestBuyGainImpactLeavesRowsUnchangedOnImpossibleDependency(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
-	source := buyOn(t, f, "2026-02-01", 3, 1000)
-	_, err := f.investmentService.Sell(ctx, sellInput(f, "2026-03-01", 2))
-	require.NoError(t, err)
 	destination := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
-	_, err = f.investmentService.InternalTransfer(ctx, internalTransferFromLot(f, destination, *source.LotID, exact.New(1), 0))
+	setHoldingCostBasisMethod(t, f, "average_cost")
+	buyOn(t, f, "2026-02-01", 2, 2000)
+	_, err := f.investmentService.InternalTransfer(ctx, pooledTransferInput(f, destination, "2026-03-01", exact.New(1), 0))
 	require.NoError(t, err)
 
-	// Replay would change the transfer's carried basis, which is refused. An
-	// acknowledgement never turns that refusal into a partial commit.
+	// Replay would deplete a different source lot for the pooled transfer,
+	// which is refused (T-132). An acknowledgement never turns that refusal
+	// into a partial commit.
 	input := backdatedBuy(f, "2026-01-01", 2, 100)
 	input.GainImpactAcknowledgement = "0000000000000000000000000000000000000000000000000000000000000000"
 	before := buyReplacementPreviewSnapshot(t, f.database)

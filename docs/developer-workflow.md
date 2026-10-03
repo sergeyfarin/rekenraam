@@ -361,6 +361,13 @@ checksum changed. Stop the app and reset the same disposable `DATABASE_URL`
 database and sidecars using the command above before restarting. No installed
 v0.1 database exists.
 
+**BREAKING DEV DATABASE, R16 transfer basis propagation (T-132, 2026-10-03):**
+`0001` adds `investment_transfer_link_revisions` and its latest-revision view,
+and the effective lot-event view now excludes revised transfer events. The
+checksum changed. Stop the app and reset the same disposable `DATABASE_URL`
+database and sidecars using the command above before restarting. No installed
+v0.1 database exists.
+
 **BREAKING DEV DATABASE, R16 effective reads (T-124, 2026-10-03):** `0001`
 merges `investment_lot_facts` into `investment_lots.operation_id`, adds the
 effective-read views, and writes the former ALTER/recreated view and trigger

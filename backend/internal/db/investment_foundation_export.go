@@ -50,6 +50,11 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 			l.original_acquired_on, l.source_evidence_json
 			FROM investment_transfer_lot_links l JOIN investment_transfer_facts f ON f.operation_id = l.operation_id
 			WHERE f.book_id = ? ORDER BY l.operation_id, l.link_seq`,
+		"transfer-link-revisions": `SELECT r.id, r.operation_id, r.link_seq, r.revision_seq,
+			r.caused_by_operation_id, r.supersedes_revision_id, r.source_lot_id, r.carried_basis_value,
+			r.carried_basis_scale, r.created_at, r.created_audit_event_id
+			FROM investment_transfer_link_revisions r WHERE r.book_id = ?
+			ORDER BY r.operation_id, r.link_seq, r.revision_seq`,
 		"split-facts": `SELECT f.operation_id, f.account_id, f.commodity_id, f.effective_on,
 			f.ratio_numerator, f.ratio_denominator, f.source_evidence_json, f.created_audit_event_id
 			FROM investment_split_facts f WHERE f.book_id = ? ORDER BY f.operation_id`,
