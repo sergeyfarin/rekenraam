@@ -1560,7 +1560,7 @@ func TestBuyInvestment_RejectsHoldingAccountRolesThroughHTTP(t *testing.T) {
 // T-95. A backdated trade is refused with its own code, not a bare validation
 // failure: the rule is not visible in the form, so the client has something
 // specific to explain.
-func TestSellInvestment_BackdatedBehindASaleReportsItsOwnCode(t *testing.T) {
+func TestSellInvestment_BackdatedBehindASaleReplaysOrNamesDependency(t *testing.T) {
 	t.Parallel()
 	handler, _ := newSetupTestHandler(t)
 	f := bootstrapInvestmentAPITest(t, handler)
@@ -1577,15 +1577,30 @@ func TestSellInvestment_BackdatedBehindASaleReportsItsOwnCode(t *testing.T) {
 	}
 	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sell, http.StatusCreated)
 
-	backdated := sell
-	backdated.TransactionDate = "2026-03-01"
-	for _, path := range []string{"/api/v1/investments/sell", "/api/v1/investments/sell/preview"} {
-		res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, backdated, http.StatusConflict)
+	// Selling 6 in March leaves only 4 for the recorded July sale of 5: the
+	// preview and the commit name that dependency (T-117).
+	impossible := sell
+	impossible.TransactionDate = "2026-03-01"
+	impossible.QuantityValue = exact.New(6)
+	for _, path := range []string{"/api/v1/investments/sell", "/api/v1/investments/sell/preview",
+		"/api/v1/investments/sell/reconciliation-impact"} {
+		res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, impossible, http.StatusConflict)
 		var body errorResponse
 		require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
-		assert.Equal(t, "INVESTMENT_EVENT_OUT_OF_ORDER", body.Error.Code)
-		assert.Contains(t, body.Error.Message, "2026-07-01", "the message names the disposal that blocks it")
+		assert.Equal(t, "INVESTMENT_SALE_DEPENDENCY", body.Error.Code, path)
 	}
+
+	// Selling 5 in March replays July onto the remaining shares at the same
+	// per-share basis, so no committed gain changes and no acknowledgement is needed.
+	backdated := sell
+	backdated.TransactionDate = "2026-03-01"
+	res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		"/api/v1/investments/sell/reconciliation-impact", backdated, http.StatusOK)
+	var impact reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&impact))
+	require.NotNil(t, impact.GainImpact)
+	assert.Empty(t, impact.GainImpact.Changes)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", backdated, http.StatusCreated)
 }
 
 func TestBuyInvestment_BackdatedBehindSaleReplaysPosition(t *testing.T) {

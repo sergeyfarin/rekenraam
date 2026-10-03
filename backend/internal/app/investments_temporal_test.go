@@ -179,60 +179,9 @@ func TestWriteOffRejectsLotsAcquiredAfterTheWriteOffDate(t *testing.T) {
 
 // T-95, second pass. Filtering by opened_on keeps a disposal from consuming a
 // lot that did not exist yet, but it does not make the lot's *remaining* basis
-// historical. A later average-cost sale has already redistributed pooled basis
-// across the survivors, so an older lot that passes the date filter can hand a
-// backdated sale basis that only exists because of purchases and sales that
-// came after it. The projection is only true as of the last disposal applied
-// to it, and events dated before that one are now refused outright.
-
-func TestBackdatedSaleIsRefusedOnceALaterSaleHasPooledTheBasis(t *testing.T) {
-	f := newInvestmentsTestFixture(t)
-	ctx := context.Background()
-
-	buyOn(t, f, "2026-01-01", 10, 10000) // 10 shares at 10.00
-	buyOn(t, f, "2026-06-01", 10, 30000) // 10 shares at 30.00
-
-	later := sellInput(f, "2026-07-01", 5)
-	later.CostBasisMethod = "average_cost"
-	_, err := f.investmentService.Sell(ctx, later)
-	require.NoError(t, err)
-
-	// January's surviving 5 shares now carry 100.00 of pooled basis rather than
-	// the 50.00 they were bought for, so a March sale selecting that lot would
-	// take basis created by a June purchase and a July sale.
-	earlier := sellInput(f, "2026-03-01", 5)
-	earlier.CostBasisMethod = "average_cost"
-
-	_, err = f.investmentService.PreviewSell(ctx, earlier)
-	require.EqualError(t, err, "investment events must be entered in chronological order: a disposal dated 2026-03-01 is before this position's later depletion on 2026-07-01")
-
-	_, err = f.investmentService.Sell(ctx, earlier)
-	require.EqualError(t, err, "investment events must be entered in chronological order: a disposal dated 2026-03-01 is before this position's later depletion on 2026-07-01")
-
-	// The refusal left the position exactly as the July sale did.
-	positions, err := f.investmentService.Positions(ctx)
-	require.NoError(t, err)
-	require.Len(t, positions, 1)
-	require.Equal(t, "15", positions[0].QuantityValue.String())
-}
-
-func TestBackdatedWriteOffIsRefusedAfterASale(t *testing.T) {
-	f := newInvestmentsTestFixture(t)
-	ctx := context.Background()
-	buyOn(t, f, "2026-01-01", 10, 10000)
-	_, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 5))
-	require.NoError(t, err)
-
-	input := InvestmentWriteOffInput{
-		OwnerUserID: f.ownerUserID, TransactionDate: "2026-03-01", CommodityID: f.stockCommodityID,
-		HoldingAccountID: f.holdingAccountID, QuantityValue: exact.New(1),
-		Reason: "delisted", ChangeReason: "delisted",
-	}
-	_, err = f.investmentService.PreviewWriteOff(ctx, input)
-	require.ErrorContains(t, err, "chronological order")
-	_, err = f.investmentService.WriteOff(ctx, input)
-	require.ErrorContains(t, err, "chronological order")
-}
+// historical. A disposal dated before a later depletion therefore never reads
+// the current projection: since T-117 it is admitted only through full
+// chronological replay (see investment_backdating_test.go).
 
 func TestBackdatedPurchaseReplaysLaterAverageCostSale(t *testing.T) {
 	f := newInvestmentsTestFixture(t)

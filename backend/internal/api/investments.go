@@ -170,19 +170,20 @@ type investmentTradeRequest struct {
 }
 
 type externalTransferInRequest struct {
-	EffectiveOn            string            `json:"effective_on"`
-	HoldingAccountID       int64             `json:"holding_account_id"`
-	CommodityID            int64             `json:"commodity_id"`
-	QuantityValue          exact.Coefficient `json:"quantity_value"`
-	QuantityScale          int               `json:"quantity_scale"`
-	CarriedBasisValue      *moneyCoefficient `json:"carried_basis_value"`
-	CarriedBasisScale      int               `json:"carried_basis_scale"`
-	CostCommodityID        int64             `json:"cost_commodity_id"`
-	OriginalAcquiredOn     string            `json:"original_acquired_on"`
-	SourceEvidence         json.RawMessage   `json:"source_evidence,omitempty"`
-	Memo                   string            `json:"memo"`
-	ChangeReason           string            `json:"change_reason"`
-	ReconciliationOverride bool              `json:"reconciliation_override"`
+	EffectiveOn               string            `json:"effective_on"`
+	HoldingAccountID          int64             `json:"holding_account_id"`
+	CommodityID               int64             `json:"commodity_id"`
+	QuantityValue             exact.Coefficient `json:"quantity_value"`
+	QuantityScale             int               `json:"quantity_scale"`
+	CarriedBasisValue         *moneyCoefficient `json:"carried_basis_value"`
+	CarriedBasisScale         int               `json:"carried_basis_scale"`
+	CostCommodityID           int64             `json:"cost_commodity_id"`
+	OriginalAcquiredOn        string            `json:"original_acquired_on"`
+	SourceEvidence            json.RawMessage   `json:"source_evidence,omitempty"`
+	Memo                      string            `json:"memo"`
+	ChangeReason              string            `json:"change_reason"`
+	ReconciliationOverride    bool              `json:"reconciliation_override"`
+	GainImpactAcknowledgement string            `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type externalTransferInResponse struct {
@@ -430,6 +431,9 @@ type investmentWriteOffRequest struct {
 	// ReconciliationOverride lets a backdated write-off proceed into a
 	// reconciled period, invalidating the affected checkpoints (T-53).
 	ReconciliationOverride bool `json:"reconciliation_override"`
+	// GainImpactAcknowledgement echoes the preview token when a backdated
+	// write-off revises committed gains (T-117).
+	GainImpactAcknowledgement string `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type sellPreviewResponse struct {
@@ -899,6 +903,7 @@ func externalTransferInInput(owner app.Owner, r *http.Request, request externalT
 		CostCommodityID: request.CostCommodityID, OriginalAcquiredOn: request.OriginalAcquiredOn,
 		SourceEvidenceJSON: evidence, Memo: request.Memo,
 		ChangeReason: request.ChangeReason, ReconciliationOverride: request.ReconciliationOverride,
+		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 	}, nil
 }
 
@@ -1914,7 +1919,8 @@ func toInvestmentWriteOffInput(owner app.Owner, r *http.Request, request investm
 		QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale, Reason: request.Reason,
 		Memo: request.Memo, PayeeID: request.PayeeID, Status: request.Status, LotAllocations: allocations,
 		ChangeReason: request.ChangeReason, CostBasisMethod: request.CostBasisMethod,
-		ReconciliationOverride: request.ReconciliationOverride,
+		ReconciliationOverride:    request.ReconciliationOverride,
+		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 	}
 }
 

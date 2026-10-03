@@ -1367,9 +1367,11 @@ func latestPositionRewriteDateTx(ctx context.Context, tx *sql.Tx, bookID int64, 
 // March after entering a June purchase therefore still works, and so does
 // entering the June purchase afterwards.
 //
-// Corrections use explicit position replay; ordinary event entry cannot
-// silently recompute a previously posted depletion. The comparison is
-// inclusive, so same-day
+// Corrections and entries that belong behind a later depletion — purchases,
+// reinvestment, known-basis transfer-in, sales and write-offs (T-117) — are
+// admitted only through explicit position replay; this guard keeps the
+// remaining direct paths from silently recomputing a posted depletion. The
+// comparison is inclusive, so same-day
 // events stay legal in the order they are entered: buying and selling on one
 // day, or two sales on one day, both still work.
 func requirePositionEventInOrderTx(ctx context.Context, tx *sql.Tx, bookID int64, accountID int64, commodityID int64, eventDate string, what string) error {
@@ -1958,13 +1960,46 @@ func (r *InvestmentRepository) CreateTransactionAndDisposeLotsWithDecisionAndPos
 }
 
 func (r *InvestmentRepository) createTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
+	return r.writeTransactionAndDisposeLots(ctx, transactionParams, disposalParams, postWrite, false)
+}
+
+// SimulateTransactionAndDisposeLots runs the complete sale/write-off writer —
+// including backdated replay admission, prices and checkpoint invalidation —
+// then rolls back. Its allocations are exactly what the commit would write;
+// lot event and decision IDs are temporary and cleared (T-117).
+func (r *InvestmentRepository) SimulateTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams) (SimulatedInvestmentWrite, []LotDisposalRecord, DisposalDecisionRecord, error) {
+	transaction, disposals, decision, err := r.writeTransactionAndDisposeLots(ctx, transactionParams, disposalParams, nil, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, nil, DisposalDecisionRecord{}, err
+	}
+	for index := range disposals {
+		disposals[index].EventID = 0
+	}
+	decision.ID, decision.TransactionID, decision.TransactionVersionID, decision.AuditEventID = 0, 0, 0, 0
+	decision.Allocations = disposals
+	return simulatedInvestmentWrite(transaction), disposals, decision, nil
+}
+
+func (r *InvestmentRepository) writeTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error, preview bool) (TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
 	type result struct {
 		disposals []LotDisposalRecord
 		decision  DisposalDecisionRecord
 	}
-	transaction, outcome, err := executeInvestmentWriteTx(ctx, r.database, transactionParams,
+	write := executeInvestmentWriteTx[result]
+	if preview {
+		write = previewInvestmentWriteTx[result]
+	}
+	transaction, outcome, err := write(ctx, r.database, transactionParams,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (result, error) {
 			disposalParams.TransactionID = transaction.ID
+			latest, err := latestPositionRewriteDateTx(ctx, tx, disposalParams.BookID, disposalParams.AccountID, disposalParams.CommodityID)
+			if err != nil {
+				return result{}, err
+			}
+			if latest != "" && disposalParams.EventDate < latest {
+				disposals, decision, err := disposeBehindLaterRewriteTx(ctx, tx, transaction, disposalParams, auditEventID)
+				return result{disposals: disposals, decision: decision}, err
+			}
 			disposals, err := disposeLotsWithAuditTx(ctx, tx, disposalParams, auditEventID, false)
 			if err != nil {
 				return result{}, err

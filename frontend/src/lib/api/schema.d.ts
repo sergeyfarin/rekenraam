@@ -19311,6 +19311,8 @@ export interface components {
             cost_basis_method?: components["schemas"]["CostBasisMethod"];
             /** @description Allows a backdated write-off to proceed into a reconciled period, invalidating the affected checkpoints. Without it such a write-off is refused with a 409 CONFLICT. */
             reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's reconciliation-impact preview, required when an entry dated behind a later disposal revises committed gains (T-117). */
+            gain_impact_acknowledgement?: string;
         };
         InvestmentLotDisposalResponse: {
             /** Format: int64 */
@@ -19361,6 +19363,8 @@ export interface components {
             memo?: string;
             change_reason?: string;
             reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's reconciliation-impact preview, required when an entry dated behind a later disposal revises committed gains (T-117). */
+            gain_impact_acknowledgement?: string;
         };
         ExternalTransferInResponse: {
             transaction: components["schemas"]["TransactionResponse"];

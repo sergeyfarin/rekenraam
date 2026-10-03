@@ -134,7 +134,7 @@ The shared gain-impact mechanism (T-114 #129) and its rollout to every existing
 replay path (T-126 #141) ship: manual and imported acquisitions, reinvestment,
 native reversals/replacements and Trading 212 source revisions disclose and
 require acknowledgement of revised committed gains.
-Manual splits (#137) and pooled internal transfers (#138) ship; near-term focus is **#132 now**, then #139.
+Manual splits (#137), pooled internal transfers (#138) and backdated transfer-in/disposal replay (#132) ship; near-term focus is **#139 now**.
 New replaying commands opt into the same disclosure in their own acceptance.
 Closed #99/#125/#113/#127/#129/#141/#142 are historical evidence, not active gates.
 Priority labels describe urgency; this sequence does not add hard dependencies.
@@ -157,10 +157,13 @@ Remaining work, in order:
    a snapshotted method policy, gain disclosure, replay that refuses a changed
    carried basis with the transfer named, and mobile preview entry. Operational
    average cost only; tax-policy identification stays R18.
-4. **Broader backdated replay [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132).** Transfer-in behind
-   later sales and earlier disposal replay. Reinvestment already admits earlier
-   openings, proves preview feasibility and discloses gain changes (T-126).
-   Current earlier sales without a later disposal remain supported.
+4. **Broader backdated replay [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132).**
+   **Shipped 2026-10-03**: known-basis transfer-in and sales/write-offs dated
+   behind later disposals are admitted through full chronological replay with
+   recorded methods and elections kept, identical preview/commit simulation,
+   gain acknowledgement and a named refusal for an impossible later decision.
+   Original acquisition date orders FIFO/LIFO; the transfer date gates
+   availability. Unknown-basis admission keeps its separate contract.
 5. **Cross-position replay decision and effective-reader consolidation [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).**
    Settle before outbound transfers and compound actions. Full rebuild and
    affected dependency closure both need durable elections, dated bridges and

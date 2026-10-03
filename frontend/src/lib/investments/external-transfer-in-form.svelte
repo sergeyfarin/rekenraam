@@ -2,7 +2,7 @@
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { accountsQueryOptions } from '$lib/api/accounts';
-  import { currenciesQueryOptions } from '$lib/api/currencies';
+  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import { forecastQueryKey } from '$lib/api/forecast';
   import { accountRegisterQueryKey, transactionsQueryKey } from '$lib/api/transactions';
   import { TranslatedFormError } from '$lib/form-errors';
@@ -14,9 +14,15 @@
     investmentPositionsQueryKey,
     recordExternalTransferIn,
     type ExternalTransferInRequest,
+    type GainImpact,
     type ReconciliationImpactResponse
   } from '$lib/api/investments';
   import { parseTransferInAmounts } from '$lib/investments/form-amounts';
+  import {
+    gainAcknowledgement, gainImpactCurrency, gainImpactRows, hasGainChanges, impactNeedsReview,
+    isGainAcknowledgementRefusal
+  } from '$lib/investments/gain-impact';
+  import { getLocale } from '$lib/paraglide/runtime.js';
   import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
   import { m } from '$lib/paraglide/messages.js';
 
@@ -44,8 +50,12 @@
   let formError = $state<unknown>(undefined);
   let dateInput = $state<HTMLInputElement | undefined>();
   let didFocus = false;
+  // A transfer dated behind later sales replays them (T-117); checkpoint and
+  // gain consequences are confirmed together.
   let reconciliationModal = $state<{
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
+    gainImpact: GainImpact | null;
+    gainRefreshed: boolean;
     payload: ExternalTransferInRequest;
   } | null>(null);
 
@@ -55,6 +65,11 @@
     account.status === 'active' && account.allows_postings &&
     (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')));
   const currencies = $derived((currenciesQuery.data?.currencies ?? []).filter((currency) => currency.status === 'active'));
+  const currenciesByID = $derived(new Map<number, CurrencyResponse>(
+    (currenciesQuery.data?.currencies ?? []).map((currency) => [currency.id, currency])));
+  const modalGainRows = $derived(reconciliationModal?.gainImpact
+    ? gainImpactRows(reconciliationModal.gainImpact.changes, gainImpactCurrency(currenciesByID), getLocale())
+    : []);
   const loading = $derived(accountsQuery.isPending || instrumentsQuery.isPending || currenciesQuery.isPending);
   const loadError = $derived(accountsQuery.isError || instrumentsQuery.isError || currenciesQuery.isError);
   const canSubmit = $derived(
@@ -116,29 +131,48 @@
     pending = true;
     formError = undefined;
     try {
-      const impact = await externalTransferInReconciliationImpact(payload);
-      if (impact.affected_checkpoints.length > 0) {
-        reconciliationModal = { impacts: impact.affected_checkpoints, payload };
-        return;
-      }
+      if (await reviewImpact(payload, false)) return;
       await post(payload);
     } catch (error) {
-      formError = error;
+      await recoverFromRefusal(error, payload);
     } finally {
       pending = false;
     }
   }
 
+  async function reviewImpact(payload: ExternalTransferInRequest, refreshed: boolean): Promise<boolean> {
+    const impact = await externalTransferInReconciliationImpact(payload);
+    if (!impactNeedsReview(impact)) return false;
+    const gainImpact = hasGainChanges(impact.gain_impact) ? impact.gain_impact : null;
+    reconciliationModal = { impacts: impact.affected_checkpoints, gainImpact,
+      gainRefreshed: refreshed && !!gainImpact, payload };
+    return true;
+  }
+
+  // A stale or missing gain acknowledgement re-previews the current set.
+  async function recoverFromRefusal(error: unknown, payload: ExternalTransferInRequest) {
+    try {
+      if (!isGainAcknowledgementRefusal(error) || !(await reviewImpact(payload, true))) formError = error;
+    } catch (previewError) {
+      formError = previewError;
+    }
+  }
+
   async function confirmOverride() {
     if (!reconciliationModal) return;
-    const payload = reconciliationModal.payload;
+    const { payload, impacts, gainImpact } = reconciliationModal;
     reconciliationModal = null;
     pending = true;
     formError = undefined;
+    const acknowledgement = gainAcknowledgement(gainImpact);
     try {
-      await post({ ...payload, reconciliation_override: true });
+      await post({
+        ...payload,
+        ...(impacts.length > 0 ? { reconciliation_override: true } : {}),
+        ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
+      });
     } catch (error) {
-      formError = error;
+      await recoverFromRefusal(error, payload);
     } finally {
       pending = false;
     }
@@ -146,7 +180,8 @@
 </script>
 
 {#if reconciliationModal}
-  <ReconciliationConfirm impacts={reconciliationModal.impacts} {pending}
+  <ReconciliationConfirm impacts={reconciliationModal.impacts} gainRows={modalGainRows}
+    gainRefreshed={reconciliationModal.gainRefreshed} {pending}
     onCancel={() => (reconciliationModal = null)} onConfirm={confirmOverride} />
 {/if}
 

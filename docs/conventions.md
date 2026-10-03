@@ -106,6 +106,12 @@ When a feature introduces a durable new rule, update one of those documents in t
   a sale (exact remainder on the last touched lot) and never carries a selected
   lot's own basis out of a pool. The transfer snapshots the applied method and
   its provenance, and any move locks the source family (T-123).
+- An entry dated behind a later depletion of its position never reads the
+  current projection. It is admitted only through full chronological replay at
+  its same-day slot (after that day's earlier entries), with later decisions
+  keeping their recorded method, provenance and elections, the shared writer's
+  rolled-back preview, and gain acknowledgement; a path without that replay
+  stays refused as out of order (T-95, T-117).
 - Replay that changes a committed disposal's effective basis, proceeds, gain,
   knowledge, date, position or method must be disclosed, even when no reconciled
   balance changes (T-114). A command opts in by setting `GainImpactPolicy` on its

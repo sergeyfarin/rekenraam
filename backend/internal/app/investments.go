@@ -330,6 +330,9 @@ type InvestmentWriteOffInput struct {
 	ReconciliationOverride bool
 	OriginType             string
 	Operation              string
+	// GainImpactAcknowledgement echoes the preview token when a backdated
+	// write-off revises committed gains (T-117).
+	GainImpactAcknowledgement string
 }
 
 // asTradeInput reuses the shared disposal planner, which only reads the lot
@@ -1236,24 +1239,43 @@ func (s *InvestmentService) resolveCostBasisMethod(ctx context.Context, holdingA
 	}, nil
 }
 
-func (s *InvestmentService) computeSellDisposals(ctx context.Context, input InvestmentTradeInput, method string, proceedsValue int64, proceedsScale int) ([]db.LotDisposalRecord, error) {
-	allocations := make([]db.LotAllocation, 0, len(input.LotAllocations))
-	for _, a := range input.LotAllocations {
-		allocations = append(allocations, db.LotAllocation{LotID: a.LotID, QuantityValue: a.QuantityValue, QuantityScale: a.QuantityScale})
+// simulateDisposal runs the complete sale/write-off writer — including
+// backdated replay admission, checkpoint invalidation and gain comparison —
+// and rolls back, so a preview reports exactly what the commit would do
+// (T-117).
+func (s *InvestmentService) simulateDisposal(ctx context.Context, input InvestmentTradeInput) (db.SimulatedInvestmentWrite, []db.LotDisposalRecord, error) {
+	input.ReconciliationOverride = true
+	transactionParams, disposalParams, err := s.prepareSellWrite(ctx, input)
+	if err != nil {
+		return db.SimulatedInvestmentWrite{}, nil, err
 	}
-	return s.repository.SimulateDisposeLots(ctx, db.DisposeLotsParams{
-		BookID:          BookID,
-		AccountID:       input.HoldingAccountID,
-		CommodityID:     input.CommodityID,
-		CostCommodityID: input.CashCommodityID,
-		ProceedsValue:   proceedsValue,
-		ProceedsScale:   proceedsScale,
-		EventDate:       input.TransactionDate,
-		QuantityValue:   input.QuantityValue,
-		QuantityScale:   input.QuantityScale,
-		Allocations:     allocations,
-		CostBasisMethod: method,
-	})
+	transactionParams.GainImpact = gainImpactPolicy("")
+	simulated, disposals, _, err := s.repository.SimulateTransactionAndDisposeLots(ctx, transactionParams, disposalParams)
+	if err != nil {
+		return db.SimulatedInvestmentWrite{}, nil, mapDisposalWriteError(err, input.WriteOff)
+	}
+	return simulated, disposals, nil
+}
+
+// mapDisposalWriteError translates a sale or write-off writer failure. A
+// backdated disposal that makes a later decision impossible names it.
+func mapDisposalWriteError(err error, writeOff bool) error {
+	var dependency *db.InvestmentReplayDependencyError
+	switch {
+	case errors.As(err, &dependency):
+		return InvestmentSaleDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
+	case errors.Is(err, db.ErrInsufficientLots):
+		return ErrInvestmentLotsInsufficient
+	case errors.Is(err, db.ErrInvalidDisposalParams), errors.Is(err, db.ErrInvestmentBasisRange):
+		return ValidationError{Message: err.Error()}
+	case errors.Is(err, db.ErrOutOfOrderPositionEvent), errors.Is(err, db.ErrGainImpactAcknowledgementRequired),
+		errors.Is(err, db.ErrGainImpactAcknowledgementStale):
+		return err
+	}
+	if writeOff {
+		return fmt.Errorf("dispose write-off lots: %w", mapTransactionDBError(err))
+	}
+	return fmt.Errorf("dispose sell lots: %w", mapTransactionDBError(err))
 }
 
 func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTradeInput) (SellPreviewResult, error) {
@@ -1271,18 +1293,10 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 	if err != nil {
 		return SellPreviewResult{}, err
 	}
-	disposals, err := s.computeSellDisposals(ctx, input, method, economics.ClearingValue, economics.ClearingScale)
+	input.WriteOff = false
+	_, disposals, err := s.simulateDisposal(ctx, input)
 	if err != nil {
-		if errors.Is(err, db.ErrInsufficientLots) {
-			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
-		}
-		if errors.Is(err, db.ErrInvalidDisposalParams) || errors.Is(err, db.ErrInvestmentBasisRange) {
-			return SellPreviewResult{}, ValidationError{Message: err.Error()}
-		}
-		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
-			return SellPreviewResult{}, err
-		}
-		return SellPreviewResult{}, fmt.Errorf("preview sell disposals: %w", err)
+		return SellPreviewResult{}, err
 	}
 	// Disposals can carry different CostBasisScales (lots opened at different
 	// cash scales, e.g. via import); accumulate through exact.ScaledInt rather
@@ -1370,6 +1384,7 @@ func (s *InvestmentService) WriteOff(ctx context.Context, input InvestmentWriteO
 	trade.PayeeID = input.PayeeID
 	trade.Status = input.Status
 	trade.ReconciliationOverride = input.ReconciliationOverride
+	trade.GainImpactAcknowledgement = input.GainImpactAcknowledgement
 	return s.writeOffTrade(ctx, trade)
 }
 
@@ -1388,18 +1403,9 @@ func (s *InvestmentService) PreviewWriteOff(ctx context.Context, input Investmen
 	if err != nil {
 		return SellPreviewResult{}, err
 	}
-	disposals, err := s.computeSellDisposals(ctx, input.asTradeInput(), method, 0, 0)
+	_, disposals, err := s.simulateDisposal(ctx, input.asTradeInput())
 	if err != nil {
-		if errors.Is(err, db.ErrInsufficientLots) {
-			return SellPreviewResult{}, ErrInvestmentLotsInsufficient
-		}
-		if errors.Is(err, db.ErrInvalidDisposalParams) || errors.Is(err, db.ErrInvestmentBasisRange) {
-			return SellPreviewResult{}, ValidationError{Message: err.Error()}
-		}
-		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
-			return SellPreviewResult{}, err
-		}
-		return SellPreviewResult{}, fmt.Errorf("preview write-off disposals: %w", err)
+		return SellPreviewResult{}, err
 	}
 	disposedBasis := exact.NewScaledInt()
 	for _, disposal := range disposals {
@@ -1445,11 +1451,11 @@ func (s *InvestmentService) WriteOffReconciliationImpact(ctx context.Context, in
 	trade.PayeeID = input.PayeeID
 	trade.Status = input.Status
 	trade.WriteOff = true
-	plan, err := s.sellPlan(ctx, trade)
+	simulated, _, err := s.simulateDisposal(ctx, trade)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	return s.reconciliationImpactForPlan(ctx, plan)
+	return s.simulatedReconciliationImpact(ctx, simulated)
 }
 
 // sellWithPostWrite is the import-side variant of Sell. Its callback runs
@@ -1526,6 +1532,9 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 	if err != nil {
 		return InvestmentTradeResult{}, err
 	}
+	// A disposal dated behind a later one replays it (T-117); any change to a
+	// committed gain needs the preview's acknowledgement.
+	transactionParams.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
 	var transactionRecord db.TransactionRecord
 	var disposals []db.LotDisposalRecord
 	var decision db.DisposalDecisionRecord
@@ -1535,16 +1544,7 @@ func (s *InvestmentService) sell(ctx context.Context, input InvestmentTradeInput
 		transactionRecord, disposals, decision, err = s.repository.CreateTransactionAndDisposeLotsWithDecisionAndPostWrite(ctx, transactionParams, disposalParams, postWrite)
 	}
 	if err != nil {
-		if errors.Is(err, db.ErrInsufficientLots) {
-			return InvestmentTradeResult{}, ErrInvestmentLotsInsufficient
-		}
-		if errors.Is(err, db.ErrInvalidDisposalParams) || errors.Is(err, db.ErrInvestmentBasisRange) {
-			return InvestmentTradeResult{}, ValidationError{Message: err.Error()}
-		}
-		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
-			return InvestmentTradeResult{}, err
-		}
-		return InvestmentTradeResult{}, fmt.Errorf("dispose sell lots: %w", err)
+		return InvestmentTradeResult{}, mapDisposalWriteError(err, input.WriteOff)
 	}
 	transaction := toTransaction(transactionRecord)
 	committedDecision := toDisposalDecision(decision)
@@ -2876,8 +2876,6 @@ const (
 // through the same builder the write path uses. Buys also execute the writer
 // and dependent replay in a rolled-back transaction before returning impact.
 func (s *InvestmentService) TradeReconciliationImpact(ctx context.Context, kind InvestmentImpactKind, input InvestmentTradeInput) (ReconciliationImpact, error) {
-	var plan investmentTransactionPlan
-	var err error
 	switch kind {
 	case InvestmentImpactBuy:
 		input.ReconciliationOverride = true
@@ -2886,18 +2884,16 @@ func (s *InvestmentService) TradeReconciliationImpact(ctx context.Context, kind 
 			return ReconciliationImpact{}, err
 		}
 		return s.openingReconciliationImpact(ctx, transactionParams, lotParams, "buy")
-	case InvestmentImpactSell:
-		plan, err = s.sellPlan(ctx, input)
-	case InvestmentImpactWriteOff:
-		input.WriteOff = true
-		plan, err = s.sellPlan(ctx, input)
+	case InvestmentImpactSell, InvestmentImpactWriteOff:
+		input.WriteOff = kind == InvestmentImpactWriteOff
+		simulated, _, err := s.simulateDisposal(ctx, input)
+		if err != nil {
+			return ReconciliationImpact{}, err
+		}
+		return s.simulatedReconciliationImpact(ctx, simulated)
 	default:
 		return ReconciliationImpact{}, ValidationError{Message: "investment impact kind is invalid"}
 	}
-	if err != nil {
-		return ReconciliationImpact{}, err
-	}
-	return s.reconciliationImpactForPlan(ctx, plan)
 }
 
 // DividendReconciliationImpact is TradeReconciliationImpact for a cash dividend.

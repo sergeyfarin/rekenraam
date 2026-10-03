@@ -556,6 +556,12 @@ InvestmentWriteOffRequest:
         Allows a backdated write-off to proceed into a reconciled period,
         invalidating the affected checkpoints. Without it such a write-off is
         refused with a 409 CONFLICT.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview, required when an entry dated behind a
+        later disposal revises committed gains (T-117).
 
 InvestmentLotDisposalResponse:
   type: object
@@ -661,6 +667,12 @@ ExternalTransferInRequest:
       type: string
     reconciliation_override:
       type: boolean
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview, required when an entry dated behind a
+        later disposal revises committed gains (T-117).
 
 ExternalTransferInResponse:
   type: object

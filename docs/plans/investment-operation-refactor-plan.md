@@ -15,7 +15,7 @@ and priority. Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
 | Contract area | Verified boundary | Next gate |
 |---|---|---|
 | Foundation / exact trade economics (1–3) | Shipped; #125 integrity complete; bundle schema 5 | Remove duplicated opening evidence and centralize effective reads without weakening audit checks |
-| Long buy/sale correction (4a–4ai, #99) | Reversal, replacement, recorded-method replay, backdated buys, Trading 212 quantity/net revisions, shared writer | Gain-impact disclosure and remaining families have separate bounded issues |
+| Long buy/sale correction (4a–4ai, #99, T-117) | Reversal, replacement, recorded-method replay, backdated buys, transfer-in, sales and write-offs, Trading 212 quantity/net revisions, shared writer | Gain-impact disclosure and remaining families have separate bounded issues |
 | Preview feasibility | Buy/source replacements, plain buys and reinvestment run rolled-back writer replay; openings return actual checkpoint sets | Disclosure shipped for every existing replay path (#129, #141); new commands opt in |
 | Transfers (5b/5d, T-123) | Known-basis external inbound; explicit-lot and pooled average-cost internal, with exact remainder, snapshotted policy and carried-basis dependency fence | Cross-position replay; unknown immutable facts/resolution |
 | Split / basis actions (5) | Manual split/reverse split with replay, gain disclosure, export, self-check, mobile entry and Trading 212 split-row linking (T-122) | Split correction and guarded journal-delta adjustment; return of capital, cash in lieu |
@@ -428,7 +428,7 @@ accepted and flagged, but cannot be silently reclassified as shorts.
 
 Each slice keeps the app runnable, updates API, export/restore and self-check
 when affected, and has named exact-conservation and rollback tests. Immediate
-focus is #132 (#129, #141, #137 and #138 shipped), then #139. #141 covered
+focus is #139 (#129, #141, #137, #138 and #132 shipped). #141 covered
 reinvestment, imported acquisitions, native reversals/replacements and source
 revisions; new commands opt into the same policy themselves.
 Shared checkpoint preview under-reporting #142 is complete; same-day boundary
@@ -463,12 +463,16 @@ and combined-delta behavior remain #135. Current sequence:
    new lots. Replay re-runs the pool and refuses any changed link with the
    transfer named. This is operational average cost, not tax-policy
    completeness.
-4. **General backdating** — [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132). Transfer-in behind later
-   disposals first, then earlier sales/write-offs through dependent replay.
-   Reinvestment already admits earlier openings through the same writer;
-   preview feasibility is fixed. T-126 opts this existing path into gain
-   disclosure; no wider admission is needed.
-   Some earlier sales already work when no later disposal exists.
+4. **General backdating** — [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132). **Shipped**
+   (2026-10-03). Known-basis transfer-in uses the opening replay admission
+   (link written before replay so the original date orders FIFO/LIFO while
+   the transfer date gates availability). A sale or write-off dated behind a
+   later depletion joins the effective intents at its same-day slot after
+   earlier entries; replay yields its allocations (written as historical
+   evidence) and revises later decisions under their recorded policy and
+   elections. Preview, reconciliation impact and commit run the same writer;
+   both opt into gain acknowledgement. An impossible later decision is named
+   (`INVESTMENT_SALE_DEPENDENCY`). Reinvestment admission is pinned unchanged.
 5. **Replay scope / effective reader consolidation** — [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).
    Decide before outbound transfers or compound actions. Compare affected
    dependency closure with a whole-book rebuild using real transfer chains,

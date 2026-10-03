@@ -18,12 +18,40 @@ type CreateExternalTransferInParams struct {
 // immutable transfer evidence, checkpoint invalidations and one audit event
 // under the shared investment transaction boundary.
 func (r *InvestmentRepository) CreateExternalTransferIn(ctx context.Context, journal CreateTransactionParams, transfer CreateExternalTransferInParams) (TransactionRecord, InvestmentLotRecord, error) {
-	return executeInvestmentWriteTx(ctx, r.database, journal,
+	return r.createExternalTransferIn(ctx, journal, transfer, false)
+}
+
+// SimulateExternalTransferIn runs the complete transfer-in writer, including
+// any replay of later disposals, then rolls back (T-117).
+func (r *InvestmentRepository) SimulateExternalTransferIn(ctx context.Context, journal CreateTransactionParams, transfer CreateExternalTransferInParams) (SimulatedInvestmentWrite, error) {
+	transaction, _, err := r.createExternalTransferIn(ctx, journal, transfer, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, err
+	}
+	return simulatedInvestmentWrite(transaction), nil
+}
+
+// A transfer-in dated before a later depletion is admitted the way a
+// backdated purchase is: its lot opens on the transfer date (availability)
+// while its link carries the original acquisition date (FIFO/LIFO order), and
+// the position replays every later decision under its recorded policy. The
+// link is written before replay so that ordering sees the original date.
+func (r *InvestmentRepository) createExternalTransferIn(ctx context.Context, journal CreateTransactionParams, transfer CreateExternalTransferInParams, preview bool) (TransactionRecord, InvestmentLotRecord, error) {
+	write := executeInvestmentWriteTx[InvestmentLotRecord]
+	if preview {
+		write = previewInvestmentWriteTx[InvestmentLotRecord]
+	}
+	return write(ctx, r.database, journal,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (InvestmentLotRecord, error) {
 			lot := transfer.Lot
 			lot.SourceTransactionID = transaction.ID
 			lot.EventKind = "transfer_in"
-			record, err := createLotWithAuditTx(ctx, tx, lot, auditEventID, false)
+			latest, err := latestPositionRewriteDateTx(ctx, tx, lot.BookID, lot.AccountID, lot.CommodityID)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			replayAdmission := latest != "" && lot.OpenedOn < latest
+			record, err := createLotWithAuditTx(ctx, tx, lot, auditEventID, replayAdmission)
 			if err != nil {
 				return InvestmentLotRecord{}, err
 			}
@@ -55,7 +83,25 @@ func (r *InvestmentRepository) CreateExternalTransferIn(ctx context.Context, jou
 				originalKnowledge, transfer.OriginalAcquiredOn, transfer.SourceEvidenceJSON); err != nil {
 				return InvestmentLotRecord{}, fmt.Errorf("link external transfer lot: %w", err)
 			}
-			return record, nil
+			if !replayAdmission {
+				return record, nil
+			}
+			intents, err := investmentReplayIntentsQuery(ctx, tx, lot.BookID, lot.AccountID,
+				lot.CommodityID, lot.CostCommodityID, "long")
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			projection, err := simulateInvestmentReplayTx(ctx, tx, lot.BookID, lot.AccountID,
+				lot.CommodityID, lot.CostCommodityID, intents)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			if err := persistInvestmentReplayProjectionTx(ctx, tx, lot.BookID, lot.AccountID,
+				lot.CommodityID, lot.CostCommodityID, operationID, auditEventID, journal.ActorUserID,
+				journal.CreatedAt, intents, projection); err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			return investmentLotByIDTx(ctx, tx, lot.BookID, record.ID)
 		}, nil)
 }
 

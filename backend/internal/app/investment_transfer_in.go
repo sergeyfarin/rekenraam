@@ -31,6 +31,9 @@ type ExternalTransferInInput struct {
 	Memo                   string
 	ChangeReason           string
 	ReconciliationOverride bool
+	// GainImpactAcknowledgement echoes the preview token when a transfer dated
+	// behind later disposals revises their gains (T-117).
+	GainImpactAcknowledgement string
 }
 
 func (s *InvestmentService) externalTransferInPlan(ctx context.Context, input ExternalTransferInInput) (investmentTransactionPlan, error) {
@@ -115,24 +118,18 @@ func (s *InvestmentService) externalTransferInPlan(ctx context.Context, input Ex
 	}, nil
 }
 
-func (s *InvestmentService) PreviewExternalTransferInReconciliationImpact(ctx context.Context, input ExternalTransferInInput) (ReconciliationImpact, error) {
+// externalTransferInWrite freezes the journal and lot facts the preview and
+// the commit both hand to the same writer.
+func (s *InvestmentService) externalTransferInWrite(ctx context.Context, input ExternalTransferInInput) (db.CreateTransactionParams, db.CreateExternalTransferInParams, error) {
 	plan, err := s.externalTransferInPlan(ctx, input)
 	if err != nil {
-		return ReconciliationImpact{}, err
-	}
-	return s.reconciliationImpactForPlan(ctx, plan)
-}
-
-func (s *InvestmentService) ExternalTransferIn(ctx context.Context, input ExternalTransferInInput) (InvestmentTradeResult, error) {
-	plan, err := s.externalTransferInPlan(ctx, input)
-	if err != nil {
-		return InvestmentTradeResult{}, err
+		return db.CreateTransactionParams{}, db.CreateExternalTransferInParams{}, err
 	}
 	journal, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create, plan.AccountRuleDependencies)
 	if err != nil {
-		return InvestmentTradeResult{}, err
+		return db.CreateTransactionParams{}, db.CreateExternalTransferInParams{}, err
 	}
-	transaction, lot, err := s.repository.CreateExternalTransferIn(ctx, journal, db.CreateExternalTransferInParams{
+	return journal, db.CreateExternalTransferInParams{
 		Lot: db.CreateInvestmentLotParams{
 			BookID: BookID, AccountID: input.HoldingAccountID, CommodityID: input.CommodityID,
 			OpenedOn: plan.Date, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale,
@@ -141,12 +138,37 @@ func (s *InvestmentService) ExternalTransferIn(ctx context.Context, input Extern
 			CreatedAt: s.now().UTC().Format(time.RFC3339), CreatedByUserID: input.OwnerUserID,
 		},
 		OriginalAcquiredOn: strings.TrimSpace(input.OriginalAcquiredOn), SourceEvidenceJSON: plan.MetadataJSON,
-	})
+	}, nil
+}
+
+// PreviewExternalTransferInReconciliationImpact runs the complete writer,
+// including replay of later disposals, and rolls back.
+func (s *InvestmentService) PreviewExternalTransferInReconciliationImpact(ctx context.Context, input ExternalTransferInInput) (ReconciliationImpact, error) {
+	input.ReconciliationOverride = true
+	journal, transfer, err := s.externalTransferInWrite(ctx, input)
 	if err != nil {
-		if errors.Is(err, db.ErrOutOfOrderPositionEvent) {
-			return InvestmentTradeResult{}, err
-		}
-		return InvestmentTradeResult{}, fmt.Errorf("record external investment transfer: %w", mapTransactionDBError(err))
+		return ReconciliationImpact{}, err
+	}
+	journal.GainImpact = gainImpactPolicy("")
+	simulated, err := s.repository.SimulateExternalTransferIn(ctx, journal, transfer)
+	if err != nil {
+		return ReconciliationImpact{}, mapInvestmentOpeningWriteError(err, "external investment transfer")
+	}
+	return s.simulatedReconciliationImpact(ctx, simulated)
+}
+
+// ExternalTransferIn records a known-basis inbound transfer. One dated behind
+// later disposals replays them and needs the preview's gain acknowledgement
+// when a committed gain changes (T-117).
+func (s *InvestmentService) ExternalTransferIn(ctx context.Context, input ExternalTransferInInput) (InvestmentTradeResult, error) {
+	journal, transfer, err := s.externalTransferInWrite(ctx, input)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	journal.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
+	transaction, lot, err := s.repository.CreateExternalTransferIn(ctx, journal, transfer)
+	if err != nil {
+		return InvestmentTradeResult{}, mapInvestmentOpeningWriteError(err, "external investment transfer")
 	}
 	return InvestmentTradeResult{Transaction: toTransaction(transaction), LotID: &lot.ID}, nil
 }

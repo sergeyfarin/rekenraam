@@ -405,7 +405,12 @@
         ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
       }, csrfToken);
     } else {
-      await recordSell(override ? { ...payload, reconciliation_override: true } : payload, csrfToken);
+      // A sale dated behind a later one replays it (T-117); echo the accepted gains.
+      await recordSell({
+        ...payload,
+        ...(override ? { reconciliation_override: true } : {}),
+        ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
+      }, csrfToken);
     }
 
     await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });

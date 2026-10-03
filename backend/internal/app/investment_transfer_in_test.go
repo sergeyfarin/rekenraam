@@ -244,19 +244,3 @@ func TestExternalTransferInKnownZeroBasisAndUnknownOriginalDate(t *testing.T) {
 	assert.Equal(t, "unknown", knowledge)
 	assert.False(t, original.Valid)
 }
-
-func TestExternalTransferInRefusesBackdatingBehindSaleWithoutPartialWrite(t *testing.T) {
-	f := newInvestmentsTestFixture(t)
-	seedExternalTransferEquity(t, f.database)
-	buyOn(t, f, "2026-05-01", 2, 8000)
-	_, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-07-01", 2))
-	require.NoError(t, err)
-	before := f.transactionCount(t)
-	input := knownTransferInput(f)
-	_, err = f.investmentService.ExternalTransferIn(context.Background(), input)
-	require.ErrorIs(t, err, ErrInvestmentEventOutOfOrder)
-	assert.Equal(t, before, f.transactionCount(t))
-	var facts int
-	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_transfer_facts`).Scan(&facts))
-	assert.Zero(t, facts)
-}
