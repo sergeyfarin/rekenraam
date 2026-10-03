@@ -155,6 +155,25 @@ There is no in-place secret-key rotation command yet. Intentional rotation uses
 the same backup-first delete-and-re-add procedure for stored online import
 connections.
 
+### Trading 212 Provider Stub (Development Only)
+
+`TRADING212_BASE_URL` points the Trading 212 key probe and history fetches at
+another server, such as the e2e stub in `e2e/stubs/trading212.mjs`:
+
+```sh
+node e2e/stubs/trading212.mjs
+APP_ENV=development TRADING212_BASE_URL=http://127.0.0.1:16890/api/v0 pnpm dev:backend
+```
+
+It is honored **only** with `APP_ENV=development`. Startup refuses it in
+production (and a hand-built runtime config refuses it too), because the API
+key travels in the `Authorization` header of every provider request. The stub
+answers only API keys registered through `PUT /__control/accounts/{key}` and
+serves their orders, dividends and cash transactions in the provider's wire
+shape; `e2e/playwright/support/trading212.ts` wraps that control call. Starting
+an online import or refresh wakes the fetch worker immediately, so a stubbed
+fetch is staged in seconds rather than on the worker's one-minute tick.
+
 ### Frontend Validation
 
 Runs SvelteKit checks and the Vitest unit suite.
@@ -221,6 +240,7 @@ pnpm test:release-preflight
 - The Playwright suite runs with one worker because the default harness shares one app instance and SQLite database.
 - Set `E2E_PORT` when the self-managed e2e port needs to move.
 - Set `E2E_BASE_URL` when you want Playwright to target an already-running app instead of booting its own fresh instance.
+- The harness also boots the Trading 212 provider stub on `127.0.0.1:16890` (move it with `TRADING212_STUB_PORT`) and starts the app with `TRADING212_BASE_URL` pointing at it, so import journeys can create connections and fetch fills without the real provider. Specs that need it call `requireTrading212Stub()`; against an external `E2E_BASE_URL` they skip unless `E2E_TRADING212_STUB_URL` names a stub that app is configured to use.
 - The harness sets a throwaway `REKENRAAM_SECRET_KEY` for the instance it boots, because the MFA journey cannot enrol without one — enrolment returns `CONFIG_REQUIRED` rather than storing the shared secret in the clear. Export your own `REKENRAAM_SECRET_KEY` to override it.
 - `mfa.spec.ts` shares the run's database with every other spec, so it turns MFA back off in `afterAll`. A spec that changes account-wide authentication state must clean up the same way.
 - Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an existing Chromium binary when the sandbox or image cannot download the revision this Playwright release pins (`pnpm exec playwright install` fails, and the run dies with "Executable doesn't exist"). Container images that preinstall a browser usually expose one at `/opt/pw-browsers/chromium`. Prefer this over patching the browser cache by hand; leave it unset locally so Playwright uses its own pinned build.

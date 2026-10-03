@@ -106,3 +106,12 @@ func TestRuntimeCloseDeadlineCanBeRetried(t *testing.T) {
 	require.NoError(t, runtime.Close(context.Background()))
 	require.NoError(t, runtime.Close(context.Background()))
 }
+
+func TestRuntimeRefusesTrading212BaseURLOutsideDevelopment(t *testing.T) {
+	cfg, path := runtimeTestConfig(t)
+	cfg.AppEnv = "production"
+	cfg.Trading212BaseURL = "http://127.0.0.1:16890/api/v0"
+	_, err := Open(context.Background(), cfg, quietLogger())
+	require.ErrorContains(t, err, "only allowed in development")
+	require.NoError(t, lockfile.CheckAvailable(path), "refused before taking the lock")
+}

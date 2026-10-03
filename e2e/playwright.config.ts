@@ -9,6 +9,10 @@ const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
 // secret in the clear. This value protects nothing: it guards a database that
 // is deleted at the start of every run.
 const e2eSecretKey = process.env.REKENRAAM_SECRET_KEY ?? 'ZTJlLW9ubHktdGhyb3dhd2F5LWtleS0zMi1ieXRlcyE=';
+// The Trading 212 provider stub (stubs/trading212.mjs). The app is pointed at
+// it with TRADING212_BASE_URL, which the backend refuses outside
+// APP_ENV=development, so no real API key can ever be redirected (T-128).
+const trading212StubPort = process.env.TRADING212_STUB_PORT ?? '16890';
 
 export default defineConfig({
   testDir: './playwright',
@@ -38,11 +42,19 @@ export default defineConfig({
   },
   webServer: process.env.E2E_BASE_URL
     ? undefined
-    : {
-        command:
-          `cd .. && rm -f backend/var/e2e.sqlite backend/var/e2e.sqlite-shm backend/var/e2e.sqlite-wal && GOCACHE=\${GOCACHE:-/tmp/rekenraam-go-build-cache} pnpm build && APP_ENV=development DATABASE_URL=file:backend/var/e2e.sqlite REKENRAAM_SECRET_KEY=${e2eSecretKey} HTTP_ADDR=127.0.0.1:${e2ePort} ./dist/rekenraam`,
-        url: `${baseURL}/healthz`,
-        timeout: 180_000,
-        reuseExistingServer: false
-      }
+    : [
+        {
+          command: `TRADING212_STUB_PORT=${trading212StubPort} node stubs/trading212.mjs`,
+          url: `http://127.0.0.1:${trading212StubPort}/healthz`,
+          timeout: 10_000,
+          reuseExistingServer: false
+        },
+        {
+          command:
+            `cd .. && rm -f backend/var/e2e.sqlite backend/var/e2e.sqlite-shm backend/var/e2e.sqlite-wal && GOCACHE=\${GOCACHE:-/tmp/rekenraam-go-build-cache} pnpm build && APP_ENV=development DATABASE_URL=file:backend/var/e2e.sqlite REKENRAAM_SECRET_KEY=${e2eSecretKey} TRADING212_BASE_URL=http://127.0.0.1:${trading212StubPort}/api/v0 HTTP_ADDR=127.0.0.1:${e2ePort} ./dist/rekenraam`,
+          url: `${baseURL}/healthz`,
+          timeout: 180_000,
+          reuseExistingServer: false
+        }
+      ]
 });

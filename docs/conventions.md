@@ -491,6 +491,7 @@ has actual installations, its migration files are immutable.
 - Log at `Info` for normal request lifecycle events, `Warn` for recoverable anomalies, `Error` for failures that need operator attention.
 - Do not log financial record content (amounts, payees, account names) at any level.
 - The application mode is controlled by the **`APP_ENV`** environment variable. Accepted values: `development`, `production`. Default to `production` when unset. Mode gates log format (text vs JSON) and any dev-only middleware.
+- A development-only override that could redirect a stored credential — such as `TRADING212_BASE_URL` for the e2e provider stub — is a startup **error** outside `APP_ENV=development`, never silently ignored, and the runtime re-checks it for configs not built by `config.Load`.
 - HTTP middleware layers run in a consistent order per request: request ID injection → panic recovery when added → request logging → auth check → CSRF validation for mutating authenticated requests → handler. Each layer is a plain `http.Handler` wrapper; no framework-specific middleware interface.
 - A server-generated request-scoped UUID is generated for every inbound request, included in all log entries for that request, and echoed in the `X-Request-ID` response header. Incoming `X-Request-ID` may be logged as an external/caller request ID, but it does not replace the server-generated ID.
 - The HTTP server must handle `SIGTERM` and `SIGINT` with `http.Server.Shutdown(ctx)` and a short grace period before exiting.

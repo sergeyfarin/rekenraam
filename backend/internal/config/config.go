@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/netip"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -32,6 +33,10 @@ type Config struct {
 	// the server starts without it but returns CONFIG_REQUIRED if unset when
 	// a connection operation is attempted.
 	SecretKey []byte
+	// Trading212BaseURL redirects the Trading 212 provider (probe and fetch)
+	// to a stub server. Development only: Load refuses it in production, so a
+	// misconfigured deployment can never send a real API key to another host.
+	Trading212BaseURL string
 }
 
 func Load() (Config, error) {
@@ -67,6 +72,10 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	trading212BaseURL, err := loadTrading212BaseURL(appEnv)
+	if err != nil {
+		return Config{}, err
+	}
 	setupToken, generatedSetupToken, err := loadSetupToken(appEnv)
 	if err != nil {
 		return Config{}, err
@@ -84,7 +93,27 @@ func Load() (Config, error) {
 		TrustedProxyCIDRs:      trustedProxyCIDRs,
 		OpenExchangeRatesAppID: strings.TrimSpace(os.Getenv("OPEN_EXCHANGE_RATES_APP_ID")),
 		SecretKey:              secretKey,
+		Trading212BaseURL:      trading212BaseURL,
 	}, nil
+}
+
+// loadTrading212BaseURL reads TRADING212_BASE_URL, the development-only
+// provider stub override used by the e2e harness (T-128). Outside
+// development it is a startup error rather than silently ignored: the
+// Trading 212 API key travels in the Authorization header of every request.
+func loadTrading212BaseURL(appEnv string) (string, error) {
+	raw := strings.TrimSpace(os.Getenv("TRADING212_BASE_URL"))
+	if raw == "" {
+		return "", nil
+	}
+	if appEnv != "development" {
+		return "", fmt.Errorf("TRADING212_BASE_URL is only allowed when APP_ENV=development")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return "", fmt.Errorf("TRADING212_BASE_URL must be an absolute http or https URL")
+	}
+	return raw, nil
 }
 
 func loadSetupToken(appEnv string) (string, bool, error) {

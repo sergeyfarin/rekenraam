@@ -56,6 +56,11 @@ func openWith(ctx context.Context, cfg config.Config, logger *slog.Logger, deps 
 	if logger == nil {
 		logger = slog.Default()
 	}
+	// config.Load already refuses this; a hand-built Config must not route a
+	// real Trading 212 API key to a stub host either (T-128).
+	if cfg.Trading212BaseURL != "" && cfg.AppEnv != "development" {
+		return nil, errors.New("a Trading 212 base URL override is only allowed in development")
+	}
 	r := &Runtime{closed: make(chan struct{})}
 	defer func() {
 		if err != nil {
@@ -113,8 +118,9 @@ func openWith(ctx context.Context, cfg config.Config, logger *slog.Logger, deps 
 	pricingService := app.NewPricingService(db.NewPricingRepository(database), marketdata.DefaultRegistry(cfg.OpenExchangeRatesAppID))
 	transactionService.SetPricingRepository(db.NewPricingRepository(database))
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
-	importConnectionService := app.NewImportConnectionService(db.NewImportConnectionRepository(database), accountService, cfg.SecretKey, app.NewTrading212Prober(nil))
+	importConnectionService := app.NewImportConnectionService(db.NewImportConnectionRepository(database), accountService, cfg.SecretKey, app.NewTrading212Prober(nil, cfg.Trading212BaseURL))
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, importConnectionService, db.NewBackgroundWorkRepository(database), investmentService)
+	importService.SetTrading212BaseURL(cfg.Trading212BaseURL)
 	exportService := app.NewExportService(db.NewExportRepository(readOnlyDatabase))
 	forecastService := app.NewForecastService(db.NewForecastRepository(readOnlyDatabase))
 	budgetService := app.NewBudgetService(db.NewBudgetRepository(database), settingsService)

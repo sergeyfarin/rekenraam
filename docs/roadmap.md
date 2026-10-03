@@ -109,21 +109,19 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. API and browser evidence for import gain review and Trading 212 source
-   revisions — [T-128 #143](https://github.com/sergeyfarin/rekenraam/issues/143).
+1. Dividend/reinvestment correction — [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130).
 
 **Next, in order**
 
-2. Dividend/reinvestment correction — [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130).
-3. Trade date/account/instrument/currency correction — [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131).
-4. Write-off correction — [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133).
-5. Pooled-lineage decision [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) and replay-equivalence
+2. Trade date/account/instrument/currency correction — [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131).
+3. Write-off correction — [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133).
+4. Pooled-lineage decision [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) and replay-equivalence
    self-check [T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149). Both precede transfer correction:
    it would otherwise hit the lineage refusal, and every replaying command
    increases the stored projection's exposure to a skipped-replay bug.
-6. Transfer correction — [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134).
-7. Correction-chain register and net checkpoint impact — [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135).
-8. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
+5. Transfer correction — [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134).
+6. Correction-chain register and net checkpoint impact — [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135).
+7. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
    return of capital, cash in lieu), then short sale/cover
    [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103), then compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
 

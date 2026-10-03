@@ -35,6 +35,10 @@ type ImportService struct {
 	backgroundWork    *db.BackgroundWorkRepository
 	httpClient        *http.Client
 	trading212BaseURL string
+	// fetchWake lets a newly enqueued fetch run now instead of on the
+	// worker's next one-minute tick. Buffered 1: a pending wake already
+	// covers every fetch enqueued before the worker reads it.
+	fetchWake chan struct{}
 
 	// investmentService routes resolved Trading 212 order-fill/dividend rows
 	// to real Buy/Sell/Dividend calls at commit time (B-T212-INVST, Slice
@@ -75,8 +79,16 @@ func NewImportService(
 		connectionService:  connectionService,
 		backgroundWork:     backgroundWork,
 		httpClient:         &http.Client{Timeout: 30 * time.Second},
+		fetchWake:          make(chan struct{}, 1),
 		investmentService:  investmentService,
 	}
+}
+
+// SetTrading212BaseURL points online fetches at a provider stub. The runtime
+// calls it only with the development-only TRADING212_BASE_URL; empty keeps
+// the live API.
+func (s *ImportService) SetTrading212BaseURL(baseURL string) {
+	s.trading212BaseURL = baseURL
 }
 
 // SetNowForTest overrides the clock used for batch/work timestamps and lease

@@ -198,6 +198,47 @@ func TestStartOnlineImport_WorkerStagesRowsAndUpdatesCursor(t *testing.T) {
 	assert.Equal(t, "ready", updatedConn.LastFetchStatus)
 }
 
+// A started fetch wakes the worker rather than waiting up to a minute for its
+// ticker (T-128): the e2e provider stub and the user both see a batch fill
+// in seconds.
+func TestStartOnlineImport_WakesRunningWorker(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeFakeT212JSON(w, nil)
+	}))
+	defer server.Close()
+
+	svc, connService, importRepo, _ := newImportFetchTestService(t)
+	conn := createTestTrading212Connection(t, svc, connService, server.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := svc.StartBackgroundWorker(ctx, testWorkerLogger())
+	defer func() {
+		cancel()
+		<-done
+	}()
+
+	for range 2 {
+		result, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
+		require.NoError(t, err)
+		require.Eventually(t, func() bool {
+			return sourceMetaOf(t, importRepo, result.Batch.ID).FetchStatus == "ready"
+		}, 10*time.Second, 10*time.Millisecond, "the wake, not the one-minute tick, runs the fetch")
+	}
+}
+
+func TestStartOnlineImport_LeavesOneWakeWithoutBlocking(t *testing.T) {
+	svc, connService, _, _ := newImportFetchTestService(t)
+	conn := createTestTrading212Connection(t, svc, connService, "http://example.invalid")
+	ctx := context.Background()
+
+	_, err := svc.StartOnlineImport(ctx, StartOnlineImportInput{OwnerUserID: 1, ConnectionID: conn.ID})
+	require.NoError(t, err)
+	require.Len(t, svc.fetchWake, 1)
+	_, err = svc.RefreshImportConnection(ctx, RefreshImportConnectionInput{OwnerUserID: 1, ConnectionID: conn.ID})
+	require.ErrorIs(t, err, ErrImportFetchInProgress)
+	svc.wakeFetchWorker()
+	require.Len(t, svc.fetchWake, 1, "a pending wake already covers later work; waking never blocks")
+}
+
 func TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted(t *testing.T) {
 	movements := []fakeT212Movement{
 		{ID: "ref-1", Type: "DEPOSIT", DateTime: "2024-01-01T00:00:00Z", Amount: "100.00", Currency: "EUR"},

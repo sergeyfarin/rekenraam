@@ -70,8 +70,15 @@ Pattern: a once-a-minute ticker service started from `command.go`
    attached. Only paths relative to the configured base URL get the
    `Authorization` header (`trading212/fetcher.go` refuses absolute
    `nextPagePath`). A compromised provider response must not be able to
-   exfiltrate the user's API key.
+   exfiltrate the user's API key. The configured base URL itself is
+   overridable only for the development provider stub (`TRADING212_BASE_URL`),
+   which is a startup error outside `APP_ENV=development` (conventions §
+   Observability).
 6. Respect `Retry-After` on 429s (see `trading212.Fetcher`).
+7. **User-started work should not wait for the tick.** Enqueueing a fetch
+   signals the worker's non-blocking, one-slot wake channel
+   (`ImportService.wakeFetchWorker`); the ticker stays the fallback for
+   retries and scheduled work.
 
 ## Provider adapters
 

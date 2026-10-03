@@ -164,7 +164,7 @@ func TestTrading212Adapter_FingerprintsAreConnectionScoped(t *testing.T) {
 // --- Trading212Prober ---
 
 func TestTrading212Prober_SkipsNonTrading212SourceKind(t *testing.T) {
-	prober := NewTrading212Prober(nil)
+	prober := NewTrading212Prober(nil, "")
 	err := prober.Probe(context.Background(), "qif", "anything", "")
 	assert.NoError(t, err)
 }
@@ -176,8 +176,7 @@ func TestTrading212Prober_ValidKeySucceeds(t *testing.T) {
 	}))
 	defer server.Close()
 
-	prober := NewTrading212Prober(server.Client())
-	prober.baseURL = server.URL
+	prober := NewTrading212Prober(server.Client(), server.URL)
 	err := prober.Probe(context.Background(), "trading212", "good-key", "{}")
 	assert.NoError(t, err)
 }
@@ -188,8 +187,7 @@ func TestTrading212Prober_InvalidKeyReturnsProviderUnauthorized(t *testing.T) {
 	}))
 	defer server.Close()
 
-	prober := NewTrading212Prober(server.Client())
-	prober.baseURL = server.URL
+	prober := NewTrading212Prober(server.Client(), server.URL)
 	err := prober.Probe(context.Background(), "trading212", "bad-key", "{}")
 	assert.True(t, errors.Is(err, ErrProviderUnauthorized))
 }

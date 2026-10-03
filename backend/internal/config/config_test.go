@@ -123,3 +123,45 @@ func TestLoadRejectsInvalidSessionLifetimeHours(t *testing.T) {
 		})
 	}
 }
+
+// The Trading 212 API key rides in every provider request, so the stub
+// override must never take effect outside development (T-128).
+func TestLoadRefusesTrading212BaseURLOutsideDevelopment(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("TRADING212_BASE_URL", "http://127.0.0.1:16890/api/v0")
+
+	_, err := Load()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TRADING212_BASE_URL is only allowed when APP_ENV=development")
+}
+
+func TestLoadRefusesTrading212BaseURLWhenAppEnvDefaults(t *testing.T) {
+	t.Setenv("APP_ENV", "")
+	t.Setenv("TRADING212_BASE_URL", "http://127.0.0.1:16890/api/v0")
+
+	_, err := Load()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "only allowed when APP_ENV=development")
+}
+
+func TestLoadReadsTrading212BaseURLInDevelopment(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("TRADING212_BASE_URL", " http://127.0.0.1:16890/api/v0 ")
+
+	cfg, err := Load()
+
+	require.NoError(t, err)
+	assert.Equal(t, "http://127.0.0.1:16890/api/v0", cfg.Trading212BaseURL)
+}
+
+func TestLoadRejectsRelativeTrading212BaseURL(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("TRADING212_BASE_URL", "/api/v0")
+
+	_, err := Load()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "absolute http or https URL")
+}

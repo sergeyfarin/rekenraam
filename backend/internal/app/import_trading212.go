@@ -335,8 +335,11 @@ type Trading212Prober struct {
 	baseURL string
 }
 
-func NewTrading212Prober(client *http.Client) *Trading212Prober {
-	return &Trading212Prober{client: client}
+// NewTrading212Prober probes the live API when baseURL is empty. A non-empty
+// baseURL is the development-only provider stub (config refuses it in
+// production).
+func NewTrading212Prober(client *http.Client, baseURL string) *Trading212Prober {
+	return &Trading212Prober{client: client, baseURL: baseURL}
 }
 
 func (p *Trading212Prober) Probe(ctx context.Context, sourceKind string, apiKey string, configJSON string) error {

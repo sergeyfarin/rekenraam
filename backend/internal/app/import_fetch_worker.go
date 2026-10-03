@@ -226,7 +226,18 @@ func (s *ImportService) startTrading212Fetch(ctx context.Context, params trading
 		return ImportBatch{}, fmt.Errorf("start online import batch: %w", err)
 	}
 
+	s.wakeFetchWorker()
 	return toImportBatch(batch), nil
+}
+
+// wakeFetchWorker asks a running fetch worker to claim work now. It never
+// blocks: a wake already pending covers this work too. Without a running
+// worker the durable queue item simply waits for the next worker start.
+func (s *ImportService) wakeFetchWorker() {
+	select {
+	case s.fetchWake <- struct{}{}:
+	default:
+	}
 }
 
 // --- Durable worker ---
@@ -254,6 +265,8 @@ func (s *ImportService) StartBackgroundWorker(ctx context.Context, logger *slog.
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				s.runDueTrading212Fetches(ctx, logger, workerID)
+			case <-s.fetchWake:
 				s.runDueTrading212Fetches(ctx, logger, workerID)
 			}
 		}

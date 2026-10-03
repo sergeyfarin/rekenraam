@@ -41,6 +41,14 @@ func importConnectionsTestSecretKey() []byte {
 // swappable so tests can simulate a rejected or failing provider key.
 func newImportConnectionsTestHandler(t *testing.T, prober app.ConnectionProber) (http.Handler, *sql.DB) {
 	t.Helper()
+	return newImportConnectionsTestHandlerWith(t, prober, nil)
+}
+
+// newImportConnectionsTestHandlerWith lets a test configure the import
+// service before the handler is built, e.g. to point it at a provider stub
+// and start its fetch worker.
+func newImportConnectionsTestHandlerWith(t *testing.T, prober app.ConnectionProber, configure func(*app.ImportService)) (http.Handler, *sql.DB) {
+	t.Helper()
 
 	database, _ := testdb.Open(t)
 
@@ -72,6 +80,9 @@ func newImportConnectionsTestHandler(t *testing.T, prober app.ConnectionProber) 
 	investmentService := app.NewInvestmentService(db.NewInvestmentRepository(database), accountService, transactionService, pricingService)
 	connectionService := app.NewImportConnectionService(db.NewImportConnectionRepository(database), accountService, importConnectionsTestSecretKey(), prober)
 	importService := app.NewImportService(db.NewImportRepository(database), transactionService, accountRepository, connectionService, db.NewBackgroundWorkRepository(database), investmentService)
+	if configure != nil {
+		configure(importService)
+	}
 
 	handler := NewHandler(logger, http.NotFoundHandler(), Services{
 		Setup:            setupService,
