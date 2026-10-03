@@ -111,14 +111,9 @@ func investmentGainSnapshotTx(ctx context.Context, tx *sql.Tx, bookID int64) (ma
 			d.quantity_value, d.quantity_scale, d.disposed_basis_value, d.disposed_basis_scale,
 			d.proceeds_value, d.proceeds_scale, r.disposed_basis_value, r.disposed_basis_scale
 		FROM investment_disposal_decisions d
-		JOIN investment_operations o ON o.id = d.operation_id
-		LEFT JOIN investment_disposal_revisions r ON r.decision_id = d.id
-			AND r.revision_seq = (SELECT MAX(latest.revision_seq)
-				FROM investment_disposal_revisions latest WHERE latest.decision_id = d.id)
-		WHERE d.book_id = ?
-			AND o.correction_mode IS NOT 'reverse'
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = o.id)`, bookID)
+		JOIN effective_investment_operations o ON o.id = d.operation_id
+		LEFT JOIN latest_investment_disposal_revisions r ON r.decision_id = d.id
+		WHERE d.book_id = ?`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read effective disposals for gain impact: %w", err)
 	}

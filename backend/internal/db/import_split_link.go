@@ -38,13 +38,10 @@ func (r *ImportRepository) ListSplitLinkCandidates(ctx context.Context, bookID, 
 			f.ratio_numerator, f.ratio_denominator,
 			EXISTS (SELECT 1 FROM import_commit_identity_effects e WHERE e.operation_id = f.operation_id)
 		FROM investment_split_facts f
-		JOIN investment_operations o ON o.id = f.operation_id
+		JOIN effective_investment_operations o ON o.id = f.operation_id
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.role = 'primary'
 		JOIN transaction_versions v ON v.id = link.transaction_version_id
 		WHERE f.book_id = ? AND f.commodity_id = ?
-			AND o.correction_mode IS NOT 'reverse'
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = o.id)
 		ORDER BY f.effective_on DESC, f.operation_id DESC`, bookID, commodityID)
 	if err != nil {
 		return nil, fmt.Errorf("read split link candidates: %w", err)
@@ -106,13 +103,10 @@ func (r *ImportRepository) LinkStagedRowToSplit(ctx context.Context, params Link
 	var accountID, transactionID int64
 	err = tx.QueryRowContext(ctx, `
 		SELECT f.account_id, v.transaction_id FROM investment_split_facts f
-		JOIN investment_operations o ON o.id = f.operation_id
+		JOIN effective_investment_operations o ON o.id = f.operation_id
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.role = 'primary'
 		JOIN transaction_versions v ON v.id = link.transaction_version_id
 		WHERE f.operation_id = ? AND f.book_id = ? AND f.commodity_id = ?
-			AND o.correction_mode IS NOT 'reverse'
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = o.id)
 			AND NOT EXISTS (SELECT 1 FROM import_commit_identity_effects e WHERE e.operation_id = o.id)`,
 		params.OperationID, params.BookID, params.CommodityID).Scan(&accountID, &transactionID)
 	if errors.Is(err, sql.ErrNoRows) {

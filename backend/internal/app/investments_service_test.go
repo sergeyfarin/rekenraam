@@ -316,7 +316,7 @@ func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
 	`, buy.Transaction.ID).Scan(&seriesAuditMatches))
 	assert.EqualValues(t, 1, seriesAuditMatches, "new price series shares the buy's audit event")
 	require.NoError(t, f.database.QueryRowContext(ctx, `
-		SELECT count(*) FROM investment_lot_facts WHERE book_id = 1
+		SELECT count(*) FROM investment_lots WHERE book_id = 1 AND operation_id IS NOT NULL
 	`).Scan(&lotFactCount))
 	assert.EqualValues(t, 2, lotFactCount)
 	require.NoError(t, f.database.QueryRowContext(ctx, `
@@ -351,7 +351,7 @@ func TestInvestmentTradePriceFailureRollsBackEntireCommand(t *testing.T) {
 	var auditsAfter int64
 	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM audit_events`).Scan(&auditsAfter))
 	assert.Equal(t, auditsBefore, auditsAfter)
-	for _, table := range []string{"investment_operations", "investment_operation_journal_links", "investment_operation_components", "investment_lots", "investment_lot_facts", "price_series"} {
+	for _, table := range []string{"investment_operations", "investment_operation_journal_links", "investment_operation_components", "investment_lots", "price_series"} {
 		var count int64
 		require.NoError(t, f.database.QueryRowContext(ctx, `SELECT count(*) FROM `+table).Scan(&count))
 		assert.Zero(t, count, table)

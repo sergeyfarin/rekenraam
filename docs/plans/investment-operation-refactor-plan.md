@@ -14,10 +14,10 @@ and priority. Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
 
 | Contract area | Verified boundary | Next gate |
 |---|---|---|
-| Foundation / exact trade economics (1–3) | Shipped; #125 integrity complete; bundle schema 5 | Remove duplicated opening evidence and centralize effective reads without weakening audit checks |
+| Foundation / exact trade economics (1–3) | Shipped; #125 integrity complete; bundle schema 6; opening facts merged onto lots and effective reads in SQL views (T-124) | Require an opening operation on every lot ([T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148)) |
 | Long buy/sale correction (4a–4ai, #99, T-117) | Reversal, replacement, recorded-method replay, backdated buys, transfer-in, sales and write-offs, Trading 212 quantity/net revisions, shared writer | Gain-impact disclosure and remaining families have separate bounded issues |
 | Preview feasibility | Buy/source replacements, plain buys and reinvestment run rolled-back writer replay; openings return actual checkpoint sets | Disclosure shipped for every existing replay path (#129, #141); new commands opt in |
-| Transfers (5b/5d, T-123) | Known-basis external inbound; explicit-lot and pooled average-cost internal, with exact remainder, snapshotted policy and carried-basis dependency fence | Cross-position replay; unknown immutable facts/resolution |
+| Transfers (5b/5d, T-123) | Known-basis external inbound; explicit-lot and pooled average-cost internal, with exact remainder, snapshotted policy and carried-basis dependency fence; replay scope decided (dependency closure, T-124) | Merged-stream closure replay ([T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147)); unknown immutable facts/resolution |
 | Split / basis actions (5) | Manual split/reverse split with replay, gain disclosure, export, self-check, mobile entry and Trading 212 split-row linking (T-122) | Split correction and guarded journal-delta adjustment; return of capital, cash in lieu |
 | Shorts / compound actions (6–7) | Operation/side foundation only | Side-aware commands; compound date/effect cardinality and replay |
 
@@ -141,8 +141,12 @@ Keep immutable `investment_lots` identity and opening facts separate from
 remaining quantity/basis and update attribution belong in the projection;
 original quantity/consideration stay in immutable evidence. Rebuild lot and
 position basis state atomically from effective history. The basis-state key
-includes `position_side`; every selection/rebuild must respect it. Removing
-remaining duplicated opening evidence is tracked separately in T-124 #139.
+includes `position_side`; every selection/rebuild must respect it. An
+operation-opened lot row *is* that operation's opening fact
+(`investment_lots.operation_id`, T-124); there is no duplicate facts table.
+Effective readers select through the `effective_investment_operations`,
+`latest_investment_disposal_revisions`, `latest_investment_split_revisions`
+and `effective_investment_lot_events` views; audits read the base tables.
 Keep projected remaining basis nullable with an explicit knowledge status;
 an unknown opening never becomes a fabricated zero in either lot state or
 an average-cost pool.
@@ -427,8 +431,9 @@ accepted and flagged, but cannot be silently reclassified as shorts.
 ## Delivery slices and gates
 
 Each slice keeps the app runnable, updates API, export/restore and self-check
-when affected, and has named exact-conservation and rollback tests. Immediate
-focus is #139 (#129, #141, #137, #138 and #132 shipped). #141 covered
+when affected, and has named exact-conservation and rollback tests. #129,
+#141, #137, #138, #132 and the #139 decision have shipped; closure replay is
+#147. #141 covered
 reinvestment, imported acquisitions, native reversals/replacements and source
 revisions; new commands opt into the same policy themselves.
 Shared checkpoint preview under-reporting #142 is complete; same-day boundary
@@ -474,11 +479,21 @@ and combined-delta behavior remain #135. Current sequence:
    both opt into gain acknowledgement. An impossible later decision is named
    (`INVESTMENT_SALE_DEPENDENCY`). Reinvestment admission is pinned unchanged.
 5. **Replay scope / effective reader consolidation** — [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).
-   Decide before outbound transfers or compound actions. Compare affected
-   dependency closure with a whole-book rebuild using real transfer chains,
-   journal adjustments, elections, unknown basis and rollback. Until an ADR
-   refinement and implementation land, changed internal carried basis remains
-   a named refusal; unchanged transfers can already replay.
+   **Decided and shipped** (2026-10-03, ADR 0013 *Cross-Position Replay Scope
+   Refinement*): an affected-position dependency closure, seeded per changed
+   position and date and following every recorded internal transfer to a fixed
+   point, replayed as one merged dated stream in the command transaction. A
+   whole-book rebuild was rejected (O(book) per command and preview, wider
+   failure radius, same refusals) and kept only as a verifier
+   ([T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149)). The
+   closure (`InvestmentReplayClosure`) ships with chain, cycle, ordering and
+   unrelated-position tests; propagation is
+   [T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147). Until
+   then a changed internal carried basis stays a named, atomic refusal, now
+   pinned across a chain with specific-lot lineage. Effective reads moved to
+   SQL views, `investment_lot_facts` merged into `investment_lots`, and the
+   baseline's ALTER/recreated view/trigger leftovers were folded into final
+   DDL. Repeated typed-date sequence stays a #115 admission gate.
 6. **Correction families** — dividends/reinvestment [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130),
    date/account/instrument/currency [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131), write-offs [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133),
    transfers [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134), register grouping/net checkpoint impact
@@ -491,8 +506,9 @@ and combined-delta behavior remain #135. Current sequence:
    **compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115)**.
    Outbound transfers, unknown-basis resolution, return of capital and linked
    cash in lieu retain the slice 5 posting/replay contracts. Compound kinds
-   require repeated typed-date sequences and explicit clearing attribution
-   before admission. Bonds/derivatives need separate instrument contracts.
+   require repeated typed-date sequences (`investment_operation_dates` is still
+   keyed by `(operation_id, date_role)`), explicit clearing attribution and,
+   for cross-position effects, the #147 closure replay before admission. Bonds/derivatives need separate instrument contracts.
 
 Independent validation performance work is [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140); it must preserve
 race and meaningful financial coverage. It does not block defining these slices.

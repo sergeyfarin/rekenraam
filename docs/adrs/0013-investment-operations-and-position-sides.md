@@ -146,3 +146,66 @@ portions while originals remain audit evidence. Current single-disposal
 commands allocate whole legs atomically; compound commands must supply their
 own portions before posting. This clarifies decision 1 without admitting a
 compound sale workflow or changing fee treatment.
+
+## Cross-Position Replay Scope Refinement (2026-10-03, T-124)
+
+Decision 6 refuses a correction that changes a linked internal-transfer
+carried basis "until cross-account transfer revisions can replay destination
+lots and dependent disposals atomically". This refinement selects how that
+replay is scoped, before outbound transfers and compound actions build on it.
+
+**Chosen: affected-position dependency closure, replayed as one merged dated
+stream inside the command's SQLite transaction.**
+
+- *Closure.* Seed it with the positions `(account, instrument, side, cost
+  currency)` whose effective intents the command changes, each from the
+  earliest date it can differ. Follow every recorded internal-transfer lot link
+  from source to destination when the transfer is dated on or after the
+  source's affected date; the destination is affected from the transfer date.
+  Repeat to a fixed point. Corrected and reversed transfers are followed too,
+  so the closure covers the edges before and after the command. Positions with
+  no path to a seed have identical inputs and are not touched. A transfer out
+  of the book ends the walk; its change is a guarded dated bridge adjustment,
+  not destination replay (decision 6).
+- *Ordering.* Positions are not replayed one after another: a chain may
+  cycle (A→B, later B→A) and same-day order crosses positions. All closure
+  intents are merged and sorted by date, correction-root slot and effect
+  sequence. A transfer's destination opening is produced at the transfer's slot
+  from the replayed depletion; the original acquisition date still orders
+  FIFO/LIFO and the transfer date gates availability.
+- *Atomicity.* One savepoint simulates the closure; the shared writer runs
+  gain-impact disclosure (#129) and reconciliation impact over all of it, and
+  preview runs the same writer. Any refusal leaves the database unchanged with
+  the dependent operation named.
+
+**Rejected: whole-book rebuild per command.** For positions inside the
+closure it computes the same result, and outside it every input is unchanged,
+so the extra work is a no-op. It costs O(book) on every command and every
+preview, and widens the failure radius: an unrelated position with an
+unmodeled lot, unresolved basis or a not-yet-supported action would block
+unrelated commands. Rebuilding also does not remove legitimate refusals. An
+invalid specific-lot election, missing or unknown source basis, a split whose
+posted quantity would change, or an uncomputable bridge is a fact about the
+history, not about replay scope, and stays a named refusal under either choice.
+A full rebuild remains useful as an offline self-check verifier
+([T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149)).
+
+**Status.** The closure is implemented and tested
+(`InvestmentReplayClosure`); merged-stream propagation is
+[T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147). Until it
+lands, decision 6's named refusal stays in force, now pinned along transfer
+chains with specific-lot lineage (`TestChainedTransferBasisChangeIsRefusedAtomicallyWithLineageIntact`).
+
+**Effective reads and opening facts.** Effective selection lives in SQL views:
+`effective_investment_operations` (the end of each correction chain; a pure
+reversal is not effective), `latest_investment_disposal_revisions`,
+`latest_investment_split_revisions` and `effective_investment_lot_events`.
+Replay intents, realized gains, gain impact, split-link import and the
+projection checks of self-check read through them. Self-check still audits
+every original and superseded allocation set from the base tables, and
+correction admission still asks directly whether an operation already has a
+successor. The duplicate `investment_lot_facts` table is merged into
+`investment_lots.operation_id`, which keeps its canonical-fact constraints and
+immutability; `source_transaction_id` stays as journal provenance and disposal
+decisions keep their transaction/version links. Repeated typed-date sequence
+remains a gate for the first compound kind (#115) rather than unused schema.

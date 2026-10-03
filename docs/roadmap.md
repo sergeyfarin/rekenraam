@@ -165,9 +165,12 @@ Remaining work, in order:
    Original acquisition date orders FIFO/LIFO; the transfer date gates
    availability. Unknown-basis admission keeps its separate contract.
 5. **Cross-position replay decision and effective-reader consolidation [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).**
-   Settle before outbound transfers and compound actions. Full rebuild and
-   affected dependency closure both need durable elections, dated bridges and
-   atomic rollback; rebuilding alone cannot eliminate legitimate refusals.
+   **Decided 2026-10-03** (ADR 0013 refinement): affected-position dependency
+   closure replayed as one dated stream, not a whole-book rebuild. The closure
+   ships; propagation of a changed carried basis is
+   [T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147) and stays a
+   named refusal until then. Effective reads are SQL views and duplicate lot
+   opening facts are merged.
 6. **Remaining lifecycle families.** Dividend/reinvestment correction
    [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130); trade field correction [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131); write-off correction
    [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133); transfer correction [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134); correction-chain register

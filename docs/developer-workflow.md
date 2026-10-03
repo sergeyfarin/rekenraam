@@ -361,6 +361,14 @@ checksum changed. Stop the app and reset the same disposable `DATABASE_URL`
 database and sidecars using the command above before restarting. No installed
 v0.1 database exists.
 
+**BREAKING DEV DATABASE, R16 effective reads (T-124, 2026-10-03):** `0001`
+merges `investment_lot_facts` into `investment_lots.operation_id`, adds the
+effective-read views, and writes the former ALTER/recreated view and trigger
+replacements as final DDL. The checksum and frozen seed changed together.
+Stop the app and reset the same disposable `DATABASE_URL` database and
+sidecars using the command above before restarting. No installed v0.1
+database exists.
+
 **BREAKING DEV DATABASE, consolidated baseline (2026-09-30):** no legacy
 or installed databases exist. Source revision tables and lot opening guards
 are folded into `0001`, with an updated checksum. The embedded migration head

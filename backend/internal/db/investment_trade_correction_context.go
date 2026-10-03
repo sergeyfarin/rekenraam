@@ -116,11 +116,11 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			AND net.component_seq = (SELECT MIN(component_seq) FROM investment_operation_components
 				WHERE operation_id = o.id AND component_kind = 'net_settlement')
 		LEFT JOIN investment_operation_components gross ON gross.operation_id = o.id AND gross.component_kind = 'gross_consideration'
-		LEFT JOIN investment_lot_facts f ON f.operation_id = o.id AND f.position_side = 'long'
+		LEFT JOIN investment_lots f ON f.operation_id = o.id AND f.position_side = 'long'
 		LEFT JOIN investment_disposal_decisions d ON d.operation_id = o.id AND d.position_side = 'long'
 		JOIN commodities c ON c.id = COALESCE(f.commodity_id, d.commodity_id)
 		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind IN ('buy', 'sell')
-			AND (SELECT count(*) FROM investment_lot_facts WHERE operation_id = o.id) <= 1
+			AND (SELECT count(*) FROM investment_lots WHERE operation_id = o.id) <= 1
 			AND (SELECT count(*) FROM investment_disposal_decisions WHERE operation_id = o.id) <= 1
 	`, bookID, transactionID, bookID, bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
 		&record.OperationKind, &record.EventDate, &record.HoldingAccountID,

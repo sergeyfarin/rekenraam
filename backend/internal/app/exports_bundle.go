@@ -882,7 +882,7 @@ value in this archive was ever a floating-point number.`,
   investment-operation-dates.csv  typed trade, settlement, and payment dates
   investment-operation-components.csv  exact source amounts and fee elections
   investment-lot-state.csv  current remaining balances and update attribution
-  investment-lot-facts.csv  immutable lot-opening source facts
+  investment-lot-facts.csv  immutable opening facts of operation-opened lots
   investment-lot-events.csv  immutable acquisition and disposal events
   investment-lot-effects.csv  direct operation-to-event links
   investment-transfer-facts.csv  typed in-kind transfer sources and account endpoints

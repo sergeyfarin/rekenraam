@@ -217,14 +217,14 @@ INSERT INTO price_observations VALUES(2,1,1,2,1,'trade_implied','not_applicable'
 INSERT INTO price_observations VALUES(3,1,1,2,1,'trade_implied','not_applicable',12000000000,8,1,0,'2026-04-02',NULL,NULL,1,NULL,0,1,1,13,NULL,NULL,'{}','{}',NULL,NULL,'','2026-09-13T11:34:58Z',1,31,NULL);
 INSERT INTO cost_basis_profiles VALUES(1,1,'Seed Average Cost','average_cost',0,'active','','{}','2026-09-13T11:34:58Z',1,'2026-09-13T11:34:58Z',1,35,35,1);
 INSERT INTO cost_basis_profile_versions VALUES(1,1,1,1,'Seed Average Cost','average_cost',0,'active','','{}','2026-09-13T11:34:58Z',1,'saved cost basis profile',35);
-INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, source_transaction_id, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id, position_side) VALUES (1, 1, 15, 2, '2026-02-02', 7, '10', 0, 100000, 2, 1, '{}', '2026-09-13T11:34:58Z', 1, 27, 'long');
-INSERT INTO investment_lot_state (lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id, basis_knowledge) VALUES (1, 1, 'closed', '0', 2, 0, 2, '2026-09-13T11:34:58Z', 1, 31, 'known');
-INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, source_transaction_id, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id, position_side) VALUES (2, 1, 15, 2, '2026-03-02', 8, '5', 0, 60000, 2, 1, '{}', '2026-09-13T11:34:58Z', 1, 29, 'long');
-INSERT INTO investment_lot_state (lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id, basis_knowledge) VALUES (2, 1, 'open', '250', 2, 30000, 2, '2026-09-13T11:34:58Z', 1, 31, 'known');
 INSERT INTO investment_operations (id,book_id,operation_kind,event_date,created_at,created_audit_event_id) VALUES(1,1,'buy','2026-02-02','2026-09-13T11:34:58Z',27);
 INSERT INTO investment_operations (id,book_id,operation_kind,event_date,created_at,created_audit_event_id) VALUES(2,1,'buy','2026-03-02','2026-09-13T11:34:58Z',29);
 INSERT INTO investment_operations (id,book_id,operation_kind,event_date,created_at,created_audit_event_id) VALUES(3,1,'sell','2026-04-02','2026-09-13T11:34:58Z',31);
 INSERT INTO investment_operations (id,book_id,operation_kind,event_date,created_at,created_audit_event_id) VALUES(4,1,'dividend','2026-05-02','2026-09-13T11:34:58Z',33);
+INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, source_transaction_id, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id, position_side, operation_id) VALUES (1, 1, 15, 2, '2026-02-02', 7, '10', 0, 100000, 2, 1, '{}', '2026-09-13T11:34:58Z', 1, 27, 'long', 1);
+INSERT INTO investment_lot_state (lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id, basis_knowledge) VALUES (1, 1, 'closed', '0', 2, 0, 2, '2026-09-13T11:34:58Z', 1, 31, 'known');
+INSERT INTO investment_lots (id, book_id, account_id, commodity_id, opened_on, source_transaction_id, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale, cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id, position_side, operation_id) VALUES (2, 1, 15, 2, '2026-03-02', 8, '5', 0, 60000, 2, 1, '{}', '2026-09-13T11:34:58Z', 1, 29, 'long', 2);
+INSERT INTO investment_lot_state (lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id, basis_knowledge) VALUES (2, 1, 'open', '250', 2, 30000, 2, '2026-09-13T11:34:58Z', 1, 31, 'known');
 INSERT INTO investment_operation_journal_links VALUES(1,1,1,11,1,'primary');
 INSERT INTO investment_operation_journal_links VALUES(2,1,2,12,1,'primary');
 INSERT INTO investment_operation_journal_links VALUES(3,1,3,13,1,'primary');
@@ -246,8 +246,6 @@ INSERT INTO investment_lot_events VALUES(1,1,1,'acquisition',7,'2026-02-02','10'
 INSERT INTO investment_lot_events VALUES(2,1,2,'acquisition',8,'2026-03-02','5',0,60000,2,'{}','2026-09-13T11:34:58Z',1,29,NULL);
 INSERT INTO investment_lot_events VALUES(3,1,1,'disposal',9,'2026-04-02','-1000',2,-100000,2,'{}','2026-09-13T11:34:58Z',1,31,'fifo');
 INSERT INTO investment_lot_events VALUES(4,1,2,'disposal',9,'2026-04-02','-250',2,-30000,2,'{}','2026-09-13T11:34:58Z',1,31,'fifo');
-INSERT INTO investment_lot_facts VALUES(1,1,1,15,2,'long','2026-02-02','10',0,'100000',2,1,27);
-INSERT INTO investment_lot_facts VALUES(2,1,2,15,2,'long','2026-03-02','5',0,'60000',2,1,29);
 INSERT INTO investment_operation_lot_effects VALUES(1,1,1);
 INSERT INTO investment_operation_lot_effects VALUES(2,2,1);
 INSERT INTO investment_operation_lot_effects VALUES(3,3,1);

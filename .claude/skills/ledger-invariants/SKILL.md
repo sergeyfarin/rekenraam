@@ -149,6 +149,11 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
 - Internal transfers follow the source's method lock, else its default: lots
   for individual-lot sources, a pooled quantity for average-cost sources, which
   reuses the sale's pool depletion and conserves basis exactly (T-123).
+- Effective reads use the views `effective_investment_operations`,
+  `latest_investment_disposal_revisions`, `latest_investment_split_revisions`
+  and `effective_investment_lot_events`; never re-inline those predicates, and
+  never route an audit through them. Cross-position replay is scoped to the
+  dependency closure (`InvestmentReplayClosure`, ADR 0013 T-124 refinement).
 
 ## Dates and times
 

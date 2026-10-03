@@ -267,3 +267,13 @@ has an empty `remaining_cost_basis` summary cell and empty coefficient/scale
 cells in state CSV; it is never exported as zero. Quantity remains exact and
 available. Existing columns retain their order. Missing state or inconsistent
 knowledge/amount pairs remain export errors, preserving the integrity boundary.
+
+### Merged opening-fact source (2026-10-03, T-124)
+
+ADR 0013's T-124 refinement stores immutable lot opening facts on
+`investment_lots` (with its new `operation_id`) instead of a duplicate
+`investment_lot_facts` table. `investment-lot-facts.csv` keeps its file name,
+columns, order and values: one row per operation-opened lot, with
+`consideration_value`/`consideration_scale` taken from the lot's opening
+basis. The manifest stays at schema version 6. A lot with no opening
+operation is not an opening fact and is not listed, exactly as before.

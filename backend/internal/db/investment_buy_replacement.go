@@ -36,7 +36,7 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 	var record BuyOperationRecord
 	var corrected, imported int
 	err := reader.QueryRowContext(ctx, `SELECT o.id, linked_version.transaction_id, link.transaction_version_id,
-		current.id, f.lot_id, o.event_date, f.account_id, f.commodity_id, f.cost_commodity_id,
+		current.id, f.id, o.event_date, f.account_id, f.commodity_id, f.cost_commodity_id,
 		EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id),
 		(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
 			WHERE effect.operation_id = o.id)),
@@ -46,12 +46,12 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 			WHERE effect.operation_id = o.id), 0)
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
-		JOIN investment_lot_facts f ON f.operation_id = o.id AND f.position_side = 'long'
+		JOIN investment_lots f ON f.operation_id = o.id AND f.position_side = 'long'
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
 		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
 		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
 		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind = 'buy'
-		AND (SELECT count(*) FROM investment_lot_facts one WHERE one.operation_id = o.id) = 1`,
+		AND (SELECT count(*) FROM investment_lots one WHERE one.operation_id = o.id) = 1`,
 		bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.LotID,
 		&record.EventDate, &record.AccountID, &record.CommodityID, &record.CostCommodityID,

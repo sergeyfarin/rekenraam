@@ -82,19 +82,16 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		return nil, fmt.Errorf("%w: replay requires a long position and its exact book, account, instrument and cost currency", ErrInvalidDisposalParams)
 	}
 	openings, err := reader.QueryContext(ctx, `
-		SELECT f.lot_id, f.operation_id, o.operation_kind, f.opened_on,
-			f.quantity_value, f.quantity_scale, f.consideration_value, f.consideration_scale,
+		SELECT l.id, l.operation_id, o.operation_kind, l.opened_on,
+			l.quantity_value, l.quantity_scale, l.cost_basis_value, l.cost_basis_scale,
 			(SELECT x.effect_seq FROM investment_operation_lot_effects x
 			 JOIN investment_lot_events e ON e.id = x.lot_event_id
-			 WHERE x.operation_id = f.operation_id AND e.lot_id = f.lot_id
+			 WHERE x.operation_id = l.operation_id AND e.lot_id = l.id
 			   AND e.event_kind IN ('acquisition', 'reinvested_dividend', 'transfer_in')
 			 ORDER BY x.effect_seq LIMIT 1)
-		FROM investment_lot_facts f JOIN investment_operations o ON o.id = f.operation_id
-		WHERE f.book_id = ? AND f.account_id = ? AND f.commodity_id = ?
-			AND f.cost_commodity_id = ? AND f.position_side = ?
-			AND o.correction_mode IS NOT 'reverse'
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = o.id)
+		FROM investment_lots l JOIN effective_investment_operations o ON o.id = l.operation_id
+		WHERE l.book_id = ? AND l.account_id = ? AND l.commodity_id = ?
+			AND l.cost_commodity_id = ? AND l.position_side = ?
 	`, bookID, accountID, commodityID, costCommodityID, side)
 	if err != nil {
 		return nil, fmt.Errorf("read replay openings: %w", err)
@@ -134,12 +131,9 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			(SELECT MIN(x.effect_seq) FROM investment_disposal_allocations a
 			 JOIN investment_operation_lot_effects x ON x.lot_event_id = a.lot_event_id
 			 WHERE a.decision_id = d.id AND x.operation_id = d.operation_id)
-		FROM investment_disposal_decisions d JOIN investment_operations o ON o.id = d.operation_id
+		FROM investment_disposal_decisions d JOIN effective_investment_operations o ON o.id = d.operation_id
 		WHERE d.book_id = ? AND d.account_id = ? AND d.commodity_id = ?
 			AND d.cost_commodity_id = ? AND d.position_side = ?
-			AND o.correction_mode IS NOT 'reverse'
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = o.id)
 	`, bookID, accountID, commodityID, costCommodityID, side)
 	if err != nil {
 		return nil, fmt.Errorf("read replay disposals: %w", err)
@@ -185,15 +179,12 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			effect.effect_seq, f.basis_allocation
 		FROM investment_transfer_facts f
 		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
-		JOIN investment_operations o ON o.id = f.operation_id
+		JOIN effective_investment_operations o ON o.id = f.operation_id
 		JOIN investment_operation_lot_effects effect ON effect.operation_id = f.operation_id
 		JOIN investment_lot_events e ON e.id = effect.lot_event_id
 			AND e.lot_id = x.source_lot_id AND e.event_kind = 'transfer_out'
 		WHERE f.book_id = ? AND f.source_account_id = ? AND f.commodity_id = ?
 			AND f.transfer_kind = 'internal' AND x.cost_commodity_id = ?
-			AND o.correction_mode IS NOT 'reverse'
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = o.id)
 		ORDER BY f.operation_id, x.link_seq
 	`, bookID, accountID, commodityID, costCommodityID)
 	if err != nil {
@@ -267,13 +258,10 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			source.operation_id
 		FROM investment_disposal_allocations a
 		JOIN investment_disposal_decisions d ON d.id = a.decision_id
-		JOIN investment_operations o ON o.id = d.operation_id
-		JOIN investment_lot_facts source ON source.lot_id = a.lot_id
+		JOIN effective_investment_operations o ON o.id = d.operation_id
+		JOIN investment_lots source ON source.id = a.lot_id AND source.operation_id IS NOT NULL
 		WHERE d.book_id = ? AND d.account_id = ? AND d.commodity_id = ?
 			AND d.cost_commodity_id = ? AND d.position_side = ? AND d.cost_basis_method = 'specific_lot'
-			AND o.correction_mode IS NOT 'reverse'
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = o.id)
 		ORDER BY a.decision_id, a.allocation_seq
 	`, bookID, accountID, commodityID, costCommodityID, side)
 	if err != nil {
@@ -359,13 +347,10 @@ func investmentReplaySplitIntentsQuery(ctx context.Context, reader queryer, book
 		SELECT f.operation_id, o.operation_kind, f.effective_on, f.ratio_numerator, f.ratio_denominator,
 			f.created_audit_event_id, e.transaction_id, e.created_by_user_id, e.created_at
 		FROM investment_split_facts f
-		JOIN investment_operations o ON o.id = f.operation_id
+		JOIN effective_investment_operations o ON o.id = f.operation_id
 		JOIN investment_lot_events e ON e.id = (SELECT x.lot_event_id FROM investment_operation_lot_effects x
 			WHERE x.operation_id = f.operation_id ORDER BY x.effect_seq LIMIT 1)
 		WHERE f.book_id = ? AND f.account_id = ? AND f.commodity_id = ?
-			AND o.correction_mode IS NOT 'reverse'
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = o.id)
 		ORDER BY f.operation_id`, bookID, accountID, commodityID)
 	if err != nil {
 		return nil, fmt.Errorf("read replay splits: %w", err)

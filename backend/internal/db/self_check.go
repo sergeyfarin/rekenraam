@@ -431,25 +431,9 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		SELECT le.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
 			le.quantity_value, le.quantity_scale, le.cost_basis_value, le.cost_basis_scale,
 			le.event_kind = 'split_adjustment'
-		FROM investment_lot_events le
+		FROM effective_investment_lot_events le
 		JOIN current_investment_lots l ON l.id = le.lot_id
 		WHERE le.book_id = ?
-			AND NOT EXISTS (
-				SELECT 1 FROM investment_operation_lot_effects effect
-				JOIN investment_split_revisions revision ON revision.operation_id = effect.operation_id
-					AND revision.cost_commodity_id = l.cost_commodity_id
-				WHERE effect.lot_event_id = le.id AND le.event_kind = 'split_adjustment'
-			)
-			AND NOT EXISTS (
-				SELECT 1 FROM investment_operation_lot_effects effect
-				JOIN investment_operations successor ON successor.correction_of_operation_id = effect.operation_id
-				WHERE effect.lot_event_id = le.id
-			)
-			AND NOT EXISTS (
-				SELECT 1 FROM investment_disposal_allocations original
-				JOIN investment_disposal_revisions revision ON revision.decision_id = original.decision_id
-				WHERE original.lot_event_id = le.id
-			)
 		ORDER BY le.lot_id, le.event_date, le.id
 	`, bookID)
 	if err != nil {
@@ -478,15 +462,12 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		SELECT allocation.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
 			allocation.quantity_value, allocation.quantity_scale,
 			allocation.cost_basis_value, allocation.cost_basis_scale
-		FROM investment_disposal_revisions revision
+		FROM latest_investment_disposal_revisions revision
 		JOIN investment_disposal_decisions decision ON decision.id = revision.decision_id
+		JOIN effective_investment_operations operation ON operation.id = decision.operation_id
 		JOIN investment_disposal_revision_allocations allocation ON allocation.revision_id = revision.id
 		JOIN current_investment_lots l ON l.id = allocation.lot_id
-		WHERE revision.book_id = ? AND revision.revision_seq = (
-			SELECT MAX(latest.revision_seq) FROM investment_disposal_revisions latest
-			WHERE latest.decision_id = revision.decision_id)
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = decision.operation_id)
+		WHERE revision.book_id = ?
 		ORDER BY revision.decision_id, allocation.allocation_seq`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read effective self-check allocations: %w", err)
@@ -521,13 +502,10 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	splits, err := transaction.QueryContext(ctx, `
 		SELECT effect.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
 			effect.quantity_delta_value, effect.quantity_delta_scale
-		FROM investment_split_revisions revision
+		FROM latest_investment_split_revisions revision
 		JOIN investment_split_revision_effects effect ON effect.revision_id = revision.id
 		JOIN current_investment_lots l ON l.id = effect.lot_id
-		WHERE revision.book_id = ? AND revision.revision_seq = (
-			SELECT MAX(latest.revision_seq) FROM investment_split_revisions latest
-			WHERE latest.operation_id = revision.operation_id
-				AND latest.cost_commodity_id = revision.cost_commodity_id)
+		WHERE revision.book_id = ?
 		ORDER BY revision.id, effect.effect_seq`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read effective self-check split effects: %w", err)

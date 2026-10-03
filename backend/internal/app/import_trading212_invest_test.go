@@ -739,7 +739,7 @@ func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
 	var lotBefore string
 	require.NoError(t, f.database.QueryRowContext(ctx, `SELECT remaining_quantity_value || ':' || remaining_quantity_scale || ':' || remaining_cost_basis_value || ':' || remaining_cost_basis_scale FROM current_investment_lots`).Scan(&lotBefore))
 	before := map[string]int{}
-	for _, table := range []string{"audit_events", "transactions", "investment_operations", "investment_lot_facts", "investment_lot_events", "investment_disposal_revisions", "import_source_revisions"} {
+	for _, table := range []string{"audit_events", "transactions", "investment_operations", "investment_lots", "investment_lot_events", "investment_disposal_revisions", "import_source_revisions"} {
 		var count int
 		require.NoError(t, f.database.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&count))
 		before[table] = count

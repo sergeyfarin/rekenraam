@@ -1252,10 +1252,10 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   105,
-		"table":   102,
-		"trigger": 116,
-		"view":    7,
+		"index":   106,
+		"table":   101,
+		"trigger": 114,
+		"view":    11,
 	}, objectCounts, "the migrated head must retain every schema object")
 	assert.Equal(t, "table", objects["import_source_revisions"])
 	assert.Equal(t, "trigger", objects["import_source_revisions_same_book"])
@@ -1304,7 +1304,11 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		"investment_operation_journal_links":       "table",
 		"investment_operation_dates":               "table",
 		"investment_operation_components":          "table",
-		"investment_lot_facts":                     "table",
+		"effective_investment_operations":          "view",
+		"latest_investment_disposal_revisions":     "view",
+		"latest_investment_split_revisions":        "view",
+		"effective_investment_lot_events":          "view",
+		"investment_lots_operation_same_book":      "trigger",
 		"investment_operation_lot_effects":         "table",
 		"investment_fee_policies":                  "table",
 		"investment_fee_policy_versions":           "table",

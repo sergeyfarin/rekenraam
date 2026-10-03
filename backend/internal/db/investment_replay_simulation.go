@@ -100,10 +100,9 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 	}
 	var unmodeledLotID int64
 	err := tx.QueryRowContext(ctx, `
-		SELECT l.id FROM current_investment_lots l
-		LEFT JOIN investment_lot_facts f ON f.lot_id = l.id
+		SELECT l.id FROM investment_lots l
 		WHERE l.book_id = ? AND l.account_id = ? AND l.commodity_id = ?
-			AND l.cost_commodity_id = ? AND l.position_side = 'long' AND f.lot_id IS NULL
+			AND l.cost_commodity_id = ? AND l.position_side = 'long' AND l.operation_id IS NULL
 		LIMIT 1`, bookID, accountID, commodityID, costCommodityID).Scan(&unmodeledLotID)
 	if err == nil {
 		return InvestmentReplayProjection{}, fmt.Errorf("%w: lot %d lacks an immutable opening fact", ErrInvalidDisposalParams, unmodeledLotID)

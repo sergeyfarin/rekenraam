@@ -390,9 +390,9 @@ func TestBuyGainImpactLeavesRowsUnchangedWhenReplayEvidenceIsMissing(t *testing.
 	// Simulate damaged history, which the schema normally forbids: the
 	// February lot loses its immutable opening fact. Replay cannot prove the sale's inputs, so even a valid
 	// acknowledgement must not let any part of the buy survive.
-	_, err = f.database.Exec(`DROP TRIGGER investment_lot_facts_no_delete`)
+	_, err = f.database.Exec(`DROP TRIGGER investment_lots_opening_no_update`)
 	require.NoError(t, err)
-	_, err = f.database.Exec(`DELETE FROM investment_lot_facts WHERE lot_id = ?`, *february.LotID)
+	_, err = f.database.Exec(`UPDATE investment_lots SET operation_id = NULL WHERE id = ?`, *february.LotID)
 	require.NoError(t, err)
 	before := buyReplacementPreviewSnapshot(t, f.database)
 	_, err = f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactBuy, input)

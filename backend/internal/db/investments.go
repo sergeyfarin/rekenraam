@@ -1131,14 +1131,25 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 	// drops market value and gain entirely when the result no longer fits in an
 	// int64. Widening on demand keeps the precision where it is needed without
 	// making every position pay for it.
+	// A journal-backed lot records the operation that opened it; its own row
+	// is that operation's immutable opening fact (T-124).
+	var operationID int64
+	if params.SourceTransactionID > 0 {
+		id, err := investmentOperationIDTx(ctx, tx, params.BookID, params.SourceTransactionID)
+		if err != nil {
+			return InvestmentLotRecord{}, err
+		}
+		operationID = id
+	}
 	result, err := tx.ExecContext(ctx, `INSERT INTO investment_lots (
 		book_id, account_id, commodity_id, opened_on, source_transaction_id,
 		quantity_value, quantity_scale, cost_basis_value, cost_basis_scale,
-		cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id, operation_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		params.BookID, params.AccountID, params.CommodityID, params.OpenedOn, nullablePositiveInt64(params.SourceTransactionID),
 		params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale,
-		params.CostCommodityID, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID)
+		params.CostCommodityID, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID,
+		nullablePositiveInt64(operationID))
 	if err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("insert investment lot: %w", err)
 	}
@@ -1165,22 +1176,7 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 	if err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("insert investment lot event: %w", err)
 	}
-	if params.SourceTransactionID > 0 {
-		operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, params.SourceTransactionID)
-		if err != nil {
-			return InvestmentLotRecord{}, err
-		}
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO investment_lot_facts
-				(lot_id, book_id, operation_id, account_id, commodity_id, position_side,
-				 opened_on, quantity_value, quantity_scale, consideration_value,
-				 consideration_scale, cost_commodity_id, created_audit_event_id)
-			VALUES (?, ?, ?, ?, ?, 'long', ?, ?, ?, ?, ?, ?, ?)
-		`, lotID, params.BookID, operationID, params.AccountID, params.CommodityID,
-			params.OpenedOn, params.QuantityValue, params.QuantityScale,
-			params.CostBasisValue, params.CostBasisScale, params.CostCommodityID, auditEventID); err != nil {
-			return InvestmentLotRecord{}, fmt.Errorf("record investment lot source facts: %w", err)
-		}
+	if operationID > 0 {
 		eventID, err := eventResult.LastInsertId()
 		if err != nil {
 			return InvestmentLotRecord{}, fmt.Errorf("read acquisition event id: %w", err)
@@ -3264,20 +3260,10 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			le.quantity_scale,
 			le.cost_basis_value,
 			le.cost_basis_scale
-		FROM investment_lot_events le
+		FROM effective_investment_lot_events le
 		JOIN current_investment_lots lot ON lot.id = le.lot_id
 		WHERE lot.book_id = ?
 			AND le.event_kind = 'disposal'
-			AND NOT EXISTS (
-				SELECT 1 FROM investment_operation_lot_effects effect
-				JOIN investment_operations successor ON successor.correction_of_operation_id = effect.operation_id
-				WHERE effect.lot_event_id = le.id
-			)
-			AND NOT EXISTS (
-				SELECT 1 FROM investment_disposal_allocations original
-				JOIN investment_disposal_revisions revision ON revision.decision_id = original.decision_id
-				WHERE original.lot_event_id = le.id
-			)
 			`+dateFilter+`
 	`, args...)
 	if err != nil {
@@ -3307,16 +3293,11 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			d.cost_commodity_id, allocation.quantity_value, allocation.quantity_scale,
 			allocation.cost_basis_value, allocation.cost_basis_scale
 		FROM investment_disposal_decisions d
-		JOIN investment_operations operation ON operation.id = d.operation_id
-		JOIN investment_disposal_revisions revision ON revision.decision_id = d.id
-			AND revision.revision_seq = (
-				SELECT MAX(latest.revision_seq) FROM investment_disposal_revisions latest
-				WHERE latest.decision_id = d.id)
+		JOIN effective_investment_operations operation ON operation.id = d.operation_id
+		JOIN latest_investment_disposal_revisions revision ON revision.decision_id = d.id
 		JOIN investment_disposal_revision_allocations allocation
 			ON allocation.revision_id = revision.id
 		WHERE d.book_id = ?
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = operation.id)
 			`+revisedDateFilter+`
 		ORDER BY d.id, allocation.allocation_seq`, args...)
 	if err != nil {
@@ -3353,10 +3334,8 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	decisionRows, err := tx.QueryContext(ctx, `
 		SELECT d.transaction_id, d.cost_commodity_id, d.proceeds_value, d.proceeds_scale
 		FROM investment_disposal_decisions d
-		JOIN investment_operations operation ON operation.id = d.operation_id
-		WHERE d.book_id = ?
-			AND NOT EXISTS (SELECT 1 FROM investment_operations successor
-				WHERE successor.correction_of_operation_id = operation.id)`, bookID)
+		JOIN effective_investment_operations operation ON operation.id = d.operation_id
+		WHERE d.book_id = ?`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read realized gain decisions: %w", err)
 	}

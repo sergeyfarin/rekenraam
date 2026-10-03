@@ -19,7 +19,7 @@ func TestInvestmentLotOpeningIdentityIsImmutable(t *testing.T) {
 		{"cost_basis_value", "'100001'"}, {"cost_basis_scale", "3"},
 		{"cost_commodity_id", "2"}, {"metadata_json", "'{\"changed\":true}'"},
 		{"created_at", "'2026-09-30T00:00:00Z'"}, {"created_by_user_id", "2"},
-		{"created_audit_event_id", "NULL"},
+		{"created_audit_event_id", "NULL"}, {"operation_id", "2"}, {"operation_id", "NULL"},
 	} {
 		t.Run(test.column, func(t *testing.T) {
 			tx, err := database.BeginTx(ctx, nil)
@@ -32,6 +32,33 @@ func TestInvestmentLotOpeningIdentityIsImmutable(t *testing.T) {
 	require.Equal(t, before, captureLedgerState(t, database), "refused mutations must preserve all durable rows")
 	_, err := database.ExecContext(ctx, "DELETE FROM investment_lots WHERE id = 1")
 	require.ErrorContains(t, err, "investment lots are immutable")
+}
+
+// T-124 merged investment_lot_facts into the lot row. The constraints that
+// table enforced on operation-opened lots stay on the merged row.
+func TestOperationOpenedLotKeepsCanonicalOpeningFactConstraints(t *testing.T) {
+	ctx := context.Background()
+	database := seedReplayTestBook(t)
+	var operationID int64
+	require.NoError(t, database.QueryRowContext(ctx, `SELECT operation_id FROM investment_lots WHERE id = 1`).Scan(&operationID))
+	require.EqualValues(t, 1, operationID, "the seeded buy lot names its opening operation")
+	insert := func(quantity, basis, sourceTransaction string) error {
+		_, err := database.ExecContext(ctx, `INSERT INTO investment_lots (book_id, account_id, commodity_id,
+			opened_on, source_transaction_id, quantity_value, quantity_scale, cost_basis_value, cost_basis_scale,
+			cost_commodity_id, created_at, created_by_user_id, created_audit_event_id, operation_id)
+			VALUES (1, 15, 2, '2026-02-02', `+sourceTransaction+`, '`+quantity+`', 0, '`+basis+`', 2, 1,
+			'2026-09-30T00:00:00Z', 1, 27, 1)`)
+		return err
+	}
+	for name, err := range map[string]error{
+		"leading zero quantity": insert("010", "100", "7"),
+		"non-canonical basis":   insert("1", "1e2", "7"),
+		"no source transaction": insert("1", "100", "NULL"),
+		"padded basis":          insert("1", "0100", "7"),
+	} {
+		require.ErrorContainsf(t, err, "CHECK constraint failed", name)
+	}
+	require.NoError(t, insert("1", "0", "7"), "a known zero basis stays admissible")
 }
 
 func TestInvestmentLotProjectionUpdatesPreserveOpeningIdentity(t *testing.T) {

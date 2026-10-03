@@ -375,8 +375,7 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			JOIN investment_operation_journal_links link ON link.transaction_version_id = v.id
 			JOIN investment_operations o ON o.id = link.operation_id
 			WHERE l.book_id = ? AND link.book_id = l.book_id
-			AND NOT EXISTS (SELECT 1 FROM investment_lot_facts f
-				WHERE f.lot_id = l.id AND f.operation_id = o.id)`},
+			AND l.operation_id IS NOT o.id`},
 		{"operation lot event missing effect link", `
 			SELECT DISTINCT e.id FROM investment_lot_events e
 			JOIN transaction_versions v ON v.transaction_id = e.transaction_id

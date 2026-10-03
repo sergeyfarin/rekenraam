@@ -404,9 +404,8 @@ func (r *InvestmentRepository) createSplit(ctx context.Context, journal CreateTr
 func effectiveSplitEffectsQuery(ctx context.Context, reader queryer, bookID, operationID, costCommodityID int64) ([]SplitLotEffect, int64, int, error) {
 	var revisionID int64
 	var revisionSeq int
-	rows, err := reader.QueryContext(ctx, `SELECT id, revision_seq FROM investment_split_revisions
-		WHERE book_id = ? AND operation_id = ? AND cost_commodity_id = ?
-		ORDER BY revision_seq DESC LIMIT 1`, bookID, operationID, costCommodityID)
+	rows, err := reader.QueryContext(ctx, `SELECT id, revision_seq FROM latest_investment_split_revisions
+		WHERE book_id = ? AND operation_id = ? AND cost_commodity_id = ?`, bookID, operationID, costCommodityID)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("read latest split revision: %w", err)
 	}

@@ -102,7 +102,7 @@ func buyReplacementPreviewSnapshot(t *testing.T, database *sql.DB) map[string][]
 	for _, table := range []string{
 		"audit_events", "transactions", "transaction_versions", "journal_entries", "posting_lines", "posting_versions",
 		"investment_operations", "investment_operation_journal_links", "investment_operation_dates", "investment_operation_components",
-		"investment_lots", "investment_lot_state", "investment_lot_facts", "investment_lot_events", "investment_operation_lot_effects",
+		"investment_lots", "investment_lot_state", "investment_lot_events", "investment_operation_lot_effects",
 		"investment_position_basis_state", "investment_disposal_decisions", "investment_disposal_allocations", "investment_disposal_clearing_allocations",
 		"investment_disposal_revisions", "investment_disposal_revision_allocations", "investment_transfer_facts", "investment_transfer_lot_links",
 		"price_series", "price_observations", "reconciliation_checkpoints", "reconciliation_checkpoint_postings",

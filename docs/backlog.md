@@ -40,6 +40,9 @@ the existing local IDs resolvable; it is not a second task list.
 | T-129 | [#144 — Correct or reverse posted splits and adjust their journal delta](https://github.com/sergeyfarin/rekenraam/issues/144) |
 | T-130 | [#145 — Map verified Trading 212 split fills to the split command](https://github.com/sergeyfarin/rekenraam/issues/145) |
 | T-131 | [#146 — Record zero-delta splits without a journal](https://github.com/sergeyfarin/rekenraam/issues/146) |
+| T-132 | [#147 — Replay the cross-position dependency closure as one dated stream](https://github.com/sergeyfarin/rekenraam/issues/147) |
+| T-133 | [#148 — Require an opening operation on every investment lot](https://github.com/sergeyfarin/rekenraam/issues/148) |
+| T-134 | [#149 — Self-check full replay equivalence of investment projections](https://github.com/sergeyfarin/rekenraam/issues/149) |
 
 T-75b [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is closed for
 its delivered long-buy/sale scope; the [2026-10-02 review](reviews/investment-review-2026-10-02.md)

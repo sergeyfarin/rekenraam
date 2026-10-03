@@ -321,6 +321,9 @@ CREATE TABLE IF NOT EXISTS account_versions (
   comment_markdown TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}',
   change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  cost_basis_method TEXT CHECK (
+    cost_basis_method IS NULL OR cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')
+  ),
   UNIQUE (account_id, version_seq),
   CHECK (closed_on IS NULL OR closed_on >= opened_on),
   CHECK (
@@ -410,6 +413,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_request_id TEXT,
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  deleted_at TEXT,
+  deleted_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT,
+  deleted_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  delete_reason TEXT,
   CHECK (correction_of_transaction_id IS NULL OR correction_of_transaction_id <> id)
 );
 
@@ -440,6 +447,7 @@ CREATE TABLE IF NOT EXISTS transaction_versions (
   changed_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   change_reason TEXT NOT NULL,
   change_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  transaction_day_sequence INTEGER NOT NULL DEFAULT 0,
   UNIQUE (transaction_id, version_seq)
 );
 
@@ -526,6 +534,7 @@ CREATE TABLE IF NOT EXISTS posting_versions (
   reconciliation_status TEXT NOT NULL CHECK (reconciliation_status IN ('uncleared', 'cleared', 'reconciled')),
   cleared_on TEXT CHECK (cleared_on IS NULL OR cleared_on GLOB '????-??-??'),
   metadata_json TEXT NOT NULL DEFAULT '{}',
+  account_day_sequence INTEGER NOT NULL DEFAULT 0,
   UNIQUE (journal_entry_id, line_seq)
 );
 
@@ -640,7 +649,8 @@ CREATE TABLE IF NOT EXISTS reconciliation_checkpoints (
   void_reason TEXT NOT NULL DEFAULT '',
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
   invalidated_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  voided_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT
+  voided_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
+  statement_account_sequence INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS reconciliation_checkpoints_account_idx
@@ -1111,8 +1121,33 @@ CREATE TABLE IF NOT EXISTS investment_lots (
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
-  position_side TEXT NOT NULL DEFAULT 'long' CHECK (position_side IN ('long', 'short'))
+  position_side TEXT NOT NULL DEFAULT 'long' CHECK (position_side IN ('long', 'short')),
+  -- The operation whose effect opened this lot. The row's account, instrument,
+  -- side, date, quantity, basis and cost currency are that operation's
+  -- immutable opening facts (T-124 merged the former investment_lot_facts
+  -- duplicate). NULL only for a lot with no source transaction, which replay
+  -- refuses as unmodeled; source_transaction_id stays as journal provenance.
+  operation_id INTEGER REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  CHECK (operation_id IS NULL OR (
+    length(quantity_value) BETWEEN 1 AND 38 AND quantity_value NOT GLOB '*[^0-9]*'
+    AND substr(quantity_value, 1, 1) BETWEEN '1' AND '9'
+    AND length(cost_basis_value) BETWEEN 1 AND 38 AND (cost_basis_value = '0' OR
+      (cost_basis_value NOT GLOB '*[^0-9]*' AND substr(cost_basis_value, 1, 1) BETWEEN '1' AND '9'))
+    AND source_transaction_id IS NOT NULL AND created_audit_event_id IS NOT NULL))
 );
+
+CREATE INDEX IF NOT EXISTS investment_lots_operation_idx
+  ON investment_lots (operation_id) WHERE operation_id IS NOT NULL;
+
+-- +goose StatementBegin
+CREATE TRIGGER investment_lots_operation_same_book
+BEFORE INSERT ON investment_lots
+WHEN NEW.operation_id IS NOT NULL AND NOT EXISTS (
+  SELECT 1 FROM investment_operations o JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  WHERE o.id = NEW.operation_id AND o.book_id = NEW.book_id AND a.book_id = NEW.book_id
+)
+BEGIN SELECT RAISE(ABORT, 'investment lot opening operation must be in the same book'); END;
+-- +goose StatementEnd
 
 CREATE INDEX IF NOT EXISTS investment_lots_position_idx
   ON investment_lots (book_id, account_id, commodity_id, opened_on, id);
@@ -1463,35 +1498,6 @@ CREATE TABLE IF NOT EXISTS investment_fee_policy_versions (
 CREATE UNIQUE INDEX IF NOT EXISTS investment_fee_policy_scope_idx
   ON investment_fee_policies (book_id, IFNULL(account_id, 0), charge_kind);
 
--- investment_lots preserves immutable identity/opening facts. The committed
--- opening lot terms live here and are never changed by a disposal or replay;
--- raw trade amounts remain in investment_operation_components.
-CREATE TABLE IF NOT EXISTS investment_lot_facts (
-  lot_id INTEGER PRIMARY KEY REFERENCES investment_lots(id) ON DELETE RESTRICT,
-  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
-  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
-  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  position_side TEXT NOT NULL CHECK (position_side IN ('long', 'short')),
-  opened_on TEXT NOT NULL CHECK (opened_on GLOB '????-??-??'),
-  quantity_value TEXT NOT NULL CHECK (
-    length(quantity_value) BETWEEN 1 AND 38 AND quantity_value NOT GLOB '*[^0-9]*'
-    AND substr(quantity_value, 1, 1) BETWEEN '1' AND '9'
-  ),
-  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
-  consideration_value TEXT NOT NULL CHECK (
-    length(consideration_value) BETWEEN 1 AND 38 AND (
-      consideration_value = '0' OR
-      (consideration_value NOT GLOB '*[^0-9]*' AND substr(consideration_value, 1, 1) BETWEEN '1' AND '9') OR
-      (substr(consideration_value, 1, 1) = '-' AND substr(consideration_value, 2) NOT GLOB '*[^0-9]*'
-       AND substr(consideration_value, 2, 1) BETWEEN '1' AND '9')
-    )
-  ),
-  consideration_scale INTEGER NOT NULL CHECK (consideration_scale BETWEEN 0 AND 12),
-  cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT
-);
-
 CREATE TABLE IF NOT EXISTS investment_operation_lot_effects (
   operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
   lot_event_id INTEGER NOT NULL UNIQUE REFERENCES investment_lot_events(id) ON DELETE RESTRICT,
@@ -1702,6 +1708,54 @@ WHEN NOT EXISTS (
 BEGIN SELECT RAISE(ABORT, 'investment split revision chain is invalid'); END;
 -- +goose StatementEnd
 
+-- Effective investment reads (T-124). Replay, gains, gain-impact and import
+-- readers select through these views instead of repeating the predicates.
+-- They hide nothing: superseded originals stay in the base tables, and
+-- self-check audits every original and revision allocation set from there.
+
+-- The effective end of each correction chain. A pure reversal is terminal and
+-- contributes no intent, so it is not effective either.
+CREATE VIEW effective_investment_operations AS
+SELECT o.* FROM investment_operations o
+WHERE o.correction_mode IS NOT 'reverse'
+  AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+    WHERE successor.correction_of_operation_id = o.id);
+
+-- The current replay revision of each revised disposal decision. A decision
+-- with no row here is still described by its immutable snapshot.
+CREATE VIEW latest_investment_disposal_revisions AS
+SELECT r.* FROM investment_disposal_revisions r
+WHERE NOT EXISTS (SELECT 1 FROM investment_disposal_revisions later
+  WHERE later.decision_id = r.decision_id AND later.revision_seq > r.revision_seq);
+
+-- The current replay revision of a split's effects in each cost currency.
+CREATE VIEW latest_investment_split_revisions AS
+SELECT r.* FROM investment_split_revisions r
+WHERE NOT EXISTS (SELECT 1 FROM investment_split_revisions later
+  WHERE later.operation_id = r.operation_id AND later.cost_commodity_id = r.cost_commodity_id
+    AND later.revision_seq > r.revision_seq);
+
+-- Lot events that still describe current state: not owned by a corrected
+-- operation, not an original disposal allocation a replay revision replaced,
+-- and not a split effect revised in the lot's cost currency. Revised outputs
+-- come from the latest revision rows above.
+CREATE VIEW effective_investment_lot_events AS
+SELECT e.* FROM investment_lot_events e
+JOIN investment_lots l ON l.id = e.lot_id AND l.book_id = e.book_id
+WHERE NOT EXISTS (
+    SELECT 1 FROM investment_operation_lot_effects effect
+    JOIN investment_operations successor ON successor.correction_of_operation_id = effect.operation_id
+    WHERE effect.lot_event_id = e.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM investment_disposal_allocations original
+    JOIN investment_disposal_revisions revision ON revision.decision_id = original.decision_id
+    WHERE original.lot_event_id = e.id)
+  AND NOT (e.event_kind = 'split_adjustment' AND EXISTS (
+    SELECT 1 FROM investment_operation_lot_effects effect
+    JOIN investment_split_revisions revision ON revision.operation_id = effect.operation_id
+      AND revision.cost_commodity_id = l.cost_commodity_id
+    WHERE effect.lot_event_id = e.id));
+
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_split_revision_effects_valid
 BEFORE INSERT ON investment_split_revision_effects
@@ -1783,28 +1837,6 @@ WHEN NOT EXISTS (
 )
 BEGIN
   SELECT RAISE(ABORT, 'investment component references another book');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS investment_lot_facts_same_book
-BEFORE INSERT ON investment_lot_facts
-WHEN NOT EXISTS (
-  SELECT 1 FROM investment_lots l
-  JOIN investment_operations o ON o.id = NEW.operation_id
-  JOIN audit_events a ON a.id = NEW.created_audit_event_id
-  WHERE l.id = NEW.lot_id AND l.book_id = NEW.book_id
-    AND l.account_id = NEW.account_id AND l.commodity_id = NEW.commodity_id
-    AND l.position_side = NEW.position_side AND o.book_id = NEW.book_id
-    AND l.opened_on = NEW.opened_on AND l.quantity_value = NEW.quantity_value
-    AND l.quantity_scale = NEW.quantity_scale
-    AND l.cost_basis_value = NEW.consideration_value
-    AND l.cost_basis_scale = NEW.consideration_scale
-    AND l.cost_commodity_id = NEW.cost_commodity_id
-    AND a.book_id = NEW.book_id
-)
-BEGIN
-  SELECT RAISE(ABORT, 'investment lot fact references another book or position');
 END;
 -- +goose StatementEnd
 
@@ -1891,16 +1923,6 @@ BEGIN SELECT RAISE(ABORT, 'investment components are immutable'); END;
 CREATE TRIGGER IF NOT EXISTS investment_operation_components_no_delete
 BEFORE DELETE ON investment_operation_components
 BEGIN SELECT RAISE(ABORT, 'investment components are immutable'); END;
--- +goose StatementEnd
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS investment_lot_facts_no_update
-BEFORE UPDATE ON investment_lot_facts
-BEGIN SELECT RAISE(ABORT, 'investment lot facts are immutable'); END;
--- +goose StatementEnd
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS investment_lot_facts_no_delete
-BEFORE DELETE ON investment_lot_facts
-BEGIN SELECT RAISE(ABORT, 'investment lot facts are immutable'); END;
 -- +goose StatementEnd
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_operation_lot_effects_no_update
@@ -2162,14 +2184,6 @@ END;
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS commodity_versions_no_update
 BEFORE UPDATE ON commodity_versions
-BEGIN
-  SELECT RAISE(ABORT, 'commodity_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS commodity_versions_no_delete
-BEFORE DELETE ON commodity_versions
 BEGIN
   SELECT RAISE(ABORT, 'commodity_versions rows are append-only');
 END;
@@ -2552,14 +2566,6 @@ END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
-CREATE TRIGGER IF NOT EXISTS investment_instrument_versions_no_delete
-BEFORE DELETE ON investment_instrument_versions
-BEGIN
-  SELECT RAISE(ABORT, 'investment_instrument_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_instruments_commodity_must_be_security
 BEFORE INSERT ON investment_instruments
 WHEN NOT EXISTS (
@@ -2701,99 +2707,10 @@ BEGIN
 END;
 -- +goose StatementEnd
 
--- +goose StatementBegin
-CREATE TRIGGER fx_work_after_account_version_insert
-AFTER INSERT ON account_versions
-WHEN NEW.status = 'active'
-  AND NEW.default_commodity_id IS NOT NULL
-  AND EXISTS (
-    SELECT 1 FROM commodities c
-    WHERE c.id = NEW.default_commodity_id AND c.kind = 'currency'
-  )
-  AND NEW.default_commodity_id != COALESCE(
-    (SELECT pp.base_commodity_id
-     FROM accounts a JOIN pricing_policies pp ON pp.book_id = a.book_id
-     WHERE a.id = NEW.account_id),
-    (SELECT b.default_currency_commodity_id
-     FROM accounts a JOIN books b ON b.id = a.book_id
-     WHERE a.id = NEW.account_id),
-    0
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM account_versions prior
-    WHERE prior.account_id = NEW.account_id AND prior.id != NEW.id
-      AND prior.status = 'active'
-      AND prior.default_commodity_id = NEW.default_commodity_id
-  )
-  AND NOT EXISTS (
-    SELECT 1
-    FROM current_account_versions other
-    JOIN accounts other_account ON other_account.id = other.account_id
-    JOIN accounts new_account ON new_account.id = NEW.account_id
-    WHERE other_account.book_id = new_account.book_id
-      AND other.account_id != NEW.account_id
-      AND other.status = 'active'
-      AND other.default_commodity_id = NEW.default_commodity_id
-  )
-BEGIN
-  INSERT INTO background_work_items (
-    book_id, kind, payload_json, available_at, created_at, updated_at
-  )
-  SELECT a.book_id, 'pricing.fx_coverage',
-    json_object('reason', 'currency_activated', 'start_date', NEW.opened_on,
-      'currency_id', NEW.default_commodity_id),
-    NEW.recorded_at, NEW.recorded_at, NEW.recorded_at
-  FROM accounts a WHERE a.id = NEW.account_id;
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER fx_work_after_posting_version_insert
-AFTER INSERT ON posting_versions
-WHEN EXISTS (
-  SELECT 1 FROM transaction_versions tv
-  WHERE tv.id = NEW.transaction_version_id AND tv.status = 'posted'
-)
-  AND EXISTS (SELECT 1 FROM commodities c WHERE c.id = NEW.commodity_id AND c.kind = 'currency')
-  AND NEW.commodity_id != COALESCE(
-    (SELECT base_commodity_id FROM pricing_policies WHERE book_id = NEW.book_id),
-    (SELECT default_currency_commodity_id FROM books WHERE id = NEW.book_id),
-    0
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM background_work_items bw
-    WHERE bw.book_id = NEW.book_id
-      AND bw.kind = 'pricing.fx_coverage'
-      AND bw.status IN ('pending', 'running')
-      AND json_extract(bw.payload_json, '$.currency_id') = NEW.commodity_id
-      AND json_extract(bw.payload_json, '$.start_date') <= (SELECT entry_date FROM journal_entries WHERE id = NEW.journal_entry_id)
-  )
-BEGIN
-  INSERT INTO background_work_items (
-    book_id, kind, payload_json, available_at, created_at, updated_at
-  ) VALUES (
-    NEW.book_id, 'pricing.fx_coverage',
-    json_object('reason', 'transaction_entered',
-      'start_date', (SELECT entry_date FROM journal_entries WHERE id = NEW.journal_entry_id),
-      'currency_id', NEW.commodity_id),
-    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-    strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-    strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-  );
-END;
--- +goose StatementEnd
-
--- Earlier pre-release baseline extensions. This repository has no released
--- databases to upgrade, so the former 0002–0011 migrations remain folded into
--- this fresh-install schema in their original execution order. Keeping the
--- statements (rather than hand-reconstructing their final DDL) preserves the
--- exact defaults, indexes, and trigger replacement semantics that the prior
--- chain produced.
-
-ALTER TABLE transactions ADD COLUMN deleted_at TEXT;
-ALTER TABLE transactions ADD COLUMN deleted_by_user_id INTEGER REFERENCES users(id) ON DELETE RESTRICT;
-ALTER TABLE transactions ADD COLUMN deleted_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT;
-ALTER TABLE transactions ADD COLUMN delete_reason TEXT;
+-- Earlier pre-release baseline extensions (the former 0002–0011 migrations).
+-- No released database exists, so their column additions and trigger/view
+-- replacements are written as final DDL in the tables above (T-124); only
+-- their new objects remain here, in their original order.
 
 CREATE INDEX transactions_deleted_idx
   ON transactions (book_id, deleted_at, id)
@@ -2829,82 +2746,11 @@ BEGIN
 END;
 -- +goose StatementEnd
 
--- Same-day sequence columns retain their former DEFAULT 0, including for a
--- fresh database, to match the schema produced by the prior pre-release chain.
--- +goose StatementBegin
-DROP TRIGGER IF EXISTS transaction_versions_no_update;
--- +goose StatementEnd
-
--- +goose StatementBegin
-DROP TRIGGER IF EXISTS posting_versions_no_update;
--- +goose StatementEnd
-
-ALTER TABLE transaction_versions
-  ADD COLUMN transaction_day_sequence INTEGER NOT NULL DEFAULT 0;
-
-ALTER TABLE posting_versions
-  ADD COLUMN account_day_sequence INTEGER NOT NULL DEFAULT 0;
-
--- +goose StatementBegin
-UPDATE transaction_versions
-SET transaction_day_sequence = (
-  SELECT COUNT(DISTINCT other.transaction_id)
-  FROM transaction_versions other
-  WHERE other.book_id = transaction_versions.book_id
-    AND other.transaction_date = transaction_versions.transaction_date
-    AND other.transaction_id <= transaction_versions.transaction_id
-);
--- +goose StatementEnd
-
--- +goose StatementBegin
-UPDATE posting_versions
-SET account_day_sequence = (
-  SELECT COUNT(DISTINCT other.posting_line_id)
-  FROM posting_versions other
-  JOIN journal_entries other_je ON other_je.id = other.journal_entry_id
-  JOIN journal_entries self_je  ON self_je.id  = posting_versions.journal_entry_id
-  WHERE other.book_id = posting_versions.book_id
-    AND other.account_id = posting_versions.account_id
-    AND other_je.entry_date = self_je.entry_date
-    AND other.posting_line_id <= posting_versions.posting_line_id
-);
--- +goose StatementEnd
-
-ALTER TABLE reconciliation_checkpoints
-  ADD COLUMN statement_account_sequence INTEGER NOT NULL DEFAULT 0;
-
--- +goose StatementBegin
-UPDATE reconciliation_checkpoints
-SET statement_account_sequence = COALESCE((
-  SELECT MAX(pv.account_day_sequence)
-  FROM reconciliation_checkpoint_postings rcp
-  JOIN posting_versions pv ON pv.id = rcp.posting_version_id
-  WHERE rcp.checkpoint_id = reconciliation_checkpoints.id
-    AND rcp.entry_date = reconciliation_checkpoints.statement_date
-), 0);
--- +goose StatementEnd
-
 CREATE INDEX transaction_versions_book_date_seq_idx
   ON transaction_versions (book_id, transaction_date DESC, transaction_day_sequence DESC, id DESC);
 
 CREATE INDEX posting_versions_account_date_seq_idx
   ON posting_versions (book_id, account_id, account_day_sequence DESC, id DESC);
-
--- +goose StatementBegin
-CREATE TRIGGER transaction_versions_no_update
-BEFORE UPDATE ON transaction_versions
-BEGIN
-  SELECT RAISE(ABORT, 'transaction_versions rows are append-only');
-END;
--- +goose StatementEnd
-
--- +goose StatementBegin
-CREATE TRIGGER posting_versions_no_update
-BEFORE UPDATE ON posting_versions
-BEGIN
-  SELECT RAISE(ABORT, 'posting_versions rows are append-only');
-END;
--- +goose StatementEnd
 
 CREATE TABLE import_profiles (
   id INTEGER PRIMARY KEY,
@@ -2928,7 +2774,8 @@ CREATE TABLE import_batches (
   ),
   original_filename TEXT NOT NULL DEFAULT '',
   source_meta_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(source_meta_json)),
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  connection_id INTEGER REFERENCES import_connections(id) ON DELETE SET NULL
 );
 
 CREATE INDEX import_batches_book_created_idx ON import_batches (book_id, created_at DESC, id DESC);
@@ -3059,29 +2906,9 @@ BEGIN
 END;
 -- +goose StatementEnd
 
-ALTER TABLE account_versions ADD COLUMN cost_basis_method TEXT CHECK (
-  cost_basis_method IS NULL OR cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')
-);
-
-DROP VIEW IF EXISTS current_account_versions;
-CREATE VIEW current_account_versions AS
-SELECT av.*
-FROM account_versions av
-WHERE av.id = (
-  SELECT current_av.id
-  FROM account_versions current_av
-  WHERE current_av.account_id = av.account_id
-    AND current_av.effective_from <= date('now')
-  ORDER BY current_av.effective_from DESC, current_av.version_seq DESC
-  LIMIT 1
-);
-
 CREATE UNIQUE INDEX background_work_items_active_unique_idx
   ON background_work_items (book_id, kind, payload_json)
   WHERE status IN ('pending', 'running');
-
-DROP TRIGGER IF EXISTS fx_work_after_account_version_insert;
-DROP TRIGGER IF EXISTS fx_work_after_posting_version_insert;
 
 -- +goose StatementBegin
 CREATE TRIGGER fx_work_after_account_version_insert
@@ -3165,7 +2992,6 @@ CREATE TABLE import_connections (
 
 CREATE INDEX import_connections_book_idx ON import_connections (book_id, created_at DESC, id DESC);
 
-ALTER TABLE import_batches ADD COLUMN connection_id INTEGER REFERENCES import_connections(id) ON DELETE SET NULL;
 CREATE INDEX import_batches_connection_idx ON import_batches (connection_id) WHERE connection_id IS NOT NULL;
 
 CREATE TABLE import_connection_holdings (
@@ -3178,9 +3004,6 @@ CREATE TABLE import_connection_holdings (
 );
 
 CREATE INDEX import_connection_holdings_connection_idx ON import_connection_holdings (connection_id);
-
-DROP TRIGGER IF EXISTS investment_instrument_versions_no_delete;
-DROP TRIGGER IF EXISTS commodity_versions_no_delete;
 
 -- +goose StatementBegin
 CREATE TRIGGER investment_instrument_versions_no_delete
@@ -3828,6 +3651,7 @@ WHEN NEW.id IS NOT OLD.id
   OR NEW.created_at IS NOT OLD.created_at
   OR NEW.created_by_user_id IS NOT OLD.created_by_user_id
   OR NEW.created_audit_event_id IS NOT OLD.created_audit_event_id
+  OR NEW.operation_id IS NOT OLD.operation_id
 BEGIN
   SELECT RAISE(ABORT, 'investment lot opening facts are immutable');
 END;
@@ -3843,6 +3667,7 @@ END;
 
 -- +goose Down
 DROP TRIGGER IF EXISTS investment_lots_no_delete;
+DROP TRIGGER IF EXISTS investment_lots_operation_same_book;
 DROP TRIGGER IF EXISTS investment_lots_opening_no_update;
 DROP TRIGGER IF EXISTS import_source_revisions_no_delete;
 DROP TRIGGER IF EXISTS import_source_revisions_no_update;
@@ -3908,8 +3733,6 @@ DROP TRIGGER IF EXISTS investment_transfer_facts_no_delete;
 DROP TRIGGER IF EXISTS investment_transfer_facts_no_update;
 DROP TRIGGER IF EXISTS investment_transfer_lot_links_valid;
 DROP TRIGGER IF EXISTS investment_transfer_facts_valid;
-DROP TRIGGER IF EXISTS investment_lot_facts_no_delete;
-DROP TRIGGER IF EXISTS investment_lot_facts_no_update;
 DROP TRIGGER IF EXISTS investment_operation_components_no_delete;
 DROP TRIGGER IF EXISTS investment_operation_components_no_update;
 DROP TRIGGER IF EXISTS investment_operation_journal_links_no_delete;
@@ -3922,7 +3745,6 @@ DROP TRIGGER IF EXISTS investment_disposal_revisions_no_update;
 DROP TRIGGER IF EXISTS investment_disposal_revision_allocations_valid;
 DROP TRIGGER IF EXISTS investment_disposal_revisions_valid;
 DROP TRIGGER IF EXISTS investment_disposal_decisions_same_book;
-DROP TRIGGER IF EXISTS investment_lot_facts_same_book;
 DROP TRIGGER IF EXISTS investment_components_same_book;
 DROP TRIGGER IF EXISTS investment_operation_links_valid;
 DROP TABLE IF EXISTS investment_split_revision_effects;
@@ -3931,7 +3753,10 @@ DROP TABLE IF EXISTS investment_split_facts;
 DROP TABLE IF EXISTS investment_transfer_lot_links;
 DROP TABLE IF EXISTS investment_transfer_facts;
 DROP TABLE IF EXISTS investment_operation_lot_effects;
-DROP TABLE IF EXISTS investment_lot_facts;
+DROP VIEW IF EXISTS effective_investment_lot_events;
+DROP VIEW IF EXISTS latest_investment_split_revisions;
+DROP VIEW IF EXISTS latest_investment_disposal_revisions;
+DROP VIEW IF EXISTS effective_investment_operations;
 DROP TABLE IF EXISTS investment_operation_components;
 DROP INDEX IF EXISTS investment_fee_policy_scope_idx;
 DROP TABLE IF EXISTS investment_fee_policy_versions;

@@ -79,8 +79,8 @@ func persistInvestmentReplayProjectionTx(ctx context.Context, tx *sql.Tx, bookID
 		}
 		var priorID sql.NullInt64
 		var priorSeq int
-		err = tx.QueryRowContext(ctx, `SELECT id, revision_seq FROM investment_disposal_revisions
-			WHERE book_id = ? AND decision_id = ? ORDER BY revision_seq DESC LIMIT 1`,
+		err = tx.QueryRowContext(ctx, `SELECT id, revision_seq FROM latest_investment_disposal_revisions
+			WHERE book_id = ? AND decision_id = ?`,
 			bookID, disposal.DecisionID).Scan(&priorID, &priorSeq)
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("read current disposal revision: %w", err)
