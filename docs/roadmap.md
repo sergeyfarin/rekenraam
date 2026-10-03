@@ -134,7 +134,12 @@ The shared gain-impact mechanism (T-114 #129) and its rollout to every existing
 replay path (T-126 #141) ship: manual and imported acquisitions, reinvestment,
 native reversals/replacements and Trading 212 source revisions disclose and
 require acknowledgement of revised committed gains.
-Manual splits (#137), pooled internal transfers (#138) and backdated transfer-in/disposal replay (#132) ship; near-term focus is **#139 now**.
+Manual splits (#137), pooled internal transfers (#138), backdated
+transfer-in/disposal replay (#132), the cross-position decision (#139) and
+closure propagation (#147) ship. Near-term focus, reviewed 2026-10-03:
+**split correction [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) now**, with
+import/source-revision API and browser evidence [T-128 #143](https://github.com/sergeyfarin/rekenraam/issues/143)
+alongside, then the step 6 correction families.
 New replaying commands opt into the same disclosure in their own acceptance.
 Closed #99/#125/#113/#127/#129/#141/#142 are historical evidence, not active gates.
 Priority labels describe urgency; this sequence does not add hard dependencies.
@@ -173,11 +178,23 @@ Remaining work, in order:
    basis revises the link and replays every destination, chain and cycle in
    the same command, with gain disclosure. Changed pooled lineage
    ([T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150)) and removing a transferred acquisition stay refused.
-6. **Remaining lifecycle families.** Dividend/reinvestment correction
+6. **Split correction, then remaining lifecycle families.** Split
+   reversal/replacement and the guarded journal-delta adjustment
+   [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) come first: a mistaken split, or a
+   mistaken trade before one, has no recovery path today. Zero-delta splits
+   [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146) reuse its adjustment rule afterwards.
+   Then dividend/reinvestment correction
    [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130); trade field correction [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131); write-off correction
    [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133); transfer correction [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134); correction-chain register
    and net checkpoint impact [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135). Provider cancellation/wider source
    revision [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) is evidence-blocked, not an active P0 gate.
+   Settle the pooled-lineage decision [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) before
+   transfer correction #134, which would otherwise hit the same refusal, and
+   land the replay-equivalence self-check [T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149)
+   before #134 as well. Each new replaying command increases the stored
+   projection's exposure to a skipped-replay bug.
+   The lot-opening `NOT NULL` cleanup [T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) is a
+   baseline change and must land before the v0.1.0 tag.
 7. **Outbound/unknown transfers, return of capital and cash in lieu**, under
    [#114](https://github.com/sergeyfarin/rekenraam/issues/114) and the
    [slice 5 contract](plans/investment-operation-slice-5-contract.md), then

@@ -437,7 +437,11 @@ shipped. #141 covered
 reinvestment, imported acquisitions, native reversals/replacements and source
 revisions; new commands opt into the same policy themselves.
 Shared checkpoint preview under-reporting #142 is complete; same-day boundary
-and combined-delta behavior remain #135. Current sequence:
+and combined-delta behavior remain #135. Next (2026-10-03): split correction
+[T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) opens step 6, with API/browser evidence
+[T-128 #143](https://github.com/sergeyfarin/rekenraam/issues/143) alongside. Before transfer correction #134,
+settle pooled lineage #150 and add the replay-equivalence verifier #149.
+Current sequence:
 
 1. **Shared gain-impact safety mechanism** — [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129). **Shipped** for manual buys: a command sets
    `GainImpactPolicy` and the shared writer snapshots effective disposals before

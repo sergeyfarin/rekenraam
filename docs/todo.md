@@ -12,26 +12,34 @@ Done: [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129) shared g
 [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141) rollout to every existing replay path (see
 [implemented](implemented.md) for the coverage matrix).
 
-## Now: remaining replay gaps (splits shipped)
+## Done 2026-10-03: replay gaps
 
-1. [x] Manual split/reverse split [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137) with replay, gain disclosure, mobile entry and
-   Trading 212 split-row linking. Follow-ups: split correction/journal-delta adjustment
-   [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) (P2), verified provider mapping [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145) (blocked),
-   zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146).
-2. [x] Support pooled average-cost internal transfers [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).
-3. [x] Extend backdating [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132): known-basis transfer-in behind later sales first,
-   then earlier sales/write-offs. Preserve recorded methods and original dates.
-4. [x] Decide cross-position replay and consolidate effective readers
-   [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139): dependency closure chosen; effective views; lot facts merged.
-5. [x] Propagate changed internal-transfer basis through the dependency closure
-   [T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147). Follow-up: changed pooled lineage
-   [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) (P3).
+Manual splits [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137), pooled internal transfers
+[T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138), broader backdating [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132), the
+cross-position replay decision [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139) and transfer-basis
+propagation [T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147) ship. See [implemented](implemented.md).
 
-This is execution order, not an extra dependency chain. New commands integrate
-the #129 gain-impact policy themselves.
+## Now
+
+1. [ ] Correct or reverse posted splits and adjust their journal delta
+   [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) (P2). Today a mistaken split, or a quantity
+   correction, backdated buy or reversal before a split, is refused with no
+   recovery path. Integrate #129 gain acknowledgement and the reconciliation
+   preview.
+2. [ ] Alongside: add API and browser evidence for import gain review and Trading 212
+   source revisions [T-128 #143](https://github.com/sergeyfarin/rekenraam/issues/143) (P2). The development-only
+   provider base-URL override and e2e stub also give later Trading 212 work
+   (#136, #145) a test harness.
+
+Follow-ups, not gates: zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146) after #144
+(reuses its adjustment rule); verified provider split mapping
+[T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145) stays blocked on evidence.
 
 ## Then, within R16 (P2 correction families)
 
+- [ ] Before transfer correction #134: decide pooled-lineage re-derivation
+  [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) and add the full replay-equivalence self-check
+  [T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149) (both P3, sequenced here deliberately).
 - [ ] Deliver dividend/reinvestment correction [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130), trade field
   correction [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131), write-off correction [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133), transfer
   correction [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134), and correction grouping/net checkpoint impact
@@ -58,6 +66,8 @@ previews now replay and return the writer’s actual checkpoint set, and every e
 - [ ] Complete [T-80](https://github.com/sergeyfarin/rekenraam/issues/102) catalog parity, add validation, and arrange native
   terminology review before calling the multilingual surface complete.
 
+- [ ] Before the v0.1.0 tag: make every lot's opening operation `NOT NULL`
+  [T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148). This is a baseline change under the migration policy.
 - [ ] Measure and shorten the backend race gate [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140) without reducing
   meaningful coverage.
 
