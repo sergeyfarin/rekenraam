@@ -675,7 +675,12 @@ ExternalTransferInResponse:
 InternalTransferRequest:
   type: object
   additionalProperties: false
-  required: [effective_on, source_account_id, destination_account_id, commodity_id, cost_commodity_id, lot_allocations]
+  description: >-
+    Send lot_allocations for an individual-lot source, or quantity_value and
+    quantity_scale for an average-cost source (pooled allocation, T-123). The
+    source position's method-family lock, or else its resolved default,
+    decides which is accepted.
+  required: [effective_on, source_account_id, destination_account_id, commodity_id, cost_commodity_id]
   properties:
     effective_on:
       type: string
@@ -696,9 +701,16 @@ InternalTransferRequest:
       description: All selected source lots must carry basis in this currency.
     lot_allocations:
       type: array
-      minItems: 1
       items:
         $ref: "../schemas/investments.yaml#/InvestmentLotAllocationRequest"
+    quantity_value:
+      type: string
+      pattern: '^[1-9][0-9]{0,37}$'
+      description: Pooled transfer quantity coefficient; omit when lot_allocations are sent.
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
     source_evidence:
       type: object
       additionalProperties: true
@@ -708,13 +720,73 @@ InternalTransferRequest:
       type: string
     reconciliation_override:
       type: boolean
+    gain_impact_acknowledgement:
+      type: string
+      description: Echoes the preview gain-impact token when committed gains would change.
+
+InternalTransferLink:
+  type: object
+  required: [source_lot_id, destination_lot_id, quantity_value, quantity_scale, carried_basis_value, carried_basis_scale, original_date_knowledge, original_acquired_on]
+  properties:
+    source_lot_id:
+      type: integer
+      format: int64
+    destination_lot_id:
+      type: [integer, "null"]
+      format: int64
+      description: Null in a preview, whose lots are never durable.
+    quantity_value:
+      type: string
+    quantity_scale:
+      type: integer
+    carried_basis_value:
+      type: string
+      description: Basis carried from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot.
+    carried_basis_scale:
+      type: integer
+    original_date_knowledge:
+      type: string
+      enum: [known, unknown]
+    original_acquired_on:
+      type: [string, "null"]
+      format: date
+
+InternalTransferPlan:
+  type: object
+  required: [basis_allocation, cost_basis_method, resolution_tier, links]
+  properties:
+    basis_allocation:
+      type: string
+      enum: [selected_lots, average_cost_pool]
+    cost_basis_method:
+      type: string
+      enum: [fifo, lifo, average_cost, specific_lot]
+    resolution_tier:
+      type: string
+      enum: [account, global, fallback, position_lock]
+      description: position_lock means an open position's method family overrode the current default.
+    links:
+      type: array
+      items:
+        $ref: "../schemas/investments.yaml#/InternalTransferLink"
+
+InternalTransferPreviewResponse:
+  type: object
+  required: [plan, impact]
+  properties:
+    plan:
+      $ref: "../schemas/investments.yaml#/InternalTransferPlan"
+    impact:
+      $ref: "../schemas/transactions.yaml#/ReconciliationImpactResponse"
 
 InternalTransferResponse:
   type: object
-  required: [transaction, destination_lot_ids]
+  required: [transaction, plan, destination_lot_ids]
   properties:
     transaction:
       $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    plan:
+      $ref: "../schemas/investments.yaml#/InternalTransferPlan"
     destination_lot_ids:
       type: array
       items:
@@ -1488,7 +1560,14 @@ InvestmentPositionResponse:
     - basis_knowledge
     - cost_commodity_id
     - latest_price_approximate
+    - transfer_basis_allocation
   properties:
+    transfer_basis_allocation:
+      type: string
+      enum: [selected_lots, average_cost_pool]
+      description: >-
+        How an internal transfer from this position allocates basis: the open
+        position's method lock, else its resolved default method (T-123).
     account_id:
       type: integer
       format: int64

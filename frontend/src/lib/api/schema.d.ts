@@ -13612,8 +13612,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Transfer selected investment lots between holding accounts
-         * @description Moves positive explicit long-lot quantities with their carried basis, without cash or gain.
+         * Transfer an investment holding between holding accounts
+         * @description Moves selected long lots with their own basis (individual-lot source) or a quantity at the dated average-cost pool rate (average-cost source), without cash or gain. Destination lots keep source lineage and original dates.
          */
         post: {
             parameters: {
@@ -13666,7 +13666,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Reconciliation override required or dated lot dependency conflicts */
+                /** @description Reconciliation override or gain acknowledgement required, the allocation does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED / INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a dated lot dependency conflicts */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -13738,6 +13738,85 @@ export interface paths {
                 };
                 /** @description Authentication required */
                 401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transfers/internal/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview an internal investment transfer
+         * @description Authenticated read-only preview; no CSRF token or write occurs. Runs the complete transfer writer and rolls back, returning the carried basis per source lot plus checkpoint and gain impact.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InternalTransferRequest"];
+                };
+            };
+            responses: {
+                /** @description Carried allocation plan and its reconciliation/gain impact */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InternalTransferPreviewResponse"];
+                    };
+                };
+                /** @description Invalid transfer facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Allocation does not match the source method or a dated lot dependency conflicts */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -19288,6 +19367,7 @@ export interface components {
             /** Format: int64 */
             lot_id: number;
         };
+        /** @description Send lot_allocations for an individual-lot source, or quantity_value and quantity_scale for an average-cost source (pooled allocation, T-123). The source position's method-family lock, or else its resolved default, decides which is accepted. */
         InternalTransferRequest: {
             /**
              * Format: date
@@ -19305,17 +19385,57 @@ export interface components {
              * @description All selected source lots must carry basis in this currency.
              */
             cost_commodity_id: number;
-            lot_allocations: components["schemas"]["InvestmentLotAllocationRequest"][];
+            lot_allocations?: components["schemas"]["InvestmentLotAllocationRequest"][];
+            /** @description Pooled transfer quantity coefficient; omit when lot_allocations are sent. */
+            quantity_value?: string;
+            quantity_scale?: number;
             source_evidence?: {
                 [key: string]: unknown;
             };
             memo?: string;
             change_reason?: string;
             reconciliation_override?: boolean;
+            /** @description Echoes the preview gain-impact token when committed gains would change. */
+            gain_impact_acknowledgement?: string;
         };
         InternalTransferResponse: {
             transaction: components["schemas"]["TransactionResponse"];
+            plan: components["schemas"]["InternalTransferPlan"];
             destination_lot_ids: number[];
+        };
+        InternalTransferLink: {
+            /** Format: int64 */
+            source_lot_id: number;
+            /**
+             * Format: int64
+             * @description Null in a preview, whose lots are never durable.
+             */
+            destination_lot_id: number | null;
+            quantity_value: string;
+            quantity_scale: number;
+            /** @description Basis carried from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot. */
+            carried_basis_value: string;
+            carried_basis_scale: number;
+            /** @enum {string} */
+            original_date_knowledge: "known" | "unknown";
+            /** Format: date */
+            original_acquired_on: string | null;
+        };
+        InternalTransferPlan: {
+            /** @enum {string} */
+            basis_allocation: "selected_lots" | "average_cost_pool";
+            /** @enum {string} */
+            cost_basis_method: "fifo" | "lifo" | "average_cost" | "specific_lot";
+            /**
+             * @description position_lock means an open position's method family overrode the current default.
+             * @enum {string}
+             */
+            resolution_tier: "account" | "global" | "fallback" | "position_lock";
+            links: components["schemas"]["InternalTransferLink"][];
+        };
+        InternalTransferPreviewResponse: {
+            plan: components["schemas"]["InternalTransferPlan"];
+            impact: components["schemas"]["ReconciliationImpactResponse"];
         };
         InvestmentSplitRequest: {
             /**
@@ -19712,6 +19832,11 @@ export interface components {
             lots: components["schemas"]["InvestmentLotResponse"][];
         };
         InvestmentPositionResponse: {
+            /**
+             * @description How an internal transfer from this position allocates basis: the open position's method lock, else its resolved default method (T-123).
+             * @enum {string}
+             */
+            transfer_basis_allocation: "selected_lots" | "average_cost_pool";
             /** Format: int64 */
             account_id: number;
             /** Format: int64 */
@@ -19934,7 +20059,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

@@ -198,6 +198,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/investments/transfers/external/in/reconciliation-impact", externalTransferInReconciliationImpact(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transfers/internal", internalTransfer(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/transfers/internal/reconciliation-impact", internalTransferReconciliationImpact(logger, services.Auth, services.Investment))
+	mux.HandleFunc("POST /api/v1/investments/transfers/internal/preview", internalTransferPreview(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/splits", investmentSplit(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/splits/preview", investmentSplitPreview(logger, services.Auth, services.Investment))
 	mux.HandleFunc("GET /api/v1/investments/transactions/{transaction_id}/correction-chain", investmentCorrectionChain(logger, services.Auth, services.Investment))

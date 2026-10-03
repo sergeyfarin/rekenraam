@@ -442,6 +442,13 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 						AND (source_event.cost_basis_value = '-' || x.carried_basis_value
 							OR (source_event.cost_basis_value = '0' AND x.carried_basis_value = '0'))
 				)))`},
+		{"internal transfer basis allocation disagrees with its source depletions", `
+			SELECT f.operation_id FROM investment_transfer_facts f
+			WHERE f.book_id = ? AND f.transfer_kind = 'internal'
+			AND EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+				JOIN investment_lot_events e ON e.id = x.lot_event_id AND e.event_kind = 'transfer_out'
+				WHERE x.operation_id = f.operation_id
+				AND (e.cost_basis_method IS 'average_cost') <> (f.basis_allocation = 'average_cost_pool'))`},
 		{"split missing its sourced ratio or lot effects", `
 			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
 			AND o.operation_kind = 'split'

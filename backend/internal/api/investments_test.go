@@ -183,14 +183,73 @@ func TestInternalTransferAPIRequiresCSRFAndPreviewsBothAccounts(t *testing.T) {
 	assert.Equal(t, 1, linkCount)
 }
 
-func TestAverageCostInternalTransferConflictHasSpecificCode(t *testing.T) {
-	recorder := httptest.NewRecorder()
-	writeInvestmentServiceError(recorder, nil, nil, "internal transfer",
-		ledgerdb.ErrAverageCostTransferRequiresPoolAllocation)
-	require.Equal(t, http.StatusConflict, recorder.Code)
-	var response errorResponse
-	require.NoError(t, json.NewDecoder(recorder.Body).Decode(&response))
-	assert.Equal(t, "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED", response.Error.Code)
+func TestInternalTransferAllocationConflictsHaveSpecificCodes(t *testing.T) {
+	for err, code := range map[error]string{
+		ledgerdb.ErrAverageCostTransferRequiresPoolAllocation: "INVESTMENT_TRANSFER_POOL_REQUIRED",
+		ledgerdb.ErrPooledTransferRequiresAverageCost:         "INVESTMENT_TRANSFER_POOL_UNAVAILABLE",
+	} {
+		recorder := httptest.NewRecorder()
+		writeInvestmentServiceError(recorder, nil, nil, "internal transfer", err)
+		require.Equal(t, http.StatusConflict, recorder.Code)
+		var response errorResponse
+		require.NoError(t, json.NewDecoder(recorder.Body).Decode(&response))
+		assert.Equal(t, code, response.Error.Code)
+	}
+}
+
+func TestPooledInternalTransferAPIPreviewMatchesCommit(t *testing.T) {
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "IPOOL")
+	source := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	destination := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	for _, buy := range []struct {
+		date, quantity string
+		cash           int64
+	}{{"2026-01-01", "1", 10000}, {"2026-01-02", "1", 20000}} {
+		request := tradeRequestBody(f, source.ID, instrument.CommodityID, buy.quantity, buy.cash)
+		request.TransactionDate = buy.date
+		doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+			"/api/v1/investments/buy", request, http.StatusCreated)
+	}
+	sale := tradeRequestBody(f, source.ID, instrument.CommodityID, "1", 30000)
+	sale.TransactionDate = "2026-01-03"
+	sale.CostBasisMethod = "average_cost"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/sell", sale, http.StatusCreated)
+	request := internalTransferRequest{
+		EffectiveOn: "2026-02-01", SourceAccountID: source.ID,
+		DestinationAccountID: destination.ID, CommodityID: instrument.CommodityID,
+		CostCommodityID: f.commodityID, QuantityValue: exact.New(1),
+	}
+	path := "/api/v1/investments/transfers/internal"
+	res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/preview", request, http.StatusOK)
+	var preview internalTransferPreviewResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
+	require.Equal(t, "average_cost_pool", preview.Plan.BasisAllocation)
+	require.Equal(t, "position_lock", preview.Plan.ResolutionTier)
+	require.Len(t, preview.Plan.Links, 1)
+	assert.Nil(t, preview.Plan.Links[0].DestinationLotID)
+	assert.Empty(t, preview.Impact.AffectedCheckpoints)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
+	var committed internalTransferResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&committed))
+	require.Len(t, committed.Plan.Links, 1)
+	require.NotNil(t, committed.Plan.Links[0].DestinationLotID)
+	assert.Equal(t, committed.DestinationLotIDs[0], *committed.Plan.Links[0].DestinationLotID)
+	// The pool after an average-cost sale is 150.00 for one share.
+	assert.Equal(t, preview.Plan.Links[0].CarriedBasisValue, committed.Plan.Links[0].CarriedBasisValue)
+	assert.Equal(t, preview.Plan.Links[0].CarriedBasisScale, committed.Plan.Links[0].CarriedBasisScale)
+	assert.Zero(t, exact.ScaledIntFromInt64(int64(committed.Plan.Links[0].CarriedBasisValue),
+		committed.Plan.Links[0].CarriedBasisScale).Cmp(exact.ScaledIntFromInt64(15000, 2)))
+	// The destination has no average-cost lock or default, so its moved lot
+	// goes back as a selected lot.
+	request.QuantityValue = ""
+	request.LotAllocations = []investmentLotAllocationRequest{{LotID: committed.DestinationLotIDs[0], QuantityValue: exact.New(1)}}
+	request.SourceAccountID, request.DestinationAccountID = destination.ID, source.ID
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/preview", request, http.StatusOK)
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
+	assert.Equal(t, "selected_lots", preview.Plan.BasisAllocation)
 }
 
 func TestExternalTransferInPreviewNamesCheckpointAndWriteRequiresOverride(t *testing.T) {

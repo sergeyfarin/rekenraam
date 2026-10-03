@@ -585,6 +585,9 @@ type InvestmentPosition struct {
 	LatestPriceDate         string
 	LatestPriceApproximate  bool
 	BasisKnowledge          string
+	// TransferBasisAllocation is how an internal transfer from this position
+	// allocates basis: the position's method lock, else its resolved default.
+	TransferBasisAllocation string
 }
 
 type InvestmentProviderEvent struct {
@@ -1889,7 +1892,19 @@ func (s *InvestmentService) Positions(ctx context.Context) ([]InvestmentPosition
 	if err != nil {
 		return nil, fmt.Errorf("read investment positions: %w", err)
 	}
-	return toInvestmentPositions(records), nil
+	positions := toInvestmentPositions(records)
+	defaults := make(map[int64]string)
+	for index, record := range records {
+		method, cached := defaults[record.AccountID]
+		if !cached {
+			if method, _, err = s.resolveCostBasisMethod(ctx, record.AccountID, ""); err != nil {
+				return nil, err
+			}
+			defaults[record.AccountID] = method
+		}
+		positions[index].TransferBasisAllocation = db.InternalTransferAllocation(record.MethodFamily, method)
+	}
+	return positions, nil
 }
 
 func (s *InvestmentService) ListProviderEvents(ctx context.Context) ([]InvestmentProviderEvent, error) {

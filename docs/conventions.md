@@ -100,6 +100,12 @@ When a feature introduces a durable new rule, update one of those documents in t
   cost may redistribute only the remaining-basis projection. While the runtime has
   one operational projection, reject switching into or out of average cost after
   a partial disposal until the position closes and starts a new method epoch.
+- An internal transfer allocates basis by the source position's method-family
+  lock, else its resolved default: selected lots carry their own basis; an
+  average-cost source moves a quantity through the same dated pool depletion as
+  a sale (exact remainder on the last touched lot) and never carries a selected
+  lot's own basis out of a pool. The transfer snapshots the applied method and
+  its provenance, and any move locks the source family (T-123).
 - Replay that changes a committed disposal's effective basis, proceeds, gain,
   knowledge, date, position or method must be disclosed, even when no reconciled
   balance changes (T-114). A command opts in by setting `GainImpactPolicy` on its

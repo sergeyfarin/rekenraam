@@ -32,3 +32,18 @@ export function parseInternalTransferAllocations(
   }
   return { ok: true, allocations };
 }
+
+/** Validate a pooled (average-cost) transfer quantity against the position. */
+export function parsePooledTransferQuantity(
+  draft: string,
+  position: { quantity_value: string; quantity_scale: number },
+  maxScale: number
+): { ok: true; quantity_value: string; quantity_scale: number } |
+   { ok: false; reason: 'invalid' | 'exceeds_available' } {
+  const parsed = parseMagnitude(draft, { maxScale });
+  if (!parsed.ok || parsed.field.value === '0') return { ok: false, reason: 'invalid' };
+  if (compareScaledAmounts(parsed.field, { value: position.quantity_value, scale: position.quantity_scale }) > 0) {
+    return { ok: false, reason: 'exceeds_available' };
+  }
+  return { ok: true, quantity_value: parsed.field.value, quantity_scale: parsed.field.scale };
+}

@@ -17,7 +17,7 @@ and priority. Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
 | Foundation / exact trade economics (1–3) | Shipped; #125 integrity complete; bundle schema 5 | Remove duplicated opening evidence and centralize effective reads without weakening audit checks |
 | Long buy/sale correction (4a–4ai, #99) | Reversal, replacement, recorded-method replay, backdated buys, Trading 212 quantity/net revisions, shared writer | Gain-impact disclosure and remaining families have separate bounded issues |
 | Preview feasibility | Buy/source replacements, plain buys and reinvestment run rolled-back writer replay; openings return actual checkpoint sets | Disclosure shipped for every existing replay path (#129, #141); new commands opt in |
-| Transfers (5b/5d) | Known-basis external inbound; explicit-lot internal, with carried-basis dependency fence | Pooled allocation and cross-position replay; unknown immutable facts/resolution |
+| Transfers (5b/5d, T-123) | Known-basis external inbound; explicit-lot and pooled average-cost internal, with exact remainder, snapshotted policy and carried-basis dependency fence | Cross-position replay; unknown immutable facts/resolution |
 | Split / basis actions (5) | Manual split/reverse split with replay, gain disclosure, export, self-check, mobile entry and Trading 212 split-row linking (T-122) | Split correction and guarded journal-delta adjustment; return of capital, cash in lieu |
 | Shorts / compound actions (6–7) | Operation/side foundation only | Side-aware commands; compound date/effect cardinality and replay |
 
@@ -428,7 +428,7 @@ accepted and flagged, but cannot be silently reclassified as shorts.
 
 Each slice keeps the app runnable, updates API, export/restore and self-check
 when affected, and has named exact-conservation and rollback tests. Immediate
-focus is #138 (#129, #141 and #137 shipped), then #132 → #139. #141 covered
+focus is #132 (#129, #141, #137 and #138 shipped), then #139. #141 covered
 reinvestment, imported acquisitions, native reversals/replacements and source
 revisions; new commands opt into the same policy themselves.
 Shared checkpoint preview under-reporting #142 is complete; same-day boundary
@@ -454,9 +454,14 @@ and combined-delta behavior remain #135. Current sequence:
    ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)). Split correction and a guarded journal-delta adjustment
    ([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)) and zero-delta splits ([T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)) remain; until then a
    history change that alters a split's quantity is refused with the split named.
-3. **Pooled internal transfers** — [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138). Conserve aggregate dated
-   pool basis with exact allocation/remainder, preserve lot lineage, and define
-   destination integration. This is operational average cost, not tax-policy
+3. **Pooled internal transfers** — [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138). **Shipped**
+   (2026-10-03): the source's method lock, else its resolved default, chooses
+   selected-lot or pooled allocation. A pooled move reuses the sale's dated
+   pool depletion (FIFO lot links for lineage, exact remainder on the last
+   touched lot), snapshots method/tier/version on the transfer fact, locks the
+   source family, and leaves the destination's method state to integrate the
+   new lots. Replay re-runs the pool and refuses any changed link with the
+   transfer named. This is operational average cost, not tax-policy
    completeness.
 4. **General backdating** — [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132). Transfer-in behind later
    disposals first, then earlier sales/write-offs through dependent replay.

@@ -23,7 +23,7 @@ type InvestmentReplayIntent struct {
 	OperationKind    string
 	EffectSeq        int
 	EventDate        string
-	Kind             string // opening, disposal, transfer_out or split
+	Kind             string // opening, disposal, transfer_out, pooled_transfer_out or split
 	LotID            int64  // opening or transfer_out
 	DecisionID       int64  // disposal only
 	// QuantityValue is the opening, disposal or transfer quantity. For a split
@@ -42,10 +42,23 @@ type InvestmentReplayIntent struct {
 	CostBasisMethod string
 	DecisionSource  DisposalDecisionSource
 	SpecificLots    []LotAllocation
+	// PooledLinks are a pooled transfer's committed per-lot carried amounts,
+	// in link order. Replay must reproduce them exactly.
+	PooledLinks     []InvestmentReplayTransferLink
 	TransactionID   int64
 	AuditEventID    int64
 	CreatedByUserID int64
 	CreatedAt       string
+}
+
+// InvestmentReplayTransferLink is one source lot's committed depletion in a
+// pooled internal transfer.
+type InvestmentReplayTransferLink struct {
+	LotID          int64
+	QuantityValue  exact.Coefficient
+	QuantityScale  int
+	CostBasisValue exact.Coefficient
+	CostBasisScale int
 }
 
 func (r *InvestmentRepository) ListInvestmentReplayIntents(ctx context.Context, bookID, accountID, commodityID, costCommodityID int64, side string) ([]InvestmentReplayIntent, error) {
@@ -169,7 +182,7 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		SELECT f.operation_id, o.operation_kind, f.effective_on, x.source_lot_id,
 			x.quantity_value, x.quantity_scale, x.carried_basis_value, x.carried_basis_scale,
 			e.transaction_id, e.created_audit_event_id, e.created_by_user_id, e.created_at,
-			effect.effect_seq
+			effect.effect_seq, f.basis_allocation
 		FROM investment_transfer_facts f
 		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
 		JOIN investment_operations o ON o.id = f.operation_id
@@ -186,14 +199,18 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	if err != nil {
 		return nil, fmt.Errorf("read replay transfer depletions: %w", err)
 	}
+	// A pooled transfer is one intent: replay depletes the pool once for its
+	// total quantity, then compares every link it produced.
+	pooled := make(map[int64]int)
 	for transfers.Next() {
 		var intent InvestmentReplayIntent
 		var basis sql.NullString
 		var basisScale sql.NullInt64
+		var allocation sql.NullString
 		if err := transfers.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
 			&intent.LotID, &intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale,
 			&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID,
-			&intent.CreatedAt, &intent.EffectSeq); err != nil {
+			&intent.CreatedAt, &intent.EffectSeq, &allocation); err != nil {
 			transfers.Close()
 			return nil, fmt.Errorf("scan replay transfer depletion: %w", err)
 		}
@@ -204,7 +221,32 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		intent.AmountValue = exact.Coefficient(basis.String)
 		intent.AmountScale = int(basisScale.Int64)
 		intent.Kind = "transfer_out"
-		intents = append(intents, intent)
+		if allocation.String != InternalTransferAverageCostPool {
+			intents = append(intents, intent)
+			continue
+		}
+		link := InvestmentReplayTransferLink{LotID: intent.LotID, QuantityValue: intent.QuantityValue,
+			QuantityScale: intent.QuantityScale, CostBasisValue: intent.AmountValue, CostBasisScale: intent.AmountScale}
+		index, exists := pooled[intent.OperationID]
+		if !exists {
+			intent.Kind = "pooled_transfer_out"
+			intent.LotID = 0
+			intent.AmountValue, intent.AmountScale = "", 0
+			pooled[intent.OperationID] = len(intents)
+			intents = append(intents, intent)
+			index = len(intents) - 1
+		} else {
+			total := exact.ScaledIntFromCoefficient(intents[index].QuantityValue, intents[index].QuantityScale)
+			total.AddCoefficient(intent.QuantityValue, intent.QuantityScale)
+			quantity, err := total.Coefficient()
+			if err != nil {
+				transfers.Close()
+				return nil, fmt.Errorf("total pooled transfer %d quantity: %w", intent.OperationID, err)
+			}
+			intents[index].QuantityValue, intents[index].QuantityScale = quantity, total.Scale()
+			intents[index].EffectSeq = min(intents[index].EffectSeq, intent.EffectSeq)
+		}
+		intents[index].PooledLinks = append(intents[index].PooledLinks, link)
 	}
 	if err := transfers.Err(); err != nil {
 		transfers.Close()

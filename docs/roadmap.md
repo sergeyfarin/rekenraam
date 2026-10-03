@@ -134,7 +134,7 @@ The shared gain-impact mechanism (T-114 #129) and its rollout to every existing
 replay path (T-126 #141) ship: manual and imported acquisitions, reinvestment,
 native reversals/replacements and Trading 212 source revisions disclose and
 require acknowledgement of revised committed gains.
-Manual splits (#137) ship; near-term focus is **#138 now**, then #132 → #139.
+Manual splits (#137) and pooled internal transfers (#138) ship; near-term focus is **#132 now**, then #139.
 New replaying commands opt into the same disclosure in their own acceptance.
 Closed #99/#125/#113/#127/#129/#141/#142 are historical evidence, not active gates.
 Priority labels describe urgency; this sequence does not add hard dependencies.
@@ -151,9 +151,12 @@ Remaining work, in order:
    double posting. Automatic provider mapping waits for verified ratio evidence
    ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)); split correction and journal-delta adjustment
    ([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)) and zero-delta splits ([T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)) are follow-ups.
-3. **Pooled average-cost internal transfer [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).** Explicit-lot
-   internal transfers and known-basis external inbound already ship. Average
-   pools remain refused until exact carried-basis allocation is implemented.
+3. **Pooled average-cost internal transfer [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).**
+   **Shipped 2026-10-03**: an average-cost source moves a quantity at its dated
+   pool rate with an exact final remainder, source lineage and original dates,
+   a snapshotted method policy, gain disclosure, replay that refuses a changed
+   carried basis with the transfer named, and mobile preview entry. Operational
+   average cost only; tax-policy identification stays R18.
 4. **Broader backdated replay [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132).** Transfer-in behind
    later sales and earlier disposal replay. Reinvestment already admits earlier
    openings, proves preview feasibility and discloses gain changes (T-126).

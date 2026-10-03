@@ -1,6 +1,9 @@
 post:
-  summary: Transfer selected investment lots between holding accounts
-  description: Moves positive explicit long-lot quantities with their carried basis, without cash or gain.
+  summary: Transfer an investment holding between holding accounts
+  description: >-
+    Moves selected long lots with their own basis (individual-lot source) or a
+    quantity at the dated average-cost pool rate (average-cost source), without
+    cash or gain. Destination lots keep source lineage and original dates.
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -38,7 +41,10 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: Reconciliation override required or dated lot dependency conflicts
+      description: >-
+        Reconciliation override or gain acknowledgement required, the allocation
+        does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED /
+        INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a dated lot dependency conflicts
       content:
         application/json:
           schema:

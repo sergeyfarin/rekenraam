@@ -394,6 +394,9 @@ type InvestmentPositionRecord struct {
 	LatestPriceBaseQuantityValue sql.NullInt64
 	LatestPriceBaseQuantityScale sql.NullInt64
 	BasisKnowledge               string
+	// MethodFamily is the open position's basis-method lock, or empty before
+	// its first depletion.
+	MethodFamily string
 }
 
 type InvestmentProviderEventRecord struct {
@@ -1665,6 +1668,15 @@ type avgCostLotRef struct {
 }
 
 func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64, allocationScale int) ([]LotDisposalRecord, error) {
+	// A pooled internal transfer depletes the pool exactly as a sale does;
+	// only its event kind differs (T-123).
+	eventKind := params.EventKind
+	if eventKind == "" {
+		eventKind = "disposal"
+	}
+	if eventKind != "disposal" && eventKind != "transfer_out" {
+		return nil, fmt.Errorf("%w: unsupported lot depletion event %q", ErrInvalidDisposalParams, eventKind)
+	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, remaining_quantity_value, remaining_quantity_scale,
 		       remaining_cost_basis_value, remaining_cost_basis_scale
@@ -1800,8 +1812,8 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 				book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 				cost_basis_value, cost_basis_scale, cost_basis_method, metadata_json,
 				created_at, created_by_user_id, created_audit_event_id
-			) VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, 'average_cost', ?, ?, ?, ?)
-		`, params.BookID, lot.id, nullablePositiveInt64(params.TransactionID), params.EventDate,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'average_cost', ?, ?, ?, ?)
+		`, params.BookID, lot.id, eventKind, nullablePositiveInt64(params.TransactionID), params.EventDate,
 			takeCoeff.Negated(), lot.quantityScale, -reportedValue, commonCostScale,
 			params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
 		if err != nil {
@@ -2138,7 +2150,13 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 					AND po.voided_at IS NULL
 				ORDER BY po.valuation_date DESC, CASE WHEN po.is_manual = 1 OR po.quote_type = 'valuation_override' THEN 3 WHEN po.is_approximate = 0 THEN 2 ELSE 1 END DESC, po.recorded_at DESC, po.id DESC
 				LIMIT 1
-			) AS latest_price_base_quantity_scale, lot.basis_knowledge
+			) AS latest_price_base_quantity_scale, lot.basis_knowledge,
+			COALESCE((
+				SELECT state.method_family FROM investment_position_basis_state state
+				WHERE state.book_id = lot.book_id AND state.account_id = lot.account_id
+					AND state.commodity_id = lot.commodity_id
+					AND state.cost_commodity_id = lot.cost_commodity_id AND state.position_side = 'long'
+			), '') AS method_family
 		FROM current_investment_lots lot
 		WHERE lot.book_id = ?
 			AND lot.status = 'open'
@@ -2164,7 +2182,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 		var quantity exact.Coefficient
 		var quantityScale int
 		var costValue, costScale sql.NullInt64
-		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate, &record.LatestPriceApproximate, &record.LatestPriceBaseQuantityValue, &record.LatestPriceBaseQuantityScale, &record.BasisKnowledge); err != nil {
+		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate, &record.LatestPriceApproximate, &record.LatestPriceBaseQuantityValue, &record.LatestPriceBaseQuantityScale, &record.BasisKnowledge, &record.MethodFamily); err != nil {
 			return nil, fmt.Errorf("scan investment position: %w", err)
 		}
 		value, scale, err := projectedBasis(costValue, costScale, record.BasisKnowledge)

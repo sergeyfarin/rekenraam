@@ -146,6 +146,9 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   may redistribute only remaining-basis projection state. With one operational
   projection, switching into or out of average cost after a partial disposal is
   rejected until the position closes.
+- Internal transfers follow the source's method lock, else its default: lots
+  for individual-lot sources, a pooled quantity for average-cost sources, which
+  reuses the sale's pool depletion and conserves basis exactly (T-123).
 
 ## Dates and times
 

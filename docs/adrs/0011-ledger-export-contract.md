@@ -234,6 +234,18 @@ posting. The links remain original audit evidence after basis replay or
 correction; replacement decisions have their own links. A zero-proceeds
 write-off may have no cost-currency portion. Existing CSV columns are retained.
 
+### Pooled internal transfer refinement (2026-10-03)
+
+Within schema version 6, `investment-transfer-facts.csv` appends
+`basis_allocation` (`selected_lots` or `average_cost_pool`), the applied
+`cost_basis_method`, `method_resolution_tier` (`account`, `global`,
+`fallback`, or `position_lock` when an open position's method family
+overrode the default) and the resolving `method_account_version_id` /
+`method_profile_version_id`. They are empty for external transfers. A pooled
+transfer's per-source-lot depletions are `transfer_out` rows with
+`cost_basis_method = average_cost`; its links carry each lot's pool-rate basis,
+with the final touched lot absorbing the exact remainder.
+
 ### Split refinement (2026-10-03)
 
 Manifest schema version 6 adds `investment-split-facts.csv` (operation,

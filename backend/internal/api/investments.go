@@ -191,21 +191,50 @@ type externalTransferInResponse struct {
 }
 
 type internalTransferRequest struct {
-	EffectiveOn            string                           `json:"effective_on"`
-	SourceAccountID        int64                            `json:"source_account_id"`
-	DestinationAccountID   int64                            `json:"destination_account_id"`
-	CommodityID            int64                            `json:"commodity_id"`
-	CostCommodityID        int64                            `json:"cost_commodity_id"`
-	LotAllocations         []investmentLotAllocationRequest `json:"lot_allocations"`
-	SourceEvidence         json.RawMessage                  `json:"source_evidence,omitempty"`
-	Memo                   string                           `json:"memo"`
-	ChangeReason           string                           `json:"change_reason"`
-	ReconciliationOverride bool                             `json:"reconciliation_override"`
+	EffectiveOn          string                           `json:"effective_on"`
+	SourceAccountID      int64                            `json:"source_account_id"`
+	DestinationAccountID int64                            `json:"destination_account_id"`
+	CommodityID          int64                            `json:"commodity_id"`
+	CostCommodityID      int64                            `json:"cost_commodity_id"`
+	LotAllocations       []investmentLotAllocationRequest `json:"lot_allocations"`
+	// QuantityValue/Scale move a total out of an average-cost pool instead of
+	// selected lots (T-123).
+	QuantityValue             exact.Coefficient `json:"quantity_value,omitempty"`
+	QuantityScale             int               `json:"quantity_scale,omitempty"`
+	SourceEvidence            json.RawMessage   `json:"source_evidence,omitempty"`
+	Memo                      string            `json:"memo"`
+	ChangeReason              string            `json:"change_reason"`
+	ReconciliationOverride    bool              `json:"reconciliation_override"`
+	GainImpactAcknowledgement string            `json:"gain_impact_acknowledgement,omitempty"`
+}
+
+type internalTransferLinkResponse struct {
+	SourceLotID           int64             `json:"source_lot_id"`
+	DestinationLotID      *int64            `json:"destination_lot_id"`
+	QuantityValue         exact.Coefficient `json:"quantity_value"`
+	QuantityScale         int               `json:"quantity_scale"`
+	CarriedBasisValue     moneyCoefficient  `json:"carried_basis_value"`
+	CarriedBasisScale     int               `json:"carried_basis_scale"`
+	OriginalDateKnowledge string            `json:"original_date_knowledge"`
+	OriginalAcquiredOn    *string           `json:"original_acquired_on"`
+}
+
+type internalTransferPlanResponse struct {
+	BasisAllocation string                         `json:"basis_allocation"`
+	CostBasisMethod string                         `json:"cost_basis_method"`
+	ResolutionTier  string                         `json:"resolution_tier"`
+	Links           []internalTransferLinkResponse `json:"links"`
+}
+
+type internalTransferPreviewResponse struct {
+	Plan   internalTransferPlanResponse `json:"plan"`
+	Impact reconciliationImpactResponse `json:"impact"`
 }
 
 type internalTransferResponse struct {
-	Transaction       transactionResponse `json:"transaction"`
-	DestinationLotIDs []int64             `json:"destination_lot_ids"`
+	Transaction       transactionResponse          `json:"transaction"`
+	Plan              internalTransferPlanResponse `json:"plan"`
+	DestinationLotIDs []int64                      `json:"destination_lot_ids"`
 }
 
 type investmentSaleReversalRequest struct {
@@ -540,6 +569,7 @@ type investmentPositionResponse struct {
 	LatestPriceScale        *int              `json:"latest_price_scale,omitempty"`
 	LatestPriceDate         string            `json:"latest_price_date,omitempty"`
 	LatestPriceApproximate  bool              `json:"latest_price_approximate"`
+	TransferBasisAllocation string            `json:"transfer_basis_allocation"`
 }
 
 type investmentPositionsResponse struct {
@@ -939,9 +969,32 @@ func internalTransferInput(owner app.Owner, r *http.Request, request internalTra
 		RequestID: RequestIDFromContext(r.Context()), EffectiveOn: request.EffectiveOn,
 		SourceAccountID: request.SourceAccountID, DestinationAccountID: request.DestinationAccountID,
 		CommodityID: request.CommodityID, CostCommodityID: request.CostCommodityID,
-		Allocations: allocations, SourceEvidenceJSON: evidence, Memo: request.Memo,
+		Allocations: allocations, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
+		SourceEvidenceJSON: evidence, Memo: request.Memo,
 		ChangeReason: request.ChangeReason, ReconciliationOverride: request.ReconciliationOverride,
+		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 	}
+}
+
+func toInternalTransferPlanResponse(plan app.InternalTransferPlan) internalTransferPlanResponse {
+	out := internalTransferPlanResponse{BasisAllocation: plan.BasisAllocation, CostBasisMethod: plan.CostBasisMethod,
+		ResolutionTier: plan.ResolutionTier, Links: make([]internalTransferLinkResponse, 0, len(plan.Links))}
+	for _, link := range plan.Links {
+		response := internalTransferLinkResponse{SourceLotID: link.SourceLotID,
+			QuantityValue: link.QuantityValue, QuantityScale: link.QuantityScale,
+			CarriedBasisValue: moneyCoefficient(link.CarriedBasisValue), CarriedBasisScale: link.CarriedBasisScale,
+			OriginalDateKnowledge: link.OriginalDateKnowledge}
+		if link.DestinationLotID > 0 {
+			id := link.DestinationLotID
+			response.DestinationLotID = &id
+		}
+		if link.OriginalAcquiredOn != "" {
+			date := link.OriginalAcquiredOn
+			response.OriginalAcquiredOn = &date
+		}
+		out.Links = append(out.Links, response)
+	}
+	return out
 }
 
 func internalTransfer(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
@@ -961,9 +1014,39 @@ func internalTransfer(logger *slog.Logger, authService *app.AuthService, investm
 			return
 		}
 		writeJSON(w, http.StatusCreated, internalTransferResponse{
-			Transaction: toTransactionResponse(result.Transaction), DestinationLotIDs: result.DestinationLotIDs,
+			Transaction: toTransactionResponse(result.Transaction), Plan: toInternalTransferPlanResponse(result.Plan),
+			DestinationLotIDs: result.DestinationLotIDs,
 		})
 	}))
+}
+
+func internalTransferPreview(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		var request internalTransferRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		preview, err := investmentService.PreviewInternalTransfer(r.Context(), internalTransferInput(owner, r, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "internal investment transfer preview", err)
+			return
+		}
+		impact := toReconciliationImpactResponse(preview.Impact)
+		gainImpact, err := toGainImpactResponse(preview.Impact.GainImpact)
+		if err != nil {
+			writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+			return
+		}
+		impact.GainImpact = gainImpact
+		writeJSON(w, http.StatusOK, internalTransferPreviewResponse{
+			Plan: toInternalTransferPlanResponse(preview.Plan), Impact: impact,
+		})
+	}
 }
 
 func internalTransferReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
@@ -1678,7 +1761,9 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 	case errors.Is(err, app.ErrInvestmentLotsInsufficient):
 		writeAPIError(w, http.StatusConflict, "CONFLICT", "insufficient investment lots")
 	case errors.Is(err, db.ErrAverageCostTransferRequiresPoolAllocation):
-		writeAPIError(w, http.StatusConflict, "INVESTMENT_AVERAGE_COST_TRANSFER_UNSUPPORTED", err.Error())
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_POOL_REQUIRED", err.Error())
+	case errors.Is(err, db.ErrPooledTransferRequiresAverageCost):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_POOL_UNAVAILABLE", err.Error())
 	case errors.Is(err, app.ErrInvestmentSaleNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment sale operation not found")
 	case errors.Is(err, app.ErrInvestmentOperationNotFound):
@@ -1915,7 +2000,7 @@ func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse 
 func toInvestmentPositionResponses(positions []app.InvestmentPosition) []investmentPositionResponse {
 	responses := make([]investmentPositionResponse, 0, len(positions))
 	for _, position := range positions {
-		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: projectedBasisValue(position.RemainingCostBasisValue, position.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(position.RemainingCostBasisScale, position.BasisKnowledge), BasisKnowledge: position.BasisKnowledge, CostCommodityID: position.CostCommodityID, LatestPriceValue: moneyCoefficientPointer(position.LatestPriceValue), LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate, LatestPriceApproximate: position.LatestPriceApproximate})
+		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: projectedBasisValue(position.RemainingCostBasisValue, position.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(position.RemainingCostBasisScale, position.BasisKnowledge), BasisKnowledge: position.BasisKnowledge, CostCommodityID: position.CostCommodityID, LatestPriceValue: moneyCoefficientPointer(position.LatestPriceValue), LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate, LatestPriceApproximate: position.LatestPriceApproximate, TransferBasisAllocation: position.TransferBasisAllocation})
 	}
 	return responses
 }

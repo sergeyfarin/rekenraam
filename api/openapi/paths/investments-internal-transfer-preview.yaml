@@ -1,0 +1,43 @@
+post:
+  summary: Preview an internal investment transfer
+  description: >-
+    Authenticated read-only preview; no CSRF token or write occurs. Runs the
+    complete transfer writer and rolls back, returning the carried basis per
+    source lot plus checkpoint and gain impact.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InternalTransferRequest"
+  responses:
+    "200":
+      description: Carried allocation plan and its reconciliation/gain impact
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InternalTransferPreviewResponse"
+    "400":
+      description: Invalid transfer facts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Allocation does not match the source method or a dated lot dependency conflicts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

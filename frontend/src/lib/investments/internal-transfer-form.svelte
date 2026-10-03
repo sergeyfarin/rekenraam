@@ -3,20 +3,24 @@
   import { parseISO } from 'date-fns';
   import APIFormError from '$lib/components/api-form-error.svelte';
   import { accountsQueryOptions } from '$lib/api/accounts';
-  import { currenciesQueryOptions } from '$lib/api/currencies';
+  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import { forecastQueryKey } from '$lib/api/forecast';
   import { accountRegisterQueryKey, transactionsQueryKey } from '$lib/api/transactions';
   import {
-    internalTransferReconciliationImpact, investmentGainsQueryKey,
-    investmentInstrumentsQueryOptions, investmentLotsQueryKey, investmentLotsQueryOptions,
-    investmentPositionsQueryKey, investmentPositionsQueryOptions, recordInternalTransfer,
+    investmentGainsQueryKey, investmentInstrumentsQueryOptions, investmentLotsQueryKey,
+    investmentLotsQueryOptions, investmentPositionsQueryKey, investmentPositionsQueryOptions,
+    previewInternalTransfer, recordInternalTransfer, type GainImpact, type InternalTransferPlan,
     type InternalTransferRequest, type ReconciliationImpactResponse
   } from '$lib/api/investments';
-  import { parseInternalTransferAllocations } from './internal-transfer-amounts';
+  import { parseInternalTransferAllocations, parsePooledTransferQuantity } from './internal-transfer-amounts';
+  import {
+    gainAcknowledgement, gainImpactCurrency, gainImpactRows, hasGainChanges, impactNeedsReview,
+    isGainAcknowledgementRefusal
+  } from './gain-impact';
   import ReconciliationConfirm from './reconciliation-confirm.svelte';
   import { TranslatedFormError } from '$lib/form-errors';
   import { coefficientSign } from '$lib/money/amount';
-  import { formatQuantity } from '$lib/money/format';
+  import { formatExactMoney, formatQuantity } from '$lib/money/format';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale } from '$lib/paraglide/runtime.js';
 
@@ -36,16 +40,22 @@
   let sourceKey = $state('');
   let destinationAccountID = $state('');
   let quantities = $state<Record<string, string>>({});
+  let pooledQuantity = $state('');
   let sourceReference = $state('');
   let memo = $state('');
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
   let dateInput = $state<HTMLInputElement | undefined>();
   let didFocus = false;
-  let reconciliationModal = $state<{
+  // The reviewed preview. Editing any field discards it, so the user always
+  // records exactly the carried basis they saw.
+  let preview = $state<{
+    plan: InternalTransferPlan;
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
+    gainImpact: GainImpact | null;
     payload: InternalTransferRequest;
   } | null>(null);
+  let reviewModal = $state<{ gainRefreshed: boolean } | null>(null);
 
   const locale = $derived(getLocale());
   const dateFormatter = $derived(new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' }));
@@ -57,25 +67,34 @@
     accounts.some((account) => account.id === position.account_id)));
   const sourcePosition = $derived(positions.find((position) =>
     `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}` === sourceKey));
+  // An average-cost source moves a quantity out of its pool; the server
+  // allocates it to lots at the pool rate (T-123).
+  const pooled = $derived(sourcePosition?.transfer_basis_allocation === 'average_cost_pool');
   const selectedInstrument = $derived((instrumentsQuery.data?.instruments ?? []).find((instrument) =>
     instrument.commodity_id === sourcePosition?.commodity_id));
   const destinationAccounts = $derived(accounts.filter((account) => account.id !== sourcePosition?.account_id));
   const lotsQuery = createQuery(() => ({
     ...investmentLotsQueryOptions(sourcePosition?.account_id, sourcePosition?.commodity_id),
-    enabled: !!sourcePosition
+    enabled: !!sourcePosition && !pooled
   }));
   const lots = $derived((lotsQuery.data?.lots ?? []).filter((lot) =>
     lot.status === 'open' && lot.cost_commodity_id === sourcePosition?.cost_commodity_id &&
     coefficientSign(lot.remaining_quantity_value) > 0));
-  const basisCurrency = $derived((currenciesQuery.data?.currencies ?? []).find((currency) =>
-    currency.id === sourcePosition?.cost_commodity_id)?.code ?? '');
+  const currenciesByID = $derived(new Map<number, CurrencyResponse>(
+    (currenciesQuery.data?.currencies ?? []).map((currency) => [currency.id, currency])));
+  const basisCurrency = $derived(sourcePosition ? currenciesByID.get(sourcePosition.cost_commodity_id) : undefined);
   const loading = $derived(accountsQuery.isPending || positionsQuery.isPending ||
     instrumentsQuery.isPending || currenciesQuery.isPending);
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
-  const canSubmit = $derived(!loading && !loadError && !lotsQuery.isPending && !lotsQuery.isError &&
-    !!csrfToken && !!effectiveOn && !!sourcePosition && !!selectedInstrument &&
-    !!destinationAccountID && lots.some((lot) => !!quantities[String(lot.id)]?.trim()));
+  const quantityEntered = $derived(pooled
+    ? !!pooledQuantity.trim()
+    : !lotsQuery.isPending && !lotsQuery.isError && lots.some((lot) => !!quantities[String(lot.id)]?.trim()));
+  const canPreview = $derived(!loading && !loadError && !!effectiveOn && !!sourcePosition &&
+    !!selectedInstrument && !!destinationAccountID && quantityEntered);
+  const modalGainRows = $derived(preview?.gainImpact
+    ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
+    : []);
 
   $effect(() => {
     if (!loading && !didFocus && dateInput) {
@@ -84,8 +103,86 @@
     }
   });
 
-  async function post(payload: InternalTransferRequest) {
-    await recordInternalTransfer(payload, csrfToken);
+  function discardPreview() {
+    preview = null;
+    formError = undefined;
+  }
+
+  function formatBasis(value: string, scale: number): string {
+    return formatExactMoney(value, scale, basisCurrency?.standard_scale ?? 2, locale);
+  }
+
+  function buildPayload(): InternalTransferRequest | null {
+    if (!sourcePosition || !selectedInstrument) return null;
+    const base = {
+      effective_on: effectiveOn,
+      source_account_id: sourcePosition.account_id,
+      destination_account_id: Number(destinationAccountID),
+      commodity_id: sourcePosition.commodity_id,
+      cost_commodity_id: sourcePosition.cost_commodity_id,
+      source_evidence: sourceReference.trim() ? { reference: sourceReference.trim() } : undefined,
+      memo: memo.trim() || undefined
+    };
+    if (pooled) {
+      const parsed = parsePooledTransferQuantity(pooledQuantity, sourcePosition, selectedInstrument.quantity_scale);
+      if (!parsed.ok) {
+        formError = new TranslatedFormError(parsed.reason === 'exceeds_available'
+          ? m.investments_transfer_internal_pooled_exceeds()
+          : m.investments_transfer_internal_pooled_quantity_error());
+        return null;
+      }
+      return { ...base, quantity_value: parsed.quantity_value, quantity_scale: parsed.quantity_scale };
+    }
+    const drafts = lots.filter((lot) => !!quantities[String(lot.id)]?.trim()).map((lot) => ({
+      lotID: lot.id, quantity: quantities[String(lot.id)]
+    }));
+    const parsed = parseInternalTransferAllocations(drafts, lots, selectedInstrument.quantity_scale);
+    if (!parsed.ok) {
+      formError = new TranslatedFormError(parsed.reason === 'exceeds_available'
+        ? m.investments_transfer_internal_exceeds_available()
+        : parsed.reason === 'empty'
+          ? m.investments_transfer_internal_select_lot()
+          : m.investments_transfer_internal_quantity_error());
+      return null;
+    }
+    return { ...base, lot_allocations: parsed.allocations };
+  }
+
+  async function runPreview(payload: InternalTransferRequest): Promise<void> {
+    const result = await previewInternalTransfer(payload);
+    preview = {
+      plan: result.plan,
+      impacts: result.impact.affected_checkpoints,
+      gainImpact: hasGainChanges(result.impact.gain_impact) ? result.impact.gain_impact : null,
+      payload
+    };
+  }
+
+  async function handlePreview(event: SubmitEvent) {
+    event.preventDefault();
+    if (!canPreview) return;
+    formError = undefined;
+    const payload = buildPayload();
+    if (!payload) return;
+    pending = true;
+    try {
+      await runPreview(payload);
+    } catch (error) {
+      preview = null;
+      formError = error;
+    } finally {
+      pending = false;
+    }
+  }
+
+  async function record(override: boolean) {
+    if (!preview) return;
+    const acknowledgement = gainAcknowledgement(preview.gainImpact);
+    await recordInternalTransfer({
+      ...preview.payload,
+      ...(override ? { reconciliation_override: true } : {}),
+      ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
+    }, csrfToken);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey }),
       queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey }),
@@ -97,69 +194,57 @@
     onSaved();
   }
 
-  async function handleSubmit(event: SubmitEvent) {
-    event.preventDefault();
-    if (!canSubmit || !sourcePosition || !selectedInstrument) return;
-    const drafts = lots.filter((lot) => !!quantities[String(lot.id)]?.trim()).map((lot) => ({
-      lotID: lot.id, quantity: quantities[String(lot.id)]
-    }));
-    const parsed = parseInternalTransferAllocations(drafts, lots, selectedInstrument.quantity_scale);
-    if (!parsed.ok) {
-      formError = new TranslatedFormError(parsed.reason === 'exceeds_available'
-        ? m.investments_transfer_internal_exceeds_available()
-        : parsed.reason === 'empty'
-          ? m.investments_transfer_internal_select_lot()
-          : m.investments_transfer_internal_quantity_error());
-      return;
-    }
-    const payload: InternalTransferRequest = {
-      effective_on: effectiveOn,
-      source_account_id: sourcePosition.account_id,
-      destination_account_id: Number(destinationAccountID),
-      commodity_id: sourcePosition.commodity_id,
-      cost_commodity_id: sourcePosition.cost_commodity_id,
-      lot_allocations: parsed.allocations,
-      source_evidence: sourceReference.trim() ? { reference: sourceReference.trim() } : undefined,
-      memo: memo.trim() || undefined
-    };
+  // The server recomputes everything at commit. A changed gain set re-opens
+  // the review with the current figures instead of a dead-end error.
+  async function commit(override: boolean) {
+    if (!preview) return;
     pending = true;
     formError = undefined;
     try {
-      const impact = await internalTransferReconciliationImpact(payload);
-      if (impact.affected_checkpoints.length > 0) {
-        reconciliationModal = { impacts: impact.affected_checkpoints, payload };
-        return;
-      }
-      await post(payload);
+      await record(override);
     } catch (error) {
-      formError = error;
+      if (isGainAcknowledgementRefusal(error) && preview) {
+        try {
+          await runPreview(preview.payload);
+          if (preview && impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {
+            reviewModal = { gainRefreshed: !!preview.gainImpact };
+          }
+        } catch (previewError) {
+          preview = null;
+          formError = previewError;
+        }
+      } else {
+        formError = error;
+      }
     } finally {
       pending = false;
     }
   }
 
-  async function confirmOverride() {
-    if (!reconciliationModal) return;
-    const payload = reconciliationModal.payload;
-    reconciliationModal = null;
-    pending = true;
-    formError = undefined;
-    try {
-      await post({ ...payload, reconciliation_override: true });
-    } catch (error) {
-      formError = error;
-    } finally {
-      pending = false;
+  function handleRecord() {
+    if (!preview) return;
+    if (impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {
+      reviewModal = { gainRefreshed: false };
+      return;
     }
+    void commit(false);
+  }
+
+  function confirmReview() {
+    if (!preview) return;
+    const override = preview.impacts.length > 0;
+    reviewModal = null;
+    void commit(override);
   }
 </script>
 
-{#if reconciliationModal}
-  <ReconciliationConfirm impacts={reconciliationModal.impacts} {pending}
-    onCancel={() => (reconciliationModal = null)} onConfirm={confirmOverride} />
+{#if reviewModal && preview}
+  <ReconciliationConfirm impacts={preview.impacts} gainRows={modalGainRows}
+    gainRefreshed={reviewModal.gainRefreshed} {pending}
+    onCancel={() => (reviewModal = null)} onConfirm={confirmReview} />
 {/if}
 
-<form onsubmit={handleSubmit} class="space-y-4" aria-busy={pending}>
+<form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
   <h2 id="internal-transfer-title" class="text-base font-semibold text-foreground">{m.investments_transfer_internal_title()}</h2>
   <p class="text-sm text-muted">{m.investments_transfer_internal_help()}</p>
   {#if loading}
@@ -172,13 +257,13 @@
     {/if}
     <div>
       <label for="internal-transfer-date" class="mb-1 block text-sm font-medium text-foreground">{m.investments_transfer_effective_date()}</label>
-      <input id="internal-transfer-date" type="date" bind:this={dateInput} bind:value={effectiveOn} required
+      <input id="internal-transfer-date" type="date" bind:this={dateInput} bind:value={effectiveOn} required oninput={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
     </div>
     <div>
       <label for="internal-transfer-source" class="mb-1 block text-sm font-medium text-foreground">{m.investments_transfer_internal_source()}</label>
       <select id="internal-transfer-source" bind:value={sourceKey} required
-        onchange={() => { quantities = {}; destinationAccountID = ''; }}
+        onchange={() => { quantities = {}; pooledQuantity = ''; destinationAccountID = ''; discardPreview(); }}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_transfer_internal_select_source()}</option>
         {#each positions as position (`${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`)}
@@ -194,48 +279,82 @@
     {#if sourcePosition}
       <div>
         <label for="internal-transfer-destination" class="mb-1 block text-sm font-medium text-foreground">{m.investments_transfer_internal_destination()}</label>
-        <select id="internal-transfer-destination" bind:value={destinationAccountID} required
+        <select id="internal-transfer-destination" bind:value={destinationAccountID} required onchange={discardPreview}
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
           <option value="">{m.investments_form_select_account()}</option>
           {#each destinationAccounts as account (account.id)}<option value={String(account.id)}>{account.name}</option>{/each}
         </select>
       </div>
-      <fieldset class="space-y-3 rounded-(--radius-control) border border-border p-3">
-        <legend class="px-1 text-sm font-medium text-foreground">{m.investments_transfer_internal_lots()}</legend>
-        {#if lotsQuery.isPending}
-          <p class="text-sm text-muted" role="status">{m.investments_loading()}</p>
-        {:else if lotsQuery.isError}
-          <p class="text-sm text-danger" role="alert">{m.investments_transfer_internal_lots_error()}</p>
-        {:else if lots.length === 0}
-          <p class="text-sm text-muted" role="status">{m.investments_transfer_internal_lots_empty()}</p>
-        {:else}
-          <p class="text-xs text-muted">{m.investments_transfer_internal_lots_help()}</p>
-          {#each lots as lot (lot.id)}
-            <div class="grid gap-2 border-t border-border pt-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
-              <label for={`internal-transfer-lot-${lot.id}`} class="text-sm text-foreground">
-                <span class="font-medium">{m.investments_transfer_internal_lot_quantity()}</span>
-                <span class="block text-xs text-muted">#{lot.id} · {dateFormatter.format(parseISO(lot.opened_on))} · {m.investments_transfer_internal_available()} {formatQuantity(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)} · {m.investments_col_cost_basis()} {lot.remaining_cost_basis_value !== null && lot.remaining_cost_basis_scale !== null ? formatQuantity(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale) : m.investments_basis_unknown()} {basisCurrency}</span>
-              </label>
-              <input id={`internal-transfer-lot-${lot.id}`} type="text" inputmode="decimal"
-                disabled={lot.basis_knowledge === 'unknown'}
-                value={quantities[String(lot.id)] ?? ''}
-                oninput={(event) => { quantities[String(lot.id)] = event.currentTarget.value; }}
-                class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
-            </div>
-          {/each}
-        {/if}
-      </fieldset>
+      {#if pooled}
+        <div class="space-y-2 rounded-(--radius-control) border border-border p-3">
+          <p id="internal-transfer-pooled-help" class="text-xs text-muted">{m.investments_transfer_internal_pooled_help()}</p>
+          <label for="internal-transfer-pooled-quantity" class="block text-sm font-medium text-foreground">
+            {m.investments_transfer_internal_lot_quantity()}
+            <span class="block text-xs font-normal text-muted">{m.investments_transfer_internal_available()} {formatQuantity(sourcePosition.quantity_value, sourcePosition.quantity_scale, locale)}</span>
+          </label>
+          <input id="internal-transfer-pooled-quantity" type="text" inputmode="decimal" autocomplete="off"
+            bind:value={pooledQuantity} oninput={discardPreview} aria-describedby="internal-transfer-pooled-help"
+            class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
+        </div>
+      {:else}
+        <fieldset class="space-y-3 rounded-(--radius-control) border border-border p-3">
+          <legend class="px-1 text-sm font-medium text-foreground">{m.investments_transfer_internal_lots()}</legend>
+          {#if lotsQuery.isPending}
+            <p class="text-sm text-muted" role="status">{m.investments_loading()}</p>
+          {:else if lotsQuery.isError}
+            <p class="text-sm text-danger" role="alert">{m.investments_transfer_internal_lots_error()}</p>
+          {:else if lots.length === 0}
+            <p class="text-sm text-muted" role="status">{m.investments_transfer_internal_lots_empty()}</p>
+          {:else}
+            <p class="text-xs text-muted">{m.investments_transfer_internal_lots_help()}</p>
+            {#each lots as lot (lot.id)}
+              <div class="grid gap-2 border-t border-border pt-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
+                <label for={`internal-transfer-lot-${lot.id}`} class="text-sm text-foreground">
+                  <span class="font-medium">{m.investments_transfer_internal_lot_quantity()}</span>
+                  <span class="block text-xs text-muted">#{lot.id} · {dateFormatter.format(parseISO(lot.opened_on))} · {m.investments_transfer_internal_available()} {formatQuantity(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)} · {m.investments_col_cost_basis()} {lot.remaining_cost_basis_value !== null && lot.remaining_cost_basis_scale !== null ? formatQuantity(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale) : m.investments_basis_unknown()} {basisCurrency?.code ?? ''}</span>
+                </label>
+                <input id={`internal-transfer-lot-${lot.id}`} type="text" inputmode="decimal"
+                  disabled={lot.basis_knowledge === 'unknown'}
+                  value={quantities[String(lot.id)] ?? ''}
+                  oninput={(event) => { quantities[String(lot.id)] = event.currentTarget.value; discardPreview(); }}
+                  class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
+              </div>
+            {/each}
+          {/if}
+        </fieldset>
+      {/if}
     {/if}
     <div>
       <label for="internal-transfer-reference" class="mb-1 block text-sm font-medium text-foreground">{m.investments_transfer_source_reference()}</label>
-      <input id="internal-transfer-reference" type="text" bind:value={sourceReference} maxlength="500"
+      <input id="internal-transfer-reference" type="text" bind:value={sourceReference} maxlength="500" oninput={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
     </div>
     <div>
       <label for="internal-transfer-memo" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_memo()}</label>
-      <input id="internal-transfer-memo" type="text" bind:value={memo} maxlength="500"
+      <input id="internal-transfer-memo" type="text" bind:value={memo} maxlength="500" oninput={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
     </div>
+    {#if preview}
+      <section class="space-y-2 rounded-(--radius-control) border border-border p-3" aria-labelledby="internal-transfer-preview-title" aria-live="polite">
+        <h3 id="internal-transfer-preview-title" class="text-sm font-semibold text-foreground">{m.investments_transfer_internal_preview_title()}</h3>
+        <ul class="space-y-1 text-sm text-foreground">
+          {#each preview.plan.links as link (link.source_lot_id)}
+            {@const values = {
+              lot: String(link.source_lot_id),
+              quantity: formatQuantity(link.quantity_value, link.quantity_scale, locale),
+              basis: formatBasis(link.carried_basis_value, link.carried_basis_scale),
+              currency: basisCurrency?.code ?? ''
+            }}
+            <li class="break-words">{link.original_acquired_on
+              ? m.investments_transfer_internal_link({ ...values, date: dateFormatter.format(parseISO(link.original_acquired_on)) })
+              : m.investments_transfer_internal_link_date_unknown(values)}</li>
+          {/each}
+        </ul>
+        {#if preview.plan.basis_allocation === 'average_cost_pool'}
+          <p class="text-xs text-muted" role="note">{m.investments_transfer_internal_pooled_note()}</p>
+        {/if}
+      </section>
+    {/if}
   {/if}
   <APIFormError error={formError} id="internal-transfer-form-error" />
   <div class="flex flex-wrap justify-end gap-3">
@@ -243,9 +362,16 @@
       class="rounded-(--radius-control) border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover">
       {m.investments_form_cancel()}
     </button>
-    <button type="submit" disabled={!canSubmit || pending}
-      class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-      {pending ? m.investments_transfer_pending() : m.investments_transfer_submit()}
-    </button>
+    {#if preview}
+      <button type="button" onclick={handleRecord} disabled={pending || !csrfToken}
+        class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+        {pending ? m.investments_transfer_pending() : m.investments_transfer_submit()}
+      </button>
+    {:else}
+      <button type="submit" disabled={!canPreview || pending}
+        class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
+        {pending ? m.investments_transfer_internal_previewing() : m.investments_transfer_internal_preview()}
+      </button>
+    {/if}
   </div>
 </form>

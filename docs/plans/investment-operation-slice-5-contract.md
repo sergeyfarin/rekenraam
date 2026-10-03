@@ -212,8 +212,8 @@ that allocation rather than rewriting the 8.00 EUR receipt.
    are likewise prerequisites for their respective commands.
 2. Known-basis external inbound and explicit-lot internal transfers are shipped.
    Manual split/reverse split with Trading 212 split-row linking shipped
-   ([T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137)); next pooled internal transfer allocation
-   ([T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138)) and broader transfer-in/disposal backdating ([T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132)).
+   ([T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137)), as did pooled average-cost internal transfer allocation
+   ([T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138)); next broader transfer-in/disposal backdating ([T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132)).
 3. Decide cross-position replay ([T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139)) before outbound transfers,
    then deliver unknown-basis resolution, return of capital and linked cash in
    lieu. Prove bridge adjustment/refusal, exact conservation, dependent replay

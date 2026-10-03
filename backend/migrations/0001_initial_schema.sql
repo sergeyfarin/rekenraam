@@ -1512,6 +1512,20 @@ CREATE TABLE IF NOT EXISTS investment_transfer_facts (
   destination_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  -- Internal transfers snapshot how the source basis was allocated (T-123):
+  -- carried per selected lot, or at the dated average-cost pool rate. The
+  -- method and its provenance are the policy that applied at commit; a later
+  -- default never reinterprets them. position_lock means an open average-cost
+  -- position fixed the method regardless of the current default.
+  basis_allocation TEXT CHECK (basis_allocation IS NULL OR basis_allocation IN ('selected_lots', 'average_cost_pool')),
+  cost_basis_method TEXT CHECK (cost_basis_method IS NULL OR cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')),
+  method_resolution_tier TEXT CHECK (method_resolution_tier IS NULL
+    OR method_resolution_tier IN ('account', 'global', 'fallback', 'position_lock')),
+  method_account_version_id INTEGER REFERENCES account_versions(id) ON DELETE RESTRICT,
+  method_profile_version_id INTEGER REFERENCES cost_basis_profile_versions(id) ON DELETE RESTRICT,
+  CHECK ((transfer_kind = 'internal') = (basis_allocation IS NOT NULL
+    AND cost_basis_method IS NOT NULL AND method_resolution_tier IS NOT NULL)),
+  CHECK ((basis_allocation = 'average_cost_pool') = (basis_allocation IS NOT NULL AND cost_basis_method = 'average_cost')),
   CHECK ((transfer_kind = 'external_in' AND source_account_id IS NULL AND destination_account_id IS NOT NULL)
     OR (transfer_kind = 'external_out' AND source_account_id IS NOT NULL AND destination_account_id IS NULL)
     OR (transfer_kind = 'internal' AND source_account_id IS NOT NULL AND destination_account_id IS NOT NULL

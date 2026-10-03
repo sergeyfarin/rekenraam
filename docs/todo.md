@@ -18,7 +18,7 @@ Done: [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129) shared g
    Trading 212 split-row linking. Follow-ups: split correction/journal-delta adjustment
    [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) (P2), verified provider mapping [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145) (blocked),
    zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146).
-2. [ ] Support pooled average-cost internal transfers [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).
+2. [x] Support pooled average-cost internal transfers [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).
 3. [ ] Extend backdating [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132): known-basis transfer-in behind later sales first,
    then earlier sales/write-offs. Preserve recorded methods and original dates.
 4. [ ] Decide cross-position replay and consolidate effective readers

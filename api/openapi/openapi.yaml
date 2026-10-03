@@ -297,6 +297,8 @@ paths:
     $ref: "./paths/investments-internal-transfer.yaml"
   /api/v1/investments/transfers/internal/reconciliation-impact:
     $ref: "./paths/investments-internal-transfer-impact.yaml"
+  /api/v1/investments/transfers/internal/preview:
+    $ref: "./paths/investments-internal-transfer-preview.yaml"
   /api/v1/investments/splits:
     $ref: "./paths/investments-split.yaml"
   /api/v1/investments/splits/preview:
@@ -984,6 +986,12 @@ components:
       $ref: "./components/schemas/investments.yaml#/InternalTransferRequest"
     InternalTransferResponse:
       $ref: "./components/schemas/investments.yaml#/InternalTransferResponse"
+    InternalTransferLink:
+      $ref: "./components/schemas/investments.yaml#/InternalTransferLink"
+    InternalTransferPlan:
+      $ref: "./components/schemas/investments.yaml#/InternalTransferPlan"
+    InternalTransferPreviewResponse:
+      $ref: "./components/schemas/investments.yaml#/InternalTransferPreviewResponse"
     InvestmentSplitRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitRequest"
     InvestmentSplitLotEffect:

@@ -19,6 +19,8 @@ export type ExternalTransferInRequest = components['schemas']['ExternalTransferI
 export type ExternalTransferInResponse = components['schemas']['ExternalTransferInResponse'];
 export type InternalTransferRequest = components['schemas']['InternalTransferRequest'];
 export type InternalTransferResponse = components['schemas']['InternalTransferResponse'];
+export type InternalTransferPreviewResponse = components['schemas']['InternalTransferPreviewResponse'];
+export type InternalTransferPlan = components['schemas']['InternalTransferPlan'];
 export type InvestmentSplitRequest = components['schemas']['InvestmentSplitRequest'];
 export type InvestmentSplitPlan = components['schemas']['InvestmentSplitPlan'];
 export type InvestmentSplitPreviewResponse = components['schemas']['InvestmentSplitPreviewResponse'];
@@ -243,12 +245,13 @@ export async function recordExternalTransferIn(
   }
 }
 
-export async function internalTransferReconciliationImpact(
+/** Runs the complete transfer writer and rolls back: carried basis plus impact. */
+export async function previewInternalTransfer(
   input: InternalTransferRequest
-): Promise<ReconciliationImpactResponse> {
+): Promise<InternalTransferPreviewResponse> {
   try {
     const { data, error, response } = await apiClient.POST(
-      '/api/v1/investments/transfers/internal/reconciliation-impact',
+      '/api/v1/investments/transfers/internal/preview',
       { body: input }
     );
     if (data !== undefined) return data;

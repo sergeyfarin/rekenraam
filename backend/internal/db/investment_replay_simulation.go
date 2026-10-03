@@ -206,6 +206,22 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 					OperationID: intent.OperationID,
 					Cause:       fmt.Errorf("%w: transfer carried basis changed", ErrInvestmentCorrectionDependency)}
 			}
+		case "pooled_transfer_out":
+			params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
+				CommodityID: commodityID, CostCommodityID: costCommodityID,
+				TransactionID: intent.TransactionID, EventDate: intent.EventDate,
+				QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
+				MetadataJSON: "{}", CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID}
+			moved, err := pooledTransferOutTx(ctx, tx, params, intent.AuditEventID)
+			if err == nil && !pooledTransferReproduced(moved, intent.PooledLinks) {
+				// The destination lots carry the committed amounts; a pool that
+				// now prices or sources them differently cannot be adjusted yet.
+				err = errors.New("transfer carried basis changed")
+			}
+			if err != nil {
+				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
+					OperationID: intent.OperationID, Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
+			}
 		case "split":
 			effects, err := splitEffectsForPositionTx(ctx, tx, bookID, accountID, commodityID, costCommodityID,
 				intent.EventDate, intent.RatioNumerator, intent.RatioDenominator)
@@ -264,4 +280,23 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 		return InvestmentReplayProjection{}, fmt.Errorf("close replay lot projection: %w", err)
 	}
 	return projection, nil
+}
+
+// pooledTransferReproduced reports whether a replayed pool depletion took the
+// same quantity and basis from the same source lots as the committed links.
+func pooledTransferReproduced(moved []LotDisposalRecord, links []InvestmentReplayTransferLink) bool {
+	if len(moved) != len(links) {
+		return false
+	}
+	for index, link := range links {
+		depletion := moved[index]
+		if depletion.LotID != link.LotID ||
+			exact.ScaledIntFromCoefficient(depletion.QuantityValue, depletion.QuantityScale).Cmp(
+				exact.ScaledIntFromCoefficient(link.QuantityValue, link.QuantityScale)) != 0 ||
+			exact.ScaledIntFromInt64(depletion.CostBasisValue, depletion.CostBasisScale).Cmp(
+				exact.ScaledIntFromCoefficient(link.CostBasisValue, link.CostBasisScale)) != 0 {
+			return false
+		}
+	}
+	return true
 }
