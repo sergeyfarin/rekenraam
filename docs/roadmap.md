@@ -1,20 +1,23 @@
 # Roadmap
 
-This is the one active, forward-looking plan for Rekenraam. It answers
-**what to build next**, in order. It is governed by
-`docs/product-requirements.md`; shipped scope is recorded in
-`docs/implemented.md`; actionable work is in
-[GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues), with local
-IDs mapped in `docs/backlog.md`; the short-horizon queue is `docs/todo.md`.
-The [GitHub roadmap index](https://github.com/sergeyfarin/rekenraam/issues/120)
-links current slices to their actionable tickets; this file remains the
-ordered product plan.
+The single source of truth for **what to build next, in what order** —
+initiatives and the current focus within them. Governed by
+`docs/product-requirements.md`.
 
-Last reviewed: 2026-10-02. The current order is R16,
-R11 price management, R17 quotes and crypto, R18 gains projections, then R13
-returns analytics. Cross-border input and date correctness run in parallel.
-Prior roadmap detail is retained in the
-[completed roadmap record](reviews/completed-roadmap-2026-09-27.md).
+Other questions have exactly one home each:
+
+- Ticket acceptance, state, priority and discussion: [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues).
+- What ships today: `docs/implemented.md`.
+- Feature design contracts: `docs/plans/`. They never define a sequence.
+- Resolving a local `T-nn`/`G-nn` ID to its issue: `docs/backlog.md`.
+
+Do not restate shipped detail here; when a focus item ships, delete it and
+record the capability in `implemented.md`.
+
+Last reviewed: 2026-10-03. The current order is R16, R11 price management,
+R17 quotes and crypto, R18 gains projections, then R13 returns analytics.
+Cross-border input and date correctness run in parallel. Prior roadmap detail
+is retained in the [completed roadmap record](reviews/completed-roadmap-2026-09-27.md).
 
 ## Slice index
 
@@ -99,15 +102,37 @@ in `docs/reviews/competitive-analysis-2026-07.md`.
 ## Current plan
 
 Do not start a new roadmap initiative until the current one has met its
-acceptance criteria. Feature-specific design documents may clarify a slice, but
-must not create a competing sequence.
+acceptance criteria. Priority labels on issues express urgency; the order
+below is execution order, not a chain of hard dependencies.
 
-The reusable application runtime [#113](https://github.com/sergeyfarin/rekenraam/issues/113)
-and operation integrity [#125](https://github.com/sergeyfarin/rekenraam/issues/125)
-are complete. Long buy/sale correction has shipped within #99's now-bounded
-scope; remaining correction families have separate acceptance issues.
-The [2026-10-02 review](reviews/investment-review-2026-10-02.md) explains the
-revised order and qualified findings.
+### Current focus
+
+**Now**
+
+1. Split correction and journal-delta adjustment — [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144).
+   A mistaken split, or a mistaken trade before one, has no recovery path.
+2. Alongside: API and browser evidence for import gain review and Trading 212
+   source revisions — [T-128 #143](https://github.com/sergeyfarin/rekenraam/issues/143).
+
+**Next, in order**
+
+3. Dividend/reinvestment correction — [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130).
+4. Trade date/account/instrument/currency correction — [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131).
+5. Write-off correction — [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133).
+6. Pooled-lineage decision [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) and replay-equivalence
+   self-check [T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149). Both precede transfer correction:
+   it would otherwise hit the lineage refusal, and every replaying command
+   increases the stored projection's exposure to a skipped-replay bug.
+7. Transfer correction — [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134).
+8. Correction-chain register and net checkpoint impact — [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135).
+9. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
+   return of capital, cash in lieu), then short sale/cover
+   [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103), then compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
+
+**Placed, not sequenced:** zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146) after #144;
+lot-opening `NOT NULL` [T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) before the v0.1.0 tag; race-gate
+runtime [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140) any time without reducing coverage. Blocked on
+provider evidence: [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145), [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136).
 
 ### Completed initiatives through R10
 
@@ -119,97 +144,20 @@ for the original scope and acceptance notes.
 
 ### R16 — investment lifecycle completeness
 
-ADR 0013 defines the named operation/side foundation. The
-[active operation plan](plans/investment-operation-refactor-plan.md) contains
-the contract and gates; [implemented](implemented.md) records shipped commands.
-The foundation, trade economics, long-buy/sale reversal/replacement, backdated
-buy replay and Trading 212 quantity/net source corrections ship. Their writer
-convergence and operation-integrity gates are complete. Buy and reinvestment
-checkpoint previews prove replay feasibility through the rolled-back writer
-and report its actual invalidation set. Shared reconciliation resolution now
-also reports the full write set for generic transactions and other previews
-(T-127 #142); per-boundary date/sequence and net-delta semantics remain #135.
+Complete the long-position lifecycle on ADR 0013's named operation/side
+foundation: corrections for every operation family, in-kind transfers and
+basis actions, splits, named short positions and compound corporate actions.
+Every new command integrates the shared gain-impact acknowledgement, the
+reconciliation preview and export/self-check in its own acceptance; each stays
+independently runnable and audited. Negative holdings without named short
+events remain unclassified warnings. The
+[operation plan](plans/investment-operation-refactor-plan.md) and
+[slice 5 contract](plans/investment-operation-slice-5-contract.md) govern
+design; [implemented](implemented.md) records the shipped boundary.
 
-The shared gain-impact mechanism (T-114 #129) and its rollout to every existing
-replay path (T-126 #141) ship: manual and imported acquisitions, reinvestment,
-native reversals/replacements and Trading 212 source revisions disclose and
-require acknowledgement of revised committed gains.
-Manual splits (#137), pooled internal transfers (#138), backdated
-transfer-in/disposal replay (#132), the cross-position decision (#139) and
-closure propagation (#147) ship. Near-term focus, reviewed 2026-10-03:
-**split correction [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) now**, with
-import/source-revision API and browser evidence [T-128 #143](https://github.com/sergeyfarin/rekenraam/issues/143)
-alongside, then the step 6 correction families.
-New replaying commands opt into the same disclosure in their own acceptance.
-Closed #99/#125/#113/#127/#129/#141/#142 are historical evidence, not active gates.
-Priority labels describe urgency; this sequence does not add hard dependencies.
-
-Remaining work, in order:
-
-1. **Gain disclosure is complete for existing paths** ([T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129), [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141)).
-   New split, transfer and correction commands opt in as part of their own
-   acceptance. R18 retains historical reporting and tax profiles; no permanent
-   filed-through date has been adopted.
-2. **Manual split/reverse split plus verified Trading 212 mapping [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137).**
-   **Shipped 2026-10-03**: exact-ratio command, replay with gain disclosure,
-   mobile entry, and Trading 212 split rows linked to recorded splits without
-   double posting. Automatic provider mapping waits for verified ratio evidence
-   ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)); split correction and journal-delta adjustment
-   ([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)) and zero-delta splits ([T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)) are follow-ups.
-3. **Pooled average-cost internal transfer [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138).**
-   **Shipped 2026-10-03**: an average-cost source moves a quantity at its dated
-   pool rate with an exact final remainder, source lineage and original dates,
-   a snapshotted method policy, gain disclosure, replay that refuses a changed
-   carried basis with the transfer named, and mobile preview entry. Operational
-   average cost only; tax-policy identification stays R18.
-4. **Broader backdated replay [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132).**
-   **Shipped 2026-10-03**: known-basis transfer-in and sales/write-offs dated
-   behind later disposals are admitted through full chronological replay with
-   recorded methods and elections kept, identical preview/commit simulation,
-   gain acknowledgement and a named refusal for an impossible later decision.
-   Original acquisition date orders FIFO/LIFO; the transfer date gates
-   availability. Unknown-basis admission keeps its separate contract.
-5. **Cross-position replay decision and effective-reader consolidation [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).**
-   **Decided 2026-10-03** (ADR 0013 refinement): affected-position dependency
-   closure replayed as one dated stream, not a whole-book rebuild. Effective
-   reads are SQL views and duplicate lot opening facts are merged.
-   **Propagation shipped 2026-10-03** ([T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147)):
-   a correction or backdated entry that changes an internal transfer's carried
-   basis revises the link and replays every destination, chain and cycle in
-   the same command, with gain disclosure. Changed pooled lineage
-   ([T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150)) and removing a transferred acquisition stay refused.
-6. **Split correction, then remaining lifecycle families.** Split
-   reversal/replacement and the guarded journal-delta adjustment
-   [T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) come first: a mistaken split, or a
-   mistaken trade before one, has no recovery path today. Zero-delta splits
-   [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146) reuse its adjustment rule afterwards.
-   Then dividend/reinvestment correction
-   [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130); trade field correction [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131); write-off correction
-   [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133); transfer correction [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134); correction-chain register
-   and net checkpoint impact [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135). Provider cancellation/wider source
-   revision [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) is evidence-blocked, not an active P0 gate.
-   Settle the pooled-lineage decision [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) before
-   transfer correction #134, which would otherwise hit the same refusal, and
-   land the replay-equivalence self-check [T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149)
-   before #134 as well. Each new replaying command increases the stored
-   projection's exposure to a skipped-replay bug.
-   The lot-opening `NOT NULL` cleanup [T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) is a
-   baseline change and must land before the v0.1.0 tag.
-7. **Outbound/unknown transfers, return of capital and cash in lieu**, under
-   [#114](https://github.com/sergeyfarin/rekenraam/issues/114) and the
-   [slice 5 contract](plans/investment-operation-slice-5-contract.md), then
-   **short sale/cover [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103)**,
-   then **compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115)**.
-   Keep each command independently runnable and audited. Negative holdings
-   without named short events remain unclassified warnings.
-
-Zero-proceeds write-off and price observation voiding ship as backend commands;
-write-off UI and the R11 price operator surface remain follow-ups. Provider
-return-of-capital/cash-in-lieu suggestions stay review-only until supported.
-The exact monetary JSON boundary and bundle schema 5 are shipped; changes to
-baseline/export contracts require fresh and seeded validation under ADR 0013.
-Race-gate performance improvement [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140) is independent trust work;
-retain all financial and race coverage while measuring safe scheduling changes.
+R16 is complete when focus items 1–9 above are closed. Write-off UI and
+provider return-of-capital/cash-in-lieu suggestions remain follow-ups outside
+that bar.
 
 ### R11 — price and FX management UI, promoted after R16
 
@@ -227,8 +175,8 @@ Before presenting the five drafted non-English catalogs as complete or using
 them in a migration demo, close G-08 (locale-aware amount input), T-87
 (owner-local default dates), and T-80 (catalog parity and native review).
 These are independently shippable correctness and communication fixes; they do
-not require waiting for R16 or R11. The actionable tickets live in GitHub
-Issues; `docs/backlog.md` retains the ID mapping.
+not require waiting for R16 or R11: [G-08 #100](https://github.com/sergeyfarin/rekenraam/issues/100),
+[T-87 #101](https://github.com/sergeyfarin/rekenraam/issues/101), [T-80 #102](https://github.com/sergeyfarin/rekenraam/issues/102).
 
 ### R17 — crypto instrument type
 

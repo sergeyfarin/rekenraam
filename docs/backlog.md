@@ -1,9 +1,11 @@
-# Technical backlog — GitHub issue index
+# Local ID index
 
-[GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues) is the live
-tracker for open defects, technical debt, and actionable roadmap work. Issue
-state, priority labels, discussion, and PR links belong there. This file keeps
-the existing local IDs resolvable; it is not a second task list.
+Resolves local `T-nn`/`G-nn` IDs cited in the repo to their GitHub issue.
+Nothing else lives here: acceptance, state and priority are on
+[GitHub](https://github.com/sergeyfarin/rekenraam/issues); order is in the
+[roadmap](roadmap.md). Add a row when a new issue's ID is referenced in the
+repo; new issues take the next unused `T-nn`, `G-nn` or `S-nn`. Local IDs and
+GitHub numbers are distinct; cite both.
 
 | Local ID | GitHub issue |
 |---|---|
@@ -45,25 +47,8 @@ the existing local IDs resolvable; it is not a second task list.
 | T-134 | [#149 — Self-check full replay equivalence of investment projections](https://github.com/sergeyfarin/rekenraam/issues/149) |
 | T-135 | [#150 — Admit changed pooled-transfer lineage under replay](https://github.com/sergeyfarin/rekenraam/issues/150) |
 
-T-75b [#99](https://github.com/sergeyfarin/rekenraam/issues/99) is closed for
-its delivered long-buy/sale scope; the [2026-10-02 review](reviews/investment-review-2026-10-02.md)
-maps the remaining correction families above. Local `T-nn` IDs and GitHub
-`#nn` numbers are distinct identifiers; include both when discussing a ticket.
-
-The [roadmap](roadmap.md) owns product order; its
-[GitHub index](https://github.com/sergeyfarin/rekenraam/issues/120) links current
-slices to issues. The [short-horizon queue](todo.md) points to immediate work,
-and [implemented](implemented.md) records what ships.
-
-The [pre-migration backlog snapshot](reviews/open-backlog-before-github-2026-09-27.md)
-preserves the detailed acceptance context and the T-42–T-47 ID collision
-mapping. Closed-item evidence remains in the
+IDs not listed here were closed before the GitHub migration; see the
+[pre-migration snapshot](reviews/open-backlog-before-github-2026-09-27.md)
+(including the T-42–T-47 collision mapping) and the
 [July](reviews/resolved-backlog-2026-07.md) and
 [September](reviews/resolved-backlog-2026-09-27.md) resolution records.
-
-For new actionable work, create an issue with the next unambiguous `T-nn`,
-`G-nn`, or `S-nn` ID as appropriate and link it here if that ID is referenced
-in the repo. Record durable decisions in requirements, conventions, ADRs, or
-plans as applicable; issue comments do not replace those documents. Close an
-issue after the change and its validation land, and update the shipped-feature
-ledger or roadmap when their boundaries change.

@@ -23,7 +23,7 @@ In case of conflict, earlier items in the list take precedence over later items.
 
 For current execution state, read these (governed by the sources above):
 
-- `docs/roadmap.md` — prioritized next work and competitor gap analysis.
+- `docs/roadmap.md` — the only source of work order and current focus.
 - `docs/implemented.md` — what already ships (the feature ledger).
 - `docs/backlog.md` — local ID index for open GitHub Issues; issue status and
   priority live on GitHub.

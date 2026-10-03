@@ -8,17 +8,17 @@ does a new document go?"** The current-state files and GitHub Issues answer
 
 | File | Answers | Update discipline |
 |---|---|---|
-| [roadmap.md](roadmap.md) | What are we building next, in what order? | Only when priorities genuinely change; governed by `product-requirements.md` |
-| [todo.md](todo.md) | What is the short-horizon working queue right now? | Keep concise issue links; remove items when completed or reprioritized |
-| [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues) | Which actionable defects, debt, and roadmap slices are open? | Keep state, priorities, discussion, and PR links there; use local IDs (`T-nn`, `S-nn`, `G-nn`) where needed |
-| [backlog.md](backlog.md) | Which GitHub issue owns an existing local ID? | Keep a compact ID-to-issue index; do not maintain a second live status list |
+| [roadmap.md](roadmap.md) | What are we building next, in what order, and what is the current focus? | The **only** place order lives. Remove focus items when they ship; governed by `product-requirements.md` |
+| [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues) | What does each ticket require, and is it open? | Acceptance, state, priority, discussion and PR links. Issues never restate the overall order |
+| [backlog.md](backlog.md) | Which GitHub issue owns a local ID? | ID-to-issue table only; no status, priority or order |
 | [implemented.md](implemented.md) | What ships today, backend vs UI? | Reconcile with the codebase when a slice lands |
 
-The boundary between them: **roadmap** holds ordered product initiatives,
-**GitHub Issues** holds actionable work, **backlog** maps local IDs to those
-issues, **todo** is the distilled "next actions" view with issue links, and
-**implemented** is the capability ledger. A piece of work should have exactly
-one live tracking home.
+The boundary between them: **roadmap** holds order and current focus,
+**GitHub Issues** holds each ticket's acceptance and state, **backlog** maps
+local IDs to issues, and **implemented** is the capability ledger. Feature
+plans hold design only. Each fact has exactly one home; elsewhere, link to it.
+GitHub issue [#120](https://github.com/sergeyfarin/rekenraam/issues/120) only
+points to the roadmap.
 
 ## Governance (root)
 
@@ -48,14 +48,8 @@ one live tracking home.
 ## Current execution plan
 
 R16 investment lifecycle completeness is the current initiative. Its
-[operation plan](plans/investment-operation-refactor-plan.md) and
-[slice 1 economics contract](plans/investment-operation-slice-1-contract.md)
-govern the work. The schema and exact trade economics are shipped; correction
-foundations 4a–4e are complete. The native correction/reversal command is next,
-followed by transfers, basis actions and named short sales. See the
-[short-horizon queue](todo.md) for immediate steps and
-[implemented](implemented.md) for the exact shipped boundary. R8 budgets and
-R10 forecasting are complete.
+[operation plan](plans/investment-operation-refactor-plan.md) and slice
+contracts govern design; the [roadmap](roadmap.md) holds its current focus.
 
 The [2026-09-27 work-tracking audit](reviews/github-work-tracking-audit-2026-09-27.md)
 records the open-ID triage used for the migration to GitHub Issues.

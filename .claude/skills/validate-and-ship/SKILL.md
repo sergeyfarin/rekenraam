@@ -228,7 +228,7 @@ full relevant suite.
 
 | What changed | Update |
 |---|---|
-| Feature shipped / status changed | `docs/implemented.md` (feature ledger) and `docs/roadmap.md` status line |
+| Feature shipped / status changed | `docs/implemented.md` (feature ledger); remove the item from the roadmap's current focus |
 | Tech debt found or paid | GitHub Issue with a local ID (`T-NN`), exact file/line, and, when closing, the fix and validating test; map IDs used in the repo in `docs/backlog.md` |
 | Durable product behavior/scope | `docs/product-requirements.md` |
 | Repo-wide rule/convention | `docs/conventions.md` |

@@ -553,8 +553,9 @@ has actual installations, its migration files are immutable.
 
 - Requirements belong in `docs/product-requirements.md`.
 - Long-lived architectural constraints belong in `docs/early-architecture-decisions.md`.
-- Active sequencing belongs in `docs/roadmap.md`; durable phase boundaries
-  belong in `docs/product-requirements.md`.
+- Active sequencing and current focus belong only in `docs/roadmap.md`;
+  durable phase boundaries belong in `docs/product-requirements.md`. Plans,
+  issues and other docs link to the roadmap rather than restating order.
 - Shipped scope belongs in `docs/implemented.md`; live actionable defects and
   debt belong in GitHub Issues. `docs/backlog.md` maps local IDs to issues but
   does not duplicate status or priority. Completed plans and dated reviews are
@@ -562,7 +563,7 @@ has actual installations, its migration files are immutable.
 - When roadmap priorities change, cross-check `docs/competitor-comparison.md` and
   record intentional parity gaps or gains in the roadmap's parity section.
 - **An acceptance decision is recorded in the plan it governs, in the same
-  commit that flips the status elsewhere.** `roadmap.md`, `todo.md`, and
+  commit that flips the status elsewhere.** `roadmap.md` and
   `implemented.md` say *that* an initiative was accepted; the feature plan is
   where each retained follow-up gets its yes/no and its reason, because the plan
   is what the next initiative is checked against. R2 shipped with the status

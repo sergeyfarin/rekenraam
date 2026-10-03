@@ -7,7 +7,6 @@ backend and UI status tracked separately. It replaces the per-step trackers
 single answer to "what is done."
 
 - **Source of truth for "what's next":** `docs/roadmap.md`.
-- **Short-horizon working queue:** `docs/todo.md`.
 - **Source of truth for product intent and phase boundaries:**
   `docs/product-requirements.md`.
 - **Technical debt and polish:**

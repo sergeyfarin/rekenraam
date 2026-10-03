@@ -1,25 +1,17 @@
 # Investment operation and subledger refactor plan
 
-Status: active contract and delivery gates, reviewed 2026-10-02.
+Status: active design contract, reviewed 2026-10-03.
 ADR 0012 and ADR 0013 govern. R16 owns long-position lifecycle work; T-108
 owns shorts. Planned behavior is not shipped behavior.
 
-[Implemented features](../implemented.md) records shipped behavior.
+This plan is the **design contract only**. Sequence and current focus live in
+the [roadmap](../roadmap.md); shipped behavior in
+[implemented](../implemented.md); ticket acceptance and state in GitHub Issues.
 [The 2026-10-01 progress snapshot](../reviews/investment-operation-progress-2026-10-01.md)
 preserves the former slice-by-slice history. [The initial review](../reviews/investment-review-2026-10-02.md) and
 [follow-up disposition](../reviews/investment-followup-review-2026-10-02.md)
 record evidence, qualifications and issue boundaries.
-The [roadmap](../roadmap.md) owns product order; GitHub owns live issue state
-and priority. Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
-
-| Contract area | Verified boundary | Next gate |
-|---|---|---|
-| Foundation / exact trade economics (1–3) | Shipped; #125 integrity complete; bundle schema 6; opening facts merged onto lots and effective reads in SQL views (T-124) | Require an opening operation on every lot ([T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148)) |
-| Long buy/sale correction (4a–4ai, #99, T-117) | Reversal, replacement, recorded-method replay, backdated buys, transfer-in, sales and write-offs, Trading 212 quantity/net revisions, shared writer | Gain-impact disclosure and remaining families have separate bounded issues |
-| Preview feasibility | Buy/source replacements, plain buys and reinvestment run rolled-back writer replay; openings return actual checkpoint sets | Disclosure shipped for every existing replay path (#129, #141); new commands opt in |
-| Transfers (5b/5d, T-123, T-132) | Known-basis external inbound; explicit-lot and pooled average-cost internal, with exact remainder and snapshotted policy; changed carried basis propagates through destinations and chains as link revisions (T-132) | Pooled lineage changes ([T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150)); transfer correction (#134); unknown immutable facts/resolution |
-| Split / basis actions (5) | Manual split/reverse split with replay, gain disclosure, export, self-check, mobile entry and Trading 212 split-row linking (T-122) | Split correction and guarded journal-delta adjustment; return of capital, cash in lieu |
-| Shorts / compound actions (6–7) | Operation/side foundation only | Side-aware commands; compound date/effect cardinality and replay |
+Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
 
 ## Outcome and boundaries
 
@@ -428,98 +420,66 @@ the replay and dependency checks can complete; before then, keep T-95's
 chronological restriction. Independent negative dated balances can be
 accepted and flagged, but cannot be silently reclassified as shorts.
 
-## Delivery slices and gates
+## Slice design notes
 
 Each slice keeps the app runnable, updates API, export/restore and self-check
-when affected, and has named exact-conservation and rollback tests. #129,
-#141, #137, #138, #132, the #139 decision and #147 closure propagation have
-shipped. #141 covered
-reinvestment, imported acquisitions, native reversals/replacements and source
-revisions; new commands opt into the same policy themselves.
-Shared checkpoint preview under-reporting #142 is complete; same-day boundary
-and combined-delta behavior remain #135. Next (2026-10-03): split correction
-[T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144) opens step 6, with API/browser evidence
-[T-128 #143](https://github.com/sergeyfarin/rekenraam/issues/143) alongside. Before transfer correction #134,
-settle pooled lineage #150 and add the replay-equivalence verifier #149.
-Current sequence:
+when affected, and has named exact-conservation and rollback tests. These
+notes record design decisions per area; they carry no status or order.
 
-1. **Shared gain-impact safety mechanism** — [T-114 #129](https://github.com/sergeyfarin/rekenraam/issues/129). **Shipped** for manual buys: a command sets
-   `GainImpactPolicy` and the shared writer snapshots effective disposals before
-   guards/journals, compares after domain effects in the same transaction
-   (revised/replaced/removed, by correction root + decision sequence), and refuses a
-   non-empty set without the preview's exact token. Removal/replacement are
-   compared explicitly; `persistInvestmentReplayProjectionTx` is not the hook.
-   Existing paths are rolled out under [T-126 #141](https://github.com/sergeyfarin/rekenraam/issues/141) (shipped; matrix in implemented.md).
-   New split, transfer and correction commands must integrate #129 in their own acceptance.
-   A permanent “gains acknowledged through” date is an unaccepted design option,
-   not a new book rule. R18 still owns reproducible historical/tax reporting.
-2. **Split/reverse split** — [T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137), under
-   [#114](https://github.com/sergeyfarin/rekenraam/issues/114) and the
-   [slice 5 contract](investment-operation-slice-5-contract.md). **Shipped**
-   (2026-10-03): manual exact-ratio command with replay admission, gain
-   disclosure, mobile entry, export/self-check, and Trading 212 split-row
-   linking without double posting. `STOCK_SPLIT` alone supplies no ratio or
-   entitlement, so automatic mapping stays blocked on verified payload evidence
-   ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)). Split correction and a guarded journal-delta adjustment
-   ([T-129 #144](https://github.com/sergeyfarin/rekenraam/issues/144)) and zero-delta splits ([T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)) remain; until then a
-   history change that alters a split's quantity is refused with the split named.
-3. **Pooled internal transfers** — [T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138). **Shipped**
-   (2026-10-03): the source's method lock, else its resolved default, chooses
-   selected-lot or pooled allocation. A pooled move reuses the sale's dated
-   pool depletion (FIFO lot links for lineage, exact remainder on the last
-   touched lot), snapshots method/tier/version on the transfer fact, locks the
-   source family, and leaves the destination's method state to integrate the
-   new lots. Replay re-runs the pool and refuses any changed link with the
-   transfer named. This is operational average cost, not tax-policy
-   completeness.
-4. **General backdating** — [T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132). **Shipped**
-   (2026-10-03). Known-basis transfer-in uses the opening replay admission
-   (link written before replay so the original date orders FIFO/LIFO while
-   the transfer date gates availability). A sale or write-off dated behind a
-   later depletion joins the effective intents at its same-day slot after
-   earlier entries; replay yields its allocations (written as historical
-   evidence) and revises later decisions under their recorded policy and
-   elections. Preview, reconciliation impact and commit run the same writer;
-   both opt into gain acknowledgement. An impossible later decision is named
-   (`INVESTMENT_SALE_DEPENDENCY`). Reinvestment admission is pinned unchanged.
-5. **Replay scope / effective reader consolidation** — [T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139).
-   **Decided and shipped** (2026-10-03, ADR 0013 *Cross-Position Replay Scope
-   Refinement*): an affected-position dependency closure, seeded per changed
-   position and date and following every recorded internal transfer to a fixed
-   point, replayed as one merged dated stream in the command transaction. A
-   whole-book rebuild was rejected (O(book) per command and preview, wider
-   failure radius, same refusals) and kept only as a verifier
-   ([T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149)). The
-   closure (`InvestmentReplayClosure`) ships with chain, cycle, ordering and
-   unrelated-position tests. **Propagation shipped**
-   ([T-132 #147](https://github.com/sergeyfarin/rekenraam/issues/147),
-   2026-10-03): a changed carried basis appends a transfer link revision and
-   replays each destination to a fixed point, through chains, cycles,
-   specific-lot elections, pooled sources and same-day sales, with gain
-   disclosure and preview = commit. Removing a transferred acquisition and
-   changed pooled lineage ([T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150))
-   stay named refusals. Effective reads moved to
-   SQL views, `investment_lot_facts` merged into `investment_lots`, and the
-   baseline's ALTER/recreated view/trigger leftovers were folded into final
-   DDL. Repeated typed-date sequence stays a #115 admission gate.
-6. **Correction families** — dividends/reinvestment [T-115 #130](https://github.com/sergeyfarin/rekenraam/issues/130),
-   date/account/instrument/currency [T-116 #131](https://github.com/sergeyfarin/rekenraam/issues/131), write-offs [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133),
-   transfers [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134), register grouping/net checkpoint impact
-   [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135). Field and transfer changes depend on general backdating and
-   the cross-position decision where applicable. No umbrella P0 depends on all
-   future command families. Provider cancellation/wider revisions
-   [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) are blocked pending verified execution evidence.
-7. **Remaining slice 5 actions**, then **short sale/cover**
-   [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103), then
-   **compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115)**.
-   Outbound transfers, unknown-basis resolution, return of capital and linked
-   cash in lieu retain the slice 5 posting/replay contracts. Compound kinds
-   require repeated typed-date sequences (`investment_operation_dates` is still
-   keyed by `(operation_id, date_role)`), explicit clearing attribution and,
-   for cross-position effects, the #147 propagation before admission. Bonds/derivatives need separate instrument contracts.
-
-Independent validation performance work is [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140); it must preserve
-race and meaningful financial coverage. It does not block defining these slices.
+- **Gain-impact safety mechanism** (T-114). A command sets
+  `GainImpactPolicy`; the shared writer snapshots effective disposals before
+  guards/journals, compares after domain effects in the same transaction
+  (revised/replaced/removed, by correction root + decision sequence), and
+  refuses a non-empty set without the preview's exact token. Removal and
+  replacement are compared explicitly; `persistInvestmentReplayProjectionTx`
+  is not the hook. Every replaying command integrates it in its own
+  acceptance. A permanent “gains acknowledged through” date is an unaccepted
+  design option, not a book rule; R18 owns reproducible historical/tax
+  reporting.
+- **Split/reverse split** (T-122, under the
+  [slice 5 contract](investment-operation-slice-5-contract.md)). Exact-ratio
+  manual command with replay admission. `STOCK_SPLIT` alone supplies no ratio
+  or entitlement, so provider rows only link to a recorded split until
+  verified payload evidence defines a mapping. A history change that alters a
+  split's quantity is refused with the split named until a guarded
+  journal-delta adjustment exists (T-129).
+- **Pooled internal transfers** (T-123). The source's method lock, else its
+  resolved default, chooses selected-lot or pooled allocation. A pooled move
+  reuses the sale's dated pool depletion (FIFO lot links for lineage, exact
+  remainder on the last touched lot), snapshots method/tier/version on the
+  transfer fact, locks the source family, and leaves the destination's method
+  state to integrate the new lots. This is operational average cost, not
+  tax-policy completeness.
+- **General backdating** (T-117). Known-basis transfer-in uses the opening
+  replay admission (link written before replay so the original date orders
+  FIFO/LIFO while the transfer date gates availability). A sale or write-off
+  dated behind a later depletion joins the effective intents at its same-day
+  slot after earlier entries; replay yields its allocations (written as
+  historical evidence) and revises later decisions under their recorded policy
+  and elections. Preview, reconciliation impact and commit run the same
+  writer. An impossible later decision is named (`INVESTMENT_SALE_DEPENDENCY`).
+- **Cross-position replay scope** (T-124, ADR 0013 *Cross-Position Replay
+  Scope Refinement*). An affected-position dependency closure
+  (`InvestmentReplayClosure`), seeded per changed position and date and
+  following every recorded internal transfer to a fixed point, replays as one
+  merged dated stream in the command transaction. A whole-book rebuild was
+  rejected (O(book) per command and preview, wider failure radius, same
+  refusals) and kept only as a verifier (T-134). A changed carried basis
+  appends a transfer link revision and replays each destination (T-132).
+  Removing a transferred acquisition and changed pooled lineage (T-135) are
+  named refusals. Effective reads are SQL views; opening facts live on
+  `investment_lots`.
+- **Correction families** (T-115, T-116, T-118, T-119, T-120). Field and
+  transfer changes reuse general backdating and the cross-position closure.
+  Provider cancellation/wider revisions (T-121) require verified execution
+  evidence; cancelled order status is insufficient.
+- **Remaining slice 5 actions, shorts, compound actions.** Outbound transfers,
+  unknown-basis resolution, return of capital and linked cash in lieu retain
+  the slice 5 posting/replay contracts. Compound kinds require repeated
+  typed-date sequences (`investment_operation_dates` is still keyed by
+  `(operation_id, date_role)`), explicit clearing attribution and, for
+  cross-position effects, closure propagation before admission.
+  Bonds/derivatives need separate instrument contracts.
 
 ### Required acceptance cases across slices
 
