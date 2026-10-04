@@ -71,3 +71,25 @@ test.describe('on a phone', () => {
   });
 });
 
+// The accent and warning badges stay at AA in palettes other than the default.
+// src/lib/theme-contrast.test.ts computes every combination from the tokens;
+// this measures a few as the browser actually renders them.
+for (const appearance of [
+  { theme: 'light', base: 'default', accent: 'amber' },
+  { theme: 'dark', base: 'default', accent: 'blue' },
+  { theme: 'dark', base: 'slate', accent: 'rose' },
+  { theme: 'light', base: 'zinc', accent: 'violet' }
+]) {
+  test(`correction badges are accessible in ${appearance.theme} ${appearance.base} ${appearance.accent}`, async ({ page }) => {
+    const register = await correctedDividendRegister(page);
+    await page.evaluate(({ theme, base, accent }) => {
+      localStorage.setItem('rekenraam-theme', theme);
+      localStorage.setItem('rekenraam-base-color', base);
+      localStorage.setItem('rekenraam-accent-color', accent);
+    }, appearance);
+    await page.goto(register);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', appearance.theme);
+    await expect(page.locator('summary')).toHaveCount(3);
+    await expectNoAccessibilityViolations(page, `register in ${appearance.theme} ${appearance.base} ${appearance.accent}`);
+  });
+}

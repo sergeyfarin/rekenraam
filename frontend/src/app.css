@@ -27,19 +27,28 @@
    * was 3.73:1, positive on positive-soft 4.22:1, selected 4.03:1, and
    * white-on-accent — every primary button in the app — 4.20:1. The dark
    * theme already cleared it and is unchanged (R3a).
+   *
+   * Re-derived 2026-10-04 for every theme × base × accent palette, now pinned
+   * by src/lib/theme-contrast.test.ts: the status badges' warning (3.1:1) and
+   * danger (4.2:1) text, accent badges over row hover and surface-strong, the
+   * light blue/violet/rose/amber accents (down to 2.9:1) and the dark
+   * blue/violet/rose accents fell short, as did white on the light blue and
+   * violet selected tokens. Only lightness moved; hue and chroma
+   * keep each palette's character. The amber accent now carries light button
+   * text, since a darkened amber no longer holds dark text at AA.
    */
   --color-selected: oklch(0.54 0.14 154);
   --color-selected-foreground: oklch(0.986 0.01 154);
   --color-row-hover: oklch(0.965 0.014 108);
   --color-border: oklch(0.855 0.022 108);
   --color-muted: oklch(0.48 0.035 108);
-  --color-accent: oklch(0.5 0.14 154);
+  --color-accent: oklch(0.47 0.14 154);
   --color-accent-foreground: oklch(0.986 0.01 154);
-  --color-positive: oklch(0.5 0.12 155);
+  --color-positive: oklch(0.495 0.12 155);
   --color-positive-soft: oklch(0.925 0.035 155);
-  --color-warning: oklch(0.62 0.12 78);
+  --color-warning: oklch(0.525 0.12 78);
   --color-warning-soft: oklch(0.945 0.04 78);
-  --color-danger: oklch(0.56 0.2 25);
+  --color-danger: oklch(0.535 0.2 25);
   --color-danger-soft: oklch(0.93 0.03 25);
   --color-chart-1: oklch(0.5 0.14 154);
   --color-chart-2: oklch(0.62 0.12 175);
@@ -77,13 +86,13 @@
   --color-row-hover: oklch(0.295 0.022 108);
   --color-border: oklch(0.39 0.026 108);
   --color-muted: oklch(0.73 0.026 108);
-  --color-accent: oklch(0.69 0.13 154);
+  --color-accent: oklch(0.705 0.13 154);
   --color-accent-foreground: oklch(0.13 0.022 154);
   --color-positive: oklch(0.7 0.12 155);
   --color-positive-soft: oklch(0.3 0.06 155);
   --color-warning: oklch(0.78 0.12 78);
   --color-warning-soft: oklch(0.34 0.055 78);
-  --color-danger: oklch(0.68 0.18 25);
+  --color-danger: oklch(0.69 0.18 25);
   --color-danger-soft: oklch(0.3 0.06 25);
   --color-chart-1: oklch(0.69 0.13 154);
   --color-chart-2: oklch(0.74 0.11 175);
@@ -116,13 +125,13 @@
     --color-row-hover: oklch(0.295 0.022 108);
     --color-border: oklch(0.39 0.026 108);
     --color-muted: oklch(0.73 0.026 108);
-    --color-accent: oklch(0.69 0.13 154);
+    --color-accent: oklch(0.705 0.13 154);
     --color-accent-foreground: oklch(0.13 0.022 154);
     --color-positive: oklch(0.7 0.12 155);
     --color-positive-soft: oklch(0.3 0.06 155);
     --color-warning: oklch(0.78 0.12 78);
     --color-warning-soft: oklch(0.34 0.055 78);
-    --color-danger: oklch(0.68 0.18 25);
+    --color-danger: oklch(0.69 0.18 25);
     --color-danger-soft: oklch(0.3 0.06 25);
     --color-chart-1: oklch(0.69 0.13 154);
     --color-chart-2: oklch(0.74 0.11 175);
@@ -197,9 +206,9 @@
   --color-topbar-border: oklch(0.38 0.06 245);
   --color-topbar-control: oklch(0.31 0.058 245);
   --color-topbar-control-hover: oklch(0.36 0.065 245);
-  --color-selected: oklch(0.59 0.16 245);
+  --color-selected: oklch(0.545 0.16 245);
   --color-selected-foreground: oklch(0.985 0.008 245);
-  --color-accent: oklch(0.58 0.15 245);
+  --color-accent: oklch(0.485 0.15 245);
   --color-accent-foreground: oklch(0.985 0.008 245);
   --color-chart-1: oklch(0.58 0.15 245);
   --color-chart-2: oklch(0.64 0.13 220);
@@ -212,9 +221,9 @@
   --color-topbar-border: oklch(0.38 0.064 300);
   --color-topbar-control: oklch(0.31 0.06 300);
   --color-topbar-control-hover: oklch(0.36 0.068 300);
-  --color-selected: oklch(0.58 0.15 300);
+  --color-selected: oklch(0.565 0.15 300);
   --color-selected-foreground: oklch(0.985 0.008 300);
-  --color-accent: oklch(0.57 0.15 300);
+  --color-accent: oklch(0.51 0.15 300);
   --color-accent-foreground: oklch(0.985 0.008 300);
   --color-chart-1: oklch(0.57 0.15 300);
   --color-chart-2: oklch(0.64 0.14 280);
@@ -229,7 +238,7 @@
   --color-topbar-control-hover: oklch(0.36 0.068 18);
   --color-selected: oklch(0.57 0.16 18);
   --color-selected-foreground: oklch(0.985 0.008 18);
-  --color-accent: oklch(0.56 0.16 18);
+  --color-accent: oklch(0.51 0.16 18);
   --color-accent-foreground: oklch(0.985 0.008 18);
   --color-chart-1: oklch(0.56 0.16 18);
   --color-chart-2: oklch(0.64 0.14 42);
@@ -244,8 +253,8 @@
   --color-topbar-control-hover: oklch(0.39 0.068 78);
   --color-selected: oklch(0.62 0.14 78);
   --color-selected-foreground: oklch(0.18 0.02 78);
-  --color-accent: oklch(0.62 0.14 78);
-  --color-accent-foreground: oklch(0.18 0.02 78);
+  --color-accent: oklch(0.495 0.14 78);
+  --color-accent-foreground: oklch(0.985 0.008 78);
   --color-chart-1: oklch(0.62 0.14 78);
   --color-chart-2: oklch(0.68 0.12 98);
   --color-chart-3: oklch(0.56 0.12 54);
@@ -259,7 +268,7 @@
   --color-topbar-control-hover: oklch(0.265 0.042 245);
   --color-selected: oklch(0.66 0.14 245);
   --color-selected-foreground: oklch(0.14 0.02 245);
-  --color-accent: oklch(0.67 0.13 245);
+  --color-accent: oklch(0.715 0.13 245);
   --color-accent-foreground: oklch(0.14 0.02 245);
   --color-chart-1: oklch(0.67 0.13 245);
   --color-chart-2: oklch(0.74 0.11 220);
@@ -274,7 +283,7 @@
   --color-topbar-control-hover: oklch(0.265 0.044 300);
   --color-selected: oklch(0.66 0.14 300);
   --color-selected-foreground: oklch(0.14 0.02 300);
-  --color-accent: oklch(0.67 0.13 300);
+  --color-accent: oklch(0.735 0.13 300);
   --color-accent-foreground: oklch(0.14 0.02 300);
   --color-chart-1: oklch(0.67 0.13 300);
   --color-chart-2: oklch(0.74 0.11 280);
@@ -289,7 +298,7 @@
   --color-topbar-control-hover: oklch(0.265 0.044 18);
   --color-selected: oklch(0.66 0.14 18);
   --color-selected-foreground: oklch(0.14 0.02 18);
-  --color-accent: oklch(0.67 0.13 18);
+  --color-accent: oklch(0.735 0.13 18);
   --color-accent-foreground: oklch(0.14 0.02 18);
   --color-chart-1: oklch(0.67 0.13 18);
   --color-chart-2: oklch(0.74 0.11 42);

@@ -266,6 +266,14 @@ non-trivial diff (yours or reviewed):
     `TestCheckpointIntegrityIgnoresNonFinancialEdits`,
     `TestCheckpointIntegrityStillFlagsChangedReconciledFacts`.
 
+28. **Contrast measured in one palette only** — axe checks the theme a browser
+    case renders, and the R3a contrast pass re-derived only the light default
+    palette, so the warning and danger badges, accent badges over row hover,
+    and four alternative accent palettes sat below 4.5:1 unnoticed. Any token
+    change runs `src/lib/theme-contrast.test.ts`, which computes every theme ×
+    base × accent pairing from `app.css`; a new text-on-tint pairing gets a
+    line there. Named check: `theme-contrast.test.ts` (30 combinations).
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

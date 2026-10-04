@@ -1,5 +1,6 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages.js';
+  import StatusBadge from '$lib/components/status-badge.svelte';
   import type { AccountRegisterEntryResponse } from '$lib/api/transactions';
   import type { AccountClass } from './transaction-labels';
   import { commodityDisplay, formatSignedAmount } from './transaction-labels';
@@ -62,10 +63,7 @@
   onkeydown={(e) => e.stopPropagation()}
 >
   <summary class="inline-flex cursor-pointer flex-wrap items-center gap-1.5 rounded text-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
-    <!-- Bordered foreground text, not a tinted StatusBadge: the warning and
-         accent badge tones fall below 4.5:1 at this size. The words carry the
-         state, so no colour cue is needed. -->
-    <span class="rounded-(--radius-control) border border-border px-1.5 py-0.5 font-semibold text-foreground">{badgeText()}</span>
+    <StatusBadge tone={badge === 'current' ? 'accent' : 'warning'}>{badgeText()}</StatusBadge>
     <span>{m.register_correction_history({ count: chain.members.length })}</span>
   </summary>
   <div class="mt-2 space-y-2 rounded-(--radius-control) border border-border bg-surface-strong px-3 py-2 text-foreground">
