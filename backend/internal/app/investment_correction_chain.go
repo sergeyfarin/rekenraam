@@ -47,8 +47,8 @@ type InvestmentCorrectionChain struct {
 	// CanReverseTransfer allows native reversal of an internal or
 	// external-in transfer (T-119).
 	CanReverseTransfer bool
-	// CanReplaceTransfer allows native replacement of an internal transfer
-	// (T-119); the transfer correction context pre-fills it.
+	// CanReplaceTransfer allows native replacement of an internal or
+	// external-in transfer (T-119); EffectiveTransfer pre-fills it.
 	CanReplaceTransfer bool
 	EffectiveTransfer  *InvestmentCorrectionTransferTerms
 	Operations         []InvestmentCorrectionNode
@@ -86,9 +86,11 @@ type InvestmentCorrectionReinvestmentTerms struct {
 	PayeeID          *int64
 }
 
-// InvestmentCorrectionTransferTerms are an effective internal transfer's
-// committed terms, which pre-fill its replacement form (T-119).
+// InvestmentCorrectionTransferTerms are an effective transfer's committed
+// terms, which pre-fill its replacement form (T-119). SourceAccountID is zero
+// and the carried basis and original date are set for an external transfer in.
 type InvestmentCorrectionTransferTerms struct {
+	TransferKind         string
 	EffectiveOn          string
 	SourceAccountID      int64
 	DestinationAccountID int64
@@ -99,6 +101,9 @@ type InvestmentCorrectionTransferTerms struct {
 	Allocations          []InvestmentLotAllocationInput
 	QuantityValue        exact.Coefficient
 	QuantityScale        int
+	CarriedBasisValue    exact.Coefficient
+	CarriedBasisScale    int
+	OriginalAcquiredOn   string
 	SourceEvidenceJSON   string
 	Memo                 string
 }
@@ -200,9 +205,9 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 		}
 		if correctable && (record.OperationKind == "internal_transfer" || record.OperationKind == "external_transfer_in") {
 			chain.CanReverseTransfer = true
-			chain.CanReplaceTransfer = record.OperationKind == "internal_transfer"
+			chain.CanReplaceTransfer = true
 			if chain.CanReplaceTransfer {
-				terms, err := s.internalTransferCorrectionTerms(ctx, record.OperationID, record.TransactionID.Int64)
+				terms, err := s.transferCorrectionTerms(ctx, record.OperationID, record.TransactionID.Int64)
 				if err != nil {
 					return InvestmentCorrectionChain{}, err
 				}
@@ -276,8 +281,8 @@ func reinvestmentCorrectionTerms(transaction Transaction) (*InvestmentCorrection
 	}, true
 }
 
-func (s *InvestmentService) internalTransferCorrectionTerms(ctx context.Context, operationID, transactionID int64) (InvestmentCorrectionTransferTerms, error) {
-	terms, err := s.repository.InternalTransferTerms(ctx, BookID, operationID)
+func (s *InvestmentService) transferCorrectionTerms(ctx context.Context, operationID, transactionID int64) (InvestmentCorrectionTransferTerms, error) {
+	terms, err := s.repository.TransferTerms(ctx, BookID, operationID)
 	if err != nil {
 		return InvestmentCorrectionTransferTerms{}, mapTransferCorrectionError(err)
 	}
@@ -286,7 +291,9 @@ func (s *InvestmentService) internalTransferCorrectionTerms(ctx context.Context,
 		return InvestmentCorrectionTransferTerms{}, err
 	}
 	out := InvestmentCorrectionTransferTerms{
-		EffectiveOn: terms.EffectiveOn, SourceAccountID: terms.SourceAccountID,
+		TransferKind: terms.TransferKind, EffectiveOn: terms.EffectiveOn,
+		CarriedBasisValue: terms.CarriedBasisValue, CarriedBasisScale: terms.CarriedBasisScale,
+		OriginalAcquiredOn: terms.OriginalAcquiredOn, SourceAccountID: terms.SourceAccountID,
 		DestinationAccountID: terms.DestinationAccountID, CommodityID: terms.CommodityID,
 		CostCommodityID: terms.CostCommodityID, BasisAllocation: terms.BasisAllocation,
 		DestinationLineage: terms.DestinationLineage, QuantityValue: terms.QuantityValue,

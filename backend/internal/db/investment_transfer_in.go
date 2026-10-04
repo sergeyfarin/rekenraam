@@ -43,66 +43,77 @@ func (r *InvestmentRepository) createExternalTransferIn(ctx context.Context, jou
 	}
 	return write(ctx, r.database, journal,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (InvestmentLotRecord, error) {
-			lot := transfer.Lot
-			lot.SourceTransactionID = transaction.ID
-			lot.EventKind = "transfer_in"
-			latest, err := latestPositionRewriteDateTx(ctx, tx, lot.BookID, lot.AccountID, lot.CommodityID)
-			if err != nil {
-				return InvestmentLotRecord{}, err
-			}
-			replayAdmission := latest != "" && lot.OpenedOn < latest
-			record, err := createLotWithAuditTx(ctx, tx, lot, auditEventID, replayAdmission)
-			if err != nil {
-				return InvestmentLotRecord{}, err
-			}
-			operationID, err := investmentOperationIDTx(ctx, tx, lot.BookID, transaction.ID)
-			if err != nil {
-				return InvestmentLotRecord{}, err
-			}
-			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO investment_transfer_facts
-					(operation_id, book_id, transfer_kind, effective_on, commodity_id,
-					 destination_account_id, source_evidence_json, created_audit_event_id)
-				VALUES (?, ?, 'external_in', ?, ?, ?, ?, ?)
-			`, operationID, lot.BookID, lot.OpenedOn, lot.CommodityID, lot.AccountID,
-				transfer.SourceEvidenceJSON, auditEventID); err != nil {
-				return InvestmentLotRecord{}, fmt.Errorf("record external transfer source: %w", err)
-			}
-			originalKnowledge := "unknown"
-			if transfer.OriginalAcquiredOn != "" {
-				originalKnowledge = "known"
-			}
-			if _, err := tx.ExecContext(ctx, `
-				INSERT INTO investment_transfer_lot_links
-					(operation_id, link_seq, destination_lot_id, quantity_value, quantity_scale,
-					 basis_knowledge, carried_basis_value, carried_basis_scale, cost_commodity_id,
-					 original_date_knowledge, original_acquired_on, source_evidence_json)
-				VALUES (?, 1, ?, ?, ?, 'known', ?, ?, ?, ?, NULLIF(?, ''), ?)
-			`, operationID, record.ID, lot.QuantityValue, lot.QuantityScale,
-				exact.New(lot.CostBasisValue), lot.CostBasisScale, lot.CostCommodityID,
-				originalKnowledge, transfer.OriginalAcquiredOn, transfer.SourceEvidenceJSON); err != nil {
-				return InvestmentLotRecord{}, fmt.Errorf("link external transfer lot: %w", err)
-			}
-			if !replayAdmission {
-				return record, nil
-			}
-			intents, err := investmentReplayIntentsQuery(ctx, tx, lot.BookID, lot.AccountID,
-				lot.CommodityID, lot.CostCommodityID, "long")
-			if err != nil {
-				return InvestmentLotRecord{}, err
-			}
-			projection, err := simulateInvestmentReplayTx(ctx, tx, lot.BookID, lot.AccountID,
-				lot.CommodityID, lot.CostCommodityID, intents)
-			if err != nil {
-				return InvestmentLotRecord{}, err
-			}
-			if err := persistInvestmentReplayProjectionTx(ctx, tx, lot.BookID, lot.AccountID,
-				lot.CommodityID, lot.CostCommodityID, operationID, auditEventID, journal.ActorUserID,
-				journal.CreatedAt, intents, projection); err != nil {
-				return InvestmentLotRecord{}, err
-			}
-			return investmentLotByIDTx(ctx, tx, lot.BookID, record.ID)
+			return writeExternalTransferInTx(ctx, tx, journal, transfer, transaction, auditEventID, false)
 		}, nil)
+}
+
+// writeExternalTransferInTx records the transfer's lot, facts and link for a
+// journal the enclosing writer just posted. A transfer dated before a later
+// depletion is admitted through replay of its holding. A correction passes
+// correcting, which always admits the lot by replay and leaves the replay of
+// every touched holding to the caller.
+func writeExternalTransferInTx(ctx context.Context, tx *sql.Tx, journal CreateTransactionParams,
+	transfer CreateExternalTransferInParams, transaction TransactionRecord, auditEventID int64, correcting bool,
+) (InvestmentLotRecord, error) {
+	lot := transfer.Lot
+	lot.SourceTransactionID = transaction.ID
+	lot.EventKind = "transfer_in"
+	latest, err := latestPositionRewriteDateTx(ctx, tx, lot.BookID, lot.AccountID, lot.CommodityID)
+	if err != nil {
+		return InvestmentLotRecord{}, err
+	}
+	replayAdmission := correcting || (latest != "" && lot.OpenedOn < latest)
+	record, err := createLotWithAuditTx(ctx, tx, lot, auditEventID, replayAdmission)
+	if err != nil {
+		return InvestmentLotRecord{}, err
+	}
+	operationID, err := investmentOperationIDTx(ctx, tx, lot.BookID, transaction.ID)
+	if err != nil {
+		return InvestmentLotRecord{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO investment_transfer_facts
+			(operation_id, book_id, transfer_kind, effective_on, commodity_id,
+			 destination_account_id, source_evidence_json, created_audit_event_id)
+		VALUES (?, ?, 'external_in', ?, ?, ?, ?, ?)
+	`, operationID, lot.BookID, lot.OpenedOn, lot.CommodityID, lot.AccountID,
+		transfer.SourceEvidenceJSON, auditEventID); err != nil {
+		return InvestmentLotRecord{}, fmt.Errorf("record external transfer source: %w", err)
+	}
+	originalKnowledge := "unknown"
+	if transfer.OriginalAcquiredOn != "" {
+		originalKnowledge = "known"
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO investment_transfer_lot_links
+			(operation_id, link_seq, destination_lot_id, quantity_value, quantity_scale,
+			 basis_knowledge, carried_basis_value, carried_basis_scale, cost_commodity_id,
+			 original_date_knowledge, original_acquired_on, source_evidence_json)
+		VALUES (?, 1, ?, ?, ?, 'known', ?, ?, ?, ?, NULLIF(?, ''), ?)
+	`, operationID, record.ID, lot.QuantityValue, lot.QuantityScale,
+		exact.New(lot.CostBasisValue), lot.CostBasisScale, lot.CostCommodityID,
+		originalKnowledge, transfer.OriginalAcquiredOn, transfer.SourceEvidenceJSON); err != nil {
+		return InvestmentLotRecord{}, fmt.Errorf("link external transfer lot: %w", err)
+	}
+	if correcting || !replayAdmission {
+		return record, nil
+	}
+	intents, err := investmentReplayIntentsQuery(ctx, tx, lot.BookID, lot.AccountID,
+		lot.CommodityID, lot.CostCommodityID, "long")
+	if err != nil {
+		return InvestmentLotRecord{}, err
+	}
+	projection, err := simulateInvestmentReplayTx(ctx, tx, lot.BookID, lot.AccountID,
+		lot.CommodityID, lot.CostCommodityID, intents)
+	if err != nil {
+		return InvestmentLotRecord{}, err
+	}
+	if err := persistInvestmentReplayProjectionTx(ctx, tx, lot.BookID, lot.AccountID,
+		lot.CommodityID, lot.CostCommodityID, operationID, auditEventID, journal.ActorUserID,
+		journal.CreatedAt, intents, projection); err != nil {
+		return InvestmentLotRecord{}, err
+	}
+	return investmentLotByIDTx(ctx, tx, lot.BookID, record.ID)
 }
 
 func (r *InvestmentRepository) ExternalInvestmentTransferEquityAccountID(ctx context.Context, bookID int64) (int64, error) {

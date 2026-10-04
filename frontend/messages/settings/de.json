@@ -773,6 +773,7 @@
   "transactions_investment_replace_transfer_action": "Übertrag korrigieren…",
   "transactions_investment_replace_transfer_title": "Diesen Übertrag korrigieren",
   "transactions_investment_replace_transfer_copy": "Bucht die exakte Gegenbuchung und den korrigierten Übertrag gemeinsam. Die Quelle wird zum Übertragsdatum belastet, beide Depots und spätere Verkäufe werden neu berechnet, und das Original bleibt im Prüfverlauf erhalten.",
+  "transactions_investment_replace_transfer_in_copy": "Bucht die exakte Gegenbuchung und den korrigierten Übertrag gemeinsam, sodass die Differenz der Eröffnungsbrücke ergänzt statt überschrieben wird. Das Depot und spätere Verkäufe werden neu berechnet, und das Original bleibt im Prüfverlauf erhalten.",
   "transactions_investment_replace_transfer_lots_help": "Übertragene Menge aus jedem Posten, den der Übertrag verwendet hat. Lassen Sie einen Posten leer, um ihn nicht mehr zu übertragen.",
   "transactions_investment_replace_transfer_lot": "Posten #{lot}",
   "transactions_investment_replace_write_off_title": "Diese Abschreibung korrigieren",

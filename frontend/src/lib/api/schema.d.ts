@@ -15408,7 +15408,7 @@ export interface paths {
         put?: never;
         /**
          * Replace a posted internal transfer
-         * @description Posts the exact inverse of an internal transfer and a corrected internal transfer (T-119) under one audit event and one database transaction. The replacement depletes its source at the replaced transfer's correction-root same-day slot, so the lots and basis are those the transfer date sees; every position either transfer moved then replays under recorded elections and changed carried basis propagates downstream. Date, lots or pooled quantity, both holding accounts and destination lineage may change; re-recording a source_lots transfer from an average-cost source as one pooled_lot is the remedy for a lineage refusal. The original transfer's journal, facts, links, revisions and lot events stay immutable. External transfers in are reversed, not replaced, here (404). A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
+         * @description Posts the exact inverse of an internal transfer and a corrected internal transfer (T-119) under one audit event and one database transaction. The replacement depletes its source at the replaced transfer's correction-root same-day slot, so the lots and basis are those the transfer date sees; every position either transfer moved then replays under recorded elections and changed carried basis propagates downstream. Date, lots or pooled quantity, both holding accounts and destination lineage may change; re-recording a source_lots transfer from an average-cost source as one pooled_lot is the remedy for a lineage refusal. The original transfer's journal, facts, links, revisions and lot events stay immutable. External transfers in use replace-transfer-in (404 here). A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
          */
         post: {
             parameters: {
@@ -15556,6 +15556,181 @@ export interface paths {
                     };
                 };
                 /** @description Transfer already corrected or changed, a dependent operation cannot be satisfied, or the source cannot supply the replacement */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-transfer-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a posted external transfer in
+         * @description Posts the exact inverse of an external transfer in (equity bridge included) and a corrected transfer in (T-119) under one audit event and one database transaction. The bridge difference is therefore appended, never overwritten: the original journal and source evidence stay. The new lot opens at the replaced transfer's correction-root same-day slot and both the old and new holdings replay under recorded elections. Date, holding account, quantity, carried basis, original acquisition date and evidence may change; an unknown original date stays unknown unless supplied. Internal transfers use replace-transfer (404 here). A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    /** @description Posted external transfer-in transaction ID. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentTransferInReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Transfer replaced and both holdings replayed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentTransferInReplacementResponse"];
+                    };
+                };
+                /** @description Invalid request, missing reason, or a changed security or basis currency */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted external transfer in not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Transfer already corrected (INVESTMENT_TRANSFER_ALREADY_CORRECTED), changed (INVESTMENT_TRANSFER_CHANGED), a dependent operation cannot be satisfied (INVESTMENT_TRANSFER_DEPENDENCY), or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-transfer-in/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation and gain impact of an external transfer-in replacement
+         * @description Pass reconciliation_override=true to the replacement command after reviewing the listed checkpoints. Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Posted external transfer-in transaction ID. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentTransferInReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted external transfer in not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Transfer already corrected (INVESTMENT_TRANSFER_ALREADY_CORRECTED), changed (INVESTMENT_TRANSFER_CHANGED), or a dependent operation cannot be satisfied (INVESTMENT_TRANSFER_DEPENDENCY) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -21218,6 +21393,22 @@ export interface components {
             plan: components["schemas"]["InternalTransferPlan"];
             impact: components["schemas"]["ReconciliationImpactResponse"];
         };
+        InvestmentTransferInReplacementRequest: {
+            /** @description Why the posted external transfer in is being corrected. */
+            reason: string;
+            /** @description Omit or set false to keep affected reconciliation checkpoints active. */
+            reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's preview, accepting exactly the committed disposal gain changes it disclosed (T-126). */
+            gain_impact_acknowledgement?: string;
+            /** @description The full corrected transfer in. Date, holding account, quantity, carried basis, original acquisition date and evidence may change; commodity_id and cost_commodity_id must equal the transfer's. Its change_reason, reconciliation_override and gain_impact_acknowledgement are ignored. */
+            replacement: components["schemas"]["ExternalTransferInRequest"];
+        };
+        InvestmentTransferInReplacementResponse: {
+            inverse: components["schemas"]["TransactionResponse"];
+            replacement: components["schemas"]["ExternalTransferInResponse"];
+            /** Format: int64 */
+            corrected_transaction_id: number;
+        };
         InvestmentTransferReplacementRequest: {
             /** @description Why the posted internal transfer is being corrected. */
             reason: string;
@@ -21318,25 +21509,41 @@ export interface components {
             /** Format: int64 */
             corrected_transaction_id: number;
         };
-        /** @description The effective internal transfer's committed terms, for pre-filling a replacement (T-119). Selected-lot transfers list lot_allocations; average-cost pool transfers give quantity_value/scale. */
+        /** @description The effective transfer's committed terms, for pre-filling a replacement (T-119). Internal selected-lot transfers list lot_allocations; internal pool transfers and external transfers in give quantity_value/scale. An external transfer in has no source account or lineage and gives its carried basis and original date. */
         InvestmentCorrectionTransferTerms: {
+            /** @enum {string} */
+            transfer_kind: "internal" | "external_in";
             /** Format: date */
             effective_on: string;
             /** Format: int64 */
-            source_account_id: number;
+            source_account_id: number | null;
             /** Format: int64 */
             destination_account_id: number;
             /** Format: int64 */
             commodity_id: number;
             /** Format: int64 */
             cost_commodity_id: number;
-            /** @enum {string} */
-            basis_allocation: "selected_lots" | "average_cost_pool";
-            /** @enum {string} */
-            destination_lineage: "source_lots" | "pooled_lot";
+            /**
+             * @description Empty for an external transfer in.
+             * @enum {string}
+             */
+            basis_allocation: "selected_lots" | "average_cost_pool" | "";
+            /**
+             * @description Empty for an external transfer in.
+             * @enum {string}
+             */
+            destination_lineage: "source_lots" | "pooled_lot" | "";
             lot_allocations: components["schemas"]["InvestmentLotAllocationRequest"][];
             quantity_value: string | null;
             quantity_scale: number | null;
+            /** @description External transfer in only. */
+            carried_basis_value: string | null;
+            carried_basis_scale: number | null;
+            /**
+             * Format: date
+             * @description External transfer in only; null when the original date is unknown.
+             */
+            original_acquired_on: string | null;
             source_evidence: {
                 [key: string]: unknown;
             };
@@ -21523,7 +21730,7 @@ export interface components {
             can_correct_write_off: boolean;
             /** @description Whether the effective posted internal or external-in transfer can attempt reversal (T-119). A destination disposal or onward transfer of the removed units may still refuse the command. */
             can_reverse_transfer: boolean;
-            /** @description Whether the effective posted internal transfer can attempt replacement (T-119). External transfers in are reversed only. */
+            /** @description Whether the effective posted internal or external-in transfer can attempt replacement (T-119); internal ones use replace-transfer, external ones replace-transfer-in. */
             can_replace_transfer: boolean;
             effective_transfer?: components["schemas"]["InvestmentCorrectionTransferTerms"];
             /** @description Whether the effective posted cash dividend can be reversed or replaced (T-115). Imported lineage requires a committed source identity. */

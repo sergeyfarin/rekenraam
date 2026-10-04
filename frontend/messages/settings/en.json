@@ -772,6 +772,7 @@
   "transactions_investment_replace_transfer_action": "Correct transfer…",
   "transactions_investment_replace_transfer_title": "Correct this transfer",
   "transactions_investment_replace_transfer_copy": "Posts the exact inverse and the corrected transfer together. The source is depleted as of the transfer date, both holdings and later sales are recalculated, and the original stays in the audit history.",
+  "transactions_investment_replace_transfer_in_copy": "Posts the exact inverse and the corrected transfer together, so the opening-balance bridge difference is added rather than overwritten. The holding and later sales are recalculated, and the original stays in the audit history.",
   "transactions_investment_replace_transfer_lots_help": "Quantity moved from each lot the transfer took from. Leave a lot empty to stop moving it.",
   "transactions_investment_replace_transfer_lot": "Lot #{lot}",
   "transactions_investment_replace_write_off_title": "Correct this write-off",

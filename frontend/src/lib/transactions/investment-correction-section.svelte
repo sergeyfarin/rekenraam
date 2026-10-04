@@ -11,6 +11,7 @@
   import DividendCorrectionForm from '$lib/investments/dividend-correction-form.svelte';
   import WriteOffCorrectionForm from '$lib/investments/write-off-correction-form.svelte';
   import TransferCorrectionForm from '$lib/investments/transfer-correction-form.svelte';
+  import TransferInCorrectionForm from '$lib/investments/transfer-in-correction-form.svelte';
   import GainImpactList from '$lib/investments/gain-impact-list.svelte';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import {
@@ -83,8 +84,8 @@
   const writeOffCorrectable = $derived(chainQuery.data?.can_correct_write_off === true &&
     chainQuery.data.effective_transaction_id === transactionID);
 
-  // Internal and external-in transfers are reversed; internal ones are also
-  // replaced, pre-filled from the chain's effective_transfer (T-119).
+  // Internal and external-in transfers are reversed or replaced; the
+  // replacement form pre-fills from the chain's effective_transfer (T-119).
   const transferReversible = $derived(chainQuery.data?.can_reverse_transfer === true &&
     chainQuery.data.effective_transaction_id === transactionID);
   const transferReplaceable = $derived(chainQuery.data?.can_replace_transfer === true &&
@@ -423,8 +424,13 @@
     role="presentation">
     <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
       role="dialog" aria-modal="true" aria-label={m.transactions_investment_replace_transfer_title()}>
-      <TransferCorrectionForm {csrfToken} {transactionID} transfer={chainQuery.data.effective_transfer}
-        onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+      {#if chainQuery.data.effective_transfer.transfer_kind === 'external_in'}
+        <TransferInCorrectionForm {csrfToken} {transactionID} transfer={chainQuery.data.effective_transfer}
+          onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+      {:else}
+        <TransferCorrectionForm {csrfToken} {transactionID} transfer={chainQuery.data.effective_transfer}
+          onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+      {/if}
     </div>
   </div>
 {:else if replacementKind === 'write_off' && csrfToken}

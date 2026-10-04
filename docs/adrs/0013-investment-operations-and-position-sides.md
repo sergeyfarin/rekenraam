@@ -367,8 +367,11 @@ Depleting today's lots instead would take units a later disposal already
 consumed, or miss ones it has not.
 
 **External-in replacement.** Inverse plus a new external transfer in.
-Quantity, carried basis, original acquisition date and effective date may
-change. The bridge difference is therefore the inverse bridge plus the new
+Quantity, carried basis, original acquisition date, effective date and
+holding account may change; the security and basis currency may not. The new
+lot needs no subject intent: as an opening it already takes the correction
+root's same-day slot, so it opens by replay admission and the old and new
+holdings replay. The bridge difference is therefore the inverse bridge plus the new
 bridge, appended under the correcting audit event; the original bridge journal
 and source evidence are never overwritten. An unknown original date stays
 unknown unless the replacement supplies one; carried basis must stay known
@@ -379,7 +382,9 @@ restores the source lots the way an internal reversal does (no destination),
 and its replacement follows the internal contract without a destination;
 gains never arise from a transfer, so only later source disposals restate.
 
-**Status.** Reversal of internal and external-in transfers shipped
-2026-10-04 (`POST /api/v1/investments/transactions/{id}/reverse-transfer` and
-its preview), and internal replacement the same day (`.../replace-transfer`
-and its `/preview`). External-in replacement remains on T-119.
+**Status.** Shipped 2026-10-04: reversal of internal and external-in
+transfers (`POST /api/v1/investments/transactions/{id}/reverse-transfer` and
+its preview), internal replacement (`.../replace-transfer` and its
+`/preview`) and external-in replacement (`.../replace-transfer-in` and its
+`/reconciliation-impact`). Outbound correction waits for the outbound writer
+(#114).

@@ -109,12 +109,11 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Transfer correction — [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134).
+1. Correction-chain register and net checkpoint impact — [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135).
 
 **Next, in order**
 
-2. Correction-chain register and net checkpoint impact — [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135).
-3. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
+2. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
    return of capital, cash in lieu), then short sale/cover
    [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103), then compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
 

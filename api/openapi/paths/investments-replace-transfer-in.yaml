@@ -1,0 +1,66 @@
+post:
+  summary: Replace a posted external transfer in
+  description: >-
+    Posts the exact inverse of an external transfer in (equity bridge included)
+    and a corrected transfer in (T-119) under one audit event and one database
+    transaction. The bridge difference is therefore appended, never
+    overwritten: the original journal and source evidence stay. The new lot
+    opens at the replaced transfer's correction-root same-day slot and both
+    the old and new holdings replay under recorded elections. Date, holding
+    account, quantity, carried basis, original acquisition date and evidence
+    may change; an unknown original date stays unknown unless supplied.
+    Internal transfers use replace-transfer (404 here).
+    A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+      description: Posted external transfer-in transaction ID.
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentTransferInReplacementRequest"
+  responses:
+    "201":
+      description: Transfer replaced and both holdings replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentTransferInReplacementResponse"
+    "400":
+      description: Invalid request, missing reason, or a changed security or basis currency
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted external transfer in not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Transfer already corrected (INVESTMENT_TRANSFER_ALREADY_CORRECTED), changed (INVESTMENT_TRANSFER_CHANGED), a dependent operation cannot be satisfied (INVESTMENT_TRANSFER_DEPENDENCY), or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

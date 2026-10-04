@@ -145,3 +145,55 @@ func TestReplaceInternalTransferAPIPreviewMatchesCommit(t *testing.T) {
 	require.True(t, chain.CanReplaceTransfer)
 	require.Equal(t, right.ID, chain.EffectiveTransfer.DestinationAccountID)
 }
+
+// T-119: external transfer-in replacement over HTTP, pre-filled from the
+// correction chain and fenced from the internal command.
+func TestReplaceExternalTransferInAPI(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "XINR")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	basis := moneyCoefficient(8000)
+	request := externalTransferInRequest{EffectiveOn: "2026-02-01", HoldingAccountID: holding.ID,
+		CommodityID: instrument.CommodityID, QuantityValue: exact.New(2), CarriedBasisValue: &basis,
+		CarriedBasisScale: 2, CostCommodityID: f.commodityID, OriginalAcquiredOn: "2020-03-01"}
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/transfers/external/in", request, http.StatusCreated)
+	var in externalTransferInResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&in))
+	base := "/api/v1/investments/transactions/" + strconv.FormatInt(in.Transaction.ID, 10)
+
+	chainRes := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, base+"/correction-chain", nil, http.StatusOK)
+	var chain investmentCorrectionChainResponse
+	require.NoError(t, json.NewDecoder(chainRes.Body).Decode(&chain))
+	require.True(t, chain.CanReplaceTransfer)
+	require.NotNil(t, chain.EffectiveTransfer)
+	require.Equal(t, "external_in", chain.EffectiveTransfer.TransferKind)
+	require.Nil(t, chain.EffectiveTransfer.SourceAccountID)
+	require.NotNil(t, chain.EffectiveTransfer.CarriedBasisValue)
+	require.Equal(t, exact.Coefficient("8000"), *chain.EffectiveTransfer.CarriedBasisValue)
+	require.NotNil(t, chain.EffectiveTransfer.OriginalAcquiredOn)
+	require.Equal(t, "2020-03-01", *chain.EffectiveTransfer.OriginalAcquiredOn)
+	require.NotNil(t, chain.EffectiveTransfer.QuantityValue)
+	require.Equal(t, exact.Coefficient("2"), *chain.EffectiveTransfer.QuantityValue)
+
+	corrected := request
+	more := moneyCoefficient(10000)
+	corrected.CarriedBasisValue = &more
+	replace := investmentTransferInReplacementRequest{Reason: "statement shows 100.00", Replacement: corrected}
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/replace-transfer",
+		investmentTransferReplacementRequest{Reason: "wrong command"}, http.StatusNotFound)
+	preview := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		base+"/replace-transfer-in/reconciliation-impact", replace, http.StatusOK)
+	var impact reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(preview.Body).Decode(&impact))
+	require.Empty(t, impact.AffectedCheckpoints)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/replace-transfer-in", replace, http.StatusCreated)
+	var replaced investmentTransferInReplacementResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&replaced))
+	require.Equal(t, in.Transaction.ID, replaced.CorrectedTransactionID)
+	require.NotZero(t, replaced.Replacement.LotID)
+	conflict := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/replace-transfer-in", replace, http.StatusConflict)
+	require.Contains(t, conflict.Body.String(), "INVESTMENT_TRANSFER_ALREADY_CORRECTED")
+}

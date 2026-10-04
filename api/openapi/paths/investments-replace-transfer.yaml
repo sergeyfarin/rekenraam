@@ -11,7 +11,7 @@ post:
     re-recording a source_lots transfer from an average-cost source as one
     pooled_lot is the remedy for a lineage refusal. The original transfer's
     journal, facts, links, revisions and lot events stay immutable. External
-    transfers in are reversed, not replaced, here (404).
+    transfers in use replace-transfer-in (404 here).
     A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
   parameters:
     - in: path

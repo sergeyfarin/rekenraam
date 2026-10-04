@@ -53,6 +53,7 @@
 
   const source = untrack(() => transfer);
   const pooled = source.basis_allocation === 'average_cost_pool';
+  const sourceAccountID = source.source_account_id ?? 0;
   const locale = getLocale();
   const queryClient = useQueryClient();
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
@@ -83,10 +84,10 @@
   } | null>(null);
 
   const accounts = $derived(accountsQuery.data?.accounts ?? []);
-  const sourceAccount = $derived(accounts.find((account: AccountResponse) => account.id === source.source_account_id));
+  const sourceAccount = $derived(accounts.find((account: AccountResponse) => account.id === sourceAccountID));
   const destinationAccounts = $derived(accounts.filter((account: AccountResponse) =>
     (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding') &&
-    account.id !== source.source_account_id &&
+    account.id !== sourceAccountID &&
     (account.status === 'active' || account.id === source.destination_account_id)));
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(
     (currenciesQuery.data?.currencies ?? []).map((currency: CurrencyResponse) => [currency.id, currency])));
@@ -97,7 +98,7 @@
 
   function buildPayload(): InternalTransferRequest | null {
     const base = {
-      effective_on: effectiveOn, source_account_id: source.source_account_id,
+      effective_on: effectiveOn, source_account_id: sourceAccountID,
       destination_account_id: Number(destinationAccountID), commodity_id: source.commodity_id,
       cost_commodity_id: source.cost_commodity_id, source_evidence: source.source_evidence,
       memo: memo.trim() || undefined
@@ -214,7 +215,7 @@
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
   </div>
 
-  <p class="text-sm text-foreground">{m.investments_transfer_internal_source()}: <strong>{sourceAccount?.name ?? `#${source.source_account_id}`}</strong></p>
+  <p class="text-sm text-foreground">{m.investments_transfer_internal_source()}: <strong>{sourceAccount?.name ?? `#${sourceAccountID}`}</strong></p>
 
   <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
     <div>

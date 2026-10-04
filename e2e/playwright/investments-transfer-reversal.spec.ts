@@ -87,4 +87,33 @@ test.describe('on a phone', () => {
     await expect.poll(() => held(page, destination.id, instrument.commodity_id)).toBe('6');
     await expect.poll(() => held(page, source.id, instrument.commodity_id)).toBe('4');
   });
+
+  test('correcting an external transfer in changes the holding quantity', async ({ page }) => {
+    const { csrfToken, currencyID } = await readyForLedger(page);
+    const suffix = `xin${Date.now()}`;
+    const openedOn = daysFromTodayISO(-60);
+    const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+      commodity_code: suffix.toUpperCase(), instrument_type: 'stock', display_name: `Transfer in ${suffix}`, symbol: suffix.toUpperCase(),
+      quote_commodity_id: currencyID, trading_commodity_id: currencyID, quantity_scale: 3, price_scale: 2, effective_from: openedOn
+    });
+    const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+      instrument_id: instrument.id, name: `Transfer in holding ${suffix}`, opened_on: openedOn, effective_from: openedOn
+    });
+    const arrived = await apiJSON<{ transaction: { id: number } }>(page, 'POST', '/api/v1/investments/transfers/external/in', csrfToken, {
+      effective_on: daysFromTodayISO(-10), holding_account_id: holding.id, commodity_id: instrument.commodity_id,
+      quantity_value: '2', quantity_scale: 0, carried_basis_value: '8000', carried_basis_scale: 2,
+      cost_commodity_id: currencyID, original_acquired_on: daysFromTodayISO(-50)
+    });
+    await expect.poll(() => held(page, holding.id, instrument.commodity_id)).toBe('2');
+
+    await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+    await page.getByRole('button', { name: 'Correct transfer…' }).click();
+    const form = page.getByRole('dialog', { name: 'Correct this transfer' });
+    await expect(form.getByLabel('Quantity')).toHaveValue('2');
+    await form.getByLabel('Reason for correction').fill('three units arrived');
+    await form.getByLabel('Quantity').fill('3');
+    await form.getByRole('button', { name: 'Review and replace' }).click();
+    await expect(form).toBeHidden();
+    await expect.poll(() => held(page, holding.id, instrument.commodity_id)).toBe('3');
+  });
 });

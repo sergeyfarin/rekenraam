@@ -773,6 +773,7 @@
   "transactions_investment_replace_transfer_action": "Corriger le transfert…",
   "transactions_investment_replace_transfer_title": "Corriger ce transfert",
   "transactions_investment_replace_transfer_copy": "Passe ensemble l’écriture inverse exacte et le transfert corrigé. La source est débitée à la date du transfert, les deux comptes et les ventes ultérieures sont recalculés, et l’original reste dans l’historique d’audit.",
+  "transactions_investment_replace_transfer_in_copy": "Passe ensemble l’écriture inverse exacte et le transfert corrigé : l’écart de la contrepartie d’ouverture est ajouté plutôt qu’écrasé. Le compte et les ventes ultérieures sont recalculés, et l’original reste dans l’historique d’audit.",
   "transactions_investment_replace_transfer_lots_help": "Quantité transférée depuis chaque lot utilisé par le transfert. Laissez un lot vide pour ne plus le transférer.",
   "transactions_investment_replace_transfer_lot": "Lot n° {lot}",
   "transactions_investment_replace_write_off_title": "Corriger cette dépréciation",

@@ -773,6 +773,7 @@
   "transactions_investment_replace_transfer_action": "Corregir transferencia…",
   "transactions_investment_replace_transfer_title": "Corregir esta transferencia",
   "transactions_investment_replace_transfer_copy": "Registra juntos el asiento inverso exacto y la transferencia corregida. El origen se reduce a la fecha de la transferencia, ambas cuentas y las ventas posteriores se recalculan y la original permanece en el historial de auditoría.",
+  "transactions_investment_replace_transfer_in_copy": "Registra juntos el asiento inverso exacto y la transferencia corregida, de modo que la diferencia del puente de apertura se añade en lugar de sobrescribirse. La cuenta y las ventas posteriores se recalculan y la original permanece en el historial de auditoría.",
   "transactions_investment_replace_transfer_lots_help": "Cantidad transferida de cada lote que usó la transferencia. Deja un lote vacío para dejar de transferirlo.",
   "transactions_investment_replace_transfer_lot": "Lote n.º {lot}",
   "transactions_investment_replace_write_off_title": "Corregir esta baja",

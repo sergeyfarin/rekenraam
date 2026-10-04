@@ -773,6 +773,7 @@
   "transactions_investment_replace_transfer_action": "Исправить перевод…",
   "transactions_investment_replace_transfer_title": "Исправить этот перевод",
   "transactions_investment_replace_transfer_copy": "Создаёт точную обратную проводку и исправленный перевод вместе. Источник списывается на дату перевода, оба счёта и последующие продажи пересчитываются, а исходная запись остаётся в истории аудита.",
+  "transactions_investment_replace_transfer_in_copy": "Создаёт точную обратную проводку и исправленный перевод вместе, поэтому разница по вступительной проводке добавляется, а не перезаписывается. Счёт и последующие продажи пересчитываются, а исходная запись остаётся в истории аудита.",
   "transactions_investment_replace_transfer_lots_help": "Количество, переведённое из каждого лота, который использовал перевод. Оставьте лот пустым, чтобы больше его не переводить.",
   "transactions_investment_replace_transfer_lot": "Лот № {lot}",
   "transactions_investment_replace_write_off_title": "Исправить это списание",

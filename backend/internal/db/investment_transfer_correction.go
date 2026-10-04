@@ -389,10 +389,12 @@ func replacedTransferPositions(expected TransferOperationRecord, transfer Create
 	return positions
 }
 
-// InternalTransferTerms are an internal transfer's committed terms, which a
-// replacement form starts from: the selected source lots and quantities, or
-// the pooled quantity and lineage.
-type InternalTransferTerms struct {
+// TransferTerms are a transfer's committed terms, which a replacement form
+// starts from. An internal transfer has its selected source lots and
+// quantities, or its pooled quantity and lineage. An external transfer in has
+// its quantity, carried basis and original acquisition date.
+type TransferTerms struct {
+	TransferKind         string
 	EffectiveOn          string
 	SourceAccountID      int64
 	DestinationAccountID int64
@@ -403,51 +405,165 @@ type InternalTransferTerms struct {
 	Allocations          []LotAllocation
 	QuantityValue        exact.Coefficient
 	QuantityScale        int
+	CarriedBasisValue    exact.Coefficient
+	CarriedBasisScale    int
+	OriginalAcquiredOn   string
 	SourceEvidenceJSON   string
 }
 
-func (r *InvestmentRepository) InternalTransferTerms(ctx context.Context, bookID, operationID int64) (InternalTransferTerms, error) {
-	var terms InternalTransferTerms
-	err := r.database.QueryRowContext(ctx, `SELECT f.effective_on, f.source_account_id, f.destination_account_id,
-		f.commodity_id, f.basis_allocation, f.destination_lineage, f.source_evidence_json
-		FROM investment_transfer_facts f WHERE f.book_id = ? AND f.operation_id = ? AND f.transfer_kind = 'internal'`,
-		bookID, operationID).Scan(&terms.EffectiveOn, &terms.SourceAccountID, &terms.DestinationAccountID,
-		&terms.CommodityID, &terms.BasisAllocation, &terms.DestinationLineage, &terms.SourceEvidenceJSON)
+func (r *InvestmentRepository) TransferTerms(ctx context.Context, bookID, operationID int64) (TransferTerms, error) {
+	var terms TransferTerms
+	var source sql.NullInt64
+	var allocation, lineage sql.NullString
+	err := r.database.QueryRowContext(ctx, `SELECT f.transfer_kind, f.effective_on, f.source_account_id,
+		f.destination_account_id, f.commodity_id, f.basis_allocation, f.destination_lineage, f.source_evidence_json
+		FROM investment_transfer_facts f
+		WHERE f.book_id = ? AND f.operation_id = ? AND f.transfer_kind IN ('internal', 'external_in')`,
+		bookID, operationID).Scan(&terms.TransferKind, &terms.EffectiveOn, &source, &terms.DestinationAccountID,
+		&terms.CommodityID, &allocation, &lineage, &terms.SourceEvidenceJSON)
 	if errors.Is(err, sql.ErrNoRows) {
-		return InternalTransferTerms{}, ErrNotFound
+		return TransferTerms{}, ErrNotFound
 	}
 	if err != nil {
-		return InternalTransferTerms{}, fmt.Errorf("read internal transfer terms: %w", err)
+		return TransferTerms{}, fmt.Errorf("read transfer terms: %w", err)
 	}
-	// The committed link rows hold what the user moved: each selected lot and
-	// its quantity, or a pool's lots (whose quantities sum to the move).
-	rows, err := r.database.QueryContext(ctx, `SELECT x.source_lot_id, x.quantity_value, x.quantity_scale, x.cost_commodity_id
+	terms.SourceAccountID, terms.BasisAllocation, terms.DestinationLineage = source.Int64, allocation.String, lineage.String
+	// The committed link rows hold what was moved: each selected lot and its
+	// quantity, a pool's lots (whose quantities sum to the move), or the one
+	// external lot with its carried basis and original date.
+	rows, err := r.database.QueryContext(ctx, `SELECT x.source_lot_id, x.quantity_value, x.quantity_scale,
+		x.cost_commodity_id, x.carried_basis_value, x.carried_basis_scale, COALESCE(x.original_acquired_on, '')
 		FROM investment_transfer_lot_links x WHERE x.operation_id = ? ORDER BY x.link_seq`, operationID)
 	if err != nil {
-		return InternalTransferTerms{}, fmt.Errorf("read internal transfer links: %w", err)
+		return TransferTerms{}, fmt.Errorf("read transfer links: %w", err)
 	}
 	defer rows.Close()
-	total := exact.NewScaledInt()
+	total, basis := exact.NewScaledInt(), exact.NewScaledInt()
 	for rows.Next() {
-		var source sql.NullInt64
-		var allocation LotAllocation
-		if err := rows.Scan(&source, &allocation.QuantityValue, &allocation.QuantityScale, &terms.CostCommodityID); err != nil {
-			return InternalTransferTerms{}, fmt.Errorf("scan internal transfer link: %w", err)
+		var sourceLot sql.NullInt64
+		var link LotAllocation
+		var carried sql.NullString
+		var carriedScale sql.NullInt64
+		if err := rows.Scan(&sourceLot, &link.QuantityValue, &link.QuantityScale, &terms.CostCommodityID,
+			&carried, &carriedScale, &terms.OriginalAcquiredOn); err != nil {
+			return TransferTerms{}, fmt.Errorf("scan transfer link: %w", err)
 		}
-		total.AddCoefficient(allocation.QuantityValue, allocation.QuantityScale)
+		total.AddCoefficient(link.QuantityValue, link.QuantityScale)
+		if carried.Valid {
+			basis.AddCoefficient(exact.Coefficient(carried.String), int(carriedScale.Int64))
+		}
 		if terms.BasisAllocation == InternalTransferSelectedLots {
-			allocation.LotID = source.Int64
-			terms.Allocations = append(terms.Allocations, allocation)
+			link.LotID = sourceLot.Int64
+			terms.Allocations = append(terms.Allocations, link)
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return InternalTransferTerms{}, fmt.Errorf("iterate internal transfer links: %w", err)
+		return TransferTerms{}, fmt.Errorf("iterate transfer links: %w", err)
 	}
-	if terms.BasisAllocation == InternalTransferAverageCostPool {
+	if terms.BasisAllocation != InternalTransferSelectedLots {
 		if terms.QuantityValue, err = total.Coefficient(); err != nil {
-			return InternalTransferTerms{}, err
+			return TransferTerms{}, err
 		}
 		terms.QuantityScale = total.Scale()
 	}
+	if terms.TransferKind == "external_in" {
+		if terms.CarriedBasisValue, err = basis.Coefficient(); err != nil {
+			return TransferTerms{}, err
+		}
+		terms.CarriedBasisScale = basis.Scale()
+	} else {
+		terms.OriginalAcquiredOn = ""
+	}
 	return terms, nil
+}
+
+// ExternalTransferInReplacementRecord is the inverse and replacement journals
+// and the replacement's lot.
+type ExternalTransferInReplacementRecord struct {
+	Inverse     TransactionRecord
+	Replacement TransactionRecord
+	Lot         InvestmentLotRecord
+}
+
+// ReplaceExternalTransferIn reverses an external transfer in and records
+// corrected terms as its successor. The bridge difference is the inverse
+// bridge plus the new one, both appended; the original journal and source
+// evidence stay. The new lot opens by replay admission at the correction
+// root's same-day slot, then the old and new holdings replay.
+func (r *InvestmentRepository) ReplaceExternalTransferIn(ctx context.Context, expected TransferOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, transfer CreateExternalTransferInParams,
+) (ExternalTransferInReplacementRecord, error) {
+	return r.replaceExternalTransferIn(ctx, expected, inverseParams, replacementParams, transfer, false)
+}
+
+// SimulateExternalTransferInReplacement runs the replacement writer and every
+// replay, then rolls back.
+func (r *InvestmentRepository) SimulateExternalTransferInReplacement(ctx context.Context, expected TransferOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, transfer CreateExternalTransferInParams,
+) (SimulatedInvestmentWrite, error) {
+	record, err := r.replaceExternalTransferIn(ctx, expected, inverseParams, replacementParams, transfer, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, err
+	}
+	return simulatedInvestmentWrite(record.Inverse, record.Replacement), nil
+}
+
+func (r *InvestmentRepository) replaceExternalTransferIn(ctx context.Context, expected TransferOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, transfer CreateExternalTransferInParams, preview bool,
+) (ExternalTransferInReplacementRecord, error) {
+	lot := transfer.Lot
+	if expected.OperationID <= 0 || expected.TransferKind != "external_in" ||
+		inverseParams.BookID <= 0 || inverseParams.BookID != replacementParams.BookID || inverseParams.BookID != lot.BookID ||
+		inverseParams.ActorUserID != replacementParams.ActorUserID || inverseParams.ActorUserID != lot.CreatedByUserID ||
+		inverseParams.Spec.InvestmentOperationKind != "" ||
+		inverseParams.Spec.TransactionKind != "investment" || inverseParams.Spec.Status != "posted" ||
+		inverseParams.Spec.TransactionDate != expected.EventDate ||
+		replacementParams.Spec.InvestmentOperationKind != "external_transfer_in" ||
+		replacementParams.Spec.TransactionKind != "investment" || replacementParams.Spec.Status != "posted" ||
+		replacementParams.Spec.TransactionDate != lot.OpenedOn ||
+		lot.AccountID <= 0 || lot.CommodityID != expected.CommodityID || lot.CostCommodityID != expected.CostCommodityID ||
+		replacementParams.InvestmentCorrectionOfOperationID != expected.OperationID ||
+		replacementParams.InvestmentCorrectionMode != "replace" || replacementParams.InvestmentCorrectionReason == "" ||
+		!inverseParams.CorrectionOfTransactionID.Valid || inverseParams.CorrectionOfTransactionID.Int64 != expected.TransactionID ||
+		!replacementParams.CorrectionOfTransactionID.Valid || replacementParams.CorrectionOfTransactionID.Int64 != expected.TransactionID {
+		return ExternalTransferInReplacementRecord{}, fmt.Errorf("%w: external transfer replacement is incomplete", ErrInvalidDisposalParams)
+	}
+	write := executeInvestmentJournalsWithGuardTx[InvestmentLotRecord]
+	if preview {
+		write = previewInvestmentJournalsWithGuardTx[InvestmentLotRecord]
+	}
+	journals, record, err := write(ctx, r.database,
+		[]CreateTransactionParams{inverseParams, replacementParams},
+		func(tx *sql.Tx) error {
+			_, err := checkTransferOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
+			return err
+		}, func(tx *sql.Tx, journals []TransactionRecord, auditEventID int64) (InvestmentLotRecord, error) {
+			inverse, replacement := journals[0], journals[1]
+			operationID, err := investmentOperationIDTx(ctx, tx, lot.BookID, replacement.ID)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
+				(book_id, operation_id, transaction_version_id, link_seq, role)
+				VALUES (?, ?, ?, 2, 'reversal')`, lot.BookID, operationID, inverse.VersionID); err != nil {
+				return InvestmentLotRecord{}, fmt.Errorf("link transfer replacement inverse: %w", err)
+			}
+			opened, err := writeExternalTransferInTx(ctx, tx, replacementParams, transfer, replacement, auditEventID, true)
+			if err != nil {
+				return InvestmentLotRecord{}, err
+			}
+			for _, position := range correctedTradePositions(
+				investmentReplayPositionKey{expected.DestinationAccountID, expected.CommodityID, expected.CostCommodityID},
+				investmentReplayPositionKey{lot.AccountID, lot.CommodityID, lot.CostCommodityID}) {
+				if err := replayCorrectedPositionTx(ctx, tx, lot.BookID, position, operationID, auditEventID,
+					replacementParams.ActorUserID, replacementParams.CreatedAt); err != nil {
+					return InvestmentLotRecord{}, err
+				}
+			}
+			return investmentLotByIDTx(ctx, tx, lot.BookID, opened.ID)
+		}, nil)
+	if err != nil {
+		return ExternalTransferInReplacementRecord{}, err
+	}
+	return ExternalTransferInReplacementRecord{Inverse: journals[0], Replacement: journals[1], Lot: record}, nil
 }
