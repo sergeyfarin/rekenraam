@@ -316,3 +316,61 @@ Rejected options:
 Moves into tax wrappers (ISA, TFSA/RRSP, pension) are usually a sale and a new
 acquisition, not an internal transfer; the transfer form says so. Tax-exact
 per-person pools (UK s104, Canada ACB, France PMP) remain R18 projections.
+
+## Transfer Correction Refinement (2026-10-04, T-119)
+
+A transfer is corrected by its own commands, never by the generic transaction
+editor and never by sale or buy correction. Each direction has its own
+contract; they share the correction fences of every other family (one
+correction per operation, an imported lineage must still name its committed
+source, the journal must not have moved since the plan, reconciled balances
+need the override, changed gains need the exact acknowledgement) and one rule:
+**the transfer's first journal, facts, links, link revisions and lot events
+stay immutable evidence**. A correction appends an inverse journal and, for a
+replacement, a new operation at the correction root's same-day slot; it never
+rewrites them.
+
+**Reversal (all directions).** The inverse journal negates every leg the
+transfer posted, including the external equity bridge, on the transfer date.
+The transfer leaves `effective_investment_operations`, so replay no longer
+sees its depletions or the lots it opened. Every position it touched replays
+in the command transaction, source first: the source (internal, outbound)
+gets its units and carried basis back, and each destination lot (internal,
+external-in) is retired by the replay (status closed, zero remaining; the lot
+row stays). Replaying the destination explicitly is the seeding with *removed
+edges* that the T-132 propagation needs; anything downstream propagates from
+there. A destination disposal or a `source_lots` onward transfer that needed
+the removed units is a named dependency (`INVESTMENT_TRANSFER_DEPENDENCY`)
+and nothing is written; the remedy is to correct the dependent operation
+first, so a chain unwinds from its end. A `pooled_lot` onward transfer is
+revised from the remaining pool instead. Revisions of a reversed transfer stay
+as evidence; self-check's effective lot events and lot reconciliation read
+only revisions of effective transfers.
+
+**Internal replacement.** Inverse plus a new internal transfer under one audit
+event, replaying source and destination of both the old and the new transfer
+together with propagation. Date, quantity or lot allocations, destination
+account and destination lineage may change; re-recording a `source_lots`
+transfer from an average-cost source as one `pooled_lot` is the remedy the
+*Pooled Transfer Lineage Refinement* names. A new destination lot is a new lot
+row: a destination specific-lot election or a `source_lots` onward transfer
+follows it through the correction root only when it is the transfer's single
+destination lot on the same date (the rule acquisition replacement already
+uses); otherwise it is a named dependency.
+
+**External-in replacement.** Inverse plus a new external transfer in.
+Quantity, carried basis, original acquisition date and effective date may
+change. The bridge difference is therefore the inverse bridge plus the new
+bridge, appended under the correcting audit event; the original bridge journal
+and source evidence are never overwritten. An unknown original date stays
+unknown unless the replacement supplies one; carried basis must stay known
+until unknown-basis resolution (#114) exists.
+
+**Outbound.** No outbound writer exists yet. When #114 adds one, its reversal
+restores the source lots the way an internal reversal does (no destination),
+and its replacement follows the internal contract without a destination;
+gains never arise from a transfer, so only later source disposals restate.
+
+**Status.** Reversal of internal and external-in transfers shipped
+2026-10-04 (`POST /api/v1/investments/transactions/{id}/reverse-transfer` and
+its preview). Internal and external-in replacement remain on T-119.

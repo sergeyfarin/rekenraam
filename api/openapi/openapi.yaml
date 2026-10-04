@@ -331,6 +331,10 @@ paths:
     $ref: "./paths/investments-replace-buy.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-buy/reconciliation-impact:
     $ref: "./paths/investments-replace-buy-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-transfer:
+    $ref: "./paths/investments-reverse-transfer.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-transfer/reconciliation-impact:
+    $ref: "./paths/investments-reverse-transfer-reconciliation-impact.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-write-off:
     $ref: "./paths/investments-reverse-write-off.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-write-off/reconciliation-impact:

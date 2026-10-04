@@ -530,11 +530,13 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	// A revised internal transfer moves the same units at its latest carried
 	// basis: out of its effective source lot (the corrected successor of the
 	// original acquisition, when replaced) and into the destination (T-132).
+	// A reversed transfer's revisions are evidence only (T-119).
 	transfers, err := transaction.QueryContext(ctx, `
 		SELECT revision.source_lot_id, source.account_id, source.commodity_id, source.cost_commodity_id,
 			link.destination_lot_id, destination.account_id, destination.commodity_id, destination.cost_commodity_id,
 			link.quantity_value, link.quantity_scale, revision.carried_basis_value, revision.carried_basis_scale
 		FROM latest_investment_transfer_link_revisions revision
+		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
 		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
 			AND link.link_seq = revision.link_seq
 		JOIN current_investment_lots source ON source.id = revision.source_lot_id
@@ -579,6 +581,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 			depletion.quantity_value, depletion.quantity_scale, depletion.cost_basis_value, depletion.cost_basis_scale,
 			0
 		FROM latest_investment_transfer_link_revisions revision
+		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
 		JOIN investment_transfer_link_revision_depletions depletion ON depletion.revision_id = revision.id
 		JOIN current_investment_lots source ON source.id = depletion.source_lot_id
 		WHERE revision.book_id = ? AND revision.source_lot_id IS NULL
@@ -587,6 +590,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 			link.quantity_value, link.quantity_scale, revision.carried_basis_value, revision.carried_basis_scale,
 			1
 		FROM latest_investment_transfer_link_revisions revision
+		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
 		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
 			AND link.link_seq = revision.link_seq
 		JOIN current_investment_lots destination ON destination.id = link.destination_lot_id

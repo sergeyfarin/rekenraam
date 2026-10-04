@@ -492,6 +492,12 @@ notes record design decisions per area; they carry no status or order.
   proceeds stay zero with no cash leg, quantity/method/elections/date/holding
   may change, and the write-off's own restated loss is part of the
   acknowledged gain set.
+  T-119 is specified per direction in ADR 0013 *Transfer Correction
+  Refinement*. Reversal (shipped) inverts the whole transfer journal,
+  including any equity bridge, and replays source then destination so the
+  removed destination lots seed propagation; a destination disposal or
+  `source_lots` onward transfer of the removed units is a named refusal.
+  Internal and external-in replacement remain.
   Provider cancellation/wider revisions (T-121) require verified execution
   evidence; cancelled order status is insufficient.
 - **Remaining slice 5 actions, shorts, compound actions.** Outbound transfers,

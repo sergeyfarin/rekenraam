@@ -44,6 +44,9 @@ type InvestmentCorrectionChain struct {
 	// CanCorrectWriteOff allows native write-off reversal and replacement
 	// (T-118); the trade correction context pre-fills the replacement.
 	CanCorrectWriteOff bool
+	// CanReverseTransfer allows native reversal of an internal or
+	// external-in transfer (T-119).
+	CanReverseTransfer bool
 	Operations         []InvestmentCorrectionNode
 }
 
@@ -173,6 +176,9 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 		}
 		if correctable && record.OperationKind == "write_off" {
 			chain.CanCorrectWriteOff = true
+		}
+		if correctable && (record.OperationKind == "internal_transfer" || record.OperationKind == "external_transfer_in") {
+			chain.CanReverseTransfer = true
 		}
 		if effective && record.OperationKind == "buy" && (!importedLineage || committedSource) &&
 			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {

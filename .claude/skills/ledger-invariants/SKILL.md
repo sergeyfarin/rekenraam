@@ -162,6 +162,11 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   `persistInvestmentReplayProjectionTx` appends transfer link revisions and
   replays destinations to a fixed point (T-132). Any new reader of a
   transferred lot's basis must use the latest link revision, not the link.
+- Transfers are corrected by their own commands (T-119, ADR 0013 *Transfer
+  Correction Refinement*): a reversal inverts the whole journal (bridge
+  included) and replays source then destination, so removed destination lots
+  seed propagation. Revisions of a reversed transfer are evidence only; read
+  current state through revisions of effective operations.
 
 ## Dates and times
 

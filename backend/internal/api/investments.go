@@ -317,6 +317,7 @@ type investmentCorrectionChainResponse struct {
 	EffectiveDividend      *investmentCorrectionDividendTerms `json:"effective_dividend,omitempty"`
 	CanCorrectReinvested   bool                               `json:"can_correct_reinvested_dividend"`
 	CanCorrectWriteOff     bool                               `json:"can_correct_write_off"`
+	CanReverseTransfer     bool                               `json:"can_reverse_transfer"`
 	EffectiveReinvestment  *investmentCorrectionReinvestTerms `json:"effective_reinvestment,omitempty"`
 	Operations             []investmentCorrectionNodeResponse `json:"operations"`
 }
@@ -1134,6 +1135,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanCorrectDividend: chain.CanCorrectDividend, EffectiveDividend: toInvestmentCorrectionDividendTerms(chain.EffectiveDividend),
 			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
 			CanCorrectWriteOff: chain.CanCorrectWriteOff,
+			CanReverseTransfer: chain.CanReverseTransfer,
 			Operations:         operations,
 		})
 	}
@@ -1860,6 +1862,16 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_ALREADY_CORRECTED", err.Error())
 	case errors.Is(err, app.ErrInvestmentImportedSplit):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_IMPORTED_SPLIT", err.Error())
+	case errors.Is(err, app.ErrInvestmentTransferNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment transfer operation not found")
+	case errors.Is(err, app.ErrInvestmentTransferAlreadyCorrected):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_ALREADY_CORRECTED", err.Error())
+	case errors.Is(err, app.ErrInvestmentTransferChanged):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_CHANGED", err.Error())
+	case errors.Is(err, app.ErrInvestmentTransferDependency):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_DEPENDENCY", err.Error())
+	case errors.Is(err, app.ErrInvestmentImportedTransfer):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_IMPORTED_TRANSFER", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
 	// Every investment trade goes through the transaction write guard, so a
@@ -2731,6 +2743,60 @@ func replaceInvestmentWriteOffReconciliationImpact(logger *slog.Logger, authServ
 		})
 		if err != nil {
 			writeInvestmentServiceError(w, r, logger, "preview write-off replacement reconciliation impact", err)
+			return
+		}
+		writeReconciliationImpact(w, impact)
+	}
+}
+
+func reverseInvestmentTransfer(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		transaction, err := investmentService.ReverseTransfer(r.Context(), app.ReverseInvestmentTransferInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			TransactionID: transactionID, Reason: request.Reason,
+			ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "reverse investment transfer", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSaleReversalResponse{Transaction: toTransactionResponse(transaction), CorrectedTransactionID: transactionID})
+	}))
+}
+
+func reverseInvestmentTransferReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReverseTransferReconciliationImpact(r.Context(), app.ReverseInvestmentTransferInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview transfer reversal reconciliation impact", err)
 			return
 		}
 		writeReconciliationImpact(w, impact)

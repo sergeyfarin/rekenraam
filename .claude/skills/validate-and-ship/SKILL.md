@@ -237,6 +237,14 @@ non-trivial diff (yours or reviewed):
     commands or intent kinds: assert the replay check passes after a replay
     of the touched positions (the shared self-check pass helpers do).
     Named regression: `TestReplayKeepsSelectedLotTransferMethodLock`.
+26. **Revision rows read without asking whether their operation is still
+    effective** — `latest_*_revisions` views select the newest revision per
+    decision or link, not per *effective* operation. Once an operation can be
+    reversed, its revisions stay as evidence and must not describe current
+    state: self-check counted a reversed transfer's link revision as a live
+    lot event until T-119 joined `effective_investment_operations`. Any new
+    reader of a latest revision for current state joins it too. Named
+    regression: `TestReverseRevisedInternalTransferKeepsRevisionAsEvidence`.
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

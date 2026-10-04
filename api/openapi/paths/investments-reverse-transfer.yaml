@@ -1,0 +1,68 @@
+post:
+  summary: Reverse a posted internal or external-in transfer
+  description: >-
+    Posts the exact inverse of an internal or external-in transfer journal
+    (T-119), including any external equity bridge, and removes the transfer
+    from effective history in one database transaction. The source holding
+    (internal only) gets its units and carried basis back; the destination
+    lots the transfer opened are retired; later disposals on both sides replay
+    under their recorded elections and changed carried basis propagates to
+    downstream transfers. A destination sale or a source-lots onward transfer
+    that needs the removed units is refused as INVESTMENT_TRANSFER_DEPENDENCY
+    with nothing written. The original transfer facts, links, link revisions,
+    journal and lot events remain immutable audit history. Reversal is
+    terminal.
+    A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+      description: Posted internal or external-in transfer transaction ID.
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalRequest"
+  responses:
+    "201":
+      description: Transfer reversed and every moved position replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted internal or external-in transfer not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Transfer already corrected (INVESTMENT_TRANSFER_ALREADY_CORRECTED), changed (INVESTMENT_TRANSFER_CHANGED), a dependent operation cannot be satisfied (INVESTMENT_TRANSFER_DEPENDENCY), an imported transfer lost its committed source (INVESTMENT_IMPORTED_TRANSFER), or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
