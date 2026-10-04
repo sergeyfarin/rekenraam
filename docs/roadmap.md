@@ -127,7 +127,8 @@ below is execution order, not a chain of hard dependencies.
 
 **Placed, not sequenced:** zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146);
 lot-opening `NOT NULL` [T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) before the v0.1.0 tag; race-gate
-runtime [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140) any time without reducing coverage. Blocked on
+runtime [T-125 #140](https://github.com/sergeyfarin/rekenraam/issues/140) any time without reducing coverage; Refresh
+reach for revised Trading 212 fills before the fetch cursor [T-137 #152](https://github.com/sergeyfarin/rekenraam/issues/152). Blocked on
 provider evidence: [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145), [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136).
 
 ### Completed initiatives through R10

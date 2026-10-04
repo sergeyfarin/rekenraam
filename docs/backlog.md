@@ -47,6 +47,7 @@ GitHub numbers are distinct; cite both.
 | T-134 | [#149 — Self-check full replay equivalence of investment projections](https://github.com/sergeyfarin/rekenraam/issues/149) |
 | T-135 | [#150 — Admit changed pooled-transfer lineage under replay](https://github.com/sergeyfarin/rekenraam/issues/150) |
 | T-136 | [#151 — Label split adjustment journals in transaction lists and registers](https://github.com/sergeyfarin/rekenraam/issues/151) |
+| T-137 | [#152 — Revised Trading 212 fills before the fetch cursor reachable from Refresh](https://github.com/sergeyfarin/rekenraam/issues/152) |
 
 IDs not listed here were closed before the GitHub migration; see the
 [pre-migration snapshot](reviews/open-backlog-before-github-2026-09-27.md)
