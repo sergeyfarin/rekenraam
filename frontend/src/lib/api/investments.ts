@@ -56,6 +56,11 @@ export type InvestmentBuyReplacementRequest = components['schemas']['InvestmentB
 export type InvestmentBuyReplacementResponse = components['schemas']['InvestmentBuyReplacementResponse'];
 export type InvestmentSaleReplacementRequest = components['schemas']['InvestmentSaleReplacementRequest'];
 export type InvestmentSaleReplacementResponse = components['schemas']['InvestmentSaleReplacementResponse'];
+export type InvestmentDividendReplacementRequest = components['schemas']['InvestmentDividendReplacementRequest'];
+export type InvestmentDividendReplacementResponse = components['schemas']['InvestmentDividendReplacementResponse'];
+export type InvestmentReinvestmentReplacementRequest = components['schemas']['InvestmentReinvestmentReplacementRequest'];
+export type InvestmentCorrectionDividendTerms = components['schemas']['InvestmentCorrectionDividendTerms'];
+export type InvestmentCorrectionReinvestmentTerms = components['schemas']['InvestmentCorrectionReinvestmentTerms'];
 
 export const investmentPositionsQueryKey = ['api', 'investments', 'positions'] as const;
 export const investmentLotsQueryKey = ['api', 'investments', 'lots'] as const;
@@ -952,6 +957,120 @@ export async function replaceSplit(
   try {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/investments/transactions/{transaction_id}/replace-split',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+// Dividend and reinvested-dividend corrections (T-115).
+
+export async function previewDividendReversalReconciliation(transactionID: number, input: InvestmentBuyReversalRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-dividend/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseDividend(transactionID: number, input: InvestmentBuyReversalRequest, csrfToken: string): Promise<InvestmentBuyReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-dividend',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewDividendReplacementReconciliation(transactionID: number, input: InvestmentDividendReplacementRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-dividend/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceDividend(transactionID: number, input: InvestmentDividendReplacementRequest, csrfToken: string): Promise<InvestmentDividendReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-dividend',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewReinvestmentReversalReconciliation(transactionID: number, input: InvestmentBuyReversalRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-reinvested-dividend/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseReinvestedDividend(transactionID: number, input: InvestmentBuyReversalRequest, csrfToken: string): Promise<InvestmentBuyReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-reinvested-dividend',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewReinvestmentReplacementReconciliation(transactionID: number, input: InvestmentReinvestmentReplacementRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-reinvested-dividend/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceReinvestedDividend(transactionID: number, input: InvestmentReinvestmentReplacementRequest, csrfToken: string): Promise<InvestmentBuyReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-reinvested-dividend',
       { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
     );
     if (data !== undefined) return data;
