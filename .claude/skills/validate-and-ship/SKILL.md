@@ -192,8 +192,11 @@ non-trivial diff (yours or reviewed):
     Fix the common selector when generic transactions and other investment
     previews share it (T-127 #142). Named preview/commit pairs:
     `TestCreatePreviewReportsEveryCheckpointCommitInvalidates` and
-    `TestSalePreviewReportsEveryCheckpointCommitInvalidates`. Same-day sequence
-    versus date-only cascade is tracked separately in T-120 #135.
+    `TestSalePreviewReportsEveryCheckpointCommitInvalidates`. Test each
+    checkpoint against its own `(date, sequence)` boundary through
+    `activeCheckpointRefsAtOrAfter`; judging only the latest checkpoint let a
+    same-day reorder across an earlier boundary through without override
+    (T-120 #135, `TestPostingMoveAcrossEarlierSameDayCheckpointRequiresOverride`).
     Gain disclosure now also runs through these writer previews (T-114 #129 / T-126 #141).
 
 23. **Replay silently restating committed gains** — a backdated or corrective

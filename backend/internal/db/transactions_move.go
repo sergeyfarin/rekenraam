@@ -200,26 +200,26 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 			return TransactionRecord{}, fmt.Errorf("find adjacent posting: %w", err)
 		}
 
-		// Check whether the swap would move a posting across an active checkpoint
-		// boundary. The current posting would take adjSeq; the adjacent posting
-		// would take currentSeq. If the new position for either posting crosses
-		// the boundary, require override. Checkpoints are account- AND
-		// commodity-scoped, and latestActiveReconciliationCheckpoint applies the
-		// same (statement_date DESC, id DESC) lock-floor ordering used by every
-		// other reconciliation guard in this package.
-		crossesCheckpoint := false
-		checkpoint, checkpointErr := latestActiveReconciliationCheckpoint(ctx, tx, params.BookID, params.AccountID, currentCommodityID)
-		if checkpointErr != nil && !errors.Is(checkpointErr, ErrReconciliationCheckpoint) {
-			return TransactionRecord{}, fmt.Errorf("read checkpoint for move guard: %w", checkpointErr)
+		// A swap of sequences lo < hi on one date changes the balance at every
+		// same-day boundary in [lo, hi) — and nowhere else. Each checkpoint is
+		// tested against its own boundary (T-120 #135): judging only the latest
+		// one let a swap across an earlier same-day checkpoint through without
+		// an override whenever a later checkpoint also existed. A crossing
+		// invalidates the crossed checkpoint and every later active one, the
+		// same set activeCheckpointRefsAtOrAfter gives the other write paths.
+		lowSeq, highSeq := min(currentSeq, adjSeq), max(currentSeq, adjSeq)
+		reached, err := activeCheckpointRefsAtOrAfter(ctx, tx, params.BookID, PeriodScopedCheckpointRef{
+			AccountID: params.AccountID, CommodityID: currentCommodityID,
+			EntryDate: currentEntryDate, AccountDaySequence: lowSeq,
+		})
+		if err != nil {
+			return TransactionRecord{}, err
 		}
-		if checkpointErr == nil {
-			// A posting is inside the period when: entry_date < stmtDate OR (entry_date == stmtDate AND seq <= stmtAcctSeq)
-			insideBefore := func(seq int64) bool {
-				return currentEntryDate < checkpoint.StatementDate ||
-					(currentEntryDate == checkpoint.StatementDate && seq <= checkpoint.StatementAccountSequence)
+		crossesCheckpoint := false
+		for _, ref := range reached {
+			if ref.StatementDate == currentEntryDate && ref.StatementAccountSequence < highSeq {
+				crossesCheckpoint = true
 			}
-			// A swap crosses the boundary when one sequence is inside and the other is not.
-			crossesCheckpoint = insideBefore(currentSeq) != insideBefore(adjSeq)
 		}
 		if crossesCheckpoint && !params.ReconciliationOverride {
 			return TransactionRecord{}, ErrReconciliationOverrideRequired
@@ -300,7 +300,7 @@ func (r *TransactionRepository) MovePosting(ctx context.Context, params MovePost
 		if crossesCheckpoint {
 			invalidated, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
 				BookID:       params.BookID,
-				Refs:         []CheckpointInvalidationRef{{AccountID: params.AccountID, CommodityID: currentCommodityID, EntryDate: currentEntryDate}},
+				Refs:         reached,
 				ActorUserID:  params.ActorUserID,
 				AuditEventID: auditEventID,
 				OccurredAt:   params.RecordedAt,

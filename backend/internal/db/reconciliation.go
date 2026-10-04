@@ -912,47 +912,31 @@ func enforceCheckpointBoundaryTx(ctx context.Context, tx *sql.Tx, params checkpo
 	})
 }
 
+// invalidateReconciliationCheckpoints invalidates exactly the resolved refs.
+// It makes no boundary decision of its own: callers resolve the set through
+// activeCheckpointRefsAtOrAfter, so preview, guard and invalidation agree.
 func invalidateReconciliationCheckpoints(ctx context.Context, tx *sql.Tx, params checkpointInvalidationParams) ([]int64, error) {
-	if len(params.Refs) == 0 {
-		return nil, nil
-	}
-	seen := map[string]bool{}
-	ids := map[int64]bool{}
+	seen := map[int64]bool{}
+	var ids []int64
 	for _, ref := range params.Refs {
-		if ref.AccountID <= 0 || ref.CommodityID <= 0 || ref.EntryDate == "" {
+		if ref.CheckpointID <= 0 || seen[ref.CheckpointID] {
 			continue
 		}
-		key := fmt.Sprintf("%d|%d|%s", ref.AccountID, ref.CommodityID, ref.EntryDate)
-		if seen[key] {
-			continue
+		seen[ref.CheckpointID] = true
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE reconciliation_checkpoints
+			SET status = 'invalidated',
+				invalidated_at = ?,
+				invalidated_by_user_id = ?,
+				invalidation_reason = ?,
+				invalidated_audit_event_id = ?
+			WHERE book_id = ? AND id = ? AND status = 'active'
+		`, params.OccurredAt, params.ActorUserID, params.Reason, params.AuditEventID, params.BookID, ref.CheckpointID); err != nil {
+			return nil, fmt.Errorf("invalidate reconciliation checkpoint: %w", err)
 		}
-		seen[key] = true
-		affected, err := activeReconciliationCheckpointRefsFromDate(ctx, tx, params.BookID,
-			PeriodScopedCheckpointRef{AccountID: ref.AccountID, CommodityID: ref.CommodityID, EntryDate: ref.EntryDate})
-		if err != nil {
-			return nil, err
-		}
-		for _, checkpoint := range affected {
-			checkpointID := checkpoint.CheckpointID
-			if _, err := tx.ExecContext(ctx, `
-				UPDATE reconciliation_checkpoints
-				SET status = 'invalidated',
-					invalidated_at = ?,
-					invalidated_by_user_id = ?,
-					invalidation_reason = ?,
-					invalidated_audit_event_id = ?
-				WHERE book_id = ? AND id = ? AND status = 'active'
-			`, params.OccurredAt, params.ActorUserID, params.Reason, params.AuditEventID, params.BookID, checkpointID); err != nil {
-				return nil, fmt.Errorf("invalidate reconciliation checkpoint: %w", err)
-			}
-			ids[checkpointID] = true
-		}
+		ids = append(ids, ref.CheckpointID)
 	}
-	result := make([]int64, 0, len(ids))
-	for id := range ids {
-		result = append(result, id)
-	}
-	return result, nil
+	return ids, nil
 }
 
 func reconciliationSessionByID(ctx context.Context, queryer interface {
@@ -1262,16 +1246,16 @@ type PeriodScopedCheckpointRef struct {
 }
 
 // PeriodScopedCheckpointInvalidationRefs returns every active checkpoint the
-// current write guard would invalidate, once per checkpoint. A candidate first
-// has to fall within its latest active checkpoint's period:
+// current write guard would invalidate, once per checkpoint, with the earliest
+// candidate date that reaches it. Each checkpoint is tested against its own
+// boundary (T-120 #135): a candidate is inside a checkpoint when
 //
 //	entry_date < statement_date
 //	OR (entry_date = statement_date AND account_day_sequence <= statement_account_sequence)
 //
-// Once eligible, invalidation includes all active checkpoints dated at or after
-// the candidate, matching the writer's current date-based cascade. Same-day
-// per-boundary sequence filtering is separate follow-up work (T-120 #135).
-// Candidates with no active checkpoint are silently excluded.
+// That set is upward closed — a position inside one checkpoint is inside every
+// later one — so it is the reached checkpoint and all later active checkpoints,
+// and a same-day posting after an earlier boundary leaves that one active.
 func (r *TransactionRepository) PeriodScopedCheckpointInvalidationRefs(ctx context.Context, bookID int64, candidates []PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {
 	return periodScopedCheckpointInvalidationRefs(ctx, r.database, bookID, candidates)
 }
@@ -1281,39 +1265,17 @@ func (r *TransactionRepository) PeriodScopedCheckpointInvalidationRefs(ctx conte
 // answer is resolved against the state the write will actually commit against;
 // passing the pool instead answers a question about the past (T-94).
 func periodScopedCheckpointInvalidationRefs(ctx context.Context, queryer interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, bookID int64, candidates []PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {
-	if len(candidates) == 0 {
-		return nil, nil
-	}
-
-	seen := map[string]bool{}
+	seen := map[PeriodScopedCheckpointRef]bool{}
 	checkpointIndexes := map[int64]int{}
 	var refs []CheckpointInvalidationRef
-
 	for _, candidate := range candidates {
-		key := fmt.Sprintf("%d|%d|%s|%d", candidate.AccountID, candidate.CommodityID, candidate.EntryDate, candidate.AccountDaySequence)
-		if seen[key] {
+		if seen[candidate] {
 			continue
 		}
-		seen[key] = true
-
-		checkpoint, err := latestActiveReconciliationCheckpoint(ctx, queryer, bookID, candidate.AccountID, candidate.CommodityID)
-		if errors.Is(err, ErrReconciliationCheckpoint) {
-			continue // no active checkpoint for this account/commodity
-		}
-		if err != nil {
-			return nil, fmt.Errorf("check period-scoped checkpoint: %w", err)
-		}
-
-		inside := candidate.EntryDate < checkpoint.StatementDate ||
-			(candidate.EntryDate == checkpoint.StatementDate &&
-				candidate.AccountDaySequence <= checkpoint.StatementAccountSequence)
-		if !inside {
-			continue
-		}
-		affected, err := activeReconciliationCheckpointRefsFromDate(ctx, queryer, bookID, candidate)
+		seen[candidate] = true
+		affected, err := activeCheckpointRefsAtOrAfter(ctx, queryer, bookID, candidate)
 		if err != nil {
 			return nil, err
 		}
@@ -1328,22 +1290,26 @@ func periodScopedCheckpointInvalidationRefs(ctx context.Context, queryer interfa
 			refs = append(refs, ref)
 		}
 	}
-
 	return refs, nil
 }
 
-// Shared by preview resolution and durable invalidation so their checkpoint
-// selection cannot drift. This helper does not decide candidate eligibility.
-func activeReconciliationCheckpointRefsFromDate(ctx context.Context, queryer interface {
+// activeCheckpointRefsAtOrAfter is the one per-boundary selector: every active
+// checkpoint for the candidate's account and commodity whose boundary is at or
+// after the candidate's (entry_date, account_day_sequence). Preview, the write
+// guard and posting moves all select through it so their answers cannot drift.
+func activeCheckpointRefsAtOrAfter(ctx context.Context, queryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }, bookID int64, candidate PeriodScopedCheckpointRef) ([]CheckpointInvalidationRef, error) {
 	rows, err := queryer.QueryContext(ctx, `
         SELECT id, statement_date, statement_account_sequence
         FROM reconciliation_checkpoints
         WHERE book_id = ? AND account_id = ? AND commodity_id = ?
-            AND status = 'active' AND statement_date >= ?
-        ORDER BY statement_date, id
-    `, bookID, candidate.AccountID, candidate.CommodityID, candidate.EntryDate)
+            AND status = 'active'
+            AND (statement_date > ?
+                OR (statement_date = ? AND statement_account_sequence >= ?))
+        ORDER BY statement_date, statement_account_sequence, id
+    `, bookID, candidate.AccountID, candidate.CommodityID, candidate.EntryDate,
+		candidate.EntryDate, candidate.AccountDaySequence)
 	if err != nil {
 		return nil, fmt.Errorf("read reconciliation checkpoints to invalidate: %w", err)
 	}

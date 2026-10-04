@@ -983,11 +983,14 @@ void and deletion workflows above.
 
 Shared checkpoint resolution reports the full unique active invalidation set,
 including later checkpoints, with each checkpoint’s own statement metadata;
-commit resolves it again inside the write transaction (T-127 #142). Current
-eligibility uses the latest date/sequence boundary, then invalidation cascades
-by date alone. T-120 #135 tracks making that cascade respect each same-day
-sequence boundary and the command’s combined balance delta. Preview parity
-does not claim that over-invalidation is solved.
+commit resolves it again inside the write transaction (T-127 #142). Every
+create, edit, lifecycle and posting-move path selects through one per-boundary
+selector: a position reaches each active checkpoint whose own
+`(statement_date, statement_account_sequence)` is at or after it, so a same-day
+posting after an earlier boundary leaves that checkpoint active, and a
+same-day reorder is guarded when it crosses any checkpoint's boundary, not only
+the latest one (T-120 #135). Netting a correction command's combined balance
+delta per boundary remains T-120 #135.
 
 Minimum query parameters:
 
