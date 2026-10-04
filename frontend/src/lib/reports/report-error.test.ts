@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APIClientError } from '$lib/api/client';
+import { APIClientError } from '#lib/api/client.ts';
 import { isRetryableAPIError, reportErrorCode, reportErrorState } from './report-error';
 
 describe('isRetryableAPIError', () => {

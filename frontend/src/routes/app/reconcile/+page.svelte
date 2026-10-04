@@ -1,14 +1,14 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import ArrowLeft from '@lucide/svelte/icons/arrow-left';
-  import { m } from '$lib/paraglide/messages.js';
-  import Panel from '$lib/components/panel.svelte';
-  import { authSessionQueryOptions } from '$lib/api/auth';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
-  import type { ReconciliationSessionResponse } from '$lib/api/reconciliation';
-  import ReconcileStartForm from '$lib/reconcile/reconcile-start-form.svelte';
-  import ReconcileSession from '$lib/reconcile/reconcile-session.svelte';
-  import ReconcileCheckpoints from '$lib/reconcile/reconcile-checkpoints.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import Panel from '#lib/components/panel.svelte';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
+  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import type { ReconciliationSessionResponse } from '#lib/api/reconciliation.ts';
+  import ReconcileStartForm from '#lib/reconcile/reconcile-start-form.svelte';
+  import ReconcileSession from '#lib/reconcile/reconcile-session.svelte';
+  import ReconcileCheckpoints from '#lib/reconcile/reconcile-checkpoints.svelte';
 
   // ── Session + CSRF ────────────────────────────────────────────────
   const sessionQuery = createQuery(() => authSessionQueryOptions());

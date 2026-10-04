@@ -1,16 +1,16 @@
 <script lang="ts">
   import Save from '@lucide/svelte/icons/save';
   import X from '@lucide/svelte/icons/x';
-  import APIFormError from '$lib/components/api-form-error.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
   import {
     createCategory,
     updateCategory,
     type CategoryResponse,
     type CreateCategoryRequest,
     type UpdateCategoryRequest
-  } from '$lib/api/categories';
-  import { m } from '$lib/paraglide/messages.js';
-  import { deriveRecordCode } from '$lib/record-code';
+  } from '#lib/api/categories.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { deriveRecordCode } from '#lib/record-code.ts';
   import CategoryIcon from './category-icon.svelte';
   import {
     categoryIconLabel,

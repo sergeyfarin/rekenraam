@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { InvestmentLotResponse } from '$lib/api/investments';
+import type { InvestmentLotResponse } from '#lib/api/investments.ts';
 import { parseInternalTransferAllocations, parsePooledTransferQuantity } from './internal-transfer-amounts';
 
 const lot = {

@@ -2,18 +2,18 @@
   import Plus from '@lucide/svelte/icons/plus';
   import Save from '@lucide/svelte/icons/save';
   import X from '@lucide/svelte/icons/x';
-  import APIFormError from '$lib/components/api-form-error.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
   import {
     createAccountAdvanced,
     updateAccount,
     type AccountRequest,
     type AccountResponse
-  } from '$lib/api/accounts';
-  import type { CurrencyResponse } from '$lib/api/currencies';
-  import type { InstitutionResponse } from '$lib/api/institutions';
-  import { m } from '$lib/paraglide/messages.js';
-  import { deriveRecordCode } from '$lib/record-code';
-  import type { LocalizedCurrencyCatalogEntry } from '$lib/install-gate/currency-options';
+  } from '#lib/api/accounts.ts';
+  import type { CurrencyResponse } from '#lib/api/currencies.ts';
+  import type { InstitutionResponse } from '#lib/api/institutions.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { deriveRecordCode } from '#lib/record-code.ts';
+  import type { LocalizedCurrencyCatalogEntry } from '#lib/install-gate/currency-options.ts';
   import {
     accountDisplayName,
     accountKindClass,

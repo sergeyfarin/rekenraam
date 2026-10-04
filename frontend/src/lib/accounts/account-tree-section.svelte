@@ -4,12 +4,12 @@
   import Edit3 from '@lucide/svelte/icons/edit-3';
   import Lock from '@lucide/svelte/icons/lock';
   import Trash2 from '@lucide/svelte/icons/trash-2';
-  import type { AccountResponse } from '$lib/api/accounts';
-  import type { CurrencyResponse } from '$lib/api/currencies';
-  import type { InstitutionResponse } from '$lib/api/institutions';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import TreeNameCell from '$lib/components/tree-name-cell.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  import type { AccountResponse } from '#lib/api/accounts.ts';
+  import type { CurrencyResponse } from '#lib/api/currencies.ts';
+  import type { InstitutionResponse } from '#lib/api/institutions.ts';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import TreeNameCell from '#lib/components/tree-name-cell.svelte';
+  import { m } from '#lib/paraglide/messages.js';
   import {
     accountClassRank,
     accountCommodityLabel,

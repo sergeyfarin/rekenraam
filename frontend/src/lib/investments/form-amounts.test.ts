@@ -39,7 +39,7 @@ describe('parseTransferInAmounts', () => {
 
 /**
  * These tests exist because consolidating the investment forms onto
- * `$lib/money` changes their behaviour rather than preserving it. Each change
+ * `#lib/money` changes their behaviour rather than preserving it. Each change
  * is pinned by name here so a future edit that reintroduces the old semantics
  * fails loudly instead of quietly.
  */

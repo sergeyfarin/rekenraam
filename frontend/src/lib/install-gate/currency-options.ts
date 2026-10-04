@@ -1,4 +1,4 @@
-import type { CurrencyCatalogEntry } from '$lib/api/currencies';
+import type { CurrencyCatalogEntry } from '#lib/api/currencies.ts';
 
 export type LocalizedCurrencyCatalogEntry = CurrencyCatalogEntry & {
   name: string;

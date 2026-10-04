@@ -1,8 +1,8 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import { m } from '$lib/paraglide/messages.js';
-  import { currenciesQueryOptions } from '$lib/api/currencies';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import { m } from '#lib/paraglide/messages.js';
+  import { currenciesQueryOptions } from '#lib/api/currencies.ts';
+  import { getLocale } from '#lib/paraglide/runtime.js';
 
   let {
     selected,

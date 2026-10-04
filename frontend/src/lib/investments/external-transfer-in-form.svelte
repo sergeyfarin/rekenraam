@@ -1,11 +1,11 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { accountsQueryOptions } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import { accountRegisterQueryKey, transactionsQueryKey } from '$lib/api/transactions';
-  import { TranslatedFormError } from '$lib/form-errors';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transactions.ts';
+  import { TranslatedFormError } from '#lib/form-errors.ts';
   import {
     externalTransferInReconciliationImpact,
     investmentGainsQueryKey,
@@ -16,15 +16,15 @@
     type ExternalTransferInRequest,
     type GainImpact,
     type ReconciliationImpactResponse
-  } from '$lib/api/investments';
-  import { parseTransferInAmounts } from '$lib/investments/form-amounts';
+  } from '#lib/api/investments.ts';
+  import { parseTransferInAmounts } from '#lib/investments/form-amounts.ts';
   import {
     gainAcknowledgement, gainImpactCurrency, gainImpactRows, hasGainChanges, impactNeedsReview,
     isGainAcknowledgementRefusal
-  } from '$lib/investments/gain-impact';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/investments/gain-impact.ts';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
+  import { m } from '#lib/paraglide/messages.js';
 
   let { csrfToken, onSaved, onCancel }: {
     csrfToken: string;

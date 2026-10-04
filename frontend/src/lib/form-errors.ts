@@ -1,5 +1,5 @@
-import { APIClientError } from '$lib/api/client';
-import { getAPIClientErrorMessage } from '$lib/api-error-messages';
+import { APIClientError } from '#lib/api/client.ts';
+import { getAPIClientErrorMessage } from '#lib/api-error-messages.ts';
 
 export type FormErrorState = {
   message: string;

@@ -4,7 +4,7 @@ import type {
   SpendingReportDrillDown,
   SpendingReportGroup,
   SpendingReportResponse
-} from '$lib/api/reports';
+} from '#lib/api/reports.ts';
 
 /**
  * One table row: a single group's total in a single commodity. The backend

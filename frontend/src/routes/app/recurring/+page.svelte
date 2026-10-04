@@ -1,4 +1,4 @@
 <script lang="ts">
-  import RecurringScreen from '$lib/recurring/recurring-screen.svelte';
+  import RecurringScreen from '#lib/recurring/recurring-screen.svelte';
 </script>
 <RecurringScreen />

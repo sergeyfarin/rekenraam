@@ -1,7 +1,7 @@
-import type { InvestmentTradeRequest } from '$lib/api/investments';
-import { parseMagnitude, parseMoneyMagnitude, type AmountFieldError } from '$lib/investments/form-amounts';
-import { formatLedgerAmount } from '$lib/money/amount';
-import type { InvestmentTradeCorrectionContextResponse } from '$lib/api/investments';
+import type { InvestmentTradeRequest } from '#lib/api/investments.ts';
+import { parseMagnitude, parseMoneyMagnitude, type AmountFieldError } from '#lib/investments/form-amounts.ts';
+import { formatLedgerAmount } from '#lib/money/amount.ts';
+import type { InvestmentTradeCorrectionContextResponse } from '#lib/api/investments.ts';
 
 export type TradeChargeDraft = {
   kind: 'commission' | 'transaction_tax' | 'other_fee' | 'rebate';

@@ -1,11 +1,11 @@
 <script lang="ts">
   import Check from '@lucide/svelte/icons/check';
   import Languages from '@lucide/svelte/icons/languages';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale, locales, setLocale, type Locale } from '$lib/paraglide/runtime.js';
-  import { localeAutonym } from '$lib/settings/locales';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale, locales, setLocale, type Locale } from '#lib/paraglide/runtime.js';
+  import { localeAutonym } from '#lib/settings/locales.ts';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
 
   const currentLocale = getLocale();
 

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
-  import TransactionEditor from '$lib/transactions/transaction-editor.svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { createRecurringTemplate, updateRecurringTemplate, previewRecurringSchedule, type RecurringTemplate, type RecurringTemplatePatch, type CreateRecurringTemplateRequest } from '$lib/api/recurring';
-  import type { TransactionRequest } from '$lib/api/transactions';
+  import TransactionEditor from '#lib/transactions/transaction-editor.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { createRecurringTemplate, updateRecurringTemplate, previewRecurringSchedule, type RecurringTemplate, type RecurringTemplatePatch, type CreateRecurringTemplateRequest } from '#lib/api/recurring.ts';
+  import type { TransactionRequest } from '#lib/api/transactions.ts';
   import { templateValues, templatePatch, weekdayLabel, displayDate } from './recurring-model';
 
   let { template, today, csrfToken, onSaved, onCancel, onPendingChange } = $props<{

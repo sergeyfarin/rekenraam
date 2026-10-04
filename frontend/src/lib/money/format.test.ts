@@ -56,7 +56,7 @@ describe('formatQuantity', () => {
 });
 
 /**
- * The two halves of `$lib/money` deliberately render the same value
+ * The two halves of `#lib/money` deliberately render the same value
  * differently. These tests pin that difference so neither half drifts into
  * doing the other's job — the mistake that produced the duplicated,
  * divergent copies G-02 cleaned up.

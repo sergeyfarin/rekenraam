@@ -6,14 +6,14 @@
   import Save from '@lucide/svelte/icons/save';
   import X from '@lucide/svelte/icons/x';
   import { parseISO } from 'date-fns';
-  import { authSessionQueryOptions } from '$lib/api/auth';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import {
     createCurrency,
     currencyCatalogQueryOptions,
     type CurrencyResponse
-  } from '$lib/api/currencies';
-  import { APIClientError } from '$lib/api/client';
-  import { forecastQueryKey } from '$lib/api/forecast';
+  } from '#lib/api/currencies.ts';
+  import { APIClientError } from '#lib/api/client.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
   import {
     createPricingSourceAssignment,
     retryPricingBackgroundWork,
@@ -23,14 +23,14 @@
     type MarketDataSourceResponse,
     type PriceObservationResponse,
     type PricingSourceAssignmentResponse
-  } from '$lib/api/pricing';
-  import { currencySettingsPageQueryOptions } from '$lib/api/settings';
-  import { getAPIClientErrorMessage } from '$lib/api-error-messages';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import { localizedCurrencyCatalog, type LocalizedCurrencyCatalogEntry } from '$lib/install-gate/currency-options';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/pricing.ts';
+  import { currencySettingsPageQueryOptions } from '#lib/api/settings.ts';
+  import { getAPIClientErrorMessage } from '#lib/api-error-messages.ts';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import { localizedCurrencyCatalog, type LocalizedCurrencyCatalogEntry } from '#lib/install-gate/currency-options.ts';
+  import { m } from '#lib/paraglide/messages.js';
 
   type RateDirection = 'currency_default' | 'default_currency' | 'both';
   type RatePair = {

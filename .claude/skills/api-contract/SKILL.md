@@ -34,7 +34,7 @@ are generated, never hand-written.
 5. Implement the handler (see `backend-slice` skill).
 6. Frontend consumes types from the generated file only:
    ```ts
-   import type { components } from '$lib/api/schema';
+   import type { components } from '#lib/api/schema.js';
    type Foo = components['schemas']['FooResponse'];
    ```
    Follow the client pattern in `frontend/src/lib/api/connections.ts`

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { GainImpactChange } from '$lib/api/investments';
-import { APIClientError } from '$lib/api/client';
+import type { GainImpactChange } from '#lib/api/investments.ts';
+import { APIClientError } from '#lib/api/client.ts';
 import {
   gainAcknowledgement,
   gainImpactCurrency,

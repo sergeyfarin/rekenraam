@@ -1,5 +1,5 @@
-import type { BalanceQuantity } from '$lib/api/ledger';
-import type { CashflowReportResponse } from '$lib/api/reports';
+import type { BalanceQuantity } from '#lib/api/ledger.ts';
+import type { CashflowReportResponse } from '#lib/api/reports.ts';
 
 /**
  * One table row: a single calendar bucket in a single commodity.

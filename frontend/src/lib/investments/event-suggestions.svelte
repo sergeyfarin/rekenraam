@@ -1,14 +1,14 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
   import {
     investmentEventSuggestionsQueryOptions,
     acceptEventSuggestion,
     ignoreEventSuggestion,
     type InvestmentEventSuggestionResponse
-  } from '$lib/api/investments';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/investments.ts';
+  import { m } from '#lib/paraglide/messages.js';
 
   interface Props {
     csrfToken: string;

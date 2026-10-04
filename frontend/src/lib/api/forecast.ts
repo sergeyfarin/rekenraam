@@ -1,5 +1,5 @@
-import type { components } from '$lib/api/schema';
-import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '$lib/api/client';
+import type { components } from '#lib/api/schema.js';
+import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '#lib/api/client.ts';
 
 export type ForecastBalancesResponse = components['schemas']['ForecastBalancesResponse'];
 export type ForecastEventsResponse = components['schemas']['ForecastEventsResponse'];

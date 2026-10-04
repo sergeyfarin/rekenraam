@@ -1,5 +1,5 @@
 import createClient from 'openapi-fetch';
-import type { components, paths } from '$lib/api/schema';
+import type { components, paths } from '#lib/api/schema.js';
 
 export type APIErrorResponse = components['schemas']['ErrorResponse'];
 export type APIErrorCode = components['schemas']['ErrorBody']['code'];

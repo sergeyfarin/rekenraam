@@ -1,15 +1,15 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import { authSessionQueryOptions } from '$lib/api/auth';
-  import { budgetMonthQueryOptions, budgetQueryKey, setBudgetTarget, setBudgetTreatment, type BudgetTreatment } from '$lib/api/budgets';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import PageHeader from '$lib/components/page-header.svelte';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import { formatLedgerAmount, parseDecimalAmount } from '$lib/money/amount';
-  import { formatQuantity, joinCommodityAmount } from '$lib/money/format';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { m } from '$lib/paraglide/messages.js';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
+  import { budgetMonthQueryOptions, budgetQueryKey, setBudgetTarget, setBudgetTreatment, type BudgetTreatment } from '#lib/api/budgets.ts';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import PageHeader from '#lib/components/page-header.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import { formatLedgerAmount, parseDecimalAmount } from '#lib/money/amount.ts';
+  import { formatQuantity, joinCommodityAmount } from '#lib/money/format.ts';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { m } from '#lib/paraglide/messages.js';
 
   let month = $state('');
   let currencyID = $state(0);

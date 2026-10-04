@@ -1,8 +1,8 @@
 <script lang="ts" generics="R extends Record<string, any>">
   import { createTable, FlexRender, renderSnippet } from '@tanstack/svelte-table';
   import type { DisplayColumnDef } from '@tanstack/svelte-table';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import { m } from '#lib/paraglide/messages.js';
   import {
     transactionTableFeatures,
     type Column,

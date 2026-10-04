@@ -9,7 +9,7 @@
  */
 
 import MiniSearch from 'minisearch';
-import type { PayeeResponse } from '$lib/api/payees';
+import type { PayeeResponse } from '#lib/api/payees.ts';
 
 /** The same normalization payee records are stored under, mirrored here. */
 export function normalizePayeeName(value: string): string {

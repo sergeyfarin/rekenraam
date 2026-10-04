@@ -1,6 +1,6 @@
 <script lang="ts">
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { m } from '#lib/paraglide/messages.js';
 
   let {
     error,

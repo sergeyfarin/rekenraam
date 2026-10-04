@@ -1,7 +1,7 @@
-import type { AccountResponse } from '$lib/api/accounts';
-import type { InstitutionResponse } from '$lib/api/institutions';
-import type { CurrencyResponse } from '$lib/api/currencies';
-import { m } from '$lib/paraglide/messages.js';
+import type { AccountResponse } from '#lib/api/accounts.ts';
+import type { InstitutionResponse } from '#lib/api/institutions.ts';
+import type { CurrencyResponse } from '#lib/api/currencies.ts';
+import { m } from '#lib/paraglide/messages.js';
 
 export type AccountClass = AccountResponse['account_class'];
 export type ManagedAccountClass = Exclude<AccountClass, 'income' | 'expense'>;

@@ -3,29 +3,29 @@
   import TrendingUp from '@lucide/svelte/icons/trending-up';
   import X from '@lucide/svelte/icons/x';
   import Plus from '@lucide/svelte/icons/plus';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import { authSessionQueryOptions } from '$lib/api/auth';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import {
     investmentPositionsQueryOptions,
     investmentLotsQueryOptions,
     investmentInstrumentsQueryOptions,
     investmentEventSuggestionsQueryOptions,
     type InvestmentPositionResponse
-  } from '$lib/api/investments';
-  import BuyForm from '$lib/investments/buy-form.svelte';
-  import SellForm from '$lib/investments/sell-form.svelte';
-  import DividendForm from '$lib/investments/dividend-form.svelte';
-  import ExternalTransferInForm from '$lib/investments/external-transfer-in-form.svelte';
-  import InternalTransferForm from '$lib/investments/internal-transfer-form.svelte';
-  import SplitForm from '$lib/investments/split-form.svelte';
-  import GainsReport from '$lib/investments/gains-report.svelte';
-  import EventSuggestions from '$lib/investments/event-suggestions.svelte';
+  } from '#lib/api/investments.ts';
+  import BuyForm from '#lib/investments/buy-form.svelte';
+  import SellForm from '#lib/investments/sell-form.svelte';
+  import DividendForm from '#lib/investments/dividend-form.svelte';
+  import ExternalTransferInForm from '#lib/investments/external-transfer-in-form.svelte';
+  import InternalTransferForm from '#lib/investments/internal-transfer-form.svelte';
+  import SplitForm from '#lib/investments/split-form.svelte';
+  import GainsReport from '#lib/investments/gains-report.svelte';
+  import EventSuggestions from '#lib/investments/event-suggestions.svelte';
   import { parseISO } from 'date-fns';
   import { formatScaledValue } from './investment-labels';
-  import { coefficientSign } from '$lib/money/amount';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import { coefficientSign } from '#lib/money/amount.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
 
   const locale = $derived(getLocale());
   const dateFormatter = $derived(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { correctionLotDrafts, correctionTradeDraft, exactTradeFields, newTradeCharge,
   parseCorrectionLotChoices } from './trade-economics';
-import type { InvestmentTradeCorrectionContextResponse } from '$lib/api/investments';
+import type { InvestmentTradeCorrectionContextResponse } from '#lib/api/investments.ts';
 
 it('prefills a correction from exact signed source amounts and recorded fee treatment', () => {
   const source: InvestmentTradeCorrectionContextResponse = {

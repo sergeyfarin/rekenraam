@@ -4,10 +4,10 @@
   import Download from '@lucide/svelte/icons/download';
   import HeartPulse from '@lucide/svelte/icons/heart-pulse';
   import KeyRound from '@lucide/svelte/icons/key-round';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import { authSessionQueryOptions } from '$lib/api/auth';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import {
     backupStatusQueryKey,
     backupStatusQueryOptions,
@@ -21,10 +21,10 @@
     selfCheckQueryOptions,
     type ExportScope,
     type SelfCheckRun
-  } from '$lib/api/maintenance';
-  import { getAPIClientErrorMessage } from '$lib/api-error-messages';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  } from '#lib/api/maintenance.ts';
+  import { getAPIClientErrorMessage } from '#lib/api-error-messages.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
 
   type ExportFormat = 'bundle' | 'csv' | 'qif';
 

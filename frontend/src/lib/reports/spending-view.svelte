@@ -1,18 +1,18 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { formatQuantity } from '$lib/money/format';
-  import { categoriesQueryOptions, type CategoryResponse } from '$lib/api/categories';
-  import { categoryDisplayName } from '$lib/categories/category-labels';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { formatQuantity } from '#lib/money/format.ts';
+  import { categoriesQueryOptions, type CategoryResponse } from '#lib/api/categories.ts';
+  import { categoryDisplayName } from '#lib/categories/category-labels.ts';
   import {
     spendingQueryOptions,
     type SpendingGroupBy,
     type SpendingMode,
     type SpendingOptions
-  } from '$lib/api/reports';
+  } from '#lib/api/reports.ts';
   import SpendingBarChart from './spending-bar-chart.svelte';
   import { csvFilename, downloadCSV, exactDecimal, toCSV, withReportContext } from './report-csv';
   import { reportErrorState } from './report-error';

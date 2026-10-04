@@ -1,7 +1,7 @@
-import type { ImportResolution, ImportStagedRow } from '$lib/api/imports';
-import { parseNormalized } from '$lib/api/imports';
-import type { PayeeResponse } from '$lib/api/payees';
-import { exactPayeeMatch, normalizePayeeName, payeeSuggestions } from '$lib/transactions/payee-matching';
+import type { ImportResolution, ImportStagedRow } from '#lib/api/imports.ts';
+import { parseNormalized } from '#lib/api/imports.ts';
+import type { PayeeResponse } from '#lib/api/payees.ts';
+import { exactPayeeMatch, normalizePayeeName, payeeSuggestions } from '#lib/transactions/payee-matching.ts';
 
 export interface UnknownImportPayeeGroup {
   key: string;

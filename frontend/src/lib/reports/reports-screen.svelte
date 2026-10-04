@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { createQuery } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import { currenciesQueryOptions } from '$lib/api/currencies';
-  import { accountsQueryOptions } from '$lib/api/accounts';
-  import { categoriesQueryOptions } from '$lib/api/categories';
-  import { payeesQueryOptions } from '$lib/api/payees';
-  import { accountDisplayName } from '$lib/accounts/account-labels';
-  import { categoryDisplayName } from '$lib/categories/category-labels';
-  import { investmentInstrumentsQueryOptions } from '$lib/api/investments';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import { currenciesQueryOptions } from '#lib/api/currencies.ts';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { categoriesQueryOptions } from '#lib/api/categories.ts';
+  import { payeesQueryOptions } from '#lib/api/payees.ts';
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
+  import { categoryDisplayName } from '#lib/categories/category-labels.ts';
+  import { investmentInstrumentsQueryOptions } from '#lib/api/investments.ts';
   import {
     netWorthSeriesQueryOptions,
     type CashflowOptions,
@@ -20,10 +20,10 @@
     type SpendingGroupBy,
     type SpendingMode,
     type SpendingOptions
-  } from '$lib/api/reports';
-  import { formatQuantity } from '$lib/money/format';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/reports.ts';
+  import { formatQuantity } from '#lib/money/format.ts';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { m } from '#lib/paraglide/messages.js';
   import { convertedSeries, hasMultipleCommodities, netWorthRows } from './net-worth';
   import BucketColumnChart from './bucket-column-chart.svelte';
   import CashflowView from './cashflow-view.svelte';
@@ -70,11 +70,11 @@
   }
 
   function parseFilters(): NetWorthSeriesOptions | null {
-    return parseReportRange($page.url.searchParams);
+    return parseReportRange(page.url.searchParams);
   }
 
   function parseView(): ReportView {
-    const view = $page.url.searchParams.get('view');
+    const view = page.url.searchParams.get('view');
     if (view === 'spending' || view === 'cashflow') {
       return view;
     }
@@ -82,19 +82,19 @@
   }
 
   function parseGroupBy(): SpendingGroupBy {
-    return $page.url.searchParams.get('group_by') === 'payee' ? 'payee' : 'category';
+    return page.url.searchParams.get('group_by') === 'payee' ? 'payee' : 'category';
   }
 
   function parseMode(): SpendingMode {
-    return $page.url.searchParams.get('mode') === 'income' ? 'income' : 'spending';
+    return page.url.searchParams.get('mode') === 'income' ? 'income' : 'spending';
   }
 
   const activeFilters = $derived.by(parseFilters);
   const view = $derived.by(parseView);
-  const reportFilters = $derived(parseReportFilters($page.url.searchParams));
+  const reportFilters = $derived(parseReportFilters(page.url.searchParams));
   // Not part of ReportFilterState: a filter narrows what a report is about, and
   // this changes nothing about that. Every exact figure is present either way.
-  const reportingCurrencyID = $derived(parseReportingCurrency($page.url.searchParams));
+  const reportingCurrencyID = $derived(parseReportingCurrency(page.url.searchParams));
   // Net worth has no category or payee dimension: those exist only where a
   // category posting does. Offering them here would be a control that changes
   // nothing.
@@ -128,12 +128,11 @@
     if (!browser || activeFilters !== null) {
       return;
     }
-    const repaired = repairReportRange($page.url.searchParams, todayISO());
+    const repaired = repairReportRange(page.url.searchParams, todayISO());
     if (repaired) {
       void goto(`/app/reports?${repaired.toString()}`, {
         replaceState: true,
-        keepFocus: true,
-        noScroll: true
+        reset: false
       });
     }
   });
@@ -344,19 +343,19 @@
   }
 
   function applyFilters() {
-    const params = new URLSearchParams($page.url.searchParams);
+    const params = new URLSearchParams(page.url.search);
     params.set('start_date', startDate);
     params.set('end_date', endDate);
     params.set('bucket', bucket);
-    void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
+    void goto(`/app/reports?${params.toString()}`, { reset: false });
   }
 
   // Every control writes the URL, then the typed query follows. Switching one
   // dimension preserves the rest so a shared link keeps its full state.
   function setParam(name: string, value: string) {
-    const params = new URLSearchParams($page.url.searchParams);
+    const params = new URLSearchParams(page.url.search);
     params.set(name, value);
-    void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
+    void goto(`/app/reports?${params.toString()}`, { reset: false });
   }
 
   // Filter selections apply immediately rather than waiting for Apply: the date
@@ -364,15 +363,15 @@
   // checkbox is never half-set. A selection a net-worth request cannot express
   // stays in the URL, so switching back to spending restores it.
   function applyReportFilters(next: ReportFilterState) {
-    const params = writeReportFilters($page.url.searchParams, next);
-    void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
+    const params = writeReportFilters(page.url.searchParams, next);
+    void goto(`/app/reports?${params.toString()}`, { reset: false });
   }
 
   // The selection is kept even where it currently adds nothing, so a range that
   // later spans a second currency starts restating without being re-picked.
   function applyReportingCurrency(commodityID: number | null) {
-    const params = withReportingCurrency($page.url.searchParams, commodityID);
-    void goto(`/app/reports?${params.toString()}`, { keepFocus: true, noScroll: true });
+    const params = withReportingCurrency(page.url.searchParams, commodityID);
+    void goto(`/app/reports?${params.toString()}`, { reset: false });
   }
 </script>
 

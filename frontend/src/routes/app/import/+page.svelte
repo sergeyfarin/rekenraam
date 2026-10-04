@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { parseISO } from 'date-fns';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Upload from '@lucide/svelte/icons/upload';
   import CheckCircle from '@lucide/svelte/icons/circle-check';
@@ -10,27 +10,27 @@
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import Plus from '@lucide/svelte/icons/plus';
   import Loader from '@lucide/svelte/icons/loader-circle';
-  import Panel from '$lib/components/panel.svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import PayeeResolutionPanel from '$lib/imports/payee-resolution-panel.svelte';
-  import ImportRulesPanel from '$lib/imports/import-rules-panel.svelte';
-  import type { PayeeResponse } from '$lib/api/payees';
-  import { linkableSplitFill, sourceCorrectionKind, unsupportedSourceFill } from '$lib/imports/source-correction';
-  import SplitLinkPanel from '$lib/imports/split-link-panel.svelte';
-  import { authSessionQueryOptions } from '$lib/api/auth';
-  import { accountsQueryOptions } from '$lib/api/accounts';
-  import { currenciesQueryOptions } from '$lib/api/currencies';
-  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
-  import GainImpactList from '$lib/investments/gain-impact-list.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import PayeeResolutionPanel from '#lib/imports/payee-resolution-panel.svelte';
+  import ImportRulesPanel from '#lib/imports/import-rules-panel.svelte';
+  import type { PayeeResponse } from '#lib/api/payees.ts';
+  import { linkableSplitFill, sourceCorrectionKind, unsupportedSourceFill } from '#lib/imports/source-correction.ts';
+  import SplitLinkPanel from '#lib/imports/split-link-panel.svelte';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions } from '#lib/api/currencies.ts';
+  import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
+  import GainImpactList from '#lib/investments/gain-impact-list.svelte';
   import {
     gainAcknowledgement,
     gainImpactCurrency,
     gainImpactRows,
     hasGainChanges,
     type GainImpactRow
-  } from '$lib/investments/gain-impact';
-  import { categoriesQueryOptions } from '$lib/api/categories';
-  import { tagsQueryOptions } from '$lib/api/tags';
+  } from '#lib/investments/gain-impact.ts';
+  import { categoriesQueryOptions } from '#lib/api/categories.ts';
+  import { tagsQueryOptions } from '#lib/api/tags.ts';
   import {
     analyzeCSVImport,
     startImport,
@@ -59,15 +59,15 @@
     type ImportStagedRow,
     type CommitImportBatchResponse,
     type ImportResolution
-  } from '$lib/api/imports';
+  } from '#lib/api/imports.ts';
   import {
     parseCSVProfileConfig,
     rankCSVProfiles,
     uniqueCSVProfileSuggestion,
     type CSVDelimiter,
     type CSVProfileConfig
-  } from '$lib/imports/csv-profile';
-  import { textEncodingOptions } from '$lib/imports/text-encodings';
+  } from '#lib/imports/csv-profile.ts';
+  import { textEncodingOptions } from '#lib/imports/text-encodings.ts';
   import {
     listImportConnections,
     createImportConnection,
@@ -76,9 +76,9 @@
     refreshImportConnection,
     importConnectionsQueryKey,
     type ImportConnection
-  } from '$lib/api/connections';
-  import { m } from '$lib/paraglide/messages.js';
-  import { forecastQueryKey } from '$lib/api/forecast';
+  } from '#lib/api/connections.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
 
   // ── Page state ─────────────────────────────────────────────────────
   type Step = 'upload' | 'fetching' | 'preview' | 'result';

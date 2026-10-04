@@ -1,15 +1,15 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import { m } from '$lib/paraglide/messages.js';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { parseStatementBalance } from '$lib/reconcile/statement-balance';
+  import { m } from '#lib/paraglide/messages.js';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { parseStatementBalance } from '#lib/reconcile/statement-balance.ts';
   import {
     startReconciliation,
     type ReconciliationSessionResponse,
     type StartReconciliationRequest
-  } from '$lib/api/reconciliation';
+  } from '#lib/api/reconciliation.ts';
 
   let {
     csrfToken,

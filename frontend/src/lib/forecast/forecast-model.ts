@@ -1,4 +1,5 @@
-import type { components } from '$lib/api/schema';
+import type { ReadonlyURLSearchParams } from '$app/state';
+import type { components } from '#lib/api/schema.js';
 
 export type ForecastSpendingModel = 'off' | 'adaptive_v1';
 export type ForecastLearningPattern = 'daily' | 'weekly' | 'monthly' | 'annual_seasonal';
@@ -45,14 +46,14 @@ export const defaultForecastFilters: ForecastFilters = {
   expensePatterns: {}
 };
 
-function scalar(params: URLSearchParams, key: string): string | null | undefined {
+function scalar(params: ReadonlyURLSearchParams, key: string): string | null | undefined {
   const values = params.getAll(key);
   if (values.length === 0) return undefined;
   if (values.length !== 1 || values[0] === '') return null;
   return values[0];
 }
 
-export function parseForecastFilters(params: URLSearchParams): ForecastFilterParseResult {
+export function parseForecastFilters(params: ReadonlyURLSearchParams): ForecastFilterParseResult {
   const fallback = { ...defaultForecastFilters, accountIDs: [] };
   const known = new Set([
     'horizon_days', 'account_id', 'include_descendants', 'reporting_currency_id', 'fx_method',
@@ -114,7 +115,7 @@ type ForecastLearningFilters = Pick<ForecastFilters, 'spendingModel' | 'historyC
  * Mirrors the backend contract: with the model off every other model parameter
  * is an orphan, so a URL carrying one is invalid rather than quietly ignored.
  */
-function parseForecastLearningFilters(params: URLSearchParams): ForecastLearningFilters | null {
+function parseForecastLearningFilters(params: ReadonlyURLSearchParams): ForecastLearningFilters | null {
   const modelRaw = scalar(params, 'spending_model');
   if (modelRaw === null || (modelRaw !== undefined && modelRaw !== 'off' && modelRaw !== 'adaptive_v1')) return null;
   const historyRaw = scalar(params, 'history_complete_from');

@@ -10,9 +10,9 @@
  * when repeating the identical request could plausibly succeed.
  */
 
-import type { APIErrorCode } from '$lib/api/client';
-import { APIClientError } from '$lib/api/client';
-import { getAPIErrorMessage } from '$lib/api-error-messages';
+import type { APIErrorCode } from '#lib/api/client.ts';
+import { APIClientError } from '#lib/api/client.ts';
+import { getAPIErrorMessage } from '#lib/api-error-messages.ts';
 
 /**
  * Codes an identical repeat of the same report query cannot resolve.

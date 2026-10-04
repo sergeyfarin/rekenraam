@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { createQuery } from '@tanstack/svelte-query';
   import LayoutDashboard from '@lucide/svelte/icons/layout-dashboard';
   import LogOut from '@lucide/svelte/icons/log-out';
-  import { recurringSummaryQueryOptions } from '$lib/api/recurring';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import { recurringSummaryQueryOptions } from '#lib/api/recurring.ts';
+  import { getLocale } from '#lib/paraglide/runtime.js';
   import Repeat from '@lucide/svelte/icons/repeat';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import Settings from '@lucide/svelte/icons/settings';
@@ -19,14 +19,14 @@
   import ChartNoAxesCombined from '@lucide/svelte/icons/chart-no-axes-combined';
   import ChartSpline from '@lucide/svelte/icons/chart-spline';
   import ChartPie from '@lucide/svelte/icons/chart-pie';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import PageHeader from '$lib/components/page-header.svelte';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import { authSessionQueryOptions, logout } from '$lib/api/auth';
-  import { setupStatusQueryOptions } from '$lib/api/setup';
-  import { APIClientError } from '$lib/api/client';
-  import { m } from '$lib/paraglide/messages.js';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import PageHeader from '#lib/components/page-header.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import { authSessionQueryOptions, logout } from '#lib/api/auth.ts';
+  import { setupStatusQueryOptions } from '#lib/api/setup.ts';
+  import { APIClientError } from '#lib/api/client.ts';
+  import { m } from '#lib/paraglide/messages.js';
 
   let { children } = $props();
 
@@ -86,18 +86,18 @@
   });
 
   const recurringSummary = createQuery(() => ({ ...recurringSummaryQueryOptions(), enabled: shellState === 'ready' && !shouldRedirectHome }));
-  const isRecurringRoute = $derived($page.url.pathname.startsWith('/app/recurring'));
-  const isOverviewRoute = $derived($page.url.pathname === '/app');
-  const isAccountsRoute = $derived($page.url.pathname.startsWith('/app/accounts'));
-  const isCategoriesRoute = $derived($page.url.pathname.startsWith('/app/categories'));
-  const isTransactionsRoute = $derived($page.url.pathname.startsWith('/app/transactions'));
-  const isReconcileRoute = $derived($page.url.pathname.startsWith('/app/reconcile'));
-  const isImportRoute = $derived($page.url.pathname.startsWith('/app/import'));
-  const isSettingsRoute = $derived($page.url.pathname.startsWith('/app/settings'));
-  const isInvestmentsRoute = $derived($page.url.pathname.startsWith('/app/investments'));
-  const isReportsRoute = $derived($page.url.pathname.startsWith('/app/reports'));
-  const isForecastRoute = $derived($page.url.pathname.startsWith('/app/forecast'));
-  const isBudgetsRoute = $derived($page.url.pathname.startsWith('/app/budgets'));
+  const isRecurringRoute = $derived(page.url.pathname.startsWith('/app/recurring'));
+  const isOverviewRoute = $derived(page.url.pathname === '/app');
+  const isAccountsRoute = $derived(page.url.pathname.startsWith('/app/accounts'));
+  const isCategoriesRoute = $derived(page.url.pathname.startsWith('/app/categories'));
+  const isTransactionsRoute = $derived(page.url.pathname.startsWith('/app/transactions'));
+  const isReconcileRoute = $derived(page.url.pathname.startsWith('/app/reconcile'));
+  const isImportRoute = $derived(page.url.pathname.startsWith('/app/import'));
+  const isSettingsRoute = $derived(page.url.pathname.startsWith('/app/settings'));
+  const isInvestmentsRoute = $derived(page.url.pathname.startsWith('/app/investments'));
+  const isReportsRoute = $derived(page.url.pathname.startsWith('/app/reports'));
+  const isForecastRoute = $derived(page.url.pathname.startsWith('/app/forecast'));
+  const isBudgetsRoute = $derived(page.url.pathname.startsWith('/app/budgets'));
 
   const headerTitle = $derived(
     isBudgetsRoute ? m.budgets_title() : isRecurringRoute ? m.recurring_title() : isAccountsRoute

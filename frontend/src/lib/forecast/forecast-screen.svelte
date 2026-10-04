@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import ChevronUp from '@lucide/svelte/icons/chevron-up';
@@ -11,14 +11,14 @@
     forecastEventsQueryKey,
     type ForecastBalancesResponse,
     type ForecastQuery
-  } from '$lib/api/forecast';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import { formatQuantity } from '$lib/money/format';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/forecast.ts';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import { formatQuantity } from '#lib/money/format.ts';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { m } from '#lib/paraglide/messages.js';
   import ForecastChart from './forecast-chart.svelte';
   import ForecastEvents from './forecast-events.svelte';
   import ForecastLearning from './forecast-learning.svelte';
@@ -45,7 +45,7 @@
   const locale = $derived(getLocale());
   const dateFormatter = $derived(new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric' }));
   const dateTimeFormatter = $derived(new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }));
-  const parsed = $derived(parseForecastFilters($page.url.searchParams));
+  const parsed = $derived(parseForecastFilters(page.url.searchParams));
   const active = $derived(parsed.filters);
   const activeQuery = $derived<ForecastQuery>({
     horizonDays: active.horizonDays,
@@ -82,7 +82,7 @@
   const data = $derived(query.data);
 
   $effect(() => {
-    const signature = $page.url.search;
+    const signature = page.url.search;
     if (signature === syncedURL) return;
     horizonDays = active.horizonDays;
     accountIDs = [...active.accountIDs];
@@ -187,13 +187,13 @@
       spendingModel, historyCompleteFrom: historyCompleteFrom || null, expenseCategoryIDs, expensePatterns
     };
     const params = writeForecastFilters(filters);
-    void goto(`/app/forecast?${params.toString()}`, { keepFocus: true, noScroll: true });
+    void goto(`/app/forecast?${params.toString()}`, { reset: false });
   }
 
   function resetFilters() {
     openDetailKey = '';
     queryClient.removeQueries({ queryKey: forecastEventsQueryKey });
-    void goto('/app/forecast', { keepFocus: true, noScroll: true });
+    void goto('/app/forecast', { reset: false });
   }
 
   function toggleDetails(date: string) {

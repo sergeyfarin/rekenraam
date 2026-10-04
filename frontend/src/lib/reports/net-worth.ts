@@ -1,5 +1,5 @@
-import type { BalanceQuantity } from '$lib/api/ledger';
-import type { NetWorthSeriesResponse } from '$lib/api/reports';
+import type { BalanceQuantity } from '#lib/api/ledger.ts';
+import type { NetWorthSeriesResponse } from '#lib/api/reports.ts';
 
 export type NetWorthRow = BalanceQuantity & {
   startDate: string;

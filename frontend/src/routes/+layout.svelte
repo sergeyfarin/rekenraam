@@ -2,9 +2,9 @@
   import { QueryClientProvider } from '@tanstack/svelte-query';
   import { onMount } from 'svelte';
   import '../app.css';
-  import { createQueryClient } from '$lib/query-client';
-  import TopBar from '$lib/components/top-bar.svelte';
-  import { initializeTheme } from '$lib/theme.svelte';
+  import { createQueryClient } from '#lib/query-client.ts';
+  import TopBar from '#lib/components/top-bar.svelte';
+  import { initializeTheme } from '#lib/theme.svelte.ts';
 
   let { children } = $props();
   const queryClient = createQueryClient();

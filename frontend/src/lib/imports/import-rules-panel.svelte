@@ -1,11 +1,11 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import Plus from '@lucide/svelte/icons/plus';
-  import Panel from '$lib/components/panel.svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { categoriesQueryOptions } from '$lib/api/categories';
-  import { payeesQueryOptions } from '$lib/api/payees';
-  import { tagsQueryOptions } from '$lib/api/tags';
+  import Panel from '#lib/components/panel.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { categoriesQueryOptions } from '#lib/api/categories.ts';
+  import { payeesQueryOptions } from '#lib/api/payees.ts';
+  import { tagsQueryOptions } from '#lib/api/tags.ts';
   import {
     createImportRule,
     deleteImportRule,
@@ -13,8 +13,8 @@
     importRulesQueryOptions,
     updateImportRule,
     type ImportRule
-  } from '$lib/api/import-rules';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/import-rules.ts';
+  import { m } from '#lib/paraglide/messages.js';
 
   let { csrfToken }: { csrfToken: string } = $props();
   const queryClient = useQueryClient();

@@ -1,7 +1,7 @@
-import type { components } from '$lib/api/schema';
-import { m } from '$lib/paraglide/messages.js';
-import { builtinCategoryLabel } from '$lib/categories/category-labels';
-import { formatQuantity } from '$lib/money/format';
+import type { components } from '#lib/api/schema.js';
+import { m } from '#lib/paraglide/messages.js';
+import { builtinCategoryLabel } from '#lib/categories/category-labels.ts';
+import { formatQuantity } from '#lib/money/format.ts';
 
 export type PostingResponse = components['schemas']['PostingResponse'];
 export type TransactionStatus = components['schemas']['TransactionStatus'];

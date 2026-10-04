@@ -1,17 +1,17 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import { accountRegisterQueryKey, transactionsQueryKey } from '$lib/api/transactions';
-  import { formatLedgerAmount } from '$lib/money/amount';
-  import { parseTransferInAmounts } from '$lib/investments/form-amounts';
-  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
-  import { TranslatedFormError } from '$lib/form-errors';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transactions.ts';
+  import { formatLedgerAmount } from '#lib/money/amount.ts';
+  import { parseTransferInAmounts } from '#lib/investments/form-amounts.ts';
+  import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
+  import { TranslatedFormError } from '#lib/form-errors.ts';
   import {
     gainAcknowledgement,
     gainImpactCurrency,
@@ -19,7 +19,7 @@
     hasGainChanges,
     impactNeedsReview,
     isGainAcknowledgementRefusal
-  } from '$lib/investments/gain-impact';
+  } from '#lib/investments/gain-impact.ts';
   import {
     investmentGainsQueryKey,
     investmentLotsQueryKey,
@@ -30,7 +30,7 @@
     type GainImpact,
     type InvestmentCorrectionTransferTerms,
     type ReconciliationImpactResponse
-  } from '$lib/api/investments';
+  } from '#lib/api/investments.ts';
 
   // Replaces a posted external transfer in (T-119). The security and basis
   // currency are fixed; the date, holding, quantity, carried basis and

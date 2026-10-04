@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import type { AccountRegisterEntryResponse } from '$lib/api/transactions';
+  import { m } from '#lib/paraglide/messages.js';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import type { AccountRegisterEntryResponse } from '#lib/api/transactions.ts';
   import type { AccountClass } from './transaction-labels';
   import { commodityDisplay, formatSignedAmount } from './transaction-labels';
   import {

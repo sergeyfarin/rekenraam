@@ -1,6 +1,6 @@
-import type { components } from '$lib/api/schema';
-import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '$lib/api/client';
-import type { TransactionLifecycleRequest, TransactionsResponse } from '$lib/api/transactions';
+import type { components } from '#lib/api/schema.js';
+import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '#lib/api/client.ts';
+import type { TransactionLifecycleRequest, TransactionsResponse } from '#lib/api/transactions.ts';
 
 export type ReconciliationSessionResponse = components['schemas']['ReconciliationSessionResponse'];
 export type ReconciliationCheckpointResponse = components['schemas']['ReconciliationCheckpointResponse'];

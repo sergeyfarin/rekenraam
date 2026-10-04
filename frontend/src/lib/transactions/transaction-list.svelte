@@ -1,19 +1,19 @@
 <script lang="ts">
-  import { transactionTitle } from '$lib/transactions/transaction-title';
-  import { systemLabelText } from '$lib/transactions/system-label';
-  import { joinCommodityAmount } from '$lib/money/format';
+  import { transactionTitle } from '#lib/transactions/transaction-title.ts';
+  import { systemLabelText } from '#lib/transactions/system-label.ts';
+  import { joinCommodityAmount } from '#lib/money/format.ts';
   import { untrack } from 'svelte';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
-  import { m } from '$lib/paraglide/messages.js';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
   import {
     transactionsInfiniteQueryOptions,
     moveTransaction,
     type TransactionResponse
-  } from '$lib/api/transactions';
+  } from '#lib/api/transactions.ts';
   import {
     formatSignedAmount,
     resolveAccountLabel,

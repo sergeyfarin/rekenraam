@@ -1,9 +1,9 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
   import {
     gainAcknowledgement,
     gainImpactCurrency,
@@ -11,13 +11,13 @@
     hasGainChanges,
     impactNeedsReview,
     isGainAcknowledgementRefusal
-  } from '$lib/investments/gain-impact';
-  import { parseTradeAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
-  import TradeEconomicsFields from '$lib/investments/trade-economics-fields.svelte';
-  import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '$lib/investments/trade-economics';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
+  } from '#lib/investments/gain-impact.ts';
+  import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
+  import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
+  import { correctionTradeDraft, exactTradeFields, type TradeChargeDraft } from '#lib/investments/trade-economics.ts';
+  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
   import {
     investmentPositionsQueryKey,
     investmentLotsQueryKey,
@@ -33,8 +33,8 @@
     type InvestmentTradeCorrectionContextResponse,
     type GainImpact,
     type ReconciliationImpactResponse
-  } from '$lib/api/investments';
-  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
+  } from '#lib/api/investments.ts';
+  import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
 
   let {
     csrfToken,
@@ -171,7 +171,7 @@
     cashCommodityID ? (currenciesByID.get(cashCommodityID)?.code ?? '') : ''
   );
 
-  // Amount validation lives in $lib/investments/form-amounts.ts so its
+  // Amount validation lives in #lib/investments/form-amounts.ts so its
   // behaviour can be pinned by name; see that module for what changed.
   function amountErrorMessage(reason: AmountFieldError): string {
     switch (reason) {

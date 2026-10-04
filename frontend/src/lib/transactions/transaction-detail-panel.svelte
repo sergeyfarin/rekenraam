@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { transactionTitle } from '$lib/transactions/transaction-title';
-  import { systemLabelText } from '$lib/transactions/system-label';
+  import { transactionTitle } from '#lib/transactions/transaction-title.ts';
+  import { systemLabelText } from '#lib/transactions/system-label.ts';
   import X from '@lucide/svelte/icons/x';
   import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import APIFormError from '$lib/components/api-form-error.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import APIFormError from '#lib/components/api-form-error.svelte';
   import InvestmentCorrectionSection from './investment-correction-section.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
   import {
     voidTransaction,
     unvoidTransaction,
@@ -18,9 +18,9 @@
     type TransactionResponse,
     type ReconciliationImpactResponse,
     type TransactionLifecycleRequest
-  } from '$lib/api/transactions';
-  import { APIClientError } from '$lib/api/client';
-  import { formatQuantity, joinCommodityAmount } from '$lib/money/format';
+  } from '#lib/api/transactions.ts';
+  import { APIClientError } from '#lib/api/client.ts';
+  import { formatQuantity, joinCommodityAmount } from '#lib/money/format.ts';
   import {
     formatSignedAmount,
     resolveAccountLabel,

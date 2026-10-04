@@ -1,12 +1,12 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { formatQuantity } from '$lib/money/format';
-  import { cashflowQueryOptions, type CashflowOptions } from '$lib/api/reports';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { formatQuantity } from '#lib/money/format.ts';
+  import { cashflowQueryOptions, type CashflowOptions } from '#lib/api/reports.ts';
   import {
     cashflowDrillDownHref,
     cashflowRows,

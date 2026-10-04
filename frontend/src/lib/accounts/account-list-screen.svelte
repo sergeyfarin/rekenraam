@@ -4,27 +4,27 @@
   import Plus from '@lucide/svelte/icons/plus';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import WalletCards from '@lucide/svelte/icons/wallet-cards';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import { authSessionQueryOptions } from '$lib/api/auth';
-  import { currentBookQueryOptions } from '$lib/api/books';
-  import { forecastQueryKey } from '$lib/api/forecast';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
+  import { currentBookQueryOptions } from '#lib/api/books.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
   import {
     accountsQueryOptions,
     archiveAccount,
     closeAccount,
     deleteAccount,
     type AccountResponse
-  } from '$lib/api/accounts';
-  import { currenciesQueryOptions, currencyCatalogQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
+  } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, currencyCatalogQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     deleteInstitution,
     institutionsQueryOptions,
     type InstitutionResponse
-  } from '$lib/api/institutions';
-  import { m } from '$lib/paraglide/messages.js';
-  import { localizedCurrencyCatalog } from '$lib/install-gate/currency-options';
+  } from '#lib/api/institutions.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { localizedCurrencyCatalog } from '#lib/install-gate/currency-options.ts';
   import AccountEditor from './account-editor.svelte';
   import AccountFilterBar from './account-filter-bar.svelte';
   import AccountSummaryStats from './account-summary-stats.svelte';

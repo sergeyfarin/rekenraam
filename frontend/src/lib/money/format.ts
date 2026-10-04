@@ -3,7 +3,7 @@ import { roundAmountForDisplay } from './amount';
 /**
  * The frontend's single money-*display* layer.
  *
- * `$lib/money/amount.ts` is the parsing and exact-arithmetic half: it renders a
+ * `#lib/money/amount.ts` is the parsing and exact-arithmetic half: it renders a
  * plain, unlocalised decimal because its output must round-trip back through
  * `parseDecimalAmount` into an editable input. This module is the other half —
  * locale-aware presentation of **read-only** money: report tables, registers,

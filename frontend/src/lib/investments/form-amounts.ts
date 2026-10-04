@@ -1,4 +1,4 @@
-import { fitsInt64Coefficient, parseDecimalAmount, type ScaledAmount } from '$lib/money/amount';
+import { fitsInt64Coefficient, parseDecimalAmount, type ScaledAmount } from '#lib/money/amount.ts';
 
 /**
  * Submit-time amount validation for the three investment forms.
@@ -6,7 +6,7 @@ import { fitsInt64Coefficient, parseDecimalAmount, type ScaledAmount } from '$li
  * This lives outside the `.svelte` files on purpose. The forms previously
  * carried seven private copies of three helpers — a `parseDecimalField` each,
  * a `toSafeInt` each, and a `rawLedgerToDisplay` in the dividend form — and
- * consolidating them onto `$lib/money` is a **behaviour change per form**, not
+ * consolidating them onto `#lib/money` is a **behaviour change per form**, not
  * a like-for-like swap. There is no component-test harness in this project, so
  * the only way to pin that behaviour with named tests is for the validation to
  * be a plain module the component calls.
@@ -29,7 +29,7 @@ import { fitsInt64Coefficient, parseDecimalAmount, type ScaledAmount } from '$li
  *    rejects `1,50` outright, so the user gets a rejection instead of a
  *    hundredfold overstatement. `1,234.56` still parses as 1234.56.
  *
- * No arithmetic happens here beyond what `$lib/money` does. Quantities and
+ * No arithmetic happens here beyond what `#lib/money` does. Quantities and
  * money travel as exact coefficient strings; money keeps its backend int64 cap.
  */
 

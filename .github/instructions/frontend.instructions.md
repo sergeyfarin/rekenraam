@@ -1,5 +1,5 @@
 ---
-applyTo: "frontend/src/**/*.svelte,frontend/src/**/*.ts,frontend/src/**/*.js,frontend/svelte.config.js,frontend/vite.config.ts,frontend/tsconfig.json"
+applyTo: "frontend/src/**/*.svelte,frontend/src/**/*.ts,frontend/src/**/*.js,frontend/vite.config.ts,frontend/tsconfig.json"
 description: "Use when editing SvelteKit frontend routes, components, client-side helpers, styling, or frontend configuration."
 ---
 

@@ -9,18 +9,18 @@
   import Clock from '@lucide/svelte/icons/clock';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import packageInfo from '../../../../package.json';
-  import { authSessionQueryOptions } from '$lib/api/auth';
-  import { currentBookQueryOptions } from '$lib/api/books';
-  import { currenciesQueryOptions } from '$lib/api/currencies';
-  import { healthQueryOptions } from '$lib/api/health';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
+  import { currentBookQueryOptions } from '#lib/api/books.ts';
+  import { currenciesQueryOptions } from '#lib/api/currencies.ts';
+  import { healthQueryOptions } from '#lib/api/health.ts';
   import {
     saveUserPreferences,
     userPreferencesQueryOptions
-  } from '$lib/api/settings';
-  import { getAPIClientErrorMessage } from '$lib/api-error-messages';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/settings.ts';
+  import { getAPIClientErrorMessage } from '#lib/api-error-messages.ts';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import { m } from '#lib/paraglide/messages.js';
 
   const sessionQuery = createQuery(() => authSessionQueryOptions());
   const healthQuery = createQuery(() => healthQueryOptions());

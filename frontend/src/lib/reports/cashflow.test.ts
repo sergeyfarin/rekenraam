@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CashflowReportResponse } from '$lib/api/reports';
+import type { CashflowReportResponse } from '#lib/api/reports.ts';
 import {
   cashflowDrillDownHref,
   cashflowRows,

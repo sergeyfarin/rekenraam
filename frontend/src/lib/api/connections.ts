@@ -1,5 +1,5 @@
-import { APIClientError, toNetworkError } from '$lib/api/client';
-import type { components } from '$lib/api/schema';
+import { APIClientError, toNetworkError } from '#lib/api/client.ts';
+import type { components } from '#lib/api/schema.js';
 
 export type ImportConnection = components['schemas']['ImportConnectionResponse'];
 export type ListImportConnectionsResponse =

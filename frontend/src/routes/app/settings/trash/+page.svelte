@@ -1,29 +1,29 @@
 <script lang="ts">
-  import { joinCommodityAmount } from '$lib/money/format';
+  import { joinCommodityAmount } from '#lib/money/format.ts';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { authSessionQueryOptions } from '$lib/api/auth';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import { createQuery } from '@tanstack/svelte-query';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
   import {
     deletedTransactionsInfiniteQueryOptions,
     deletedTransactionsQueryKey,
     transactionsQueryKey,
     restoreTransaction,
     type DeletedTransactionResponse
-  } from '$lib/api/transactions';
+  } from '#lib/api/transactions.ts';
   import {
     formatSignedAmount,
     commodityDisplay
-  } from '$lib/transactions/transaction-labels';
-  import TransactionTable from '$lib/transactions/transaction-table.svelte';
-  import type { Column } from '$lib/transactions/transaction-table-types';
-  import { APIClientError } from '$lib/api/client';
-  import { forecastQueryKey } from '$lib/api/forecast';
+  } from '#lib/transactions/transaction-labels.ts';
+  import TransactionTable from '#lib/transactions/transaction-table.svelte';
+  import type { Column } from '#lib/transactions/transaction-table-types.ts';
+  import { APIClientError } from '#lib/api/client.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
 
   const queryClient = useQueryClient();
   const sessionQuery = createQuery(() => authSessionQueryOptions());
@@ -150,7 +150,7 @@
       <span class={`font-medium tabular-nums ${p.quantity_value.startsWith('-') ? 'text-danger' : 'text-foreground'}`}>
         {joinCommodityAmount(
           commodityDisplay(p),
-          formatSignedAmount(p, p.account_class as import('$lib/transactions/transaction-labels').AccountClass, locale)
+          formatSignedAmount(p, p.account_class as import('#lib/transactions/transaction-labels.ts').AccountClass, locale)
         )}
       </span>
     {:else}

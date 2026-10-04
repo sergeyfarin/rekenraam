@@ -5,8 +5,8 @@
  * report's `drill_down` query needs no translation layer and a shared link
  * reproduces the same list.
  */
-
-import type { TransactionListOptions } from '$lib/api/transactions';
+import type { ReadonlyURLSearchParams } from '$app/state';
+import type { TransactionListOptions } from '#lib/api/transactions.ts';
 
 export type TransactionQueryFilters = Pick<
   TransactionListOptions,
@@ -51,7 +51,7 @@ function oneOf<T extends readonly string[]>(raw: string | null, allowed: T): T[n
  * hand-edited link should show an unfiltered list, not a validation error where
  * a list belongs.
  */
-export function parseTransactionFilters(params: URLSearchParams): TransactionQueryFilters {
+export function parseTransactionFilters(params: ReadonlyURLSearchParams): TransactionQueryFilters {
   const filters: TransactionQueryFilters = {
     status: oneOf(params.get('status'), STATUSES),
     kind: oneOf(params.get('kind'), KINDS),
@@ -78,10 +78,10 @@ export function parseTransactionFilters(params: URLSearchParams): TransactionQue
 
 /** Writes the filters over a copy of the current parameters, clearing cleared ones. */
 export function writeTransactionFilters(
-  params: URLSearchParams,
+  params: ReadonlyURLSearchParams,
   filters: TransactionQueryFilters
 ): URLSearchParams {
-  const next = new URLSearchParams(params);
+  const next = new URLSearchParams(params.toString());
 
   const set = (name: string, value: string | number | undefined) => {
     if (value === undefined || value === '') {

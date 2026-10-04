@@ -1,4 +1,4 @@
-import type { components } from '$lib/api/schema';
+import type { components } from '#lib/api/schema.js';
 
 export type RegisterCorrectionChain = components['schemas']['RegisterCorrectionChain'];
 export type RegisterCorrectionMember = components['schemas']['RegisterCorrectionMember'];

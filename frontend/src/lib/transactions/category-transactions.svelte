@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { transactionTitle } from '$lib/transactions/transaction-title';
-  import { systemLabelText } from '$lib/transactions/system-label';
+  import { transactionTitle } from '#lib/transactions/transaction-title.ts';
+  import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { createInfiniteQuery } from '@tanstack/svelte-query';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
   import {
     transactionsInfiniteQueryOptions,
     type TransactionResponse
-  } from '$lib/api/transactions';
-  import { formatQuantity } from '$lib/money/format';
-  import { sumByCommodity } from '$lib/money/amount';
+  } from '#lib/api/transactions.ts';
+  import { formatQuantity } from '#lib/money/format.ts';
+  import { sumByCommodity } from '#lib/money/amount.ts';
   import {
     resolveAccountLabel,
     statusLabel,
@@ -69,7 +69,7 @@
     if (catPostings.length === 0) return [];
 
     // Scale alignment and the normal-sign rule (negate income/liability/equity
-    // so activity reads positive) live in $lib/money/amount.ts, not here. This
+    // so activity reads positive) live in #lib/money/amount.ts, not here. This
     // component used to carry its own rescaleUp and sign switch; every private
     // copy of that logic in this repo has eventually drifted, and the ones that
     // did shipped money bugs (T-45, T-46, T-47).

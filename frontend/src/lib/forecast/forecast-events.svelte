@@ -1,15 +1,15 @@
 <script lang="ts">
   import { createInfiniteQuery } from '@tanstack/svelte-query';
-  import { APIClientError } from '$lib/api/client';
+  import { APIClientError } from '#lib/api/client.ts';
   import {
     forecastEventsInfiniteQueryOptions,
     type ForecastBalancesResponse,
     type ForecastEvent,
     type ForecastQuery
-  } from '$lib/api/forecast';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/forecast.ts';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import { m } from '#lib/paraglide/messages.js';
 
   let {
     date,

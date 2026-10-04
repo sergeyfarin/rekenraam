@@ -1,9 +1,9 @@
 <script lang="ts">
   import AlertTriangle from '@lucide/svelte/icons/alert-triangle';
-  import { m } from '$lib/paraglide/messages.js';
-  import type { ReconciliationImpactResponse } from '$lib/api/investments';
-  import type { GainImpactRow } from '$lib/investments/gain-impact';
-  import GainImpactList from '$lib/investments/gain-impact-list.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import type { ReconciliationImpactResponse } from '#lib/api/investments.ts';
+  import type { GainImpactRow } from '#lib/investments/gain-impact.ts';
+  import GainImpactList from '#lib/investments/gain-impact-list.svelte';
 
   type CheckpointImpact = ReconciliationImpactResponse['affected_checkpoints'][number];
 

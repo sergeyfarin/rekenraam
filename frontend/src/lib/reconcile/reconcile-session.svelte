@@ -1,12 +1,12 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { formatQuantity } from '$lib/money/format';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { formatQuantity } from '#lib/money/format.ts';
   import {
     reconciliationSessionQueryOptions,
     reconciliationQueryKey,
@@ -14,7 +14,7 @@
     finishReconciliation,
     voidReconciliation,
     type ReconciliationSessionResponse
-  } from '$lib/api/reconciliation';
+  } from '#lib/api/reconciliation.ts';
 
   let {
     reconciliationID,

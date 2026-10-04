@@ -1,11 +1,11 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import type { AccountResponse } from '$lib/api/accounts';
-  import { importSplitCandidates, importSplitCandidatesQueryKey, linkImportSplit } from '$lib/api/imports';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import type { AccountResponse } from '#lib/api/accounts.ts';
+  import { importSplitCandidates, importSplitCandidatesQueryKey, linkImportSplit } from '#lib/api/imports.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
 
   let { batchId, rowId, csrfToken, accounts, onLinked }: {
     batchId: number;

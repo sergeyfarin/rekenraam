@@ -1,7 +1,7 @@
 <script lang="ts">
     import ExternalLink from '@lucide/svelte/icons/external-link';
     import Search from '@lucide/svelte/icons/search';
-    import { m } from "$lib/paraglide/messages.js";
+    import { m } from "#lib/paraglide/messages.js";
     import ThemeToggle from "./theme-toggle.svelte";
 
     let searchTerm = $state("");

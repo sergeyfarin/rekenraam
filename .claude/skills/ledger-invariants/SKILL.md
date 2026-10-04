@@ -38,8 +38,8 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
 - Overflow surfaces to the API as HTTP 422 `LEDGER_OVERFLOW`, never a 500.
 - **Canonical balance and report calculations happen in Go**, never in the
   browser. The frontend has exactly two money modules and no money dependency:
-  `$lib/money/amount.ts` for parsing and exact string/BigInt arithmetic, and
-  `$lib/money/format.ts` for locale-aware display of read-only figures. A report
+  `#lib/money/amount.ts` for parsing and exact string/BigInt arithmetic, and
+  `#lib/money/format.ts` for locale-aware display of read-only figures. A report
   view, CSV export, or `.svelte` file that grows its own inline amount math or
   formatting is the frontend form of the bug this section is about (G-02).
 

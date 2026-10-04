@@ -1,14 +1,14 @@
 <script lang="ts">
   import Save from '@lucide/svelte/icons/save';
   import X from '@lucide/svelte/icons/x';
-  import APIFormError from '$lib/components/api-form-error.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
   import {
     createInstitution,
     updateInstitution,
     type InstitutionRequest,
     type InstitutionResponse
-  } from '$lib/api/institutions';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/institutions.ts';
+  import { m } from '#lib/paraglide/messages.js';
   import { institutionKindLabel, type InstitutionKind } from './account-labels';
 
   type InstitutionEditorMode = 'create' | 'edit';

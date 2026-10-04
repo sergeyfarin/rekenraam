@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ImportStagedRow } from '$lib/api/imports';
+import type { ImportStagedRow } from '#lib/api/imports.ts';
 import { linkableSplitFill, sourceCorrectionKind, unsupportedSourceFill } from './source-correction';
 
 function row(changes: Partial<ImportStagedRow> = {}): ImportStagedRow {

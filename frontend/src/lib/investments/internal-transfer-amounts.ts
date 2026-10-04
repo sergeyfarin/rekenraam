@@ -1,6 +1,6 @@
-import type { InvestmentLotResponse, InternalTransferRequest } from '$lib/api/investments';
-import { compareScaledAmounts } from '$lib/money/amount';
-import { parseMagnitude } from '$lib/investments/form-amounts';
+import type { InvestmentLotResponse, InternalTransferRequest } from '#lib/api/investments.ts';
+import { compareScaledAmounts } from '#lib/money/amount.ts';
+import { parseMagnitude } from '#lib/investments/form-amounts.ts';
 
 export type InternalTransferDraft = { lotID: number; quantity: string };
 

@@ -1,17 +1,17 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { parseTradeAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
-  import TradeEconomicsFields from '$lib/investments/trade-economics-fields.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { parseTradeAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
+  import TradeEconomicsFields from '#lib/investments/trade-economics-fields.svelte';
   import {
     correctionLotDrafts, correctionTradeDraft, exactTradeFields, parseCorrectionLotChoices,
     type CorrectionLotDraft, type TradeChargeDraft
-  } from '$lib/investments/trade-economics';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
+  } from '#lib/investments/trade-economics.ts';
+  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
   import {
     investmentPositionsQueryKey,
     investmentLotsQueryKey,
@@ -29,8 +29,8 @@
     type SellPreviewResponse,
     type CostBasisMethod,
     type InvestmentTradeCorrectionContextResponse
-  } from '$lib/api/investments';
-  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
+  } from '#lib/api/investments.ts';
+  import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
   import {
     gainAcknowledgement,
     gainImpactCurrency,
@@ -38,11 +38,11 @@
     hasGainChanges,
     impactNeedsReview,
     isGainAcknowledgementRefusal
-  } from '$lib/investments/gain-impact';
-  import type { GainImpact } from '$lib/api/investments';
-  import { formatScaledValue, costBasisMethodLabel } from '$lib/investments/investment-labels';
-  import { coefficientSign } from '$lib/money/amount';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  } from '#lib/investments/gain-impact.ts';
+  import type { GainImpact } from '#lib/api/investments.ts';
+  import { formatScaledValue, costBasisMethodLabel } from '#lib/investments/investment-labels.ts';
+  import { coefficientSign } from '#lib/money/amount.ts';
+  import { getLocale } from '#lib/paraglide/runtime.js';
 
   let {
     csrfToken,
@@ -188,7 +188,7 @@
     cashCommodityID ? (currenciesByID.get(cashCommodityID)?.code ?? '') : ''
   );
 
-  // Amount validation lives in $lib/investments/form-amounts.ts so its
+  // Amount validation lives in #lib/investments/form-amounts.ts so its
   // behaviour can be pinned by name; see that module for what changed.
   function amountErrorMessage(reason: AmountFieldError): string {
     switch (reason) {

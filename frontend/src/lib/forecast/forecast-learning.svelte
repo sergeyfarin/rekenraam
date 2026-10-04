@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
-  import StatusBadge from '$lib/components/status-badge.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import StatusBadge from '#lib/components/status-badge.svelte';
   import {
     forecastLearningPatterns,
     forecastLearningMaxCategories,
     type ForecastLearningPattern,
     type ForecastLearnedSpending
   } from './forecast-model';
-  import type { ForecastLearningOption } from '$lib/api/forecast';
+  import type { ForecastLearningOption } from '#lib/api/forecast.ts';
 
   let {
     learned,

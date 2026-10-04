@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { templatePatch, templateValues, scheduleKeys } from './recurring-model';
-import type { RecurringTemplate } from '$lib/api/recurring';
+import type { RecurringTemplate } from '#lib/api/recurring.ts';
 
 const template: RecurringTemplate = {
  id:1, revision:1, name:'Salary', enabled:true,

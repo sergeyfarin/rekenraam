@@ -1,16 +1,16 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
   import {
     investmentGainsQueryOptions,
     investmentInstrumentsQueryOptions
-  } from '$lib/api/investments';
-  import { formatMoney, joinCommodityAmount } from '$lib/money/format';
-  import { coefficientSign, negateCoefficient } from '$lib/money/amount';
+  } from '#lib/api/investments.ts';
+  import { formatMoney, joinCommodityAmount } from '#lib/money/format.ts';
+  import { coefficientSign, negateCoefficient } from '#lib/money/amount.ts';
   import { formatScaledValue } from './investment-labels';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
 
   const locale = $derived(getLocale());
 

@@ -1,24 +1,24 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import ArrowLeft from '@lucide/svelte/icons/arrow-left';
-  import { m } from '$lib/paraglide/messages.js';
-  import Panel from '$lib/components/panel.svelte';
-  import { authSessionQueryOptions } from '$lib/api/auth';
-  import { accountsQueryOptions } from '$lib/api/accounts';
+  import { m } from '#lib/paraglide/messages.js';
+  import Panel from '#lib/components/panel.svelte';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import {
     transactionsQueryKey,
     accountRegisterQueryKey,
     type AccountRegisterEntryResponse
-  } from '$lib/api/transactions';
-  import { getTransaction, type TransactionResponse } from '$lib/api/transactions';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import AccountRegister from '$lib/transactions/account-register.svelte';
-  import TransactionDetailPanel from '$lib/transactions/transaction-detail-panel.svelte';
-  import TransactionEditor from '$lib/transactions/transaction-editor.svelte';
+  } from '#lib/api/transactions.ts';
+  import { getTransaction, type TransactionResponse } from '#lib/api/transactions.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import AccountRegister from '#lib/transactions/account-register.svelte';
+  import TransactionDetailPanel from '#lib/transactions/transaction-detail-panel.svelte';
+  import TransactionEditor from '#lib/transactions/transaction-editor.svelte';
 
   // ── Route param ───────────────────────────────────────────────────
-  const accountID = $derived(Number($page.params.id));
+  const accountID = $derived(Number(page.params.id));
 
   // ── Session + CSRF ────────────────────────────────────────────────
   const sessionQuery = createQuery(() => authSessionQueryOptions());
@@ -108,7 +108,7 @@
   async function handleUndoDelete(tx: TransactionResponse) {
     if (!csrfToken) return;
     try {
-      const { restoreTransaction } = await import('$lib/api/transactions');
+      const { restoreTransaction } = await import('#lib/api/transactions.ts');
       await restoreTransaction(tx.id, csrfToken, {});
       await invalidate();
     } catch {

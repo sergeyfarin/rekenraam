@@ -5,11 +5,11 @@
   import GitBranch from '@lucide/svelte/icons/git-branch';
   import Route from '@lucide/svelte/icons/route';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
-  import { healthQueryOptions } from '$lib/api/health';
-  import { getAPIClientErrorMessage } from '$lib/api-error-messages';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import { m } from '$lib/paraglide/messages.js';
+  import { healthQueryOptions } from '#lib/api/health.ts';
+  import { getAPIClientErrorMessage } from '#lib/api-error-messages.ts';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import { m } from '#lib/paraglide/messages.js';
 
   const healthQuery = createQuery(() => healthQueryOptions());
 

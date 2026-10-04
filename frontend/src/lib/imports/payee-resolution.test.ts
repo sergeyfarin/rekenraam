@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ImportResolution, ImportStagedRow } from '$lib/api/imports';
-import type { PayeeResponse } from '$lib/api/payees';
+import type { ImportResolution, ImportStagedRow } from '#lib/api/imports.ts';
+import type { PayeeResponse } from '#lib/api/payees.ts';
 import { unknownImportPayeeGroups } from './payee-resolution';
 
 const payee = (id: number, name: string): PayeeResponse => ({ id, name }) as PayeeResponse;

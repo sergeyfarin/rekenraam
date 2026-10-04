@@ -1,15 +1,15 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import Panel from '$lib/components/panel.svelte';
-  import type { ImportResolution, ImportStagedRow } from '$lib/api/imports';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import type { ImportResolution, ImportStagedRow } from '#lib/api/imports.ts';
   import {
     createPayee,
     payeesQueryKey,
     payeesQueryOptions,
     type PayeeResponse
-  } from '$lib/api/payees';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/payees.ts';
+  import { m } from '#lib/paraglide/messages.js';
   import { unknownImportPayeeGroups } from './payee-resolution';
 
   let {

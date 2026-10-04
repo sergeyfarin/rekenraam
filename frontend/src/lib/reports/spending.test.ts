@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SpendingReportResponse } from '$lib/api/reports';
+import type { SpendingReportResponse } from '#lib/api/reports.ts';
 import {
   convertedBarRows,
   formatShare,

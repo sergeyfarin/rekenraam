@@ -2,15 +2,15 @@
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
   import { untrack } from 'svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import { formatLedgerAmount } from '$lib/money/amount';
-  import { parseDividendAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
-  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { formatLedgerAmount } from '#lib/money/amount.ts';
+  import { parseDividendAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
+  import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
   import {
     gainAcknowledgement,
     gainImpactCurrency,
@@ -18,7 +18,7 @@
     hasGainChanges,
     impactNeedsReview,
     isGainAcknowledgementRefusal
-  } from '$lib/investments/gain-impact';
+  } from '#lib/investments/gain-impact.ts';
   import {
     investmentLotsQueryKey,
     investmentPositionsQueryKey,
@@ -32,7 +32,7 @@
     type InvestmentCorrectionReinvestmentTerms,
     type ReconciliationImpactResponse,
     type ReinvestedDividendRequest
-  } from '$lib/api/investments';
+  } from '#lib/api/investments.ts';
 
   // Replaces a posted cash dividend or reinvested dividend (T-115). Only the
   // amounts, withholding, quantity, income account and memo are editable: the

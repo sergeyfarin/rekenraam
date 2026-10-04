@@ -1,4 +1,4 @@
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '#lib/paraglide/messages.js';
 import type { InstallGateState } from './install-gate-state';
 
 export type InstallGateStateCopy = {

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
-  import type { AccountResponse } from '$lib/api/accounts';
-  import type { CurrencyResponse } from '$lib/api/currencies';
+  import { m } from '#lib/paraglide/messages.js';
+  import type { AccountResponse } from '#lib/api/accounts.ts';
+  import type { CurrencyResponse } from '#lib/api/currencies.ts';
   import { newTradeCharge, type TradeChargeDraft } from './trade-economics';
 
   let {

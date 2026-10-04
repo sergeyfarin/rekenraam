@@ -407,7 +407,7 @@ has actual installations, its migration files are immutable.
   allocation or posting rule: stored amounts, fractional share quantities, and
   detailed lot values retain their precision. Use `formatMoney` for these summary
   amounts and `formatQuantity` for exact quantities.
-- The two halves of `$lib/money` are not interchangeable, and a report or export must
+- The two halves of `#lib/money` are not interchangeable, and a report or export must
   pick the right one rather than growing inline math: `format.ts` for anything a user
   only reads, `amount.ts` (`formatLedgerAmount`) for anything that must round-trip
   back into an editable input unchanged. `format.test.ts` pins the difference.
@@ -439,6 +439,7 @@ has actual installations, its migration files are immutable.
 - Use **`date-fns` v4** for frontend date manipulation (parsing, arithmetic, formatting helpers). Use `Intl.DateTimeFormat` for final locale-aware display output. Do not use `luxon`, `moment`, or the browser `Date` constructor for financial date logic.
 - All new frontend files must be **TypeScript** (`.ts`, `.svelte` with `<script lang="ts">`). No JavaScript-only files in `frontend/src`.
 - Component state uses **Svelte 5 runes** (`$state`, `$derived`, `$effect`, `$props`). Cross-component and cross-route shared state uses `$state` in `.svelte.ts` module files. No Svelte 4 stores (`writable`, `readable`, `derived` from `svelte/store`) in new code.
+- Frontend modules import shared code through the `#lib/*` subpath import (declared in `frontend/package.json` `imports`) with an explicit file extension: `#lib/money/amount.ts`, `#lib/components/panel.svelte`, `#lib/paraglide/messages.js`; the generated declaration-only `schema.d.ts` is imported as `#lib/api/schema.js`. Route state comes from `$app/state` (`page.url`, `page.params`), whose URL types are read-only — helpers that read query parameters take `ReadonlyURLSearchParams` and copy before writing. SvelteKit and adapter options live in the `sveltekit({...})` call in `frontend/vite.config.ts`; SvelteKit 3 refuses a `svelte.config.js`.
 
 ## Design Conventions
 

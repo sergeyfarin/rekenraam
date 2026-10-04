@@ -1,17 +1,17 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { untrack } from 'svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import { formatLedgerAmount } from '$lib/money/amount';
-  import { formatScaledValue } from '$lib/investments/investment-labels';
-  import { parseMagnitude, type AmountFieldError } from '$lib/investments/form-amounts';
-  import { correctionLotDrafts, parseCorrectionLotChoices, type CorrectionLotDraft } from '$lib/investments/trade-economics';
-  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { formatLedgerAmount } from '#lib/money/amount.ts';
+  import { formatScaledValue } from '#lib/investments/investment-labels.ts';
+  import { parseMagnitude, type AmountFieldError } from '#lib/investments/form-amounts.ts';
+  import { correctionLotDrafts, parseCorrectionLotChoices, type CorrectionLotDraft } from '#lib/investments/trade-economics.ts';
+  import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
   import {
     gainAcknowledgement,
     gainImpactCurrency,
@@ -19,7 +19,7 @@
     hasGainChanges,
     impactNeedsReview,
     isGainAcknowledgementRefusal
-  } from '$lib/investments/gain-impact';
+  } from '#lib/investments/gain-impact.ts';
   import {
     investmentGainsQueryKey,
     investmentLotsQueryKey,
@@ -30,7 +30,7 @@
     type InvestmentTradeCorrectionContextResponse,
     type InvestmentWriteOffRequest,
     type ReconciliationImpactResponse
-  } from '$lib/api/investments';
+  } from '#lib/api/investments.ts';
 
   // Replaces a posted write-off (T-118). Proceeds stay zero and there is no
   // cash leg; quantity, method, lot elections, date and holding may change.

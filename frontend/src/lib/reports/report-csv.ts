@@ -1,4 +1,4 @@
-import { formatLedgerAmount } from '$lib/money/amount';
+import { formatLedgerAmount } from '#lib/money/amount.ts';
 
 /**
  * CSV export of what a report screen is showing.
@@ -14,7 +14,7 @@ import { formatLedgerAmount } from '$lib/money/amount';
  *   Grocer"` survives the round trip.
  *
  * `exactDecimal` delegates the actual digit-shifting to
- * `$lib/money/amount.ts`'s `formatLedgerAmount` — the same plain-decimal
+ * `#lib/money/amount.ts`'s `formatLedgerAmount` — the same plain-decimal
  * formatter every editable amount input round-trips through — rather than
  * reimplementing it here. Duplicated decimal-formatting helpers are a
  * documented recurring bug class in this codebase (T-36/T-45/T-47, a silent

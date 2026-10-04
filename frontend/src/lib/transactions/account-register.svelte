@@ -1,22 +1,22 @@
 <script lang="ts">
-  import { transactionTitle } from '$lib/transactions/transaction-title';
-  import { systemLabelText } from '$lib/transactions/system-label';
+  import { transactionTitle } from '#lib/transactions/transaction-title.ts';
+  import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
   import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
   import CheckCircle from '@lucide/svelte/icons/check-circle';
   import Circle from '@lucide/svelte/icons/circle';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
   import {
     accountRegisterInfiniteQueryOptions,
     accountRegisterQueryKey,
     movePosting,
     type AccountRegisterEntryResponse
-  } from '$lib/api/transactions';
-  import { formatQuantity } from '$lib/money/format';
-  import { forecastQueryKey } from '$lib/api/forecast';
+  } from '#lib/api/transactions.ts';
+  import { formatQuantity } from '#lib/money/format.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
   import { formatSignedAmount, statusTone } from './transaction-labels';
   import type { AccountClass } from './transaction-labels';
   import TransactionTable from './transaction-table.svelte';

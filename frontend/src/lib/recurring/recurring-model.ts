@@ -1,7 +1,7 @@
 import { addDays, parseISO } from 'date-fns';
-import { m } from '$lib/paraglide/messages.js';
-import type { RecurringTemplate, RecurringTemplatePatch } from '$lib/api/recurring';
-import type { TransactionRequest } from '$lib/api/transactions';
+import { m } from '#lib/paraglide/messages.js';
+import type { RecurringTemplate, RecurringTemplatePatch } from '#lib/api/recurring.ts';
+import type { TransactionRequest } from '#lib/api/transactions.ts';
 
 export const scheduleKeys = ['frequency', 'interval_count', 'by_weekday', 'day_of_month', 'last_day_of_month', 'month_of_year', 'starts_on', 'ends_on', 'max_occurrences'] as const;
 

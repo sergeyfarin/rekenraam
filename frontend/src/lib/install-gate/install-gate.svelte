@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { goto } from '$app/navigation';
   import { createQuery } from '@tanstack/svelte-query';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { authSessionQueryOptions, completeLoginMFA, login } from '$lib/api/auth';
-  import { completeCurrencySetup, currencyCatalogQueryOptions } from '$lib/api/currencies';
-  import { healthQueryOptions } from '$lib/api/health';
-  import { createBook, createOwner, setupStatusQueryOptions } from '$lib/api/setup';
-  import { getAPIClientErrorMessage } from '$lib/api-error-messages';
-  import { TranslatedFormError } from '$lib/form-errors';
-  import { m } from '$lib/paraglide/messages.js';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { authSessionQueryOptions, completeLoginMFA, login } from '#lib/api/auth.ts';
+  import { completeCurrencySetup, currencyCatalogQueryOptions } from '#lib/api/currencies.ts';
+  import { healthQueryOptions } from '#lib/api/health.ts';
+  import { createBook, createOwner, setupStatusQueryOptions } from '#lib/api/setup.ts';
+  import { getAPIClientErrorMessage } from '#lib/api-error-messages.ts';
+  import { TranslatedFormError } from '#lib/form-errors.ts';
+  import { m } from '#lib/paraglide/messages.js';
   import AuthenticatedPanel from './authenticated-panel.svelte';
   import CurrencySetupForm from './currency-setup-form.svelte';
   import InstallGateHero from './install-gate-hero.svelte';

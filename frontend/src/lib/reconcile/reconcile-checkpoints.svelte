@@ -1,13 +1,13 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import Panel from '$lib/components/panel.svelte';
-  import { formatQuantity } from '$lib/money/format';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import Panel from '#lib/components/panel.svelte';
+  import { formatQuantity } from '#lib/money/format.ts';
   import {
     reconciliationCheckpointsQueryOptions,
     type ReconciliationCheckpointResponse
-  } from '$lib/api/reconciliation';
+  } from '#lib/api/reconciliation.ts';
 
   let {
     accountID,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ForecastScreen from '$lib/forecast/forecast-screen.svelte';
+  import ForecastScreen from '#lib/forecast/forecast-screen.svelte';
 </script>
 
 <ForecastScreen />

@@ -1,27 +1,27 @@
 <script lang="ts">
-  import { transactionTitle } from '$lib/transactions/transaction-title';
-  import { systemLabelText } from '$lib/transactions/system-label';
+  import { transactionTitle } from '#lib/transactions/transaction-title.ts';
+  import { systemLabelText } from '#lib/transactions/system-label.ts';
   import type { Snippet } from 'svelte';
-  import { tagsQueryOptions } from '$lib/api/tags';
+  import { tagsQueryOptions } from '#lib/api/tags.ts';
   import Plus from '@lucide/svelte/icons/plus';
   import Save from '@lucide/svelte/icons/save';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import X from '@lucide/svelte/icons/x';
   import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { isSubledgerManagedAccountKind } from '$lib/accounts/subledger-accounts';
-  import { m } from '$lib/paraglide/messages.js';
-  import { accountsQueryOptions } from '$lib/api/accounts';
-  import { categoriesQueryOptions } from '$lib/api/categories';
-  import { createPayee, payeesQueryKey, payeesQueryOptions, type PayeeResponse } from '$lib/api/payees';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { categoriesQueryOptions } from '#lib/api/categories.ts';
+  import { createPayee, payeesQueryKey, payeesQueryOptions, type PayeeResponse } from '#lib/api/payees.ts';
   import {
     needsPayeeConfirmation,
     payeeSuggestions,
     resolveTypedPayee,
     type PayeeResolution
   } from './payee-matching';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     createTransaction,
     updateTransaction,
@@ -31,27 +31,27 @@
     type TransactionRequest,
     type TransactionResponse,
     type ReconciliationImpactResponse
-  } from '$lib/api/transactions';
-  import type { AccountResponse } from '$lib/api/accounts';
-  import type { CategoryResponse } from '$lib/api/categories';
-  import type { components } from '$lib/api/schema';
+  } from '#lib/api/transactions.ts';
+  import type { AccountResponse } from '#lib/api/accounts.ts';
+  import type { CategoryResponse } from '#lib/api/categories.ts';
+  import type { components } from '#lib/api/schema.js';
 
   type JournalEntryResponse = components['schemas']['JournalEntryResponse'];
   type PostingResponse = components['schemas']['PostingResponse'];
   type JournalEntryPostingRequest = NonNullable<
     NonNullable<TransactionRequest['journal_entries']>[number]['postings']
   >[number];
-  import { accountDisplayName } from '$lib/accounts/account-labels';
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
   import { systemRoleLabel } from './transaction-labels';
-  import { categoryDisplayName } from '$lib/categories/category-labels';
-  import { APIClientError } from '$lib/api/client';
+  import { categoryDisplayName } from '#lib/categories/category-labels.ts';
+  import { APIClientError } from '#lib/api/client.ts';
   import {
     commodityImbalance,
     formatLedgerAmount,
     inflowPositiveAmount,
     negateCoefficient,
     parseDecimalAmount
-  } from '$lib/money/amount';
+  } from '#lib/money/amount.ts';
 
   // ── Tier types ────────────────────────────────────────────────────
   type Tier = 'simple' | 'split';
@@ -215,7 +215,7 @@
     )
   );
 
-  // For Tier 3 imbalance check — summed per commodity, scale-aware, in $lib/money.
+  // For Tier 3 imbalance check — summed per commodity, scale-aware, in #lib/money.
   const splitImbalance = $derived.by(() => commodityImbalance(splitLegs));
 
   const title = $derived(

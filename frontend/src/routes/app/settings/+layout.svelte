@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import type { Snippet } from 'svelte';
   import Coins from '@lucide/svelte/icons/coins';
   import Languages from '@lucide/svelte/icons/languages';
@@ -7,11 +7,11 @@
   import Settings2 from '@lucide/svelte/icons/settings-2';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import Trash2 from '@lucide/svelte/icons/trash-2';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '#lib/paraglide/messages.js';
 
   let { children } = $props<{ children?: Snippet }>();
 
-  const pathname = $derived($page.url.pathname);
+  const pathname = $derived(page.url.pathname);
 
   const sections = $derived([
     {

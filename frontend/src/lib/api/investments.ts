@@ -1,6 +1,6 @@
-import type { components } from '$lib/api/schema';
-import type { TransactionResponse } from '$lib/api/transactions';
-import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '$lib/api/client';
+import type { components } from '#lib/api/schema.js';
+import type { TransactionResponse } from '#lib/api/transactions.ts';
+import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '#lib/api/client.ts';
 
 export type InvestmentInstrumentResponse = components['schemas']['InvestmentInstrumentResponse'];
 export type InvestmentInstrumentsResponse = components['schemas']['InvestmentInstrumentsResponse'];

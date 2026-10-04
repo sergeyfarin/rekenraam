@@ -1,5 +1,5 @@
 <script lang="ts">
-  import LanguageSettings from '$lib/settings/language-settings.svelte';
+  import LanguageSettings from '#lib/settings/language-settings.svelte';
 </script>
 
 <LanguageSettings />

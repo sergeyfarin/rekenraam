@@ -7,12 +7,12 @@
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import Tags from '@lucide/svelte/icons/tags';
   import Trash2 from '@lucide/svelte/icons/trash-2';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import Panel from '$lib/components/panel.svelte';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
-  import TreeNameCell from '$lib/components/tree-name-cell.svelte';
-  import { authSessionQueryOptions } from '$lib/api/auth';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
+  import TreeNameCell from '#lib/components/tree-name-cell.svelte';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import {
     categoriesQueryOptions,
     completeCategoriesSetup,
@@ -20,9 +20,9 @@
     disableCategory,
     restoreCategory,
     type CategoryResponse
-  } from '$lib/api/categories';
-  import { setupStatusQueryOptions } from '$lib/api/setup';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/categories.ts';
+  import { setupStatusQueryOptions } from '#lib/api/setup.ts';
+  import { m } from '#lib/paraglide/messages.js';
   import CategoryIcon from './category-icon.svelte';
   import CategoryEditor from './category-editor.svelte';
   import { categoryIconName } from './category-icons';

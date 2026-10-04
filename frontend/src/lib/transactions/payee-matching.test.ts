@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PayeeResponse } from '$lib/api/payees';
+import type { PayeeResponse } from '#lib/api/payees.ts';
 import {
   exactPayeeMatch,
   needsPayeeConfirmation,

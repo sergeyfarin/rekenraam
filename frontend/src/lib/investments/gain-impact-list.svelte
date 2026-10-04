@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
-  import type { GainImpactRow } from '$lib/investments/gain-impact';
+  import { m } from '#lib/paraglide/messages.js';
+  import type { GainImpactRow } from '#lib/investments/gain-impact.ts';
 
   // The replay gain disclosure (T-114/T-126), shared by every investment
   // confirmation so a changed gain reads the same wherever it is reviewed.

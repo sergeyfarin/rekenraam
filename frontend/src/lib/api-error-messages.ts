@@ -1,6 +1,6 @@
-import type { APIErrorCode } from '$lib/api/client';
-import { APIClientError } from '$lib/api/client';
-import { m } from '$lib/paraglide/messages.js';
+import type { APIErrorCode } from '#lib/api/client.ts';
+import { APIClientError } from '#lib/api/client.ts';
+import { m } from '#lib/paraglide/messages.js';
 
 const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   VALIDATION_FAILED: () => m.api_error_validation_failed(),

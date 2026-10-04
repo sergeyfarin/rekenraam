@@ -2,9 +2,9 @@
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import ShieldCheck from '@lucide/svelte/icons/shield-check';
   import KeyRound from '@lucide/svelte/icons/key-round';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
   import {
     activateMFATOTP,
     authSessionQueryOptions,
@@ -13,8 +13,8 @@
     mfaStatusQueryKey,
     mfaStatusQueryOptions,
     regenerateMFARecoveryCodes
-  } from '$lib/api/auth';
-  import { m } from '$lib/paraglide/messages.js';
+  } from '#lib/api/auth.ts';
+  import { m } from '#lib/paraglide/messages.js';
 
   const queryClient = useQueryClient();
   const sessionQuery = createQuery(() => authSessionQueryOptions());

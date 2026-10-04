@@ -213,11 +213,12 @@ test('[acceptance] forecast filters survive reload and back navigation', async (
   await page.getByLabel('Include eligible sub-accounts').uncheck();
   await page.getByLabel('Combined currency').selectOption(String(currencyID));
   await page.getByRole('button', { name: 'Apply', exact: true }).click();
-  const filteredURL = page.url();
   await expect(page).toHaveURL(new RegExp(`account_id=${account.id}`));
   await expect(page).toHaveURL(/horizon_days=30/);
   await expect(page).toHaveURL(/include_descendants=false/);
   await expect(page).toHaveURL(/fx_method=constant_as_of/);
+  // Read only after the assertions above have waited for the navigation.
+  const filteredURL = page.url();
 
   await page.reload();
   await expect(page.getByLabel(account.name, { exact: true })).toBeChecked();

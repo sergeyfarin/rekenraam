@@ -1,14 +1,14 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import { m } from '$lib/paraglide/messages.js';
-  import { accountsQueryOptions } from '$lib/api/accounts';
-  import { categoriesQueryOptions } from '$lib/api/categories';
-  import { currenciesQueryOptions } from '$lib/api/currencies';
-  import { investmentInstrumentsQueryOptions } from '$lib/api/investments';
-  import { payeesQueryOptions } from '$lib/api/payees';
-  import { accountDisplayName } from '$lib/accounts/account-labels';
-  import { categoryDisplayName } from '$lib/categories/category-labels';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import { m } from '#lib/paraglide/messages.js';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { categoriesQueryOptions } from '#lib/api/categories.ts';
+  import { currenciesQueryOptions } from '#lib/api/currencies.ts';
+  import { investmentInstrumentsQueryOptions } from '#lib/api/investments.ts';
+  import { payeesQueryOptions } from '#lib/api/payees.ts';
+  import { accountDisplayName } from '#lib/accounts/account-labels.ts';
+  import { categoryDisplayName } from '#lib/categories/category-labels.ts';
+  import { getLocale } from '#lib/paraglide/runtime.js';
   import ReportFilterSelect from './report-filter-select.svelte';
   import { commodityLabelMap } from './commodity-labels';
   import {

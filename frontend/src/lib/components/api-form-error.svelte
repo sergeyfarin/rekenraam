@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
-  import { getFormErrorState } from '$lib/form-errors';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getFormErrorState } from '#lib/form-errors.ts';
 
   type Props = {
     error?: unknown;

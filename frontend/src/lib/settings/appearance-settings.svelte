@@ -1,7 +1,7 @@
 <script lang="ts">
   import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
   import SwatchBook from '@lucide/svelte/icons/swatch-book';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '#lib/paraglide/messages.js';
   import {
     resetAppearance,
     setAccentColor,
@@ -9,9 +9,9 @@
     themeState,
     type AccentColorName,
     type BaseColorName
-  } from '$lib/theme.svelte';
-  import Panel from '$lib/components/panel.svelte';
-  import StatusBadge from '$lib/components/status-badge.svelte';
+  } from '#lib/theme.svelte.ts';
+  import Panel from '#lib/components/panel.svelte';
+  import StatusBadge from '#lib/components/status-badge.svelte';
 
   type BaseOption = {
     name: BaseColorName;

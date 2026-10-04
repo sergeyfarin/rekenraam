@@ -1,5 +1,5 @@
-import type { components } from '$lib/api/schema';
-import { formatQuantity } from '$lib/money/format';
+import type { components } from '#lib/api/schema.js';
+import { formatQuantity } from '#lib/money/format.ts';
 
 export type InvestmentPositionResponse = components['schemas']['InvestmentPositionResponse'];
 export type InvestmentLotResponse = components['schemas']['InvestmentLotResponse'];

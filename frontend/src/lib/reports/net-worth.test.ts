@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NetWorthSeriesResponse } from '$lib/api/reports';
+import type { NetWorthSeriesResponse } from '#lib/api/reports.ts';
 import { convertedSeries, hasMultipleCommodities, netWorthRows } from './net-worth';
 
 const report: NetWorthSeriesResponse = {

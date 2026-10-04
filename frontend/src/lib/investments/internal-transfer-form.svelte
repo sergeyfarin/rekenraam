@@ -1,28 +1,28 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { accountsQueryOptions } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import { accountRegisterQueryKey, transactionsQueryKey } from '$lib/api/transactions';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transactions.ts';
   import {
     investmentGainsQueryKey, investmentInstrumentsQueryOptions, investmentLotsQueryKey,
     investmentLotsQueryOptions, investmentPositionsQueryKey, investmentPositionsQueryOptions,
     previewInternalTransfer, recordInternalTransfer, type GainImpact, type InternalTransferPlan,
     type InternalTransferRequest, type ReconciliationImpactResponse
-  } from '$lib/api/investments';
+  } from '#lib/api/investments.ts';
   import { parseInternalTransferAllocations, parsePooledTransferQuantity } from './internal-transfer-amounts';
   import {
     gainAcknowledgement, gainImpactCurrency, gainImpactRows, hasGainChanges, impactNeedsReview,
     isGainAcknowledgementRefusal
   } from './gain-impact';
   import ReconciliationConfirm from './reconciliation-confirm.svelte';
-  import { TranslatedFormError } from '$lib/form-errors';
-  import { coefficientSign } from '$lib/money/amount';
-  import { formatExactMoney, formatQuantity } from '$lib/money/format';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import { TranslatedFormError } from '#lib/form-errors.ts';
+  import { coefficientSign } from '#lib/money/amount.ts';
+  import { formatExactMoney, formatQuantity } from '#lib/money/format.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
 
   let { csrfToken, onSaved, onCancel }: {
     csrfToken: string;

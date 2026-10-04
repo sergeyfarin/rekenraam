@@ -1,12 +1,12 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { accountsQueryOptions, type AccountResponse } from '$lib/api/accounts';
-  import { formatLedgerAmount } from '$lib/money/amount';
-  import { parseDividendAmounts, type AmountFieldError } from '$lib/investments/form-amounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
+  import { formatLedgerAmount } from '#lib/money/amount.ts';
+  import { parseDividendAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
   import {
     investmentPositionsQueryKey,
     investmentLotsQueryKey,
@@ -22,9 +22,9 @@
     type DividendRequest,
     type ReinvestedDividendRequest,
     type ReconciliationImpactResponse
-  } from '$lib/api/investments';
-  import ReconciliationConfirm from '$lib/investments/reconciliation-confirm.svelte';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  } from '#lib/api/investments.ts';
+  import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
+  import { getLocale } from '#lib/paraglide/runtime.js';
   import {
     gainAcknowledgement,
     gainImpactCurrency,
@@ -32,8 +32,8 @@
     hasGainChanges,
     impactNeedsReview,
     isGainAcknowledgementRefusal
-  } from '$lib/investments/gain-impact';
-  import type { GainImpact } from '$lib/api/investments';
+  } from '#lib/investments/gain-impact.ts';
+  import type { GainImpact } from '#lib/api/investments.ts';
 
   let {
     mode = 'cash',
@@ -191,7 +191,7 @@
     }
   }
 
-  // Amount validation lives in $lib/investments/form-amounts.ts so its
+  // Amount validation lives in #lib/investments/form-amounts.ts so its
   // behaviour can be pinned by name; see that module for what changed.
   function amountErrorMessage(reason: AmountFieldError): string {
     switch (reason) {

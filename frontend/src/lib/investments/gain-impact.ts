@@ -1,6 +1,6 @@
-import { APIClientError } from '$lib/api/client';
-import type { GainImpact, GainImpactChange } from '$lib/api/investments';
-import { formatExactMoney } from '$lib/money/format';
+import { APIClientError } from '#lib/api/client.ts';
+import type { GainImpact, GainImpactChange } from '#lib/api/investments.ts';
+import { formatExactMoney } from '#lib/money/format.ts';
 
 /**
  * Display rows for a replay gain disclosure (T-114). The backend computes and

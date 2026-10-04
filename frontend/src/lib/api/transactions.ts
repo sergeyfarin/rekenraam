@@ -1,5 +1,5 @@
-import type { components } from '$lib/api/schema';
-import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '$lib/api/client';
+import type { components } from '#lib/api/schema.js';
+import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '#lib/api/client.ts';
 import type { InfiniteData } from '@tanstack/svelte-query';
 
 export type TransactionResponse = components['schemas']['TransactionResponse'];

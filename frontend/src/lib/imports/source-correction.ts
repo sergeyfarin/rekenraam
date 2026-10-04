@@ -1,4 +1,4 @@
-import type { ImportStagedRow } from '$lib/api/imports';
+import type { ImportStagedRow } from '#lib/api/imports.ts';
 
 export function sourceCorrectionKind(row: ImportStagedRow): 'buy' | 'sale' | null {
   if (unsupportedSourceFill(row) || !row.source_changed || !row.source_transaction_id ||

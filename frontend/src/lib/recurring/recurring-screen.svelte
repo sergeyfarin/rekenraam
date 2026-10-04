@@ -1,18 +1,18 @@
 <script lang="ts">
   import { createQuery, createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
   import { addDays, formatISO, parseISO } from 'date-fns';
-  import StatePanel from '$lib/components/state-panel.svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import TransactionEditor from '$lib/transactions/transaction-editor.svelte';
+  import StatePanel from '#lib/components/state-panel.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import TransactionEditor from '#lib/transactions/transaction-editor.svelte';
   import TemplateEditor from './template-editor.svelte';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import { authSessionQueryOptions } from '$lib/api/auth';
-  import { currenciesQueryOptions } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import { getTransaction, getPostReconciliationImpact, postTransaction, deleteDraftTransaction, transactionsQueryKey, type TransactionResponse, type ReconciliationImpactResponse } from '$lib/api/transactions';
-  import { recurringTemplatesQueryOptions, recurringDueInfiniteQueryOptions, recurringSummaryQueryOptions, getRecurringOccurrences, archiveRecurringTemplate, updateRecurringTemplate, skipRecurringOccurrence, retryRecurringOccurrence, runRecurringNow, type RecurringTemplate, type RecurringDueResponse } from '$lib/api/recurring';
-  import { formatQuantity } from '$lib/money/format';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
+  import { currenciesQueryOptions } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { getTransaction, getPostReconciliationImpact, postTransaction, deleteDraftTransaction, transactionsQueryKey, type TransactionResponse, type ReconciliationImpactResponse } from '#lib/api/transactions.ts';
+  import { recurringTemplatesQueryOptions, recurringDueInfiniteQueryOptions, recurringSummaryQueryOptions, getRecurringOccurrences, archiveRecurringTemplate, updateRecurringTemplate, skipRecurringOccurrence, retryRecurringOccurrence, runRecurringNow, type RecurringTemplate, type RecurringDueResponse } from '#lib/api/recurring.ts';
+  import { formatQuantity } from '#lib/money/format.ts';
   import { displayDate, scheduleLabel } from './recurring-model';
 
   const session = createQuery(() => authSessionQueryOptions());

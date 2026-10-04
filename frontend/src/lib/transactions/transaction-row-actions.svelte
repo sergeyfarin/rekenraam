@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
-  import type { TransactionResponse } from '$lib/api/transactions';
+  import { m } from '#lib/paraglide/messages.js';
+  import type { TransactionResponse } from '#lib/api/transactions.ts';
 
   let {
     transaction,

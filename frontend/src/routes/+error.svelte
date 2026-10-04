@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { m } from '$lib/paraglide/messages.js';
+  import { m } from '#lib/paraglide/messages.js';
 </script>
 
 <!-- Even the page nobody meant to reach needs a name (R3a). -->

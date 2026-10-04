@@ -1,5 +1,5 @@
-import type { AuthSessionResponse } from '$lib/api/auth';
-import type { SetupStatusResponse } from '$lib/api/setup';
+import type { AuthSessionResponse } from '#lib/api/auth.ts';
+import type { SetupStatusResponse } from '#lib/api/setup.ts';
 
 export type InstallGateState =
   | 'loading'

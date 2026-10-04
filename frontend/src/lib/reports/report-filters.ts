@@ -6,6 +6,7 @@
  * an OR-set within one dimension and combine with AND across dimensions, which
  * matches the API contract exactly — no translation layer in between.
  */
+import type { ReadonlyURLSearchParams } from '$app/state';
 
 export type ReportFilterState = {
   accountIDs: number[];
@@ -43,7 +44,7 @@ export const emptyReportFilters: ReportFilterState = {
  * and duplicate entries are dropped so the report still renders, and the result
  * is sorted so two links selecting the same set produce the same query key.
  */
-export function parseIDParam(params: URLSearchParams, name: string): number[] {
+export function parseIDParam(params: ReadonlyURLSearchParams, name: string): number[] {
   const ids = new Set<number>();
   for (const raw of params.getAll(name)) {
     const value = Number(raw);
@@ -54,7 +55,7 @@ export function parseIDParam(params: URLSearchParams, name: string): number[] {
   return [...ids].sort((a, b) => a - b);
 }
 
-export function parseReportFilters(params: URLSearchParams): ReportFilterState {
+export function parseReportFilters(params: ReadonlyURLSearchParams): ReportFilterState {
   return {
     accountIDs: parseIDParam(params, ID_PARAMS.account),
     includeDescendants: params.get('include_descendants') === 'true',
@@ -72,8 +73,8 @@ export function parseReportFilters(params: URLSearchParams): ReportFilterState {
  * report has a clean, short URL. `include_descendants` is only meaningful
  * alongside an account selection, and is dropped without one.
  */
-export function writeReportFilters(params: URLSearchParams, filters: ReportFilterState): URLSearchParams {
-  const next = new URLSearchParams(params);
+export function writeReportFilters(params: ReadonlyURLSearchParams, filters: ReportFilterState): URLSearchParams {
+  const next = new URLSearchParams(params.toString());
 
   const setIDs = (name: string, ids: number[]) => {
     next.delete(name);

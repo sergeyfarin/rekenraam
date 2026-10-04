@@ -2,22 +2,22 @@
   import { onMount } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import Plus from '@lucide/svelte/icons/plus';
-  import { m } from '$lib/paraglide/messages.js';
-  import Panel from '$lib/components/panel.svelte';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { authSessionQueryOptions } from '$lib/api/auth';
-  import { getTransaction, transactionsQueryKey, type TransactionResponse } from '$lib/api/transactions';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import TransactionList from '$lib/transactions/transaction-list.svelte';
+  import { m } from '#lib/paraglide/messages.js';
+  import Panel from '#lib/components/panel.svelte';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { authSessionQueryOptions } from '#lib/api/auth.ts';
+  import { getTransaction, transactionsQueryKey, type TransactionResponse } from '#lib/api/transactions.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import TransactionList from '#lib/transactions/transaction-list.svelte';
   import {
     parseTransactionFilters,
     writeTransactionFilters,
     type TransactionQueryFilters
-  } from '$lib/transactions/transaction-url-filters';
-  import TransactionDetailPanel from '$lib/transactions/transaction-detail-panel.svelte';
-  import TransactionEditor from '$lib/transactions/transaction-editor.svelte';
+  } from '#lib/transactions/transaction-url-filters.ts';
+  import TransactionDetailPanel from '#lib/transactions/transaction-detail-panel.svelte';
+  import TransactionEditor from '#lib/transactions/transaction-editor.svelte';
 
   // ── Panel state ───────────────────────────────────────────────────
   type PanelState =
@@ -29,7 +29,7 @@
     | { type: 'just-deleted'; transaction: TransactionResponse };
 
   let panel = $state<PanelState>({ type: 'none' });
-  const linkedTransactionID = Number($page.url.searchParams.get('transaction_id') ?? 0);
+  const linkedTransactionID = Number(page.url.searchParams.get('transaction_id') ?? 0);
   let linkedPending = $state(Number.isSafeInteger(linkedTransactionID) && linkedTransactionID > 0);
   let linkedError = $state<unknown>();
 
@@ -48,18 +48,17 @@
   // The URL seeds the list once, so a report drill-down lands pre-filtered, and
   // is rewritten in place as the bar changes. `replaceState` keeps filter
   // tweaking out of history — Back returns to wherever the link came from.
-  const initialFilters = parseTransactionFilters($page.url.searchParams);
+  const initialFilters = parseTransactionFilters(page.url.searchParams);
 
   function handleFiltersChange(filters: TransactionQueryFilters) {
-    const params = writeTransactionFilters($page.url.searchParams, filters);
+    const params = writeTransactionFilters(page.url.searchParams, filters);
     const search = params.toString();
-    if (search === $page.url.searchParams.toString()) {
+    if (search === page.url.searchParams.toString()) {
       return;
     }
     void goto(`/app/transactions${search ? `?${search}` : ''}`, {
       replaceState: true,
-      keepFocus: true,
-      noScroll: true
+      reset: false
     });
   }
 
@@ -143,7 +142,7 @@
   async function handleUndoDelete(tx: TransactionResponse) {
     if (!csrfToken) return;
     try {
-      const { restoreTransaction } = await import('$lib/api/transactions');
+      const { restoreTransaction } = await import('#lib/api/transactions.ts');
       await restoreTransaction(tx.id, csrfToken, {});
       await invalidateTransactions();
     } catch {

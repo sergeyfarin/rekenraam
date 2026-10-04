@@ -1,9 +1,9 @@
 <script lang="ts">
   import { createQuery } from '@tanstack/svelte-query';
-  import { m } from '$lib/paraglide/messages.js';
-  import { accountsQueryOptions } from '$lib/api/accounts';
-  import { payeesQueryOptions } from '$lib/api/payees';
-  import type { TransactionListOptions } from '$lib/api/transactions';
+  import { m } from '#lib/paraglide/messages.js';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { payeesQueryOptions } from '#lib/api/payees.ts';
+  import type { TransactionListOptions } from '#lib/api/transactions.ts';
 
   export type TransactionFilters = Pick<
     TransactionListOptions,

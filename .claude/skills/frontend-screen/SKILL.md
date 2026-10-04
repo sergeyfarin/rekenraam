@@ -17,6 +17,16 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
 - **Svelte 5 runes only** (`$state`, `$derived`, `$effect`, `$props`).
   Cross-component shared state = `$state` in `.svelte.ts` module files
   (example: `frontend/src/lib/theme.svelte.ts`). No Svelte 4 stores in new code.
+- **SvelteKit 3 imports**: shared code is `#lib/...` with an explicit extension
+  (`#lib/money/amount.ts`, `#lib/components/panel.svelte`; the generated
+  `schema.d.ts` is `#lib/api/schema.js`) — `#lib` no longer exists. Route state
+  comes from `$app/state` (`page.url`, `page.params`); `$app/stores` is gone and
+  `$app/environment` is now `$app/env`. `page.url.searchParams` is
+  `ReadonlyURLSearchParams`, so URL helpers accept that type and copy via
+  `new URLSearchParams(params.toString())` before writing. `goto` takes
+  `reset: false` (not `keepFocus`/`noScroll`) to keep scroll and focus.
+- SvelteKit/adapter config lives in `sveltekit({...})` in
+  `frontend/vite.config.ts`; there is no `svelte.config.js`.
 
 ## Structure
 
@@ -30,7 +40,7 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
 
 ## i18n (every user-visible string, no exceptions)
 
-- Paraglide JS: `import { m } from '$lib/paraglide/messages.js';` then
+- Paraglide JS: `import { m } from '#lib/paraglide/messages.js';` then
   `m.some_message_id()`. Catalogs live in
   `frontend/messages/<domain>/<locale>.json`; keep message IDs flat, prefixed
   by domain/screen (`import_preview_dedupe_duplicate`).
@@ -38,13 +48,13 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
 - Formatting of money, dates, numbers is locale-aware (`Intl.NumberFormat`,
   `Intl.DateTimeFormat`, `date-fns` v4) and separate from translation.
   Never use the `Date` constructor or luxon/moment for financial date logic.
-- **All money parsing and exact arithmetic goes through `$lib/money/amount.ts`**
+- **All money parsing and exact arithmetic goes through `#lib/money/amount.ts`**
   (`parseDecimalAmount`, `formatLedgerAmount`, `negateCoefficient`,
   `inflowPositiveAmount`, `commodityImbalance`) — string/BigInt over the ledger's
   `{ value, scale }` pair, never a `Number`. Never write a private amount helper
   inside a `.svelte` file: every copy that existed had drifted, and two of them
   shipped a silent 100× error (T-45).
-- **All money display goes through `$lib/money/format.ts`** (`formatQuantity`)
+- **All money display goes through `#lib/money/format.ts`** (`formatQuantity`)
   — locale-aware presentation of read-only figures. There is no money-formatting
   dependency: G-08 settled on `Intl.NumberFormat` and dropped `dinero.js`.
   Reports, tables, and CSV export use these two modules; they never grow their

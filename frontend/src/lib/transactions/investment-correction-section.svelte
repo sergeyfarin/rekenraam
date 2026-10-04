@@ -2,18 +2,18 @@
   import { createQuery } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
   import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import BuyForm from '$lib/investments/buy-form.svelte';
-  import SellForm from '$lib/investments/sell-form.svelte';
-  import SplitForm from '$lib/investments/split-form.svelte';
-  import DividendCorrectionForm from '$lib/investments/dividend-correction-form.svelte';
-  import WriteOffCorrectionForm from '$lib/investments/write-off-correction-form.svelte';
-  import TransferCorrectionForm from '$lib/investments/transfer-correction-form.svelte';
-  import TransferInCorrectionForm from '$lib/investments/transfer-in-correction-form.svelte';
-  import GainImpactList from '$lib/investments/gain-impact-list.svelte';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import BuyForm from '#lib/investments/buy-form.svelte';
+  import SellForm from '#lib/investments/sell-form.svelte';
+  import SplitForm from '#lib/investments/split-form.svelte';
+  import DividendCorrectionForm from '#lib/investments/dividend-correction-form.svelte';
+  import WriteOffCorrectionForm from '#lib/investments/write-off-correction-form.svelte';
+  import TransferCorrectionForm from '#lib/investments/transfer-correction-form.svelte';
+  import TransferInCorrectionForm from '#lib/investments/transfer-in-correction-form.svelte';
+  import GainImpactList from '#lib/investments/gain-impact-list.svelte';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     gainAcknowledgement,
     gainImpactCurrency,
@@ -21,7 +21,7 @@
     hasGainChanges,
     impactNeedsReview,
     isGainAcknowledgementRefusal
-  } from '$lib/investments/gain-impact';
+  } from '#lib/investments/gain-impact.ts';
   import {
     getInvestmentCorrectionChain,
     getInvestmentTradeCorrectionContext,
@@ -42,7 +42,7 @@
     reverseWriteOff,
     type GainImpact,
     type ReconciliationImpactResponse
-  } from '$lib/api/investments';
+  } from '#lib/api/investments.ts';
 
   let {
     transactionID,

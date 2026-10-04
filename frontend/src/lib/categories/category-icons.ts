@@ -1,5 +1,5 @@
-import type { CategoryResponse } from '$lib/api/categories';
-import { m } from '$lib/paraglide/messages.js';
+import type { CategoryResponse } from '#lib/api/categories.ts';
+import { m } from '#lib/paraglide/messages.js';
 
 export const categoryIconOptions = [
   'tags',

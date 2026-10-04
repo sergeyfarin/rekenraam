@@ -1,4 +1,5 @@
-import type { components } from '$lib/api/schema';
+import type { ReadonlyURLSearchParams } from '$app/state';
+import type { components } from '#lib/api/schema.js';
 
 /**
  * The reporting currency, read from and written to the URL like every other
@@ -19,7 +20,7 @@ export const REPORTING_CURRENCY_PARAM = 'reporting_currency_id';
  * hand-edited link should still render the report it mostly describes, which
  * is the same rule the ID filters follow.
  */
-export function parseReportingCurrency(params: URLSearchParams): number | null {
+export function parseReportingCurrency(params: ReadonlyURLSearchParams): number | null {
   const raw = params.get(REPORTING_CURRENCY_PARAM);
   if (raw === null) return null;
   const value = Number(raw);
@@ -28,10 +29,10 @@ export function parseReportingCurrency(params: URLSearchParams): number | null {
 
 /** Writes the selection into a copy of the URL parameters. */
 export function withReportingCurrency(
-  params: URLSearchParams,
+  params: ReadonlyURLSearchParams,
   commodityID: number | null
 ): URLSearchParams {
-  const next = new URLSearchParams(params);
+  const next = new URLSearchParams(params.toString());
   if (commodityID === null) {
     next.delete(REPORTING_CURRENCY_PARAM);
   } else {

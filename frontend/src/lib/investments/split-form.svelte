@@ -1,29 +1,29 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-  import APIFormError from '$lib/components/api-form-error.svelte';
-  import { accountsQueryOptions } from '$lib/api/accounts';
-  import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
-  import { forecastQueryKey } from '$lib/api/forecast';
-  import { accountRegisterQueryKey, transactionsQueryKey } from '$lib/api/transactions';
+  import APIFormError from '#lib/components/api-form-error.svelte';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
+  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transactions.ts';
   import {
     investmentGainsQueryKey, investmentInstrumentsQueryOptions, investmentLotsQueryKey,
     investmentPositionsQueryKey, investmentPositionsQueryOptions, previewInvestmentSplit,
     previewSplitReplacement, recordInvestmentSplit, replaceSplit, type GainImpact,
     type InvestmentCorrectionSplitTerms, type InvestmentSplitPlan, type InvestmentSplitRequest,
     type ReconciliationImpactResponse
-  } from '$lib/api/investments';
+  } from '#lib/api/investments.ts';
   import {
     gainAcknowledgement, gainImpactCurrency, gainImpactRows, hasGainChanges, impactNeedsReview,
     isGainAcknowledgementRefusal
   } from './gain-impact';
   import ReconciliationConfirm from './reconciliation-confirm.svelte';
   import { parseSplitRatio } from './split-ratio';
-  import { TranslatedFormError } from '$lib/form-errors';
-  import { coefficientSign } from '$lib/money/amount';
-  import { formatQuantity } from '$lib/money/format';
-  import { m } from '$lib/paraglide/messages.js';
-  import { getLocale } from '$lib/paraglide/runtime.js';
+  import { TranslatedFormError } from '#lib/form-errors.ts';
+  import { coefficientSign } from '#lib/money/amount.ts';
+  import { formatQuantity } from '#lib/money/format.ts';
+  import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
 
   // With correction set, the form replaces that posted split (T-129): the
   // holding is fixed, the current terms are pre-filled and a reason is required.

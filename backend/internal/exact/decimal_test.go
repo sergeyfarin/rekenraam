@@ -42,7 +42,7 @@ func TestDecimalTreatsANegativeScaleAsWhole(t *testing.T) {
 }
 
 // decimalVectorFile is the one specification behind two implementations:
-// exact.Decimal here and formatLedgerAmount in the frontend's $lib/money. The
+// exact.Decimal here and formatLedgerAmount in the frontend's #lib/money. The
 // two cannot share code across languages, so they share this file instead — a
 // change to either that drifts from the other fails here by name.
 const decimalVectorFile = "../../../fixtures/decimal-rendering.json"
