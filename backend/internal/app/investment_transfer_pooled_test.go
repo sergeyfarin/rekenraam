@@ -14,6 +14,14 @@ import (
 // Pooled internal transfers (T-123). An average-cost source moves a quantity
 // at its dated pool rate; source plus destination basis is conserved exactly.
 
+// sourceLotsTransferInput is a pooled quantity carried as one destination lot
+// per depleted source lot: the opt-in lineage (T-135).
+func sourceLotsTransferInput(f *investmentsTestFixture, destinationID int64, date string, quantity exact.Coefficient, scale int) InternalTransferInput {
+	input := pooledTransferInput(f, destinationID, date, quantity, scale)
+	input.DestinationLineage = db.InternalTransferSourceLots
+	return input
+}
+
 func pooledTransferInput(f *investmentsTestFixture, destinationID int64, date string, quantity exact.Coefficient, scale int) InternalTransferInput {
 	return InternalTransferInput{
 		OwnerUserID: f.ownerUserID, EffectiveOn: date,
@@ -94,18 +102,20 @@ func TestPooledTransferAverageDefaultBeforeFirstSaleCarriesPoolRate(t *testing.T
 	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM audit_events`).Scan(&auditsAfter))
 	assert.Equal(t, auditsBefore+1, auditsAfter, "one audited operation")
 
-	// The FIFO-linked January lot carries the pool rate (15.00), not its own
-	// 10.00; the preview showed exactly what the commit carried.
+	// One pooled destination lot (the default lineage, T-135) carries the
+	// pool rate (15.00), not the January lot's own 10.00, and that unit's
+	// January date; the preview showed exactly what the commit carried.
 	require.Len(t, result.Plan.Links, 1)
 	link := result.Plan.Links[0]
 	assert.Equal(t, db.InternalTransferAverageCostPool, result.Plan.BasisAllocation)
+	assert.Equal(t, db.InternalTransferPooledLot, result.Plan.DestinationLineage)
 	assert.Equal(t, "average_cost", result.Plan.CostBasisMethod)
 	assert.Equal(t, "account", result.Plan.ResolutionTier)
-	assert.Equal(t, *first.LotID, link.SourceLotID)
+	assert.Zero(t, link.SourceLotID, "a pooled lot is carried from the pool, not one source lot")
 	assert.Equal(t, "2026-01-01", link.OriginalAcquiredOn)
 	assertMoneyValue(t, 1500, 2, link.CarriedBasisValue, link.CarriedBasisScale, "pool-rate carried basis")
 	require.Len(t, preview.Plan.Links, 1)
-	assert.Equal(t, link.SourceLotID, preview.Plan.Links[0].SourceLotID)
+	assert.Equal(t, db.InternalTransferPooledLot, preview.Plan.DestinationLineage)
 	assertMoneyValue(t, link.CarriedBasisValue, link.CarriedBasisScale,
 		preview.Plan.Links[0].CarriedBasisValue, preview.Plan.Links[0].CarriedBasisScale, "preview equals commit")
 	assert.Zero(t, preview.Plan.Links[0].DestinationLotID, "preview exposes no temporary lot ID")
@@ -163,8 +173,11 @@ func TestPooledTransferFromPartiallySoldPoolUsesDatedPoolAndPositionLock(t *test
 
 	// Selected lots remain refused for this source; a pooled request against
 	// an individual-lot source is refused the other way round.
+	var sourceLotID int64
+	require.NoError(t, f.database.QueryRow(`SELECT id FROM current_investment_lots
+		WHERE account_id = ? AND status = 'open' ORDER BY id LIMIT 1`, f.holdingAccountID).Scan(&sourceLotID))
 	_, err = f.investmentService.InternalTransfer(ctx,
-		internalTransferFromLot(f, destinationID, result.Plan.Links[0].SourceLotID, exact.New(1), 0))
+		internalTransferFromLot(f, destinationID, sourceLotID, exact.New(1), 0))
 	require.ErrorIs(t, err, db.ErrAverageCostTransferRequiresPoolAllocation)
 	assert.Equal(t, SelfCheckPassed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
 }
@@ -267,7 +280,7 @@ func TestPooledTransferSpanningSourceLotsKeepsLineageAndOriginalDates(t *testing
 	second := buyOn(t, f, "2026-01-15", 2, 4000)
 	buyOn(t, f, "2026-01-20", 2, 6000)
 	result, err := f.investmentService.InternalTransfer(ctx,
-		pooledTransferInput(f, destinationID, "2026-02-01", exact.New(3), 0))
+		sourceLotsTransferInput(f, destinationID, "2026-02-01", exact.New(3), 0))
 	require.NoError(t, err)
 	require.Len(t, result.Plan.Links, 2)
 	require.Len(t, result.DestinationLotIDs, 2)
@@ -392,7 +405,7 @@ func TestPooledTransferReplaysUnchangedAfterLaterSaleReversal(t *testing.T) {
 	buyOn(t, f, "2026-01-01", 1, 1000)
 	buyOn(t, f, "2026-01-02", 2, 2001)
 	transfer, err := f.investmentService.InternalTransfer(ctx,
-		pooledTransferInput(f, destinationID, "2026-02-01", exact.New(2), 0))
+		sourceLotsTransferInput(f, destinationID, "2026-02-01", exact.New(2), 0))
 	require.NoError(t, err)
 	sale, err := f.investmentService.Sell(ctx, sellInput(f, "2026-03-01", 1))
 	require.NoError(t, err)
@@ -427,12 +440,13 @@ func TestBackdatedBuyRefusesChangedPooledTransferLineageWithoutWriting(t *testin
 	setHoldingCostBasisMethod(t, f, "average_cost")
 	buyOn(t, f, "2026-02-01", 2, 2000)
 	transfer, err := f.investmentService.InternalTransfer(ctx,
-		pooledTransferInput(f, destinationID, "2026-03-01", exact.New(1), 0))
+		sourceLotsTransferInput(f, destinationID, "2026-03-01", exact.New(1), 0))
 	require.NoError(t, err)
 	// A January purchase becomes the pool's first FIFO lot, so the March
 	// transfer would deplete a different source lot than the destination is
-	// linked to (and dated from). That lineage change cannot be a basis
-	// revision (T-132); it is refused with the transfer named.
+	// linked to (and dated from). With the opt-in source_lots lineage that
+	// change cannot be a basis revision (T-132); it is refused with the
+	// transfer named. The default pooled lot admits it (T-135).
 	input := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
 		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,

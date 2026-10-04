@@ -22,15 +22,16 @@ const maxInvestmentTransferPropagationRounds = 256
 // basis to the destination positions, within the caller's transaction
 // (ADR 0013 cross-position replay refinement, T-132).
 //
-// The only input one position gives another is a link's carried basis: lots,
-// quantities and original dates of a transfer are fixed, and a replay that
-// would change them is refused with the transfer named. So the merged dated
-// stream the ADR describes is computed exactly by replaying each destination
-// from its links' effective basis and repeating until no link changes. A
-// source's depletion at a transfer's slot depends only on that source's
-// earlier history, so a cycle (A→B, later B→A) settles: the return leg's new
-// basis cannot reach back before it. Destinations reached this way are a
-// subset of InvestmentReplayClosure — only links whose basis actually moved.
+// The only input one position gives another is a link's carried basis and,
+// for a pooled_lot link (T-135), its original acquisition date: destination
+// lots and quantities of a transfer are fixed, and a source_lots replay that
+// would change which lots it takes is refused with the transfer named. So the
+// merged dated stream the ADR describes is computed exactly by replaying each
+// destination from its links' effective inputs and repeating until no link
+// changes. A source's depletion at a transfer's slot depends only on that
+// source's earlier history, so a cycle (A→B, later B→A) settles: the return
+// leg's new basis cannot reach back before it. Destinations reached this way
+// are a subset of InvestmentReplayClosure — only links that actually moved.
 //
 // Every write joins the caller's transaction. Any refusal (an impossible
 // disposal, an invalid election, a split quantity dependency, a basis range
@@ -90,7 +91,8 @@ func propagateInvestmentTransferRevisionsTx(ctx context.Context, tx *sql.Tx, boo
 // returns the destination position that must replay from it.
 func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, causedByOperationID,
 	auditEventID int64, createdAt string, revision InvestmentReplayTransferRevision) (investmentReplayPositionKey, error) {
-	if revision.OperationID <= 0 || revision.LinkSeq <= 0 || revision.SourceLotID <= 0 || revision.CostBasisValue < 0 {
+	if revision.OperationID <= 0 || revision.LinkSeq <= 0 || revision.CostBasisValue < 0 ||
+		(revision.SourceLotID > 0) == revision.PooledLot || (revision.PooledLot && len(revision.Depletions) == 0) {
 		return investmentReplayPositionKey{}, fmt.Errorf("%w: transfer link revision is incomplete", ErrInvalidDisposalParams)
 	}
 	var destination investmentReplayPositionKey
@@ -111,14 +113,34 @@ func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, cause
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return investmentReplayPositionKey{}, fmt.Errorf("read current transfer link revision: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_link_revisions (
+	var originalKnowledge, originalDate sql.NullString
+	if revision.PooledLot {
+		originalKnowledge = sql.NullString{String: revision.OriginalDateKnowledge, Valid: true}
+		originalDate = sql.NullString{String: revision.OriginalAcquiredOn, Valid: revision.OriginalAcquiredOn != ""}
+	}
+	result, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_link_revisions (
 		book_id, operation_id, link_seq, revision_seq, caused_by_operation_id, supersedes_revision_id,
-		source_lot_id, carried_basis_value, carried_basis_scale, created_at, created_audit_event_id
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		source_lot_id, carried_basis_value, carried_basis_scale, original_date_knowledge, original_acquired_on,
+		created_at, created_audit_event_id
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		bookID, revision.OperationID, revision.LinkSeq, priorSeq+1, causedByOperationID, priorID,
-		revision.SourceLotID,
-		exact.New(revision.CostBasisValue), revision.CostBasisScale, createdAt, auditEventID); err != nil {
+		nullablePositiveInt64(revision.SourceLotID), exact.New(revision.CostBasisValue), revision.CostBasisScale,
+		originalKnowledge, originalDate, createdAt, auditEventID)
+	if err != nil {
 		return investmentReplayPositionKey{}, fmt.Errorf("append transfer link revision: %w", err)
+	}
+	revisionID, err := result.LastInsertId()
+	if err != nil {
+		return investmentReplayPositionKey{}, fmt.Errorf("read transfer link revision id: %w", err)
+	}
+	for index, depletion := range revision.Depletions {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_link_revision_depletions (
+			revision_id, depletion_seq, book_id, source_lot_id, quantity_value, quantity_scale,
+			cost_basis_value, cost_basis_scale
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, revisionID, index+1, bookID, depletion.LotID,
+			depletion.QuantityValue, depletion.QuantityScale, depletion.CostBasisValue, depletion.CostBasisScale); err != nil {
+			return investmentReplayPositionKey{}, fmt.Errorf("append transfer revision depletion: %w", err)
+		}
 	}
 	return destination, nil
 }

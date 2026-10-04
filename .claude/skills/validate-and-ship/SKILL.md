@@ -227,6 +227,16 @@ non-trivial diff (yours or reviewed):
     `TestSplitReversalInvertsPrimaryPlusAdjustmentDelta`,
     `TestReversalsBeforeSplitPostAdjustmentJournals`,
     `TestEarlierAcquisitionBasisCorrectionReplaysThroughSplit`.
+25. **A replay branch that omits a side effect its writer performs** —
+    replay re-derives a position from intents, so anything the commit path
+    writes besides lot effects (the method-family lock, a link's original
+    date, a revision row) must be re-derived by the matching replay branch, or
+    the first replay of that position silently drops it. The selected-lots
+    transfer branch cleared the source's individual-lot lock this way until
+    the `investment_replay_equivalence` self-check (T-134) found it. New
+    commands or intent kinds: assert the replay check passes after a replay
+    of the touched positions (the shared self-check pass helpers do).
+    Named regression: `TestReplayKeepsSelectedLotTransferMethodLock`.
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

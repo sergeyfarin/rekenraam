@@ -105,7 +105,11 @@ When a feature introduces a durable new rule, update one of those documents in t
   average-cost source moves a quantity through the same dated pool depletion as
   a sale (exact remainder on the last touched lot) and never carries a selected
   lot's own basis out of a pool. The transfer snapshots the applied method and
-  its provenance, and any move locks the source family (T-123).
+  its provenance, and any move locks the source family (T-123). An average-cost
+  source opens one pooled destination lot by default, dated by the latest
+  original date among the units moved; one lot per source lot is opt-in
+  (`destination_lineage`, T-135). Moves into tax wrappers are a sale and a buy,
+  not an internal transfer.
 - An entry dated behind a later depletion of its position never reads the
   current projection. It is admitted only through full chronological replay at
   its same-day slot (after that day's earlier entries), with later decisions
@@ -127,8 +131,9 @@ When a feature introduces a durable new rule, update one of those documents in t
   than skipping it.
 - Effective investment reads select through the SQL views
   `effective_investment_operations`, `latest_investment_disposal_revisions`,
-  `latest_investment_split_revisions` and `effective_investment_lot_events`
-  rather than repeating successor or latest-revision predicates (T-124). Audit
+  `latest_investment_split_revisions`, `effective_investment_lot_events` and
+  `effective_investment_transfer_links` rather than repeating successor or
+  latest-revision predicates (T-124, T-135). Audit
   reads (self-check of original and superseded allocation sets, export) use the
   base tables, so an effective view never hides damaged history. An
   operation-opened lot row is that operation's immutable opening fact.
@@ -136,8 +141,10 @@ When a feature introduces a durable new rule, update one of those documents in t
   affected-position dependency closure, not a whole-book rebuild (ADR 0013
   refinement). A changed carried basis or corrected source lot appends a
   transfer link revision and replays each destination in the same command
-  until nothing changes (T-132); units, destination lots and original dates
-  never change, and a replay that would change them is refused by name.
+  until nothing changes (T-132); units and destination lots never change. A
+  `pooled_lot` revision may also change the destination's original date and
+  the source depletions (T-135); a `source_lots` replay that would change its
+  lots or dates is refused by name.
 - Realized/unrealized gains are server-computed read models with named policy.
   Reproducible investment reports state their `as_of` date, price-knowledge
   cutoff, valuation/FX method, staleness policy, reporting currency, basis profile,

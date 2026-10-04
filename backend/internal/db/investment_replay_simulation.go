@@ -25,13 +25,20 @@ type InvestmentReplayProjection struct {
 }
 
 // InvestmentReplayTransferRevision is one link's replayed depletion: the
-// source lot it now takes from and the basis it carries.
+// source lot it now takes from and the basis it carries. A pooled_lot link
+// (T-135) has no SourceLotID; it records every source depletion and the
+// latest original acquisition date among them instead.
 type InvestmentReplayTransferRevision struct {
 	OperationID    int64
 	LinkSeq        int
 	SourceLotID    int64
 	CostBasisValue int64
 	CostBasisScale int
+	PooledLot      bool
+	// pooled_lot only.
+	OriginalDateKnowledge string
+	OriginalAcquiredOn    string
+	Depletions            []InvestmentReplayTransferLink
 }
 
 // InvestmentReplaySplit is a split's per-lot effect at its replay slot.
@@ -209,6 +216,11 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 			}
 			moved, err := disposeLotTx(ctx, tx, params, intent.LotID,
 				intent.QuantityValue, intent.QuantityScale, intent.AuditEventID, allocationScale)
+			if err == nil {
+				// The writer locks a source it moves lots out of to individual
+				// lots; replay must leave the same lock (found by T-134).
+				err = updatePositionMethodFamilyTx(ctx, tx, params, "specific_lot", intent.AuditEventID)
+			}
 			if err != nil {
 				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
 					OperationID: intent.OperationID, Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
@@ -232,7 +244,8 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 				// Each destination lot is tied to one source lot and its original
 				// date; a pool that now depletes other lots or quantities would
 				// move different units, which no basis revision can express.
-				err = errors.New("transfer source lots changed")
+				// A pooled_lot transfer has no such tie (T-135).
+				err = errors.New("transfer source lots changed; record it as one pooled lot to let history move them")
 			}
 			if err != nil {
 				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
@@ -246,6 +259,30 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 						OperationID: intent.OperationID, LinkSeq: link.LinkSeq, SourceLotID: depletion.LotID,
 						CostBasisValue: depletion.CostBasisValue, CostBasisScale: depletion.CostBasisScale})
 				}
+			}
+		case "pooled_lot_transfer_out":
+			params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
+				CommodityID: commodityID, CostCommodityID: costCommodityID,
+				TransactionID: intent.TransactionID, EventDate: intent.EventDate,
+				QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
+				MetadataJSON: "{}", CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID}
+			moved, err := pooledTransferOutTx(ctx, tx, params, intent.AuditEventID)
+			var totals pooledTransferTotals
+			if err == nil {
+				totals, err = pooledTransferTotalsTx(ctx, tx, bookID, moved)
+			}
+			if err == nil && exact.ScaledIntFromCoefficient(totals.quantityValue, totals.quantityScale).Cmp(
+				exact.ScaledIntFromCoefficient(intent.QuantityValue, intent.QuantityScale)) != 0 {
+				err = errors.New("pooled transfer quantity changed")
+			}
+			if err != nil {
+				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
+					OperationID: intent.OperationID, Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
+			}
+			// The destination lot and quantity are fixed; its basis, date and
+			// the source lots the pool took them from follow history.
+			if revision, changed := pooledLotTransferRevision(intent, moved, totals); changed {
+				projection.TransferRevisions = append(projection.TransferRevisions, revision)
 			}
 		case "split":
 			effects, err := splitEffectsForPositionTx(ctx, tx, bookID, accountID, commodityID, costCommodityID,
@@ -299,6 +336,34 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 		return InvestmentReplayProjection{}, fmt.Errorf("close replay lot projection: %w", err)
 	}
 	return projection, nil
+}
+
+// pooledLotTransferRevision compares a replayed pooled_lot depletion with the
+// transfer's effective one and returns the revision to append when anything
+// differs: a source lot, a quantity, a basis or the original date.
+func pooledLotTransferRevision(intent InvestmentReplayIntent, moved []LotDisposalRecord, totals pooledTransferTotals) (InvestmentReplayTransferRevision, bool) {
+	revision := InvestmentReplayTransferRevision{OperationID: intent.OperationID, LinkSeq: intent.LinkSeq,
+		CostBasisValue: totals.basisValue, CostBasisScale: totals.basisScale, PooledLot: true,
+		OriginalDateKnowledge: totals.originalKnowledge, OriginalAcquiredOn: totals.originalDate}
+	changed := len(moved) != len(intent.PooledDepletions) ||
+		totals.originalKnowledge != intent.OriginalDateKnowledge || totals.originalDate != intent.OriginalAcquiredOn ||
+		exact.ScaledIntFromInt64(totals.basisValue, totals.basisScale).Cmp(
+			exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale)) != 0
+	for index, depletion := range moved {
+		revision.Depletions = append(revision.Depletions, InvestmentReplayTransferLink{
+			LotID: depletion.LotID, QuantityValue: depletion.QuantityValue, QuantityScale: depletion.QuantityScale,
+			CostBasisValue: exact.New(depletion.CostBasisValue), CostBasisScale: depletion.CostBasisScale})
+		if changed {
+			continue
+		}
+		effective := intent.PooledDepletions[index]
+		changed = depletion.LotID != effective.LotID ||
+			exact.ScaledIntFromCoefficient(depletion.QuantityValue, depletion.QuantityScale).Cmp(
+				exact.ScaledIntFromCoefficient(effective.QuantityValue, effective.QuantityScale)) != 0 ||
+			exact.ScaledIntFromInt64(depletion.CostBasisValue, depletion.CostBasisScale).Cmp(
+				exact.ScaledIntFromCoefficient(effective.CostBasisValue, effective.CostBasisScale)) != 0
+	}
+	return revision, changed
 }
 
 // pooledTransferLineageReproduced reports whether a replayed pool depletion

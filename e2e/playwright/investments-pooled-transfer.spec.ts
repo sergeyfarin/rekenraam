@@ -5,7 +5,8 @@ import { todayISO } from './support/dates';
 
 /**
  * T-123: an average-cost holding is moved on a phone-sized screen by quantity.
- * The preview shows the pool-rate basis the commit then carries.
+ * The preview shows the pool-rate basis the commit then carries, as one pooled
+ * destination lot by default (T-135).
  */
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -58,12 +59,14 @@ test('an average-cost holding moves by quantity at the previewed pool rate on mo
   await page.getByLabel('Source position').selectOption({ label: s.sourceLabel });
   await page.getByLabel('Destination holding account').selectOption({ label: s.destinationLabel });
   await expect(page.getByText('This position uses average cost.')).toBeVisible();
+  await expect(page.getByText('usually a sale and a new purchase')).toBeVisible();
   await page.getByRole('textbox', { name: /Quantity to move/ }).fill('1');
+  await expect(page.getByRole('radio', { name: /One pooled lot/ })).toBeChecked();
   await page.getByRole('button', { name: 'Preview transfer' }).click();
 
   // The first lot was bought at 10.00, but it carries the pool's 15.00.
   const preview = page.getByRole('region', { name: 'What moves' });
-  await expect(preview).toContainText('1 units, basis 15.00');
+  await expect(preview).toContainText('Pooled lot: 1 units, basis 15.00');
   await expect(preview).toContainText('not a complete tax calculation');
   await page.getByRole('button', { name: 'Record transfer' }).click();
   await expect(preview).toBeHidden();

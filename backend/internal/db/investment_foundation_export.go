@@ -42,7 +42,7 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 		"transfer-facts": `SELECT f.operation_id, f.transfer_kind, f.effective_on, f.commodity_id,
 			f.source_account_id, f.destination_account_id, f.source_evidence_json, f.created_audit_event_id,
 			f.basis_allocation, f.cost_basis_method, f.method_resolution_tier,
-			f.method_account_version_id, f.method_profile_version_id
+			f.method_account_version_id, f.method_profile_version_id, f.destination_lineage
 			FROM investment_transfer_facts f WHERE f.book_id = ? ORDER BY f.operation_id`,
 		"transfer-lot-links": `SELECT l.operation_id, l.link_seq, l.source_lot_id, l.destination_lot_id,
 			l.quantity_value, l.quantity_scale, l.basis_knowledge, l.carried_basis_value,
@@ -52,9 +52,14 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 			WHERE f.book_id = ? ORDER BY l.operation_id, l.link_seq`,
 		"transfer-link-revisions": `SELECT r.id, r.operation_id, r.link_seq, r.revision_seq,
 			r.caused_by_operation_id, r.supersedes_revision_id, r.source_lot_id, r.carried_basis_value,
-			r.carried_basis_scale, r.created_at, r.created_audit_event_id
+			r.carried_basis_scale, r.created_at, r.created_audit_event_id,
+			r.original_date_knowledge, r.original_acquired_on
 			FROM investment_transfer_link_revisions r WHERE r.book_id = ?
 			ORDER BY r.operation_id, r.link_seq, r.revision_seq`,
+		"transfer-link-revision-depletions": `SELECT d.revision_id, d.depletion_seq, d.source_lot_id,
+			d.quantity_value, d.quantity_scale, d.cost_basis_value, d.cost_basis_scale
+			FROM investment_transfer_link_revision_depletions d WHERE d.book_id = ?
+			ORDER BY d.revision_id, d.depletion_seq`,
 		"split-facts": `SELECT f.operation_id, f.account_id, f.commodity_id, f.effective_on,
 			f.ratio_numerator, f.ratio_denominator, f.source_evidence_json, f.created_audit_event_id
 			FROM investment_split_facts f WHERE f.book_id = ? ORDER BY f.operation_id`,

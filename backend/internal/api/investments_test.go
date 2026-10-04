@@ -228,9 +228,21 @@ func TestPooledInternalTransferAPIPreviewMatchesCommit(t *testing.T) {
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
 	require.Equal(t, "average_cost_pool", preview.Plan.BasisAllocation)
 	require.Equal(t, "position_lock", preview.Plan.ResolutionTier)
+	require.Equal(t, "pooled_lot", preview.Plan.DestinationLineage, "the default for a pooled quantity (T-135)")
 	require.Len(t, preview.Plan.Links, 1)
 	assert.Nil(t, preview.Plan.Links[0].DestinationLotID)
+	assert.Nil(t, preview.Plan.Links[0].SourceLotID, "a pooled lot is carried from the pool")
+	require.NotNil(t, preview.Plan.Links[0].OriginalAcquiredOn)
+	assert.Equal(t, "2026-01-02", *preview.Plan.Links[0].OriginalAcquiredOn, "the latest unit moved")
 	assert.Empty(t, preview.Impact.AffectedCheckpoints)
+	// The opt-in lineage is echoed with the source lot it carries.
+	sourceLots := request
+	sourceLots.DestinationLineage = "source_lots"
+	var sourceLotsPreview internalTransferPreviewResponse
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/preview", sourceLots, http.StatusOK)
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&sourceLotsPreview))
+	assert.Equal(t, "source_lots", sourceLotsPreview.Plan.DestinationLineage)
+	require.NotNil(t, sourceLotsPreview.Plan.Links[0].SourceLotID)
 	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
 	var committed internalTransferResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&committed))
@@ -242,14 +254,19 @@ func TestPooledInternalTransferAPIPreviewMatchesCommit(t *testing.T) {
 	assert.Equal(t, preview.Plan.Links[0].CarriedBasisScale, committed.Plan.Links[0].CarriedBasisScale)
 	assert.Zero(t, exact.ScaledIntFromInt64(int64(committed.Plan.Links[0].CarriedBasisValue),
 		committed.Plan.Links[0].CarriedBasisScale).Cmp(exact.ScaledIntFromInt64(15000, 2)))
+	// A pooled lot needs a pooled quantity.
+	request.DestinationLineage = "pooled_lot"
 	// The destination has no average-cost lock or default, so its moved lot
 	// goes back as a selected lot.
 	request.QuantityValue = ""
 	request.LotAllocations = []investmentLotAllocationRequest{{LotID: committed.DestinationLotIDs[0], QuantityValue: exact.New(1)}}
 	request.SourceAccountID, request.DestinationAccountID = destination.ID, source.ID
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/preview", request, http.StatusBadRequest)
+	request.DestinationLineage = ""
 	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/preview", request, http.StatusOK)
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
 	assert.Equal(t, "selected_lots", preview.Plan.BasisAllocation)
+	assert.Equal(t, "source_lots", preview.Plan.DestinationLineage)
 }
 
 func TestExternalTransferInPreviewNamesCheckpointAndWriteRequiresOverride(t *testing.T) {

@@ -544,9 +544,10 @@ func TestReplaceImportedBuyDatePreservesDedupeIdentity(t *testing.T) {
 }
 
 // The new position's own transfers are dependencies too. Moving a buy into an
-// average-cost position before its pooled transfer would change which lots
-// the transfer depleted, so the transfer is named (pooled lineage, T-135);
-// moving it in after the transfer leaves the transfer untouched and commits.
+// average-cost position before a pooled transfer that carries source lots
+// would change which lots the transfer depleted, so the transfer is named
+// (T-135 keeps that refusal for the opt-in lineage); moving it in after the
+// transfer leaves the transfer untouched and commits.
 func TestReplaceBuyIntoPositionWithLaterPooledTransfer(t *testing.T) {
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
@@ -555,7 +556,7 @@ func TestReplaceBuyIntoPositionWithLaterPooledTransfer(t *testing.T) {
 	setHoldingCostBasisMethod(t, f, "average_cost")
 	buyOn(t, f, "2026-02-01", 2, 2000)
 	transfer, err := f.investmentService.InternalTransfer(ctx,
-		pooledTransferInput(f, destination, "2026-03-01", exact.New(1), 0))
+		sourceLotsTransferInput(f, destination, "2026-03-01", exact.New(1), 0))
 	require.NoError(t, err)
 	misbooked, err := f.investmentService.Buy(ctx, tradeOn(f, wrong, "2026-01-01", 2, 4000))
 	require.NoError(t, err)

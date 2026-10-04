@@ -25,6 +25,7 @@ SelfCheckResult:
         - checkpoint_integrity
         - account_version_coverage
         - investment_foundation
+        - investment_replay_equivalence
         - sqlite_integrity
         - attachments
     status:

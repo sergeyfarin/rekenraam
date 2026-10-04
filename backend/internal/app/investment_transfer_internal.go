@@ -12,6 +12,8 @@ import (
 // InternalTransferInput moves a holding between two of the book's accounts.
 // An individual-lot source names Allocations; an average-cost source names a
 // total Quantity and the writer allocates it from the dated pool (T-123).
+// DestinationLineage (T-135) chooses, for a pooled quantity only, between one
+// pooled destination lot (the default) and one lot per depleted source lot.
 type InternalTransferInput struct {
 	OwnerUserID               int64
 	AuthSessionID             int64
@@ -24,6 +26,7 @@ type InternalTransferInput struct {
 	Allocations               []InvestmentLotAllocationInput
 	QuantityValue             exact.Coefficient
 	QuantityScale             int
+	DestinationLineage        string
 	SourceEvidenceJSON        string
 	Memo                      string
 	ChangeReason              string
@@ -31,8 +34,9 @@ type InternalTransferInput struct {
 	GainImpactAcknowledgement string
 }
 
-// InternalTransferLink is one source lot's carried quantity and basis.
-// DestinationLotID is zero in a preview.
+// InternalTransferLink is one source lot's carried quantity and basis, or a
+// pooled lot's whole move (SourceLotID zero). DestinationLotID is zero in a
+// preview.
 type InternalTransferLink struct {
 	SourceLotID           int64
 	DestinationLotID      int64
@@ -47,10 +51,11 @@ type InternalTransferLink struct {
 // InternalTransferPlan is what the writer allocated: the applied method, how
 // it resolved, and every carried link.
 type InternalTransferPlan struct {
-	BasisAllocation string
-	CostBasisMethod string
-	ResolutionTier  string
-	Links           []InternalTransferLink
+	BasisAllocation    string
+	DestinationLineage string
+	CostBasisMethod    string
+	ResolutionTier     string
+	Links              []InternalTransferLink
 }
 
 type InternalTransferPreview struct {
@@ -81,6 +86,15 @@ func (s *InvestmentService) internalTransferPlan(ctx context.Context, input Inte
 	}
 	if !pooled && input.QuantityValue != "" {
 		return investmentTransactionPlan{}, db.CreateInternalTransferParams{}, ValidationError{Message: "send source lots or a pooled quantity, not both"}
+	}
+	switch input.DestinationLineage {
+	case "", db.InternalTransferSourceLots:
+	case db.InternalTransferPooledLot:
+		if !pooled {
+			return investmentTransactionPlan{}, db.CreateInternalTransferParams{}, ValidationError{Message: "a pooled destination lot needs a pooled quantity"}
+		}
+	default:
+		return investmentTransactionPlan{}, db.CreateInternalTransferParams{}, ValidationError{Message: "destination lineage must be source_lots or pooled_lot"}
 	}
 	allocations := make([]db.LotAllocation, 0, len(input.Allocations))
 	seen := make(map[int64]bool, len(input.Allocations))
@@ -157,6 +171,7 @@ func (s *InvestmentService) internalTransferPlan(ctx context.Context, input Inte
 		CostCommodityID: input.CostCommodityID, EffectiveOn: date,
 		Allocations: allocations, SourceEvidenceJSON: evidence,
 		SourceCostBasisMethod: method, SourceMethodSource: methodSource,
+		DestinationLineage: input.DestinationLineage,
 	}
 	if pooled {
 		transfer.PooledQuantityValue, transfer.PooledQuantityScale = quantity, total.Scale()
@@ -219,8 +234,9 @@ func (s *InvestmentService) InternalTransfer(ctx context.Context, input Internal
 }
 
 func toInternalTransferPlan(result db.InternalTransferResult) InternalTransferPlan {
-	plan := InternalTransferPlan{BasisAllocation: result.BasisAllocation, CostBasisMethod: result.CostBasisMethod,
-		ResolutionTier: result.ResolutionTier, Links: make([]InternalTransferLink, 0, len(result.Links))}
+	plan := InternalTransferPlan{BasisAllocation: result.BasisAllocation, DestinationLineage: result.DestinationLineage,
+		CostBasisMethod: result.CostBasisMethod,
+		ResolutionTier:  result.ResolutionTier, Links: make([]InternalTransferLink, 0, len(result.Links))}
 	for _, link := range result.Links {
 		plan.Links = append(plan.Links, InternalTransferLink(link))
 	}
@@ -238,6 +254,8 @@ func mapInternalTransferError(err error) error {
 		errors.Is(err, db.ErrGainImpactAcknowledgementRequired),
 		errors.Is(err, db.ErrGainImpactAcknowledgementStale):
 		return err
+	case errors.Is(err, db.ErrInvalidTransferDestinationLineage):
+		return ValidationError{Message: err.Error()}
 	case errors.Is(err, db.ErrUnknownInvestmentBasis):
 		return ValidationError{Message: "a holding with unresolved basis cannot be moved yet"}
 	case errors.Is(err, db.ErrInvalidDisposalParams), errors.Is(err, db.ErrInvestmentBasisRange):

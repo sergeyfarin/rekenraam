@@ -172,7 +172,7 @@ func TestExportBundleChecksumsVerify(t *testing.T) {
 		assert.Equalf(t, int64(len(content)), file.Bytes, "%s byte count is wrong", file.Name)
 	}
 
-	assert.Equal(t, 7, bundle.manifest.SchemaVersion)
+	assert.Equal(t, 8, bundle.manifest.SchemaVersion)
 	assert.Equal(t, "journal_entry", bundle.manifest.SelectionUnit)
 	assert.True(t, bundle.manifest.IncludesSystemAccounts)
 	assert.True(t, bundle.manifest.AllTransactionsComplete)

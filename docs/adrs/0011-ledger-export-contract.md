@@ -300,3 +300,19 @@ any posted journal and in `investment-operation-journal-links.csv` with role
 `split_adjustment`. A split's `primary` plus `split_adjustment` journals sum to
 its effective effects. The manifest stays at schema version 7; existing columns
 keep their order.
+
+### Pooled transfer lineage (2026-10-04, T-135)
+
+Manifest schema version 8 adds `investment-transfer-link-revision-depletions.csv`
+(`revision_id`, `depletion_seq`, `source_lot_id`, `quantity_value`,
+`quantity_scale`, `cost_basis_value`, `cost_basis_scale`) and appends
+`destination_lineage` (`source_lots` or `pooled_lot`; empty for external
+transfers) to `investment-transfer-facts.csv` and `original_date_knowledge`,
+`original_acquired_on` to `investment-transfer-link-revisions.csv`. A
+`pooled_lot` transfer has one link with an empty `source_lot_id`; its first
+source depletions are its `transfer_out` events in
+`investment-lot-effects.csv`. Its revisions leave `source_lot_id` empty, carry
+the destination's current original date, and list their source depletions in
+the new file. For `source_lots` revisions the two appended columns are empty
+and the original date stays the link's. Existing files and columns are
+otherwise unchanged.

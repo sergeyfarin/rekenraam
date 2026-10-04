@@ -188,7 +188,14 @@ invalid specific-lot election, missing or unknown source basis, a split whose
 posted quantity would change, or an uncomputable bridge is a fact about the
 history, not about replay scope, and stays a named refusal under either choice.
 A full rebuild remains useful as an offline self-check verifier
-([T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149)).
+([T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149)). It shipped 2026-10-04 as the
+`investment_replay_equivalence` check: every long position is replayed from
+its effective intents in a rolled-back savepoint, one short write transaction
+per position, and compared exactly with its stored lots, disposal allocations,
+split effects, method lock and transfer links. Because each position is
+checked against the stored effective links, a stale link or a destination
+replayed from one is found, which verifies the whole fixed point without a
+merged whole-book replay.
 
 **Status.** The closure is implemented and tested
 (`InvestmentReplayClosure`); propagation shipped in
@@ -215,8 +222,10 @@ Positions reached are the subset of the closure whose links actually moved.
   evidence. Effective reads and self-check use the latest link revision for
   both ends; an in-book transfer posts no basis, so no journal changes.
 - Still refused with the transfer named: removing the transferred acquisition
-  (reversal), and an average-cost pool that would now deplete different
-  source lots or quantities ([T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150)).
+  (reversal), and a `source_lots` transfer from an average-cost pool that
+  would now deplete different source lots or quantities. The default
+  `pooled_lot` lineage admits that change (*Pooled Transfer Lineage
+  Refinement*, below; [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150)).
   A future transfer correction (T-119 #134) must also seed propagation with
   the destinations of edges it removes or replaces.
 
@@ -249,3 +258,61 @@ that per operation. Splits are the first such operation (role
 adjustment journals discovered during domain effects. Native correction
 admission and the operation-for-transaction lookup continue to read only
 `primary` links, so an adjustment journal cannot be corrected on its own.
+
+## Pooled Transfer Lineage Refinement (2026-10-04, T-135)
+
+The research and the options weighed are in
+`docs/reviews/internal-transfer-lineage-research-2026-10-04.md`.
+
+An average-cost source's per-lot split of a transfer is a FIFO lineage
+convention, not a choice the user made. Storing that split as fixed fact made
+any backdated buy into the source a refusal. The destination lineage is now an
+explicit part of the transfer, `investment_transfer_facts.destination_lineage`:
+
+- **Individual-lot source: `source_lots`, always.** The user chose the lots;
+  they stay fixed facts, as before.
+- **Average-cost source: `pooled_lot` by default.** The transfer opens **one**
+  destination lot for the whole quantity, carrying the pool's exact basis. Its
+  single link has no source lot (`source_lot_id` is null). Its original
+  acquisition date is the **latest** original date among the units the pool's
+  FIFO lineage moved, which never overstates how long the units were held; one
+  unknown date makes it unknown. The source depletions stay the operation's
+  `transfer_out` lot effects.
+- **Average-cost source: `source_lots` on request.** One destination lot per
+  depleted source lot with its own date, for holding history such as US
+  average basis. A replay that changes which lots or quantities the pool
+  depletes stays a named refusal; the remedy is to re-record the transfer as a
+  pooled lot (transfer correction, T-119).
+
+Under replay a `pooled_lot` transfer is one intent for its fixed quantity. The
+destination lot's ID and quantity never change, so destination specific-lot
+elections stay valid. When the replayed carried basis, original date or source
+depletion set differs from the effective one, a link revision is appended with
+a null source lot, the revised date (`original_date_knowledge`,
+`original_acquired_on`) and its complete depletion set
+(`investment_transfer_link_revision_depletions`). The destination then replays
+from the effective link, and its FIFO/LIFO ordering reads the revised date.
+That adds the date to the cross-position inputs of the T-132 fixed point; it
+still flows only forward from source to destination, so cycles still settle.
+Readers of a transferred lot's basis or original date use the view
+`effective_investment_transfer_links`.
+
+Self-check audits every committed and revised depletion set of a pooled lot
+against the link's quantity and basis, and lot reconciliation uses the latest
+revision's depletions. Bundle schema 8 exports the lineage, the revised date
+and `investment-transfer-link-revision-depletions.csv` (ADR 0011).
+
+Rejected options:
+
+- **Re-deriving per-lot destination lots under replay.** Replay would have to
+  retire and open destination lots, and a destination specific-lot election
+  naming a retired lot would still be refused.
+- **Pooling an individual-lot source.** An average-cost destination merges
+  arriving lots anyway, and a lot-based destination would receive an invented
+  lot.
+- **Transfer-date or earliest-unit dating.** Transfer dating discards holding
+  history. Earliest-unit dating overstates the holding period of the rest.
+
+Moves into tax wrappers (ISA, TFSA/RRSP, pension) are usually a sale and a new
+acquisition, not an internal transfer; the transfer form says so. Tax-exact
+per-person pools (UK s104, Canada ACB, France PMP) remain R18 projections.

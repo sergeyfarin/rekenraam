@@ -60,7 +60,7 @@ func requireSelfCheckPasses(t *testing.T, f *investmentsTestFixture) {
 	t.Helper()
 	run, err := selfCheckOver(t, f.database).RunSelfCheck(context.Background(), "manual")
 	require.NoError(t, err)
-	for _, check := range []string{CheckLotReconciliation, CheckInvestmentFoundation, CheckCommodityPositionSign} {
+	for _, check := range []string{CheckLotReconciliation, CheckInvestmentFoundation, CheckCommodityPositionSign, CheckInvestmentReplay} {
 		result := resultFor(t, run, check)
 		assert.Equal(t, SelfCheckPassed, result.Status, "%s: %s", check, result.Summary)
 	}

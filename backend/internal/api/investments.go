@@ -200,17 +200,22 @@ type internalTransferRequest struct {
 	LotAllocations       []investmentLotAllocationRequest `json:"lot_allocations"`
 	// QuantityValue/Scale move a total out of an average-cost pool instead of
 	// selected lots (T-123).
-	QuantityValue             exact.Coefficient `json:"quantity_value,omitempty"`
-	QuantityScale             int               `json:"quantity_scale,omitempty"`
-	SourceEvidence            json.RawMessage   `json:"source_evidence,omitempty"`
-	Memo                      string            `json:"memo"`
-	ChangeReason              string            `json:"change_reason"`
-	ReconciliationOverride    bool              `json:"reconciliation_override"`
-	GainImpactAcknowledgement string            `json:"gain_impact_acknowledgement,omitempty"`
+	QuantityValue exact.Coefficient `json:"quantity_value,omitempty"`
+	QuantityScale int               `json:"quantity_scale,omitempty"`
+	// DestinationLineage chooses, for a pooled quantity, one pooled
+	// destination lot (default) or one lot per source lot (T-135).
+	DestinationLineage        string          `json:"destination_lineage,omitempty"`
+	SourceEvidence            json.RawMessage `json:"source_evidence,omitempty"`
+	Memo                      string          `json:"memo"`
+	ChangeReason              string          `json:"change_reason"`
+	ReconciliationOverride    bool            `json:"reconciliation_override"`
+	GainImpactAcknowledgement string          `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type internalTransferLinkResponse struct {
-	SourceLotID           int64             `json:"source_lot_id"`
+	// SourceLotID is null for a pooled destination lot, which is carried
+	// from the whole pool rather than one source lot.
+	SourceLotID           *int64            `json:"source_lot_id"`
 	DestinationLotID      *int64            `json:"destination_lot_id"`
 	QuantityValue         exact.Coefficient `json:"quantity_value"`
 	QuantityScale         int               `json:"quantity_scale"`
@@ -221,10 +226,11 @@ type internalTransferLinkResponse struct {
 }
 
 type internalTransferPlanResponse struct {
-	BasisAllocation string                         `json:"basis_allocation"`
-	CostBasisMethod string                         `json:"cost_basis_method"`
-	ResolutionTier  string                         `json:"resolution_tier"`
-	Links           []internalTransferLinkResponse `json:"links"`
+	BasisAllocation    string                         `json:"basis_allocation"`
+	DestinationLineage string                         `json:"destination_lineage"`
+	CostBasisMethod    string                         `json:"cost_basis_method"`
+	ResolutionTier     string                         `json:"resolution_tier"`
+	Links              []internalTransferLinkResponse `json:"links"`
 }
 
 type internalTransferPreviewResponse struct {
@@ -991,23 +997,28 @@ func internalTransferInput(owner app.Owner, r *http.Request, request internalTra
 		SourceAccountID: request.SourceAccountID, DestinationAccountID: request.DestinationAccountID,
 		CommodityID: request.CommodityID, CostCommodityID: request.CostCommodityID,
 		Allocations: allocations, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
-		SourceEvidenceJSON: evidence, Memo: request.Memo,
+		DestinationLineage: request.DestinationLineage, SourceEvidenceJSON: evidence, Memo: request.Memo,
 		ChangeReason: request.ChangeReason, ReconciliationOverride: request.ReconciliationOverride,
 		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 	}
 }
 
 func toInternalTransferPlanResponse(plan app.InternalTransferPlan) internalTransferPlanResponse {
-	out := internalTransferPlanResponse{BasisAllocation: plan.BasisAllocation, CostBasisMethod: plan.CostBasisMethod,
-		ResolutionTier: plan.ResolutionTier, Links: make([]internalTransferLinkResponse, 0, len(plan.Links))}
+	out := internalTransferPlanResponse{BasisAllocation: plan.BasisAllocation, DestinationLineage: plan.DestinationLineage,
+		CostBasisMethod: plan.CostBasisMethod, ResolutionTier: plan.ResolutionTier,
+		Links: make([]internalTransferLinkResponse, 0, len(plan.Links))}
 	for _, link := range plan.Links {
-		response := internalTransferLinkResponse{SourceLotID: link.SourceLotID,
+		response := internalTransferLinkResponse{
 			QuantityValue: link.QuantityValue, QuantityScale: link.QuantityScale,
 			CarriedBasisValue: moneyCoefficient(link.CarriedBasisValue), CarriedBasisScale: link.CarriedBasisScale,
 			OriginalDateKnowledge: link.OriginalDateKnowledge}
 		if link.DestinationLotID > 0 {
 			id := link.DestinationLotID
 			response.DestinationLotID = &id
+		}
+		if link.SourceLotID > 0 {
+			id := link.SourceLotID
+			response.SourceLotID = &id
 		}
 		if link.OriginalAcquiredOn != "" {
 			date := link.OriginalAcquiredOn

@@ -281,3 +281,23 @@ func TestReplayTransferDepletionUsesEffectLinkWithoutLegacyOperationTransactionI
 	require.Equal(t, SelfCheckPassed,
 		resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
 }
+
+// Found by the replay-equivalence self-check (T-134): a selected-lots move
+// locks the source to individual lots, and replaying that source (here for a
+// backdated buy) must keep the lock rather than silently clear it.
+func TestReplayKeepsSelectedLotTransferMethodLock(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+	buy := buyOn(t, f, "2026-02-01", 2, 2000)
+	_, err := f.investmentService.InternalTransfer(context.Background(),
+		internalTransferFromLot(f, destinationID, *buy.LotID, exact.New(1), 0))
+	require.NoError(t, err)
+	require.Equal(t, "individual_lot", positionMethodFamily(t, f, f.holdingAccountID))
+
+	acknowledgedBuy(t, f, backdatedBuy(f, "2026-01-01", 1, 1000))
+	assert.Equal(t, "individual_lot", positionMethodFamily(t, f, f.holdingAccountID))
+	requireInvestmentSelfCheckPasses(t, f)
+	run := mustRunInvestmentSelfCheck(t, f)
+	assert.Equal(t, SelfCheckPassed, resultFor(t, run, CheckInvestmentReplay).Status, resultFor(t, run, CheckInvestmentReplay).Summary)
+}

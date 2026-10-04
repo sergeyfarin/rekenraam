@@ -691,7 +691,8 @@ InternalTransferRequest:
     Send lot_allocations for an individual-lot source, or quantity_value and
     quantity_scale for an average-cost source (pooled allocation, T-123). The
     source position's method-family lock, or else its resolved default,
-    decides which is accepted.
+    decides which is accepted. A pooled quantity opens one pooled destination
+    lot unless destination_lineage is source_lots (T-135).
   required: [effective_on, source_account_id, destination_account_id, commodity_id, cost_commodity_id]
   properties:
     effective_on:
@@ -723,6 +724,16 @@ InternalTransferRequest:
       type: integer
       minimum: 0
       maximum: 24
+    destination_lineage:
+      type: string
+      enum: [pooled_lot, source_lots]
+      description: >-
+        Pooled quantity only. pooled_lot (default) opens one destination lot at
+        the pool's carried basis, dated by the latest original acquisition date
+        among the units moved; replay may revise its basis and date. source_lots
+        opens one lot per depleted source lot with its own date; a later change
+        to which lots the pool depletes is then refused with the transfer named.
+        Selected lots always carry source_lots.
     source_evidence:
       type: object
       additionalProperties: true
@@ -741,8 +752,9 @@ InternalTransferLink:
   required: [source_lot_id, destination_lot_id, quantity_value, quantity_scale, carried_basis_value, carried_basis_scale, original_date_knowledge, original_acquired_on]
   properties:
     source_lot_id:
-      type: integer
+      type: [integer, "null"]
       format: int64
+      description: Null for a pooled destination lot, which is carried from the whole pool.
     destination_lot_id:
       type: [integer, "null"]
       format: int64
@@ -753,7 +765,7 @@ InternalTransferLink:
       type: integer
     carried_basis_value:
       type: string
-      description: Basis carried from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot.
+      description: Basis carried from the source lot, or the pool for a pooled lot; pool rate for an average-cost source, exact remainder on the final touched lot.
     carried_basis_scale:
       type: integer
     original_date_knowledge:
@@ -762,14 +774,18 @@ InternalTransferLink:
     original_acquired_on:
       type: [string, "null"]
       format: date
+      description: For a pooled lot, the latest original acquisition date among the units moved.
 
 InternalTransferPlan:
   type: object
-  required: [basis_allocation, cost_basis_method, resolution_tier, links]
+  required: [basis_allocation, destination_lineage, cost_basis_method, resolution_tier, links]
   properties:
     basis_allocation:
       type: string
       enum: [selected_lots, average_cost_pool]
+    destination_lineage:
+      type: string
+      enum: [pooled_lot, source_lots]
     cost_basis_method:
       type: string
       enum: [fifo, lifo, average_cost, specific_lot]

@@ -20,6 +20,17 @@ const (
 	InternalTransferAverageCostPool = "average_cost_pool"
 )
 
+// Destination lineage of an internal transfer (T-135, ADR 0013). An
+// individual-lot source always carries source lots. An average-cost source
+// defaults to one pooled destination lot, dated by the latest original
+// acquisition date among the units moved, which replay may revise without
+// changing the lot; carrying source lots there is opt-in, and a replay that
+// would change which lots its FIFO lineage depletes is refused.
+const (
+	InternalTransferSourceLots = "source_lots"
+	InternalTransferPooledLot  = "pooled_lot"
+)
+
 type CreateInternalTransferParams struct {
 	BookID               int64
 	SourceAccountID      int64
@@ -37,10 +48,15 @@ type CreateInternalTransferParams struct {
 	// An open position's method-family lock overrides them inside the writer.
 	SourceCostBasisMethod string
 	SourceMethodSource    DisposalDecisionSource
+	// DestinationLineage is source_lots or pooled_lot. Empty means the
+	// allocation's default: source lots for selected lots, a pooled lot for a
+	// pooled quantity.
+	DestinationLineage string
 }
 
-// InternalTransferLink is one source lot's carried quantity and basis.
-// DestinationLotID is zero in a preview, whose IDs are never durable.
+// InternalTransferLink is one source lot's carried quantity and basis, or a
+// pooled lot's whole move (SourceLotID zero). DestinationLotID is zero in a
+// preview, whose IDs are never durable.
 type InternalTransferLink struct {
 	SourceLotID           int64
 	DestinationLotID      int64
@@ -53,16 +69,18 @@ type InternalTransferLink struct {
 }
 
 type InternalTransferResult struct {
-	BasisAllocation   string
-	CostBasisMethod   string
-	ResolutionTier    string
-	Links             []InternalTransferLink
-	DestinationLotIDs []int64
+	BasisAllocation    string
+	DestinationLineage string
+	CostBasisMethod    string
+	ResolutionTier     string
+	Links              []InternalTransferLink
+	DestinationLotIDs  []int64
 }
 
 var (
 	ErrAverageCostTransferRequiresPoolAllocation = errors.New("internal transfer from an average-cost position requires pooled basis allocation")
 	ErrPooledTransferRequiresAverageCost         = errors.New("pooled basis allocation requires an average-cost source position")
+	ErrInvalidTransferDestinationLineage         = errors.New("internal transfer destination lineage is invalid for its allocation")
 )
 
 // InternalTransferAllocation is the allocation an internal transfer applies
@@ -85,6 +103,7 @@ func InternalTransferAllocation(lockFamily, defaultMethod string) string {
 // belonged to individual lots, nor the reverse.
 type internalTransferPolicy struct {
 	allocation string
+	lineage    string
 	method     string
 	source     DisposalDecisionSource
 }
@@ -119,6 +138,16 @@ func internalTransferPolicyTx(ctx context.Context, tx *sql.Tx, transfer CreateIn
 		return internalTransferPolicy{}, ErrAverageCostTransferRequiresPoolAllocation
 	case policy.allocation == InternalTransferSelectedLots && pooled:
 		return internalTransferPolicy{}, ErrPooledTransferRequiresAverageCost
+	}
+	switch {
+	case transfer.DestinationLineage == "" && pooled:
+		policy.lineage = InternalTransferPooledLot
+	case transfer.DestinationLineage == "" || transfer.DestinationLineage == InternalTransferSourceLots:
+		policy.lineage = InternalTransferSourceLots
+	case transfer.DestinationLineage == InternalTransferPooledLot && pooled:
+		policy.lineage = InternalTransferPooledLot
+	default:
+		return internalTransferPolicy{}, ErrInvalidTransferDestinationLineage
 	}
 	return policy, nil
 }
@@ -176,13 +205,13 @@ func (r *InvestmentRepository) createInternalTransfer(ctx context.Context, journ
 				(operation_id, book_id, transfer_kind, effective_on, commodity_id,
 				 source_account_id, destination_account_id, source_evidence_json, created_audit_event_id,
 				 basis_allocation, cost_basis_method, method_resolution_tier,
-				 method_account_version_id, method_profile_version_id)
-				VALUES (?, ?, 'internal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, operationID, transfer.BookID,
+				 method_account_version_id, method_profile_version_id, destination_lineage)
+				VALUES (?, ?, 'internal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, operationID, transfer.BookID,
 				transfer.EffectiveOn, transfer.CommodityID, transfer.SourceAccountID,
 				transfer.DestinationAccountID, transfer.SourceEvidenceJSON, auditEventID,
 				policy.allocation, policy.method, policy.source.ResolutionTier,
 				nullablePositiveInt64(policy.source.AccountVersionID),
-				nullablePositiveInt64(policy.source.ProfileVersionID)); err != nil {
+				nullablePositiveInt64(policy.source.ProfileVersionID), policy.lineage); err != nil {
 				return InternalTransferResult{}, fmt.Errorf("record internal transfer fact: %w", err)
 			}
 			params := DisposeLotsParams{BookID: transfer.BookID, AccountID: transfer.SourceAccountID,
@@ -200,8 +229,18 @@ func (r *InvestmentRepository) createInternalTransfer(ctx context.Context, journ
 			if err != nil {
 				return InternalTransferResult{}, err
 			}
-			result := InternalTransferResult{BasisAllocation: policy.allocation, CostBasisMethod: policy.method,
-				ResolutionTier: policy.source.ResolutionTier}
+			result := InternalTransferResult{BasisAllocation: policy.allocation, DestinationLineage: policy.lineage,
+				CostBasisMethod: policy.method, ResolutionTier: policy.source.ResolutionTier}
+			if policy.lineage == InternalTransferPooledLot {
+				link, err := openPooledTransferDestinationTx(ctx, tx, transfer, transaction, journal,
+					operationID, auditEventID, moved)
+				if err != nil {
+					return InternalTransferResult{}, err
+				}
+				result.Links = []InternalTransferLink{link}
+				result.DestinationLotIDs = []int64{link.DestinationLotID}
+				moved = nil
+			}
 			for index, depletion := range moved {
 				link, err := openInternalTransferDestinationTx(ctx, tx, transfer, transaction, journal,
 					operationID, auditEventID, index+1, depletion)
@@ -291,7 +330,7 @@ func openInternalTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer
 	if err != nil {
 		return InternalTransferLink{}, err
 	}
-	originalKnowledge, originalDate, err := internalTransferOriginalDateTx(ctx, tx, source)
+	originalKnowledge, originalDate, err := internalTransferOriginalDateTx(ctx, tx, source.ID, source.OpenedOn)
 	if err != nil {
 		return InternalTransferLink{}, err
 	}
@@ -327,13 +366,111 @@ func openInternalTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer
 		OriginalDateKnowledge: originalKnowledge, OriginalAcquiredOn: originalDate}, nil
 }
 
-func internalTransferOriginalDateTx(ctx context.Context, tx *sql.Tx, source InvestmentLotRecord) (string, string, error) {
+// openPooledTransferDestinationTx opens the single destination lot of a
+// pooled_lot transfer (T-135). Every source depletion is linked to the
+// operation as an effect; the one link carries their total quantity and basis
+// and the latest original acquisition date among them.
+func openPooledTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer CreateInternalTransferParams,
+	transaction TransactionRecord, journal CreateTransactionParams, operationID, auditEventID int64,
+	moved []LotDisposalRecord,
+) (InternalTransferLink, error) {
+	if len(moved) == 0 {
+		return InternalTransferLink{}, ErrInvalidDisposalParams
+	}
+	for _, depletion := range moved {
+		if err := linkLotEffectTx(ctx, tx, operationID, depletion.EventID); err != nil {
+			return InternalTransferLink{}, err
+		}
+	}
+	pooled, err := pooledTransferTotalsTx(ctx, tx, transfer.BookID, moved)
+	if err != nil {
+		return InternalTransferLink{}, err
+	}
+	destination, err := createLotWithAuditTx(ctx, tx, CreateInvestmentLotParams{
+		BookID: transfer.BookID, AccountID: transfer.DestinationAccountID,
+		CommodityID: transfer.CommodityID, OpenedOn: transfer.EffectiveOn,
+		SourceTransactionID: transaction.ID, QuantityValue: pooled.quantityValue,
+		QuantityScale: pooled.quantityScale, CostBasisValue: pooled.basisValue,
+		CostBasisScale: pooled.basisScale, CostCommodityID: transfer.CostCommodityID,
+		MetadataJSON: `{"source":"internal_transfer"}`, EventKind: "transfer_in",
+		CreatedAt: journal.CreatedAt, CreatedByUserID: journal.ActorUserID,
+	}, auditEventID, false)
+	if err != nil {
+		return InternalTransferLink{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_lot_links
+		(operation_id, link_seq, source_lot_id, destination_lot_id, quantity_value, quantity_scale,
+		 basis_knowledge, carried_basis_value, carried_basis_scale, cost_commodity_id,
+		 original_date_knowledge, original_acquired_on, source_evidence_json)
+		VALUES (?, 1, NULL, ?, ?, ?, 'known', ?, ?, ?, ?, NULLIF(?, ''), ?)`,
+		operationID, destination.ID, pooled.quantityValue, pooled.quantityScale,
+		exact.New(pooled.basisValue), pooled.basisScale, transfer.CostCommodityID,
+		pooled.originalKnowledge, pooled.originalDate, transfer.SourceEvidenceJSON); err != nil {
+		return InternalTransferLink{}, fmt.Errorf("link pooled internal transfer lot: %w", err)
+	}
+	return InternalTransferLink{DestinationLotID: destination.ID,
+		QuantityValue: pooled.quantityValue, QuantityScale: pooled.quantityScale,
+		CarriedBasisValue: pooled.basisValue, CarriedBasisScale: pooled.basisScale,
+		OriginalDateKnowledge: pooled.originalKnowledge, OriginalAcquiredOn: pooled.originalDate}, nil
+}
+
+// pooledTransferTotals is what a pooled lot carries from its depletions.
+type pooledTransferTotals struct {
+	quantityValue     exact.Coefficient
+	quantityScale     int
+	basisValue        int64
+	basisScale        int
+	originalKnowledge string
+	originalDate      string
+}
+
+// pooledTransferTotalsTx sums a pool depletion exactly and dates it by the
+// latest original acquisition date among the lots it took from. One unknown
+// date makes the latest unknown. Commit and replay share it.
+func pooledTransferTotalsTx(ctx context.Context, tx *sql.Tx, bookID int64, moved []LotDisposalRecord) (pooledTransferTotals, error) {
+	quantity, basis := exact.NewScaledInt(), exact.NewScaledInt()
+	totals := pooledTransferTotals{originalKnowledge: "known"}
+	for _, depletion := range moved {
+		quantity.AddCoefficient(depletion.QuantityValue, depletion.QuantityScale)
+		basis.AddInt64(depletion.CostBasisValue, depletion.CostBasisScale)
+		source, err := investmentLotByIDTx(ctx, tx, bookID, depletion.LotID)
+		if err != nil {
+			return pooledTransferTotals{}, err
+		}
+		knowledge, date, err := internalTransferOriginalDateTx(ctx, tx, source.ID, source.OpenedOn)
+		if err != nil {
+			return pooledTransferTotals{}, err
+		}
+		if knowledge != "known" {
+			totals.originalKnowledge = "unknown"
+		} else if date > totals.originalDate {
+			totals.originalDate = date
+		}
+	}
+	if totals.originalKnowledge != "known" {
+		totals.originalDate = ""
+	}
+	var err error
+	if totals.quantityValue, err = quantity.Coefficient(); err != nil {
+		return pooledTransferTotals{}, err
+	}
+	totals.quantityScale = quantity.Scale()
+	if totals.basisValue, err = basis.Int64(); err != nil {
+		return pooledTransferTotals{}, ErrInvestmentBasisRange
+	}
+	totals.basisScale = basis.Scale()
+	return totals, nil
+}
+
+// internalTransferOriginalDateTx is a lot's effective original acquisition
+// date: its own opening, or what the transfer that opened it currently carries.
+func internalTransferOriginalDateTx(ctx context.Context, tx *sql.Tx, lotID int64, openedOn string) (string, string, error) {
 	var knowledge string
 	var original sql.NullString
 	err := tx.QueryRowContext(ctx, `SELECT original_date_knowledge, original_acquired_on
-		FROM investment_transfer_lot_links WHERE destination_lot_id = ?`, source.ID).Scan(&knowledge, &original)
+		FROM effective_investment_transfer_links WHERE destination_lot_id = ?`, lotID).Scan(&knowledge, &original)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "known", source.OpenedOn, nil
+		return "known", openedOn, nil
 	}
 	if err != nil {
 		return "", "", fmt.Errorf("read source lot original acquisition date: %w", err)

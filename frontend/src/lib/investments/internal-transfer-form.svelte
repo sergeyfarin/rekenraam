@@ -41,6 +41,9 @@
   let destinationAccountID = $state('');
   let quantities = $state<Record<string, string>>({});
   let pooledQuantity = $state('');
+  // An average-cost source opens one pooled destination lot by default; the
+  // user may keep one lot per source lot instead (T-135).
+  let lineage = $state<'pooled_lot' | 'source_lots'>('pooled_lot');
   let sourceReference = $state('');
   let memo = $state('');
   let pending = $state(false);
@@ -131,7 +134,10 @@
           : m.investments_transfer_internal_pooled_quantity_error());
         return null;
       }
-      return { ...base, quantity_value: parsed.quantity_value, quantity_scale: parsed.quantity_scale };
+      return {
+        ...base, quantity_value: parsed.quantity_value, quantity_scale: parsed.quantity_scale,
+        destination_lineage: lineage
+      };
     }
     const drafts = lots.filter((lot) => !!quantities[String(lot.id)]?.trim()).map((lot) => ({
       lotID: lot.id, quantity: quantities[String(lot.id)]
@@ -247,6 +253,7 @@
 <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
   <h2 id="internal-transfer-title" class="text-base font-semibold text-foreground">{m.investments_transfer_internal_title()}</h2>
   <p class="text-sm text-muted">{m.investments_transfer_internal_help()}</p>
+  <p class="text-xs text-muted" role="note">{m.investments_transfer_internal_wrapper_hint()}</p>
   {#if loading}
     <p class="text-sm text-muted" role="status">{m.investments_loading()}</p>
   {:else if loadError}
@@ -263,7 +270,7 @@
     <div>
       <label for="internal-transfer-source" class="mb-1 block text-sm font-medium text-foreground">{m.investments_transfer_internal_source()}</label>
       <select id="internal-transfer-source" bind:value={sourceKey} required
-        onchange={() => { quantities = {}; pooledQuantity = ''; destinationAccountID = ''; discardPreview(); }}
+        onchange={() => { quantities = {}; pooledQuantity = ''; lineage = 'pooled_lot'; destinationAccountID = ''; discardPreview(); }}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_transfer_internal_select_source()}</option>
         {#each positions as position (`${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}`)}
@@ -295,6 +302,25 @@
           <input id="internal-transfer-pooled-quantity" type="text" inputmode="decimal" autocomplete="off"
             bind:value={pooledQuantity} oninput={discardPreview} aria-describedby="internal-transfer-pooled-help"
             class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
+          <fieldset class="space-y-2 pt-1">
+            <legend class="text-sm font-medium text-foreground">{m.investments_transfer_internal_lineage_legend()}</legend>
+            {#each [
+              { value: 'pooled_lot', label: m.investments_transfer_internal_lineage_pooled(), help: m.investments_transfer_internal_lineage_pooled_help() },
+              { value: 'source_lots', label: m.investments_transfer_internal_lineage_source_lots(), help: m.investments_transfer_internal_lineage_source_lots_help() }
+            ] as option (option.value)}
+              <label class="flex items-start gap-2 text-sm text-foreground">
+                <input type="radio" name="internal-transfer-lineage" value={option.value}
+                  checked={lineage === option.value}
+                  onchange={() => { lineage = option.value as 'pooled_lot' | 'source_lots'; discardPreview(); }}
+                  aria-describedby={`internal-transfer-lineage-${option.value}-help`}
+                  class="mt-1" />
+                <span>
+                  <span class="font-medium">{option.label}</span>
+                  <span id={`internal-transfer-lineage-${option.value}-help`} class="block text-xs text-muted">{option.help}</span>
+                </span>
+              </label>
+            {/each}
+          </fieldset>
         </div>
       {:else}
         <fieldset class="space-y-3 rounded-(--radius-control) border border-border p-3">
@@ -338,16 +364,17 @@
       <section class="space-y-2 rounded-(--radius-control) border border-border p-3" aria-labelledby="internal-transfer-preview-title" aria-live="polite">
         <h3 id="internal-transfer-preview-title" class="text-sm font-semibold text-foreground">{m.investments_transfer_internal_preview_title()}</h3>
         <ul class="space-y-1 text-sm text-foreground">
-          {#each preview.plan.links as link (link.source_lot_id)}
+          {#each preview.plan.links as link, index (link.source_lot_id ?? `pooled-${index}`)}
             {@const values = {
-              lot: String(link.source_lot_id),
+              lot: String(link.source_lot_id ?? ''),
               quantity: formatQuantity(link.quantity_value, link.quantity_scale, locale),
               basis: formatBasis(link.carried_basis_value, link.carried_basis_scale),
               currency: basisCurrency?.code ?? ''
             }}
-            <li class="break-words">{link.original_acquired_on
-              ? m.investments_transfer_internal_link({ ...values, date: dateFormatter.format(parseISO(link.original_acquired_on)) })
-              : m.investments_transfer_internal_link_date_unknown(values)}</li>
+            {@const date = link.original_acquired_on ? dateFormatter.format(parseISO(link.original_acquired_on)) : null}
+            <li class="break-words">{link.source_lot_id === null
+              ? (date ? m.investments_transfer_internal_pooled_link({ ...values, date }) : m.investments_transfer_internal_pooled_link_date_unknown(values))
+              : (date ? m.investments_transfer_internal_link({ ...values, date }) : m.investments_transfer_internal_link_date_unknown(values))}</li>
           {/each}
         </ul>
         {#if preview.plan.basis_allocation === 'average_cost_pool'}

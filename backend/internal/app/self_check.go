@@ -37,6 +37,7 @@ const (
 	CheckCheckpointIntegrity    = "checkpoint_integrity"
 	CheckAccountVersionCoverage = "account_version_coverage"
 	CheckInvestmentFoundation   = "investment_foundation"
+	CheckInvestmentReplay       = "investment_replay_equivalence"
 	CheckSQLiteIntegrity        = "sqlite_integrity"
 	CheckAttachments            = "attachments"
 )
@@ -131,6 +132,10 @@ var checkNarratives = map[string]checkNarrative{
 	CheckInvestmentFoundation: {
 		explanation: "Named investment operations must link their posted versions, source lots, effects and journal-backed cash components. Disposal decisions and each shared cost-currency clearing posting must independently conserve their attributed proceeds. A completed setup also needs its external investment transfer equity account and commission default.",
 		nextStep:    "Review the named operation, disposal decision, journal or lot and the setup accounts. Preserve the original rows before correcting any mismatch or missing link.",
+	},
+	CheckInvestmentReplay: {
+		explanation: "Commands replay only the investment positions they affect. This check replays every long position from its effective trades, transfers, splits and elections in a rolled-back simulation and compares lot balances, each disposal's allocations, split effects, carried transfer basis and the method lock with what is stored, exactly and per cost currency. A stored result that history no longer produces means a command skipped a replay it needed.",
+		nextStep:    "Note the named lots, disposal decisions or operations and keep a backup. Do not edit the projection by hand: re-entering a correction through the app replays the position, and a refused replay names the operation history no longer supports.",
 	},
 	CheckSQLiteIntegrity: {
 		explanation: "The database file itself must pass SQLite's integrity_check and foreign_key_check.",
@@ -307,18 +312,95 @@ func (s *SelfCheckService) executeChecks(ctx context.Context) ([]SelfCheckResult
 		return nil, err
 	}
 
+	// Replay runs in short write transactions of its own; release the read
+	// snapshot first so it never holds a connection the replay waits on.
+	_ = snapshot.Rollback()
+	replay, err := s.investmentReplayCheck(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	integrity, err := s.sqliteIntegrityCheck(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	results := append(balances, structural, lots, positions, checkpoints, coverage, investmentFoundation, integrity, s.attachmentsCheck())
+	results := append(balances, structural, lots, positions, checkpoints, coverage, investmentFoundation, replay, integrity, s.attachmentsCheck())
 	for index := range results {
 		narrative := checkNarratives[results[index].CheckID]
 		results[index].Explanation = narrative.explanation
 		results[index].NextStep = narrative.nextStep
 	}
 	return results, nil
+}
+
+// investmentReplayCheck is T-134's verifier: every long position's stored
+// projection must equal its replay from effective intents.
+func (s *SelfCheckService) investmentReplayCheck(ctx context.Context) (SelfCheckResult, error) {
+	equivalence, err := s.repository.InvestmentReplayEquivalence(ctx, BookID)
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	result := SelfCheckResult{CheckID: CheckInvestmentReplay, Status: SelfCheckPassed,
+		Summary: fmt.Sprintf("%d investment positions replay to their stored lots, disposals, splits and transfers",
+			equivalence.Positions-equivalence.Skipped)}
+	if len(equivalence.Mismatches) > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount = int64(len(equivalence.Mismatches))
+		counts := make(map[string]int)
+		var kinds []string
+		var references []string
+		for _, mismatch := range equivalence.Mismatches {
+			if counts[mismatch.Kind] == 0 {
+				kinds = append(kinds, mismatch.Kind)
+			}
+			counts[mismatch.Kind]++
+			if len(result.Sample) < db.SelfCheckSampleLimit && mismatch.ReferenceID > 0 {
+				result.Sample = append(result.Sample, mismatch.ReferenceID)
+				references = append(references, fmt.Sprintf("%s #%d", replayReferenceLabel(mismatch.Kind), mismatch.ReferenceID))
+			}
+		}
+		var parts []string
+		for _, kind := range kinds {
+			parts = append(parts, fmt.Sprintf("%d %s", counts[kind], replayMismatchLabel(kind)))
+		}
+		result.Summary = "replay disagrees with the stored projection: " + strings.Join(parts, "; ")
+		if len(references) > 0 {
+			result.Summary += " (" + strings.Join(references, ", ") + ")"
+		}
+	}
+	if equivalence.Skipped > 0 {
+		result.Summary += fmt.Sprintf("; %d positions with a lot that has no opening operation were not replayed", equivalence.Skipped)
+	}
+	return result, nil
+}
+
+func replayMismatchLabel(kind string) string {
+	switch kind {
+	case db.ReplayMismatchLotState:
+		return "lot balances"
+	case db.ReplayMismatchDisposal:
+		return "disposal allocations"
+	case db.ReplayMismatchSplit:
+		return "split effects"
+	case db.ReplayMismatchTransferLink:
+		return "internal transfers carrying stale basis"
+	case db.ReplayMismatchMethodFamily:
+		return "method locks"
+	default:
+		return "positions whose history no longer replays"
+	}
+}
+
+func replayReferenceLabel(kind string) string {
+	switch kind {
+	case db.ReplayMismatchLotState:
+		return "lot"
+	case db.ReplayMismatchDisposal:
+		return "decision"
+	default:
+		return "operation"
+	}
 }
 
 func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapshot *sql.Tx) (SelfCheckResult, error) {
@@ -410,7 +492,7 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				WHERE f.operation_id = o.id AND f.transfer_kind = 'internal')
 			OR EXISTS (SELECT 1 FROM investment_transfer_lot_links x
 				JOIN investment_transfer_facts f ON f.operation_id = x.operation_id
-				WHERE f.operation_id = o.id AND NOT EXISTS (
+				WHERE f.operation_id = o.id AND x.source_lot_id IS NOT NULL AND NOT EXISTS (
 					SELECT 1 FROM investment_lots source JOIN investment_lots destination
 						ON destination.id = x.destination_lot_id
 					JOIN investment_lot_events source_event ON source_event.lot_id = source.id
@@ -440,7 +522,39 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 						AND source_event.cost_basis_scale = x.carried_basis_scale
 						AND (source_event.cost_basis_value = '-' || x.carried_basis_value
 							OR (source_event.cost_basis_value = '0' AND x.carried_basis_value = '0'))
-				)))`},
+				))
+			-- A pooled_lot transfer (T-135) has one link and one destination
+			-- lot opened by its transfer_in effect; every transfer_out effect
+			-- takes from its source position. Totals are folded in Go.
+			OR EXISTS (SELECT 1 FROM investment_transfer_facts f WHERE f.operation_id = o.id
+				AND f.destination_lineage = 'pooled_lot' AND (
+					(SELECT COUNT(*) FROM investment_transfer_lot_links x WHERE x.operation_id = f.operation_id) <> 1
+					OR NOT EXISTS (SELECT 1 FROM investment_transfer_lot_links x
+						JOIN investment_lots destination ON destination.id = x.destination_lot_id
+						JOIN investment_lot_events destination_event ON destination_event.lot_id = destination.id
+							AND destination_event.event_kind = 'transfer_in'
+						JOIN investment_operation_lot_effects destination_effect
+							ON destination_effect.lot_event_id = destination_event.id AND destination_effect.operation_id = o.id
+						WHERE x.operation_id = f.operation_id AND x.source_lot_id IS NULL
+							AND destination.account_id = f.destination_account_id AND destination.commodity_id = f.commodity_id
+							AND destination.cost_commodity_id = x.cost_commodity_id
+							AND x.quantity_value = destination.quantity_value AND x.quantity_scale = destination.quantity_scale
+							AND x.carried_basis_value = destination.cost_basis_value
+							AND x.carried_basis_scale = destination.cost_basis_scale
+							AND EXISTS (SELECT 1 FROM investment_operation_journal_links link
+								JOIN transaction_versions v ON v.id = link.transaction_version_id
+								WHERE link.operation_id = o.id AND v.transaction_id = destination.source_transaction_id
+								AND v.transaction_id = destination_event.transaction_id))
+					OR NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+						JOIN investment_lot_events e ON e.id = x.lot_event_id AND e.event_kind = 'transfer_out'
+						WHERE x.operation_id = o.id)
+					OR EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+						JOIN investment_lot_events e ON e.id = x.lot_event_id AND e.event_kind = 'transfer_out'
+						JOIN investment_lots source ON source.id = e.lot_id
+						JOIN investment_transfer_lot_links link ON link.operation_id = f.operation_id
+						WHERE x.operation_id = o.id AND (source.account_id <> f.source_account_id
+							OR source.commodity_id <> f.commodity_id OR source.cost_commodity_id <> link.cost_commodity_id))))
+			)`},
 		{"internal transfer basis allocation disagrees with its source depletions", `
 			SELECT f.operation_id FROM investment_transfer_facts f
 			WHERE f.book_id = ? AND f.transfer_kind = 'internal'
@@ -586,6 +700,29 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		result.Status = SelfCheckFailed
 		result.FindingCount += splitMismatch
 		summaries = append(summaries, fmt.Sprintf("%d splits post a different journal delta than their effective lot effects", splitMismatch))
+	}
+	// Every committed and revised depletion set of a pooled_lot transfer must
+	// take exactly the quantity and basis its one destination lot carries.
+	pooledSets, err := s.repository.SelfCheckPooledTransferSets(ctx, snapshot, BookID)
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	var pooledMismatch int64
+	for _, set := range pooledSets {
+		if set.Depletions > 0 && set.DepletedQuantity.Cmp(set.LinkQuantity) == 0 &&
+			set.DepletedBasis.Cmp(set.LinkBasis) == 0 {
+			continue
+		}
+		pooledMismatch++
+		if len(result.Sample) < db.SelfCheckSampleLimit {
+			result.Sample = append(result.Sample, set.OperationID)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("operation #%d", set.OperationID))
+		}
+	}
+	if pooledMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += pooledMismatch
+		summaries = append(summaries, fmt.Sprintf("%d pooled transfer depletion sets do not carry their link's quantity and basis", pooledMismatch))
 	}
 	type clearingKey struct {
 		operationID, versionID, currencyID int64

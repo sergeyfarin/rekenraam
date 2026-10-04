@@ -23,7 +23,7 @@ type InvestmentReplayIntent struct {
 	OperationKind    string
 	EffectSeq        int
 	EventDate        string
-	Kind             string // opening, disposal, transfer_out, pooled_transfer_out or split
+	Kind             string // opening, disposal, transfer_out, pooled_transfer_out, pooled_lot_transfer_out or split
 	LotID            int64  // opening or transfer_out
 	LinkSeq          int    // transfer_out: the link whose carried basis it produces
 	// RecordedLotID is the source lot a transfer_out's current effective
@@ -53,11 +53,17 @@ type InvestmentReplayIntent struct {
 	SpecificLots    []LotAllocation
 	// PooledLinks are a pooled transfer's committed per-lot carried amounts,
 	// in link order. Replay must reproduce them exactly.
-	PooledLinks     []InvestmentReplayTransferLink
-	TransactionID   int64
-	AuditEventID    int64
-	CreatedByUserID int64
-	CreatedAt       string
+	PooledLinks []InvestmentReplayTransferLink
+	// PooledDepletions are a pooled_lot transfer's effective source
+	// depletions; AmountValue is its effective carried basis and the original
+	// date fields its effective date. Replay may revise all three (T-135).
+	PooledDepletions      []InvestmentReplayTransferLink
+	OriginalDateKnowledge string
+	OriginalAcquiredOn    string
+	TransactionID         int64
+	AuditEventID          int64
+	CreatedByUserID       int64
+	CreatedAt             string
 }
 
 // InvestmentReplayTransferLink is one source lot's committed depletion in a
@@ -106,9 +112,7 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		FROM investment_lots l JOIN effective_investment_operations o ON o.id = l.operation_id
 		-- An internal-transfer destination opens at its link's effective
 		-- carried basis; the lot row keeps the first committed amount (T-132).
-		LEFT JOIN investment_transfer_lot_links link ON link.destination_lot_id = l.id
-		LEFT JOIN latest_investment_transfer_link_revisions revision
-			ON revision.operation_id = link.operation_id AND revision.link_seq = link.link_seq
+		LEFT JOIN effective_investment_transfer_links revision ON revision.destination_lot_id = l.id
 		WHERE l.book_id = ? AND l.account_id = ? AND l.commodity_id = ?
 			AND l.cost_commodity_id = ? AND l.position_side = ?
 	`, bookID, accountID, commodityID, costCommodityID, side)
@@ -209,7 +213,8 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		LEFT JOIN latest_investment_transfer_link_revisions revision
 			ON revision.operation_id = x.operation_id AND revision.link_seq = x.link_seq
 		WHERE f.book_id = ? AND f.source_account_id = ? AND f.commodity_id = ?
-			AND f.transfer_kind = 'internal' AND x.cost_commodity_id = ?
+			AND f.transfer_kind = 'internal' AND f.destination_lineage = 'source_lots'
+			AND x.cost_commodity_id = ?
 		ORDER BY f.operation_id, x.link_seq
 	`, bookID, accountID, commodityID, costCommodityID)
 	if err != nil {
@@ -277,6 +282,12 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	if err := transfers.Close(); err != nil {
 		return nil, fmt.Errorf("close replay transfer depletions: %w", err)
 	}
+
+	pooledLots, err := investmentReplayPooledLotIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
+	if err != nil {
+		return nil, err
+	}
+	intents = append(intents, pooledLots...)
 
 	splits, err := investmentReplaySplitIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
 	if err != nil {
@@ -416,6 +427,143 @@ type transferSourceOpening struct {
 	lotID       int64
 	operationID int64
 	openedOn    string
+}
+
+// investmentReplayPooledLotIntentsQuery reads the pooled_lot transfers out of
+// a holding (T-135). Each is one intent for the link's fixed quantity,
+// carrying its effective basis, original date and source depletions: the
+// latest revision's, or else the operation's committed transfer_out events.
+func investmentReplayPooledLotIntentsQuery(ctx context.Context, reader queryer, bookID, accountID, commodityID, costCommodityID int64) ([]InvestmentReplayIntent, error) {
+	rows, err := reader.QueryContext(ctx, `
+		SELECT f.operation_id, o.operation_kind, f.effective_on, x.link_seq,
+			x.quantity_value, x.quantity_scale, x.carried_basis_value, x.carried_basis_scale,
+			x.original_date_knowledge, COALESCE(x.original_acquired_on, ''), COALESCE(x.revision_id, 0)
+		FROM investment_transfer_facts f
+		JOIN effective_investment_operations o ON o.id = f.operation_id
+		JOIN effective_investment_transfer_links x ON x.operation_id = f.operation_id
+		WHERE f.book_id = ? AND f.source_account_id = ? AND f.commodity_id = ?
+			AND f.transfer_kind = 'internal' AND f.destination_lineage = 'pooled_lot'
+			AND x.cost_commodity_id = ?
+		ORDER BY f.operation_id`, bookID, accountID, commodityID, costCommodityID)
+	if err != nil {
+		return nil, fmt.Errorf("read replay pooled-lot transfers: %w", err)
+	}
+	var intents []InvestmentReplayIntent
+	var revisions []int64
+	for rows.Next() {
+		intent := InvestmentReplayIntent{Kind: "pooled_lot_transfer_out"}
+		var basis sql.NullString
+		var basisScale sql.NullInt64
+		var revisionID int64
+		if err := rows.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate, &intent.LinkSeq,
+			&intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale,
+			&intent.OriginalDateKnowledge, &intent.OriginalAcquiredOn, &revisionID); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan replay pooled-lot transfer: %w", err)
+		}
+		if !basis.Valid || !basisScale.Valid {
+			rows.Close()
+			return nil, fmt.Errorf("%w: transfer operation %d lacks known basis", ErrInvalidDisposalParams, intent.OperationID)
+		}
+		intent.AmountValue, intent.AmountScale = exact.Coefficient(basis.String), int(basisScale.Int64)
+		intents = append(intents, intent)
+		revisions = append(revisions, revisionID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("iterate replay pooled-lot transfers: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close replay pooled-lot transfers: %w", err)
+	}
+	for index := range intents {
+		intent := &intents[index]
+		// The committed source events give the intent its slot and provenance
+		// even after a revision replaced their amounts.
+		events, err := reader.QueryContext(ctx, `
+			SELECT effect.effect_seq, e.lot_id, e.quantity_value, e.quantity_scale,
+				e.cost_basis_value, e.cost_basis_scale, e.transaction_id, e.created_audit_event_id,
+				e.created_by_user_id, e.created_at
+			FROM investment_operation_lot_effects effect
+			JOIN investment_lot_events e ON e.id = effect.lot_event_id AND e.event_kind = 'transfer_out'
+			WHERE effect.operation_id = ?
+			ORDER BY effect.effect_seq`, intent.OperationID)
+		if err != nil {
+			return nil, fmt.Errorf("read replay pooled-lot depletions: %w", err)
+		}
+		for events.Next() {
+			var depletion InvestmentReplayTransferLink
+			var seq int
+			var basis sql.NullString
+			var basisScale sql.NullInt64
+			var transactionID, auditEventID, userID int64
+			var createdAt string
+			if err := events.Scan(&seq, &depletion.LotID, &depletion.QuantityValue, &depletion.QuantityScale,
+				&basis, &basisScale, &transactionID, &auditEventID, &userID, &createdAt); err != nil {
+				events.Close()
+				return nil, fmt.Errorf("scan replay pooled-lot depletion: %w", err)
+			}
+			if !basis.Valid || !basisScale.Valid {
+				events.Close()
+				return nil, fmt.Errorf("%w: transfer operation %d depletion lacks known basis", ErrInvalidDisposalParams, intent.OperationID)
+			}
+			depletion.QuantityValue = depletion.QuantityValue.Negated()
+			depletion.CostBasisValue, depletion.CostBasisScale = exact.Coefficient(basis.String).Negated(), int(basisScale.Int64)
+			if intent.EffectSeq == 0 {
+				intent.EffectSeq, intent.TransactionID, intent.AuditEventID = seq, transactionID, auditEventID
+				intent.CreatedByUserID, intent.CreatedAt = userID, createdAt
+			}
+			intent.PooledDepletions = append(intent.PooledDepletions, depletion)
+		}
+		if err := events.Err(); err != nil {
+			events.Close()
+			return nil, fmt.Errorf("iterate replay pooled-lot depletions: %w", err)
+		}
+		if err := events.Close(); err != nil {
+			return nil, fmt.Errorf("close replay pooled-lot depletions: %w", err)
+		}
+		if intent.EffectSeq <= 0 {
+			return nil, fmt.Errorf("replay pooled-lot transfer %d has no immutable source effect", intent.OperationID)
+		}
+		if revisions[index] > 0 {
+			if intent.PooledDepletions, err = transferRevisionDepletionsQuery(ctx, reader, revisions[index]); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return intents, nil
+}
+
+// transferRevisionDepletionsQuery reads a pooled_lot revision's source
+// depletions in order.
+func transferRevisionDepletionsQuery(ctx context.Context, reader queryer, revisionID int64) ([]InvestmentReplayTransferLink, error) {
+	rows, err := reader.QueryContext(ctx, `SELECT source_lot_id, quantity_value, quantity_scale,
+		cost_basis_value, cost_basis_scale FROM investment_transfer_link_revision_depletions
+		WHERE revision_id = ? ORDER BY depletion_seq`, revisionID)
+	if err != nil {
+		return nil, fmt.Errorf("read transfer revision depletions: %w", err)
+	}
+	var depletions []InvestmentReplayTransferLink
+	for rows.Next() {
+		var depletion InvestmentReplayTransferLink
+		if err := rows.Scan(&depletion.LotID, &depletion.QuantityValue, &depletion.QuantityScale,
+			&depletion.CostBasisValue, &depletion.CostBasisScale); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan transfer revision depletion: %w", err)
+		}
+		depletions = append(depletions, depletion)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("iterate transfer revision depletions: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close transfer revision depletions: %w", err)
+	}
+	if len(depletions) == 0 {
+		return nil, fmt.Errorf("transfer link revision %d has no depletions", revisionID)
+	}
+	return depletions, nil
 }
 
 // investmentReplaySplitIntentsQuery reads the effective splits of a holding.

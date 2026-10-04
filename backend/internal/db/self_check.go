@@ -572,6 +572,55 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	if err := transfers.Close(); err != nil {
 		return nil, fmt.Errorf("close effective self-check transfer revisions: %w", err)
 	}
+	// A revised pooled_lot transfer takes its effective depletions out of the
+	// source lots and its whole quantity into the one destination (T-135).
+	pooled, err := transaction.QueryContext(ctx, `
+		SELECT depletion.source_lot_id, source.account_id, source.commodity_id, source.cost_commodity_id,
+			depletion.quantity_value, depletion.quantity_scale, depletion.cost_basis_value, depletion.cost_basis_scale,
+			0
+		FROM latest_investment_transfer_link_revisions revision
+		JOIN investment_transfer_link_revision_depletions depletion ON depletion.revision_id = revision.id
+		JOIN current_investment_lots source ON source.id = depletion.source_lot_id
+		WHERE revision.book_id = ? AND revision.source_lot_id IS NULL
+		UNION ALL
+		SELECT link.destination_lot_id, destination.account_id, destination.commodity_id, destination.cost_commodity_id,
+			link.quantity_value, link.quantity_scale, revision.carried_basis_value, revision.carried_basis_scale,
+			1
+		FROM latest_investment_transfer_link_revisions revision
+		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
+			AND link.link_seq = revision.link_seq
+		JOIN current_investment_lots destination ON destination.id = link.destination_lot_id
+		WHERE revision.book_id = ? AND revision.source_lot_id IS NULL`, bookID, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read effective self-check pooled transfer revisions: %w", err)
+	}
+	for pooled.Next() {
+		var event SelfCheckLotEventRecord
+		var quantity, basis exact.Coefficient
+		var incoming bool
+		if err := pooled.Scan(&event.LotID, &event.AccountID, &event.CommodityID, &event.CostCommodityID,
+			&quantity, &event.QuantityScale, &basis, &event.CostBasisScale, &incoming); err != nil {
+			pooled.Close()
+			return nil, fmt.Errorf("scan effective self-check pooled transfer revision: %w", err)
+		}
+		value, err := exact.ScaledIntFromCoefficient(basis, event.CostBasisScale).Int64()
+		if err != nil || value < 0 || quantity.Sign() <= 0 {
+			pooled.Close()
+			return nil, fmt.Errorf("invalid effective self-check pooled transfer revision for lot %d", event.LotID)
+		}
+		event.QuantityValue, event.CostBasisValue = quantity, value
+		if !incoming {
+			event.QuantityValue, event.CostBasisValue = quantity.Negated(), -value
+		}
+		events = append(events, event)
+	}
+	if err := pooled.Err(); err != nil {
+		pooled.Close()
+		return nil, fmt.Errorf("iterate effective self-check pooled transfer revisions: %w", err)
+	}
+	if err := pooled.Close(); err != nil {
+		return nil, fmt.Errorf("close effective self-check pooled transfer revisions: %w", err)
+	}
 	return events, nil
 }
 
@@ -1021,4 +1070,86 @@ func (r *SelfCheckRepository) SelfCheckSplitDeltas(ctx context.Context, transact
 		}
 	}
 	return deltas, nil
+}
+
+// SelfCheckPooledTransferSet is one source depletion set of a pooled_lot
+// internal transfer (T-135): the committed transfer_out events (RevisionID
+// zero) or one revision's depletions, folded exactly, beside the quantity and
+// basis the link carries for that set.
+type SelfCheckPooledTransferSet struct {
+	OperationID      int64
+	RevisionID       int64
+	LinkQuantity     *exact.ScaledInt
+	LinkBasis        *exact.ScaledInt
+	DepletedQuantity *exact.ScaledInt
+	DepletedBasis    *exact.ScaledInt
+	Depletions       int
+}
+
+// SelfCheckPooledTransferSets audits every committed and revised depletion
+// set of every pooled_lot transfer, not only the effective one.
+func (r *SelfCheckRepository) SelfCheckPooledTransferSets(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckPooledTransferSet, error) {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT link.operation_id, 0, link.quantity_value, link.quantity_scale,
+			link.carried_basis_value, link.carried_basis_scale,
+			e.quantity_value, e.quantity_scale, e.cost_basis_value, e.cost_basis_scale
+		FROM investment_transfer_facts f
+		JOIN investment_transfer_lot_links link ON link.operation_id = f.operation_id
+		LEFT JOIN investment_operation_lot_effects effect ON effect.operation_id = f.operation_id
+		LEFT JOIN investment_lot_events e ON e.id = effect.lot_event_id AND e.event_kind = 'transfer_out'
+		WHERE f.book_id = ? AND f.destination_lineage = 'pooled_lot'
+			AND (effect.operation_id IS NULL OR e.id IS NOT NULL)
+		UNION ALL
+		SELECT revision.operation_id, revision.id, link.quantity_value, link.quantity_scale,
+			revision.carried_basis_value, revision.carried_basis_scale,
+			'-' || depletion.quantity_value, depletion.quantity_scale,
+			CASE depletion.cost_basis_value WHEN '0' THEN '0' ELSE '-' || depletion.cost_basis_value END,
+			depletion.cost_basis_scale
+		FROM investment_transfer_link_revisions revision
+		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
+			AND link.link_seq = revision.link_seq
+		LEFT JOIN investment_transfer_link_revision_depletions depletion ON depletion.revision_id = revision.id
+		WHERE revision.book_id = ? AND revision.source_lot_id IS NULL
+		ORDER BY 1, 2`, bookID, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read self-check pooled transfer sets: %w", err)
+	}
+	defer rows.Close()
+	var sets []SelfCheckPooledTransferSet
+	for rows.Next() {
+		var operationID, revisionID int64
+		var linkQuantity exact.Coefficient
+		var linkQuantityScale int
+		var linkBasis sql.NullString
+		var linkBasisScale sql.NullInt64
+		var quantity, basis sql.NullString
+		var quantityScale, basisScale sql.NullInt64
+		if err := rows.Scan(&operationID, &revisionID, &linkQuantity, &linkQuantityScale, &linkBasis, &linkBasisScale,
+			&quantity, &quantityScale, &basis, &basisScale); err != nil {
+			return nil, fmt.Errorf("scan self-check pooled transfer set: %w", err)
+		}
+		if len(sets) == 0 || sets[len(sets)-1].OperationID != operationID || sets[len(sets)-1].RevisionID != revisionID {
+			set := SelfCheckPooledTransferSet{OperationID: operationID, RevisionID: revisionID,
+				LinkQuantity: exact.ScaledIntFromCoefficient(linkQuantity, linkQuantityScale),
+				LinkBasis:    exact.NewScaledInt(), DepletedQuantity: exact.NewScaledInt(), DepletedBasis: exact.NewScaledInt()}
+			if linkBasis.Valid {
+				set.LinkBasis.AddCoefficient(exact.Coefficient(linkBasis.String), int(linkBasisScale.Int64))
+			}
+			sets = append(sets, set)
+		}
+		if !quantity.Valid {
+			continue
+		}
+		// Depletions leave the source, so their signed amounts are negative.
+		set := &sets[len(sets)-1]
+		set.Depletions++
+		set.DepletedQuantity.SubScaled(exact.ScaledIntFromCoefficient(exact.Coefficient(quantity.String), int(quantityScale.Int64)))
+		if basis.Valid {
+			set.DepletedBasis.SubScaled(exact.ScaledIntFromCoefficient(exact.Coefficient(basis.String), int(basisScale.Int64)))
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate self-check pooled transfer sets: %w", err)
+	}
+	return sets, nil
 }

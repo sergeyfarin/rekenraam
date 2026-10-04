@@ -18985,7 +18985,7 @@ export interface components {
         /** @description One check's verdict, in the terms a person needs: what was checked, what was found, where to look, and what to do about it. A failure a reader cannot act on is only half reported. */
         SelfCheckResult: {
             /** @enum {string} */
-            check_id: "entry_balance" | "transaction_balance" | "book_balance" | "version_integrity" | "lot_reconciliation" | "commodity_position_sign" | "checkpoint_integrity" | "account_version_coverage" | "investment_foundation" | "sqlite_integrity" | "attachments";
+            check_id: "entry_balance" | "transaction_balance" | "book_balance" | "version_integrity" | "lot_reconciliation" | "commodity_position_sign" | "checkpoint_integrity" | "account_version_coverage" | "investment_foundation" | "investment_replay_equivalence" | "sqlite_integrity" | "attachments";
             /**
              * @description not_applicable is reserved for a check that cannot run yet — attachments until R14a. It never passes by default: passing a check nobody ran is how a coverage claim gets made by accident.
              * @enum {string}
@@ -20785,7 +20785,7 @@ export interface components {
             /** Format: int64 */
             lot_id: number;
         };
-        /** @description Send lot_allocations for an individual-lot source, or quantity_value and quantity_scale for an average-cost source (pooled allocation, T-123). The source position's method-family lock, or else its resolved default, decides which is accepted. */
+        /** @description Send lot_allocations for an individual-lot source, or quantity_value and quantity_scale for an average-cost source (pooled allocation, T-123). The source position's method-family lock, or else its resolved default, decides which is accepted. A pooled quantity opens one pooled destination lot unless destination_lineage is source_lots (T-135). */
         InternalTransferRequest: {
             /**
              * Format: date
@@ -20807,6 +20807,11 @@ export interface components {
             /** @description Pooled transfer quantity coefficient; omit when lot_allocations are sent. */
             quantity_value?: string;
             quantity_scale?: number;
+            /**
+             * @description Pooled quantity only. pooled_lot (default) opens one destination lot at the pool's carried basis, dated by the latest original acquisition date among the units moved; replay may revise its basis and date. source_lots opens one lot per depleted source lot with its own date; a later change to which lots the pool depletes is then refused with the transfer named. Selected lots always carry source_lots.
+             * @enum {string}
+             */
+            destination_lineage?: "pooled_lot" | "source_lots";
             source_evidence?: {
                 [key: string]: unknown;
             };
@@ -20822,8 +20827,11 @@ export interface components {
             destination_lot_ids: number[];
         };
         InternalTransferLink: {
-            /** Format: int64 */
-            source_lot_id: number;
+            /**
+             * Format: int64
+             * @description Null for a pooled destination lot, which is carried from the whole pool.
+             */
+            source_lot_id: number | null;
             /**
              * Format: int64
              * @description Null in a preview, whose lots are never durable.
@@ -20831,17 +20839,22 @@ export interface components {
             destination_lot_id: number | null;
             quantity_value: string;
             quantity_scale: number;
-            /** @description Basis carried from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot. */
+            /** @description Basis carried from the source lot, or the pool for a pooled lot; pool rate for an average-cost source, exact remainder on the final touched lot. */
             carried_basis_value: string;
             carried_basis_scale: number;
             /** @enum {string} */
             original_date_knowledge: "known" | "unknown";
-            /** Format: date */
+            /**
+             * Format: date
+             * @description For a pooled lot, the latest original acquisition date among the units moved.
+             */
             original_acquired_on: string | null;
         };
         InternalTransferPlan: {
             /** @enum {string} */
             basis_allocation: "selected_lots" | "average_cost_pool";
+            /** @enum {string} */
+            destination_lineage: "pooled_lot" | "source_lots";
             /** @enum {string} */
             cost_basis_method: "fifo" | "lifo" | "average_cost" | "specific_lot";
             /**

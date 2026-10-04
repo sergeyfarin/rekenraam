@@ -465,11 +465,15 @@ notes record design decisions per area; they carry no status or order.
   following every recorded internal transfer to a fixed point, replays as one
   merged dated stream in the command transaction. A whole-book rebuild was
   rejected (O(book) per command and preview, wider failure radius, same
-  refusals) and kept only as a verifier (T-134). A changed carried basis
+  refusals) and kept only as a verifier (T-134, shipped as the
+  `investment_replay_equivalence` self-check). A changed carried basis
   appends a transfer link revision and replays each destination (T-132).
-  Removing a transferred acquisition and changed pooled lineage (T-135) are
-  named refusals. Effective reads are SQL views; opening facts live on
-  `investment_lots`.
+  Removing a transferred acquisition is a named refusal. An average-cost
+  source moves one pooled destination lot by default, whose basis, latest-unit
+  date and source depletions replay may revise (T-135, ADR 0013 *Pooled
+  Transfer Lineage Refinement*); changed lineage stays refused only for the
+  opt-in `source_lots` lineage. Effective reads are SQL views; opening facts
+  live on `investment_lots`.
 - **Correction families** (T-115, T-116, T-118, T-119, T-120). Field and
   transfer changes reuse general backdating and the cross-position closure.
   T-116 (shipped) admits a buy or sale replacement with a different trade

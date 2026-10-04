@@ -1583,7 +1583,7 @@ func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 	rows, err := tx.QueryContext(ctx, `
 		SELECT lot.id, lot.remaining_quantity_value, lot.remaining_quantity_scale
 		FROM current_investment_lots lot
-		LEFT JOIN investment_transfer_lot_links link ON link.destination_lot_id = lot.id
+		LEFT JOIN effective_investment_transfer_links link ON link.destination_lot_id = lot.id
 		WHERE lot.book_id = ? AND lot.account_id = ? AND lot.commodity_id = ?
 			AND lot.cost_commodity_id = ? AND lot.status = 'open' AND lot.opened_on <= ?
 		`+orderClause, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate)

@@ -310,11 +310,11 @@ func TestBuyGainImpactLeavesRowsUnchangedOnImpossibleDependency(t *testing.T) {
 	destination := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
 	setHoldingCostBasisMethod(t, f, "average_cost")
 	buyOn(t, f, "2026-02-01", 2, 2000)
-	_, err := f.investmentService.InternalTransfer(ctx, pooledTransferInput(f, destination, "2026-03-01", exact.New(1), 0))
+	_, err := f.investmentService.InternalTransfer(ctx, sourceLotsTransferInput(f, destination, "2026-03-01", exact.New(1), 0))
 	require.NoError(t, err)
 
-	// Replay would deplete a different source lot for the pooled transfer,
-	// which is refused (T-132). An acknowledgement never turns that refusal
+	// Replay would deplete a different source lot for a transfer that carries
+	// source lots, which is refused (T-132, T-135). An acknowledgement never turns that refusal
 	// into a partial commit.
 	input := backdatedBuy(f, "2026-01-01", 2, 100)
 	input.GainImpactAcknowledgement = "0000000000000000000000000000000000000000000000000000000000000000"

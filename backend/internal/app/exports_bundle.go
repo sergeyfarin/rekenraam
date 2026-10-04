@@ -22,7 +22,7 @@ import (
 // BundleSchemaVersion is the archive's own version, carried in manifest.json.
 // Columns are appended within a version; a change that cannot be made by
 // appending increments this and needs an ADR (ADR 0011).
-const BundleSchemaVersion = 7
+const BundleSchemaVersion = 8
 
 // bundleFile is one entry of the archive, recorded in the manifest with the
 // checksum computed while it was written.
@@ -205,13 +205,16 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "lot-effects", []string{"operation_id", "effect_seq", "lot_event_id"})
 		}},
 		{"investment-transfer-facts.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-facts", []string{"operation_id", "transfer_kind", "effective_on", "commodity_id", "source_account_id", "destination_account_id", "source_evidence_json", "audit_event_id", "basis_allocation", "cost_basis_method", "method_resolution_tier", "method_account_version_id", "method_profile_version_id"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-facts", []string{"operation_id", "transfer_kind", "effective_on", "commodity_id", "source_account_id", "destination_account_id", "source_evidence_json", "audit_event_id", "basis_allocation", "cost_basis_method", "method_resolution_tier", "method_account_version_id", "method_profile_version_id", "destination_lineage"})
 		}},
 		{"investment-transfer-lot-links.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-lot-links", []string{"operation_id", "link_seq", "source_lot_id", "destination_lot_id", "quantity_value", "quantity_scale", "basis_knowledge", "carried_basis_value", "carried_basis_scale", "cost_commodity_id", "original_date_knowledge", "original_acquired_on", "source_evidence_json"})
 		}},
 		{"investment-transfer-link-revisions.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-link-revisions", []string{"revision_id", "operation_id", "link_seq", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "source_lot_id", "carried_basis_value", "carried_basis_scale", "created_at", "audit_event_id"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-link-revisions", []string{"revision_id", "operation_id", "link_seq", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "source_lot_id", "carried_basis_value", "carried_basis_scale", "created_at", "audit_event_id", "original_date_knowledge", "original_acquired_on"})
+		}},
+		{"investment-transfer-link-revision-depletions.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-link-revision-depletions", []string{"revision_id", "depletion_seq", "source_lot_id", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale"})
 		}},
 		{"investment-split-facts.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "split-facts", []string{"operation_id", "account_id", "commodity_id", "effective_on", "ratio_numerator", "ratio_denominator", "source_evidence_json", "audit_event_id"})
@@ -891,6 +894,7 @@ value in this archive was ever a floating-point number.`,
   investment-transfer-facts.csv  typed in-kind transfer sources and account endpoints
   investment-transfer-lot-links.csv  sourced lot lineage, dates, and basis knowledge
   investment-transfer-link-revisions.csv  replayed carried basis of internal transfer links
+  investment-transfer-link-revision-depletions.csv  replayed source depletions of pooled-lot transfers
   investment-split-facts.csv  sourced split and reverse-split ratios and dates
   investment-split-revisions.csv  replay revisions of split lot effects per cost currency, with any adjustment journal
   investment-split-revision-effects.csv  per-lot quantity changes for those revisions
@@ -973,7 +977,12 @@ investment-transfer-lot-links.csv keeps each internal transfer's first carried
 basis. When corrected history changes it, the highest revision_seq per link in
 investment-transfer-link-revisions.csv is the basis the destination lot now
 carries and the source lot it is taken from (the corrected successor of a
-replaced acquisition); units, destination lots and original dates do not change.`,
+replaced acquisition); units and destination lots do not change. A pooled_lot
+transfer (destination_lineage in investment-transfer-facts.csv) has one link
+with no source lot: its revisions also carry the destination's current
+original acquisition date, and their source depletions are in
+investment-transfer-link-revision-depletions.csv. Its first depletions are the
+transfer_out events in investment-lot-effects.csv.`,
 	}
 
 	if filter.From != "" || filter.To != "" || len(filter.AccountIDs) > 0 || len(filter.CommodityIDs) > 0 {
