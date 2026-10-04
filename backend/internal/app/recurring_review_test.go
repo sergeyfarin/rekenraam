@@ -14,6 +14,7 @@ import (
 )
 
 func TestSkippingAFutureOccurrenceThroughReviewStopsItGenerating(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -46,6 +47,7 @@ func TestSkippingAFutureOccurrenceThroughReviewStopsItGenerating(t *testing.T) {
 }
 
 func TestRecurringSkipRejectsNonScheduleAndPreCreationDates(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -59,6 +61,7 @@ func TestRecurringSkipRejectsNonScheduleAndPreCreationDates(t *testing.T) {
 }
 
 func TestBlockedOccurrenceRetriesOnlyWhenAskedTo(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -103,6 +106,7 @@ func TestBlockedOccurrenceRetriesOnlyWhenAskedTo(t *testing.T) {
 }
 
 func TestRecurringRetryRollsBackDraftAndAuditOnOccurrenceFailure(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -127,6 +131,7 @@ func TestRecurringRetryRollsBackDraftAndAuditOnOccurrenceFailure(t *testing.T) {
 }
 
 func TestRecurringSkipAndGenerationRacePreservesOneAuditedIdentity(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -165,6 +170,7 @@ func TestRecurringSkipAndGenerationRacePreservesOneAuditedIdentity(t *testing.T)
 }
 
 func TestRecurringDuePaginationUsesCurrentDraftAmountsAndKeepsArchivedDrafts(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	input.Patch.Frequency = recurringTestPtr("daily")
@@ -218,6 +224,7 @@ func TestRecurringDuePaginationUsesCurrentDraftAmountsAndKeepsArchivedDrafts(t *
 }
 
 func TestRecurringOccurrenceRangeKeepsSkippedDatesAcrossScheduleEdits(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -244,6 +251,7 @@ func TestRecurringOccurrenceRangeKeepsSkippedDatesAcrossScheduleEdits(t *testing
 }
 
 func TestArchivedBlockedOccurrenceCanBeSkippedButNotRetried(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -268,6 +276,7 @@ func TestArchivedBlockedOccurrenceCanBeSkippedButNotRetried(t *testing.T) {
 }
 
 func TestRecurringRetryRejectsStaleAttemptsAndTemplateRevisions(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -294,6 +303,7 @@ func TestRecurringRetryRejectsStaleAttemptsAndTemplateRevisions(t *testing.T) {
 }
 
 func TestRecurringDuePreservesMoreThanOnePage(t *testing.T) {
+	t.Parallel()
 	_, s, input := recurringFixture(t)
 	ctx := context.Background()
 	input.Patch.Frequency = recurringTestPtr("daily")
@@ -318,6 +328,7 @@ func TestRecurringDuePreservesMoreThanOnePage(t *testing.T) {
 }
 
 func TestConcurrentRecurringRetriesAcrossPoolsCreateOneDraft(t *testing.T) {
+	t.Parallel()
 	f, first, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := first.CreateTemplate(ctx, input)
@@ -367,6 +378,7 @@ func TestConcurrentRecurringRetriesAcrossPoolsCreateOneDraft(t *testing.T) {
 }
 
 func TestRecurringSkipRollsBackAuditOnWriteFailure(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -379,6 +391,7 @@ func TestRecurringSkipRollsBackAuditOnWriteFailure(t *testing.T) {
 }
 
 func TestRecurringDueAmountsKeepCommoditiesSeparateAndRejectOverflow(t *testing.T) {
+	t.Parallel()
 	result, err := recurringAmounts([]db.RecurringDuePosting{
 		{CommodityID: 1, CommodityCode: "EUR", QuantityValue: exact.MustParse("9007199254740993"), QuantityScale: 2},
 		{CommodityID: 1, CommodityCode: "EUR", QuantityValue: exact.New(7), QuantityScale: 3},
@@ -402,6 +415,7 @@ func TestRecurringDueAmountsKeepCommoditiesSeparateAndRejectOverflow(t *testing.
 }
 
 func TestUnsavedSchedulePreviewUsesCalendarRulesWithoutWrites(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	before := recurringCounts(t, f.database)
 	patch := RecurringTemplatePatch{Frequency: recurringTestPtr("monthly"), StartsOn: recurringTestPtr("2026-08-31"), DayOfMonth: NullablePatch[int]{Set: true, Value: recurringTestPtr(31)}}
@@ -425,6 +439,7 @@ func TestUnsavedSchedulePreviewUsesCalendarRulesWithoutWrites(t *testing.T) {
 }
 
 func TestRecurringSummaryCountsArchivedDraftsAndBlockedSeparately(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)

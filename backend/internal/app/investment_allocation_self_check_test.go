@@ -10,6 +10,7 @@ import (
 )
 
 func TestSelfCheckDetectsDisposalAllocationConservationDamage(t *testing.T) {
+	t.Parallel()
 	for _, replayed := range []bool{false, true} {
 		for _, mutation := range []struct {
 			name, assignment string
@@ -67,6 +68,7 @@ func TestSelfCheckDetectsDisposalAllocationConservationDamage(t *testing.T) {
 }
 
 func TestSelfCheckAllocationConservationAcceptsMixedScalesAndNegativeProceeds(t *testing.T) {
+	t.Parallel()
 	for _, negative := range []bool{false, true} {
 		t.Run(fmt.Sprintf("negative=%t", negative), func(t *testing.T) {
 			t.Parallel()
@@ -121,6 +123,7 @@ func TestSelfCheckDetectsDisposalRevisionBasisHeaderDamage(t *testing.T) {
 }
 
 func TestSelfCheckChecksEveryDisposalRevisionSnapshot(t *testing.T) {
+	t.Parallel()
 	for _, original := range []bool{false, true} {
 		t.Run(fmt.Sprintf("original=%t", original), func(t *testing.T) {
 			t.Parallel()

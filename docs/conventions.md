@@ -532,6 +532,13 @@ has actual installations, its migration files are immutable.
   `db.Open`, including its production PRAGMA and permission checks. Tests whose
   subject is migration, restore, or fresh-database startup behavior must keep
   constructing and migrating their own database instead of using the template.
+- Every top-level test in `internal/app` and `internal/db` calls `t.Parallel()`
+  first; the race gate runs packages one at a time, so tests left serial run
+  on one core (T-125). A test that genuinely needs process-wide state
+  (`t.Setenv`, working directory, a package variable) instead carries a
+  `// serial: <reason>` comment directly above it.
+  `TestIntegrationSuitesRunTestsInParallel` enforces this. Never share a live
+  database, file or worker between parallel tests.
 - Use **`testify`** (`testify/assert` for non-fatal checks, `testify/require` for fatal checks) in all Go tests. Do not write verbose `if got != want` assertion blocks.
 - Frontend logic gets Svelte checks and focused component or unit tests when introduced.
 - Bruno covers important API workflows.

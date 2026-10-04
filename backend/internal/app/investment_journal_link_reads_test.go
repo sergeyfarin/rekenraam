@@ -12,6 +12,7 @@ import (
 )
 
 func TestInvestmentCorrectionReadsAndCommandsUseJournalLinks(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"buy", "sell"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx := context.Background()
@@ -97,6 +98,7 @@ func requireInvestmentHeaderRetired(t *testing.T, f *investmentsTestFixture) {
 }
 
 func TestInvestmentTransferAndReinvestmentWritersWithoutCompatibilityHeader(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	requireInvestmentHeaderRetired(t, f)
@@ -121,6 +123,7 @@ func TestInvestmentTransferAndReinvestmentWritersWithoutCompatibilityHeader(t *t
 }
 
 func TestInvestmentCorrectionReadsRequireJournalLink(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -144,6 +147,7 @@ func TestInvestmentCorrectionReadsRequireJournalLink(t *testing.T) {
 }
 
 func TestInvestmentOperationSchemaRetiresTransactionHeader(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	var count int
 	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM pragma_table_info('investment_operations') WHERE name = 'transaction_id'`).Scan(&count))
@@ -151,6 +155,7 @@ func TestInvestmentOperationSchemaRetiresTransactionHeader(t *testing.T) {
 }
 
 func TestLotSelfCheckReportsMissingAndCorruptState(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought := buyOn(t, f, "2026-01-01", 3, 30000)
@@ -172,6 +177,7 @@ func TestLotSelfCheckReportsMissingAndCorruptState(t *testing.T) {
 }
 
 func TestBuyLotStateInitializationFailureRollsBackCommand(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	counts := func() map[string]int {

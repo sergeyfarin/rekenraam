@@ -82,6 +82,7 @@ func requireConserved(t *testing.T, want *exact.ScaledInt, parts ...*exact.Scale
 }
 
 func TestPooledTransferAverageDefaultBeforeFirstSaleCarriesPoolRate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -147,6 +148,7 @@ func TestPooledTransferAverageDefaultBeforeFirstSaleCarriesPoolRate(t *testing.T
 }
 
 func TestPooledTransferFromPartiallySoldPoolUsesDatedPoolAndPositionLock(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -183,6 +185,7 @@ func TestPooledTransferFromPartiallySoldPoolUsesDatedPoolAndPositionLock(t *test
 }
 
 func TestPooledTransferRefusedForIndividualLotSourceWithoutWriting(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -198,6 +201,7 @@ func TestPooledTransferRefusedForIndividualLotSourceWithoutWriting(t *testing.T)
 }
 
 func TestPooledTransferMixedScalesConserveBasis(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -229,6 +233,7 @@ func TestPooledTransferMixedScalesConserveBasis(t *testing.T) {
 }
 
 func TestPooledTransfersRepeatedUntilFullKeepExactRemainder(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -272,6 +277,7 @@ func TestPooledTransfersRepeatedUntilFullKeepExactRemainder(t *testing.T) {
 }
 
 func TestPooledTransferSpanningSourceLotsKeepsLineageAndOriginalDates(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -313,6 +319,7 @@ func TestPooledTransferSpanningSourceLotsKeepsLineageAndOriginalDates(t *testing
 }
 
 func TestPooledTransferJoinsDestinationAverageCostPool(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -357,6 +364,7 @@ func TestPooledTransferJoinsDestinationAverageCostPool(t *testing.T) {
 }
 
 func TestPooledTransferLaterSourceAndDestinationSalesUseCarriedBasis(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -398,6 +406,7 @@ func TestPooledTransferLaterSourceAndDestinationSalesUseCarriedBasis(t *testing.
 }
 
 func TestPooledTransferReplaysUnchangedAfterLaterSaleReversal(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -434,6 +443,7 @@ func TestPooledTransferReplaysUnchangedAfterLaterSaleReversal(t *testing.T) {
 }
 
 func TestBackdatedBuyRefusesChangedPooledTransferLineageWithoutWriting(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -467,6 +477,7 @@ func TestBackdatedBuyRefusesChangedPooledTransferLineageWithoutWriting(t *testin
 }
 
 func TestPooledTransferLateReconciliationRefusalRollsBackEverything(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	setHoldingCostBasisMethod(t, f, "average_cost")
@@ -516,6 +527,7 @@ func TestPooledTransferLateReconciliationRefusalRollsBackEverything(t *testing.T
 }
 
 func TestPooledTransferRefusesUnknownBasisWithoutWriting(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")

@@ -14,6 +14,7 @@ import (
 // their fill/date key, non-investment rows keep their relative order, and the
 // sort is stable throughout.
 func TestSortRowsForInvestmentCommitOrder(t *testing.T) {
+	t.Parallel()
 	row := func(id int64, raw, normalized string) db.ImportStagedRowRecord {
 		return db.ImportStagedRowRecord{ID: id, RawJSON: raw, NormalizedJSON: normalized}
 	}

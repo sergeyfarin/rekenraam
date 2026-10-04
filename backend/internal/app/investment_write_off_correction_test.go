@@ -62,6 +62,7 @@ func requireZeroProceeds(t *testing.T, f *investmentsTestFixture, transactionID 
 // A full write-off is reversed: the inverse restores every unit, the
 // original decision stays as immutable evidence, and self-check passes.
 func TestReverseFullWriteOffRestoresPosition(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 10, 100000)
@@ -90,6 +91,7 @@ func TestReverseFullWriteOffRestoresPosition(t *testing.T) {
 // A partial write-off is replaced by a smaller one at zero proceeds. A later
 // FIFO sale then consumes different shares, and its gain change is disclosed.
 func TestReplacePartialWriteOffReplaysDependentSale(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 10, 100000)
@@ -126,6 +128,7 @@ func TestReplacePartialWriteOffReplaysDependentSale(t *testing.T) {
 // Reversing a write-off restores units a later sale did not need; reducing a
 // later write-off below a dependent sale's requirement is named instead.
 func TestReplaceWriteOffRefusesImpossibleDependentSale(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 10, 100000)
@@ -147,6 +150,7 @@ func TestReplaceWriteOffRefusesImpossibleDependentSale(t *testing.T) {
 // election names the lot the user chose; a later specific-lot sale of the
 // originally written-off lot now replays against it.
 func TestReplaceSpecificLotWriteOffKeepsLineage(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	first := buyOn(t, f, "2026-01-01", 5, 50000)
@@ -178,6 +182,7 @@ func TestReplaceSpecificLotWriteOffKeepsLineage(t *testing.T) {
 // An already corrected write-off cannot be corrected again, and the sale and
 // write-off commands stay in their own families.
 func TestWriteOffCorrectionsStayInTheirFamilyAndRefuseAlreadyCorrected(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 10, 100000)
@@ -210,6 +215,7 @@ func TestWriteOffCorrectionsStayInTheirFamilyAndRefuseAlreadyCorrected(t *testin
 // after the preview changes the gain set, so the stale token is refused and
 // nothing is written.
 func TestReplaceWriteOffRefusesStalePreview(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 10, 100000)
@@ -234,6 +240,7 @@ func TestReplaceWriteOffRefusesStalePreview(t *testing.T) {
 // A failure after the replacement and dependent replay are written rolls back
 // the inverse, the corrected write-off, the replay revisions and the audit.
 func TestReplaceWriteOffRollsBackLateFailure(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 10, 100000)
@@ -267,6 +274,7 @@ func TestReplaceWriteOffRollsBackLateFailure(t *testing.T) {
 // the checkpoint. The write-off has no cash leg, so the checkpoint is on the
 // holding's security balance.
 func TestReverseWriteOffRequiresReconciliationOverride(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 10, 100000)
@@ -290,6 +298,7 @@ func TestReverseWriteOffRequiresReconciliationOverride(t *testing.T) {
 // has no cash leg, so its cost currency is resolved from the new holding's
 // lots on the corrected date; the source position gets its units back.
 func TestReplaceWriteOffMovesHolding(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	other := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")

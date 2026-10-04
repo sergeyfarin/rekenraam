@@ -80,6 +80,7 @@ func TestCalendarBucketBoundsUsesCalendarBoundariesAndClipsRange(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestScaledDivisionExactResult(t *testing.T) {
+	t.Parallel()
 	// 100 USD (scale 2) / 4 BTC (scale 0) = 25 USD/BTC at scale 8
 	price, err := scaledDivision(10000, 2, exact.New(4), 0, 8)
 	require.NoError(t, err)
@@ -87,6 +88,7 @@ func TestScaledDivisionExactResult(t *testing.T) {
 }
 
 func TestScaledDivisionRoundsHalfUp(t *testing.T) {
+	t.Parallel()
 	// 100 USD / 3 BTC → 33.33333333... at scale 8
 	// truncation would give 3333333333 (33.33333333)
 	// rounded gives 3333333333 — last significant digit is 3, no rounding up
@@ -97,6 +99,7 @@ func TestScaledDivisionRoundsHalfUp(t *testing.T) {
 }
 
 func TestScaledDivisionRoundsUp(t *testing.T) {
+	t.Parallel()
 	// 2 / 3 at scale 4 = 0.6666... → rounds to 6667 (0.6667)
 	price, err := scaledDivision(2, 0, exact.New(3), 0, 4)
 	require.NoError(t, err)
@@ -104,24 +107,28 @@ func TestScaledDivisionRoundsUp(t *testing.T) {
 }
 
 func TestScaledDivisionRoundsAfterNegativeExponent(t *testing.T) {
+	t.Parallel()
 	price, err := scaledDivision(5000, 12, exact.New(1), 0, 8)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), price)
 }
 
 func TestScaledDivisionRoundsNegativeHalfAwayFromZero(t *testing.T) {
+	t.Parallel()
 	price, err := scaledDivision(-1, 0, exact.New(2), 0, 0)
 	require.NoError(t, err)
 	assert.Equal(t, int64(-1), price)
 }
 
 func TestScaledDivisionDivisionByZero(t *testing.T) {
+	t.Parallel()
 	_, err := scaledDivision(100, 2, exact.New(0), 0, 8)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "division by zero")
 }
 
 func TestScaledDivisionOverflow(t *testing.T) {
+	t.Parallel()
 	// Very small denominator (1 unit at scale 24) and large numerator/scale
 	// should overflow int64.
 	tiny := exact.MustParse("1") // 1 * 10^-24
@@ -132,6 +139,7 @@ func TestScaledDivisionOverflow(t *testing.T) {
 }
 
 func TestScaledDivisionCryptoNumeratorScale(t *testing.T) {
+	t.Parallel()
 	// 5 USD (scale 2) / 50 tokens (scale 8) = 0.1 USD/token.
 	price, err := scaledDivision(500, 2, exact.MustParse("5000000000"), 8, 8)
 	require.NoError(t, err)
@@ -139,6 +147,7 @@ func TestScaledDivisionCryptoNumeratorScale(t *testing.T) {
 }
 
 func TestScaledDivisionTinyCryptoAmountByLargeFiatAmountReportsOverflow(t *testing.T) {
+	t.Parallel()
 	// 10 billion quote units / 10^-21 crypto units = 10^31 quote units per
 	// crypto unit. The calculation is exact, but the current price coefficient
 	// is int64 and therefore cannot store the result.
@@ -152,6 +161,7 @@ func TestScaledDivisionTinyCryptoAmountByLargeFiatAmountReportsOverflow(t *testi
 // ---------------------------------------------------------------------------
 
 func TestScaledFXProductUsesWideIntermediate(t *testing.T) {
+	t.Parallel()
 	// Both factors fit int64. Their raw product does not, but after applying
 	// the scales the result is exactly math.MaxInt64 and must remain lossless.
 	first := PriceObservation{PriceValue: math.MaxInt64, PriceScale: 18, BaseQuantityValue: 1}
@@ -163,6 +173,7 @@ func TestScaledFXProductUsesWideIntermediate(t *testing.T) {
 }
 
 func TestScaledFXProductReportsResultOverflow(t *testing.T) {
+	t.Parallel()
 	first := PriceObservation{PriceValue: math.MaxInt64, BaseQuantityValue: 1}
 	second := PriceObservation{PriceValue: 2, BaseQuantityValue: 1}
 
@@ -172,6 +183,7 @@ func TestScaledFXProductReportsResultOverflow(t *testing.T) {
 }
 
 func TestScaledFXProductRoundsHalfUpAtResultScale(t *testing.T) {
+	t.Parallel()
 	first := PriceObservation{PriceValue: 1, BaseQuantityValue: 2}
 	second := PriceObservation{PriceValue: 1, BaseQuantityValue: 1}
 
@@ -181,6 +193,7 @@ func TestScaledFXProductRoundsHalfUpAtResultScale(t *testing.T) {
 }
 
 func TestScaledFXProductChainsThreeLegsWithoutIntermediateRounding(t *testing.T) {
+	t.Parallel()
 	// 1/3 * 3/7 * 7/1 = 1 exactly. Rounding each leg product on the way would
 	// not land on 1, so this pins the single-quotient property of the chain.
 	legs := []PriceObservation{
@@ -196,6 +209,7 @@ func TestScaledFXProductChainsThreeLegsWithoutIntermediateRounding(t *testing.T)
 }
 
 func TestScaledFXProductRejectsSingleLegChain(t *testing.T) {
+	t.Parallel()
 	_, err := scaledFXProduct([]PriceObservation{{PriceValue: 1, BaseQuantityValue: 1}}, 0)
 
 	require.Error(t, err)
@@ -207,6 +221,7 @@ func TestScaledFXProductRejectsSingleLegChain(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestAggregatePostingsAccumulatesCorrectly(t *testing.T) {
+	t.Parallel()
 	postings := []db.LedgerPostingRecord{
 		{AccountID: 1, CommodityID: 10, QuantityValue: exact.New(500), QuantityScale: 2},
 		{AccountID: 1, CommodityID: 10, QuantityValue: exact.New(300), QuantityScale: 2},
@@ -224,6 +239,7 @@ func TestAggregatePostingsAccumulatesCorrectly(t *testing.T) {
 }
 
 func TestAggregatePostingsMixedScalesSameCommodity(t *testing.T) {
+	t.Parallel()
 	postings := []db.LedgerPostingRecord{
 		{AccountID: 1, CommodityID: 10, QuantityValue: exact.New(1), QuantityScale: 0},  // 1
 		{AccountID: 1, CommodityID: 10, QuantityValue: exact.New(10), QuantityScale: 1}, // 1.0

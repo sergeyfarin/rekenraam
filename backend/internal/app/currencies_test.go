@@ -10,6 +10,7 @@ import (
 )
 
 func TestCurrencySpecNormalizesCodeAndUsesCatalogFallback(t *testing.T) {
+	t.Parallel()
 	service := NewCurrencyService(nil, nil)
 
 	spec, err := service.currencySpec(" usd ", "")
@@ -22,6 +23,7 @@ func TestCurrencySpecNormalizesCodeAndUsesCatalogFallback(t *testing.T) {
 }
 
 func TestCurrencySpecRejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
 	service := NewCurrencyService(nil, nil)
 	tests := []struct {
 		name      string

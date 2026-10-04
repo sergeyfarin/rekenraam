@@ -10,6 +10,7 @@ import (
 )
 
 func TestReleaseReviewProbe(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		t.Run("future_lot_"+method, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
@@ -49,6 +50,7 @@ func TestReleaseReviewProbe(t *testing.T) {
 }
 
 func TestReleaseReviewReconciliationInterleave(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	input := CreateTransactionInput{OwnerUserID: f.ownerUserID, OriginType: "browser_api", Spec: TransactionInput{TransactionDate: "2026-01-01", JournalEntries: []JournalEntryInput{{Postings: []PostingInput{{AccountID: f.cashAccountID, CommodityID: f.eurCommodityID, QuantityValue: exact.New(10)}, {AccountID: f.incomeAccountID, CommodityID: f.eurCommodityID, QuantityValue: exact.New(-10)}}}}}}

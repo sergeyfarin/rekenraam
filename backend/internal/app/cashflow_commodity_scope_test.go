@@ -41,6 +41,7 @@ func requireNoCommodity(t *testing.T, amounts []BalanceQuantity, commodityID int
 }
 
 func TestCashflowExcludesTheSecurityLegsOfABuy(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -68,6 +69,7 @@ func TestCashflowExcludesTheSecurityLegsOfABuy(t *testing.T) {
 }
 
 func TestCashflowExcludesTheSecurityLegsOfASell(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -96,6 +98,7 @@ func TestCashflowExcludesTheSecurityLegsOfASell(t *testing.T) {
 // wrong euro number: the shares were valued at the buy-implied price and added
 // to both gross measures, turning 0 in / 100 out into 100 in / 200 out.
 func TestCashflowReportingTotalsDropTheSecurityLegs(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -122,6 +125,7 @@ func TestCashflowReportingTotalsDropTheSecurityLegs(t *testing.T) {
 // touch a selected cash account, and both must still be classified — the rule
 // is "the group touches cash", not "the group is the entry's first commodity".
 func TestCashflowStillClassifiesEveryCommodityThatTouchesCash(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	usdCommodityID := seedTestCurrencyCommodity(t, f.database, "USD")

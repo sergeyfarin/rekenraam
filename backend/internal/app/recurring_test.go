@@ -31,6 +31,7 @@ func recurringFixture(t *testing.T) (*investmentsTestFixture, *RecurringService,
 }
 
 func TestUpdateRecurringTemplateLeavesOmittedFieldsAlone(t *testing.T) {
+	t.Parallel()
 	_, service, input := recurringFixture(t)
 	input.Patch.Enabled = recurringTestPtr(false)
 	input.Patch.LeadDays = recurringTestPtr(0)
@@ -51,6 +52,7 @@ func TestUpdateRecurringTemplateLeavesOmittedFieldsAlone(t *testing.T) {
 }
 
 func TestRecurringTemplateValidatesBalancePerCommodityAndScale(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name           string
 		first, second  string
@@ -82,6 +84,7 @@ func TestRecurringTemplateValidatesBalancePerCommodityAndScale(t *testing.T) {
 }
 
 func TestRecurringTemplateSaveHasNoLedgerSideEffects(t *testing.T) {
+	t.Parallel()
 	f, service, input := recurringFixture(t)
 	tables := []string{"transactions", "transaction_versions", "posting_versions", "investment_lots", "investment_lot_events", "background_work_items", "reconciliation_checkpoints"}
 	before := map[string]int{}
@@ -102,6 +105,7 @@ func TestRecurringTemplateSaveHasNoLedgerSideEffects(t *testing.T) {
 }
 
 func TestRecurringTemplateWatermarkUsesOwnerLocalDate(t *testing.T) {
+	t.Parallel()
 	_, service, input := recurringFixture(t)
 	_, err := service.settings.SavePreferences(context.Background(), SaveUserPreferencesInput{UserID: input.OwnerUserID, TimeZone: "Europe/Amsterdam"})
 	require.NoError(t, err)
@@ -112,6 +116,7 @@ func TestRecurringTemplateWatermarkUsesOwnerLocalDate(t *testing.T) {
 }
 
 func TestRecurringTemplateRejectsInvalidSchedules(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name  string
 		patch func(*RecurringTemplatePatch)
@@ -135,6 +140,7 @@ func TestRecurringTemplateRejectsInvalidSchedules(t *testing.T) {
 }
 
 func TestRecurringTemplateRejectsInvestmentPostingsDespiteOrdinaryKind(t *testing.T) {
+	t.Parallel()
 	f, service, input := recurringFixture(t)
 	// A kind label alone cannot make a security holding safe for a producer
 	// that has no investment lot workflow.
@@ -148,6 +154,7 @@ func TestRecurringTemplateRejectsInvestmentPostingsDespiteOrdinaryKind(t *testin
 }
 
 func TestRecurringTemplateScheduleEditPreservesMaterializedOccurrences(t *testing.T) {
+	t.Parallel()
 	_, service, input := recurringFixture(t)
 	ctx := context.Background()
 	created, err := service.CreateTemplate(ctx, input)
@@ -168,6 +175,7 @@ func TestRecurringTemplateScheduleEditPreservesMaterializedOccurrences(t *testin
 }
 
 func TestRecurringTemplateProducesInputAcceptedByRealTransactionService(t *testing.T) {
+	t.Parallel()
 	f, service, input := recurringFixture(t)
 	ctx := context.Background()
 	created, err := service.CreateTemplate(ctx, input)
@@ -186,6 +194,7 @@ func TestRecurringTemplateProducesInputAcceptedByRealTransactionService(t *testi
 }
 
 func TestRecurringTemplateNextDueIncludesUnmaterializedOverdueDates(t *testing.T) {
+	t.Parallel()
 	_, service, input := recurringFixture(t)
 	created, err := service.CreateTemplate(context.Background(), input)
 	require.NoError(t, err)
@@ -197,6 +206,7 @@ func TestRecurringTemplateNextDueIncludesUnmaterializedOverdueDates(t *testing.T
 }
 
 func TestRecurringTemplateAllowsCurrencyClearingWithoutInvestmentEffects(t *testing.T) {
+	t.Parallel()
 	f, service, input := recurringFixture(t)
 	tradingID, err := db.NewInvestmentRepository(f.database).CommodityTradingAccountID(context.Background(), BookID)
 	require.NoError(t, err)

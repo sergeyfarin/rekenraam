@@ -97,6 +97,7 @@ func overlayBuild(t testing.TB, input forecastNormalizedInput, snapshot db.Forec
 // TestForecastLearningOptionValidation covers the whole opt-in query contract,
 // including that every model parameter is an orphan while the model is off.
 func TestForecastLearningOptionValidation(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		input   ForecastInput
@@ -201,6 +202,7 @@ func TestForecastLearningOptionValidation(t *testing.T) {
 // TestForecastLearningWindowMatchesRequestedCadences proves a weekly-only
 // request does not read five years of history.
 func TestForecastLearningWindowMatchesRequestedCadences(t *testing.T) {
+	t.Parallel()
 	weekly, err := forecastLearningWindow(overlayInput("2015-01-01", nil), overlayAsOf)
 	require.NoError(t, err)
 	assert.Equal(t, "2025-06-30", weekly, "52 complete weeks back from the as-of week")
@@ -218,6 +220,7 @@ func TestForecastLearningWindowMatchesRequestedCadences(t *testing.T) {
 }
 
 func TestForecastLearningOverlayEstimatesEligibleGroups(t *testing.T) {
+	t.Parallel()
 	snapshot := overlaySnapshot(t, overlayHistory(t, 20, "7000"))
 	core := overlayCore(t, "100000")
 	overlay := overlayBuild(t, overlayInput(overlayHistoryStart(t, 20), nil), snapshot, core)
@@ -274,6 +277,7 @@ func TestForecastLearningOverlayEstimatesEligibleGroups(t *testing.T) {
 }
 
 func TestForecastLearningSeparateFXCoverage(t *testing.T) {
+	t.Parallel()
 	snapshot := overlaySnapshot(t, overlayHistory(t, 20, "7000"))
 	core := overlayCore(t, "100000")
 	quoteID := int64(1)
@@ -326,6 +330,7 @@ func TestForecastLearningSeparateFXCoverage(t *testing.T) {
 }
 
 func TestForecastLearningOverlayReportsExcludedGroups(t *testing.T) {
+	t.Parallel()
 	t.Run("too little history is excluded by name", func(t *testing.T) {
 		snapshot := overlaySnapshot(t, overlayHistory(t, 10, "7000"))
 		overlay := overlayBuild(t, overlayInput(overlayHistoryStart(t, 10), nil), snapshot, overlayCore(t, "100000"))
@@ -382,6 +387,7 @@ func TestForecastLearningOverlayReportsExcludedGroups(t *testing.T) {
 // TestForecastLearningOverlayRespectsRecurringOverlap proves a category already
 // covered by a template is dropped rather than estimated a second time.
 func TestForecastLearningOverlayRespectsRecurringOverlap(t *testing.T) {
+	t.Parallel()
 	snapshot := overlaySnapshot(t, overlayHistory(t, 20, "7000"))
 	snapshot.Templates = []db.ForecastTemplateRecord{{ID: 77, BookID: 1, Name: "Groceries", Enabled: true, TransactionKind: "ordinary", Frequency: "monthly", IntervalCount: 1, StartsOn: "2025-01-01", GenerateFrom: "2025-01-01"}}
 	snapshot.TemplatePostings = []db.ForecastTemplatePostingRecord{
@@ -401,6 +407,7 @@ func TestForecastLearningOverlayRespectsRecurringOverlap(t *testing.T) {
 // TestForecastLearningOverlaySubtractsKnownFutureSpending proves a purchase the
 // core projection already carries is not estimated a second time.
 func TestForecastLearningOverlaySubtractsKnownFutureSpending(t *testing.T) {
+	t.Parallel()
 	base := overlayBuild(t, overlayInput(overlayHistoryStart(t, 20), nil), overlaySnapshot(t, overlayHistory(t, 20, "7000")), overlayCore(t, "100000"))
 	require.Len(t, base.Groups, 1)
 
@@ -417,6 +424,7 @@ func TestForecastLearningOverlaySubtractsKnownFutureSpending(t *testing.T) {
 }
 
 func TestForecastLearningOverlayRefusesWithoutGroupPrefix(t *testing.T) {
+	t.Parallel()
 	snapshot := overlaySnapshot(t, overlayHistory(t, 20, "7000"))
 	core := overlayCore(t, "100000")
 	bounds := forecastBounds{AsOf: overlayAsOf, First: core.FirstDate, Through: overlayThrough}
@@ -444,6 +452,7 @@ func TestForecastLearningOverlayRefusesWithoutGroupPrefix(t *testing.T) {
 // TestForecastLearningOverlayListsCategoryOptions proves the owner can see what
 // they may select without any history being required.
 func TestForecastLearningOverlayListsCategoryOptions(t *testing.T) {
+	t.Parallel()
 	overlay := overlayBuild(t, overlayInput("2024-01-01", nil), overlaySnapshot(t, nil), overlayCore(t, "100000"))
 	require.NotEmpty(t, overlay.CategoryOptions)
 	ids := make([]int64, 0, len(overlay.CategoryOptions))

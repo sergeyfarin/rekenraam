@@ -8,6 +8,7 @@ import (
 )
 
 func TestDisposalClearingAttributionGuardsAndRestoredDamage(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct{ name, mutation string }{
 		{"missing", `DELETE FROM investment_disposal_clearing_allocations WHERE decision_id = ?`},
 		{"amount", `UPDATE investment_disposal_clearing_allocations SET proceeds_value = '9999' WHERE decision_id = ?`},
@@ -92,6 +93,7 @@ func TestDisposalClearingAttributionFailureRollsBackSale(t *testing.T) {
 }
 
 func TestDisposalClearingAttributionHandlesDatedFees(t *testing.T) {
+	t.Parallel()
 	for _, treatment := range []string{"clearing_included", "separately_expensed"} {
 		t.Run(treatment, func(t *testing.T) {
 			t.Parallel()

@@ -94,6 +94,7 @@ func correctionCount(t *testing.T, f *investmentsTestFixture) int {
 // for a later sale. The preview discloses that sale's restated gain, the
 // inverse stays on the original date and the replacement on the new one.
 func TestReplaceBuyMovesTradeDateEarlierAndRestatesLaterSale(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, tradeOn(f, f.holdingAccountID, "2026-02-01", 10, 100000))
@@ -134,6 +135,7 @@ func TestReplaceBuyMovesTradeDateEarlierAndRestatesLaterSale(t *testing.T) {
 // Moving a buy after the sale that consumed it leaves the sale without
 // shares on its date: the sale is named and nothing is written.
 func TestReplaceBuyDateAfterDependentSaleNamesSale(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	original, err := f.investmentService.Buy(ctx, tradeOn(f, f.holdingAccountID, "2026-01-01", 10, 100000))
@@ -155,6 +157,7 @@ func TestReplaceBuyDateAfterDependentSaleNamesSale(t *testing.T) {
 // FIFO sale now consumes the remaining lot there, the new account holds the
 // shares, and both positions replay under one audit event.
 func TestReplaceBuyMovesHoldingAccountAndReplaysBothPositions(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	other := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -190,6 +193,7 @@ func TestReplaceBuyMovesHoldingAccountAndReplaysBothPositions(t *testing.T) {
 // Instrument and cost currency both change: the source position empties and
 // the replacement opens a lot in the new instrument at its new cost currency.
 func TestReplaceBuyChangesInstrumentAndCostCurrency(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	usd := seedTestCurrencyCommodity(t, f.database, "USD")
@@ -218,6 +222,7 @@ func TestReplaceBuyChangesInstrumentAndCostCurrency(t *testing.T) {
 // acquisition to another account leaves the election without its lot, so the
 // sale is named and nothing is written.
 func TestReplaceBuyRefusesInvalidatedSpecificLotElection(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	other := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -247,6 +252,7 @@ func TestReplaceBuyRefusesInvalidatedSpecificLotElection(t *testing.T) {
 // transfer link's lot and original date order the destination, so moving the
 // acquisition names the transfer (pooled lineage is T-135).
 func TestReplaceTransferredBuyFieldChangeNamesTransfer(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	destination := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -274,6 +280,7 @@ func TestReplaceTransferredBuyFieldChangeNamesTransfer(t *testing.T) {
 // three journal dates. The inverse keeps all three; the replacement posts its
 // moved trade and settlement dates and the charge's own payment date.
 func TestReplaceBuyDateKeepsMultiJournalFeeDates(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	fees := seedTestAccountWithClass(t, f.database, "active", true, "expense", "expense")
@@ -303,6 +310,7 @@ func TestReplaceBuyDateKeepsMultiJournalFeeDates(t *testing.T) {
 // then the reverse: either crossing needs the explicit override, the preview
 // names the checkpoint, and a refusal writes nothing.
 func TestReplaceBuyDateCrossingCheckpointRequiresOverride(t *testing.T) {
+	t.Parallel()
 	for name, dates := range map[string][2]string{
 		"into reconciled period":   {"2026-04-01", "2026-02-01"},
 		"out of reconciled period": {"2026-02-01", "2026-04-01"},
@@ -346,6 +354,7 @@ func TestReplaceBuyDateCrossingCheckpointRequiresOverride(t *testing.T) {
 // acceptance hook — rolls back the inverse, the replacement, both positions'
 // replay revisions and the retired price.
 func TestReplaceBuyAcrossPositionsRollsBackLateFailure(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	other := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -380,6 +389,7 @@ func TestReplaceBuyAcrossPositionsRollsBackLateFailure(t *testing.T) {
 // source position gets its shares back, the new position's later sale is
 // restated, and the inverse keeps the original date.
 func TestReplaceSaleMovesAccountAndDateReplaysBothPositions(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	other := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -426,6 +436,7 @@ func TestReplaceSaleMovesAccountAndDateReplaysBothPositions(t *testing.T) {
 // A sale moved to a position that cannot cover it on the new date is refused
 // as itself, not as a dependency, and nothing is written.
 func TestReplaceSaleIntoPositionWithoutSharesIsRefused(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	other := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -451,6 +462,7 @@ func TestReplaceSaleIntoPositionWithoutSharesIsRefused(t *testing.T) {
 // entered before the other sale now on the same day, so it still allocates
 // first: FIFO gives it January's lot, not February's.
 func TestReplaceSaleDateKeepsOriginalSameDaySlot(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, tradeOn(f, f.holdingAccountID, "2026-01-01", 5, 50000))
@@ -493,6 +505,7 @@ func TestReplaceSaleDateKeepsOriginalSameDaySlot(t *testing.T) {
 // and a later provider quantity revision no longer matches the effective
 // trade, so it is refused for review instead of moving the trade back.
 func TestReplaceImportedBuyDatePreservesDedupeIdentity(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -549,6 +562,7 @@ func TestReplaceImportedBuyDatePreservesDedupeIdentity(t *testing.T) {
 // (T-135 keeps that refusal for the opt-in lineage); moving it in after the
 // transfer leaves the transfer untouched and commits.
 func TestReplaceBuyIntoPositionWithLaterPooledTransfer(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	wrong := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")

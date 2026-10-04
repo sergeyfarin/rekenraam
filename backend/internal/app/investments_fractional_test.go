@@ -37,6 +37,7 @@ func buyAtScale(t *testing.T, f *investmentsTestFixture, date string, value int6
 // share. The commodity permits six decimal places, so the sale was always
 // within the position's precision.
 func TestSellHalfAShareFromAWholeShareLotUnderEveryMethod(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		t.Run(method, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
@@ -94,6 +95,7 @@ func TestSellHalfAShareFromAWholeShareLotUnderEveryMethod(t *testing.T) {
 // How a purchase was typed must not decide anything about what follows. The
 // same position entered two ways has to behave identically.
 func TestPurchaseTextPrecisionDoesNotChangeWhatCanBeSold(t *testing.T) {
+	t.Parallel()
 	sell := func(t *testing.T, buyValue int64, buyScale int) InvestmentTradeResult {
 		t.Helper()
 		f := newInvestmentsTestFixture(t)
@@ -125,6 +127,7 @@ func TestPurchaseTextPrecisionDoesNotChangeWhatCanBeSold(t *testing.T) {
 // Selling the whole lot in fractional pieces has to close it exactly, with no
 // dust left behind by the widening.
 func TestFractionalSalesDrainALotExactly(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -155,6 +158,7 @@ func TestFractionalSalesDrainALotExactly(t *testing.T) {
 // opportunity. Widening must not turn "you do not have that" into a silent
 // truncation.
 func TestSellRejectsMoreThanTheLotHoldsAtAnyScale(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 

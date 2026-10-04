@@ -11,6 +11,7 @@ import (
 )
 
 func TestInvestmentReplaySimulationReallocatesBasisWithoutChangingPostedHistory(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	tx, err := database.BeginTx(ctx, nil)
@@ -53,6 +54,7 @@ func TestInvestmentReplaySimulationReallocatesBasisWithoutChangingPostedHistory(
 }
 
 func TestInvestmentReplaySimulationNamesImpossibleDependentDisposal(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	tx, err := database.BeginTx(ctx, nil)
@@ -69,6 +71,7 @@ func TestInvestmentReplaySimulationNamesImpossibleDependentDisposal(t *testing.T
 }
 
 func TestInvestmentReplaySimulationRefusesLotWithoutOpeningFact(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	repo := NewInvestmentRepository(database)
@@ -91,6 +94,7 @@ func TestInvestmentReplaySimulationRefusesLotWithoutOpeningFact(t *testing.T) {
 }
 
 func TestInvestmentReplaySimulationRejectsPositionBasisOverflow(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	tx, err := database.BeginTx(ctx, nil)

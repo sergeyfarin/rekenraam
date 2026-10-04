@@ -40,6 +40,7 @@ func requireFinancialAmount(t *testing.T, amounts []BalanceQuantity, commodity i
 // group must not change any measure, even with unusual signs, different account
 // classes, shuffled postings or coefficients wider than int64.
 func TestFinancialCashflowIgnoresEveryOutsideCommodityGroup(t *testing.T) {
+	t.Parallel()
 	for _, class := range []string{"income", "expense", "asset", "liability", "equity"} {
 		t.Run(class, func(t *testing.T) {
 			for seed := uint64(1); seed <= 12; seed++ {
@@ -82,6 +83,7 @@ func TestFinancialCashflowIgnoresEveryOutsideCommodityGroup(t *testing.T) {
 // Expected gross numbers are stated from those facts, not reconstructed from
 // the report's own operating_net + transfer_net identity.
 func TestFinancialCashflowGrossAmountsFollowSelectedAccounts(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	savings := seedTestAccountWithClass(t, f.database, "active", true, "asset", "savings")
@@ -153,6 +155,7 @@ func TestFinancialCashflowGrossAmountsFollowSelectedAccounts(t *testing.T) {
 // A zero grand total is insufficient: errors may cancel across entries or
 // currencies. These go through CreateTransaction and assert no durable residue.
 func TestFinancialPostingBoundaryRejectsCancellationAcrossEntriesOrCommodities(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"different entries", "different commodities", "different scales"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
@@ -180,6 +183,7 @@ func TestFinancialPostingBoundaryRejectsCancellationAcrossEntriesOrCommodities(t
 }
 
 func TestFinancialBalancedWideCoefficientsSurviveSplittingAndReordering(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	// 30-digit money exceeds int64 and JS's exact integer range. Mixed scales and

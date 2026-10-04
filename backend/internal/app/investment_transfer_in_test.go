@@ -46,6 +46,7 @@ func knownTransferInput(f *investmentsTestFixture) ExternalTransferInInput {
 }
 
 func TestExternalTransferInKnownBasisPostsBookBridgeAndReplaysAsOpening(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	equityID := seedExternalTransferEquity(t, f.database)
 	ctx := context.Background()
@@ -143,6 +144,7 @@ func TestExternalTransferInKnownBasisPostsBookBridgeAndReplaysAsOpening(t *testi
 }
 
 func TestExternalTransferFoundationUsesJournalLinkWithoutCompatibilityID(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	requireInvestmentHeaderRetired(t, f)
 	seedExternalTransferEquity(t, f.database)
@@ -154,6 +156,7 @@ func TestExternalTransferFoundationUsesJournalLinkWithoutCompatibilityID(t *test
 }
 
 func TestTransferOriginalAcquisitionDateOrdersFIFOAndLIFO(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo"} {
 		for _, moveAgain := range []bool{false, true} {
 			name := method + "_external"
@@ -224,6 +227,7 @@ func TestTransferOriginalAcquisitionDateOrdersFIFOAndLIFO(t *testing.T) {
 }
 
 func TestExternalTransferInKnownZeroBasisAndUnknownOriginalDate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	seedExternalTransferEquity(t, f.database)
 	input := knownTransferInput(f)

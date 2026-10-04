@@ -67,6 +67,7 @@ func learningCommodityLeg(account, commodity int64, value string, scale int) str
 }
 
 func TestForecastLearningClassifiesCompleteEntries(t *testing.T) {
+	t.Parallel()
 	accounts, commodities := learningAccounts()
 	eligible := learningRows(1, 1, "ordinary", "ordinary", "2026-01-05", learningLeg(1, "-15000"), learningLeg(3, "10000"), learningLeg(4, "5000"))
 	classified := ClassifyForecastLearningEntries(eligible, accounts, commodities)
@@ -105,6 +106,7 @@ func exclusionTotal(values map[string]int) int {
 }
 
 func TestForecastLearningPeriodCoverage(t *testing.T) {
+	t.Parallel()
 	group := ForecastLearningGroup{FundingAccountID: 1, CategoryAccountID: 3, CommodityID: 1}
 	purchases := []ForecastLearningPurchase{{Group: group, EntryDate: "2026-01-05", Amount: exact.ScaledIntFromInt64(100, 2)}}
 	weekly, err := ForecastLearningPeriods(purchases, group, ForecastLearningWeekly, "2025-09-01", "2026-01-08")
@@ -118,6 +120,7 @@ func TestForecastLearningPeriodCoverage(t *testing.T) {
 }
 
 func TestForecastLearningDoesNotOverlapRecurringGroups(t *testing.T) {
+	t.Parallel()
 	accounts, _ := learningAccounts()
 	templates := []db.ForecastTemplateRecord{
 		{ID: 1, StartsOn: "2026-01-01", Enabled: false},
@@ -138,6 +141,7 @@ func TestForecastLearningDoesNotOverlapRecurringGroups(t *testing.T) {
 }
 
 func TestForecastLearningColdStartAndSparseHistory(t *testing.T) {
+	t.Parallel()
 	group := ForecastLearningGroup{1, 3, 1}
 	for _, test := range []struct {
 		name, pattern, from, asOf, reason string
@@ -162,6 +166,7 @@ func TestForecastLearningColdStartAndSparseHistory(t *testing.T) {
 }
 
 func TestForecastLearningSubtractsKnownPeriodSpend(t *testing.T) {
+	t.Parallel()
 	group := ForecastLearningGroup{1, 3, 1}
 	known, ambiguous, err := ForecastLearningKnownPeriodSpend([]ForecastLearningKnownItem{
 		{Group: group, ProjectedDate: "2026-09-01", Amount: exact.ScaledIntFromInt64(2000, 2)},
@@ -195,6 +200,7 @@ func TestForecastLearningSubtractsKnownPeriodSpend(t *testing.T) {
 }
 
 func TestForecastLearningAllocationIsExact(t *testing.T) {
+	t.Parallel()
 	group := ForecastLearningGroup{1, 3, 1}
 	periods := []ForecastLearningPeriod{{Start: "2026-08-31", End: "2026-09-06", Spend: exact.NewScaledInt()}}
 	bins := ForecastLearningTimingBins([]ForecastLearningPurchase{
@@ -246,6 +252,7 @@ func TestForecastLearningAllocationIsExact(t *testing.T) {
 }
 
 func TestForecastLearningBaselinesRemainExact(t *testing.T) {
+	t.Parallel()
 	periods := make([]ForecastLearningPeriod, 8)
 	for i := range periods {
 		periods[i] = ForecastLearningPeriod{Start: time.Date(2025, time.Month(i+1), 1, 0, 0, 0, 0, time.UTC).Format(time.DateOnly), Spend: exact.ScaledIntFromInt64(int64(i+1), 0)}

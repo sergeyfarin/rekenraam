@@ -9,6 +9,7 @@ import (
 )
 
 func TestInvestmentReplayRevisionPreservesOriginalAndInstallsEffectiveState(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	tx, err := database.BeginTx(ctx, nil)
@@ -50,6 +51,7 @@ func TestInvestmentReplayRevisionPreservesOriginalAndInstallsEffectiveState(t *t
 }
 
 func TestInvestmentReplayRevisionRejectsIncompleteAllocationBeforeWriting(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	tx, err := database.BeginTx(ctx, nil)
@@ -70,6 +72,7 @@ func TestInvestmentReplayRevisionRejectsIncompleteAllocationBeforeWriting(t *tes
 }
 
 func TestInvestmentReplayRevisionRejectsCrossPositionAllocation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	tx, err := database.BeginTx(ctx, nil)
@@ -89,6 +92,7 @@ func TestInvestmentReplayRevisionRejectsCrossPositionAllocation(t *testing.T) {
 }
 
 func TestRealizedGainsUseLatestEffectiveReplayRevision(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	repo := NewInvestmentRepository(database)
@@ -147,6 +151,7 @@ func TestRealizedGainsUseLatestEffectiveReplayRevision(t *testing.T) {
 }
 
 func TestCorrectedSaleIsAbsentFromCurrentGainsAndLotEffects(t *testing.T) {
+	t.Parallel()
 	for _, revised := range []bool{false, true} {
 		name := "original_allocation"
 		if revised {
@@ -193,6 +198,7 @@ func TestCorrectedSaleIsAbsentFromCurrentGainsAndLotEffects(t *testing.T) {
 }
 
 func TestSelfCheckLotEventsUseEffectiveDisposalAfterReplay(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	tx, err := database.BeginTx(ctx, nil)
@@ -230,6 +236,7 @@ func TestSelfCheckLotEventsUseEffectiveDisposalAfterReplay(t *testing.T) {
 }
 
 func TestInvestmentReplayReconstructsMissingLotState(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	before := captureLedgerState(t, database)
@@ -274,6 +281,7 @@ func TestInvestmentReplayReconstructsMissingLotState(t *testing.T) {
 }
 
 func TestInvestmentReplayStateInstallationFailureRollsBack(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	_, err := database.ExecContext(ctx, `DELETE FROM investment_lot_state`)

@@ -20,6 +20,7 @@ import (
 )
 
 func TestOpenAppliesRequiredPragmas(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	state, err := Check(context.Background(), database)
@@ -34,6 +35,7 @@ func TestOpenAppliesRequiredPragmas(t *testing.T) {
 }
 
 func TestEnforceSQLiteFilePermissionsRestrictsDatabaseAndSidecars(t *testing.T) {
+	t.Parallel()
 	databasePath := filepath.Join(t.TempDir(), "private.sqlite")
 	databaseURL := "file:" + databasePath
 	database, err := Open(context.Background(), databaseURL)
@@ -65,6 +67,7 @@ func TestEnforceSQLiteFilePermissionsRestrictsDatabaseAndSidecars(t *testing.T) 
 // still gets a 0600 backup file inside a 0755 directory. The file mode is what
 // protects the ledger contents there.
 func TestBackupSQLiteDatabaseCreatesPrivateDirectory(t *testing.T) {
+	t.Parallel()
 	databasePath := filepath.Join(t.TempDir(), "source.sqlite")
 	database, err := Open(context.Background(), "file:"+databasePath)
 	require.NoError(t, err)
@@ -88,6 +91,7 @@ func TestBackupSQLiteDatabaseCreatesPrivateDirectory(t *testing.T) {
 }
 
 func TestVerifySQLiteBackupRejectsForeignKeyViolation(t *testing.T) {
+	t.Parallel()
 	backupPath := filepath.Join(t.TempDir(), "invalid-backup.sqlite")
 	backupDatabase, err := sql.Open(driverName, "file:"+backupPath)
 	require.NoError(t, err)
@@ -107,6 +111,7 @@ func TestVerifySQLiteBackupRejectsForeignKeyViolation(t *testing.T) {
 }
 
 func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -233,6 +238,7 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 // the frozen book, preserve it on repeated migration admission, and produce the
 // same schema as a fresh database.
 func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	seeded := openTestDatabase(t)
 
@@ -547,6 +553,7 @@ func schemaFingerprint(t *testing.T, database *sql.DB) []string {
 }
 
 func TestInitialMigrationDownRemovesTheConsolidatedSchema(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 	provider, err := goose.NewProvider(goose.DialectSQLite3, database, migrations.FS)
 	require.NoError(t, err)
@@ -565,6 +572,7 @@ func TestInitialMigrationDownRemovesTheConsolidatedSchema(t *testing.T) {
 }
 
 func TestCurrentVersionViewsUseConsistentSelectionRules(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -590,6 +598,7 @@ func TestCurrentVersionViewsUseConsistentSelectionRules(t *testing.T) {
 }
 
 func TestCommodityPrecisionCeilingAllowsCryptoOnlyThroughTwentyFour(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 	require.NoError(t, Migrate(context.Background(), database))
 	insertMinimalFinancialFixture(t, database)
@@ -623,6 +632,7 @@ func TestCommodityPrecisionCeilingAllowsCryptoOnlyThroughTwentyFour(t *testing.T
 }
 
 func TestBaselineStoresLosslessLedgerQuantitiesAsText(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 	require.NoError(t, Migrate(context.Background(), database))
 	insertMinimalFinancialFixture(t, database)
@@ -669,6 +679,7 @@ func TestBaselineStoresLosslessLedgerQuantitiesAsText(t *testing.T) {
 }
 
 func TestMigrationsEnforceVersionDatesAndPositiveSequences(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -733,6 +744,7 @@ func TestMigrationsEnforceVersionDatesAndPositiveSequences(t *testing.T) {
 }
 
 func TestMigrationsEnforceAccountValidityDates(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -782,6 +794,7 @@ func TestMigrationsEnforceAccountValidityDates(t *testing.T) {
 }
 
 func TestMigrationsEnforceTransactionAndVersionIntegrity(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -834,6 +847,7 @@ func TestMigrationsEnforceTransactionAndVersionIntegrity(t *testing.T) {
 }
 
 func TestMigrationsEnforceTagIconFormat(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -859,6 +873,7 @@ func TestMigrationsEnforceTagIconFormat(t *testing.T) {
 }
 
 func TestPostingCommodityScaleTriggerUsesEntryDate(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -948,6 +963,7 @@ func TestPostingCommodityScaleTriggerUsesEntryDate(t *testing.T) {
 }
 
 func TestCurrentVersionViewsUseEffectiveDateBeforeVersionSequence(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -986,6 +1002,7 @@ func TestCurrentVersionViewsUseEffectiveDateBeforeVersionSequence(t *testing.T) 
 }
 
 func TestBooksRemainSingleBookUntilScopeChanges(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -1013,6 +1030,7 @@ func TestBooksRemainSingleBookUntilScopeChanges(t *testing.T) {
 }
 
 func TestBookDefaultCurrencyInsertMustReferenceSameBookCurrency(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 
 	require.NoError(t, Migrate(context.Background(), database))
@@ -1068,6 +1086,7 @@ func insertMinimalFinancialFixture(t *testing.T, database *sql.DB) {
 }
 
 func TestWithRequiredPragmasPreservesExistingQuery(t *testing.T) {
+	t.Parallel()
 	got := withRequiredPragmas("file:var/dev.sqlite?mode=rwc")
 
 	assert.Contains(t, got, "mode=rwc")

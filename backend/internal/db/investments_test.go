@@ -15,6 +15,7 @@ import (
 )
 
 func TestInvestmentInstrumentCreatesSecurityCommodityAndVersionHistory(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 
@@ -100,6 +101,7 @@ func assertBasisValue(t *testing.T, expectedValue int64, expectedScale int, gotV
 }
 
 func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -179,6 +181,7 @@ func TestInvestmentLotsDisposeFIFOAndPreserveRemainingBasis(t *testing.T) {
 }
 
 func TestCreateTransactionAndDisposeLotsRollsBackTransactionOnInsufficientLots(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -220,6 +223,7 @@ func TestCreateTransactionAndDisposeLotsRollsBackTransactionOnInsufficientLots(t
 }
 
 func TestInvestmentLotsRejectInsufficientFIFOAndRollBack(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -270,6 +274,7 @@ func TestInvestmentLotsRejectInsufficientFIFOAndRollBack(t *testing.T) {
 }
 
 func TestInvestmentLotsDisposeFIFOAlignsMismatchedQuantityScale(t *testing.T) {
+	t.Parallel()
 	// A lot's quantity_scale need not match the sale's quantity_scale — e.g. an
 	// imported trade's raw amount string had a different decimal-place count
 	// than the lot it's disposing. Before the fix, the FIFO/LIFO loop compared
@@ -330,6 +335,7 @@ func TestInvestmentLotsDisposeFIFOAlignsMismatchedQuantityScale(t *testing.T) {
 // still hold is conservation: the lot keeps exactly what was not sold, and the
 // basis follows the quantity.
 func TestInvestmentLotsDisposeFIFOSellsFinerThanTheLotScale(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -373,6 +379,7 @@ func TestInvestmentLotsDisposeFIFOSellsFinerThanTheLotScale(t *testing.T) {
 }
 
 func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -449,6 +456,7 @@ func TestInvestmentLotsProrateRoundingIntoFinalDisposal(t *testing.T) {
 }
 
 func TestPricingObservationStoresExactProviderAndManualData(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
@@ -505,6 +513,7 @@ func TestPricingObservationStoresExactProviderAndManualData(t *testing.T) {
 }
 
 func TestPricingObservationRejectsNonPositivePriceAtStorage(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
@@ -546,6 +555,7 @@ func TestPricingObservationRejectsNonPositivePriceAtStorage(t *testing.T) {
 }
 
 func TestDefaultCostBasisProfileIsCreatedOnce(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, _ := migratedInvestmentTestDatabase(t)
 	repository := NewInvestmentRepository(database)
@@ -562,6 +572,7 @@ func TestDefaultCostBasisProfileIsCreatedOnce(t *testing.T) {
 }
 
 func TestAutomationRuleCreateAndUpdate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
@@ -629,6 +640,7 @@ func TestAutomationRuleCreateAndUpdate(t *testing.T) {
 // existing active rule omitted from a later call stayed active untouched,
 // including auto_post rules that can post real trades unattended.
 func TestReplaceAutomationRulesArchivesOmittedRules(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	instrument := createInvestmentTestInstrument(t, database, ownerID, currencyID)
@@ -815,6 +827,7 @@ func countRows(t *testing.T, database *sql.DB, tableName string) int {
 }
 
 func TestInvestmentInstrumentRejectsDuplicateCommodity(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	first := createInvestmentTestInstrument(t, database, ownerID, currencyID)
@@ -877,6 +890,7 @@ func createThreeLots(t *testing.T, database *sql.DB, ownerID, currencyID int64) 
 }
 
 func TestInvestmentLotsDisposeLIFO(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
@@ -911,6 +925,7 @@ func TestInvestmentLotsDisposeLIFO(t *testing.T) {
 }
 
 func TestInvestmentLotsDisposeLIFOCrossesLots(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
@@ -946,6 +961,7 @@ func TestInvestmentLotsDisposeLIFOCrossesLots(t *testing.T) {
 }
 
 func TestInvestmentLotsLIFOAndFIFOProduceDifferentBasis(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
@@ -979,6 +995,7 @@ func TestInvestmentLotsLIFOAndFIFOProduceDifferentBasis(t *testing.T) {
 }
 
 func TestInvestmentLotsAverageCostPoolMath(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
@@ -1018,6 +1035,7 @@ func TestInvestmentLotsAverageCostPoolMath(t *testing.T) {
 }
 
 func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -1077,6 +1095,7 @@ func TestInvestmentLotsAverageCostResidualConservation(t *testing.T) {
 }
 
 func TestInvestmentLotsAverageCostSequentialSalesConserveUntilFinalClose(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
@@ -1131,6 +1150,7 @@ func TestInvestmentLotsAverageCostSequentialSalesConserveUntilFinalClose(t *test
 }
 
 func TestInvestmentLotsRejectSwitchAcrossAverageCostWhilePositionOpen(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ first, second string }{{"fifo", "average_cost"}, {"average_cost", "lifo"}} {
 		t.Run(tc.first+"_to_"+tc.second, func(t *testing.T) {
 			ctx := context.Background()
@@ -1150,6 +1170,7 @@ func TestInvestmentLotsRejectSwitchAcrossAverageCostWhilePositionOpen(t *testing
 }
 
 func TestInvestmentLotsClosedPositionStartsANewCostBasisMethodEpoch(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -1175,6 +1196,7 @@ func TestInvestmentLotsClosedPositionStartsANewCostBasisMethodEpoch(t *testing.T
 }
 
 func TestInvestmentLotsAverageCostClosedLotHasZeroBasis(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -1214,6 +1236,7 @@ func TestInvestmentLotsAverageCostClosedLotHasZeroBasis(t *testing.T) {
 // no way to sell any of it, and no way to change how either was recorded.
 // Widening to the finer scale gives the pool math what it needs.
 func TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentScales(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -1281,6 +1304,7 @@ INSERT INTO investment_lot_state (lot_id, book_id, remaining_quantity_value, rem
 // the pool is 200 EUR. Mixed cash precision arrives through imports, so a
 // refusal here was reachable without anyone doing anything unusual.
 func TestInvestmentLotsAverageCostPoolsLotsRecordedAtDifferentCostBasisScales(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -1331,6 +1355,7 @@ INSERT INTO investment_lot_state (lot_id, book_id, remaining_quantity_value, rem
 }
 
 func TestInvestmentLotsSpecificLotValidatesOwnershipAndQuantity(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
@@ -1349,6 +1374,7 @@ func TestInvestmentLotsSpecificLotValidatesOwnershipAndQuantity(t *testing.T) {
 }
 
 func TestInvestmentLotsExplicitAllocationsRejectedForFIFO(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
@@ -1366,6 +1392,7 @@ func TestInvestmentLotsExplicitAllocationsRejectedForFIFO(t *testing.T) {
 }
 
 func TestInvestmentLotsSpecificLotAllocationTotalMismatchReturnsError(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, lots := createThreeLots(t, database, ownerID, currencyID)
@@ -1384,6 +1411,7 @@ func TestInvestmentLotsSpecificLotAllocationTotalMismatchReturnsError(t *testing
 }
 
 func TestInvestmentLotsUnknownMethodReturnsError(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
@@ -1400,6 +1428,7 @@ func TestInvestmentLotsUnknownMethodReturnsError(t *testing.T) {
 }
 
 func TestInvestmentLotsSimulateDoesNotMutateLots(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID, commodityID, _ := createThreeLots(t, database, ownerID, currencyID)
@@ -1426,6 +1455,7 @@ func TestInvestmentLotsSimulateDoesNotMutateLots(t *testing.T) {
 }
 
 func TestListRealizedGainsNilProceedsWhenNoTransaction(t *testing.T) {
+	t.Parallel()
 	// When lots are disposed without an associated transaction (TransactionID=0),
 	// proceeds are unknown → ProceedsValue=0 and RealizedGainValue = −disposed_basis.
 	ctx := context.Background()
@@ -1460,6 +1490,7 @@ func TestListRealizedGainsNilProceedsWhenNoTransaction(t *testing.T) {
 }
 
 func TestListRealizedGainsDateFilter(t *testing.T) {
+	t.Parallel()
 	// Two disposals on different dates; verify From/To filter includes/excludes correctly.
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
@@ -1494,6 +1525,7 @@ func TestListRealizedGainsDateFilter(t *testing.T) {
 }
 
 func TestListRealizedGainsMultiLotSaleProducesOneRow(t *testing.T) {
+	t.Parallel()
 	// A sell transaction that disposes two lots must produce one realized-gains row,
 	// not two. The full sale proceeds appear once on the transaction; the old per-lot
 	// query would have duplicated them, inflating gains.
@@ -1538,6 +1570,7 @@ func TestListRealizedGainsMultiLotSaleProducesOneRow(t *testing.T) {
 }
 
 func TestListRealizedGainsAggregatesMixedScaleDisposalEvents(t *testing.T) {
+	t.Parallel()
 	// A single sell transaction can dispose lots with different quantity_scale
 	// and cost_basis_scale (e.g. lots created from imports whose raw amount
 	// strings had different decimal-place counts). The old SQL used
@@ -1607,6 +1640,7 @@ func TestListRealizedGainsAggregatesMixedScaleDisposalEvents(t *testing.T) {
 }
 
 func TestListRealizedGainsDoesNotInferProceedsFromUndecidedCashLegs(t *testing.T) {
+	t.Parallel()
 	// Split cash settlement alone does not say which amounts belong in
 	// operational proceeds. Only a committed disposal decision does.
 	ctx := context.Background()
@@ -1662,6 +1696,7 @@ func TestListRealizedGainsDoesNotInferProceedsFromUndecidedCashLegs(t *testing.T
 }
 
 func TestPositionsWithGainsNilWhenNoPrice(t *testing.T) {
+	t.Parallel()
 	// A position without a price observation must have nil gain fields.
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
@@ -1678,6 +1713,7 @@ func TestPositionsWithGainsNilWhenNoPrice(t *testing.T) {
 }
 
 func TestPositionsWithGainsBaseQuantityNormalized(t *testing.T) {
+	t.Parallel()
 	// Price stored as 150 EUR at base_quantity=100, base_quantity_scale=0.
 	// Per-unit price = 150/100 = €1.50.
 	// Position: 450 units at cost 56 000 (scale 2) = €560.00.
@@ -1758,6 +1794,7 @@ func TestPositionsWithGainsBaseQuantityNormalized(t *testing.T) {
 }
 
 func TestPositionsWithGainsComputedCorrectly(t *testing.T) {
+	t.Parallel()
 	// 100 units at cost 10 000 minor units (scale 2) = €100.00.
 	// Price observation: 200 minor units (scale 2) = €2.00 per unit → market €200.00.
 	// Expected unrealized gain: €200.00 − €100.00 = €100.00 at the combined scale.

@@ -30,16 +30,19 @@ func goldenTrading212Payload(t *testing.T) []byte {
 }
 
 func TestTrading212Adapter_Kind(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "trading212", (&Trading212Adapter{}).Kind())
 }
 
 func TestTrading212Adapter_DetectAlwaysNone(t *testing.T) {
+	t.Parallel()
 	a := &Trading212Adapter{}
 	assert.Equal(t, ConfidenceNone, a.Detect(RawInput{Filename: "anything.json"}))
 	assert.Equal(t, ConfidenceNone, a.Detect(RawInput{}))
 }
 
 func TestTrading212Adapter_ParseGoldenPayload(t *testing.T) {
+	t.Parallel()
 	a := &Trading212Adapter{}
 	result, err := a.Parse(context.Background(), RawInput{Bytes: goldenTrading212Payload(t)}, nil)
 	require.NoError(t, err)
@@ -82,6 +85,7 @@ func TestTrading212Adapter_ParseGoldenPayload(t *testing.T) {
 // — including the old guessed values — must be flagged needs_attention, not
 // silently treated as a plain cash leg.
 func TestTrading212Adapter_CashMovementTypesMatchRealAPIEnum(t *testing.T) {
+	t.Parallel()
 	a := &Trading212Adapter{}
 	payload, err := json.Marshal(trading212FetchPayload{
 		ConnectionID: 1,
@@ -113,6 +117,7 @@ func TestTrading212Adapter_CashMovementTypesMatchRealAPIEnum(t *testing.T) {
 }
 
 func TestTrading212Adapter_ParseRejectsMissingConnectionID(t *testing.T) {
+	t.Parallel()
 	a := &Trading212Adapter{}
 	payload := trading212FetchPayload{Movements: []trading212Movement{{ID: "ref-1", Type: "DEPOSIT", Amount: "1.00", Currency: "EUR"}}}
 	b, err := json.Marshal(payload)
@@ -122,12 +127,14 @@ func TestTrading212Adapter_ParseRejectsMissingConnectionID(t *testing.T) {
 }
 
 func TestTrading212Adapter_ParseRejectsInvalidJSON(t *testing.T) {
+	t.Parallel()
 	a := &Trading212Adapter{}
 	_, err := a.Parse(context.Background(), RawInput{Bytes: []byte("not json")}, nil)
 	assert.Error(t, err)
 }
 
 func TestTrading212Adapter_FingerprintsStableAcrossReparse(t *testing.T) {
+	t.Parallel()
 	a := &Trading212Adapter{}
 	payload := goldenTrading212Payload(t)
 
@@ -143,6 +150,7 @@ func TestTrading212Adapter_FingerprintsStableAcrossReparse(t *testing.T) {
 }
 
 func TestTrading212Adapter_FingerprintsAreConnectionScoped(t *testing.T) {
+	t.Parallel()
 	a := &Trading212Adapter{}
 	mk := func(connectionID int64) []byte {
 		b, err := json.Marshal(trading212FetchPayload{
@@ -164,12 +172,14 @@ func TestTrading212Adapter_FingerprintsAreConnectionScoped(t *testing.T) {
 // --- Trading212Prober ---
 
 func TestTrading212Prober_SkipsNonTrading212SourceKind(t *testing.T) {
+	t.Parallel()
 	prober := NewTrading212Prober(nil, "")
 	err := prober.Probe(context.Background(), "qif", "anything", "")
 	assert.NoError(t, err)
 }
 
 func TestTrading212Prober_ValidKeySucceeds(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[],"nextPagePath":""}`))
@@ -182,6 +192,7 @@ func TestTrading212Prober_ValidKeySucceeds(t *testing.T) {
 }
 
 func TestTrading212Prober_InvalidKeyReturnsProviderUnauthorized(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}))

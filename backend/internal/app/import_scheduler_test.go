@@ -38,6 +38,7 @@ func countBackgroundWork(t *testing.T, database *sql.DB, kind string) int {
 // never fires the scheduler — no regression for every connection created
 // before Slice 4a shipped.
 func TestRunDueTrading212AutoRefreshes_DisabledConnectionNeverTriggers(t *testing.T) {
+	t.Parallel()
 	svc, connService, _, database := newImportFetchTestService(t)
 	createTestTrading212Connection(t, svc, connService, "http://example.invalid")
 
@@ -51,6 +52,7 @@ func TestRunDueTrading212AutoRefreshes_DisabledConnectionNeverTriggers(t *testin
 // wait a full interval — first-time enable should trigger on the very next
 // tick.
 func TestRunDueTrading212AutoRefreshes_NeverFetchedTriggersImmediately(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeFakeT212JSON(w, nil)
 	}))
@@ -70,6 +72,7 @@ func TestRunDueTrading212AutoRefreshes_NeverFetchedTriggersImmediately(t *testin
 // just under the interval ago must not trigger, and the same connection
 // considered from just over the interval later must.
 func TestRunDueTrading212AutoRefreshes_BoundaryJustUnderAndOverInterval(t *testing.T) {
+	t.Parallel()
 	restore := SetAutoRefreshIntervalForTest(24 * time.Hour)
 	defer restore()
 
@@ -103,6 +106,7 @@ func TestRunDueTrading212AutoRefreshes_BoundaryJustUnderAndOverInterval(t *testi
 // returns ErrImportFetchInProgress for this, and the scheduler must not
 // double-enqueue a second fetch on top of it.
 func TestRunDueTrading212AutoRefreshes_InFlightGuardSkipsWithoutError(t *testing.T) {
+	t.Parallel()
 	svc, connService, _, database := newImportFetchTestService(t)
 	conn := createTestTrading212Connection(t, svc, connService, "http://example.invalid")
 	enableAutoRefresh(t, connService, conn)
@@ -127,6 +131,7 @@ func TestRunDueTrading212AutoRefreshes_InFlightGuardSkipsWithoutError(t *testing
 // a future non-trading212 online source with auto-refresh enabled can't be
 // swept up by the trading212-only scheduler.
 func TestListDueAutoRefreshConnectionIDs_ScopedToSourceKind(t *testing.T) {
+	t.Parallel()
 	database := openConnectionTestDatabase(t)
 	connService := NewImportConnectionService(db.NewImportConnectionRepository(database), nil, testKey(), NoOpProber{})
 	conn := createTestTrading212Connection(t, nil, connService, "http://example.invalid")

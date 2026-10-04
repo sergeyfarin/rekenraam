@@ -10,6 +10,7 @@ import (
 )
 
 func TestCSVAdapterTwoBankLayoutsUseProfileDataWithoutCodeChanges(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		config     string
@@ -50,6 +51,7 @@ func TestCSVAdapterTwoBankLayoutsUseProfileDataWithoutCodeChanges(t *testing.T) 
 // Getting this wrong turns 1234,00 into 1.234, a silent 1000x error on exactly
 // the migration path the announcement leads with.
 func TestCSVAdapterUsesTheWholeFileToSettleAnAmbiguousDecimalSeparator(t *testing.T) {
+	t.Parallel()
 	config := `{"delimiter":"semicolon","date_column":"Datum","payee_column":"Beschreibung","amount_column":"Betrag","date_layout":"DMY"}`
 	contents := "Datum;Beschreibung;Betrag\n28/08/2026;Miete;-1.234\n29/08/2026;Kaffee;-56,78\n30/08/2026;Gehalt;2.500\n"
 
@@ -67,6 +69,7 @@ func TestCSVAdapterUsesTheWholeFileToSettleAnAmbiguousDecimalSeparator(t *testin
 
 // The same shape in reverse: a US file where a lone "1,234" must stay 1234.
 func TestCSVAdapterKeepsUSGroupingWhenTheFileSettlesOnADecimalPoint(t *testing.T) {
+	t.Parallel()
 	config := `{"delimiter":"comma","date_column":"Date","payee_column":"Description","amount_column":"Amount","date_layout":"MDY"}`
 	contents := "Date,Description,Amount\n08/28/2026,Rent,\"-1,234\"\n08/29/2026,Coffee,-56.78\n"
 
@@ -82,6 +85,7 @@ func TestCSVAdapterKeepsUSGroupingWhenTheFileSettlesOnADecimalPoint(t *testing.T
 }
 
 func TestCSVAdapterParse_LegacyEncodingUsesSameDecoderAsQIF(t *testing.T) {
+	t.Parallel()
 	contents, err := charmap.Windows1250.NewEncoder().Bytes([]byte("Data;Opis;Kwota\n28/08/2026;Zażółć;-12,34\n"))
 	require.NoError(t, err)
 	profile := &ImportProfile{ID: 8, AdapterKind: "csv", ConfigJSON: `{"delimiter":"semicolon","date_column":"Data","payee_column":"Opis","amount_column":"Kwota","date_layout":"DMY","decimal_separator":","}`}
@@ -97,6 +101,7 @@ func TestCSVAdapterParse_LegacyEncodingUsesSameDecoderAsQIF(t *testing.T) {
 }
 
 func TestAnalyzeCSVInput_DecodesHeadersAndDetectsDelimiter(t *testing.T) {
+	t.Parallel()
 	contents, err := charmap.Windows1251.NewEncoder().Bytes([]byte("Дата;Описание;Сумма\n24.04.2021;Кафе;-42,49\n"))
 	require.NoError(t, err)
 
@@ -110,6 +115,7 @@ func TestAnalyzeCSVInput_DecodesHeadersAndDetectsDelimiter(t *testing.T) {
 }
 
 func TestAnalyzeCSVInput_UsesCSVQuotingRulesForCanonicalHeaders(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		contents  string
@@ -140,18 +146,21 @@ func TestAnalyzeCSVInput_UsesCSVQuotingRulesForCanonicalHeaders(t *testing.T) {
 }
 
 func TestAnalyzeCSVInput_RejectsDuplicateHeaders(t *testing.T) {
+	t.Parallel()
 	_, err := AnalyzeCSVInput(RawInput{Filename: "statement.csv", Bytes: []byte("Date,Amount,Amount\n")}, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `header "Amount" appears more than once`)
 }
 
 func TestCSVAdapterRejectsProfileColumnMissingFromStatement(t *testing.T) {
+	t.Parallel()
 	_, err := (&CSVAdapter{}).Parse(context.Background(), RawInput{Filename: "statement.csv", Bytes: []byte("Date,Value\n2026-08-28,-1.00\n")}, &ImportProfile{ID: 1, AdapterKind: "csv", ConfigJSON: `{"date_column":"Date","amount_column":"Amount","date_layout":"YMD","decimal_separator":"."}`})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `column "Amount" is not present`)
 }
 
 func TestCSVAdapterRejectsAmbiguousAmountMapping(t *testing.T) {
+	t.Parallel()
 	for _, config := range []string{
 		`{"date_column":"Date","date_layout":"YMD"}`,
 		`{"date_column":"Date","amount_column":"Amount","debit_column":"Debit","credit_column":"Credit","date_layout":"YMD"}`,
@@ -163,6 +172,7 @@ func TestCSVAdapterRejectsAmbiguousAmountMapping(t *testing.T) {
 }
 
 func TestCSVAdapterDetect(t *testing.T) {
+	t.Parallel()
 	adapter := &CSVAdapter{}
 	assert.Equal(t, ConfidenceHigh, adapter.Detect(RawInput{Filename: "statement.CSV"}))
 	assert.Equal(t, ConfidenceMedium, adapter.Detect(RawInput{ContentType: "text/csv"}))

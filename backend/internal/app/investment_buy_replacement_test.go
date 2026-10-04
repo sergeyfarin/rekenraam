@@ -11,6 +11,7 @@ import (
 )
 
 func TestReplaceOldManualBuyReplaysDependentSameDaySale(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	original, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -75,6 +76,7 @@ func TestReplaceOldManualBuyReplaysDependentSameDaySale(t *testing.T) {
 }
 
 func TestReplaceOldBuyRollsBackWhenDependentSaleNeedsMoreShares(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	original, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -120,6 +122,7 @@ func TestReplaceOldBuyRollsBackWhenDependentSaleNeedsMoreShares(t *testing.T) {
 }
 
 func TestReplaceOldBuyRequiresReconciliationOverrideAtomically(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	original, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -171,6 +174,7 @@ func TestReplaceOldBuyRequiresReconciliationOverrideAtomically(t *testing.T) {
 }
 
 func TestReplaceImportedBuyRequiresSourceAwareCorrection(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	original, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -188,6 +192,7 @@ func TestReplaceImportedBuyRequiresSourceAwareCorrection(t *testing.T) {
 }
 
 func TestReplaceBuyRequiresExplicitChargeTreatment(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	original, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -218,6 +223,7 @@ func TestReplaceBuyRequiresExplicitChargeTreatment(t *testing.T) {
 }
 
 func TestReplaceBuyReplacesApproximatePriceWithGrossPrice(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	original, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -259,6 +265,7 @@ func TestReplaceBuyReplacesApproximatePriceWithGrossPrice(t *testing.T) {
 }
 
 func TestReplaceBuyTwiceKeepsOriginalSpecificLotElection(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	first, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -309,6 +316,7 @@ func TestReplaceBuyTwiceKeepsOriginalSpecificLotElection(t *testing.T) {
 }
 
 func TestReplaceOldBuyRecalculatesDependentSaleUnderEveryBasisMethod(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		method string
 		basis  int64

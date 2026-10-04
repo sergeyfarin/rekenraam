@@ -39,6 +39,7 @@ func backdatedWriteOff(f *investmentsTestFixture, date string, quantity int64) I
 }
 
 func TestBackdatedTransferInFromOldBrokerReplaysCurrentBrokerSaleByOriginalDate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	seedExternalTransferEquity(t, f.database)
@@ -95,6 +96,7 @@ func TestBackdatedTransferInFromOldBrokerReplaysCurrentBrokerSaleByOriginalDate(
 }
 
 func TestBackdatedDisposalBehindLaterSaleUnderEveryMethod(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"sale", "write-off"} {
 		for _, test := range []struct {
 			method     string
@@ -196,6 +198,7 @@ func TestBackdatedDisposalBehindLaterSaleUnderEveryMethod(t *testing.T) {
 }
 
 func TestBackdatedDisposalNamesImpossibleLaterDecisionWithoutWriting(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name  string
 		setup func(t *testing.T, f *investmentsTestFixture) (InvestmentTradeInput, InvestmentTradeInput)
@@ -244,6 +247,7 @@ func TestBackdatedDisposalNamesImpossibleLaterDecisionWithoutWriting(t *testing.
 }
 
 func TestBackdatedSaleTakesSameDaySlotAfterEarlierEntries(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 5, 5000)  // 10.00 per share
@@ -275,6 +279,7 @@ func TestBackdatedSaleTakesSameDaySlotAfterEarlierEntries(t *testing.T) {
 }
 
 func TestBackdatedSaleLateRefusalsRollBackReplayAndSourceIdentity(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)

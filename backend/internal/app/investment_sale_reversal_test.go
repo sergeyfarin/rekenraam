@@ -18,6 +18,7 @@ func saleOperationIDForTest(t *testing.T, f *investmentsTestFixture, transaction
 }
 
 func TestReverseManualSaleReplaysLaterSaleAndKeepsOriginalHistory(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -111,6 +112,7 @@ func TestReverseManualSaleReplaysLaterSaleAndKeepsOriginalHistory(t *testing.T) 
 }
 
 func TestReverseManualSaleRequiresReconciliationOverrideAtomically(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -158,6 +160,7 @@ func TestReverseManualSaleRequiresReconciliationOverrideAtomically(t *testing.T)
 }
 
 func TestReverseImportedSaleRequiresSourceAwareCorrection(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{

@@ -106,6 +106,7 @@ func plainImportTransactionCount(t *testing.T, f *plainImportTestFixture) int {
 }
 
 func TestApplyImportRules_DescriptionMatchAndTransferSafety(t *testing.T) {
+	t.Parallel()
 	categoryID := int64(41)
 	rules := []db.ImportRuleRecord{{
 		ID: 7, Name: "Rail travel", MatchField: "description", ContainsText: "train",
@@ -125,6 +126,7 @@ func TestApplyImportRules_DescriptionMatchAndTransferSafety(t *testing.T) {
 }
 
 func TestCSVImportSavedProfileStagesAndCommitsThroughRealLedgerService(t *testing.T) {
+	t.Parallel()
 	f := newPlainImportTestFixture(t)
 	ctx := context.Background()
 	profile, err := f.importService.CreateImportProfile(ctx, CreateImportProfileInput{
@@ -161,6 +163,7 @@ func TestCSVImportSavedProfileStagesAndCommitsThroughRealLedgerService(t *testin
 }
 
 func TestImportIdentityOrdersTwoTransactionsAndRollsBackPartialEffects(t *testing.T) {
+	t.Parallel()
 	f := newPlainImportTestFixture(t)
 	ctx := context.Background()
 	batchID, _ := f.stageQIFRow(t, "!Type:Bank\nD2026-08-28\nT-12.34\nPBooks\n^\n")
@@ -256,6 +259,7 @@ func TestImportIdentityOrdersTwoTransactionsAndRollsBackPartialEffects(t *testin
 }
 
 func TestImportIdentityCanRecordBasisOnlyOperationWithoutJournalTransaction(t *testing.T) {
+	t.Parallel()
 	f := newPlainImportTestFixture(t)
 	ctx := context.Background()
 	batchID, _ := f.stageQIFRow(t, "!Type:Bank\nD2026-08-28\nT-12.34\nPBasis source\n^\n")
@@ -309,6 +313,7 @@ func TestImportIdentityCanRecordBasisOnlyOperationWithoutJournalTransaction(t *t
 }
 
 func TestImportProfileUpdateAndDeletePreserveHistoricalBatch(t *testing.T) {
+	t.Parallel()
 	f := newPlainImportTestFixture(t)
 	ctx := context.Background()
 	profile, err := f.importService.CreateImportProfile(ctx, CreateImportProfileInput{
@@ -349,6 +354,7 @@ func TestImportProfileUpdateAndDeletePreserveHistoricalBatch(t *testing.T) {
 }
 
 func TestUpdateImportProfileOmittedConfigPreservesMapping(t *testing.T) {
+	t.Parallel()
 	f := newPlainImportTestFixture(t)
 	ctx := context.Background()
 	originalConfig := `{"delimiter":"semicolon","date_column":"Datum","amount_column":"Bedrag","date_layout":"DMY","decimal_separator":","}`
@@ -368,6 +374,7 @@ func TestUpdateImportProfileOmittedConfigPreservesMapping(t *testing.T) {
 // transaction must exist, and both callers must observe a successful,
 // idempotent outcome.
 func TestCommitImportBatch_ConcurrentPlainRowCommitsKeepOneWinner(t *testing.T) {
+	t.Parallel()
 	f := newPlainImportTestFixture(t)
 	batchID, _ := f.stageQIFRow(t, qifBankRow("06/01/26", "-42.50", "Grocery Store"))
 	initialTransactions := plainImportTransactionCount(t, f)

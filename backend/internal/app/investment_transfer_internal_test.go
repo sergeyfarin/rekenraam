@@ -22,6 +22,7 @@ func internalTransferFromLot(f *investmentsTestFixture, destinationID, lotID int
 }
 
 func TestInternalTransferPartialLotConservesQuantityBasisAndJournal(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
 	ctx := context.Background()
@@ -88,6 +89,7 @@ func TestInternalTransferPartialLotConservesQuantityBasisAndJournal(t *testing.T
 }
 
 func TestInternalTransferPreservesUnknownOriginalAcquisitionDate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	seedExternalTransferEquity(t, f.database)
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -108,6 +110,7 @@ func TestInternalTransferPreservesUnknownOriginalAcquisitionDate(t *testing.T) {
 }
 
 func TestInternalTransferKnownZeroBasisKeepsZeroWithoutGain(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	seedExternalTransferEquity(t, f.database)
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -140,6 +143,7 @@ func TestInternalTransferKnownZeroBasisKeepsZeroWithoutGain(t *testing.T) {
 }
 
 func TestInternalTransferRefusesUnavailableSourceWithoutPartialWrite(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
 	buy := buyOn(t, f, "2026-05-01", 1, 1000)
@@ -157,6 +161,7 @@ func TestInternalTransferRefusesUnavailableSourceWithoutPartialWrite(t *testing.
 }
 
 func TestInternalTransferRefusesLotBasisFromOpenAverageCostPool(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -180,6 +185,7 @@ func TestInternalTransferRefusesLotBasisFromOpenAverageCostPool(t *testing.T) {
 }
 
 func TestInternalTransferRefusesAverageCostDefaultBeforeFirstSale(t *testing.T) {
+	t.Parallel()
 	for _, tier := range []string{"account", "global"} {
 		t.Run(tier, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
@@ -210,6 +216,7 @@ func TestInternalTransferRefusesAverageCostDefaultBeforeFirstSale(t *testing.T) 
 }
 
 func TestInternalTransferLocksIndividualLotMethodBeforeFirstSale(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -230,6 +237,7 @@ func TestInternalTransferLocksIndividualLotMethodBeforeFirstSale(t *testing.T) {
 }
 
 func TestInternalTransferDepletionSurvivesLaterSaleReversalReplay(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
 	buy := buyOn(t, f, "2026-05-01", 3, 3000)
@@ -257,6 +265,7 @@ func TestInternalTransferDepletionSurvivesLaterSaleReversalReplay(t *testing.T) 
 }
 
 func TestReplayTransferDepletionUsesEffectLinkWithoutLegacyOperationTransactionID(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")

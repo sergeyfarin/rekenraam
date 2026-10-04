@@ -95,6 +95,7 @@ func activeCheckpointIDs(t *testing.T, f *investmentsTestFixture) []int64 {
 // The prepared write carries no override, so the commit must refuse rather than
 // slip a posting into a period that is now reconciled.
 func TestCreateTransactionRejectsACheckpointCreatedAfterValidation(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -132,6 +133,7 @@ func TestCreateTransactionRejectsACheckpointCreatedAfterValidation(t *testing.T)
 // when it was built, so the write would have committed and invalidated nothing,
 // leaving an active checkpoint asserting a balance the new posting just changed.
 func TestCreateTransactionWithOverrideInvalidatesACheckpointCreatedAfterValidation(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -163,6 +165,7 @@ func TestCreateTransactionWithOverrideInvalidatesACheckpointCreatedAfterValidati
 // the first checkpoint with a later one, and the write has to invalidate
 // whichever is active at commit time, not the one it saw while validating.
 func TestCreateTransactionInvalidatesTheCheckpointActiveAtCommitTime(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -204,6 +207,7 @@ func TestCreateTransactionInvalidatesTheCheckpointActiveAtCommitTime(t *testing.
 // repository directly is the point: it stands in for any caller whose own check
 // has gone stale, and for a future caller that forgets to check at all.
 func TestWritePathsEnforceTheCheckpointBoundaryInTheRepository(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	// The version is passed the way the service passes it (T-94), so each write

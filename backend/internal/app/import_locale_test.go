@@ -10,6 +10,7 @@ import (
 // --- Date field order (T-35) ---
 
 func TestParseDateOrder(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  dateOrder
@@ -34,11 +35,13 @@ func TestParseDateOrder(t *testing.T) {
 }
 
 func TestParseDateOrder_UnrecognizedReturnsError(t *testing.T) {
+	t.Parallel()
 	_, err := parseDateOrder("DD/MM/DD")
 	require.Error(t, err)
 }
 
 func TestDetectDateOrder(t *testing.T) {
+	t.Parallel()
 	t.Run("one day above 12 settles the whole file as EU", func(t *testing.T) {
 		got := detectDateOrder([]string{"01/02/2026", "15/02/2026", "03/04/2026"})
 		assert.Equal(t, dateOrderDMY, got.Order)
@@ -73,6 +76,7 @@ func TestDetectDateOrder(t *testing.T) {
 }
 
 func TestParseFlexibleDate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -103,6 +107,7 @@ func TestParseFlexibleDate(t *testing.T) {
 }
 
 func TestParseFlexibleDate_RejectsImpossibleDates(t *testing.T) {
+	t.Parallel()
 	for _, input := range []string{"", "not-a-date", "31/02/2026", "13/13/2026", "2026-02-31", "1/2"} {
 		t.Run(input, func(t *testing.T) {
 			_, err := parseFlexibleDate(input, dateOrderAuto)
@@ -114,6 +119,7 @@ func TestParseFlexibleDate_RejectsImpossibleDates(t *testing.T) {
 // --- Decimal separator (T-36) ---
 
 func TestCanonicalDecimal_Detected(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  string
@@ -149,6 +155,7 @@ func TestCanonicalDecimal_Detected(t *testing.T) {
 // "1.234" as 1.234 instead of 1234 is the same silent corruption T-36 was
 // about — the announcement's target audience, on the announcement's demo path.
 func TestDetectDecimalSeparatorAcrossValues(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		values   []string
@@ -213,6 +220,7 @@ func TestDetectDecimalSeparatorAcrossValues(t *testing.T) {
 }
 
 func TestCanonicalDecimal_ExplicitSeparatorOverridesDetection(t *testing.T) {
+	t.Parallel()
 	// "1,234" is read as a thousands group by default; a profile that declares
 	// a decimal comma must win.
 	got, err := canonicalDecimal("1,234", ',')
@@ -229,6 +237,7 @@ func TestCanonicalDecimal_ExplicitSeparatorOverridesDetection(t *testing.T) {
 }
 
 func TestCanonicalDecimal_RejectsNonNumbers(t *testing.T) {
+	t.Parallel()
 	for _, input := range []string{"", "  ", "abc", "1.2.3,4,5", "12x.34", "-"} {
 		t.Run(input, func(t *testing.T) {
 			_, err := canonicalDecimal(input, 0)

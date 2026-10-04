@@ -25,7 +25,8 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       - name: Run backend tests
-        # Shared local/CI gate: race detector, serial packages, 15m per package.
+        # Shared local/CI gate: race detector, parallel tests inside each
+        # package, packages one at a time, 15m per package (T-125).
         run: ./scripts/test-backend.sh
 
   backend-coverage:

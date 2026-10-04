@@ -31,6 +31,7 @@ func TestUnknownProjectedBasisDoesNotBecomeZeroGain(t *testing.T) {
 }
 
 func TestUnknownProjectionMakesMixedPositionBasisUnavailable(t *testing.T) {
+	t.Parallel()
 	for _, unknownFirst := range []bool{false, true} {
 		t.Run(map[bool]string{true: "first lot unknown", false: "last lot unknown"}[unknownFirst], func(t *testing.T) {
 			t.Parallel()
@@ -79,6 +80,7 @@ func TestKnownZeroTransferBasisRemainsKnown(t *testing.T) {
 }
 
 func TestUnknownProjectionRetainsQuantitySelfCheck(t *testing.T) {
+	t.Parallel()
 	for _, damageQuantity := range []bool{false, true} {
 		t.Run(map[bool]string{true: "quantity damage", false: "quantity conserved"}[damageQuantity], func(t *testing.T) {
 			t.Parallel()
@@ -110,6 +112,7 @@ func TestUnknownProjectionRetainsQuantitySelfCheck(t *testing.T) {
 }
 
 func TestKnownBasisDisposalRefusesUnknownProjectionAtomically(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		t.Run(method, func(t *testing.T) {
 			t.Parallel()
@@ -192,6 +195,7 @@ func TestProjectionBasisKnowledgeRequiresMatchingNullability(t *testing.T) {
 }
 
 func TestSelfCheckFindsRestoredBasisKnowledgePairDamage(t *testing.T) {
+	t.Parallel()
 	for _, assignment := range []string{
 		"remaining_cost_basis_value = NULL",
 		"basis_knowledge = 'unknown'",
@@ -215,6 +219,7 @@ func TestSelfCheckFindsRestoredBasisKnowledgePairDamage(t *testing.T) {
 }
 
 func TestKnownOpeningReplayReconstructsUnknownProjectionAtomically(t *testing.T) {
+	t.Parallel()
 	for _, abort := range []bool{false, true} {
 		t.Run(map[bool]string{true: "rollback retains unknown", false: "known evidence reconstructs basis"}[abort], func(t *testing.T) {
 			t.Parallel()

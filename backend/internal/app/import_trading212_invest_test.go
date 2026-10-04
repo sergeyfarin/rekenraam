@@ -274,6 +274,7 @@ func (f *investTestFixture) createCashReconciliationCheckpoint(t *testing.T, sta
 }
 
 func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 
@@ -330,6 +331,7 @@ func TestCommitImportBatch_BuyOrderFillCreatesInstrumentHoldingAndLot(t *testing
 }
 
 func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -396,6 +398,7 @@ func TestReplaceImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 }
 
 func TestReverseCommittedImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -434,6 +437,7 @@ func TestReverseCommittedImportedBuyKeepsSourceIdentityAndDedupesTheFill(t *test
 }
 
 func TestChangedTrading212FillIsHeldForSourceCorrection(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -493,6 +497,7 @@ func TestChangedTrading212FillIsHeldForSourceCorrection(t *testing.T) {
 }
 
 func TestTrading212BuySourceRevisionCommitsWithReplacementAndBecomesSnapshot(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -580,6 +585,7 @@ func TestTrading212BuySourceRevisionCommitsWithReplacementAndBecomesSnapshot(t *
 }
 
 func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -684,6 +690,7 @@ func TestCorrectTrading212BuyPostsProviderValuesAndKeepsIdentity(t *testing.T) {
 }
 
 func TestCorrectTrading212BuyRejectsChangedDateWithoutPosting(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -715,6 +722,7 @@ func TestCorrectTrading212BuyRejectsChangedDateWithoutPosting(t *testing.T) {
 }
 
 func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -775,6 +783,7 @@ func TestCorrectTrading212BuyRequiresReconciliationOverride(t *testing.T) {
 }
 
 func TestCorrectTrading212BuyRejectsCancellationSignedPayload(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name     string
 		quantity string
@@ -817,6 +826,7 @@ func TestCorrectTrading212BuyRejectsCancellationSignedPayload(t *testing.T) {
 }
 
 func TestTrading212FillSourceComparisonIgnoresLocalResolution(t *testing.T) {
+	t.Parallel()
 	changed, err := trading212FillSourceChanged(
 		`{"kind":"trading212_order_fill","quantity":"2","resolved_commodity_id":"10"}`,
 		`{"kind":"trading212_order_fill","quantity":"2","resolved_commodity_id":"11","resolved_holding_account_id":"20"}`,
@@ -828,6 +838,7 @@ func TestTrading212FillSourceComparisonIgnoresLocalResolution(t *testing.T) {
 }
 
 func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -902,6 +913,7 @@ func TestReplaceImportedSaleKeepsSourceIdentityAndDedupesTheFill(t *testing.T) {
 }
 
 func TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	checkpointID := f.createCashReconciliationCheckpoint(t, "2026-06-10")
@@ -959,6 +971,7 @@ func TestCommitImportBatch_InvestmentBuyCrossingReconciledPeriodRequiresOverride
 }
 
 func TestCommitImportBatch_BuyOrderFillReusesHoldingAccountAcrossFetches(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 
@@ -1007,6 +1020,7 @@ func TestCommitImportBatch_BuyOrderFillReusesHoldingAccountAcrossFetches(t *test
 // row (the same shape any import source produces) specifically to prove
 // the generic commit path itself, independent of B-T212-INVST.
 func TestCommitImportBatch_GenericCashRowCommitsToRealLedger(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 
@@ -1036,6 +1050,7 @@ func TestCommitImportBatch_GenericCashRowCommitsToRealLedger(t *testing.T) {
 }
 
 func TestCommitImportedTransaction_RollsBackLedgerWhenIdentityWriteFails(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 
@@ -1113,6 +1128,7 @@ func TestCommitImportedTransaction_RollsBackLedgerWhenIdentityWriteFails(t *test
 }
 
 func TestCommitImportBatch_OrderFillWithoutCashAccountFallsBackToGenericCommit(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, nil) // no cash_account_id configured
 
@@ -1142,6 +1158,7 @@ func TestCommitImportBatch_OrderFillWithoutCashAccountFallsBackToGenericCommit(t
 // the 15:00 SELL below remains before the 09:00 BUY, hits insufficient lots,
 // and falls back to a plain cash transaction instead of disposing the lot.
 func TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrades(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	ctx := context.Background()
@@ -1220,6 +1237,7 @@ func TestCommitImportBatch_SameDaySellBeforeBuyStillCommitsBothAsInvestmentTrade
 // fail the row with the real error message so the underlying problem is
 // visible instead of masked.
 func TestCommitImportBatch_BuyOrderFillUnexpectedInvestmentErrorFailsRowInsteadOfFallingBack(t *testing.T) {
+	t.Parallel()
 	// No commodity_trading system account seeded — Buy() requires one, so
 	// this simulates a real configuration bug rather than a normal
 	// "can't resolve this row" gap.
@@ -1259,6 +1277,7 @@ func TestCommitImportBatch_BuyOrderFillUnexpectedInvestmentErrorFailsRowInsteadO
 }
 
 func TestCommitImportBatch_InsufficientLotFallbackCleansCreatedInvestmentSetup(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	batchID, rowID := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
@@ -1283,6 +1302,7 @@ func TestCommitImportBatch_InsufficientLotFallbackCleansCreatedInvestmentSetup(t
 }
 
 func TestCommitImportBatch_MissingDividendDefaultCleansCreatedInstrument(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	batchID, rowID := f.stageDividendRow(t, conn.ID, trading212Dividend{
@@ -1301,6 +1321,7 @@ func TestCommitImportBatch_MissingDividendDefaultCleansCreatedInstrument(t *test
 }
 
 func TestCommitImportBatch_DividendPostsAsInvestmentIncome(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 
@@ -1391,6 +1412,7 @@ func assertInvestmentIdentityFailure(t *testing.T, f *investTestFixture, batchID
 }
 
 func TestCommitImportBatch_InvestmentBuyRollsBackWhenIdentityRecordingFails(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
@@ -1409,6 +1431,7 @@ func TestCommitImportBatch_InvestmentBuyRollsBackWhenIdentityRecordingFails(t *t
 }
 
 func TestCommitImportBatch_InvestmentSellRollsBackWhenIdentityRecordingFails(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	buyBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
@@ -1436,6 +1459,7 @@ func TestCommitImportBatch_InvestmentSellRollsBackWhenIdentityRecordingFails(t *
 }
 
 func TestCommitImportBatch_InvestmentDividendRollsBackWhenIdentityRecordingFails(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	buyBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
@@ -1471,6 +1495,7 @@ func TestCommitImportBatch_InvestmentDividendRollsBackWhenIdentityRecordingFails
 // turn the winner's committed marker into failed. The loser must recognize the
 // existing import identity as its successful idempotent outcome.
 func TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	setupBatchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
@@ -1537,6 +1562,7 @@ func TestCommitImportBatch_ConcurrentTrading212CommitsKeepTheCommittedRow(t *tes
 // holding map/account, reuse that winner for both trades, and clean up the
 // losing unused holding account.
 func TestCommitImportBatch_ConcurrentFirstTimeHoldingMapReusesWinner(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	_, commodityID, _, err := f.investmentSvc.ResolveOrCreateInstrumentForImport(
@@ -1611,6 +1637,7 @@ func TestCommitImportBatch_ConcurrentFirstTimeHoldingMapReusesWinner(t *testing.
 }
 
 func TestCommitImportStagedRow_DoesNotOverwriteCommitted(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
 	batchID, _ := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
@@ -1650,6 +1677,7 @@ func TestCommitImportStagedRow_DoesNotOverwriteCommitted(t *testing.T) {
 // caller must converge on that committed outcome instead of failing while it
 // tries to mark the stale snapshot as skipped.
 func TestCommitImportBatch_StaleIdentitySnapshotReturnsCommitted(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	ctx := context.Background()
 	batch, err := f.importRepo.CreateImportBatch(ctx, db.CreateImportBatchParams{
@@ -1703,6 +1731,7 @@ func TestCommitImportBatch_StaleIdentitySnapshotReturnsCommitted(t *testing.T) {
 // first version is stamped db.CommodityGenesisDate, so a back-dated first
 // trade commits with no special handling (T-42).
 func TestCommitImportBatch_BackdatedFirstTradeNeedsNoInstrumentBackdating(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	// A brokerage cash account the user really opened in 2023, so the fill
 	// predates only the app's own setup — not the account it settles against.
@@ -1735,6 +1764,7 @@ func TestCommitImportBatch_BackdatedFirstTradeNeedsNoInstrumentBackdating(t *tes
 // made from whichever fill arrived first, so it must not reject the earlier
 // one (T-44 — see docs/design/holding-account-opened-date.md).
 func TestCommitImportBatch_LaterImportCarryingAnEarlierTradeStillCommits(t *testing.T) {
+	t.Parallel()
 	f := newInvestTestFixture(t)
 	cashAccountID := seedTestAccountOpenedOn(t, f.database, "2023-01-01")
 	conn := f.createConnection(t, &cashAccountID)

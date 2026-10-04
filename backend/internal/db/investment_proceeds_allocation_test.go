@@ -8,6 +8,7 @@ import (
 )
 
 func TestAllocateDisposalProceedsConservesMixedScaleRemainder(t *testing.T) {
+	t.Parallel()
 	for _, proceeds := range []int64{10001, -10001} {
 		allocations := []LotDisposalRecord{
 			{QuantityValue: exact.New(1), QuantityScale: 0, CostBasisScale: 6},
@@ -32,6 +33,7 @@ func TestAllocateDisposalProceedsConservesMixedScaleRemainder(t *testing.T) {
 }
 
 func TestAllocateDisposalProceedsUsesDeepestInt64Scale(t *testing.T) {
+	t.Parallel()
 	allocations := []LotDisposalRecord{{QuantityValue: exact.New(1), CostBasisScale: 6}}
 	require.NoError(t, allocateDisposalProceeds(allocations, 9223372036854775807, 2))
 	require.Equal(t, int64(9223372036854775807), allocations[0].ProceedsValue)

@@ -10,6 +10,7 @@ import (
 )
 
 func TestReverseManualBuyReplaysDependentLIFOSaleAndKeepsHistory(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -58,6 +59,7 @@ func TestReverseManualBuyReplaysDependentLIFOSaleAndKeepsHistory(t *testing.T) {
 }
 
 func TestReverseManualBuyRejectsDependentSaleAndRollsBack(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	target := buyOn(t, f, "2026-01-01", 10, 10000)
@@ -83,6 +85,7 @@ func TestReverseManualBuyRejectsDependentSaleAndRollsBack(t *testing.T) {
 }
 
 func TestReverseManualBuyRefusesSpecificLotElectionForRemovedAcquisition(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -108,6 +111,7 @@ func TestReverseManualBuyRefusesSpecificLotElectionForRemovedAcquisition(t *test
 }
 
 func TestReverseManualBuyRequiresReconciliationOverride(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	target := buyOn(t, f, "2026-01-01", 10, 10000)
@@ -133,6 +137,7 @@ func TestReverseManualBuyRequiresReconciliationOverride(t *testing.T) {
 }
 
 func TestReverseImportedBuyRemainsFenced(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	target, err := f.investmentService.Buy(ctx, InvestmentTradeInput{

@@ -18,6 +18,7 @@ import (
 )
 
 func TestCleanPriceObservationSpecDefaultsAndCompactsJSON(t *testing.T) {
+	t.Parallel()
 	spec, err := cleanPriceObservationSpec(PriceObservationInput{
 		BaseCommodityID:    10,
 		QuoteCommodityID:   20,
@@ -45,6 +46,7 @@ func TestCleanPriceObservationSpecDefaultsAndCompactsJSON(t *testing.T) {
 }
 
 func TestCleanPriceObservationSpecRejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
 	valid := PriceObservationInput{
 		BaseCommodityID:   10,
 		QuoteCommodityID:  20,
@@ -87,6 +89,7 @@ func TestCleanPriceObservationSpecRejectsInvalidInputs(t *testing.T) {
 }
 
 func TestPricingRefreshStoresDirectRatesIdempotently(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry(fakeFXProvider{
 		code: "frankfurter",
@@ -115,6 +118,7 @@ func TestPricingRefreshStoresDirectRatesIdempotently(t *testing.T) {
 }
 
 func TestPricingRefreshStoresDerivedRateWithVintageMetadata(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR", "GBP"}, marketdata.NewRegistry(fakeFXProvider{
 		code: "frankfurter",
@@ -142,6 +146,7 @@ func TestPricingRefreshStoresDerivedRateWithVintageMetadata(t *testing.T) {
 }
 
 func TestRefreshFXTarget_DerivesMultiHopChainWhenPolicyAllowsMoreHops(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// USD -> EUR -> GBP -> JPY is the only chain the provider can serve: no
 	// direct USD/JPY, and no single intermediate covers it either.
@@ -180,6 +185,7 @@ func TestRefreshFXTarget_DerivesMultiHopChainWhenPolicyAllowsMoreHops(t *testing
 }
 
 func TestRefreshFXTarget_PrefersShorterChainOverDeeperOneFoundFirst(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// Two routes exist to JPY: USD -> EUR -> GBP -> JPY (two hops) and
 	// USD -> ZAR -> JPY (one hop). Candidates are ordered by code, so EUR is
@@ -206,6 +212,7 @@ func TestRefreshFXTarget_PrefersShorterChainOverDeeperOneFoundFirst(t *testing.T
 }
 
 func TestRefreshFXTarget_ZeroHopsDisablesTriangulationEntirely(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR", "GBP"}, marketdata.NewRegistry(fakeFXProvider{
 		code: "frankfurter",
@@ -223,6 +230,7 @@ func TestRefreshFXTarget_ZeroHopsDisablesTriangulationEntirely(t *testing.T) {
 }
 
 func TestPricingRefreshRecordsFailureHealth(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry(fakeFXProvider{
 		code:  "frankfurter",
@@ -241,6 +249,7 @@ func TestPricingRefreshRecordsFailureHealth(t *testing.T) {
 }
 
 func TestListRefreshRunsReportsHasMoreWithoutReturningHiddenRows(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewPricingRepository(database)
@@ -261,6 +270,7 @@ func TestListRefreshRunsReportsHasMoreWithoutReturningHiddenRows(t *testing.T) {
 }
 
 func TestFXCoverageBackfillsHistoricalPublicationDatesIdempotently(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry(fakeFXProvider{
 		code: "frankfurter",
@@ -303,6 +313,7 @@ func TestFXCoverageBackfillsHistoricalPublicationDatesIdempotently(t *testing.T)
 }
 
 func TestBackgroundWorkExpiredLeaseCanBeReclaimed(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, _ := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewBackgroundWorkRepository(database)
@@ -324,6 +335,7 @@ func TestBackgroundWorkExpiredLeaseCanBeReclaimed(t *testing.T) {
 }
 
 func TestBackgroundWorkEnqueueCoalescesActiveDuplicates(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, _ := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewBackgroundWorkRepository(database)
@@ -350,6 +362,7 @@ func TestBackgroundWorkEnqueueCoalescesActiveDuplicates(t *testing.T) {
 // --- CreatePrice ---
 
 func TestCreatePrice_HappyPathAndDuplicateSameDateAppends(t *testing.T) {
+	t.Parallel()
 	// cleanPriceObservationSpec's own rejections are already covered by
 	// TestCleanPriceObservationSpecRejectsInvalidInputs — this exercises the
 	// service method itself against the real repository.
@@ -384,6 +397,7 @@ func TestCreatePrice_HappyPathAndDuplicateSameDateAppends(t *testing.T) {
 }
 
 func TestCreatePrice_RequiresOwner(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	_, err := service.CreatePrice(ctx, PriceObservationInput{
@@ -395,6 +409,7 @@ func TestCreatePrice_RequiresOwner(t *testing.T) {
 // --- VoidPrice (T-37) ---
 
 func TestVoidPrice_RetiresObservationFromListingsButKeepsTheRecord(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry())
 
@@ -428,6 +443,7 @@ func TestVoidPrice_RetiresObservationFromListingsButKeepsTheRecord(t *testing.T)
 }
 
 func TestVoidPrice_StopsTheObservationBeingUsedForValuation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry())
 
@@ -464,6 +480,7 @@ func TestVoidPrice_StopsTheObservationBeingUsedForValuation(t *testing.T) {
 }
 
 func TestVoidPrice_CascadesToRatesTriangulatedFromTheVoidedLeg(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// USD -> EUR -> GBP -> JPY: the USD/JPY rate is derived from three legs,
 	// so voiding any one leg must retire the derived rate too. Leaving it
@@ -499,6 +516,7 @@ func TestVoidPrice_CascadesToRatesTriangulatedFromTheVoidedLeg(t *testing.T) {
 }
 
 func TestVoidPrice_RejectsDoubleVoidUnknownIDAndMissingReason(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry())
 
@@ -523,6 +541,7 @@ func TestVoidPrice_RejectsDoubleVoidUnknownIDAndMissingReason(t *testing.T) {
 }
 
 func TestVoidPrice_RecordsOneAuditEventLinkedFromEveryVoidedRow(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR", "GBP"}, marketdata.NewRegistry(fakeFXProvider{
 		code: "frankfurter",
@@ -564,6 +583,7 @@ func TestVoidPrice_RecordsOneAuditEventLinkedFromEveryVoidedRow(t *testing.T) {
 // --- SavePolicy / cleanPricingPolicySpec / localDailyTimeUTC ---
 
 func TestSavePolicy_RoundTripsAndComputesUTCFromOwnerTimeZone(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	setOwnerTimeZone(t, database, "Europe/Amsterdam")
@@ -586,6 +606,7 @@ func TestSavePolicy_RoundTripsAndComputesUTCFromOwnerTimeZone(t *testing.T) {
 }
 
 func TestCleanPricingPolicySpec_RejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
 	valid := PricingPolicyInput{
 		RefreshHourUTC: 4, RefreshMinuteUTC: 0,
 		TriangulationMaxHops: 1, RoundingMode: "half_up", WeekendPolicy: "skip",
@@ -620,6 +641,7 @@ func TestCleanPricingPolicySpec_RejectsInvalidInputs(t *testing.T) {
 // call, so the same 09:00 Europe/Amsterdam wall-clock time correctly maps
 // to different UTC hours either side of the 2026-03-29 spring-forward.
 func TestLocalDailyTimeUTC_TracksDSTTransition(t *testing.T) {
+	t.Parallel()
 	winter := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC) // CET, UTC+1
 	summer := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC) // CEST, UTC+2
 
@@ -637,6 +659,7 @@ func TestLocalDailyTimeUTC_TracksDSTTransition(t *testing.T) {
 }
 
 func TestLocalDailyTimeUTC_RejectsInvalidTimeZone(t *testing.T) {
+	t.Parallel()
 	_, _, err := localDailyTimeUTC(9, 0, "Not/A_Zone", time.Now())
 	require.Error(t, err)
 }
@@ -644,6 +667,7 @@ func TestLocalDailyTimeUTC_RejectsInvalidTimeZone(t *testing.T) {
 // --- SaveSourceAssignment ---
 
 func TestSaveSourceAssignment_MultipleActiveAssignmentsResolveByPriority(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD", "EUR"}, marketdata.NewRegistry())
 	repository := db.NewPricingRepository(database)
@@ -684,6 +708,7 @@ func TestSaveSourceAssignment_MultipleActiveAssignmentsResolveByPriority(t *test
 }
 
 func TestCleanPricingSourceAssignmentSpec_RejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	valid := PricingSourceAssignmentInput{CommodityID: 1, QuoteCommodityID: 2, SourceID: 3, Status: "active", EffectiveFrom: "2026-01-01"}
 	tests := []struct {
@@ -709,6 +734,7 @@ func TestCleanPricingSourceAssignmentSpec_RejectsInvalidInputs(t *testing.T) {
 // --- Scheduler ---
 
 func TestRunScheduledRefreshIfDue(t *testing.T) {
+	t.Parallel()
 	t.Run("not yet due", func(t *testing.T) {
 		ctx := context.Background()
 		database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
@@ -754,6 +780,7 @@ func TestRunScheduledRefreshIfDue(t *testing.T) {
 // --- Worker ---
 
 func TestRunDueFXCoverage_ProcessesLeasedWorkExactlyOnce(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewBackgroundWorkRepository(database)
@@ -784,6 +811,7 @@ func TestRunDueFXCoverage_ProcessesLeasedWorkExactlyOnce(t *testing.T) {
 // reach this far; the only reachable "invalid payload" is one that parses
 // but fails the service's own semantic validation.
 func TestProcessFXCoverageWork_InvalidPayloadFailsWithoutRetry(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewBackgroundWorkRepository(database)
@@ -809,6 +837,7 @@ func TestProcessFXCoverageWork_InvalidPayloadFailsWithoutRetry(t *testing.T) {
 }
 
 func TestProcessFXCoverageWork_ProviderFailureRetriesWithBackoff(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// No default currency configured for book 1's pricing policy resolution
 	// path here is fine — the fixture always sets one; instead force a
@@ -844,6 +873,7 @@ func TestProcessFXCoverageWork_ProviderFailureRetriesWithBackoff(t *testing.T) {
 }
 
 func TestProcessFXCoverageWork_GivesUpAfterMaxAttempts(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewBackgroundWorkRepository(database)
@@ -886,6 +916,7 @@ func TestProcessFXCoverageWork_GivesUpAfterMaxAttempts(t *testing.T) {
 }
 
 func TestRetryBackgroundWork_RequeuesFailedItemAndResetsAttempts(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewBackgroundWorkRepository(database)
@@ -912,6 +943,7 @@ func TestRetryBackgroundWork_RequeuesFailedItemAndResetsAttempts(t *testing.T) {
 }
 
 func TestRetryBackgroundWork_RejectsMissingAndAlreadyQueuedWork(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewBackgroundWorkRepository(database)
@@ -942,6 +974,7 @@ func TestRetryBackgroundWork_RejectsMissingAndAlreadyQueuedWork(t *testing.T) {
 }
 
 func TestRunDueFXCoverage_PoisonItemDoesNotWedgeQueue(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, service := newPricingRefreshTestService(t, []string{"USD"}, marketdata.NewRegistry())
 	repository := db.NewBackgroundWorkRepository(database)

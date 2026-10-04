@@ -9,6 +9,7 @@ import (
 )
 
 func TestTradeCorrectionContextReadsImmutableSourceFacts(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -55,6 +56,7 @@ func TestTradeCorrectionContextReadsImmutableSourceFacts(t *testing.T) {
 }
 
 func TestTradeCorrectionContextIncludesSaleElection(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -116,6 +118,7 @@ func TestTradeCorrectionContextIncludesSaleElection(t *testing.T) {
 }
 
 func TestTradeCorrectionContextPreservesOlderSalePrefixForReplacement(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{

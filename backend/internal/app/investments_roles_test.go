@@ -26,6 +26,7 @@ func validBuy(f *investmentsTestFixture) InvestmentTradeInput {
 }
 
 func TestBuyRejectsRoleCombinationsThatNoLotCanAccountFor(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		mutate  func(*testing.T, *investmentsTestFixture, *InvestmentTradeInput)
@@ -95,6 +96,7 @@ func TestBuyRejectsRoleCombinationsThatNoLotCanAccountFor(t *testing.T) {
 }
 
 func TestSellRejectsAHoldingAccountAsItsCashLeg(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -116,6 +118,7 @@ func TestSellRejectsAHoldingAccountAsItsCashLeg(t *testing.T) {
 }
 
 func TestWriteOffNeedsNoCashRoleAtAll(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -129,6 +132,7 @@ func TestWriteOffNeedsNoCashRoleAtAll(t *testing.T) {
 }
 
 func TestDividendRejectsAnIncomeAccountThatIsNotIncome(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	holding := f.holdingAccountID
@@ -153,6 +157,7 @@ func TestDividendRejectsAnIncomeAccountThatIsNotIncome(t *testing.T) {
 }
 
 func TestDividendRejectsAWithholdingAccountThatCannotHoldTax(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	income := f.incomeAccountID
@@ -180,6 +185,7 @@ func TestDividendRejectsAWithholdingAccountThatCannotHoldTax(t *testing.T) {
 }
 
 func TestReinvestedDividendRejectsASecurityAsItsSettlementCommodity(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	income := f.incomeAccountID
@@ -194,6 +200,7 @@ func TestReinvestedDividendRejectsASecurityAsItsSettlementCommodity(t *testing.T
 }
 
 func TestValidTradesStillCommitUnderTheRoleRules(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -209,6 +216,7 @@ func TestValidTradesStillCommitUnderTheRoleRules(t *testing.T) {
 }
 
 func TestWriteOffPreviewRefusesTheSameRolesItsCommitWould(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)

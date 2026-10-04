@@ -86,6 +86,7 @@ func TestSelfCheckPassesOnHealthyBook(t *testing.T) {
 }
 
 func TestSelfCheckFindsInvestmentOperationWithoutPostedVersionLink(t *testing.T) {
+	t.Parallel()
 	harness := newSelfCheckHarness(t)
 	ctx := context.Background()
 	result, err := harness.writer.ExecContext(ctx, `
@@ -108,6 +109,7 @@ func TestSelfCheckFindsInvestmentOperationWithoutPostedVersionLink(t *testing.T)
 }
 
 func TestSelfCheckRequiresJournalForNewOperationKindWithoutCompatibilityTransaction(t *testing.T) {
+	t.Parallel()
 	harness := newSelfCheckHarness(t)
 	ctx := context.Background()
 	result, err := harness.writer.ExecContext(ctx, `
@@ -424,6 +426,7 @@ func TestLatestSelfCheckReturnsTheStoredRun(t *testing.T) {
 }
 
 func TestInterruptedSelfCheckIsRecordedAsErrored(t *testing.T) {
+	t.Parallel()
 	harness := newSelfCheckHarness(t)
 	require.NoError(t, harness.readOnly.Close())
 
@@ -444,6 +447,7 @@ func TestInterruptedSelfCheckIsRecordedAsErrored(t *testing.T) {
 // thing that can still close it out, so it must find it, mark it `errored`
 // with a diagnostic, and leave a healthy run alone.
 func TestStartupRecoversSelfCheckRunInterruptedByCrash(t *testing.T) {
+	t.Parallel()
 	harness := newSelfCheckHarness(t)
 	ctx := context.Background()
 

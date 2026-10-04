@@ -188,6 +188,7 @@ func TestReplaySelfCheckReportsStaleTransferBasis(t *testing.T) {
 // book. It is a measurement, not a gate: run it with
 // REKENRAAM_MEASURE_REPLAY=1 go test ./internal/app -run TestMeasureReplaySelfCheckRuntime -v
 func TestMeasureReplaySelfCheckRuntime(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("REKENRAAM_MEASURE_REPLAY") == "" {
 		t.Skip("set REKENRAAM_MEASURE_REPLAY=1 to measure")
 	}

@@ -15,6 +15,7 @@ import (
 )
 
 func TestInvestmentOperationExportAndImportEffectsUsePrimaryJournalLinks(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	trade := InvestmentTradeInput{
@@ -70,6 +71,7 @@ func TestInvestmentOperationExportAndImportEffectsUsePrimaryJournalLinks(t *test
 }
 
 func TestImportIdentityRefusesUnlinkedInvestmentJournal(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -101,6 +103,7 @@ func TestImportIdentityRefusesUnlinkedInvestmentJournal(t *testing.T) {
 // T-115: dividend and reinvestment corrections export one row per operation
 // with their correction link, mode and reason, like trade corrections.
 func TestDividendAndReinvestmentCorrectionsExportAsOperations(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	dividend, err := f.investmentService.Dividend(ctx, cashDividendInput(f, 0, 10000, 0))
@@ -138,6 +141,7 @@ func TestDividendAndReinvestmentCorrectionsExportAsOperations(t *testing.T) {
 // T-118: a replaced and a reversed write-off export as operations with their
 // correction link, mode and reason.
 func TestWriteOffCorrectionsExportAsOperations(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 10, 100000)

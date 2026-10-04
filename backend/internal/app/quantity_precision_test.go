@@ -10,6 +10,7 @@ import (
 )
 
 func TestValidateBalancedSupportsCoefficientsBeyondInt64(t *testing.T) {
+	t.Parallel()
 	value := exact.MustParse("12345678901234567890123456789012345678")
 	entries := []db.JournalEntrySpec{{Postings: []db.PostingSpec{
 		{CommodityID: 1, QuantityValue: value, QuantityScale: 24},

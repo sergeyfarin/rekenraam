@@ -35,6 +35,7 @@ func ordinaryEntry(accountID, otherAccountID, commodityID int64, quantity int64)
 }
 
 func TestCreateTransactionRejectsPostingsToSubledgerManagedAccounts(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"security_holding", "fund_holding"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
@@ -65,6 +66,7 @@ func TestCreateTransactionRejectsPostingsToSubledgerManagedAccounts(t *testing.T
 // out generically is as untracked as putting them in, and it would consume a
 // position the subledger still thinks is open.
 func TestCreateTransactionRejectsSubledgerPostingsInEitherDirection(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	holdingAccountID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -83,6 +85,7 @@ func TestCreateTransactionRejectsSubledgerPostingsInEitherDirection(t *testing.T
 // cannot help here: this transaction has none, and the edit is what introduces
 // the holding posting.
 func TestUpdateTransactionRejectsIntroducingASubledgerManagedPosting(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	holdingAccountID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -107,6 +110,7 @@ func TestUpdateTransactionRejectsIntroducingASubledgerManagedPosting(t *testing.
 // accepts a spec the commit refuses sends the user through a confirmation step
 // for a write that was never going to land.
 func TestReconciliationImpactForCreateRejectsSubledgerManagedPostings(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	holdingAccountID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -125,6 +129,7 @@ func TestReconciliationImpactForCreateRejectsSubledgerManagedPostings(t *testing
 // outright — and an exemption wired to the wrong place would be caught here
 // rather than in production.
 func TestInvestmentCommandsStillWriteToSubledgerManagedAccounts(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -152,6 +157,7 @@ func TestInvestmentCommandsStillWriteToSubledgerManagedAccounts(t *testing.T) {
 // manages. A brokerage cash account is an ordinary money account that salary,
 // fees and transfers post to all the time.
 func TestCreateTransactionAllowsOrdinaryInvestmentAdjacentAccounts(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -169,6 +175,7 @@ func TestCreateTransactionAllowsOrdinaryInvestmentAdjacentAccounts(t *testing.T)
 // no investment command that writes a crypto position, so guarding crypto
 // wallets would remove the only way to record one. See docs/backlog.md (T-96).
 func TestCreateTransactionStillAllowsCryptoWalletPostings(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	walletID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "crypto_wallet")

@@ -35,6 +35,7 @@ func gainOf(t *testing.T, f *investmentsTestFixture) *exact.ScaledInt {
 // directions of the reported case: the same 11 EUR of proceeds, once at scale 0
 // and once at scale 2, against the same 10.99 EUR basis.
 func TestRealizedGainIsTheSameHoweverProceedsWereEntered(t *testing.T) {
+	t.Parallel()
 	for _, entered := range []struct {
 		name  string
 		value int64
@@ -67,6 +68,7 @@ func TestRealizedGainIsTheSameHoweverProceedsWereEntered(t *testing.T) {
 // preview always subtracted at a common scale, so preview and report disagreed
 // by a factor of a hundred on the same sale. They are the same number.
 func TestRealizedGainMatchesItsPreview(t *testing.T) {
+	t.Parallel()
 	for _, sale := range []struct {
 		name          string
 		basis         int64
@@ -108,6 +110,7 @@ func TestRealizedGainMatchesItsPreview(t *testing.T) {
 // per-entry rounding error would accumulate rather than cancel. Closing the
 // whole position means the gain is exactly proceeds less total cost.
 func TestRealizedGainClosesAMixedScaleMultiLotPositionExactly(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	for _, buy := range []struct {

@@ -95,6 +95,11 @@ strings to the client.
   DDL. Migration, restore, and fresh-start tests keep using `db.Open` plus
   `db.Migrate` directly because migration behavior is their subject.
   Never touch `backend/var/dev.sqlite` from tests.
+- Every top-level test in `internal/app` and `internal/db` starts with
+  `t.Parallel()` (T-125: serial tests were 654 of the app package's 866
+  race-gate seconds). Opt out only with a `// serial: <reason>` comment above
+  the function for process-wide state such as `t.Setenv`;
+  `TestIntegrationSuitesRunTestsInParallel` fails otherwise.
 - Use `testify`: `require` for fatal, `assert` for non-fatal. No manual
   `if got != want` blocks.
 - Good reference tests: `app/import_fetch_worker_test.go` (worker + concurrency),

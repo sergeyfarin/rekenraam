@@ -83,6 +83,7 @@ func requireAmount(t *testing.T, measure []BalanceQuantity, commodityID int64, v
 }
 
 func TestNetWorthFlagsDatedUnclassifiedShortUntilCorrected(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	wallet, btc, move := cryptoFixture(t, f)
 	move("2026-01-02", -500000000, 100000)
@@ -112,6 +113,7 @@ func TestNetWorthFlagsDatedUnclassifiedShortUntilCorrected(t *testing.T) {
 // but that is a property of the selection, and a selection is exactly the kind
 // of thing that changes without anyone noticing.
 func TestTransfersNeverReachSpendingOrIncome(t *testing.T) {
+	t.Parallel()
 	h := newHouseholdBook(t)
 	ctx := context.Background()
 
@@ -157,6 +159,7 @@ func TestTransfersNeverReachSpendingOrIncome(t *testing.T) {
 // not an expense and selling it is not income: the money changed shape. Only
 // the dividend is income, and only the withheld tax is an expense.
 func TestInvestmentAndCryptoPrincipalIsNeverSpendingOrIncome(t *testing.T) {
+	t.Parallel()
 	h := newHouseholdBook(t)
 	ctx := context.Background()
 
@@ -200,6 +203,7 @@ func TestInvestmentAndCryptoPrincipalIsNeverSpendingOrIncome(t *testing.T) {
 // clearing leg, so an account set that includes the clearing account counts the
 // same position twice — once where it landed and once where it came from.
 func TestNetWorthCountsEachPositionExactlyOnce(t *testing.T) {
+	t.Parallel()
 	h := newHouseholdBook(t)
 	ctx := context.Background()
 
@@ -251,6 +255,7 @@ func TestNetWorthCountsEachPositionExactlyOnce(t *testing.T) {
 // code. For one account set over one window they must agree exactly, or one of
 // them is counting something twice.
 func TestCashflowNetMovementEqualsTheSameAccountsNetWorthChange(t *testing.T) {
+	t.Parallel()
 	h := newHouseholdBook(t)
 	ctx := context.Background()
 	scope := []int64{h.cashAccountID, h.savings}
@@ -316,6 +321,7 @@ func TestCashflowNetMovementEqualsTheSameAccountsNetWorthChange(t *testing.T) {
 // ledger read forward across buckets; the point-in-time endpoint re-reads for
 // one date. They are separate implementations of one number.
 func TestNetWorthSeriesAgreesWithPointInTimeAtEveryBucketEnd(t *testing.T) {
+	t.Parallel()
 	h := newHouseholdBook(t)
 	ctx := context.Background()
 
@@ -368,6 +374,7 @@ func TestNetWorthSeriesAgreesWithPointInTimeAtEveryBucketEnd(t *testing.T) {
 // includes its own postings and its children's; counting a parent's direct
 // postings into its own subtree twice is the classic rollup error.
 func TestCategorySubtreeCountsEachPostingOnce(t *testing.T) {
+	t.Parallel()
 	h := newHouseholdBook(t)
 	ctx := context.Background()
 	parent, err := h.accountService.CreateAccount(ctx, CreateAccountInput{
@@ -426,6 +433,7 @@ func TestCategorySubtreeCountsEachPostingOnce(t *testing.T) {
 // read the version table directly, editing an amount would count both the old
 // and the new figure, and every correction would inflate the year.
 func TestEditingVoidingAndDeletingLeaveOneVersionInEveryReport(t *testing.T) {
+	t.Parallel()
 	h := newHouseholdBook(t)
 	ctx := context.Background()
 

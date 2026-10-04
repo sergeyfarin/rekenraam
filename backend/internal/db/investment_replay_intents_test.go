@@ -11,6 +11,7 @@ import (
 )
 
 func TestInvestmentReplayIntentsReadImmutableSources(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	repo := NewInvestmentRepository(database)
@@ -31,6 +32,7 @@ func TestInvestmentReplayIntentsReadImmutableSources(t *testing.T) {
 }
 
 func TestInvestmentReplayIntentsExcludeReversedOperation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	_, err := database.ExecContext(ctx, `
@@ -96,6 +98,7 @@ func seedReplayTestBook(t *testing.T) *sql.DB {
 }
 
 func TestInvestmentReplayIntentsOrderSameDayByOperationAndEffect(t *testing.T) {
+	t.Parallel()
 	intents := []InvestmentReplayIntent{
 		{OperationID: 3, EffectSeq: 1, EventDate: "2026-01-02"},
 		{OperationID: 2, EffectSeq: 2, EventDate: "2026-01-01"},
@@ -109,6 +112,7 @@ func TestInvestmentReplayIntentsOrderSameDayByOperationAndEffect(t *testing.T) {
 }
 
 func TestInvestmentReplayReplacementKeepsRootSameDaySlot(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	result, err := database.ExecContext(ctx, `INSERT INTO investment_operations

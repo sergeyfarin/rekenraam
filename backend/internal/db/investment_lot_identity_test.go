@@ -8,6 +8,7 @@ import (
 )
 
 func TestInvestmentLotOpeningIdentityIsImmutable(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	before := captureLedgerState(t, database)
@@ -37,6 +38,7 @@ func TestInvestmentLotOpeningIdentityIsImmutable(t *testing.T) {
 // T-124 merged investment_lot_facts into the lot row. The constraints that
 // table enforced on operation-opened lots stay on the merged row.
 func TestOperationOpenedLotKeepsCanonicalOpeningFactConstraints(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	var operationID int64
@@ -62,6 +64,7 @@ func TestOperationOpenedLotKeepsCanonicalOpeningFactConstraints(t *testing.T) {
 }
 
 func TestInvestmentLotProjectionUpdatesPreserveOpeningIdentity(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	// Identity and projection writes target their own tables.
@@ -82,6 +85,7 @@ func TestInvestmentLotProjectionUpdatesPreserveOpeningIdentity(t *testing.T) {
 }
 
 func TestInvestmentLotSchemaSeparatesProjection(t *testing.T) {
+	t.Parallel()
 	database := seedReplayTestBook(t)
 	var count int
 	require.NoError(t, database.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'investment_lot_state'`).Scan(&count))
@@ -91,6 +95,7 @@ func TestInvestmentLotSchemaSeparatesProjection(t *testing.T) {
 }
 
 func TestInvestmentLotStateCannotMoveAcrossLotsOrBooks(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	for _, assignment := range []string{"book_id = 2", "lot_id = 999999"} {

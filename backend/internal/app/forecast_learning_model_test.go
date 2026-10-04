@@ -78,6 +78,7 @@ func learningRat(t testing.TB, value string) *big.Rat {
 // honestly sees only its own prefix must be badly wrong about the holdout; only
 // an implementation peeking at future periods could score well.
 func TestForecastLearningNoFutureLeakage(t *testing.T) {
+	t.Parallel()
 	amounts := append(learningRepeat("100.00", 12), learningRepeat("1000.00", 4)...)
 	periods := learningPeriodsFrom(t, "week", "2025-01-06", 2, amounts...)
 
@@ -116,6 +117,7 @@ func TestForecastLearningNoFutureLeakage(t *testing.T) {
 // TestForecastLearningFallsBackUnlessValidatedBetter drives the level gate over
 // its exact boundaries. A dataset where the baseline wins is a passing test.
 func TestForecastLearningFallsBackUnlessValidatedBetter(t *testing.T) {
+	t.Parallel()
 	candidate := func(method, mae, total string) ForecastLearningCandidate {
 		return ForecastLearningCandidate{
 			Method:              method,
@@ -231,6 +233,7 @@ func learningSeasonalAmounts(years int, profile map[time.Month]string, overrides
 // through selection and refit, so a summer trip that shifts between them is not
 // smoothed into one averaged month.
 func TestForecastLearningSeasonalPeaks(t *testing.T) {
+	t.Parallel()
 	amounts := learningSeasonalAmounts(3,
 		map[time.Month]string{time.July: "1000.00", time.August: "800.00"},
 		map[string]string{"0-07": "900.00", "1-07": "1100.00"})
@@ -263,6 +266,7 @@ func TestForecastLearningSeasonalPeaks(t *testing.T) {
 }
 
 func TestForecastLearningSeasonalValidation(t *testing.T) {
+	t.Parallel()
 	t.Run("the frozen year sees only earlier observations", func(t *testing.T) {
 		amounts := learningSeasonalAmounts(3,
 			map[time.Month]string{time.July: "1000.00", time.August: "800.00"},
@@ -395,6 +399,7 @@ func TestForecastLearningSeasonalValidation(t *testing.T) {
 // TestForecastLearningVariationIsNotConfidence checks that reported spread is
 // observed history with counts, carrying no band, percentile or jitter.
 func TestForecastLearningVariationIsNotConfidence(t *testing.T) {
+	t.Parallel()
 	t.Run("weekly reports the fitted window range", func(t *testing.T) {
 		amounts := append(learningRepeat("100.00", 15), "250.00")
 		periods := learningPeriodsFrom(t, "week", "2025-01-06", 2, amounts...)
@@ -453,6 +458,7 @@ func TestForecastLearningVariationIsNotConfidence(t *testing.T) {
 // TestForecastLearningPreservesExactMoney keeps the fit rational end to end,
 // including coefficients past the float64 integer range.
 func TestForecastLearningPreservesExactMoney(t *testing.T) {
+	t.Parallel()
 	t.Run("smoothing is exact rational arithmetic", func(t *testing.T) {
 		spend := []*big.Rat{learningRat(t, "1"), new(big.Rat), new(big.Rat)}
 		assert.Equal(t, learningRat(t, "9/16"), forecastLearningSES(spend, big.NewRat(1, 4)))
@@ -485,6 +491,7 @@ func TestForecastLearningPreservesExactMoney(t *testing.T) {
 // returns no groups at all, so the caller falls back to the unchanged core
 // forecast rather than a partial learned overlay.
 func TestForecastLearningLimitsNeverReturnGroupPrefixes(t *testing.T) {
+	t.Parallel()
 	history := func(count int) []ForecastLearningGroupHistory {
 		periods := learningPeriodsFrom(t, "week", "2025-01-06", 2, learningRepeat("100.00", 16)...)
 		groups := make([]ForecastLearningGroupHistory, count)
@@ -552,6 +559,7 @@ func TestForecastLearningLimitsNeverReturnGroupPrefixes(t *testing.T) {
 // TestForecastLearningPatternsAreExclusive checks the four cadences coexist,
 // each keeping its own period system and its own single model.
 func TestForecastLearningPatternsAreExclusive(t *testing.T) {
+	t.Parallel()
 	weekly := learningPeriodsFrom(t, "week", "2025-01-06", 2, learningRepeat("100.00", 16)...)
 	monthly := learningPeriodsFrom(t, "month", "2024-01-01", 2, learningRepeat("400.00", 20)...)
 	seasonal := learningPeriodsFrom(t, "month", "2023-01-01", 2,
@@ -587,6 +595,7 @@ func TestForecastLearningPatternsAreExclusive(t *testing.T) {
 }
 
 func TestForecastLearningSelectionRejectsShortHistory(t *testing.T) {
+	t.Parallel()
 	short := learningPeriodsFrom(t, "week", "2025-01-06", 2, learningRepeat("100.00", 15)...)
 	_, err := SelectForecastLearningModel(ForecastLearningWeekly, short)
 	require.ErrorContains(t, err, "16 complete periods")

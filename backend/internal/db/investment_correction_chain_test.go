@@ -8,6 +8,7 @@ import (
 )
 
 func TestCorrectionChainReadsReplacementAndTerminalReversalFromAnyLinkedTransaction(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	_, err := database.ExecContext(ctx, `INSERT INTO investment_operations
@@ -34,6 +35,7 @@ func TestCorrectionChainReadsReplacementAndTerminalReversalFromAnyLinkedTransact
 }
 
 func TestRetiredOperationHeaderPreservesJournalLinkConstraints(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database := seedReplayTestBook(t)
 	for _, test := range []struct {

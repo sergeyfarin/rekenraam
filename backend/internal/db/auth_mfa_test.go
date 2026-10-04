@@ -55,6 +55,7 @@ func countMFARecoveryCodes(t *testing.T, database *sql.DB) int {
 }
 
 func TestActivateMFATOTPWithRecoveryCodesTurnsMFAOnAndStoresTheCodes(t *testing.T) {
+	t.Parallel()
 	database, repository := newMFATestRepository(t)
 	enrollPendingMFA(t, repository)
 
@@ -72,6 +73,7 @@ func TestActivateMFATOTPWithRecoveryCodesTurnsMFAOnAndStoresTheCodes(t *testing.
 // mid-activation failure: the owner must be left with a retryable pending
 // enrollment, never an active second factor they hold no recovery codes for.
 func TestActivateMFATOTPWithRecoveryCodesLeavesTheEnrollmentPendingWhenCodesFail(t *testing.T) {
+	t.Parallel()
 	database, repository := newMFATestRepository(t)
 	enrollPendingMFA(t, repository)
 
@@ -88,6 +90,7 @@ func TestActivateMFATOTPWithRecoveryCodesLeavesTheEnrollmentPendingWhenCodesFail
 // The retry after a failed activation must work, which is only true because
 // the failure left the enrollment pending.
 func TestActivateMFATOTPWithRecoveryCodesCanBeRetriedAfterAFailure(t *testing.T) {
+	t.Parallel()
 	database, repository := newMFATestRepository(t)
 	enrollPendingMFA(t, repository)
 
@@ -107,6 +110,7 @@ func TestActivateMFATOTPWithRecoveryCodesCanBeRetriedAfterAFailure(t *testing.T)
 // Activation is only ever a pending -> active promotion; a second activation
 // of an already-active enrollment must not silently reissue its codes.
 func TestActivateMFATOTPWithRecoveryCodesRejectsAnAlreadyActiveEnrollment(t *testing.T) {
+	t.Parallel()
 	database, repository := newMFATestRepository(t)
 	enrollPendingMFA(t, repository)
 

@@ -9,6 +9,7 @@ import (
 )
 
 func TestRecurringTemplateStalePatchCannotOverwriteEditOrWatermark(t *testing.T) {
+	t.Parallel()
 	for _, concurrent := range []string{"edit", "watermark", "archive"} {
 		t.Run(concurrent, func(t *testing.T) {
 			ctx := context.Background()
@@ -47,6 +48,7 @@ func TestRecurringTemplateStalePatchCannotOverwriteEditOrWatermark(t *testing.T)
 }
 
 func TestRecurringTemplateArchiveIsIdempotentInRepository(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	repo := NewRecurringRepository(newRecurringTestDatabase(t))
 	created := createRentTemplate(t, repo)

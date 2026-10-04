@@ -9,6 +9,7 @@ import (
 )
 
 func TestReplayIntentKeepsSpecificLotElectionButNotFIFOSelection(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	trade := InvestmentTradeInput{OwnerUserID: f.ownerUserID, CommodityID: f.stockCommodityID,

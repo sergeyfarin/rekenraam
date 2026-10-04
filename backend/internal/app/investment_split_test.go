@@ -100,6 +100,7 @@ func countSplitRows(t *testing.T, database *sql.DB) splitRowCounts {
 }
 
 func TestSplitTenForOneConservesBasisAndPostsQuantityDelta(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-02-01", 10, 10000)
@@ -129,6 +130,7 @@ func TestSplitTenForOneConservesBasisAndPostsQuantityDelta(t *testing.T) {
 }
 
 func TestSplitThreeForOneAndLowestTerms(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-02-01", 4, 12000)
 	// 6-for-2 is the same action as 3-for-1 and is stored in lowest terms.
@@ -144,6 +146,7 @@ func TestSplitThreeForOneAndLowestTerms(t *testing.T) {
 }
 
 func TestSplitThreeForTwoWidensScaleExactly(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-02-01", 5, 10000)
 	result, err := f.investmentService.Split(context.Background(), splitInput(f, "2026-03-01", 3, 2))
@@ -159,6 +162,7 @@ func TestSplitThreeForTwoWidensScaleExactly(t *testing.T) {
 }
 
 func TestReverseSplitPostsNegativeDeltaAndKeepsBasis(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-02-01", 20, 10000)
 	buyOn(t, f, "2026-02-15", 30, 30000)
@@ -172,6 +176,7 @@ func TestReverseSplitPostsNegativeDeltaAndKeepsBasis(t *testing.T) {
 }
 
 func TestSplitRefusesUnrepresentableFractionWithoutWriting(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-02-01", 10, 10000)
@@ -186,6 +191,7 @@ func TestSplitRefusesUnrepresentableFractionWithoutWriting(t *testing.T) {
 }
 
 func TestSplitRefusesNoHoldingsAndOneForOne(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	_, err := f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
@@ -200,6 +206,7 @@ func TestSplitRefusesNoHoldingsAndOneForOne(t *testing.T) {
 }
 
 func TestLaterSaleAfterSplitUsesSplitAdjustedPerShareBasis(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-02-01", 10, 10000)
@@ -215,6 +222,7 @@ func TestLaterSaleAfterSplitUsesSplitAdjustedPerShareBasis(t *testing.T) {
 }
 
 func TestBackdatedSplitReplaysLaterSaleBehindGainAcknowledgement(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -254,6 +262,7 @@ func TestBackdatedSplitReplaysLaterSaleBehindGainAcknowledgement(t *testing.T) {
 }
 
 func TestBackdatedReverseSplitRefusesImpossibleLaterSaleAtomically(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -272,6 +281,7 @@ func TestBackdatedReverseSplitRefusesImpossibleLaterSaleAtomically(t *testing.T)
 }
 
 func TestEarlierAcquisitionBasisCorrectionReplaysThroughSplit(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buy := buyOn(t, f, "2026-01-10", 10, 10000)
@@ -359,6 +369,7 @@ func operationOf(t *testing.T, f *investmentsTestFixture, transactionID int64) i
 }
 
 func TestQuantityCorrectionBeforeSplitPostsAdjustmentJournal(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buy := buyOn(t, f, "2026-01-10", 10, 10000)
@@ -384,6 +395,7 @@ func TestQuantityCorrectionBeforeSplitPostsAdjustmentJournal(t *testing.T) {
 }
 
 func TestBackdatedBuyBeforeSplitPostsAdjustmentAndRevisesLaterGain(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -422,6 +434,7 @@ func TestBackdatedBuyBeforeSplitPostsAdjustmentAndRevisesLaterGain(t *testing.T)
 }
 
 func TestReversalsBeforeSplitPostAdjustmentJournals(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buy := buyOn(t, f, "2026-01-10", 10, 10000)
@@ -452,6 +465,7 @@ func TestReversalsBeforeSplitPostAdjustmentJournals(t *testing.T) {
 }
 
 func TestSplitAdjustmentIntoReconciledPeriodNeedsOverride(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -487,6 +501,7 @@ func TestSplitAdjustmentIntoReconciledPeriodNeedsOverride(t *testing.T) {
 // checkpoint first; with those positions removed from the triggering journal,
 // only the adjustment the replay posts on the split date can reach it.
 func TestSplitAdjustmentJournalMeetsCheckpointGuardOnItsOwn(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -528,6 +543,7 @@ func TestSplitAdjustmentJournalMeetsCheckpointGuardOnItsOwn(t *testing.T) {
 }
 
 func TestSplitAdjustmentRollsBackWithItsCommand(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -564,6 +580,7 @@ func TestSplitAdjustmentRollsBackWithItsCommand(t *testing.T) {
 }
 
 func TestSameDaySplitOrderingFollowsEntrySlot(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -581,6 +598,7 @@ func TestSameDaySplitOrderingFollowsEntrySlot(t *testing.T) {
 }
 
 func TestSplitCommitRefusesPositionChangedAfterPlanning(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -596,6 +614,7 @@ func TestSplitCommitRefusesPositionChangedAfterPlanning(t *testing.T) {
 }
 
 func TestSplitIntoReconciledPeriodNeedsOverride(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -642,6 +661,7 @@ func reconcileHoldingThrough(t *testing.T, f *investmentsTestFixture, statementD
 }
 
 func TestSplitThenAverageCostAndSpecificLotSalesUseConservedBasis(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"average_cost", "specific_lot"} {
 		t.Run(method, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)

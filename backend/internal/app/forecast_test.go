@@ -66,6 +66,7 @@ func posting(id, tx, entry int64, date string, account, commodity int64, value s
 }
 
 func TestForecastOpeningUsesPostedEntryDates(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 1, 1, "10000", 2), posting(2, 2, 2, "2026-09-01", 1, 1, "20000", 2)}
 	r := forecastTestBuild(t, s, 1)
@@ -74,6 +75,7 @@ func TestForecastOpeningUsesPostedEntryDates(t *testing.T) {
 }
 
 func TestForecastFuturePostedEntriesMoveOnEntryDate(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-09-01", 1, 1, "100", 2), posting(2, 2, 2, "2026-09-05", 1, 1, "200", 2), posting(3, 3, 3, "2026-09-06", 1, 1, "900", 2)}
 	r := forecastTestBuild(t, s, 1)
@@ -82,6 +84,7 @@ func TestForecastFuturePostedEntriesMoveOnEntryDate(t *testing.T) {
 }
 
 func TestForecastEditedDraftOverridesTemplateDateAndAmount(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.Templates = []db.ForecastTemplateRecord{{ID: 10, BookID: 1, Name: "Rent", Enabled: true, TransactionKind: "ordinary", Frequency: "daily", IntervalCount: 1, StartsOn: "2026-09-02", GenerateFrom: "2026-09-02"}}
 	s.TemplatePostings = []db.ForecastTemplatePostingRecord{{TemplateID: 10, PostingID: 1, AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-10000"), QuantityScale: 2}, {TemplateID: 10, PostingID: 2, AccountID: 3, CommodityID: 1, QuantityValue: exact.MustParse("10000"), QuantityScale: 2}}
@@ -98,6 +101,7 @@ func TestForecastEditedDraftOverridesTemplateDateAndAmount(t *testing.T) {
 }
 
 func TestForecastRecurringMaterializationDoesNotChangeAmounts(t *testing.T) {
+	t.Parallel()
 	base := forecastTestSnapshot()
 	base.Templates = []db.ForecastTemplateRecord{{ID: 10, BookID: 1, Enabled: true, TransactionKind: "ordinary", Frequency: "daily", IntervalCount: 1, StartsOn: "2026-09-01", GenerateFrom: "2026-09-01", EndsOn: sql.NullString{String: "2026-09-01", Valid: true}}}
 	base.TemplatePostings = []db.ForecastTemplatePostingRecord{{TemplateID: 10, AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-100"), QuantityScale: 2}, {TemplateID: 10, AccountID: 3, CommodityID: 1, QuantityValue: exact.MustParse("100"), QuantityScale: 2}}
@@ -124,6 +128,7 @@ func TestForecastRecurringMaterializationDoesNotChangeAmounts(t *testing.T) {
 }
 
 func TestForecastServiceUsesRealRecurringGenerationAndPromotion(t *testing.T) {
+	t.Parallel()
 	f, recurring, input := recurringFixture(t)
 	ctx := context.Background()
 	_, err := recurring.CreateTemplate(ctx, input)
@@ -155,6 +160,7 @@ func TestForecastServiceUsesRealRecurringGenerationAndPromotion(t *testing.T) {
 }
 
 func TestForecastConcurrentMaterializationKeepsOneBasis(t *testing.T) {
+	t.Parallel()
 	f, recurring, input := recurringFixture(t)
 	ctx := context.Background()
 	_, err := recurring.CreateTemplate(ctx, input)
@@ -215,6 +221,7 @@ func projectedQuantities(series ForecastSeries) []ForecastQuantity {
 }
 
 func TestForecastTerminalOccurrencesNeverReappear(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.Templates = []db.ForecastTemplateRecord{{ID: 10, BookID: 1, Enabled: true, TransactionKind: "ordinary", Frequency: "daily", IntervalCount: 1, StartsOn: "2026-09-01", GenerateFrom: "2026-09-01"}}
 	s.TemplatePostings = []db.ForecastTemplatePostingRecord{{TemplateID: 10, AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-1")}, {TemplateID: 10, AccountID: 3, CommodityID: 1, QuantityValue: exact.MustParse("1")}}
@@ -225,6 +232,7 @@ func TestForecastTerminalOccurrencesNeverReappear(t *testing.T) {
 }
 
 func TestForecastPausedAndArchivedTemplatesKeepSavedDrafts(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.Templates = []db.ForecastTemplateRecord{{ID: 10, BookID: 1, Enabled: false, ArchivedAt: sql.NullString{String: "x", Valid: true}, TransactionKind: "ordinary", Frequency: "daily", IntervalCount: 1, StartsOn: "2026-09-01", GenerateFrom: "2026-09-01"}}
 	s.Occurrences = []db.ForecastOccurrenceRecord{{ID: 1, TemplateID: 10, OccurrenceDate: "2026-09-01", Status: "generated", TransactionID: sql.NullInt64{Int64: 2, Valid: true}, TransactionStatus: sql.NullString{String: "draft", Valid: true}}}
@@ -240,6 +248,7 @@ func TestForecastPausedAndArchivedTemplatesKeepSavedDrafts(t *testing.T) {
 }
 
 func TestForecastCarriesOverdueAndTodayToTomorrow(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.Templates = []db.ForecastTemplateRecord{{ID: 10, BookID: 1, Enabled: true, TransactionKind: "ordinary", Frequency: "daily", IntervalCount: 1, StartsOn: "2026-08-30", GenerateFrom: "2026-08-30", EndsOn: sql.NullString{String: "2026-08-31", Valid: true}}}
 	s.TemplatePostings = []db.ForecastTemplatePostingRecord{{TemplateID: 10, AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-10")}, {TemplateID: 10, AccountID: 3, CommodityID: 1, QuantityValue: exact.MustParse("10")}}
@@ -254,6 +263,7 @@ func TestForecastCarriesOverdueAndTodayToTomorrow(t *testing.T) {
 }
 
 func TestForecastUsesWatermarkButNotLeadWindow(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.Templates = []db.ForecastTemplateRecord{{ID: 10, BookID: 1, Enabled: true, TransactionKind: "ordinary", Frequency: "daily", IntervalCount: 1, StartsOn: "2020-01-01", GenerateFrom: "2026-09-03", MaxOccurrences: sql.NullInt64{Int64: 2440, Valid: true}}}
 	s.TemplatePostings = []db.ForecastTemplatePostingRecord{{TemplateID: 10, AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-1")}, {TemplateID: 10, AccountID: 3, CommodityID: 1, QuantityValue: exact.MustParse("1")}}
@@ -263,6 +273,7 @@ func TestForecastUsesWatermarkButNotLeadWindow(t *testing.T) {
 }
 
 func TestForecastReusesClampedCalendarSchedules(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.Templates = []db.ForecastTemplateRecord{{ID: 10, BookID: 1, Enabled: true, TransactionKind: "ordinary", Frequency: "monthly", IntervalCount: 1, DayOfMonth: sql.NullInt64{Int64: 31, Valid: true}, StartsOn: "2026-01-31", GenerateFrom: "2026-08-01"}}
 	s.TemplatePostings = []db.ForecastTemplatePostingRecord{{TemplateID: 10, AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-10")}, {TemplateID: 10, AccountID: 3, CommodityID: 1, QuantityValue: exact.MustParse("10")}}
@@ -274,6 +285,7 @@ func TestForecastReusesClampedCalendarSchedules(t *testing.T) {
 }
 
 func TestForecastInvalidDraftExcludesWholeTransaction(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.DraftPostings = []db.ForecastDraftPostingRecord{{OccurrenceID: 1, TemplateID: 10, TransactionID: 2, TransactionVersionID: 2, TransactionKind: "ordinary", JournalEntryID: 3, EntryDate: "2026-09-01", AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-10")}, {OccurrenceID: 1, TemplateID: 10, TransactionID: 2, TransactionVersionID: 2, TransactionKind: "ordinary", JournalEntryID: 3, EntryDate: "2026-09-01", AccountID: 3, CommodityID: 1, QuantityValue: exact.MustParse("9")}}
 	r := forecastTestBuild(t, s, 1)
@@ -282,6 +294,7 @@ func TestForecastInvalidDraftExcludesWholeTransaction(t *testing.T) {
 }
 
 func TestForecastLifecycleEligibilityUsesSnapshotDates(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	closed := s.AccountVersions[0]
 	closed.VersionID = 20
@@ -299,6 +312,7 @@ func TestForecastLifecycleEligibilityUsesSnapshotDates(t *testing.T) {
 }
 
 func TestForecastScopeDefaultsAndDescendants(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	parent := forecastAccountVersion(6, "Group", "asset", "group", 1)
 	parent.AllowsPostings = false
@@ -317,6 +331,7 @@ func TestForecastScopeDefaultsAndDescendants(t *testing.T) {
 }
 
 func TestForecastTransfersAndLiabilitySigns(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 1, 1, "10000", 2), posting(2, 2, 2, "2026-09-02", 1, 1, "-3000", 2), posting(3, 2, 2, "2026-09-02", 2, 1, "3000", 2), posting(4, 3, 3, "2026-08-31", 4, 1, "-30000", 2), posting(5, 4, 4, "2026-09-03", 4, 1, "10000", 2)}
 	r := forecastTestBuild(t, s, 1, 2, 4)
@@ -326,6 +341,7 @@ func TestForecastTransfersAndLiabilitySigns(t *testing.T) {
 }
 
 func TestForecastExactDailyIdentities(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 1, 1, "100", 2), posting(2, 2, 2, "2026-09-01", 1, 1, "20", 2)}
 	first := forecastTestBuild(t, s, 1)
@@ -338,6 +354,7 @@ func TestForecastExactDailyIdentities(t *testing.T) {
 }
 
 func TestForecastPreservesLargeAndMixedScaleAmounts(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 1, 1, "9007199254740993", 2), posting(2, 2, 2, "2026-08-31", 1, 1, "4", 3), posting(3, 3, 3, "2026-09-01", 1, 1, "1", 3)}
 	r := forecastTestBuild(t, s, 1)
@@ -351,6 +368,7 @@ func TestForecastPreservesLargeAndMixedScaleAmounts(t *testing.T) {
 }
 
 func TestForecastFlatSeriesAndMinimumTieDates(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 1, 1, "100", 2), posting(2, 2, 2, "2026-09-02", 1, 1, "-120", 2)}
 	r := forecastTestBuild(t, s, 1)
@@ -360,6 +378,7 @@ func TestForecastFlatSeriesAndMinimumTieDates(t *testing.T) {
 }
 
 func TestForecastDiagnosticsDoNotHideExclusions(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	for i := 0; i < 60; i++ {
 		s.Occurrences = append(s.Occurrences, db.ForecastOccurrenceRecord{ID: int64(i + 1), TemplateID: 10, OccurrenceDate: "2026-09-01", Status: "blocked"})
@@ -372,6 +391,7 @@ func TestForecastDiagnosticsDoNotHideExclusions(t *testing.T) {
 }
 
 func TestForecastIgnoresNonRecurringDraftsAndSecurityValues(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 1, 3, "999", 2), posting(2, 1, 1, "2026-08-31", 1, 1, "100", 2)}
 	r := forecastTestBuild(t, s, 1)
@@ -380,6 +400,7 @@ func TestForecastIgnoresNonRecurringDraftsAndSecurityValues(t *testing.T) {
 }
 
 func TestForecastLongCatchUpIsBoundedWithoutTruncation(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.Templates = []db.ForecastTemplateRecord{{ID: 10, BookID: 1, Enabled: true, TransactionKind: "ordinary", Frequency: "daily", IntervalCount: 1, StartsOn: "1900-01-01", GenerateFrom: "1900-01-01"}}
 	s.TemplatePostings = []db.ForecastTemplatePostingRecord{{TemplateID: 10, AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-1")}, {TemplateID: 10, AccountID: 3, CommodityID: 1, QuantityValue: exact.MustParse("1")}}
@@ -388,6 +409,7 @@ func TestForecastLongCatchUpIsBoundedWithoutTruncation(t *testing.T) {
 }
 
 func TestForecastEmptyChunksAndExhaustedSchedules(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.Templates = []db.ForecastTemplateRecord{{ID: 10, BookID: 1, Enabled: true, TransactionKind: "ordinary", Frequency: "yearly", IntervalCount: 10, DayOfMonth: sql.NullInt64{Int64: 1, Valid: true}, MonthOfYear: sql.NullInt64{Int64: 1, Valid: true}, StartsOn: "2000-01-01", GenerateFrom: "2026-01-01", MaxOccurrences: sql.NullInt64{Int64: 2, Valid: true}}}
 	s.TemplatePostings = []db.ForecastTemplatePostingRecord{{TemplateID: 10, AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-1")}, {TemplateID: 10, AccountID: 3, CommodityID: 1, QuantityValue: exact.MustParse("1")}}
@@ -396,6 +418,7 @@ func TestForecastEmptyChunksAndExhaustedSchedules(t *testing.T) {
 }
 
 func TestForecastInputAndOutputBudgets(t *testing.T) {
+	t.Parallel()
 	rootIDs := make([]int64, forecastMaxRootAccounts+1)
 	for index := range rootIDs {
 		rootIDs[index] = int64(index + 1)
@@ -439,6 +462,7 @@ func TestForecastInputAndOutputBudgets(t *testing.T) {
 }
 
 func TestForecastHonorsContextCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := buildForecast(ctx, forecastNormalizedInput{HorizonDays: 5}, forecastBounds{AsOf: "2026-08-31", First: "2026-09-01", Through: "2026-09-05"}, forecastTestScope(forecastTestSnapshot(), 1), forecastTestSnapshot(), "now")
@@ -446,6 +470,7 @@ func TestForecastHonorsContextCancellation(t *testing.T) {
 }
 
 func TestForecastConstantFXNeverUsesFutureObservations(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "10000", 2)}
 	s.Rates = []db.ForecastRateRecord{
@@ -460,6 +485,7 @@ func TestForecastConstantFXNeverUsesFutureObservations(t *testing.T) {
 }
 
 func TestForecastConstantFXStalenessAndTies(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name     string
 		date     string
@@ -493,6 +519,7 @@ func TestForecastConstantFXStalenessAndTies(t *testing.T) {
 }
 
 func TestForecastMissingFXOmitsWholeConvertedSeries(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "100", 2)}
 	r := forecastTestConverted(t, s, 1, 5)
@@ -510,6 +537,7 @@ func TestForecastMissingFXOmitsWholeConvertedSeries(t *testing.T) {
 }
 
 func TestForecastFXCoverageBeforeAccountNetting(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.AccountVersions = append(s.AccountVersions, forecastAccountVersion(6, "Other USD", "asset", "cash", 2))
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "100", 2), posting(2, 2, 2, "2026-08-31", 6, 2, "-100", 2)}
@@ -521,6 +549,7 @@ func TestForecastFXCoverageBeforeAccountNetting(t *testing.T) {
 }
 
 func TestForecastConstantFXRoundingReconciles(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.CommodityVersions[0].StandardScale = 0
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-09-01", 5, 2, "-1", 0), posting(2, 2, 2, "2026-09-02", 5, 2, "-1", 0)}
@@ -544,6 +573,7 @@ func TestForecastConstantFXRoundingReconciles(t *testing.T) {
 }
 
 func TestForecastSameCurrencyConversionNeedsNoObservation(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 1, 1, "9007199254740993", 2)}
 	r := forecastTestConverted(t, s, 1, 1)
@@ -554,6 +584,7 @@ func TestForecastSameCurrencyConversionNeedsNoObservation(t *testing.T) {
 }
 
 func TestForecastFXDoesNotChangePerCurrencySeries(t *testing.T) {
+	t.Parallel()
 	s := forecastTestSnapshot()
 	s.PostedPostings = []db.ForecastPostingRecord{posting(1, 1, 1, "2026-08-31", 5, 2, "100", 2)}
 	s.Rates = []db.ForecastRateRecord{{ObservationID: 1, BaseCommodityID: 2, QuoteCommodityID: 1, ValuationDate: "2026-08-31", RecordedAt: "2026-08-31T10:00:00Z", PriceValue: 9, PriceScale: 1, BaseQuantityValue: 1}}

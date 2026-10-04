@@ -144,6 +144,7 @@ func appendSharedDisposalDecision(t *testing.T, f *investmentsTestFixture, origi
 }
 
 func TestSelfCheckMultipleDisposalsShareClearingOnce(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name         string
 		first        string
@@ -201,6 +202,7 @@ func TestSelfCheckMultipleDisposalsShareClearingOnce(t *testing.T) {
 }
 
 func TestSelfCheckDisposalClearingKeepsCurrenciesSeparate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 2, 2000)
 	sold, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-02-01", 1))
@@ -220,6 +222,7 @@ func TestSelfCheckDisposalClearingKeepsCurrenciesSeparate(t *testing.T) {
 }
 
 func TestSelfCheckDisposalDecisionRequiresOperationJournalLink(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 2, 2000)
 	sold, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-02-01", 1))
@@ -240,6 +243,7 @@ func TestSelfCheckDisposalDecisionRequiresOperationJournalLink(t *testing.T) {
 }
 
 func TestSelfCheckDisposalClearingKeepsJournalVersionsSeparate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 2, 2000)
 	first, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-02-01", 1))

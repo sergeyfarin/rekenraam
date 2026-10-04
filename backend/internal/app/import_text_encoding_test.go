@@ -16,6 +16,7 @@ import (
 )
 
 func TestDecodeImportText_ExplicitEncodingsAcrossScripts(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		encoding string
@@ -49,6 +50,7 @@ func TestDecodeImportText_ExplicitEncodingsAcrossScripts(t *testing.T) {
 }
 
 func TestDecodeImportText_AutoDetectsMSMoneyWindows1251(t *testing.T) {
+	t.Parallel()
 	raw := []byte("P\xca\xe0\xf4\xe5 \xe8 \xef\xe8\xf2\xe0\xed\xe8\xe5 \xe4\xeb\xff \xe2\xf1\xe5\xe9 \xf1\xe5\xec\xfc\xe8\n")
 
 	got, err := decodeImportText(raw, "auto")
@@ -60,6 +62,7 @@ func TestDecodeImportText_AutoDetectsMSMoneyWindows1251(t *testing.T) {
 }
 
 func TestDecodeImportText_ValidUTF8IsNeverReinterpreted(t *testing.T) {
+	t.Parallel()
 	raw := []byte("Кафе Καφές カフェ مقهى")
 
 	got, err := decodeImportText(raw, "auto")
@@ -71,6 +74,7 @@ func TestDecodeImportText_ValidUTF8IsNeverReinterpreted(t *testing.T) {
 }
 
 func TestDecodeImportText_UsesUnicodeBOMWithoutStatisticalDetection(t *testing.T) {
+	t.Parallel()
 	raw, err := unicode.UTF16(unicode.LittleEndian, unicode.UseBOM).NewEncoder().Bytes([]byte("PКафе\n"))
 	require.NoError(t, err)
 
@@ -83,6 +87,7 @@ func TestDecodeImportText_UsesUnicodeBOMWithoutStatisticalDetection(t *testing.T
 }
 
 func TestDecodeImportText_AmbiguousLegacyTextRequiresExplicitEncoding(t *testing.T) {
+	t.Parallel()
 	raw, err := charmap.Windows1250.NewEncoder().Bytes([]byte("Zażółć gęślą jaźń"))
 	require.NoError(t, err)
 
@@ -94,6 +99,7 @@ func TestDecodeImportText_AmbiguousLegacyTextRequiresExplicitEncoding(t *testing
 }
 
 func TestDecodeImportText_UnknownExplicitEncodingIsRejected(t *testing.T) {
+	t.Parallel()
 	_, err := decodeImportText([]byte("text"), "made-up-code-page")
 	require.Error(t, err)
 	var validationErr ValidationError
@@ -101,6 +107,7 @@ func TestDecodeImportText_UnknownExplicitEncodingIsRejected(t *testing.T) {
 }
 
 func TestDecodeImportText_EncodingSelectorOptionsAreSupported(t *testing.T) {
+	t.Parallel()
 	options := []string{
 		"utf-8", "utf-16le", "utf-16be",
 		"windows-1250", "windows-1251", "windows-1252", "windows-1253", "windows-1254",

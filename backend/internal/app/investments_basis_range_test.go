@@ -13,6 +13,7 @@ import (
 // must not accept a position that its reports cannot represent, and rejection
 // must roll back the journal, projections, disposal evidence and audit together.
 func TestFinancialLaterAcquisitionRejectsUnrepresentableBasisAtomically(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		for _, reinvest := range []bool{false, true} {
 			name := method + "/buy"
@@ -64,6 +65,7 @@ func TestFinancialLaterAcquisitionRejectsUnrepresentableBasisAtomically(t *testi
 }
 
 func TestFinancialBackdatedDisposalCannotOverflowFuturePosition(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		t.Run(method, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
@@ -93,6 +95,7 @@ func TestFinancialBackdatedDisposalCannotOverflowFuturePosition(t *testing.T) {
 }
 
 func TestFinancialLaterAcquisitionRangeBoundaryIsValueBased(t *testing.T) {
+	t.Parallel()
 	// At scale 6, MaxInt64 is 9,223,372,036,854.775807. The old
 	// residual is 6.666667: adding 9,223,372,036,848.10 fits, while
 	// one more cent does not. Equivalent input spellings must agree.

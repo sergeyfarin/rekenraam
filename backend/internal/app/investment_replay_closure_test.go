@@ -32,6 +32,7 @@ func replayPosition(f *investmentsTestFixture, accountID int64, from string) db.
 }
 
 func TestReplayClosureFollowsTransferChainAndExcludesUnrelatedPositions(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	b := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -81,6 +82,7 @@ func TestReplayClosureFollowsTransferChainAndExcludesUnrelatedPositions(t *testi
 }
 
 func TestReplayClosureSettlesTransferCycleOnEarliestAffectedDates(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	b := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
@@ -108,6 +110,7 @@ func TestReplayClosureSettlesTransferCycleOnEarliestAffectedDates(t *testing.T) 
 }
 
 func TestReplayClosureRejectsIncompleteSeed(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.repository.InvestmentReplayClosure(context.Background(), BookID,
 		[]db.InvestmentReplayPosition{{AccountID: f.holdingAccountID, CommodityID: f.stockCommodityID,

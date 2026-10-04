@@ -13,6 +13,7 @@ import (
 func tradeMoney(value int64) *int64 { return &value }
 
 func TestTradeComponentLinksToItsOwnClearingLegWhenAmountsCollide(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	feeCashAccount := seedTestAccount(t, f.database, "active", true)
@@ -61,6 +62,7 @@ func TestTradeComponentLinksToItsOwnClearingLegWhenAmountsCollide(t *testing.T) 
 }
 
 func TestSelfCheckFindsUnlinkedTradeCashLeg(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	bought := buyOn(t, f, "2026-01-01", 1, 1000)
@@ -96,6 +98,7 @@ func TestSelfCheckFindsUnlinkedTradeCashLeg(t *testing.T) {
 }
 
 func TestExactTradeEconomicsFeeTreatmentAndGrossPrice(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name      string
 		treatment string
@@ -194,6 +197,7 @@ func negativeProceedsSale(f *investmentsTestFixture, date string) InvestmentTrad
 }
 
 func TestNegativeSaleProceedsSurviveLaterReplayAndReplacement(t *testing.T) {
+	t.Parallel()
 	t.Run("later sale replays after earlier reversal", func(t *testing.T) {
 		f := newInvestmentsTestFixture(t)
 		ctx := context.Background()
@@ -238,6 +242,7 @@ func TestNegativeSaleProceedsSurviveLaterReplayAndReplacement(t *testing.T) {
 }
 
 func TestDisposalDecisionSequenceAllowsSharedJournalProvenance(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 2, 2000)
 	sold, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-02-01", 1))
@@ -261,6 +266,7 @@ func TestDisposalDecisionSequenceAllowsSharedJournalProvenance(t *testing.T) {
 }
 
 func TestSelfCheckDetectsDisposalProceedsClearingMismatch(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 2, 2000)
@@ -295,6 +301,7 @@ func TestSelfCheckDetectsDisposalProceedsClearingMismatch(t *testing.T) {
 }
 
 func TestSelfCheckDetectsBalancedCashPostingComponentMismatch(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	bought := buyOn(t, f, "2026-01-01", 1, 1000)
@@ -321,6 +328,7 @@ func TestSelfCheckDetectsBalancedCashPostingComponentMismatch(t *testing.T) {
 }
 
 func TestInvestmentFoundationChecksBuyThroughJournalLinkWithoutCompatibilityID(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	buyOn(t, f, "2026-01-01", 1, 1000)
 	requireInvestmentHeaderRetired(t, f)
@@ -336,6 +344,7 @@ func mustRunInvestmentSelfCheck(t *testing.T, f *investmentsTestFixture) SelfChe
 }
 
 func TestManualAndGrossPricesOutrankLaterApproximateTradeOnSameDate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	pricing := NewPricingService(db.NewPricingRepository(f.database))
@@ -378,6 +387,7 @@ func TestManualAndGrossPricesOutrankLaterApproximateTradeOnSameDate(t *testing.T
 }
 
 func TestExactTradeEconomicsRejectsUnbalancedNet(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	input := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
 		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
@@ -391,6 +401,7 @@ func TestExactTradeEconomicsRejectsUnbalancedNet(t *testing.T) {
 }
 
 func TestForeignTradeFeeKeepsCostCurrencyBasisAndPostsOwnCashLegs(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	result, err := f.database.ExecContext(ctx, `INSERT INTO commodities (book_id, code, kind, is_builtin, created_at, created_by_user_id) VALUES (1, 'USD', 'currency', 1, '2026-01-01T00:00:00Z', 1)`)
@@ -445,6 +456,7 @@ func TestForeignTradeFeeKeepsCostCurrencyBasisAndPostsOwnCashLegs(t *testing.T) 
 }
 
 func TestSeparatelyPaidSameCurrencyCommissionPostsOnPaymentDate(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		treatment string
 		basis     int64
@@ -486,6 +498,7 @@ func TestSeparatelyPaidSameCurrencyCommissionPostsOnPaymentDate(t *testing.T) {
 }
 
 func TestTradeFeePolicySnapshotsAccountVersionAndOldTradeDoesNotChange(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	feeAccount := seedTestAccountWithClass(t, f.database, "active", true, "expense", "expense")

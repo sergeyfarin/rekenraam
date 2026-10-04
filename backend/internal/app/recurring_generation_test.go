@@ -26,6 +26,7 @@ func recurringCounts(t *testing.T, database *sql.DB) map[string]int {
 }
 
 func TestGenerationIsIdempotentAcrossTicks(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -56,6 +57,7 @@ func TestGenerationIsIdempotentAcrossTicks(t *testing.T) {
 }
 
 func TestCreatingATemplateWithAPastStartDateBackfillsNothing(t *testing.T) {
+	t.Parallel()
 	_, s, input := recurringFixture(t)
 	template, err := s.CreateTemplate(context.Background(), input)
 	require.NoError(t, err)
@@ -68,6 +70,7 @@ func TestCreatingATemplateWithAPastStartDateBackfillsNothing(t *testing.T) {
 }
 
 func TestConcurrentGeneratorsProduceOneOccurrence(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	_, err := s.CreateTemplate(context.Background(), input)
 	require.NoError(t, err)
@@ -90,6 +93,7 @@ func TestConcurrentGeneratorsProduceOneOccurrence(t *testing.T) {
 }
 
 func TestConcurrentRecurringGeneratorsWithIndependentDatabasePools(t *testing.T) {
+	t.Parallel()
 	f, first, input := recurringFixture(t)
 	_, err := first.CreateTemplate(context.Background(), input)
 	require.NoError(t, err)
@@ -126,6 +130,7 @@ func TestConcurrentRecurringGeneratorsWithIndependentDatabasePools(t *testing.T)
 }
 
 func TestRecurringCatchUpCapHoldsWatermarkUntilWindowComplete(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	input.Patch.Frequency = recurringTestPtr("daily")
 	input.Patch.DayOfMonth = NullablePatch[int]{}
@@ -149,6 +154,7 @@ func TestRecurringCatchUpCapHoldsWatermarkUntilWindowComplete(t *testing.T) {
 }
 
 func TestRecurringValidationFailureIsBlockedOnceAndDoesNotStopOtherTemplates(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	bad, err := s.CreateTemplate(ctx, input)
@@ -175,6 +181,7 @@ func TestRecurringValidationFailureIsBlockedOnceAndDoesNotStopOtherTemplates(t *
 }
 
 func TestRecurringGenerationRevalidatesAccountsAtOccurrenceDate(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	_, err := s.CreateTemplate(context.Background(), input)
 	require.NoError(t, err)
@@ -187,6 +194,7 @@ func TestRecurringGenerationRevalidatesAccountsAtOccurrenceDate(t *testing.T) {
 }
 
 func TestRecurringGenerationRollsBackDraftAuditAndOccurrenceOnFailure(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	template, err := s.CreateTemplate(context.Background(), input)
 	require.NoError(t, err)
@@ -207,6 +215,7 @@ func TestRecurringGenerationRollsBackDraftAuditAndOccurrenceOnFailure(t *testing
 }
 
 func TestConcurrentTemplateEditCannotAdvanceAStaleGenerationWatermark(t *testing.T) {
+	t.Parallel()
 	for _, change := range []string{"schedule", "disable", "archive"} {
 		t.Run(change, func(t *testing.T) {
 			f, s, input := recurringFixture(t)
@@ -250,6 +259,7 @@ func TestConcurrentTemplateEditCannotAdvanceAStaleGenerationWatermark(t *testing
 }
 
 func TestRecurringSchedulerUsesOwnerLocalDateAndUTCAttribution(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	input.Patch.Frequency = recurringTestPtr("daily")
@@ -271,6 +281,7 @@ func TestRecurringSchedulerUsesOwnerLocalDateAndUTCAttribution(t *testing.T) {
 }
 
 func TestSkippingAFutureOccurrenceStopsItGenerating(t *testing.T) {
+	t.Parallel()
 	_, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -283,6 +294,7 @@ func TestSkippingAFutureOccurrenceStopsItGenerating(t *testing.T) {
 }
 
 func TestArchivingATemplateLeavesItsGeneratedDraftsAlone(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx := context.Background()
 	template, err := s.CreateTemplate(ctx, input)
@@ -301,6 +313,7 @@ func TestArchivingATemplateLeavesItsGeneratedDraftsAlone(t *testing.T) {
 }
 
 func TestRecurringSchedulerStartupCreatesAReachableDraft(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -318,6 +331,7 @@ func TestRecurringSchedulerStartupCreatesAReachableDraft(t *testing.T) {
 }
 
 func TestDowntimeCatchUpBeyondEnumerationCapMakesProgress(t *testing.T) {
+	t.Parallel()
 	f, s, input := recurringFixture(t)
 	input.Patch.Frequency = recurringTestPtr("daily")
 	input.Patch.DayOfMonth = NullablePatch[int]{}

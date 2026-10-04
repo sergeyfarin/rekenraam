@@ -44,12 +44,14 @@ if [ "${COVERAGE:-0}" = "1" ]; then
   go tool cover -func=coverage.out | tail -1
 else
   # Ordinary integration fixtures copy a process-wide migrated SQLite template
-  # (internal/testdb) instead of replaying the full schema per test. Run
-  # packages serially so the largest SQLite integration suites do not contend
-  # with each other for CPU. T-111 profiled the complete suite and reviewed
-  # overlapping coverage: SQLite parsing and race instrumentation dominate,
-  # while the default 10m deadline left under two seconds of margin. Keep all
-  # regressions and give each race-tested package an explicit 15m bound.
-  # Continue measuring fixture cost; this bound is not a runtime target.
+  # (internal/testdb) instead of replaying the full schema per test, so every
+  # top-level application and database test runs with t.Parallel() and uses
+  # all cores inside its package (T-125; TestIntegrationSuitesRunTestsInParallel
+  # keeps it that way). Packages still run one at a time: -p 2 cut the 4-core
+  # wall time a further 19% but stretched the application package to 77% of
+  # its bound. T-111 profiled the suite: SQLite parsing and race
+  # instrumentation dominate. Keep all regressions and the explicit 15m
+  # per-package bound; it is not a runtime target. Measurements:
+  # docs/reviews/race-gate-runtime-2026-10-04.md.
   go test -race -p 1 -timeout=15m ./...
 fi

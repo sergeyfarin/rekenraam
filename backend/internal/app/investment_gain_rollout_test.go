@@ -54,6 +54,7 @@ func TestReinvestmentGainImpactRequiresAcknowledgement(t *testing.T) {
 // average cost, but not under LIFO or an explicit February election, where
 // the empty change set needs no acknowledgement.
 func TestBuyReversalGainImpactUnderEveryBasisMethod(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		method                  string
 		basisBefore, basisAfter int64
@@ -227,6 +228,7 @@ func TestBuyReplacementRejectsStaleGainAcknowledgement(t *testing.T) {
 // pending — not skipped — until the current preview-commit set is
 // acknowledged. A stale acknowledgement holds it again; the retry commits.
 func TestImportedAcquisitionGainReviewHoldsRowUntilAcknowledged(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -290,6 +292,7 @@ func TestImportedAcquisitionGainReviewHoldsRowUntilAcknowledged(t *testing.T) {
 // A Trading 212 buy source correction changes a dependent imported sale's
 // gain; the correction preview discloses it and commit requires it.
 func TestCorrectTrading212BuyDisclosesDependentSaleGain(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)
@@ -332,6 +335,7 @@ func TestCorrectTrading212BuyDisclosesDependentSaleGain(t *testing.T) {
 // A Trading 212 sale source revision replaces the imported sale's gain; the
 // correction preview discloses it and commit requires that acknowledgement.
 func TestCorrectTrading212SaleDisclosesReplacedGain(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestTestFixture(t)
 	conn := f.createConnection(t, &f.cashAccountID)

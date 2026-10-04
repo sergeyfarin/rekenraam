@@ -53,6 +53,7 @@ func (f sourceSaleFixture) revision(t *testing.T, fill trading212OrderFill) Corr
 }
 
 func TestCorrectTrading212SaleKeepsIdentityAndRecordedMethodWithDependentReplay(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost"} {
 		t.Run(method, func(t *testing.T) {
 			t.Parallel()
@@ -189,6 +190,7 @@ func TestCorrectTrading212SalePreviewAndSourceAcceptanceRollback(t *testing.T) {
 }
 
 func TestCorrectTrading212SaleRefusesUnsupportedSourceChangesAtomically(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct{ name, field, value string }{
 		{"date", "date", "2026-07-02T10:00:00Z"}, {"instrument", "ticker", "OTHER"},
 		{"currency", "currency", "USD"}, {"cancellation quantity", "quantity", "-2"},

@@ -16,6 +16,7 @@ import (
 // price behind the same placeholder as an unpriced one.
 
 func TestInt64AtUsableScaleKeepsTheComputedScaleWhenItFits(t *testing.T) {
+	t.Parallel()
 	value, scale, fits := int64AtUsableScale(exact.ScaledIntFromInt64(10000000, 2))
 	require.True(t, fits)
 	require.Equal(t, int64(10000000), value)
@@ -23,6 +24,7 @@ func TestInt64AtUsableScaleKeepsTheComputedScaleWhenItFits(t *testing.T) {
 }
 
 func TestInt64AtUsableScaleDropsOnlyRedundantZeros(t *testing.T) {
+	t.Parallel()
 	// 999.999999 shares × 100 EUR, carried at the sum of both scales.
 	padded := exact.ScaledIntFromCoefficient(exact.MustParse("9999999990000000000"), 14)
 	value, scale, fits := int64AtUsableScale(padded)
@@ -33,6 +35,7 @@ func TestInt64AtUsableScaleDropsOnlyRedundantZeros(t *testing.T) {
 }
 
 func TestInt64AtUsableScaleReportsAGenuinelyTooWideValue(t *testing.T) {
+	t.Parallel()
 	// Significant digits, not trailing zeros: nothing can be removed.
 	wide := exact.ScaledIntFromCoefficient(exact.MustParse("123456789012345678901"), 4)
 	_, _, fits := int64AtUsableScale(wide)
@@ -40,6 +43,7 @@ func TestInt64AtUsableScaleReportsAGenuinelyTooWideValue(t *testing.T) {
 }
 
 func TestPositionsWithGainsReportsAnUnpricedPositionAsSuch(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)

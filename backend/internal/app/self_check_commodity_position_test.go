@@ -82,6 +82,7 @@ func cryptoFixture(t *testing.T, f *investmentsTestFixture) (walletID int64, btc
 }
 
 func TestSelfCheckFindsACryptoWalletDrivenNegative(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	wallet, _, move := cryptoFixture(t, f)
 
@@ -107,6 +108,7 @@ func TestSelfCheckFindsACryptoWalletDrivenNegative(t *testing.T) {
 }
 
 func TestSelfCheckFindsHistoricalNegativeAfterLaterReplenishment(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	wallet, _, move := cryptoFixture(t, f)
 	move("2026-01-02", -500000000, 100000)
@@ -118,6 +120,7 @@ func TestSelfCheckFindsHistoricalNegativeAfterLaterReplenishment(t *testing.T) {
 }
 
 func TestSelfCheckAcceptsAnEarlierPurchaseImportedAfterItsSale(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	_, _, move := cryptoFixture(t, f)
 	move("2026-01-02", -500000000, 100000)
@@ -128,6 +131,7 @@ func TestSelfCheckAcceptsAnEarlierPurchaseImportedAfterItsSale(t *testing.T) {
 }
 
 func TestSelfCheckFindsAnInstrumentDrivenNegativeOnAnOrdinaryAccount(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	// Not a holding account, so the subledger fence does not apply and the
@@ -148,6 +152,7 @@ func TestSelfCheckFindsAnInstrumentDrivenNegativeOnAnOrdinaryAccount(t *testing.
 // commodity movement and is negative by construction. A book that buys, sells,
 // reinvests, writes off and round-trips crypto must produce no finding.
 func TestSelfCheckAcceptsEveryOrdinaryCommodityMovement(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	_, _, move := cryptoFixture(t, f)
@@ -180,6 +185,7 @@ func TestSelfCheckAcceptsEveryOrdinaryCommodityMovement(t *testing.T) {
 // app — the fence keeps ordinary entries out and the subledger refuses to
 // oversell — so the new check is about the accounts the fence does not cover.
 func TestSubledgerHoldingAccountCannotBeDrivenNegative(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 1, 1000)

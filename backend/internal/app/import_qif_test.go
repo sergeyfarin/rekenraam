@@ -13,6 +13,7 @@ import (
 )
 
 func TestParseQIF_SimpleBankTransaction(t *testing.T) {
+	t.Parallel()
 	qif := `!Type:Bank
 D01/15/06
 T-42.50
@@ -43,6 +44,7 @@ PSalary
 }
 
 func TestParseQIF_TransferDetection(t *testing.T) {
+	t.Parallel()
 	qif := `!Type:Bank
 D02/01/06
 T-500.00
@@ -60,6 +62,7 @@ L[Savings Account]
 }
 
 func TestParseQIF_Splits(t *testing.T) {
+	t.Parallel()
 	qif := `!Type:Bank
 D03/10/06
 T-100.00
@@ -83,6 +86,7 @@ $-40.00
 }
 
 func TestParseQIF_InvestmentType_WarnsNeedsAttention(t *testing.T) {
+	t.Parallel()
 	qif := `!Type:Invst
 D04/01/06
 T1000.00
@@ -97,6 +101,7 @@ YApple Inc
 }
 
 func TestParseQIF_ThousandsCommaStripped(t *testing.T) {
+	t.Parallel()
 	qif := `!Type:Bank
 D05/01/06
 T1,234,567.89
@@ -110,6 +115,7 @@ PCashout
 }
 
 func TestParseQIF_FingerprintsAreUnique(t *testing.T) {
+	t.Parallel()
 	// Two identical rows should have different fingerprints (via occurrence index).
 	qif := `!Type:Bank
 D06/01/06
@@ -128,6 +134,7 @@ PCoffee
 }
 
 func TestParseQIF_DateRangeInMeta(t *testing.T) {
+	t.Parallel()
 	qif := `!Type:Bank
 D01/01/06
 T-10.00
@@ -149,6 +156,7 @@ PC
 }
 
 func TestParseQIF_NoTrailingCaret(t *testing.T) {
+	t.Parallel()
 	// File without trailing ^ still produces a row.
 	qif := `!Type:Bank
 D07/01/06
@@ -164,6 +172,7 @@ PStore
 // --- EU locale handling (T-35 dates, T-36 decimal commas) ---
 
 func TestParseQIF_MSMoneyNonBreakingSpaceDate(t *testing.T) {
+	t.Parallel()
 	qif := "!Type:CCard\nD24\xa04'21\nT-42.49\nPКафе\nLПитание:Кондитерские изделия/Для всей семьи\n^\n"
 
 	result, err := parseQIF(bufio.NewScanner(strings.NewReader(qif)), "apple-card.qif")
@@ -176,6 +185,7 @@ func TestParseQIF_MSMoneyNonBreakingSpaceDate(t *testing.T) {
 }
 
 func TestQIFAdapterParse_Windows1251Cyrillic(t *testing.T) {
+	t.Parallel()
 	// MS Money's "ANSI" export uses the Windows locale code page. These byte
 	// sequences are Windows-1251 for Кафе and Питание.
 	qif := []byte("!Type:CCard\nD24\xa04'21\nT-42.49\nP\xca\xe0\xf4\xe5\nL\xcf\xe8\xf2\xe0\xed\xe8\xe5\n^\n")
@@ -191,6 +201,7 @@ func TestQIFAdapterParse_Windows1251Cyrillic(t *testing.T) {
 }
 
 func TestParseQIF_EUDatesDetectedFromTheFile(t *testing.T) {
+	t.Parallel()
 	// A single row with a day above 12 settles the layout for the ambiguous
 	// rows around it: without this, 02/03/2026 silently became 3 February.
 	qif := `!Type:Bank
@@ -215,6 +226,7 @@ PBol.com
 }
 
 func TestParseQIF_DecimalCommaAmountsAreNotHundredfold(t *testing.T) {
+	t.Parallel()
 	qif := `!Type:Bank
 D15/03/2026
 T-1,50
@@ -239,6 +251,7 @@ PHuur
 }
 
 func TestParseQIF_AmbiguousDatesWarnAndKeepTheUSDefault(t *testing.T) {
+	t.Parallel()
 	qif := `!Type:Bank
 D01/02/2026
 T-10.00
@@ -258,6 +271,7 @@ PB
 }
 
 func TestParseQIF_UnparseableDateWarnsAndKeepsTheRow(t *testing.T) {
+	t.Parallel()
 	qif := `!Type:Bank
 Dnot-a-date
 T-10.00
@@ -273,6 +287,7 @@ PA
 }
 
 func TestQIFAdapterParse_ProfileDateLayoutOverridesDetection(t *testing.T) {
+	t.Parallel()
 	qif := []byte(`!Type:Bank
 D01/02/2026
 T-10,00
@@ -293,6 +308,7 @@ PA
 }
 
 func TestQIFAdapterParse_ProfileDecimalSeparatorOverridesDetection(t *testing.T) {
+	t.Parallel()
 	// "1,234" defaults to a thousands group; a profile declaring a decimal
 	// comma must be honored.
 	qif := []byte(`!Type:Bank
@@ -311,6 +327,7 @@ PA
 }
 
 func TestQIFAdapterParse_InvalidProfileConfigIsRejected(t *testing.T) {
+	t.Parallel()
 	adapter := &QIFAdapter{}
 	input := RawInput{Filename: "ing.qif", Bytes: []byte("!Type:Bank\nD01/02/2026\nT-10,00\n^\n")}
 
@@ -325,6 +342,7 @@ func TestQIFAdapterParse_InvalidProfileConfigIsRejected(t *testing.T) {
 }
 
 func TestQIFAdapterParse_NilProfileFallsBackToDetection(t *testing.T) {
+	t.Parallel()
 	adapter := &QIFAdapter{}
 	input := RawInput{Filename: "ing.qif", Bytes: []byte("!Type:Bank\nD15/02/2026\nT-10,00\n^\n")}
 
@@ -338,6 +356,7 @@ func TestQIFAdapterParse_NilProfileFallsBackToDetection(t *testing.T) {
 // --- QIF adapter Detect tests ---
 
 func TestQIFAdapterDetect(t *testing.T) {
+	t.Parallel()
 	adapter := &QIFAdapter{}
 
 	assert.Equal(t, ConfidenceHigh, adapter.Detect(RawInput{Filename: "account.QIF"}))
@@ -352,6 +371,7 @@ func TestQIFAdapterDetect(t *testing.T) {
 // --- Date parsing tests ---
 
 func TestParseQIFDate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input string
 		want  string
@@ -387,11 +407,13 @@ func TestParseQIFDate(t *testing.T) {
 }
 
 func TestParseQIFDate_InvalidReturnsError(t *testing.T) {
+	t.Parallel()
 	_, err := parseQIFDate("not-a-date")
 	require.Error(t, err)
 }
 
 func TestBuildTransactionSpec_EUStagedRowKeepsItsDateAndAmount(t *testing.T) {
+	t.Parallel()
 	// The adapter normalizes before staging, so the commit path sees ISO dates
 	// and canonical amounts — but it must also survive a decimal-comma amount
 	// reaching it directly (T-36).
@@ -414,6 +436,7 @@ func TestBuildTransactionSpec_EUStagedRowKeepsItsDateAndAmount(t *testing.T) {
 // --- Decimal amount parsing tests ---
 
 func TestParseDecimalAmount(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		input     string
 		wantCoeff string
@@ -441,6 +464,7 @@ func TestParseDecimalAmount(t *testing.T) {
 }
 
 func TestParseDecimalAmount_EmptyReturnsError(t *testing.T) {
+	t.Parallel()
 	_, _, err := parseDecimalAmount("")
 	require.Error(t, err)
 }

@@ -18,6 +18,7 @@ func gainSnapshotEntry(decisionID int64, knowledge string, basis *exact.ScaledIn
 }
 
 func TestInvestmentGainComparisonDisclosesBasisKnowledgeTransitions(t *testing.T) {
+	t.Parallel()
 	identity := InvestmentGainIdentity{RootOperationID: 7, DecisionSeq: 1}
 	known := gainSnapshotEntry(11, InvestmentBasisKnown, exact.ScaledIntFromInt64(10000, 2))
 	unknown := gainSnapshotEntry(11, InvestmentBasisUnknown, nil)
@@ -42,6 +43,7 @@ func TestInvestmentGainComparisonDisclosesBasisKnowledgeTransitions(t *testing.T
 }
 
 func TestInvestmentGainComparisonIsScaleInsensitiveAndBindsTheChangeSet(t *testing.T) {
+	t.Parallel()
 	identity := InvestmentGainIdentity{RootOperationID: 7, DecisionSeq: 1}
 	before := gainSnapshotEntry(11, InvestmentBasisKnown, exact.ScaledIntFromInt64(10000, 2))
 	sameValue := gainSnapshotEntry(11, InvestmentBasisKnown, exact.ScaledIntFromInt64(1000000, 4))

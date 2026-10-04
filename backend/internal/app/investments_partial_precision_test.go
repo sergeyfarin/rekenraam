@@ -17,6 +17,7 @@ import (
 // Economic equality only: this does not prescribe a new allocation precision.
 // All three acquisitions cost exactly 10 EUR and must follow the same policy.
 func TestFinancialPartialDisposalGainMustNotDependOnPurchaseTextPrecision(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		t.Run(method, func(t *testing.T) {
 			var reference *big.Rat

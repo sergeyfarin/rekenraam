@@ -10,6 +10,7 @@ import (
 )
 
 func TestOlderSaleReplacementSimulationReplaysLaterSaleWithoutWrites(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{

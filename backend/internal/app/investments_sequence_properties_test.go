@@ -267,6 +267,7 @@ func TestFinancialClosedPositionGainIgnoresDecimalRepresentation(t *testing.T) {
 //   - average_cost: the 3.04 pool over 5 shares, × 2
 //   - specific_lot: one share from each, 1.01 × 1/3 plus 2.03 × 1/2
 func TestFinancialPartialDisposalsUseChosenMethodAndRetainResidual(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		method     string
 		basisValue int64

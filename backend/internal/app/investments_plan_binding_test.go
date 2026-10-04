@@ -83,6 +83,7 @@ func changeHoldingAccountKind(t *testing.T, f *investmentsTestFixture, kind stri
 // TestBuyPlannedBeforeItsHoldingAccountChangedIsRefused is the reported
 // reproduction, run end to end through the sink a buy actually uses.
 func TestBuyPlannedBeforeItsHoldingAccountChangedIsRefused(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	input := sellInput(f, "2026-01-01", 10)
@@ -131,6 +132,7 @@ func TestBuyPlannedBeforeItsHoldingAccountChangedIsRefused(t *testing.T) {
 // acquisition, so there the role change itself is still reachable and is what
 // is used.
 func TestEveryInvestmentPlanBindsItsRoleReadsToTheWrite(t *testing.T) {
+	t.Parallel()
 	for _, command := range []struct {
 		name string
 		// openPosition is whether the command needs shares to exist first.
@@ -250,6 +252,7 @@ func TestEveryInvestmentPlanBindsItsRoleReadsToTheWrite(t *testing.T) {
 // not whatever the later journal preparation happened to read. Without that
 // distinction the guard compares an account to itself.
 func TestInvestmentPlanRecordsTheVersionItsRolesRead(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	plannedVersionID := accountLatestVersionID(t, f, f.holdingAccountID)
@@ -276,6 +279,7 @@ func TestInvestmentPlanRecordsTheVersionItsRolesRead(t *testing.T) {
 // TestOrdinaryInvestmentCommandsStillCommit is the control: nothing above makes
 // an undisturbed command fail.
 func TestOrdinaryInvestmentCommandsStillCommit(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)

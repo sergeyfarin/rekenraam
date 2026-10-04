@@ -11,6 +11,7 @@ import (
 )
 
 func TestReplaceLatestManualSalePostsOneAuditedCompoundCorrection(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -79,6 +80,7 @@ func TestReplaceLatestManualSalePostsOneAuditedCompoundCorrection(t *testing.T) 
 }
 
 func TestReplaceLatestManualSaleCanUseSharesRestoredByItsOwnInverse(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -112,6 +114,7 @@ func TestReplaceLatestManualSaleCanUseSharesRestoredByItsOwnInverse(t *testing.T
 }
 
 func TestReplaceOlderManualSaleReplaysLaterPositionIntent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -174,6 +177,7 @@ func TestReplaceOlderManualSaleReplaysLaterPositionIntent(t *testing.T) {
 }
 
 func TestReplaceOlderManualSaleReplaysDependentSaleAndRefusesImpossibleCorrection(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -258,6 +262,7 @@ func TestReplaceOlderManualSaleReplaysDependentSaleAndRefusesImpossibleCorrectio
 }
 
 func TestReplaceOlderManualSaleReplaysEveryBasisMethod(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		t.Run(method, func(t *testing.T) {
 			ctx := context.Background()
@@ -329,6 +334,7 @@ func TestReplaceOlderManualSaleReplaysEveryBasisMethod(t *testing.T) {
 }
 
 func TestReplaceOlderSpecificLotSaleAfterBuyCorrectionUsesEffectiveLot(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	bought, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -388,6 +394,7 @@ func TestReplaceOlderSpecificLotSaleAfterBuyCorrectionUsesEffectiveLot(t *testin
 }
 
 func TestReplaceSaleAfterLaterSaleReversalUsesHistoricalReplay(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -434,6 +441,7 @@ func TestReplaceSaleAfterLaterSaleReversalUsesHistoricalReplay(t *testing.T) {
 }
 
 func TestReplaceOlderManualSaleRequiresReconciliationOverrideAtomically(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -491,6 +499,7 @@ func TestReplaceOlderManualSaleRequiresReconciliationOverrideAtomically(t *testi
 }
 
 func TestReplaceLatestManualSaleRollsBackImpossibleQuantity(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -530,6 +539,7 @@ func TestReplaceLatestManualSaleRollsBackImpossibleQuantity(t *testing.T) {
 }
 
 func TestReplaceManualSaleRequiresExplicitEconomicElections(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{

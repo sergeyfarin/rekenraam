@@ -37,6 +37,7 @@ import (
 // PostTransaction with an edit in between, and asserts the promotion is refused
 // rather than posting its own older dates behind a live checkpoint.
 func TestDraftPromotionPreparedBeforeAnEditIsRefused(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	postEUR(t, f, "2026-01-01", 10)
@@ -88,6 +89,7 @@ func TestDraftPromotionPreparedBeforeAnEditIsRefused(t *testing.T) {
 // made the hole closable: a promotion spec always comes from a prior read, so a
 // caller that cannot name that read has nothing to check the spec against.
 func TestDraftPromotionWithoutItsSourceVersionIsRefused(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	draftSpec := ordinaryEntry(f.cashAccountID, f.incomeAccountID, f.eurCommodityID, 5)
@@ -115,6 +117,7 @@ func TestDraftPromotionWithoutItsSourceVersionIsRefused(t *testing.T) {
 // TestPostTransactionStillPromotesAnUntouchedDraft is the other half of the
 // contract: the ordinary promotion, with nobody else editing, still works.
 func TestPostTransactionStillPromotesAnUntouchedDraft(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	draftSpec := ordinaryEntry(f.cashAccountID, f.incomeAccountID, f.eurCommodityID, 5)
@@ -137,6 +140,7 @@ func TestPostTransactionStillPromotesAnUntouchedDraft(t *testing.T) {
 // account must not commit once that account is a security holding, because the
 // subledger fence would refuse the same entry if it were prepared now.
 func TestPreparedPostingIsRefusedAfterTheAccountBecomesAHolding(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	ordinary, err := f.accountService.CreateAccount(ctx, CreateAccountInput{
@@ -188,6 +192,7 @@ func TestPreparedPostingIsRefusedAfterTheAccountBecomesAHolding(t *testing.T) {
 // account must not commit once that account is no longer one, or its lots would
 // belong to an account the subledger no longer owns.
 func TestPreparedInvestmentPostingIsRefusedAfterTheHoldingAccountChanges(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	holding, err := f.accountService.Account(ctx, f.holdingAccountID)
@@ -231,6 +236,7 @@ func TestPreparedInvestmentPostingIsRefusedAfterTheHoldingAccountChanges(t *test
 // the time it commits the account has a posting, so the lock that was checked
 // outside the write has to hold inside it too.
 func TestAccountStructureChangeIsRefusedWhenAPostingCommitsFirst(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	ordinary, err := f.accountService.CreateAccount(ctx, CreateAccountInput{

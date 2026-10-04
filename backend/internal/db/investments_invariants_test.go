@@ -189,6 +189,7 @@ func assertLotsIdentical(t *testing.T, before []InvestmentLotRecord, after []Inv
 // --- Scenario matrix: single lot exact close, partial across three lots ---
 
 func TestInvariant_ConservationAcrossMethodsAndScenarios(t *testing.T) {
+	t.Parallel()
 	type scenario struct {
 		name    string
 		lots    []lotSpec
@@ -306,6 +307,7 @@ func allocateSequentially(lots []InvestmentLotRecord, sellQty int64) []LotAlloca
 // --- Interleaved buy/sell/buy/sell ---
 
 func TestInvariant_InterleavedAcquisitionsAndDisposalsConserveBasis(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -353,6 +355,7 @@ func TestInvariant_InterleavedAcquisitionsAndDisposalsConserveBasis(t *testing.T
 // --- FIFO orders by opened_on, not insertion order ---
 
 func TestInvariant_FIFOOrdersByOpenedOnNotInsertionOrder(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	database, ownerID, currencyID := migratedInvestmentTestDatabase(t)
 	accountID := createInvestmentTestAccount(t, database, currencyID)
@@ -396,6 +399,7 @@ func TestInvariant_FIFOOrdersByOpenedOnNotInsertionOrder(t *testing.T) {
 // --- Method actually matters ---
 
 func TestInvariant_MethodActuallyChangesDisposedBasis(t *testing.T) {
+	t.Parallel()
 	// The original I-02 bug class: a method resolver that silently always
 	// disposes FIFO regardless of the requested method. fifo, lifo, and
 	// average_cost over the identical 3-lot seed must produce three
@@ -438,6 +442,7 @@ func TestInvariant_MethodActuallyChangesDisposedBasis(t *testing.T) {
 // --- Oversell fails atomically ---
 
 func TestInvariant_OversellFailsAtomicallyAcrossMethods(t *testing.T) {
+	t.Parallel()
 	methods := []string{"fifo", "lifo", "average_cost"}
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
@@ -469,6 +474,7 @@ func TestInvariant_OversellFailsAtomicallyAcrossMethods(t *testing.T) {
 // --- Residual determinism ---
 
 func TestInvariant_AverageCostResidualIsDeterministic(t *testing.T) {
+	t.Parallel()
 	// Repeating the identical disposal on an identical seed (two independent
 	// databases, not a shared one) must produce byte-identical lot events —
 	// no hidden non-determinism (map iteration, floating point, etc.) in the

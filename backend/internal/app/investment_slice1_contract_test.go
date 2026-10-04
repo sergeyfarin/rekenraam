@@ -22,6 +22,7 @@ import (
 // both a fresh baseline and a book with lots, a partial disposal, a dividend,
 // and trade-derived prices.
 func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
+	t.Parallel()
 	for _, seeded := range []bool{false, true} {
 		name := "fresh"
 		if seeded {

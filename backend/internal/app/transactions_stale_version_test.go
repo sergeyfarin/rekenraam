@@ -42,6 +42,7 @@ func preparedMetadataEdit(t *testing.T, f *investmentsTestFixture, transaction T
 }
 
 func TestStaleMetadataEditCannotOverwriteANewerReconciledAmount(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	original := postEUR(t, f, "2026-01-01", 10)
@@ -74,6 +75,7 @@ func TestStaleMetadataEditCannotOverwriteANewerReconciledAmount(t *testing.T) {
 }
 
 func TestEveryLifecycleWriteRefusesASupersededVersion(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	// Each case leaves the transaction in the state its write needs, captures
@@ -168,6 +170,7 @@ func TestEveryLifecycleWriteRefusesASupersededVersion(t *testing.T) {
 }
 
 func TestStaleDraftPromotionIsRefused(t *testing.T) {
+	t.Parallel()
 	f, recurring, template := recurringFixture(t)
 	ctx := context.Background()
 	_, err := recurring.CreateTemplate(ctx, template)
@@ -219,6 +222,7 @@ func TestStaleDraftPromotionIsRefused(t *testing.T) {
 // reconciliation override: a metadata-only edit against the current version is
 // exactly as allowed as it was before.
 func TestOrdinaryMetadataEditOfAReconciledTransactionStillCommits(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	created := postEUR(t, f, "2026-01-01", 10)

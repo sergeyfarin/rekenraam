@@ -107,6 +107,7 @@ func sourceMetaOf(t *testing.T, importRepo *db.ImportRepository, batchID int64) 
 // FindCommitIdentity's per-row check, but visually misleading). Confirms the
 // second call correctly flags them "needs_attention" instead.
 func TestStageParseResult_ReStagingSameBatchFlagsNeedsAttentionNotDuplicateNew(t *testing.T) {
+	t.Parallel()
 	svc, connService, importRepo, _ := newImportFetchTestService(t)
 	conn := createTestTrading212Connection(t, svc, connService, "http://example.invalid")
 	ctx := context.Background()
@@ -154,6 +155,7 @@ func TestStageParseResult_ReStagingSameBatchFlagsNeedsAttentionNotDuplicateNew(t
 }
 
 func TestStartOnlineImport_WorkerStagesRowsAndUpdatesCursor(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/equity/history/transactions" {
 			writeFakeT212JSON(w, nil)
@@ -202,6 +204,7 @@ func TestStartOnlineImport_WorkerStagesRowsAndUpdatesCursor(t *testing.T) {
 // ticker (T-128): the e2e provider stub and the user both see a batch fill
 // in seconds.
 func TestStartOnlineImport_WakesRunningWorker(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeFakeT212JSON(w, nil)
 	}))
@@ -226,6 +229,7 @@ func TestStartOnlineImport_WakesRunningWorker(t *testing.T) {
 }
 
 func TestStartOnlineImport_LeavesOneWakeWithoutBlocking(t *testing.T) {
+	t.Parallel()
 	svc, connService, _, _ := newImportFetchTestService(t)
 	conn := createTestTrading212Connection(t, svc, connService, "http://example.invalid")
 	ctx := context.Background()
@@ -240,6 +244,7 @@ func TestStartOnlineImport_LeavesOneWakeWithoutBlocking(t *testing.T) {
 }
 
 func TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted(t *testing.T) {
+	t.Parallel()
 	movements := []fakeT212Movement{
 		{ID: "ref-1", Type: "DEPOSIT", DateTime: "2024-01-01T00:00:00Z", Amount: "100.00", Currency: "EUR"},
 		{ID: "ref-2", Type: "DIVIDEND", DateTime: "2024-01-02T00:00:00Z", Amount: "1.23", Currency: "EUR"},
@@ -330,6 +335,7 @@ func TestRefreshImportConnection_IncrementalOnlyNewMovementsAndSkipsCommitted(t 
 }
 
 func TestStartOnlineImport_GuardsAgainstConcurrentFetch(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/equity/history/transactions" {
 			writeFakeT212JSON(w, nil)
@@ -362,6 +368,7 @@ func TestStartOnlineImport_GuardsAgainstConcurrentFetch(t *testing.T) {
 // before either had inserted its batch — this test would have been flaky
 // (occasionally >1 success) against that version.
 func TestStartOnlineImport_ConcurrentStartsRaceSafely(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/equity/history/transactions" {
 			writeFakeT212JSON(w, nil)
@@ -414,6 +421,7 @@ func TestStartOnlineImport_ConcurrentStartsRaceSafely(t *testing.T) {
 // transaction must roll back — no batch, no orphaned "fetching" state that
 // would permanently trip the in-flight guard with nothing to ever process it.
 func TestStartOnlineImportBatch_PayloadFailureLeavesNoStrandedBatch(t *testing.T) {
+	t.Parallel()
 	svc, connService, importRepo, database := newImportFetchTestService(t)
 	conn := createTestTrading212Connection(t, svc, connService, "http://example.invalid")
 	ctx := context.Background()
@@ -444,6 +452,7 @@ func TestStartOnlineImportBatch_PayloadFailureLeavesNoStrandedBatch(t *testing.T
 }
 
 func TestProcessTrading212FetchWork_UnauthorizedIsTerminal(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/equity/history/transactions" {
 			writeFakeT212JSON(w, nil)
@@ -482,6 +491,7 @@ func TestProcessTrading212FetchWork_UnauthorizedIsTerminal(t *testing.T) {
 }
 
 func TestProcessTrading212FetchWork_TransientErrorRetriesWithoutFailingBatch(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/equity/history/transactions" {
 			writeFakeT212JSON(w, nil)
@@ -513,6 +523,7 @@ func TestProcessTrading212FetchWork_TransientErrorRetriesWithoutFailingBatch(t *
 }
 
 func TestImportFetchWork_RestartReclaimsExpiredLease(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/equity/history/transactions" {
 			writeFakeT212JSON(w, nil)
@@ -564,6 +575,7 @@ func TestImportFetchWork_RestartReclaimsExpiredLease(t *testing.T) {
 // continuation mechanism recovers the full history across multiple chunks
 // instead of silently truncating it (the gap fixed alongside this test).
 func TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating(t *testing.T) {
+	t.Parallel()
 	restore := trading212.SetMaxPagesForTest(3)
 	defer restore()
 
@@ -641,6 +653,7 @@ func TestStartOnlineImport_ContinuesPastPageBudgetWithoutTruncatingOrDuplicating
 }
 
 func TestBuildTransactionSpec_OnlineRowResolvesCurrencyAndIsNeedsReview(t *testing.T) {
+	t.Parallel()
 	row := db.ImportStagedRowRecord{
 		NormalizedJSON: `{
 			"date": "2024-01-02",

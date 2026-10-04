@@ -50,6 +50,7 @@ func insertForecastTransaction(t testing.TB, database *sql.DB, transactionID, ve
 }
 
 func TestForecastLearningUsesPostedHistoryOnly(t *testing.T) {
+	t.Parallel()
 	database, repository := newForecastTestRepository(t)
 	legs := []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-100"), QuantityScale: 2}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("100"), QuantityScale: 2}}
 	insertForecastTransaction(t, database, 80, 80, "posted", "2026-08-20", legs)
@@ -89,6 +90,7 @@ func TestForecastLearningUsesPostedHistoryOnly(t *testing.T) {
 }
 
 func TestForecastLearningSnapshotRejectsPostingPrefixes(t *testing.T) {
+	t.Parallel()
 	database, repository := newForecastTestRepository(t)
 	insertForecastTransaction(t, database, 90, 90, "posted", "2026-08-20", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("-100")}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("100")}})
 	_, err := repository.LoadLearningSnapshot(context.Background(), ForecastLearningSnapshotRequest{BookID: 1, AccountIDs: []int64{1, 2}, HistoryStart: "2026-01-01", HistoryEnd: "2026-08-31", PostingLimit: 1})
@@ -96,6 +98,7 @@ func TestForecastLearningSnapshotRejectsPostingPrefixes(t *testing.T) {
 }
 
 func TestForecastLearningRateCandidatesIncludeModelOnlyCurrency(t *testing.T) {
+	t.Parallel()
 	ids := forecastCandidateCommodityIDs([]int64{1}, nil, nil, nil, []ForecastLearningPostingRecord{
 		{AccountID: 1, CommodityID: 2},
 		{AccountID: 9, CommodityID: 3},
@@ -117,6 +120,7 @@ func BenchmarkForecastLearningRead(b *testing.B) {
 }
 
 func TestForecastSnapshotReadsCurrentPostedVersionsOnly(t *testing.T) {
+	t.Parallel()
 	database, repository := newForecastTestRepository(t)
 	insertForecastTransaction(t, database, 10, 10, "posted", "2026-08-20", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("100"), QuantityScale: 2}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("-100"), QuantityScale: 2}})
 	insertForecastTransaction(t, database, 11, 11, "voided", "2026-08-21", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("200"), QuantityScale: 2}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("-200"), QuantityScale: 2}})
@@ -132,6 +136,7 @@ func TestForecastSnapshotReadsCurrentPostedVersionsOnly(t *testing.T) {
 }
 
 func TestForecastSnapshotBulkQueriesUseExistingIndexes(t *testing.T) {
+	t.Parallel()
 	database, _ := newForecastTestRepository(t)
 	insertForecastTransaction(t, database, 15, 15, "posted", "2026-08-20", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("100"), QuantityScale: 2}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("-100"), QuantityScale: 2}})
 	rows, err := database.Query(`EXPLAIN QUERY PLAN
@@ -155,6 +160,7 @@ func TestForecastSnapshotBulkQueriesUseExistingIndexes(t *testing.T) {
 }
 
 func TestForecastSnapshotKeepsDraftsAfterTemplateArchiveAndAccountEdit(t *testing.T) {
+	t.Parallel()
 	database, repository := newForecastTestRepository(t)
 	recurring := NewRecurringRepository(database)
 	template := createRentTemplate(t, recurring)
@@ -177,6 +183,7 @@ func TestForecastSnapshotKeepsDraftsAfterTemplateArchiveAndAccountEdit(t *testin
 }
 
 func TestForecastSnapshotLoadsFullDraftCounterparts(t *testing.T) {
+	t.Parallel()
 	database, repository := newForecastTestRepository(t)
 	recurring := NewRecurringRepository(database)
 	template := createRentTemplate(t, recurring)
@@ -192,6 +199,7 @@ func TestForecastSnapshotLoadsFullDraftCounterparts(t *testing.T) {
 }
 
 func TestForecastSnapshotSeesOneSideOfConcurrentPosting(t *testing.T) {
+	t.Parallel()
 	database, repository := newForecastTestRepository(t)
 	insertForecastTransaction(t, database, 40, 40, "posted", "2026-08-20", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("100"), QuantityScale: 2}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("-100"), QuantityScale: 2}})
 	var before, after []ForecastPostingRecord
@@ -214,6 +222,7 @@ func TestForecastSnapshotSeesOneSideOfConcurrentPosting(t *testing.T) {
 }
 
 func TestForecastSnapshotRejectsTruncatedInputs(t *testing.T) {
+	t.Parallel()
 	database, repository := newForecastTestRepository(t)
 	insertForecastTransaction(t, database, 50, 50, "posted", "2026-08-20", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("100"), QuantityScale: 2}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("-100"), QuantityScale: 2}})
 	request := forecastSnapshotRequest(1)
@@ -224,6 +233,7 @@ func TestForecastSnapshotRejectsTruncatedInputs(t *testing.T) {
 }
 
 func TestForecastSnapshotEmptyScopeNeverMeansAllAccounts(t *testing.T) {
+	t.Parallel()
 	database, repository := newForecastTestRepository(t)
 	insertForecastTransaction(t, database, 60, 60, "posted", "2026-08-20", []PostingSpec{{AccountID: 1, CommodityID: 1, QuantityValue: exact.MustParse("100"), QuantityScale: 2}, {AccountID: 2, CommodityID: 1, QuantityValue: exact.MustParse("-100"), QuantityScale: 2}})
 	request := forecastSnapshotRequest()
@@ -237,6 +247,7 @@ func TestForecastSnapshotEmptyScopeNeverMeansAllAccounts(t *testing.T) {
 }
 
 func TestForecastConstantFXStalenessAndTies(t *testing.T) {
+	t.Parallel()
 	database, repository := newForecastTestRepository(t)
 	_, err := database.Exec(`
 		INSERT INTO commodities (id, book_id, code, kind, is_builtin, created_at, created_by_user_id)

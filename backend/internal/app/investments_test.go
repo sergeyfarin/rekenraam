@@ -14,6 +14,7 @@ import (
 )
 
 func TestCleanInvestmentInstrumentSpecDefaultsAndNormalizesFields(t *testing.T) {
+	t.Parallel()
 	quoteCommodityID := int64(10)
 	tradingCommodityID := int64(20)
 	spec, err := cleanInvestmentInstrumentSpec(InvestmentInstrumentInput{
@@ -50,6 +51,7 @@ func TestCleanInvestmentInstrumentSpecDefaultsAndNormalizesFields(t *testing.T) 
 }
 
 func TestCleanInvestmentInstrumentSpecRejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
 	valid := InvestmentInstrumentInput{
 		CommodityCode:   "VWRL",
 		InstrumentType:  "etf",
@@ -91,6 +93,7 @@ func ptrInt64(value int64) *int64 {
 }
 
 func TestPreviewSellRealizedGainAlignsMismatchedCostBasisScales(t *testing.T) {
+	t.Parallel()
 	// Two buys create lots with different CostBasisScale (a lot's cost scale
 	// is the cash scale of the buy that created it, which varies per trade —
 	// realistic via import, see F1/F4 in the 2026-07-13 audit). Before the

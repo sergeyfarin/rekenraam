@@ -44,6 +44,7 @@ func sellInput(f *investmentsTestFixture, date string, quantity int64) Investmen
 }
 
 func TestSellRejectsLotsAcquiredAfterTheSaleDateUnderEveryMethod(t *testing.T) {
+	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		t.Run(method, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
@@ -80,6 +81,7 @@ func TestSellRejectsLotsAcquiredAfterTheSaleDateUnderEveryMethod(t *testing.T) {
 // broker activity, not an out-of-order entry. A fix that used `<` instead of
 // `<=` would break every day trade and every same-day import.
 func TestSellAllowsAcquisitionAndDisposalOnTheSameDay(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -95,6 +97,7 @@ func TestSellAllowsAcquisitionAndDisposalOnTheSameDay(t *testing.T) {
 // consume the eligible one and must refuse to reach into the future lot for the
 // remainder — reporting insufficient lots rather than quietly overdrawing.
 func TestSellSelectsOnlyLotsHeldOnTheSaleDate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -117,6 +120,7 @@ func TestSellSelectsOnlyLotsHeldOnTheSaleDate(t *testing.T) {
 // lot wins, so an ineligible later acquisition silently supplies the basis for
 // an earlier sale while the quantities still look correct.
 func TestSellUnderLIFOIgnoresLotsAcquiredAfterTheSaleDate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -138,6 +142,7 @@ func TestSellUnderLIFOIgnoresLotsAcquiredAfterTheSaleDate(t *testing.T) {
 // what is wrong rather than reporting a shortfall the user can see they do not
 // have.
 func TestSellWithSpecificLotRejectsAnAllocationDatedAfterTheSale(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -159,6 +164,7 @@ func TestSellWithSpecificLotRejectsAnAllocationDatedAfterTheSale(t *testing.T) {
 // (T-38), which is exactly the shape of thing that gets fixed on four paths and
 // missed on the fifth.
 func TestWriteOffRejectsLotsAcquiredAfterTheWriteOffDate(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -184,6 +190,7 @@ func TestWriteOffRejectsLotsAcquiredAfterTheWriteOffDate(t *testing.T) {
 // chronological replay (see investment_backdating_test.go).
 
 func TestBackdatedPurchaseReplaysLaterAverageCostSale(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -208,6 +215,7 @@ func TestBackdatedPurchaseReplaysLaterAverageCostSale(t *testing.T) {
 }
 
 func TestBackdatedPurchasePreservesRecordedDisposalMethods(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		method string
 		basis  int64
@@ -240,6 +248,7 @@ func TestBackdatedPurchasePreservesRecordedDisposalMethods(t *testing.T) {
 }
 
 func TestBackdatedPurchaseRollsBackReplayWhenImportIdentityFails(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -275,6 +284,7 @@ func TestBackdatedPurchaseRollsBackReplayWhenImportIdentityFails(t *testing.T) {
 }
 
 func TestBackdatedSaleStillWorksWhenOnlyPurchasesFollowIt(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)
@@ -295,6 +305,7 @@ func TestBackdatedSaleStillWorksWhenOnlyPurchasesFollowIt(t *testing.T) {
 }
 
 func TestSameDayEventsStayLegalInEntryOrder(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-01", 10, 10000)

@@ -158,6 +158,7 @@ func validDividendProposalJSON(cashAccountID, cashCommodityID, incomeAccountID i
 // --- AcceptSuggestion: real posting (Part 2 of the investments plan) ---
 
 func TestAcceptSuggestion_PostsProposedDividendAndMarksAccepted(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	suggestionID := f.seedSuggestion(t, validDividendProposalJSON(f.cashAccountID, f.eurCommodityID, f.incomeAccountID))
 	initialTransactions := f.transactionCount(t)
@@ -178,6 +179,7 @@ func TestAcceptSuggestion_PostsProposedDividendAndMarksAccepted(t *testing.T) {
 }
 
 func TestAcceptSuggestion_MalformedProposalMarksFailedWithoutPosting(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	suggestionID := f.seedSuggestion(t, `{not-valid-json`)
 	initialTransactions := f.transactionCount(t)
@@ -192,6 +194,7 @@ func TestAcceptSuggestion_MalformedProposalMarksFailedWithoutPosting(t *testing.
 }
 
 func TestAcceptSuggestion_UnsupportedKindMarksFailedWithoutPosting(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	suggestionID := f.seedSuggestion(t, `{"kind":"split","transaction_date":"2026-06-01"}`)
 
@@ -202,6 +205,7 @@ func TestAcceptSuggestion_UnsupportedKindMarksFailedWithoutPosting(t *testing.T)
 }
 
 func TestAcceptSuggestion_BasisEventsCannotPostAsDividendIncome(t *testing.T) {
+	t.Parallel()
 	for _, family := range []string{"return_of_capital", "cash_in_lieu"} {
 		t.Run(family, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
@@ -223,6 +227,7 @@ func TestAcceptSuggestion_BasisEventsCannotPostAsDividendIncome(t *testing.T) {
 }
 
 func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	var initialAuditCount int64
@@ -330,6 +335,7 @@ func TestInvestmentCommandsPersistNamedOperationAtomically(t *testing.T) {
 }
 
 func TestInvestmentTradePriceFailureRollsBackEntireCommand(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	_, err := f.database.ExecContext(ctx, `
@@ -359,6 +365,7 @@ func TestInvestmentTradePriceFailureRollsBackEntireCommand(t *testing.T) {
 }
 
 func TestAcceptSuggestion_InvalidCashAccountMarksFailedWithoutPosting(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	const unknownAccountID = 999999
 	suggestionID := f.seedSuggestion(t, validDividendProposalJSON(unknownAccountID, f.eurCommodityID, f.incomeAccountID))
@@ -372,6 +379,7 @@ func TestAcceptSuggestion_InvalidCashAccountMarksFailedWithoutPosting(t *testing
 }
 
 func TestAcceptSuggestion_AlreadyAcceptedReturnsNotPending(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	suggestionID := f.seedSuggestion(t, validDividendProposalJSON(f.cashAccountID, f.eurCommodityID, f.incomeAccountID))
 
@@ -385,12 +393,14 @@ func TestAcceptSuggestion_AlreadyAcceptedReturnsNotPending(t *testing.T) {
 }
 
 func TestAcceptSuggestion_NotFoundReturnsNotFound(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	_, err := f.investmentService.AcceptSuggestion(context.Background(), f.ownerUserID, 0, "req-accept", 999999)
 	require.ErrorIs(t, err, ErrInvestmentSuggestionNotFound)
 }
 
 func TestIgnoreSuggestion_AlreadyIgnoredReturnsNotPending(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	suggestionID := f.seedSuggestion(t, validDividendProposalJSON(f.cashAccountID, f.eurCommodityID, f.incomeAccountID))
 
@@ -403,6 +413,7 @@ func TestIgnoreSuggestion_AlreadyIgnoredReturnsNotPending(t *testing.T) {
 }
 
 func TestIgnoreSuggestion_AcceptedSuggestionCannotBeIgnored(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	suggestionID := f.seedSuggestion(t, validDividendProposalJSON(f.cashAccountID, f.eurCommodityID, f.incomeAccountID))
 
@@ -429,6 +440,7 @@ func assertMoneyValue(t *testing.T, expectedValue int64, expectedScale int, gotV
 }
 
 func TestSell_PostsFourLegTransactionAndDisposesLot(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -465,6 +477,7 @@ func TestSell_PostsFourLegTransactionAndDisposesLot(t *testing.T) {
 }
 
 func TestInvestmentWritesRejectDraftBeforeJournalOrLotMutation(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	before := f.transactionCount(t)
@@ -484,6 +497,7 @@ func TestInvestmentWritesRejectDraftBeforeJournalOrLotMutation(t *testing.T) {
 }
 
 func TestEveryInvestmentWriteValidatorRejectsDraftStatus(t *testing.T) {
+	t.Parallel()
 	tests := map[string]func() error{
 		"buy_or_sell": func() error { return validateTradeInput(InvestmentTradeInput{Status: "draft"}) },
 		"write_off": func() error {
@@ -509,6 +523,7 @@ func TestEveryInvestmentWriteValidatorRejectsDraftStatus(t *testing.T) {
 }
 
 func TestGenericLifecycleRejectsInvestmentLinkedTransactionsBeforeMutation(t *testing.T) {
+	t.Parallel()
 	actions := []struct {
 		name   string
 		mutate func(context.Context, *investmentsTestFixture, Transaction) error
@@ -572,6 +587,7 @@ func TestGenericLifecycleRejectsInvestmentLinkedTransactionsBeforeMutation(t *te
 }
 
 func TestRejectedSellEditCannotRewriteRealizedGainProceeds(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
@@ -610,6 +626,7 @@ func TestRejectedSellEditCannotRewriteRealizedGainProceeds(t *testing.T) {
 // --- 3a: write-off (T-38) ---
 
 func TestWriteOff_ClosesLotsWithZeroProceedsAndTwoCommodityLegs(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -649,6 +666,7 @@ func TestWriteOff_ClosesLotsWithZeroProceedsAndTwoCommodityLegs(t *testing.T) {
 }
 
 func TestWriteOff_RealizesTheWholeBasisAsALoss(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -687,6 +705,7 @@ func TestWriteOff_RealizesTheWholeBasisAsALoss(t *testing.T) {
 }
 
 func TestWriteOff_PartialQuantityLeavesTheRestOpen(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -713,6 +732,7 @@ func TestWriteOff_PartialQuantityLeavesTheRestOpen(t *testing.T) {
 }
 
 func TestWriteOff_RejectsMissingReasonAndOverlargeQuantity(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -751,6 +771,7 @@ func TestWriteOff_RejectsMissingReasonAndOverlargeQuantity(t *testing.T) {
 }
 
 func TestWriteOff_DoesNotRecordAZeroTradeImpliedPrice(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	pricingService := NewPricingService(db.NewPricingRepository(f.database))
@@ -785,6 +806,7 @@ func TestWriteOff_DoesNotRecordAZeroTradeImpliedPrice(t *testing.T) {
 // is a user-facing trust bug (the sell UI shows the preview, then commits —
 // they must always agree). Table-driven over all four cost-basis methods.
 func TestPreviewSellAndSellProduceIdenticalAllocationsAcrossCostBasisMethods(t *testing.T) {
+	t.Parallel()
 	methods := []string{"fifo", "lifo", "average_cost", "specific_lot"}
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
@@ -855,6 +877,7 @@ func TestPreviewSellAndSellProduceIdenticalAllocationsAcrossCostBasisMethods(t *
 }
 
 func TestDisposalDecisionPreservesEveryResolutionTier(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		tier   string
@@ -937,6 +960,7 @@ func setHoldingCostBasisMethod(t *testing.T, f *investmentsTestFixture, method s
 }
 
 func TestHistoricalDisposalDecisionSurvivesAccountAndGlobalDefaultChanges(t *testing.T) {
+	t.Parallel()
 	t.Run("account", func(t *testing.T) {
 		f := newInvestmentsTestFixture(t)
 		ctx := context.Background()
@@ -980,6 +1004,7 @@ func TestHistoricalDisposalDecisionSurvivesAccountAndGlobalDefaultChanges(t *tes
 }
 
 func TestSell_MethodActuallyChangesDisposedBasis(t *testing.T) {
+	t.Parallel()
 	// FIFO and LIFO over the same 2-lot seed must produce different disposed
 	// basis totals — proves the method resolver isn't silently always FIFO
 	// (the exact bug class I-02 in docs/plans/investments-plan.md guarded against).
@@ -1043,6 +1068,7 @@ func TestSell_MethodActuallyChangesDisposedBasis(t *testing.T) {
 }
 
 func TestSell_InsufficientLotsReturnsSentinelError(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	_, err := f.investmentService.Buy(ctx, InvestmentTradeInput{
@@ -1063,6 +1089,7 @@ func TestSell_InsufficientLotsReturnsSentinelError(t *testing.T) {
 }
 
 func TestReinvestedDividend_OpensNewLotFromIncomeWithoutCashLeg(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1086,6 +1113,7 @@ func TestReinvestedDividend_OpensNewLotFromIncomeWithoutCashLeg(t *testing.T) {
 }
 
 func TestReinvestedDividend_UsesConfiguredDividendDefaultWhenIncomeAccountOmitted(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1106,6 +1134,7 @@ func TestReinvestedDividend_UsesConfiguredDividendDefaultWhenIncomeAccountOmitte
 }
 
 func TestValidateReinvestedDividendInput_RejectsMissingFields(t *testing.T) {
+	t.Parallel()
 	valid := ReinvestedDividendInput{
 		OwnerUserID: 1, TransactionDate: "2026-03-01",
 		CommodityID: 5, HoldingAccountID: 6, CashCommodityID: 7,
@@ -1135,6 +1164,7 @@ func TestValidateReinvestedDividendInput_RejectsMissingFields(t *testing.T) {
 }
 
 func TestDividend_DirectWithExplicitIncomeAccount(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1150,6 +1180,7 @@ func TestDividend_DirectWithExplicitIncomeAccount(t *testing.T) {
 }
 
 func TestDividend_WithholdingLegOnlyPresentWhenConfigured(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	withholdingAccountID := seedTestAccountWithClass(t, f.database, "active", true, "liability", "other_liability")
@@ -1167,6 +1198,7 @@ func TestDividend_WithholdingLegOnlyPresentWhenConfigured(t *testing.T) {
 }
 
 func TestDividend_ResolvesDefaultsFromCommodityWhenAccountsOmitted(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1188,6 +1220,7 @@ func TestDividend_ResolvesDefaultsFromCommodityWhenAccountsOmitted(t *testing.T)
 }
 
 func TestValidateTradeInput_RejectsEdgeCases(t *testing.T) {
+	t.Parallel()
 	valid := InvestmentTradeInput{
 		OwnerUserID: 1, TransactionDate: "2026-03-01",
 		CommodityID: 5, HoldingAccountID: 6, CashAccountID: 7, CashCommodityID: 8,
@@ -1221,6 +1254,7 @@ func TestValidateTradeInput_RejectsEdgeCases(t *testing.T) {
 }
 
 func TestValidateDividendInput_RejectsEdgeCases(t *testing.T) {
+	t.Parallel()
 	valid := DividendInput{
 		OwnerUserID: 1, TransactionDate: "2026-03-01",
 		CashAccountID: 7, CashCommodityID: 8, AmountValue: 100, AmountScale: 2,
@@ -1249,6 +1283,7 @@ func TestValidateDividendInput_RejectsEdgeCases(t *testing.T) {
 // --- 3b: configuration CRUD ---
 
 func TestListCostBasisProfiles_SeedsAndReturnsDefaultFIFO(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	profiles, err := f.investmentService.ListCostBasisProfiles(context.Background(), f.ownerUserID, 0, "req-list")
 	require.NoError(t, err)
@@ -1258,6 +1293,7 @@ func TestListCostBasisProfiles_SeedsAndReturnsDefaultFIFO(t *testing.T) {
 }
 
 func TestSaveCostBasisProfile_CreateUpdateAndDefaultUniqueness(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1294,6 +1330,7 @@ func TestSaveCostBasisProfile_CreateUpdateAndDefaultUniqueness(t *testing.T) {
 }
 
 func TestCleanCostBasisProfileSpec_RejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
 	valid := CostBasisProfileInput{Name: "Default", Method: "fifo", Status: "active"}
 	tests := []struct {
 		name   string
@@ -1314,6 +1351,7 @@ func TestCleanCostBasisProfileSpec_RejectsInvalidInputs(t *testing.T) {
 }
 
 func TestListAndSaveDividendDefaults(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1342,6 +1380,7 @@ func TestListAndSaveDividendDefaults(t *testing.T) {
 }
 
 func TestCleanDividendDefaultSpec_RejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
 	valid := DividendDefaultInput{IncomeAccountID: 1, Status: "active", EffectiveFrom: "2026-01-01"}
 	tests := []struct {
 		name   string
@@ -1364,6 +1403,7 @@ func TestCleanDividendDefaultSpec_RejectsInvalidInputs(t *testing.T) {
 }
 
 func TestSearch_MatchesInstrumentAndReturnsEmptyForBlankQuery(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1385,6 +1425,7 @@ func TestSearch_MatchesInstrumentAndReturnsEmptyForBlankQuery(t *testing.T) {
 }
 
 func TestUpdateInstrument_CreatesNewVersionWithChangedFields(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1407,6 +1448,7 @@ func TestUpdateInstrument_CreatesNewVersionWithChangedFields(t *testing.T) {
 }
 
 func TestListProviderEvents_NewestFirst(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	var manualSourceID int64
@@ -1435,6 +1477,7 @@ func mustParseTestTime(t *testing.T, date string) time.Time {
 // --- 3c: gains read models ---
 
 func TestListRealizedGains_AppLayerMapsSignAndFilters(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1472,6 +1515,7 @@ func TestListRealizedGains_AppLayerMapsSignAndFilters(t *testing.T) {
 // the only way to exercise a genuinely unpriced open position (any real
 // pricingService creates an implied price the moment a trade posts).
 func TestListUnrealizedGains_NilWhenNoPriceExists(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixtureWithOptions(t, false)
 	ctx := context.Background()
 
@@ -1496,6 +1540,7 @@ func TestListUnrealizedGains_NilWhenNoPriceExists(t *testing.T) {
 // PositionsWithGains tests. The default fixture's live PricingService means
 // Buy already creates a trade-implied price, so this needs no manual seed.
 func TestListUnrealizedGains_NonNilWhenPriceExists(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1520,6 +1565,7 @@ func TestListUnrealizedGains_NonNilWhenPriceExists(t *testing.T) {
 // these tests cover the app-layer wiring: validation, listing, error mapping.)
 
 func TestSaveAndListAutomationRules_AppLayer(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 
@@ -1550,6 +1596,7 @@ func TestSaveAndListAutomationRules_AppLayer(t *testing.T) {
 }
 
 func TestCleanAutomationRuleSpec_RejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
 	valid := InvestmentAutomationRuleInput{EventFamily: "dividend", Mode: "suggest", ConfidenceThresholdBPS: 8000, EffectiveFrom: "2026-01-01"}
 	tests := []struct {
 		name   string
@@ -1574,6 +1621,7 @@ func TestCleanAutomationRuleSpec_RejectsInvalidInputs(t *testing.T) {
 }
 
 func TestListEventSuggestions_ReturnsSeededSuggestions(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	f.seedSuggestion(t, validDividendProposalJSON(f.cashAccountID, f.eurCommodityID, f.incomeAccountID))
 	f.seedSuggestion(t, validDividendProposalJSON(f.cashAccountID, f.eurCommodityID, f.incomeAccountID))
@@ -1590,6 +1638,7 @@ func TestListEventSuggestions_ReturnsSeededSuggestions(t *testing.T) {
 // pool math could not handle the mismatch; now that it aligns, the honest
 // answer is the sale, and it must be the same one preview promised.
 func TestSell_AverageCostPoolsLotsBoughtAtDifferentQuantityScales(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 

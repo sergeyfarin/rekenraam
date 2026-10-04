@@ -122,6 +122,7 @@ func (p *recordingProber) Probe(_ context.Context, _ string, _ string, configJSO
 // --- Tests ---
 
 func TestCreateImportConnection_MissingKeyReturnsConfigRequired(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, nil, NoOpProber{})
 	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1,
@@ -133,6 +134,7 @@ func TestCreateImportConnection_MissingKeyReturnsConfigRequired(t *testing.T) {
 }
 
 func TestCreateImportConnection_RoundTrip(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1,
@@ -151,6 +153,7 @@ func TestCreateImportConnection_RoundTrip(t *testing.T) {
 }
 
 func TestCreateImportConnection_SecretsNeverInPlaintext(t *testing.T) {
+	t.Parallel()
 	repo := openTestConnectionRepo(t)
 	svc := NewImportConnectionService(repo, nil, testKey(), NoOpProber{})
 
@@ -172,6 +175,7 @@ func TestCreateImportConnection_SecretsNeverInPlaintext(t *testing.T) {
 }
 
 func TestCreateImportConnection_ProbeFailureStoresNothing(t *testing.T) {
+	t.Parallel()
 	repo := openTestConnectionRepo(t)
 	svc := NewImportConnectionService(repo, nil, testKey(), errProber{err: ErrProviderUnauthorized})
 
@@ -190,6 +194,7 @@ func TestCreateImportConnection_ProbeFailureStoresNothing(t *testing.T) {
 }
 
 func TestCreateImportConnection_DuplicateNameRejected(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
@@ -204,6 +209,7 @@ func TestCreateImportConnection_DuplicateNameRejected(t *testing.T) {
 }
 
 func TestListImportConnections_ReturnsAllForBook(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	for _, name := range []string{"A", "B", "C"} {
@@ -221,6 +227,7 @@ func TestListImportConnections_ReturnsAllForBook(t *testing.T) {
 }
 
 func TestListImportConnections_KeyHintNeverExposesFullKey(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
@@ -236,6 +243,7 @@ func TestListImportConnections_KeyHintNeverExposesFullKey(t *testing.T) {
 }
 
 func TestUpdateImportConnection_RenameOnly(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
@@ -256,6 +264,7 @@ func TestUpdateImportConnection_RenameOnly(t *testing.T) {
 }
 
 func TestUpdateImportConnection_OmittedAutoRefreshPreservesExisting(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
@@ -311,6 +320,7 @@ func TestUpdateImportConnection_OmittedAutoRefreshPreservesExisting(t *testing.T
 }
 
 func TestUpdateImportConnection_RotateKey(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
@@ -334,6 +344,7 @@ func TestUpdateImportConnection_RotateKey(t *testing.T) {
 // regression test: rotating api_key and provider config together must probe
 // the config actually being persisted, not the connection's stale config.
 func TestUpdateImportConnection_RotateKeyAndConfigProbesTheNewConfig(t *testing.T) {
+	t.Parallel()
 	repo := openTestConnectionRepo(t)
 	var lastConfigJSON string
 	prober := &recordingProber{lastConfigJSON: &lastConfigJSON}
@@ -358,6 +369,7 @@ func TestUpdateImportConnection_RotateKeyAndConfigProbesTheNewConfig(t *testing.
 }
 
 func TestCreateImportConnection_Trading212BaseURLConfigRejected(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
@@ -373,6 +385,7 @@ func TestCreateImportConnection_Trading212BaseURLConfigRejected(t *testing.T) {
 }
 
 func TestUpdateImportConnection_KeyRotationProbeFailure(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
@@ -413,6 +426,7 @@ func TestUpdateImportConnection_KeyRotationProbeFailure(t *testing.T) {
 }
 
 func TestDeleteImportConnection_RemovesIt(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
@@ -427,12 +441,14 @@ func TestDeleteImportConnection_RemovesIt(t *testing.T) {
 }
 
 func TestDeleteImportConnection_NotFoundError(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 	err := svc.DeleteImportConnection(context.Background(), 9999)
 	require.ErrorIs(t, err, ErrImportConnectionNotFound)
 }
 
 func TestCreateImportConnection_ValidationErrors(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 	ctx := context.Background()
 
@@ -455,6 +471,7 @@ func TestCreateImportConnection_ValidationErrors(t *testing.T) {
 }
 
 func TestCreateImportConnection_DisplayNameIsTrimmed(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1,
@@ -467,6 +484,7 @@ func TestCreateImportConnection_DisplayNameIsTrimmed(t *testing.T) {
 }
 
 func TestCreateImportConnection_InvalidConfigJSONRejected(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 	_, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1,
@@ -480,6 +498,7 @@ func TestCreateImportConnection_InvalidConfigJSONRejected(t *testing.T) {
 }
 
 func TestUpdateImportConnection_DisplayNameIsTrimmedAndInvalidConfigRejected(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
 		OwnerUserID: 1, SourceKind: "trading212", DisplayName: "Original", APIKey: "api-key-abcd",
@@ -500,6 +519,7 @@ func TestUpdateImportConnection_DisplayNameIsTrimmedAndInvalidConfigRejected(t *
 }
 
 func TestOpenSecret_ReturnsPlaintext(t *testing.T) {
+	t.Parallel()
 	svc := newTestConnectionService(t, testKey(), NoOpProber{})
 
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{
@@ -515,6 +535,7 @@ func TestOpenSecret_ReturnsPlaintext(t *testing.T) {
 // --- cash_account_id (B-T212-INVST / Slice 4b) ---
 
 func TestCreateImportConnection_CashAccountIDSetAndValidated(t *testing.T) {
+	t.Parallel()
 	svc, database := newTestConnectionServiceWithAccounts(t)
 	accountID := seedTestAccount(t, database, "active", true)
 
@@ -528,6 +549,7 @@ func TestCreateImportConnection_CashAccountIDSetAndValidated(t *testing.T) {
 }
 
 func TestCreateImportConnection_CashAccountIDNotFoundRejected(t *testing.T) {
+	t.Parallel()
 	svc, _ := newTestConnectionServiceWithAccounts(t)
 	missing := int64(999999)
 
@@ -540,6 +562,7 @@ func TestCreateImportConnection_CashAccountIDNotFoundRejected(t *testing.T) {
 }
 
 func TestCreateImportConnection_CashAccountIDNonPostableRejected(t *testing.T) {
+	t.Parallel()
 	svc, database := newTestConnectionServiceWithAccounts(t)
 	accountID := seedTestAccount(t, database, "active", false)
 
@@ -552,6 +575,7 @@ func TestCreateImportConnection_CashAccountIDNonPostableRejected(t *testing.T) {
 }
 
 func TestCreateImportConnection_CashAccountIDArchivedRejected(t *testing.T) {
+	t.Parallel()
 	svc, database := newTestConnectionServiceWithAccounts(t)
 	accountID := seedTestAccount(t, database, "archived", true)
 
@@ -564,6 +588,7 @@ func TestCreateImportConnection_CashAccountIDArchivedRejected(t *testing.T) {
 }
 
 func TestCreateImportConnection_CashAccountIDClosedRejected(t *testing.T) {
+	t.Parallel()
 	svc, database := newTestConnectionServiceWithAccounts(t)
 	accountID := seedTestAccount(t, database, "closed", true)
 
@@ -577,6 +602,7 @@ func TestCreateImportConnection_CashAccountIDClosedRejected(t *testing.T) {
 }
 
 func TestCreateImportConnection_CashAccountIDNonAssetRejected(t *testing.T) {
+	t.Parallel()
 	svc, database := newTestConnectionServiceWithAccounts(t)
 	accountID := seedTestAccountWithClass(t, database, "active", true, "expense", "expense")
 
@@ -590,6 +616,7 @@ func TestCreateImportConnection_CashAccountIDNonAssetRejected(t *testing.T) {
 }
 
 func TestCreateImportConnection_CashAccountIDSystemAccountRejected(t *testing.T) {
+	t.Parallel()
 	svc, database := newTestConnectionServiceWithAccounts(t)
 	accountID := seedCommodityTradingAccount(t, database)
 
@@ -607,6 +634,7 @@ func TestCreateImportConnection_CashAccountIDSystemAccountRejected(t *testing.T)
 // see docs/backlog.md's "PATCH omission overwrites" review checklist entry):
 // a rename/rotate request that never mentions cash_account_id must not clear it.
 func TestUpdateImportConnection_OmittedCashAccountIDPreservesExisting(t *testing.T) {
+	t.Parallel()
 	svc, database := newTestConnectionServiceWithAccounts(t)
 	accountID := seedTestAccount(t, database, "active", true)
 
@@ -625,6 +653,7 @@ func TestUpdateImportConnection_OmittedCashAccountIDPreservesExisting(t *testing
 }
 
 func TestUpdateImportConnection_CashAccountIDCanBeSetLater(t *testing.T) {
+	t.Parallel()
 	svc, database := newTestConnectionServiceWithAccounts(t)
 
 	conn, err := svc.CreateImportConnection(context.Background(), CreateImportConnectionInput{

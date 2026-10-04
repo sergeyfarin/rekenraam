@@ -8,6 +8,7 @@ import (
 )
 
 func TestSourceRevisionCheckPreservesDatabaseErrors(t *testing.T) {
+	t.Parallel()
 	database := openTestDatabase(t)
 	require.NoError(t, database.Close())
 	err := NewImportRepository(database).CheckSourceRevision(context.Background(), CommitImportSourceRevisionParams{

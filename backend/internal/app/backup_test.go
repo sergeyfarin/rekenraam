@@ -720,6 +720,7 @@ func TestRetryBackupRunRefusesWhatCannotOrNeedNotBeRetried(t *testing.T) {
 // success — "backed up nightly and provably balanced" quietly losing its second
 // half, with nothing anywhere saying so.
 func TestPruningFailureStillLeavesASelfCheckBehind(t *testing.T) {
+	t.Parallel()
 	harness := newBackupHarness(t)
 	ctx := context.Background()
 

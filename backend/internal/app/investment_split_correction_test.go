@@ -59,6 +59,7 @@ func holdingPosting(t *testing.T, f *investmentsTestFixture, transaction Transac
 }
 
 func TestSplitReversalPostsExactInverseAndRestoresUnsplitHolding(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -83,6 +84,7 @@ func TestSplitReversalPostsExactInverseAndRestoresUnsplitHolding(t *testing.T) {
 }
 
 func TestSplitReversalInvertsPrimaryPlusAdjustmentDelta(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -105,6 +107,7 @@ func TestSplitReversalInvertsPrimaryPlusAdjustmentDelta(t *testing.T) {
 }
 
 func TestSplitReversalRefusesImpossibleLaterSaleAtomically(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -136,6 +139,7 @@ func TestSplitReversalRefusesImpossibleLaterSaleAtomically(t *testing.T) {
 }
 
 func TestSplitReplacementCorrectsRatioAndRevisesLaterGain(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 12000)
@@ -173,6 +177,7 @@ func TestSplitReplacementCorrectsRatioAndRevisesLaterGain(t *testing.T) {
 }
 
 func TestSplitReplacementMovesDateOverLaterPurchase(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -192,6 +197,7 @@ func TestSplitReplacementMovesDateOverLaterPurchase(t *testing.T) {
 }
 
 func TestSplitReplacementRefusesUnchangedTermsAndOtherKinds(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buy := buyOn(t, f, "2026-01-10", 10, 10000)
@@ -209,6 +215,7 @@ func TestSplitReplacementRefusesUnchangedTermsAndOtherKinds(t *testing.T) {
 }
 
 func TestSplitReversalIntoReconciledPeriodNeedsOverride(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -231,6 +238,7 @@ func TestSplitReversalIntoReconciledPeriodNeedsOverride(t *testing.T) {
 }
 
 func TestSplitCorrectionRollsBackLateFailure(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"reverse", "replace"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newInvestmentsTestFixture(t)
@@ -280,6 +288,7 @@ func TestSplitCorrectionRollsBackLateFailure(t *testing.T) {
 }
 
 func TestSplitCorrectionsAndAdjustmentsExportTheirLinks(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -327,6 +336,7 @@ func TestSplitCorrectionsAndAdjustmentsExportTheirLinks(t *testing.T) {
 }
 
 func TestSplitAdjustmentJournalsCarryASystemLabel(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
@@ -373,6 +383,7 @@ func TestSplitAdjustmentJournalsCarryASystemLabel(t *testing.T) {
 }
 
 func TestSplitReplacementKeepsTheReplacedSplitsSameDaySlot(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)

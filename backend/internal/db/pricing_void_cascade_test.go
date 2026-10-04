@@ -145,6 +145,7 @@ func (f voidCascadeFixture) countAuditEvents(t *testing.T) int {
 
 // A chain exactly at the bound is fully reachable and must be voided whole.
 func TestVoidPriceObservationCascadesAChainExactlyAtTheDepthLimit(t *testing.T) {
+	t.Parallel()
 	fixture := newVoidCascadeFixture(t)
 	root, chain := fixture.createChain(t, maxVoidCascadeDepth)
 
@@ -161,6 +162,7 @@ func TestVoidPriceObservationCascadesAChainExactlyAtTheDepthLimit(t *testing.T) 
 // nothing is voided at all: a partially cascaded void would leave derived
 // valuations live after their source was retired.
 func TestVoidPriceObservationRefusesAChainBeyondTheDepthLimit(t *testing.T) {
+	t.Parallel()
 	fixture := newVoidCascadeFixture(t)
 	root, _ := fixture.createChain(t, maxVoidCascadeDepth+1)
 	activeBefore := fixture.countActive(t)
@@ -176,6 +178,7 @@ func TestVoidPriceObservationRefusesAChainBeyondTheDepthLimit(t *testing.T) {
 // A cycle in the derivation metadata terminates on the visited set rather than
 // on the depth bound, so it voids cleanly instead of being refused.
 func TestVoidPriceObservationCascadesThroughACycleWithoutHittingTheDepthLimit(t *testing.T) {
+	t.Parallel()
 	fixture := newVoidCascadeFixture(t)
 	root := fixture.createObservation(t, 1)
 	first := fixture.createObservation(t, 2, root)
@@ -198,6 +201,7 @@ func TestVoidPriceObservationCascadesThroughACycleWithoutHittingTheDepthLimit(t 
 // The cascade must reach every branch, not just the first: a wide graph inside
 // the bound is voided whole.
 func TestVoidPriceObservationCascadesAcrossBranches(t *testing.T) {
+	t.Parallel()
 	fixture := newVoidCascadeFixture(t)
 	root := fixture.createObservation(t, 1)
 	left := fixture.createObservation(t, 2, root)

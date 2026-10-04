@@ -28,6 +28,7 @@ func scaledFromPointer(t *testing.T, value *int64, scale *int) *exact.ScaledInt 
 }
 
 func TestFractionalSaleRetainsPricedMarketValue(t *testing.T) {
+	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 

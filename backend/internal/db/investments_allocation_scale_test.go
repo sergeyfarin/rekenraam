@@ -15,6 +15,7 @@ import (
 // reach it, and it backs off only far enough to keep the position inside the
 // int64 its projection columns are.
 func TestCostBasisAllocationScaleIsDecidedByTheCommodityNotTheInput(t *testing.T) {
+	t.Parallel()
 	// The same 10 EUR, written three ways. All three must reach the ceiling.
 	for _, recorded := range []recordedBasis{
 		{value: 10, scale: 0},
@@ -27,6 +28,7 @@ func TestCostBasisAllocationScaleIsDecidedByTheCommodityNotTheInput(t *testing.T
 }
 
 func TestCostBasisAllocationScaleNeverNarrowsARecordedBasis(t *testing.T) {
+	t.Parallel()
 	// A basis recorded deeper than the commodity's current ceiling keeps its
 	// own precision: reaching the ceiling would mean truncating money that is
 	// already on the books.
@@ -34,6 +36,7 @@ func TestCostBasisAllocationScaleNeverNarrowsARecordedBasis(t *testing.T) {
 }
 
 func TestCostBasisAllocationScaleBacksOffForRangeOnMagnitudeNotSpelling(t *testing.T) {
+	t.Parallel()
 	// 90 trillion units at scale 2 cannot be restated to scale 6 in an int64
 	// (it would need 9e18 × 10 000), so the policy steps back until it fits.
 	large := []recordedBasis{{value: 90_000_000_000_000_00, scale: 2}}
@@ -50,6 +53,7 @@ func TestCostBasisAllocationScaleBacksOffForRangeOnMagnitudeNotSpelling(t *testi
 }
 
 func TestCostBasisAllocationScaleConsidersThePositionsTotal(t *testing.T) {
+	t.Parallel()
 	// Two lots chosen so that each one alone can be restated to the ceiling
 	// but their sum cannot. A position's basis is added up — by the projection
 	// rows a disposal rewrites and by everything that reports a position — so
@@ -63,6 +67,7 @@ func TestCostBasisAllocationScaleConsidersThePositionsTotal(t *testing.T) {
 }
 
 func TestBasisFitsInt64AtRejectsAnOverflowingRestatement(t *testing.T) {
+	t.Parallel()
 	require.True(t, basisFitsInt64At([]recordedBasis{{value: math.MaxInt64, scale: 6}}, 6))
 	require.False(t, basisFitsInt64At([]recordedBasis{{value: math.MaxInt64, scale: 6}}, 7))
 }
