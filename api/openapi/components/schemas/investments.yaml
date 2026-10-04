@@ -1077,6 +1077,27 @@ InvestmentBuyReversalResponse:
       type: integer
       format: int64
 
+InvestmentWriteOffReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, replacement]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted write-off is being corrected (T-118).
+    reconciliation_override:
+      type: boolean
+      description: Omit or set false to preserve affected reconciliation checkpoints.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview (T-126).
+    replacement:
+      description: The full corrected write-off; its reason is why the holding is worthless.
+      $ref: "#/InvestmentWriteOffRequest"
+
 InvestmentSaleReplacementRequest:
   type: object
   additionalProperties: false
@@ -1242,7 +1263,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_correct_write_off, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1268,6 +1289,9 @@ InvestmentCorrectionChainResponse:
       description: Whether the effective posted split can be reversed or replaced (T-129). Dependent replay may still refuse the command.
     effective_split:
       $ref: '#/InvestmentCorrectionSplitTerms'
+    can_correct_write_off:
+      type: boolean
+      description: Whether the effective posted write-off can be reversed or replaced (T-118). The trade correction context pre-fills the replacement; dependent replay may still refuse the command.
     can_correct_dividend:
       type: boolean
       description: Whether the effective posted cash dividend can be reversed or replaced (T-115). Imported lineage requires a committed source identity.
@@ -1295,7 +1319,7 @@ InvestmentTradeCorrectionContextResponse:
   properties:
     operation_id: { type: integer, format: int64 }
     transaction_id: { type: integer, format: int64 }
-    operation_kind: { type: string, enum: [buy, sell] }
+    operation_kind: { type: string, enum: [buy, sell, write_off] }
     event_date: { type: string, format: date }
     holding_account_id: { type: integer, format: int64 }
     commodity_id: { type: integer, format: int64 }
@@ -1327,7 +1351,7 @@ InvestmentTradeCorrectionContextResponse:
         $ref: '#/InvestmentTradeCorrectionLotChoiceResponse'
     can_replace_sale:
       type: boolean
-      description: Display hint for an effective sale eligible for correction, including imported fills with a committed source identity. The write rechecks its source and dependent replay.
+      description: Display hint for an effective sale or write-off eligible for correction, including imported fills with a committed source identity. The write rechecks its source and dependent replay.
     available_lots:
       type: array
       description: Effective long lots and quantities immediately before an uncorrected manual sale, including an older sale, from a rolled-back replay.

@@ -55,6 +55,7 @@ export type InvestmentTradeCorrectionContextResponse = components['schemas']['In
 export type InvestmentBuyReplacementRequest = components['schemas']['InvestmentBuyReplacementRequest'];
 export type InvestmentBuyReplacementResponse = components['schemas']['InvestmentBuyReplacementResponse'];
 export type InvestmentSaleReplacementRequest = components['schemas']['InvestmentSaleReplacementRequest'];
+export type InvestmentWriteOffReplacementRequest = components['schemas']['InvestmentWriteOffReplacementRequest'];
 export type InvestmentSaleReplacementResponse = components['schemas']['InvestmentSaleReplacementResponse'];
 export type InvestmentDividendReplacementRequest = components['schemas']['InvestmentDividendReplacementRequest'];
 export type InvestmentDividendReplacementResponse = components['schemas']['InvestmentDividendReplacementResponse'];
@@ -1071,6 +1072,64 @@ export async function replaceReinvestedDividend(transactionID: number, input: In
   try {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/investments/transactions/{transaction_id}/replace-reinvested-dividend',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+// Write-off corrections (T-118).
+
+export async function previewWriteOffReversalReconciliation(transactionID: number, input: InvestmentSaleReversalRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-write-off/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseWriteOff(transactionID: number, input: InvestmentSaleReversalRequest, csrfToken: string): Promise<InvestmentSaleReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-write-off',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewWriteOffReplacementReconciliation(transactionID: number, input: InvestmentWriteOffReplacementRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-write-off/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceWriteOff(transactionID: number, input: InvestmentWriteOffReplacementRequest, csrfToken: string): Promise<InvestmentSaleReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-write-off',
       { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
     );
     if (data !== undefined) return data;

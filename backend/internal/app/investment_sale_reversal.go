@@ -14,7 +14,45 @@ var (
 	ErrInvestmentSaleAlreadyCorrected = errors.New("investment sale already corrected")
 	ErrInvestmentImportedSale         = errors.New("imported sale requires source correction")
 	ErrInvestmentSaleChanged          = errors.New("investment sale changed")
+
+	ErrInvestmentWriteOffNotFound         = errors.New("investment write-off operation not found")
+	ErrInvestmentWriteOffAlreadyCorrected = errors.New("investment write-off already corrected")
+	ErrInvestmentWriteOffChanged          = errors.New("investment write-off changed")
 )
+
+// disposalCorrectionFamily fences a disposal correction command to its own
+// operation kind: a sale command never corrects a write-off, and vice versa
+// (T-118). Both share the disposal reversal and replacement writers.
+type disposalCorrectionFamily struct {
+	kind             string
+	noun             string
+	reverseOperation string
+	notFound         error
+	alreadyCorrected error
+	changed          error
+}
+
+var (
+	saleCorrectionFamily = disposalCorrectionFamily{kind: "sell", noun: "sale",
+		reverseOperation: "investment.sale.reverse", notFound: ErrInvestmentSaleNotFound,
+		alreadyCorrected: ErrInvestmentSaleAlreadyCorrected, changed: ErrInvestmentSaleChanged}
+	writeOffCorrectionFamily = disposalCorrectionFamily{kind: "write_off", noun: "write-off",
+		reverseOperation: "investment.write_off.reverse", notFound: ErrInvestmentWriteOffNotFound,
+		alreadyCorrected: ErrInvestmentWriteOffAlreadyCorrected, changed: ErrInvestmentWriteOffChanged}
+)
+
+// mapError names the family's own eligibility errors.
+func (f disposalCorrectionFamily) mapError(err error) error {
+	switch {
+	case errors.Is(err, ErrInvestmentSaleNotFound):
+		return f.notFound
+	case errors.Is(err, ErrInvestmentSaleAlreadyCorrected):
+		return f.alreadyCorrected
+	case errors.Is(err, ErrInvestmentSaleChanged):
+		return f.changed
+	}
+	return err
+}
 
 type ReverseInvestmentSaleInput struct {
 	OwnerUserID            int64
@@ -34,13 +72,17 @@ type ReverseInvestmentSaleInput struct {
 // from the effective long-position replay. Imported fills require a committed
 // source identity, which remains bound to the original operation.
 func (s *InvestmentService) ReverseSale(ctx context.Context, input ReverseInvestmentSaleInput) (Transaction, error) {
-	operation, params, err := s.prepareSaleReversalWrite(ctx, input)
+	return s.reverseDisposal(ctx, input, saleCorrectionFamily)
+}
+
+func (s *InvestmentService) reverseDisposal(ctx context.Context, input ReverseInvestmentSaleInput, family disposalCorrectionFamily) (Transaction, error) {
+	operation, params, err := s.prepareSaleReversalWrite(ctx, input, family)
 	if err != nil {
 		return Transaction{}, err
 	}
 	record, err := s.repository.ReverseSale(ctx, params, operation)
 	if err != nil {
-		return Transaction{}, mapReverseSaleError(err)
+		return Transaction{}, family.mapError(mapReverseSaleError(err))
 	}
 	return toTransaction(record), nil
 }
@@ -49,20 +91,28 @@ func (s *InvestmentService) ReverseSale(ctx context.Context, input ReverseInvest
 // dependent replay in a rolled-back transaction rather than planning the
 // inverse journal alone, so impossible replays and gain changes surface (T-126).
 func (s *InvestmentService) ReverseSaleReconciliationImpact(ctx context.Context, input ReverseInvestmentSaleInput) (ReconciliationImpact, error) {
+	return s.reverseDisposalReconciliationImpact(ctx, input, saleCorrectionFamily)
+}
+
+func (s *InvestmentService) reverseDisposalReconciliationImpact(ctx context.Context, input ReverseInvestmentSaleInput,
+	family disposalCorrectionFamily,
+) (ReconciliationImpact, error) {
 	input.ReconciliationOverride = true
-	operation, params, err := s.prepareSaleReversalWrite(ctx, input)
+	operation, params, err := s.prepareSaleReversalWrite(ctx, input, family)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
 	simulated, err := s.repository.PreviewSaleReversal(ctx, params, operation)
 	if err != nil {
-		return ReconciliationImpact{}, mapReverseSaleError(err)
+		return ReconciliationImpact{}, family.mapError(mapReverseSaleError(err))
 	}
 	return s.simulatedReconciliationImpact(ctx, simulated)
 }
 
-func (s *InvestmentService) prepareSaleReversalWrite(ctx context.Context, input ReverseInvestmentSaleInput) (db.SaleOperationRecord, db.CreateTransactionParams, error) {
-	operation, planned, err := s.reverseSalePlan(ctx, input)
+func (s *InvestmentService) prepareSaleReversalWrite(ctx context.Context, input ReverseInvestmentSaleInput,
+	family disposalCorrectionFamily,
+) (db.SaleOperationRecord, db.CreateTransactionParams, error) {
+	operation, planned, err := s.reverseSalePlan(ctx, input, family)
 	if err != nil {
 		return db.SaleOperationRecord{}, db.CreateTransactionParams{}, err
 	}
@@ -77,12 +127,14 @@ func (s *InvestmentService) prepareSaleReversalWrite(ctx context.Context, input 
 	return operation, params, nil
 }
 
-func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseInvestmentSaleInput) (db.SaleOperationRecord, CreateTransactionInput, error) {
+func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseInvestmentSaleInput,
+	family disposalCorrectionFamily,
+) (db.SaleOperationRecord, CreateTransactionInput, error) {
 	if input.OwnerUserID <= 0 || (input.OperationID <= 0 && input.TransactionID <= 0) {
-		return db.SaleOperationRecord{}, CreateTransactionInput{}, ValidationError{Message: "owner and sale id are required"}
+		return db.SaleOperationRecord{}, CreateTransactionInput{}, ValidationError{Message: "owner and " + family.noun + " id are required"}
 	}
 	if strings.TrimSpace(input.Reason) == "" {
-		return db.SaleOperationRecord{}, CreateTransactionInput{}, ValidationError{Message: "sale reversal reason is required"}
+		return db.SaleOperationRecord{}, CreateTransactionInput{}, ValidationError{Message: family.noun + " reversal reason is required"}
 	}
 	reason, err := cleanChangeReason(input.Reason, "")
 	if err != nil {
@@ -94,11 +146,14 @@ func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseIn
 	} else {
 		operation, err = s.repository.SaleOperationByID(ctx, BookID, input.OperationID)
 	}
+	if err == nil && operation.OperationKind != family.kind {
+		err = db.ErrNotFound
+	}
 	if err != nil {
-		return db.SaleOperationRecord{}, CreateTransactionInput{}, mapReverseSaleError(err)
+		return db.SaleOperationRecord{}, CreateTransactionInput{}, family.mapError(mapReverseSaleError(err))
 	}
 	if operation.AlreadyCorrected {
-		return db.SaleOperationRecord{}, CreateTransactionInput{}, ErrInvestmentSaleAlreadyCorrected
+		return db.SaleOperationRecord{}, CreateTransactionInput{}, family.alreadyCorrected
 	}
 	if operation.ImportedLineage {
 		linked, err := s.repository.HasCommittedImportSource(ctx, BookID, operation.OperationID)
@@ -114,14 +169,14 @@ func (s *InvestmentService) reverseSalePlan(ctx context.Context, input ReverseIn
 		return db.SaleOperationRecord{}, CreateTransactionInput{}, err
 	}
 	if original.VersionID != operation.CurrentVersionID || original.Status != "posted" || original.TransactionKind != "investment" || original.DeletedAt != "" || original.TransactionDate != operation.EventDate {
-		return db.SaleOperationRecord{}, CreateTransactionInput{}, ErrInvestmentSaleChanged
+		return db.SaleOperationRecord{}, CreateTransactionInput{}, family.changed
 	}
 	spec := invertedInvestmentTransactionSpec(original)
 	spec.InvestmentOperationKind = "reversal"
 	return operation, CreateTransactionInput{
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 		RequestID: input.RequestID, OriginType: defaultString(input.OriginType, "browser_api"),
-		Operation: "investment.sale.reverse", CorrectionOfTransactionID: &operation.TransactionID,
+		Operation: family.reverseOperation, CorrectionOfTransactionID: &operation.TransactionID,
 		Spec: spec, ChangeReason: reason, ReconciliationOverride: input.ReconciliationOverride,
 	}, nil
 }

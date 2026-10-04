@@ -30,6 +30,8 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   INVESTMENT_DIVIDEND_ALREADY_CORRECTED: () => m.api_error_investment_dividend_already_corrected(),
   INVESTMENT_IMPORTED_DIVIDEND: () => m.api_error_investment_imported_dividend(),
   INVESTMENT_DIVIDEND_CHANGED: () => m.api_error_investment_dividend_changed(),
+  INVESTMENT_WRITE_OFF_ALREADY_CORRECTED: () => m.api_error_investment_write_off_already_corrected(),
+  INVESTMENT_WRITE_OFF_CHANGED: () => m.api_error_investment_write_off_changed(),
   INVESTMENT_REINVESTMENT_ALREADY_CORRECTED: () => m.api_error_investment_reinvestment_already_corrected(),
   INVESTMENT_REINVESTMENT_CHANGED: () => m.api_error_investment_reinvestment_changed(),
   INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED: () => m.api_error_investment_gain_impact_acknowledgement_required(),

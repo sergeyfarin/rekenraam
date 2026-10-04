@@ -162,7 +162,7 @@ func TestReplacementWriterRechecksStaleSourceBeforeJournals(t *testing.T) {
 				replacement = sellInput(f, target.TransactionDate, 4)
 				replacement.CostBasisMethod = "fifo"
 				sale, inversePlan, err = f.investmentService.reverseSalePlan(ctx, ReverseInvestmentSaleInput{
-					OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "correct disposal"})
+					OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "correct disposal"}, saleCorrectionFamily)
 				operationID = sale.OperationID
 				inversePlan.Spec.InvestmentOperationKind = ""
 			}

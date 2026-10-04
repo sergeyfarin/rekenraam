@@ -331,6 +331,14 @@ paths:
     $ref: "./paths/investments-replace-buy.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-buy/reconciliation-impact:
     $ref: "./paths/investments-replace-buy-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-write-off:
+    $ref: "./paths/investments-reverse-write-off.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-write-off/reconciliation-impact:
+    $ref: "./paths/investments-reverse-write-off-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-write-off:
+    $ref: "./paths/investments-replace-write-off.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-write-off/reconciliation-impact:
+    $ref: "./paths/investments-replace-write-off-reconciliation-impact.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-dividend:
     $ref: "./paths/investments-reverse-dividend.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-dividend/reconciliation-impact:
@@ -1046,6 +1054,8 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentBuyReversalResponse"
     InvestmentSaleReplacementRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReplacementRequest"
+    InvestmentWriteOffReplacementRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentWriteOffReplacementRequest"
     InvestmentSaleReplacementTradeRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReplacementTradeRequest"
     InvestmentSaleReplacementResponse:

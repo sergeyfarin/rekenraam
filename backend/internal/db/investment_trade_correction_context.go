@@ -94,7 +94,9 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			c.code, COALESCE(f.cost_commodity_id, d.cost_commodity_id),
 			COALESCE(f.quantity_value, d.quantity_value),
 			COALESCE(f.quantity_scale, d.quantity_scale), COALESCE(d.cost_basis_method, ''),
-			net.cash_account_id, net.amount_value, net.amount_scale, net.amount_date,
+			-- A write-off has no cash leg (T-118): zero net, no cash account.
+			COALESCE(net.cash_account_id, 0), COALESCE(net.amount_value, '0'), COALESCE(net.amount_scale, 0),
+			COALESCE(net.amount_date, o.event_date),
 			version.description, version.payee_id,
 			gross.amount_value, gross.amount_scale,
 			(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
@@ -112,14 +114,14 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
 		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
 		JOIN current_transaction_versions version ON version.transaction_id = linked_version.transaction_id
-		JOIN investment_operation_components net ON net.operation_id = o.id AND net.component_kind = 'net_settlement'
+		LEFT JOIN investment_operation_components net ON net.operation_id = o.id AND net.component_kind = 'net_settlement'
 			AND net.component_seq = (SELECT MIN(component_seq) FROM investment_operation_components
 				WHERE operation_id = o.id AND component_kind = 'net_settlement')
 		LEFT JOIN investment_operation_components gross ON gross.operation_id = o.id AND gross.component_kind = 'gross_consideration'
 		LEFT JOIN investment_lots f ON f.operation_id = o.id AND f.position_side = 'long'
 		LEFT JOIN investment_disposal_decisions d ON d.operation_id = o.id AND d.position_side = 'long'
 		JOIN commodities c ON c.id = COALESCE(f.commodity_id, d.commodity_id)
-		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind IN ('buy', 'sell')
+		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind IN ('buy', 'sell', 'write_off')
 			AND (SELECT count(*) FROM investment_lots WHERE operation_id = o.id) <= 1
 			AND (SELECT count(*) FROM investment_disposal_decisions WHERE operation_id = o.id) <= 1
 	`, bookID, transactionID, bookID, bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
@@ -199,7 +201,7 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			return InvestmentTradeCorrectionContext{}, fmt.Errorf("close correction elected lots: %w", err)
 		}
 	}
-	if record.OperationKind == "sell" && (!record.Imported || record.SourceIdentityID > 0) && !record.AlreadyCorrected {
+	if (record.OperationKind == "sell" || record.OperationKind == "write_off") && (!record.Imported || record.SourceIdentityID > 0) && !record.AlreadyCorrected {
 		intents, err := investmentReplayIntentsQuery(ctx, tx, bookID,
 			record.HoldingAccountID, record.CommodityID, record.CostCommodityID, "long")
 		if err != nil {

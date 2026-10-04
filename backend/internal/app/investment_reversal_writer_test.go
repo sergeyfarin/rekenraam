@@ -119,7 +119,7 @@ func TestReversalWriterRechecksStaleSourceBeforeJournal(t *testing.T) {
 			} else {
 				sale, planned, err = f.investmentService.reverseSalePlan(ctx, ReverseInvestmentSaleInput{
 					OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "erroneous disposal",
-				})
+				}, saleCorrectionFamily)
 				expectedID = sale.OperationID
 			}
 			require.NoError(t, err)

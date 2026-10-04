@@ -16,7 +16,10 @@ var (
 // SaleOperationRecord is the immutable identity and position of a posted long
 // sale. A caller must still recheck it inside the correcting write transaction.
 type SaleOperationRecord struct {
-	OperationID          int64
+	OperationID int64
+	// OperationKind is sell or write_off (T-118); each correction command is
+	// fenced to its own family.
+	OperationKind        string
 	TransactionID        int64
 	TransactionVersionID int64
 	CurrentVersionID     int64
@@ -41,7 +44,7 @@ func (r *InvestmentRepository) SaleOperationByTransactionID(ctx context.Context,
 		JOIN investment_operation_journal_links link ON link.operation_id = operation.id
 			AND link.book_id = operation.book_id AND link.role = 'primary'
 		JOIN transaction_versions version ON version.id = link.transaction_version_id
-		WHERE operation.book_id = ? AND version.transaction_id = ? AND operation.operation_kind = 'sell'`, bookID, transactionID).Scan(&operationID)
+		WHERE operation.book_id = ? AND version.transaction_id = ? AND operation.operation_kind IN ('sell', 'write_off')`, bookID, transactionID).Scan(&operationID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SaleOperationRecord{}, ErrNotFound
 	}
@@ -59,7 +62,7 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 	var record SaleOperationRecord
 	var corrected, imported int
 	err := reader.QueryRowContext(ctx, `
-		SELECT o.id, linked_version.transaction_id, link.transaction_version_id, current.id, o.event_date,
+		SELECT o.id, o.operation_kind, linked_version.transaction_id, link.transaction_version_id, current.id, o.event_date,
 			d.account_id, d.commodity_id, d.cost_commodity_id,
 			EXISTS(SELECT 1 FROM investment_operations successor
 				WHERE successor.correction_of_operation_id = o.id),
@@ -75,8 +78,8 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
 		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
 		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
-		WHERE o.book_id = ? AND o.id = ? AND o.operation_kind = 'sell'
-	`, bookID, operationID).Scan(&record.OperationID, &record.TransactionID,
+		WHERE o.book_id = ? AND o.id = ? AND o.operation_kind IN ('sell', 'write_off')
+	`, bookID, operationID).Scan(&record.OperationID, &record.OperationKind, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.EventDate, &record.AccountID,
 		&record.CommodityID, &record.CostCommodityID, &corrected, &imported,
 		&record.SourceIdentityID, &record.SourceEffectSeq)

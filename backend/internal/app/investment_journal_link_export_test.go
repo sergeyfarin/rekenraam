@@ -134,3 +134,41 @@ func TestDividendAndReinvestmentCorrectionsExportAsOperations(t *testing.T) {
 	require.Equal(t, []string{"reversal", "reverse", "paid as cash"}, []string{reversed[2], reversed[6], reversed[7]})
 	require.Equal(t, byTransaction[strconv.FormatInt(reinvestment.Transaction.ID, 10)][0], reversed[5])
 }
+
+// T-118: a replaced and a reversed write-off export as operations with their
+// correction link, mode and reason.
+func TestWriteOffCorrectionsExportAsOperations(t *testing.T) {
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	buyOn(t, f, "2026-01-01", 10, 100000)
+	first := writeOffOn(t, f, "2026-02-01", 4, "fifo")
+	replaced, err := acknowledgedReplaceWriteOff(ctx, f.investmentService, ReplaceInvestmentWriteOffInput{
+		OwnerUserID: f.ownerUserID, TransactionID: first.Transaction.ID, Reason: "three shares",
+		Replacement: writeOffReplacement(f, "2026-02-01", 3, "fifo")})
+	require.NoError(t, err)
+	second := writeOffOn(t, f, "2026-03-01", 2, "fifo")
+	reversal, err := acknowledgedReverseWriteOff(ctx, f.investmentService, ReverseInvestmentSaleInput{
+		OwnerUserID: f.ownerUserID, TransactionID: second.Transaction.ID, Reason: "not delisted"})
+	require.NoError(t, err)
+
+	snapshot, err := db.NewExportRepository(f.database).Snapshot(ctx)
+	require.NoError(t, err)
+	var out bytes.Buffer
+	_, err = NewExportService(db.NewExportRepository(f.database)).writeInvestmentOperationsCSV(ctx, &out, snapshot)
+	require.NoError(t, err)
+	require.NoError(t, snapshot.Rollback())
+	rows, err := csv.NewReader(bytes.NewReader(out.Bytes())).ReadAll()
+	require.NoError(t, err)
+	byTransaction := make(map[string][]string)
+	for _, row := range rows[1:] {
+		byTransaction[row[1]] = row
+	}
+	original := byTransaction[strconv.FormatInt(first.Transaction.ID, 10)]
+	replacement := byTransaction[strconv.FormatInt(replaced.Replacement.Transaction.ID, 10)]
+	require.Equal(t, []string{"write_off", original[0], "replace", "three shares"},
+		[]string{replacement[2], replacement[5], replacement[6], replacement[7]})
+	reversed := byTransaction[strconv.FormatInt(reversal.ID, 10)]
+	require.Equal(t, []string{"reversal", "reverse", "not delisted"}, []string{reversed[2], reversed[6], reversed[7]})
+	require.Equal(t, byTransaction[strconv.FormatInt(second.Transaction.ID, 10)][0], reversed[5])
+	requireSelfCheckPasses(t, f)
+}

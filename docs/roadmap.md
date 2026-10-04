@@ -109,17 +109,16 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Write-off correction — [T-118 #133](https://github.com/sergeyfarin/rekenraam/issues/133).
-
-**Next, in order**
-
-2. Pooled-lineage decision [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) and replay-equivalence
+1. Pooled-lineage decision [T-135 #150](https://github.com/sergeyfarin/rekenraam/issues/150) and replay-equivalence
    self-check [T-134 #149](https://github.com/sergeyfarin/rekenraam/issues/149). Both precede transfer correction:
    it would otherwise hit the lineage refusal, and every replaying command
    increases the stored projection's exposure to a skipped-replay bug.
-3. Transfer correction — [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134).
-4. Correction-chain register and net checkpoint impact — [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135).
-5. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
+
+**Next, in order**
+
+2. Transfer correction — [T-119 #134](https://github.com/sergeyfarin/rekenraam/issues/134).
+3. Correction-chain register and net checkpoint impact — [T-120 #135](https://github.com/sergeyfarin/rekenraam/issues/135).
+4. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
    return of capital, cash in lieu), then short sale/cover
    [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103), then compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
 

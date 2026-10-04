@@ -262,6 +262,15 @@ type investmentSaleReplacementResponse struct {
 	CorrectedTransactionID int64                   `json:"corrected_transaction_id"`
 }
 
+// investmentWriteOffReplacementRequest carries a full corrected write-off
+// (T-118): no cash fields, its own worthless-holding reason in replacement.
+type investmentWriteOffReplacementRequest struct {
+	Reason                    string                    `json:"reason"`
+	ReconciliationOverride    bool                      `json:"reconciliation_override"`
+	Replacement               investmentWriteOffRequest `json:"replacement"`
+	GainImpactAcknowledgement string                    `json:"gain_impact_acknowledgement,omitempty"`
+}
+
 type investmentBuyReplacementRequest struct {
 	Reason                    string                 `json:"reason"`
 	ReconciliationOverride    bool                   `json:"reconciliation_override"`
@@ -301,6 +310,7 @@ type investmentCorrectionChainResponse struct {
 	CanCorrectDividend     bool                               `json:"can_correct_dividend"`
 	EffectiveDividend      *investmentCorrectionDividendTerms `json:"effective_dividend,omitempty"`
 	CanCorrectReinvested   bool                               `json:"can_correct_reinvested_dividend"`
+	CanCorrectWriteOff     bool                               `json:"can_correct_write_off"`
 	EffectiveReinvestment  *investmentCorrectionReinvestTerms `json:"effective_reinvestment,omitempty"`
 	Operations             []investmentCorrectionNodeResponse `json:"operations"`
 }
@@ -1112,7 +1122,8 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanCorrectSplit: chain.CanCorrectSplit, EffectiveSplit: toInvestmentCorrectionSplitTerms(chain.EffectiveSplit),
 			CanCorrectDividend: chain.CanCorrectDividend, EffectiveDividend: toInvestmentCorrectionDividendTerms(chain.EffectiveDividend),
 			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
-			Operations: operations,
+			CanCorrectWriteOff: chain.CanCorrectWriteOff,
+			Operations:         operations,
 		})
 	}
 }
@@ -1790,6 +1801,12 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentSaleDependency):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SALE_DEPENDENCY", err.Error())
+	case errors.Is(err, app.ErrInvestmentWriteOffNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment write-off operation not found")
+	case errors.Is(err, app.ErrInvestmentWriteOffAlreadyCorrected):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED", err.Error())
+	case errors.Is(err, app.ErrInvestmentWriteOffChanged):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_WRITE_OFF_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentBuyNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment buy operation not found")
 	case errors.Is(err, app.ErrInvestmentBuyAlreadyCorrected):
@@ -2589,4 +2606,122 @@ func toInvestmentCorrectionReinvestTerms(terms *app.InvestmentCorrectionReinvest
 		CommodityID: terms.CommodityID, CashCommodityID: terms.CashCommodityID, IncomeAccountID: terms.IncomeAccountID,
 		QuantityValue: terms.QuantityValue, QuantityScale: terms.QuantityScale,
 		AmountValue: terms.AmountValue, AmountScale: terms.AmountScale, Memo: terms.Memo, PayeeID: terms.PayeeID}
+}
+
+// Write-off correction (T-118). Reversal reuses the sale reversal request
+// shape; replacement takes a full write-off with no cash fields.
+
+func reverseInvestmentWriteOff(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		transaction, err := investmentService.ReverseWriteOff(r.Context(), app.ReverseInvestmentSaleInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			OriginType: "browser_api", TransactionID: transactionID, Reason: request.Reason,
+			ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "reverse investment write-off", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSaleReversalResponse{Transaction: toTransactionResponse(transaction), CorrectedTransactionID: transactionID})
+	}))
+}
+
+func reverseInvestmentWriteOffReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReverseWriteOffReconciliationImpact(r.Context(), app.ReverseInvestmentSaleInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview write-off reversal reconciliation impact", err)
+			return
+		}
+		writeReconciliationImpact(w, impact)
+	}
+}
+
+func replaceInvestmentWriteOff(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentWriteOffReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.ReplaceWriteOff(r.Context(), app.ReplaceInvestmentWriteOffInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r),
+			RequestID: RequestIDFromContext(r.Context()), TransactionID: transactionID,
+			Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
+			Replacement:               toInvestmentWriteOffInput(owner, r, request.Replacement),
+			GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "replace investment write-off", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSaleReplacementResponse{
+			InverseTransaction:     toTransactionResponse(result.Inverse),
+			Replacement:            toInvestmentTradeResponse(result.Replacement),
+			CorrectedTransactionID: transactionID,
+		})
+	}))
+}
+
+func replaceInvestmentWriteOffReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentWriteOffReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReplaceWriteOffReconciliationImpact(r.Context(), app.ReplaceInvestmentWriteOffInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+			Replacement: toInvestmentWriteOffInput(owner, r, request.Replacement),
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview write-off replacement reconciliation impact", err)
+			return
+		}
+		writeReconciliationImpact(w, impact)
+	}
 }

@@ -9,6 +9,7 @@
   import SellForm from '$lib/investments/sell-form.svelte';
   import SplitForm from '$lib/investments/split-form.svelte';
   import DividendCorrectionForm from '$lib/investments/dividend-correction-form.svelte';
+  import WriteOffCorrectionForm from '$lib/investments/write-off-correction-form.svelte';
   import GainImpactList from '$lib/investments/gain-impact-list.svelte';
   import { currenciesQueryOptions, type CurrencyResponse } from '$lib/api/currencies';
   import {
@@ -28,11 +29,13 @@
     previewReinvestmentReversalReconciliation,
     previewSaleReversalReconciliation,
     previewSplitReversalReconciliation,
+    previewWriteOffReversalReconciliation,
     reverseDividend,
     reverseManualBuy,
     reverseReinvestedDividend,
     reverseManualSale,
     reverseSplit,
+    reverseWriteOff,
     type GainImpact,
     type ReconciliationImpactResponse
   } from '$lib/api/investments';
@@ -56,13 +59,13 @@
     enabled: transactionID > 0
   }));
 
-  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | null>(null);
+  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | null>(null);
   // Splits pre-fill from the chain's effective_split; only trades need the
   // separate source-facts read.
   const replacementQuery = createQuery(() => ({
     queryKey: [...investmentCorrectionChainQueryKey, 'source', transactionID],
     queryFn: () => getInvestmentTradeCorrectionContext(transactionID),
-    enabled: (replacementKind === 'buy' || replacementKind === 'sell') && transactionID > 0
+    enabled: (replacementKind === 'buy' || replacementKind === 'sell' || replacementKind === 'write_off') && transactionID > 0
   }));
   const splitCorrectable = $derived(chainQuery.data?.can_correct_split === true &&
     chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_split);
@@ -73,12 +76,16 @@
   const reinvestmentCorrectable = $derived(chainQuery.data?.can_correct_reinvested_dividend === true &&
     chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_reinvestment);
 
+  // Write-offs pre-fill from the trade correction context (T-118).
+  const writeOffCorrectable = $derived(chainQuery.data?.can_correct_write_off === true &&
+    chainQuery.data.effective_transaction_id === transactionID);
+
   const sourceLinkedEffectiveBuy = $derived(
     chainQuery.data?.can_reverse_buy === true && chainQuery.data.effective_transaction_id === transactionID
   );
 
   let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
-  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment'>('sale');
+  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment' | 'write_off'>('sale');
   let reason = $state('');
   let pending = $state(false);
   let actionError = $state<unknown>(undefined);
@@ -134,7 +141,9 @@
           ? await previewDividendReversalReconciliation(transactionID, body)
           : reversalKind === 'reinvestment'
             ? await previewReinvestmentReversalReconciliation(transactionID, body)
-            : await previewSaleReversalReconciliation(transactionID, body);
+            : reversalKind === 'write_off'
+              ? await previewWriteOffReversalReconciliation(transactionID, body)
+              : await previewSaleReversalReconciliation(transactionID, body);
     if (!impactNeedsReview(preview)) return false;
     impacts = preview.affected_checkpoints;
     gainImpact = hasGainChanges(preview.gain_impact) ? preview.gain_impact : null;
@@ -159,6 +168,8 @@
       await reverseDividend(transactionID, body, csrfToken);
     } else if (reversalKind === 'reinvestment') {
       await reverseReinvestedDividend(transactionID, body, csrfToken);
+    } else if (reversalKind === 'write_off') {
+      await reverseWriteOff(transactionID, body, csrfToken);
     } else {
       await reverseManualSale(transactionID, body, csrfToken);
     }
@@ -295,6 +306,24 @@
         </button>
       </div>
     {/if}
+    {#if writeOffCorrectable}
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+          disabled={!csrfToken || pending}
+          onclick={() => { reversalKind = 'write_off'; reason = ''; actionError = undefined; modal = 'reason'; }}
+        >
+          {m.transactions_investment_reverse_write_off_action()}
+        </button>
+        <button type="button"
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+          disabled={!csrfToken}
+          onclick={() => { replacementKind = 'write_off'; }}>
+          {m.transactions_investment_replace_write_off_action()}
+        </button>
+      </div>
+    {/if}
     {#if chainQuery.data.can_reverse_sale && chainQuery.data.effective_transaction_id === transactionID}
       <button
         type="button"
@@ -357,6 +386,25 @@
       {/if}
     </div>
   </div>
+{:else if replacementKind === 'write_off' && csrfToken}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
+    role="presentation">
+    <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
+      role="dialog" aria-modal="true" aria-label={m.transactions_investment_replace_write_off_title()}>
+      {#if replacementQuery.isPending}
+        <p class="text-sm text-muted" role="status">{m.transactions_investment_replace_loading()}</p>
+      {:else if replacementQuery.isError}
+        <APIFormError error={replacementQuery.error} />
+        <button type="button" class="mt-2 text-sm font-semibold text-accent" onclick={() => replacementQuery.refetch()}>{m.transactions_retry()}</button>
+      {:else if replacementQuery.data?.operation_kind === 'write_off' && replacementQuery.data.can_replace_sale && !replacementQuery.data.already_corrected}
+        <WriteOffCorrectionForm {csrfToken} correction={replacementQuery.data} onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+      {:else}
+        <p class="text-sm text-muted">{m.transactions_investment_replace_unavailable()}</p>
+        <button type="button" class="mt-4 min-h-10 rounded-[var(--radius-control)] border border-border bg-control px-4 text-sm font-semibold text-foreground"
+          onclick={() => (replacementKind = null)}>{m.investments_form_cancel()}</button>
+      {/if}
+    </div>
+  </div>
 {:else if replacementKind === 'split' && csrfToken && chainQuery.data?.effective_split}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
     role="presentation">
@@ -403,6 +451,7 @@
               : reversalKind === 'split' ? m.transactions_investment_reverse_split_title()
               : reversalKind === 'dividend' ? m.transactions_investment_reverse_dividend_title()
               : reversalKind === 'reinvestment' ? m.transactions_investment_reverse_reinvestment_title()
+              : reversalKind === 'write_off' ? m.transactions_investment_reverse_write_off_title()
               : m.transactions_investment_reverse_title()
             : impacts.length > 0 ? m.transactions_reconciliation_warning_title() : m.investments_gain_impact_title()}
         </h3>
@@ -413,6 +462,7 @@
                 : reversalKind === 'split' ? m.transactions_investment_reverse_split_copy()
                 : reversalKind === 'dividend' ? m.transactions_investment_reverse_dividend_copy()
                 : reversalKind === 'reinvestment' ? m.transactions_investment_reverse_reinvestment_copy()
+                : reversalKind === 'write_off' ? m.transactions_investment_reverse_write_off_copy()
                 : m.transactions_investment_reverse_copy()
               : m.transactions_reconciliation_warning_copy()}
           </p>

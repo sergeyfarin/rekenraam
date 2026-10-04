@@ -49,7 +49,8 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 		inverseParams.ActorUserID != replacementParams.ActorUserID || inverseParams.ActorUserID != disposalParams.ActorUserID ||
 		inverseParams.Spec.InvestmentOperationKind != "" ||
 		inverseParams.Spec.TransactionKind != "investment" || inverseParams.Spec.Status != "posted" ||
-		replacementParams.Spec.InvestmentOperationKind != "sell" ||
+		(expected.OperationKind != "sell" && expected.OperationKind != "write_off") ||
+		replacementParams.Spec.InvestmentOperationKind != expected.OperationKind ||
 		replacementParams.Spec.TransactionKind != "investment" || replacementParams.Spec.Status != "posted" ||
 		inverseParams.Spec.TransactionDate != expected.EventDate ||
 		disposalParams.EventDate != replacementParams.Spec.TransactionDate ||
@@ -60,7 +61,8 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 		inverseParams.CorrectionOfTransactionID.Int64 != expected.TransactionID ||
 		!replacementParams.CorrectionOfTransactionID.Valid ||
 		replacementParams.CorrectionOfTransactionID.Int64 != expected.TransactionID ||
-		disposalParams.AccountID <= 0 || disposalParams.CommodityID <= 0 || disposalParams.CostCommodityID <= 0 {
+		disposalParams.AccountID <= 0 || disposalParams.CommodityID <= 0 || disposalParams.CostCommodityID < 0 ||
+		(disposalParams.CostCommodityID == 0 && expected.OperationKind != "write_off") {
 		return noInverse, noReplacement, nil, noDecision, fmt.Errorf("%w: sale replacement is incomplete", ErrInvalidDisposalParams)
 	}
 	var current SaleOperationRecord
@@ -70,9 +72,11 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 	// A corrected date, holding, instrument or cost currency (T-116) removes
 	// the sale from its source slot and admits the replacement at the new
 	// date as a backdated disposal would be (T-117).
+	// A write-off has no cash leg, so its cost currency is the holding's on
+	// the corrected date, resolved in the write transaction.
 	source := investmentReplayPositionKey{expected.AccountID, expected.CommodityID, expected.CostCommodityID}
-	target := investmentReplayPositionKey{disposalParams.AccountID, disposalParams.CommodityID, disposalParams.CostCommodityID}
-	moved := source != target || disposalParams.EventDate != expected.EventDate
+	var target investmentReplayPositionKey
+	var moved bool
 	write := executeInvestmentJournalsWithGuardTx[saleReplacementEffects]
 	if preview {
 		write = previewInvestmentJournalsWithGuardTx[saleReplacementEffects]
@@ -88,8 +92,20 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 		func(tx *sql.Tx) error {
 			var err error
 			current, err = checkSaleOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
-			if err != nil || moved {
+			if err != nil {
 				return err
+			}
+			if disposalParams.CostCommodityID == 0 {
+				if disposalParams.AccountID == expected.AccountID && disposalParams.CommodityID == expected.CommodityID {
+					disposalParams.CostCommodityID = expected.CostCommodityID
+				} else if disposalParams.CostCommodityID, err = historicalDisposalCostCommodityTx(ctx, tx, disposalParams); err != nil {
+					return err
+				}
+			}
+			target = investmentReplayPositionKey{disposalParams.AccountID, disposalParams.CommodityID, disposalParams.CostCommodityID}
+			moved = source != target || disposalParams.EventDate != expected.EventDate
+			if moved {
+				return nil
 			}
 			intents, err := investmentReplayIntentsQuery(ctx, tx, inverseParams.BookID,
 				current.AccountID, current.CommodityID, current.CostCommodityID, "long")

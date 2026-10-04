@@ -1,0 +1,63 @@
+post:
+  summary: Replace a posted write-off
+  description: >-
+    Posts the inverse of a zero-proceeds write-off and a corrected write-off
+    (T-118) under one audit event: quantity, cost-basis method, specific-lot
+    elections, date and holding may change; proceeds stay zero and there is
+    no cash leg. The original write-off, its decision and lot events remain
+    immutable history. Later disposals replay under their recorded elections;
+    one the corrected history cannot satisfy is named with
+    INVESTMENT_SALE_DEPENDENCY and nothing is written.
+    A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentWriteOffReplacementRequest"
+  responses:
+    "201":
+      description: Write-off replaced and long position rebuilt
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReplacementResponse"
+    "400":
+      description: Invalid replacement or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted long write-off not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Write-off already corrected (INVESTMENT_WRITE_OFF_ALREADY_CORRECTED), changed (INVESTMENT_WRITE_OFF_CHANGED), dependent operation impossible, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

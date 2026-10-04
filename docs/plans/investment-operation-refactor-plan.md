@@ -483,6 +483,11 @@ notes record design decisions per area; they carry no status or order.
   may move; its committed identity stays on the original, so re-fetches stay
   duplicates and later provider revisions are refused for review. Dividend
   date/account/currency remain fixed.
+  T-118 (shipped) corrects a write-off through dedicated commands fenced to
+  the `write_off` kind, reusing the disposal reversal/replacement writers:
+  proceeds stay zero with no cash leg, quantity/method/elections/date/holding
+  may change, and the write-off's own restated loss is part of the
+  acknowledged gain set.
   Provider cancellation/wider revisions (T-121) require verified execution
   evidence; cancelled order status is insufficient.
 - **Remaining slice 5 actions, shorts, compound actions.** Outbound transfers,

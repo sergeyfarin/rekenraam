@@ -51,14 +51,20 @@ func (s *InvestmentService) ReplaceSale(ctx context.Context, input ReplaceInvest
 func (s *InvestmentService) replaceSaleWithPostWriteOrigin(ctx context.Context, input ReplaceInvestmentSaleInput,
 	originType, operationCode string, postWrite func(*sql.Tx, int64, int64) error,
 ) (ReplaceInvestmentSaleResult, error) {
-	prepared, err := s.prepareSaleReplacementWrite(ctx, input, originType, operationCode)
+	return s.replaceDisposal(ctx, input, originType, operationCode, postWrite, saleCorrectionFamily)
+}
+
+func (s *InvestmentService) replaceDisposal(ctx context.Context, input ReplaceInvestmentSaleInput,
+	originType, operationCode string, postWrite func(*sql.Tx, int64, int64) error, family disposalCorrectionFamily,
+) (ReplaceInvestmentSaleResult, error) {
+	prepared, err := s.prepareSaleReplacementWrite(ctx, input, originType, operationCode, family)
 	if err != nil {
 		return ReplaceInvestmentSaleResult{}, err
 	}
 	inverse, replacementRecord, disposals, decision, err := s.repository.ReplaceSaleWithPostWrite(ctx, prepared.Operation,
 		prepared.Inverse, prepared.Replacement, prepared.Disposal, postWrite)
 	if err != nil {
-		return ReplaceInvestmentSaleResult{}, mapReplaceSaleError(err, prepared.Operation.OperationID)
+		return ReplaceInvestmentSaleResult{}, family.mapError(mapReplaceSaleError(err, prepared.Operation.OperationID))
 	}
 	committedDecision := toDisposalDecision(decision)
 	return ReplaceInvestmentSaleResult{
@@ -78,13 +84,13 @@ type preparedSaleReplacementWrite struct {
 
 // Preview and commit freeze identical inverse, replacement and disposal facts.
 func (s *InvestmentService) prepareSaleReplacementWrite(ctx context.Context, input ReplaceInvestmentSaleInput,
-	originType, operationCode string,
+	originType, operationCode string, family disposalCorrectionFamily,
 ) (preparedSaleReplacementWrite, error) {
 	operation, inversePlan, err := s.reverseSalePlan(ctx, ReverseInvestmentSaleInput{
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 		RequestID: input.RequestID, TransactionID: input.TransactionID,
 		Reason: input.Reason, ReconciliationOverride: input.ReconciliationOverride,
-	})
+	}, family)
 	if err != nil {
 		return preparedSaleReplacementWrite{}, err
 	}
@@ -101,7 +107,7 @@ func (s *InvestmentService) prepareSaleReplacementWrite(ctx context.Context, inp
 	replacement.Operation = operationCode
 	replacement.ChangeReason = inversePlan.ChangeReason
 	replacement.ReconciliationOverride = input.ReconciliationOverride
-	replacement.WriteOff = false
+	replacement.WriteOff = family.kind == "write_off"
 	inversePlan.OriginType = originType
 	inversePlan.Operation = operationCode
 	inversePlan.Spec.InvestmentOperationKind = ""
@@ -129,15 +135,21 @@ func (s *InvestmentService) prepareSaleReplacementWrite(ctx context.Context, inp
 // rolled-back transaction: the same inverse, corrected disposal, dependent
 // replay, prices and checkpoint invalidation as commit (T-126).
 func (s *InvestmentService) ReplaceSaleReconciliationImpact(ctx context.Context, input ReplaceInvestmentSaleInput) (ReconciliationImpact, error) {
+	return s.replaceDisposalReconciliationImpact(ctx, input, "investment.sale.replace", saleCorrectionFamily)
+}
+
+func (s *InvestmentService) replaceDisposalReconciliationImpact(ctx context.Context, input ReplaceInvestmentSaleInput,
+	operationCode string, family disposalCorrectionFamily,
+) (ReconciliationImpact, error) {
 	input.ReconciliationOverride = true
-	prepared, err := s.prepareSaleReplacementWrite(ctx, input, "browser_api", "investment.sale.replace")
+	prepared, err := s.prepareSaleReplacementWrite(ctx, input, "browser_api", operationCode, family)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
 	simulated, err := s.repository.PreviewSaleReplacement(ctx, prepared.Operation, prepared.Inverse,
 		prepared.Replacement, prepared.Disposal)
 	if err != nil {
-		return ReconciliationImpact{}, mapReplaceSaleError(err, prepared.Operation.OperationID)
+		return ReconciliationImpact{}, family.mapError(mapReplaceSaleError(err, prepared.Operation.OperationID))
 	}
 	return s.simulatedReconciliationImpact(ctx, simulated)
 }

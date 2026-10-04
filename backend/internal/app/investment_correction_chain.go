@@ -41,7 +41,10 @@ type InvestmentCorrectionChain struct {
 	EffectiveDividend            *InvestmentCorrectionDividendTerms
 	CanCorrectReinvestedDividend bool
 	EffectiveReinvestment        *InvestmentCorrectionReinvestmentTerms
-	Operations                   []InvestmentCorrectionNode
+	// CanCorrectWriteOff allows native write-off reversal and replacement
+	// (T-118); the trade correction context pre-fills the replacement.
+	CanCorrectWriteOff bool
+	Operations         []InvestmentCorrectionNode
 }
 
 // InvestmentCorrectionDividendTerms are an effective cash dividend's posted
@@ -167,6 +170,9 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 				return InvestmentCorrectionChain{}, err
 			}
 			chain.EffectiveReinvestment, chain.CanCorrectReinvestedDividend = reinvestmentCorrectionTerms(transaction)
+		}
+		if correctable && record.OperationKind == "write_off" {
+			chain.CanCorrectWriteOff = true
 		}
 		if effective && record.OperationKind == "buy" && (!importedLineage || committedSource) &&
 			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {
