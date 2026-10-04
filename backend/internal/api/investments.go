@@ -318,6 +318,8 @@ type investmentCorrectionChainResponse struct {
 	CanCorrectReinvested   bool                               `json:"can_correct_reinvested_dividend"`
 	CanCorrectWriteOff     bool                               `json:"can_correct_write_off"`
 	CanReverseTransfer     bool                               `json:"can_reverse_transfer"`
+	CanReplaceTransfer     bool                               `json:"can_replace_transfer"`
+	EffectiveTransfer      *investmentCorrectionTransferTerms `json:"effective_transfer,omitempty"`
 	EffectiveReinvestment  *investmentCorrectionReinvestTerms `json:"effective_reinvestment,omitempty"`
 	Operations             []investmentCorrectionNodeResponse `json:"operations"`
 }
@@ -1136,6 +1138,8 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
 			CanCorrectWriteOff: chain.CanCorrectWriteOff,
 			CanReverseTransfer: chain.CanReverseTransfer,
+			CanReplaceTransfer: chain.CanReplaceTransfer,
+			EffectiveTransfer:  toInvestmentCorrectionTransferTerms(chain.EffectiveTransfer),
 			Operations:         operations,
 		})
 	}
@@ -2566,6 +2570,49 @@ func replaceInvestmentSplitPreview(logger *slog.Logger, authService *app.AuthSer
 	}
 }
 
+type investmentCorrectionTransferTerms struct {
+	EffectiveOn          string                           `json:"effective_on"`
+	SourceAccountID      int64                            `json:"source_account_id"`
+	DestinationAccountID int64                            `json:"destination_account_id"`
+	CommodityID          int64                            `json:"commodity_id"`
+	CostCommodityID      int64                            `json:"cost_commodity_id"`
+	BasisAllocation      string                           `json:"basis_allocation"`
+	DestinationLineage   string                           `json:"destination_lineage"`
+	LotAllocations       []investmentLotAllocationRequest `json:"lot_allocations"`
+	QuantityValue        *exact.Coefficient               `json:"quantity_value"`
+	QuantityScale        *int                             `json:"quantity_scale"`
+	SourceEvidence       json.RawMessage                  `json:"source_evidence"`
+	Memo                 string                           `json:"memo"`
+}
+
+func toInvestmentCorrectionTransferTerms(terms *app.InvestmentCorrectionTransferTerms) *investmentCorrectionTransferTerms {
+	if terms == nil {
+		return nil
+	}
+	out := &investmentCorrectionTransferTerms{EffectiveOn: terms.EffectiveOn, SourceAccountID: terms.SourceAccountID,
+		DestinationAccountID: terms.DestinationAccountID, CommodityID: terms.CommodityID,
+		CostCommodityID: terms.CostCommodityID, BasisAllocation: terms.BasisAllocation,
+		DestinationLineage: terms.DestinationLineage, Memo: terms.Memo,
+		LotAllocations: make([]investmentLotAllocationRequest, 0, len(terms.Allocations)),
+		SourceEvidence: json.RawMessage(defaultJSONObject(terms.SourceEvidenceJSON))}
+	for _, allocation := range terms.Allocations {
+		out.LotAllocations = append(out.LotAllocations, investmentLotAllocationRequest{LotID: allocation.LotID,
+			QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale})
+	}
+	if terms.QuantityValue != "" {
+		value, scale := terms.QuantityValue, terms.QuantityScale
+		out.QuantityValue, out.QuantityScale = &value, &scale
+	}
+	return out
+}
+
+func defaultJSONObject(text string) string {
+	if text == "" {
+		return "{}"
+	}
+	return text
+}
+
 type investmentCorrectionSplitTerms struct {
 	HoldingAccountID int64  `json:"holding_account_id"`
 	CommodityID      int64  `json:"commodity_id"`
@@ -2800,5 +2847,93 @@ func reverseInvestmentTransferReconciliationImpact(logger *slog.Logger, authServ
 			return
 		}
 		writeReconciliationImpact(w, impact)
+	}
+}
+
+// investmentTransferReplacementRequest corrects an internal transfer (T-119).
+// Replacement is a full internal transfer; its own reason, override and
+// acknowledgement fields are ignored in favour of the outer ones.
+type investmentTransferReplacementRequest struct {
+	Reason                    string                  `json:"reason"`
+	ReconciliationOverride    bool                    `json:"reconciliation_override"`
+	GainImpactAcknowledgement string                  `json:"gain_impact_acknowledgement,omitempty"`
+	Replacement               internalTransferRequest `json:"replacement"`
+}
+
+type investmentTransferReplacementResponse struct {
+	Inverse                transactionResponse      `json:"inverse"`
+	Replacement            internalTransferResponse `json:"replacement"`
+	CorrectedTransactionID int64                    `json:"corrected_transaction_id"`
+}
+
+func investmentTransferReplacementInput(owner app.Owner, r *http.Request, transactionID int64,
+	request investmentTransferReplacementRequest) app.ReplaceInvestmentTransferInput {
+	return app.ReplaceInvestmentTransferInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		TransactionID: transactionID, Reason: request.Reason,
+		ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+		Replacement: internalTransferInput(owner, r, request.Replacement),
+	}
+}
+
+func replaceInvestmentTransfer(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentTransferReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.ReplaceTransfer(r.Context(), investmentTransferReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "replace investment transfer", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentTransferReplacementResponse{
+			Inverse: toTransactionResponse(result.Inverse),
+			Replacement: internalTransferResponse{Transaction: toTransactionResponse(result.Replacement.Transaction),
+				Plan: toInternalTransferPlanResponse(result.Replacement.Plan), DestinationLotIDs: result.Replacement.DestinationLotIDs},
+			CorrectedTransactionID: result.CorrectedTransactionID,
+		})
+	}))
+}
+
+func replaceInvestmentTransferPreview(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentTransferReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		preview, err := investmentService.PreviewTransferReplacement(r.Context(), investmentTransferReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview investment transfer replacement", err)
+			return
+		}
+		impact := toReconciliationImpactResponse(preview.Impact)
+		gainImpact, err := toGainImpactResponse(preview.Impact.GainImpact)
+		if err != nil {
+			writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+			return
+		}
+		impact.GainImpact = gainImpact
+		writeJSON(w, http.StatusOK, internalTransferPreviewResponse{
+			Plan: toInternalTransferPlanResponse(preview.Plan), Impact: impact,
+		})
 	}
 }

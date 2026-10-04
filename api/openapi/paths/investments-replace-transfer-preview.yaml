@@ -1,0 +1,51 @@
+post:
+  summary: Preview an internal transfer replacement
+  description: >-
+    Runs the replacement writer and every replay in a rolled-back transaction
+    and returns the plan the replacement would carry (destination lot IDs are
+    null) with its reconciliation and gain impact. Pass
+    reconciliation_override=true and the gain_impact acknowledgement to the
+    command after reviewing them (T-126).
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+      description: Posted internal transfer transaction ID.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentTransferReplacementRequest"
+  responses:
+    "200":
+      description: Replacement plan and impact computed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InternalTransferPreviewResponse"
+    "400":
+      description: Invalid request, missing reason, or a changed security or basis currency
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted internal transfer not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Transfer already corrected or changed, a dependent operation cannot be satisfied, or the source cannot supply the replacement
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

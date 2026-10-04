@@ -166,7 +166,9 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   Correction Refinement*): a reversal inverts the whole journal (bridge
   included) and replays source then destination, so removed destination lots
   seed propagation. Revisions of a reversed transfer are evidence only; read
-  current state through revisions of effective operations.
+  current state through revisions of effective operations. A replacement computes
+  its source depletion with a subject replay intent at the correction-root
+  slot (as a backdated split does), never from today's lot state.
 
 ## Dates and times
 

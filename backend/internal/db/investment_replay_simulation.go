@@ -22,6 +22,11 @@ type InvestmentReplayProjection struct {
 	// carries a different basis than their effective amount. Persisting the
 	// projection appends them and replays each destination (T-132).
 	TransferRevisions []InvestmentReplayTransferRevision
+	// SubjectTransferOut is the subject transfer's source depletions at its
+	// replay slot, in effect order; SubjectTransferMethod is the method its
+	// lot events record (average_cost for a pool, empty for selected lots).
+	SubjectTransferOut    []LotDisposalRecord
+	SubjectTransferMethod string
 }
 
 // InvestmentReplayTransferRevision is one link's replayed depletion: the
@@ -222,8 +227,11 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 				err = updatePositionMethodFamilyTx(ctx, tx, params, "specific_lot", intent.AuditEventID)
 			}
 			if err != nil {
-				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
-					OperationID: intent.OperationID, Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
+				return InvestmentReplayProjection{}, replayTransferError(intent, err)
+			}
+			if intent.TransferIsSubject {
+				projection.SubjectTransferOut = append(projection.SubjectTransferOut, moved)
+				continue
 			}
 			// The quantity is fixed by the transfer; the basis it carries, and
 			// the successor lot of a corrected acquisition, follow history.
@@ -240,6 +248,10 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 				QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
 				MetadataJSON: "{}", CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID}
 			moved, err := pooledTransferOutTx(ctx, tx, params, intent.AuditEventID)
+			if err == nil && intent.TransferIsSubject {
+				projection.SubjectTransferOut, projection.SubjectTransferMethod = moved, "average_cost"
+				continue
+			}
 			if err == nil && !pooledTransferLineageReproduced(moved, intent.PooledLinks) {
 				// Each destination lot is tied to one source lot and its original
 				// date; a pool that now depletes other lots or quantities would
@@ -248,8 +260,7 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 				err = errors.New("transfer source lots changed; record it as one pooled lot to let history move them")
 			}
 			if err != nil {
-				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
-					OperationID: intent.OperationID, Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
+				return InvestmentReplayProjection{}, replayTransferError(intent, err)
 			}
 			for index, link := range intent.PooledLinks {
 				depletion := moved[index]
@@ -267,6 +278,10 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 				QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
 				MetadataJSON: "{}", CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID}
 			moved, err := pooledTransferOutTx(ctx, tx, params, intent.AuditEventID)
+			if err == nil && intent.TransferIsSubject {
+				projection.SubjectTransferOut, projection.SubjectTransferMethod = moved, "average_cost"
+				continue
+			}
 			var totals pooledTransferTotals
 			if err == nil {
 				totals, err = pooledTransferTotalsTx(ctx, tx, bookID, moved)
@@ -276,8 +291,7 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 				err = errors.New("pooled transfer quantity changed")
 			}
 			if err != nil {
-				return InvestmentReplayProjection{}, &InvestmentReplayDependencyError{
-					OperationID: intent.OperationID, Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
+				return InvestmentReplayProjection{}, replayTransferError(intent, err)
 			}
 			// The destination lot and quantity are fixed; its basis, date and
 			// the source lots the pool took them from follow history.
@@ -336,6 +350,17 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 		return InvestmentReplayProjection{}, fmt.Errorf("close replay lot projection: %w", err)
 	}
 	return projection, nil
+}
+
+// replayTransferError names a transfer replay cannot reproduce as a
+// dependency of the command. The subject transfer of a replacement is the
+// command's own move, so its shortfall is returned as itself.
+func replayTransferError(intent InvestmentReplayIntent, err error) error {
+	if intent.TransferIsSubject {
+		return err
+	}
+	return &InvestmentReplayDependencyError{
+		OperationID: intent.OperationID, Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
 }
 
 // pooledLotTransferRevision compares a replayed pooled_lot depletion with the

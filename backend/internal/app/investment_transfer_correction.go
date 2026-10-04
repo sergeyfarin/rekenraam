@@ -171,3 +171,134 @@ func mapTransferCorrectionError(err error) error {
 		return fmt.Errorf("correct investment transfer: %w", mapTransactionDBError(err))
 	}
 }
+
+type ReplaceInvestmentTransferInput struct {
+	OwnerUserID               int64
+	AuthSessionID             int64
+	RequestID                 string
+	TransactionID             int64
+	Reason                    string
+	ReconciliationOverride    bool
+	GainImpactAcknowledgement string
+	// Replacement is the full corrected internal transfer. Date, quantity or
+	// lots, both accounts and destination lineage may change; the security
+	// and its cost currency stay those of the transfer.
+	Replacement InternalTransferInput
+}
+
+type ReplaceInvestmentTransferResult struct {
+	Inverse                Transaction
+	Replacement            InternalTransferResult
+	CorrectedTransactionID int64
+}
+
+type preparedTransferReplacement struct {
+	operation   db.TransferOperationRecord
+	inverse     db.CreateTransactionParams
+	replacement db.CreateTransactionParams
+	transfer    db.CreateInternalTransferParams
+}
+
+// ReplaceTransfer posts the inverse and a corrected internal transfer at the
+// replaced transfer's slot under one audit event, replaying every position
+// either transfer moved. Re-recording a source_lots transfer from an
+// average-cost source as one pooled lot is the remedy for a lineage refusal.
+func (s *InvestmentService) ReplaceTransfer(ctx context.Context, input ReplaceInvestmentTransferInput) (ReplaceInvestmentTransferResult, error) {
+	prepared, err := s.prepareTransferReplacement(ctx, input)
+	if err != nil {
+		return ReplaceInvestmentTransferResult{}, err
+	}
+	record, err := s.repository.ReplaceInternalTransfer(ctx, prepared.operation, prepared.inverse, prepared.replacement, prepared.transfer)
+	if err != nil {
+		return ReplaceInvestmentTransferResult{}, mapTransferReplacementError(err)
+	}
+	return ReplaceInvestmentTransferResult{
+		Inverse: toTransaction(record.Inverse),
+		Replacement: InternalTransferResult{Transaction: toTransaction(record.Replacement),
+			Plan: toInternalTransferPlan(record.Result), DestinationLotIDs: record.Result.DestinationLotIDs},
+		CorrectedTransactionID: prepared.operation.TransactionID,
+	}, nil
+}
+
+// PreviewTransferReplacement runs the replacement writer and every replay,
+// then rolls back: the plan the replacement would carry and its impact.
+func (s *InvestmentService) PreviewTransferReplacement(ctx context.Context, input ReplaceInvestmentTransferInput) (InternalTransferPreview, error) {
+	input.ReconciliationOverride = true
+	prepared, err := s.prepareTransferReplacement(ctx, input)
+	if err != nil {
+		return InternalTransferPreview{}, err
+	}
+	simulated, result, err := s.repository.SimulateInternalTransferReplacement(ctx, prepared.operation,
+		prepared.inverse, prepared.replacement, prepared.transfer)
+	if err != nil {
+		return InternalTransferPreview{}, mapTransferReplacementError(err)
+	}
+	impact, err := s.simulatedReconciliationImpact(ctx, simulated)
+	if err != nil {
+		return InternalTransferPreview{}, err
+	}
+	return InternalTransferPreview{Plan: toInternalTransferPlan(result), Impact: impact}, nil
+}
+
+func (s *InvestmentService) prepareTransferReplacement(ctx context.Context, input ReplaceInvestmentTransferInput) (preparedTransferReplacement, error) {
+	operation, inversePlan, err := s.transferCorrectionPlan(ctx, input.OwnerUserID, input.TransactionID, input.Reason)
+	if err != nil {
+		return preparedTransferReplacement{}, err
+	}
+	if operation.TransferKind != "internal" {
+		return preparedTransferReplacement{}, ErrInvestmentTransferNotFound
+	}
+	replacement := input.Replacement
+	replacement.OwnerUserID, replacement.AuthSessionID, replacement.RequestID =
+		input.OwnerUserID, input.AuthSessionID, input.RequestID
+	replacement.ChangeReason, replacement.ReconciliationOverride = inversePlan.ChangeReason, input.ReconciliationOverride
+	if replacement.CommodityID != operation.CommodityID || replacement.CostCommodityID != operation.CostCommodityID {
+		return preparedTransferReplacement{}, ValidationError{Message: "a transfer replacement keeps the security and its basis currency"}
+	}
+	plan, transfer, err := s.internalTransferPlan(ctx, replacement)
+	if err != nil {
+		return preparedTransferReplacement{}, err
+	}
+	inversePlan.AuthSessionID, inversePlan.RequestID = input.AuthSessionID, input.RequestID
+	inversePlan.Operation = "investment.transfer.replace"
+	inversePlan.ReconciliationOverride = input.ReconciliationOverride
+	inversePlan.Spec.InvestmentOperationKind = ""
+	inverse, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, inversePlan, nil)
+	if err != nil {
+		return preparedTransferReplacement{}, err
+	}
+	plan.Create.Operation = "investment.transfer.replace"
+	replacementParams, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, plan.Create, plan.AccountRuleDependencies)
+	if err != nil {
+		return preparedTransferReplacement{}, err
+	}
+	replacementParams.CorrectionOfTransactionID = inverse.CorrectionOfTransactionID
+	replacementParams.InvestmentCorrectionOfOperationID = operation.OperationID
+	replacementParams.InvestmentCorrectionMode = "replace"
+	replacementParams.InvestmentCorrectionReason = inversePlan.ChangeReason
+	replacementParams.CreatedAt = inverse.CreatedAt
+	// The compound command's first journal carries the disclosure policy.
+	inverse.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
+	replacementParams.GainImpact = nil
+	return preparedTransferReplacement{operation: operation, inverse: inverse,
+		replacement: replacementParams, transfer: transfer}, nil
+}
+
+// mapTransferReplacementError adds the replacement's own allocation refusals
+// to the shared correction errors.
+func mapTransferReplacementError(err error) error {
+	var dependency *db.InvestmentReplayDependencyError
+	switch {
+	case errors.As(err, &dependency):
+		return mapTransferCorrectionError(err)
+	// The transfer was pinned before the write, so a missing lot inside it is
+	// the replacement's own selection, not a missing transfer.
+	case errors.Is(err, db.ErrInsufficientLots), errors.Is(err, db.ErrNotFound),
+		errors.Is(err, db.ErrAverageCostTransferRequiresPoolAllocation),
+		errors.Is(err, db.ErrPooledTransferRequiresAverageCost),
+		errors.Is(err, db.ErrInvalidTransferDestinationLineage),
+		errors.Is(err, db.ErrUnknownInvestmentBasis):
+		return mapInternalTransferError(err)
+	}
+	return mapTransferCorrectionError(err)
+}

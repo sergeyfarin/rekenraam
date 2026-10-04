@@ -201,18 +201,8 @@ func (r *InvestmentRepository) createInternalTransfer(ctx context.Context, journ
 			if err != nil {
 				return InternalTransferResult{}, err
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_facts
-				(operation_id, book_id, transfer_kind, effective_on, commodity_id,
-				 source_account_id, destination_account_id, source_evidence_json, created_audit_event_id,
-				 basis_allocation, cost_basis_method, method_resolution_tier,
-				 method_account_version_id, method_profile_version_id, destination_lineage)
-				VALUES (?, ?, 'internal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, operationID, transfer.BookID,
-				transfer.EffectiveOn, transfer.CommodityID, transfer.SourceAccountID,
-				transfer.DestinationAccountID, transfer.SourceEvidenceJSON, auditEventID,
-				policy.allocation, policy.method, policy.source.ResolutionTier,
-				nullablePositiveInt64(policy.source.AccountVersionID),
-				nullablePositiveInt64(policy.source.ProfileVersionID), policy.lineage); err != nil {
-				return InternalTransferResult{}, fmt.Errorf("record internal transfer fact: %w", err)
+			if err := insertInternalTransferFactTx(ctx, tx, transfer, policy, operationID, auditEventID); err != nil {
+				return InternalTransferResult{}, err
 			}
 			params := DisposeLotsParams{BookID: transfer.BookID, AccountID: transfer.SourceAccountID,
 				CommodityID: transfer.CommodityID, CostCommodityID: transfer.CostCommodityID,
@@ -229,26 +219,10 @@ func (r *InvestmentRepository) createInternalTransfer(ctx context.Context, journ
 			if err != nil {
 				return InternalTransferResult{}, err
 			}
-			result := InternalTransferResult{BasisAllocation: policy.allocation, DestinationLineage: policy.lineage,
-				CostBasisMethod: policy.method, ResolutionTier: policy.source.ResolutionTier}
-			if policy.lineage == InternalTransferPooledLot {
-				link, err := openPooledTransferDestinationTx(ctx, tx, transfer, transaction, journal,
-					operationID, auditEventID, moved)
-				if err != nil {
-					return InternalTransferResult{}, err
-				}
-				result.Links = []InternalTransferLink{link}
-				result.DestinationLotIDs = []int64{link.DestinationLotID}
-				moved = nil
-			}
-			for index, depletion := range moved {
-				link, err := openInternalTransferDestinationTx(ctx, tx, transfer, transaction, journal,
-					operationID, auditEventID, index+1, depletion)
-				if err != nil {
-					return InternalTransferResult{}, err
-				}
-				result.Links = append(result.Links, link)
-				result.DestinationLotIDs = append(result.DestinationLotIDs, link.DestinationLotID)
+			result, err := openInternalTransferDestinationsTx(ctx, tx, transfer, policy, transaction, journal,
+				operationID, auditEventID, moved, false)
+			if err != nil {
+				return InternalTransferResult{}, err
 			}
 			// Any move fixes the source position's method family, even before
 			// its first sale; a fully moved position releases the lock.
@@ -257,6 +231,58 @@ func (r *InvestmentRepository) createInternalTransfer(ctx context.Context, journ
 			}
 			return result, nil
 		}, nil)
+}
+
+// insertInternalTransferFactTx records the transfer's immutable terms and
+// the allocation policy that applied.
+func insertInternalTransferFactTx(ctx context.Context, tx *sql.Tx, transfer CreateInternalTransferParams,
+	policy internalTransferPolicy, operationID, auditEventID int64) error {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_facts
+		(operation_id, book_id, transfer_kind, effective_on, commodity_id,
+		 source_account_id, destination_account_id, source_evidence_json, created_audit_event_id,
+		 basis_allocation, cost_basis_method, method_resolution_tier,
+		 method_account_version_id, method_profile_version_id, destination_lineage)
+		VALUES (?, ?, 'internal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, operationID, transfer.BookID,
+		transfer.EffectiveOn, transfer.CommodityID, transfer.SourceAccountID,
+		transfer.DestinationAccountID, transfer.SourceEvidenceJSON, auditEventID,
+		policy.allocation, policy.method, policy.source.ResolutionTier,
+		nullablePositiveInt64(policy.source.AccountVersionID),
+		nullablePositiveInt64(policy.source.ProfileVersionID), policy.lineage); err != nil {
+		return fmt.Errorf("record internal transfer fact: %w", err)
+	}
+	return nil
+}
+
+// openInternalTransferDestinationsTx opens the destination lots for a
+// source depletion and links them: one pooled lot, or one lot per depleted
+// source lot. replayAdmission lets a correction open them behind later
+// destination events, which its replay then orders.
+func openInternalTransferDestinationsTx(ctx context.Context, tx *sql.Tx, transfer CreateInternalTransferParams,
+	policy internalTransferPolicy, transaction TransactionRecord, journal CreateTransactionParams,
+	operationID, auditEventID int64, moved []LotDisposalRecord, replayAdmission bool,
+) (InternalTransferResult, error) {
+	result := InternalTransferResult{BasisAllocation: policy.allocation, DestinationLineage: policy.lineage,
+		CostBasisMethod: policy.method, ResolutionTier: policy.source.ResolutionTier}
+	if policy.lineage == InternalTransferPooledLot {
+		link, err := openPooledTransferDestinationTx(ctx, tx, transfer, transaction, journal,
+			operationID, auditEventID, moved, replayAdmission)
+		if err != nil {
+			return InternalTransferResult{}, err
+		}
+		result.Links = []InternalTransferLink{link}
+		result.DestinationLotIDs = []int64{link.DestinationLotID}
+		return result, nil
+	}
+	for index, depletion := range moved {
+		link, err := openInternalTransferDestinationTx(ctx, tx, transfer, transaction, journal,
+			operationID, auditEventID, index+1, depletion, replayAdmission)
+		if err != nil {
+			return InternalTransferResult{}, err
+		}
+		result.Links = append(result.Links, link)
+		result.DestinationLotIDs = append(result.DestinationLotIDs, link.DestinationLotID)
+	}
+	return result, nil
 }
 
 // selectedLotsTransferOutTx depletes each chosen lot at its own remaining
@@ -324,7 +350,7 @@ func pooledTransferOutTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 // average-cost pool there, or stay individual lots, like any other opening.
 func openInternalTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer CreateInternalTransferParams,
 	transaction TransactionRecord, journal CreateTransactionParams, operationID, auditEventID int64,
-	linkSeq int, depletion LotDisposalRecord,
+	linkSeq int, depletion LotDisposalRecord, replayAdmission bool,
 ) (InternalTransferLink, error) {
 	source, err := investmentLotByIDTx(ctx, tx, transfer.BookID, depletion.LotID)
 	if err != nil {
@@ -345,7 +371,7 @@ func openInternalTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer
 		CostBasisScale: depletion.CostBasisScale, CostCommodityID: transfer.CostCommodityID,
 		MetadataJSON: `{"source":"internal_transfer"}`, EventKind: "transfer_in",
 		CreatedAt: journal.CreatedAt, CreatedByUserID: journal.ActorUserID,
-	}, auditEventID, false)
+	}, auditEventID, replayAdmission)
 	if err != nil {
 		return InternalTransferLink{}, err
 	}
@@ -372,7 +398,7 @@ func openInternalTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer
 // and the latest original acquisition date among them.
 func openPooledTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer CreateInternalTransferParams,
 	transaction TransactionRecord, journal CreateTransactionParams, operationID, auditEventID int64,
-	moved []LotDisposalRecord,
+	moved []LotDisposalRecord, replayAdmission bool,
 ) (InternalTransferLink, error) {
 	if len(moved) == 0 {
 		return InternalTransferLink{}, ErrInvalidDisposalParams
@@ -394,7 +420,7 @@ func openPooledTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer C
 		CostBasisScale: pooled.basisScale, CostCommodityID: transfer.CostCommodityID,
 		MetadataJSON: `{"source":"internal_transfer"}`, EventKind: "transfer_in",
 		CreatedAt: journal.CreatedAt, CreatedByUserID: journal.ActorUserID,
-	}, auditEventID, false)
+	}, auditEventID, replayAdmission)
 	if err != nil {
 		return InternalTransferLink{}, err
 	}

@@ -497,7 +497,9 @@ notes record design decisions per area; they carry no status or order.
   including any equity bridge, and replays source then destination so the
   removed destination lots seed propagation; a destination disposal or
   `source_lots` onward transfer of the removed units is a named refusal.
-  Internal and external-in replacement remain.
+  Internal replacement (shipped) depletes its source through a subject
+  replay intent at the correction-root slot, as a backdated split computes
+  its effects. External-in replacement remains.
   Provider cancellation/wider revisions (T-121) require verified execution
   evidence; cancelled order status is insufficient.
 - **Remaining slice 5 actions, shorts, compound actions.** Outbound transfers,

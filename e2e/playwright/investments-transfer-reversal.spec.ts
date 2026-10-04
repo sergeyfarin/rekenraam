@@ -4,9 +4,9 @@ import { readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
 
 /**
- * T-119: an internal transfer is reversed from the transaction detail. The Go
- * tests pin the replay contract; this proves the localized action works at a
- * phone viewport and both holdings follow.
+ * T-119: an internal transfer is corrected and reversed from the transaction
+ * detail. The Go tests pin the replay contract; this proves the localized
+ * actions work at a phone viewport and both holdings follow.
  */
 
 function daysFromTodayISO(days: number): string {
@@ -27,9 +27,9 @@ async function held(page: Page, accountID: number, commodityID: number): Promise
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test('reversing an internal transfer returns the units to the source holding', async ({ page }) => {
+  async function seedTransfer(page: Page, prefix: string) {
     const { csrfToken, currencyID } = await readyForLedger(page);
-    const suffix = `xrv${Date.now()}`;
+    const suffix = `${prefix}${Date.now()}`;
     const openedOn = daysFromTodayISO(-60);
     const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
       name: `Transfer cash ${suffix}`, account_class: 'asset', account_kind: 'brokerage_cash',
@@ -56,7 +56,11 @@ test.describe('on a phone', () => {
       lot_allocations: [{ lot_id: bought.lot_id, quantity_value: '4', quantity_scale: 0 }]
     });
     await expect.poll(() => held(page, destination.id, instrument.commodity_id)).toBe('4');
+    return { source, destination, instrument, moved };
+  }
 
+  test('reversing an internal transfer returns the units to the source holding', async ({ page }) => {
+    const { source, destination, instrument, moved } = await seedTransfer(page, 'xrv');
     await page.goto(`/app/transactions?transaction_id=${moved.transaction.id}`);
     await page.getByRole('button', { name: 'Reverse transfer…' }).click();
     const dialog = page.getByRole('alertdialog');
@@ -67,5 +71,20 @@ test.describe('on a phone', () => {
     await expect.poll(() => held(page, source.id, instrument.commodity_id)).toBe('10');
     await expect.poll(() => held(page, destination.id, instrument.commodity_id)).toBe('0');
     await expect(page.getByRole('button', { name: 'Reverse transfer…' })).toHaveCount(0);
+  });
+
+  test('correcting an internal transfer moves the corrected quantity', async ({ page }) => {
+    const { source, destination, instrument, moved } = await seedTransfer(page, 'xcr');
+    await page.goto(`/app/transactions?transaction_id=${moved.transaction.id}`);
+    await page.getByRole('button', { name: 'Correct transfer…' }).click();
+    const form = page.getByRole('dialog', { name: 'Correct this transfer' });
+    const lot = form.getByLabel(/^Lot #/);
+    await expect(lot).toHaveValue('4');
+    await form.getByLabel('Reason for correction').fill('the statement shows six units');
+    await lot.fill('6');
+    await form.getByRole('button', { name: 'Review and replace' }).click();
+    await expect(form).toBeHidden();
+    await expect.poll(() => held(page, destination.id, instrument.commodity_id)).toBe('6');
+    await expect.poll(() => held(page, source.id, instrument.commodity_id)).toBe('4');
   });
 });

@@ -45,12 +45,16 @@ type InvestmentReplayIntent struct {
 	// SplitIsSubject marks the split the current command is creating. It has
 	// no recorded effects yet, so replay reports its effects instead of
 	// checking them.
-	SplitIsSubject  bool
-	AmountValue     exact.Coefficient // opening consideration or disposal proceeds
-	AmountScale     int
-	CostBasisMethod string
-	DecisionSource  DisposalDecisionSource
-	SpecificLots    []LotAllocation
+	SplitIsSubject bool
+	// TransferIsSubject marks the internal transfer a replacement command is
+	// recording (T-119). It has no committed links yet, so replay reports its
+	// source depletions instead of comparing them.
+	TransferIsSubject bool
+	AmountValue       exact.Coefficient // opening consideration or disposal proceeds
+	AmountScale       int
+	CostBasisMethod   string
+	DecisionSource    DisposalDecisionSource
+	SpecificLots      []LotAllocation
 	// PooledLinks are a pooled transfer's committed per-lot carried amounts,
 	// in link order. Replay must reproduce them exactly.
 	PooledLinks []InvestmentReplayTransferLink

@@ -356,7 +356,15 @@ transfer from an average-cost source as one `pooled_lot` is the remedy the
 row: a destination specific-lot election or a `source_lots` onward transfer
 follows it through the correction root only when it is the transfer's single
 destination lot on the same date (the rule acquisition replacement already
-uses); otherwise it is a named dependency.
+uses); otherwise it is a named dependency. The replacement's own source
+depletion is computed the way a backdated split computes its effects: the
+source replays its effective history with the new transfer as the *subject*
+intent at the replaced transfer's correction-root slot, and replay reports
+the depletions instead of checking them. Those become the replacement's
+`transfer_out` lot events, its destination lots open by replay admission, and
+then every position either transfer touched replays from the committed facts.
+Depleting today's lots instead would take units a later disposal already
+consumed, or miss ones it has not.
 
 **External-in replacement.** Inverse plus a new external transfer in.
 Quantity, carried basis, original acquisition date and effective date may
@@ -373,4 +381,5 @@ gains never arise from a transfer, so only later source disposals restate.
 
 **Status.** Reversal of internal and external-in transfers shipped
 2026-10-04 (`POST /api/v1/investments/transactions/{id}/reverse-transfer` and
-its preview). Internal and external-in replacement remain on T-119.
+its preview), and internal replacement the same day (`.../replace-transfer`
+and its `/preview`). External-in replacement remains on T-119.

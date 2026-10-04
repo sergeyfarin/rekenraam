@@ -15397,6 +15397,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/transactions/{transaction_id}/replace-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a posted internal transfer
+         * @description Posts the exact inverse of an internal transfer and a corrected internal transfer (T-119) under one audit event and one database transaction. The replacement depletes its source at the replaced transfer's correction-root same-day slot, so the lots and basis are those the transfer date sees; every position either transfer moved then replays under recorded elections and changed carried basis propagates downstream. Date, lots or pooled quantity, both holding accounts and destination lineage may change; re-recording a source_lots transfer from an average-cost source as one pooled_lot is the remedy for a lineage refusal. The original transfer's journal, facts, links, revisions and lot events stay immutable. External transfers in are reversed, not replaced, here (404). A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    /** @description Posted internal transfer transaction ID. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentTransferReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Transfer replaced and every moved position replayed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentTransferReplacementResponse"];
+                    };
+                };
+                /** @description Invalid request, missing reason, or a changed security or basis currency */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted internal transfer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Transfer already corrected (INVESTMENT_TRANSFER_ALREADY_CORRECTED), changed (INVESTMENT_TRANSFER_CHANGED), a dependent operation cannot be satisfied (INVESTMENT_TRANSFER_DEPENDENCY), the source cannot supply the replacement (CONFLICT for insufficient lots, INVESTMENT_TRANSFER_POOL_REQUIRED / _UNAVAILABLE), or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-transfer/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview an internal transfer replacement
+         * @description Runs the replacement writer and every replay in a rolled-back transaction and returns the plan the replacement would carry (destination lot IDs are null) with its reconciliation and gain impact. Pass reconciliation_override=true and the gain_impact acknowledgement to the command after reviewing them (T-126).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Posted internal transfer transaction ID. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentTransferReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Replacement plan and impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InternalTransferPreviewResponse"];
+                    };
+                };
+                /** @description Invalid request, missing reason, or a changed security or basis currency */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted internal transfer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Transfer already corrected or changed, a dependent operation cannot be satisfied, or the source cannot supply the replacement */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/transactions/{transaction_id}/reverse-write-off": {
         parameters: {
             query?: never;
@@ -21043,6 +21218,22 @@ export interface components {
             plan: components["schemas"]["InternalTransferPlan"];
             impact: components["schemas"]["ReconciliationImpactResponse"];
         };
+        InvestmentTransferReplacementRequest: {
+            /** @description Why the posted internal transfer is being corrected. */
+            reason: string;
+            /** @description Omit or set false to keep affected reconciliation checkpoints active. */
+            reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's preview, accepting exactly the committed disposal gain changes it disclosed (T-126). */
+            gain_impact_acknowledgement?: string;
+            /** @description The full corrected internal transfer. Date, lots or pooled quantity, both holding accounts and destination lineage may change; commodity_id and cost_commodity_id must equal the transfer's. Its change_reason, reconciliation_override and gain_impact_acknowledgement are ignored. */
+            replacement: components["schemas"]["InternalTransferRequest"];
+        };
+        InvestmentTransferReplacementResponse: {
+            inverse: components["schemas"]["TransactionResponse"];
+            replacement: components["schemas"]["InternalTransferResponse"];
+            /** Format: int64 */
+            corrected_transaction_id: number;
+        };
         InvestmentSplitRequest: {
             /**
              * Format: date
@@ -21126,6 +21317,30 @@ export interface components {
             plan: components["schemas"]["InvestmentSplitPlan"];
             /** Format: int64 */
             corrected_transaction_id: number;
+        };
+        /** @description The effective internal transfer's committed terms, for pre-filling a replacement (T-119). Selected-lot transfers list lot_allocations; average-cost pool transfers give quantity_value/scale. */
+        InvestmentCorrectionTransferTerms: {
+            /** Format: date */
+            effective_on: string;
+            /** Format: int64 */
+            source_account_id: number;
+            /** Format: int64 */
+            destination_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            /** @enum {string} */
+            basis_allocation: "selected_lots" | "average_cost_pool";
+            /** @enum {string} */
+            destination_lineage: "source_lots" | "pooled_lot";
+            lot_allocations: components["schemas"]["InvestmentLotAllocationRequest"][];
+            quantity_value: string | null;
+            quantity_scale: number | null;
+            source_evidence: {
+                [key: string]: unknown;
+            };
+            memo: string;
         };
         /** @description The effective split's current terms, for pre-filling a replacement. */
         InvestmentCorrectionSplitTerms: {
@@ -21308,6 +21523,9 @@ export interface components {
             can_correct_write_off: boolean;
             /** @description Whether the effective posted internal or external-in transfer can attempt reversal (T-119). A destination disposal or onward transfer of the removed units may still refuse the command. */
             can_reverse_transfer: boolean;
+            /** @description Whether the effective posted internal transfer can attempt replacement (T-119). External transfers in are reversed only. */
+            can_replace_transfer: boolean;
+            effective_transfer?: components["schemas"]["InvestmentCorrectionTransferTerms"];
             /** @description Whether the effective posted cash dividend can be reversed or replaced (T-115). Imported lineage requires a committed source identity. */
             can_correct_dividend: boolean;
             effective_dividend?: components["schemas"]["InvestmentCorrectionDividendTerms"];

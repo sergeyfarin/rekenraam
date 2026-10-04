@@ -335,6 +335,10 @@ paths:
     $ref: "./paths/investments-reverse-transfer.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-transfer/reconciliation-impact:
     $ref: "./paths/investments-reverse-transfer-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-transfer:
+    $ref: "./paths/investments-replace-transfer.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-transfer/preview:
+    $ref: "./paths/investments-replace-transfer-preview.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-write-off:
     $ref: "./paths/investments-reverse-write-off.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-write-off/reconciliation-impact:
@@ -1028,6 +1032,10 @@ components:
       $ref: "./components/schemas/investments.yaml#/InternalTransferPlan"
     InternalTransferPreviewResponse:
       $ref: "./components/schemas/investments.yaml#/InternalTransferPreviewResponse"
+    InvestmentTransferReplacementRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTransferReplacementRequest"
+    InvestmentTransferReplacementResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTransferReplacementResponse"
     InvestmentSplitRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitRequest"
     InvestmentSplitLotEffect:
@@ -1042,6 +1050,8 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitReplacementRequest"
     InvestmentSplitReplacementResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitReplacementResponse"
+    InvestmentCorrectionTransferTerms:
+      $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionTransferTerms"
     InvestmentCorrectionSplitTerms:
       $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionSplitTerms"
     InvestmentCorrectionDividendTerms:

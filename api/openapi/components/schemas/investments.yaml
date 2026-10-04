@@ -821,6 +821,42 @@ InternalTransferResponse:
         type: integer
         format: int64
 
+InvestmentTransferReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, replacement]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted internal transfer is being corrected.
+    reconciliation_override:
+      type: boolean
+      description: Omit or set false to keep affected reconciliation checkpoints active.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's preview, accepting exactly the committed
+        disposal gain changes it disclosed (T-126).
+    replacement:
+      $ref: "../schemas/investments.yaml#/InternalTransferRequest"
+      description: >-
+        The full corrected internal transfer. Date, lots or pooled quantity, both holding accounts and
+        destination lineage may change; commodity_id and cost_commodity_id must equal the transfer's. Its
+        change_reason, reconciliation_override and gain_impact_acknowledgement are ignored.
+
+InvestmentTransferReplacementResponse:
+  type: object
+  required: [inverse, replacement, corrected_transaction_id]
+  properties:
+    inverse:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    replacement:
+      $ref: "../schemas/investments.yaml#/InternalTransferResponse"
+    corrected_transaction_id:
+      type: integer
+      format: int64
+
 InvestmentSplitRequest:
   type: object
   additionalProperties: false
@@ -968,6 +1004,50 @@ InvestmentSplitReplacementResponse:
     corrected_transaction_id:
       type: integer
       format: int64
+
+InvestmentCorrectionTransferTerms:
+  type: object
+  description: >-
+    The effective internal transfer's committed terms, for pre-filling a replacement (T-119).
+    Selected-lot transfers list lot_allocations; average-cost pool transfers give quantity_value/scale.
+  required: [effective_on, source_account_id, destination_account_id, commodity_id, cost_commodity_id,
+    basis_allocation, destination_lineage, lot_allocations, quantity_value, quantity_scale, source_evidence, memo]
+  properties:
+    effective_on:
+      type: string
+      format: date
+    source_account_id:
+      type: integer
+      format: int64
+    destination_account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    cost_commodity_id:
+      type: integer
+      format: int64
+    basis_allocation:
+      type: string
+      enum: [selected_lots, average_cost_pool]
+    destination_lineage:
+      type: string
+      enum: [source_lots, pooled_lot]
+    lot_allocations:
+      type: array
+      items:
+        $ref: "#/InvestmentLotAllocationRequest"
+    quantity_value:
+      type: [string, "null"]
+      pattern: "^-?[0-9]+$"
+    quantity_scale:
+      type: [integer, "null"]
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
 
 InvestmentCorrectionSplitTerms:
   type: object
@@ -1279,7 +1359,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_correct_write_off, can_reverse_transfer, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_correct_write_off, can_reverse_transfer, can_replace_transfer, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1311,6 +1391,11 @@ InvestmentCorrectionChainResponse:
     can_reverse_transfer:
       type: boolean
       description: Whether the effective posted internal or external-in transfer can attempt reversal (T-119). A destination disposal or onward transfer of the removed units may still refuse the command.
+    can_replace_transfer:
+      type: boolean
+      description: Whether the effective posted internal transfer can attempt replacement (T-119). External transfers in are reversed only.
+    effective_transfer:
+      $ref: '#/InvestmentCorrectionTransferTerms'
     can_correct_dividend:
       type: boolean
       description: Whether the effective posted cash dividend can be reversed or replaced (T-115). Imported lineage requires a committed source identity.
