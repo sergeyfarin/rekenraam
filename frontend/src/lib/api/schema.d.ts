@@ -20235,6 +20235,43 @@ export interface components {
              * @enum {string}
              */
             system_label?: "split_adjustment";
+            correction_chain?: components["schemas"]["RegisterCorrectionChain"];
+        };
+        /** @description Present when the row's transaction belongs to a correction chain of more than one transaction (T-120). The original, reversal and replacement stay separate posted rows, so the running balance counts each posting once; every row carries the whole chain, so members on other register pages are still named. */
+        RegisterCorrectionChain: {
+            /** Format: int64 */
+            root_transaction_id: number;
+            role: components["schemas"]["RegisterCorrectionRole"];
+            /**
+             * Format: int64
+             * @description The chain's current effective transaction; null when the chain ends in a pure reversal.
+             */
+            effective_transaction_id: number | null;
+            net_effect: components["schemas"]["RegisterCorrectionAmount"];
+            /** @description Every chain transaction in creation order. */
+            members: components["schemas"]["RegisterCorrectionMember"][];
+        };
+        /** @enum {string} */
+        RegisterCorrectionRole: "original" | "reversal" | "replacement";
+        RegisterCorrectionMember: {
+            /** Format: int64 */
+            transaction_id: number;
+            /** Format: int64 */
+            correction_of_transaction_id: number | null;
+            role: components["schemas"]["RegisterCorrectionRole"];
+            /** Format: date */
+            transaction_date: string;
+            status: components["schemas"]["TransactionStatus"];
+            deleted: boolean;
+            /** @description The correcting operation's reason; empty for the original. */
+            reason: string;
+            /** @description The member's net in this row's account and commodity; null when it posts nothing here. */
+            amount: components["schemas"]["RegisterCorrectionAmount"] | null;
+        };
+        /** @description Debit-positive exact amount in the row's account and commodity. */
+        RegisterCorrectionAmount: {
+            quantity_value: string;
+            quantity_scale: number;
         };
         AccountRegisterResponse: {
             entries: components["schemas"]["AccountRegisterEntryResponse"][];

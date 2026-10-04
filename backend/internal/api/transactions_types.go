@@ -93,32 +93,81 @@ type accountRegisterResponse struct {
 }
 
 type accountRegisterEntryResponse struct {
-	TransactionID             int64                   `json:"transaction_id"`
-	BookID                    int64                   `json:"book_id"`
-	CorrectionOfTransactionID *int64                  `json:"correction_of_transaction_id,omitempty"`
-	Status                    string                  `json:"status"`
-	TransactionKind           string                  `json:"transaction_kind"`
-	TransactionDate           string                  `json:"transaction_date"`
-	PayeeID                   *int64                  `json:"payee_id,omitempty"`
-	PayeeName                 string                  `json:"payee_name,omitempty"`
-	Description               string                  `json:"description"`
-	ExternalRefHint           string                  `json:"external_ref_hint,omitempty"`
-	NeedsReview               bool                    `json:"needs_review"`
-	VersionID                 int64                   `json:"version_id"`
-	VersionSeq                int64                   `json:"version_seq"`
-	SupersedesVersionID       *int64                  `json:"supersedes_version_id,omitempty"`
-	TransactionTagIDs         []int64                 `json:"transaction_tag_ids"`
-	JournalEntryID            int64                   `json:"journal_entry_id"`
-	EntrySeq                  int64                   `json:"entry_seq"`
-	EntryDate                 string                  `json:"entry_date"`
-	EntryKind                 string                  `json:"entry_kind"`
-	EntryMemo                 string                  `json:"entry_memo"`
-	Posting                   postingResponse         `json:"posting"`
-	RunningBalance            balanceQuantityResponse `json:"running_balance"`
-	CreatedAt                 string                  `json:"created_at"`
-	UpdatedAt                 string                  `json:"updated_at"`
-	ChangeReason              string                  `json:"change_reason"`
-	SystemLabel               string                  `json:"system_label,omitempty"`
+	TransactionID             int64                            `json:"transaction_id"`
+	BookID                    int64                            `json:"book_id"`
+	CorrectionOfTransactionID *int64                           `json:"correction_of_transaction_id,omitempty"`
+	Status                    string                           `json:"status"`
+	TransactionKind           string                           `json:"transaction_kind"`
+	TransactionDate           string                           `json:"transaction_date"`
+	PayeeID                   *int64                           `json:"payee_id,omitempty"`
+	PayeeName                 string                           `json:"payee_name,omitempty"`
+	Description               string                           `json:"description"`
+	ExternalRefHint           string                           `json:"external_ref_hint,omitempty"`
+	NeedsReview               bool                             `json:"needs_review"`
+	VersionID                 int64                            `json:"version_id"`
+	VersionSeq                int64                            `json:"version_seq"`
+	SupersedesVersionID       *int64                           `json:"supersedes_version_id,omitempty"`
+	TransactionTagIDs         []int64                          `json:"transaction_tag_ids"`
+	JournalEntryID            int64                            `json:"journal_entry_id"`
+	EntrySeq                  int64                            `json:"entry_seq"`
+	EntryDate                 string                           `json:"entry_date"`
+	EntryKind                 string                           `json:"entry_kind"`
+	EntryMemo                 string                           `json:"entry_memo"`
+	Posting                   postingResponse                  `json:"posting"`
+	RunningBalance            balanceQuantityResponse          `json:"running_balance"`
+	CreatedAt                 string                           `json:"created_at"`
+	UpdatedAt                 string                           `json:"updated_at"`
+	ChangeReason              string                           `json:"change_reason"`
+	SystemLabel               string                           `json:"system_label,omitempty"`
+	CorrectionChain           *registerCorrectionChainResponse `json:"correction_chain,omitempty"`
+}
+
+type registerCorrectionChainResponse struct {
+	RootTransactionID      int64                              `json:"root_transaction_id"`
+	Role                   string                             `json:"role"`
+	EffectiveTransactionID *int64                             `json:"effective_transaction_id"`
+	NetEffect              registerCorrectionAmountResponse   `json:"net_effect"`
+	Members                []registerCorrectionMemberResponse `json:"members"`
+}
+
+type registerCorrectionMemberResponse struct {
+	TransactionID             int64                             `json:"transaction_id"`
+	CorrectionOfTransactionID *int64                            `json:"correction_of_transaction_id"`
+	Role                      string                            `json:"role"`
+	TransactionDate           string                            `json:"transaction_date"`
+	Status                    string                            `json:"status"`
+	Deleted                   bool                              `json:"deleted"`
+	Reason                    string                            `json:"reason"`
+	Amount                    *registerCorrectionAmountResponse `json:"amount"`
+}
+
+type registerCorrectionAmountResponse struct {
+	QuantityValue exact.Coefficient `json:"quantity_value"`
+	QuantityScale int               `json:"quantity_scale"`
+}
+
+func toRegisterCorrectionChainResponse(chain *app.RegisterCorrectionChain) *registerCorrectionChainResponse {
+	if chain == nil {
+		return nil
+	}
+	members := make([]registerCorrectionMemberResponse, 0, len(chain.Members))
+	for _, member := range chain.Members {
+		var amount *registerCorrectionAmountResponse
+		if member.Amount != nil {
+			amount = &registerCorrectionAmountResponse{QuantityValue: member.Amount.QuantityValue, QuantityScale: member.Amount.QuantityScale}
+		}
+		members = append(members, registerCorrectionMemberResponse{
+			TransactionID: member.TransactionID, CorrectionOfTransactionID: member.CorrectionOfTransactionID,
+			Role: member.Role, TransactionDate: member.TransactionDate, Status: member.Status,
+			Deleted: member.Deleted, Reason: member.Reason, Amount: amount,
+		})
+	}
+	return &registerCorrectionChainResponse{
+		RootTransactionID: chain.RootTransactionID, Role: chain.Role,
+		EffectiveTransactionID: chain.EffectiveTransactionID,
+		NetEffect:              registerCorrectionAmountResponse{QuantityValue: chain.NetEffect.QuantityValue, QuantityScale: chain.NetEffect.QuantityScale},
+		Members:                members,
+	}
 }
 
 type transactionRequest struct {
@@ -336,11 +385,12 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 				CommodityCode:        entry.Posting.CommodityCode,
 				CommoditySymbol:      entry.Posting.CommoditySymbol,
 			},
-			RunningBalance: toBalanceQuantityResponse(entry.RunningBalance),
-			CreatedAt:      entry.CreatedAt,
-			UpdatedAt:      entry.UpdatedAt,
-			ChangeReason:   entry.ChangeReason,
-			SystemLabel:    entry.SystemLabel,
+			RunningBalance:  toBalanceQuantityResponse(entry.RunningBalance),
+			CreatedAt:       entry.CreatedAt,
+			UpdatedAt:       entry.UpdatedAt,
+			ChangeReason:    entry.ChangeReason,
+			SystemLabel:     entry.SystemLabel,
+			CorrectionChain: toRegisterCorrectionChainResponse(entry.CorrectionChain),
 		})
 	}
 	return responses

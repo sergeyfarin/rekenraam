@@ -226,3 +226,46 @@ func TestChainedCashNeutralCorrectionsPreserveCashCheckpoint(t *testing.T) {
 	require.Equal(t, []int64{cash}, activeCheckpointIDsFor(t, f, f.cashAccountID, f.eurCommodityID))
 	require.Equal(t, SelfCheckPassed, checkpointIntegrityResult(t, f).Status)
 }
+
+// Differing fee dates: a fee paid separately from the cash account posts on its
+// own date. Moving that date within one statement period cancels at every
+// boundary, so both checkpoints stay active without an override; moving it
+// across a boundary changes that statement and invalidates it and later ones.
+func TestCorrectionMovingSeparatelyPaidFeeNetsPerBoundary(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	feeAccount := seedTestAccountWithClass(t, f.database, "active", true, "expense", "expense")
+	trade := func(feePaidOn string) InvestmentTradeInput {
+		return InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+			CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+			CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+			QuantityValue: exact.New(10), GrossAmountValue: tradeMoney(-100000), GrossAmountScale: 2,
+			NetSettlementValue: tradeMoney(-100000), NetSettlementScale: 2,
+			Charges: []InvestmentTradeChargeInput{{Kind: "commission", AmountValue: -500, AmountScale: 2,
+				CommodityID: f.eurCommodityID, ChargeAccountID: &feeAccount, CashAccountID: &f.cashAccountID, PaidOn: feePaidOn,
+				Treatment: "separately_expensed"}}}
+	}
+	original, err := f.investmentService.Buy(ctx, trade("2026-01-10"))
+	require.NoError(t, err)
+	early := reconcileAccount(t, f, f.cashAccountID, f.eurCommodityID, "2026-01-05", -1000)
+	late := reconcileAccount(t, f, f.cashAccountID, f.eurCommodityID, "2026-01-31", -1005)
+
+	within := ReplaceInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
+		Reason: "fee paid later in January", Replacement: trade("2026-01-20")}
+	impact, err := f.investmentService.ReplaceBuyReconciliationImpact(ctx, within)
+	require.NoError(t, err)
+	require.Empty(t, impact.AffectedCheckpoints)
+	first, err := acknowledgedReplaceBuy(ctx, f.investmentService, within)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []int64{early, late}, activeCheckpointIDsFor(t, f, f.cashAccountID, f.eurCommodityID))
+
+	across := ReplaceInvestmentBuyInput{OwnerUserID: f.ownerUserID, TransactionID: first.Replacement.Transaction.ID,
+		Reason: "fee was paid with the trade", ReconciliationOverride: true, Replacement: trade("2026-01-03")}
+	impact, err = f.investmentService.ReplaceBuyReconciliationImpact(ctx, across)
+	require.NoError(t, err)
+	requireCheckpointImpactIDs(t, impact, early, late)
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, across)
+	require.NoError(t, err)
+	require.Empty(t, activeCheckpointIDsFor(t, f, f.cashAccountID, f.eurCommodityID))
+}

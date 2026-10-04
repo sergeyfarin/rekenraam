@@ -20,6 +20,7 @@
   import { formatSignedAmount, statusTone } from './transaction-labels';
   import type { AccountClass } from './transaction-labels';
   import TransactionTable from './transaction-table.svelte';
+  import CorrectionChainNote from './correction-chain-note.svelte';
   import TransactionFilterBar from './transaction-filter-bar.svelte';
   import type { TransactionFilters } from './transaction-filter-bar.svelte';
 
@@ -122,6 +123,9 @@
         <span class="mt-0.5 inline-block">
           <StatusBadge tone={statusTone(entry.status)}>{m.transaction_status_voided()}</StatusBadge>
         </span>
+      {/if}
+      {#if entry.correction_chain}
+        <CorrectionChainNote {entry} chain={entry.correction_chain} {locale} />
       {/if}
     </div>
   {/snippet}

@@ -355,6 +355,95 @@ AccountRegisterEntryResponse:
       type: string
       enum: [split_adjustment]
       description: Stable code for a journal the system posted without user text (T-136); the client localizes it. Absent for ordinary journals.
+    correction_chain:
+      $ref: "../../openapi.yaml#/components/schemas/RegisterCorrectionChain"
+RegisterCorrectionChain:
+  type: object
+  description: >-
+    Present when the row's transaction belongs to a correction chain of more
+    than one transaction (T-120). The original, reversal and replacement stay
+    separate posted rows, so the running balance counts each posting once;
+    every row carries the whole chain, so members on other register pages are
+    still named.
+  required:
+    - root_transaction_id
+    - role
+    - effective_transaction_id
+    - net_effect
+    - members
+  properties:
+    root_transaction_id:
+      type: integer
+      format: int64
+    role:
+      $ref: "../../openapi.yaml#/components/schemas/RegisterCorrectionRole"
+    effective_transaction_id:
+      type:
+        - integer
+        - "null"
+      format: int64
+      description: The chain's current effective transaction; null when the chain ends in a pure reversal.
+    net_effect:
+      $ref: "../../openapi.yaml#/components/schemas/RegisterCorrectionAmount"
+    members:
+      type: array
+      description: Every chain transaction in creation order.
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/RegisterCorrectionMember"
+RegisterCorrectionRole:
+  type: string
+  enum: [original, reversal, replacement]
+RegisterCorrectionMember:
+  type: object
+  required:
+    - transaction_id
+    - correction_of_transaction_id
+    - role
+    - transaction_date
+    - status
+    - deleted
+    - reason
+    - amount
+  properties:
+    transaction_id:
+      type: integer
+      format: int64
+    correction_of_transaction_id:
+      type:
+        - integer
+        - "null"
+      format: int64
+    role:
+      $ref: "../../openapi.yaml#/components/schemas/RegisterCorrectionRole"
+    transaction_date:
+      type: string
+      format: date
+    status:
+      $ref: "../../openapi.yaml#/components/schemas/TransactionStatus"
+    deleted:
+      type: boolean
+    reason:
+      type: string
+      description: The correcting operation's reason; empty for the original.
+    amount:
+      description: The member's net in this row's account and commodity; null when it posts nothing here.
+      oneOf:
+        - $ref: "../../openapi.yaml#/components/schemas/RegisterCorrectionAmount"
+        - type: "null"
+RegisterCorrectionAmount:
+  type: object
+  description: Debit-positive exact amount in the row's account and commodity.
+  required:
+    - quantity_value
+    - quantity_scale
+  properties:
+    quantity_value:
+      type: string
+      pattern: '^-?(0|[1-9][0-9]{0,37})$'
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
 AccountRegisterResponse:
   type: object
   required:

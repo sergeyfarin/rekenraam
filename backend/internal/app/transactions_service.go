@@ -117,6 +117,9 @@ func (s *TransactionService) Register(ctx context.Context, accountID int64, inpu
 	if err := s.enrichRegisterPostings(ctx, entries); err != nil {
 		return AccountRegisterResult{}, err
 	}
+	if err := s.attachRegisterCorrectionChains(ctx, accountID, entries); err != nil {
+		return AccountRegisterResult{}, err
+	}
 
 	return AccountRegisterResult{
 		Entries:    entries,

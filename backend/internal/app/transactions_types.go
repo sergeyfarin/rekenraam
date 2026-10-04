@@ -127,6 +127,9 @@ type AccountRegisterEntry struct {
 	UpdatedAt                 string
 	ChangeReason              string
 	SystemLabel               string
+	// CorrectionChain is set when the row's transaction belongs to a
+	// correction chain of more than one transaction (T-120 #135).
+	CorrectionChain *RegisterCorrectionChain
 }
 
 type ListTransactionsInput struct {
