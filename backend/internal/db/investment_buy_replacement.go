@@ -9,10 +9,12 @@ import (
 
 var ErrInvestmentCorrectionDependency = errors.New("investment correction cannot satisfy a dependent operation")
 
-// BuyOperationRecord pins the posted source buy and its one immutable opening
-// lot. A correction must recheck it inside the write transaction.
+// BuyOperationRecord pins a posted acquisition — a buy or a reinvested
+// dividend (T-115) — and its one immutable opening lot. A correction must
+// recheck it inside the write transaction.
 type BuyOperationRecord struct {
 	OperationID          int64
+	OperationKind        string
 	TransactionID        int64
 	TransactionVersionID int64
 	CurrentVersionID     int64
@@ -35,7 +37,7 @@ func (r *InvestmentRepository) BuyOperationByTransactionID(ctx context.Context, 
 func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationReader, bookID, transactionID int64) (BuyOperationRecord, error) {
 	var record BuyOperationRecord
 	var corrected, imported int
-	err := reader.QueryRowContext(ctx, `SELECT o.id, linked_version.transaction_id, link.transaction_version_id,
+	err := reader.QueryRowContext(ctx, `SELECT o.id, o.operation_kind, linked_version.transaction_id, link.transaction_version_id,
 		current.id, f.id, o.event_date, f.account_id, f.commodity_id, f.cost_commodity_id,
 		EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id),
 		(audit.origin_type = 'import' OR EXISTS(SELECT 1 FROM import_commit_identity_effects effect
@@ -50,9 +52,10 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
 		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
 		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
-		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind = 'buy'
+		WHERE o.book_id = ? AND linked_version.transaction_id = ?
+		AND o.operation_kind IN ('buy', 'reinvested_dividend')
 		AND (SELECT count(*) FROM investment_lots one WHERE one.operation_id = o.id) = 1`,
-		bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
+		bookID, transactionID).Scan(&record.OperationID, &record.OperationKind, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.LotID,
 		&record.EventDate, &record.AccountID, &record.CommodityID, &record.CostCommodityID,
 		&corrected, &imported, &record.SourceIdentityID, &record.SourceEffectSeq)
@@ -101,6 +104,15 @@ func checkBuyOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID in
 	return current, nil
 }
 
+// openingLotEventKind is the lot event an acquisition operation records; a
+// replacement must open its lot with the same kind as the original.
+func openingLotEventKind(operationKind string) string {
+	if operationKind == "reinvested_dividend" {
+		return "reinvested_dividend"
+	}
+	return "acquisition"
+}
+
 type BuyReplacementRecord struct {
 	Inverse     TransactionRecord
 	Replacement TransactionRecord
@@ -145,13 +157,15 @@ func (r *InvestmentRepository) replaceBuy(ctx context.Context, expected BuyOpera
 	postWrite func(*sql.Tx, int64, int64) error, preview bool,
 ) (BuyReplacementRecord, error) {
 	if expected.OperationID <= 0 || expected.LotID <= 0 ||
+		(expected.OperationKind != "buy" && expected.OperationKind != "reinvested_dividend") ||
+		lotParams.EventKind != openingLotEventKind(expected.OperationKind) ||
 		inverseParams.BookID <= 0 || inverseParams.BookID != replacementParams.BookID ||
 		inverseParams.BookID != lotParams.BookID ||
 		inverseParams.ActorUserID != replacementParams.ActorUserID ||
 		inverseParams.ActorUserID != lotParams.CreatedByUserID ||
 		inverseParams.Spec.InvestmentOperationKind != "" ||
 		inverseParams.Spec.TransactionKind != "investment" || inverseParams.Spec.Status != "posted" ||
-		replacementParams.Spec.InvestmentOperationKind != "buy" ||
+		replacementParams.Spec.InvestmentOperationKind != expected.OperationKind ||
 		replacementParams.Spec.TransactionKind != "investment" || replacementParams.Spec.Status != "posted" ||
 		inverseParams.Spec.TransactionDate != expected.EventDate ||
 		replacementParams.Spec.TransactionDate != expected.EventDate ||

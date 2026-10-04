@@ -1,0 +1,48 @@
+post:
+  summary: Preview a cash dividend reversal
+  description: >-
+    Runs the reversal writer in a rolled-back transaction and returns the
+    reconciliation checkpoints it would invalidate. No gain_impact is returned:
+    a cash dividend replays no disposal.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalRequest"
+  responses:
+    "200":
+      description: Reconciliation impact computed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ReconciliationImpactResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted cash dividend not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected, imported without its committed source, or changed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

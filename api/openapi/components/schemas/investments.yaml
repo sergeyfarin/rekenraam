@@ -974,6 +974,44 @@ InvestmentCorrectionSplitTerms:
       type: integer
       format: int64
 
+InvestmentCorrectionDividendTerms:
+  type: object
+  description: >-
+    The effective cash dividend's posted facts, for pre-filling a replacement.
+    The date, cash account and currency are fixed for a replacement.
+  required: [event_date, cash_account_id, cash_commodity_id, income_account_id, amount_value, amount_scale]
+  properties:
+    event_date: { type: string, format: date }
+    cash_account_id: { type: integer, format: int64 }
+    cash_commodity_id: { type: integer, format: int64 }
+    income_account_id: { type: integer, format: int64 }
+    amount_value: { type: string, description: Gross dividend coefficient. }
+    amount_scale: { type: integer }
+    withholding_account_id: { type: integer, format: int64 }
+    withholding_value: { type: string, description: Withheld amount coefficient. }
+    withholding_scale: { type: integer }
+    memo: { type: string }
+    payee_id: { type: integer, format: int64 }
+
+InvestmentCorrectionReinvestmentTerms:
+  type: object
+  description: >-
+    The effective reinvested dividend's posted facts, for pre-filling a
+    replacement. Date, holding account, instrument and currency are fixed.
+  required: [event_date, holding_account_id, commodity_id, cash_commodity_id, income_account_id, quantity_value, quantity_scale, amount_value, amount_scale]
+  properties:
+    event_date: { type: string, format: date }
+    holding_account_id: { type: integer, format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    cash_commodity_id: { type: integer, format: int64 }
+    income_account_id: { type: integer, format: int64 }
+    quantity_value: { type: string }
+    quantity_scale: { type: integer }
+    amount_value: { type: string }
+    amount_scale: { type: integer }
+    memo: { type: string }
+    payee_id: { type: integer, format: int64 }
+
 InvestmentSaleReversalRequest:
   type: object
   additionalProperties: false
@@ -1152,9 +1190,59 @@ InvestmentBuyReplacementResponse:
       type: integer
       format: int64
 
+InvestmentDividendReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, replacement]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted cash dividend is being corrected.
+    reconciliation_override:
+      type: boolean
+      description: Omit or set false to preserve affected reconciliation checkpoints.
+    replacement:
+      $ref: "#/DividendRequest"
+
+InvestmentDividendReplacementResponse:
+  type: object
+  required: [inverse_transaction, replacement_transaction, corrected_transaction_id]
+  properties:
+    inverse_transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    replacement_transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    corrected_transaction_id:
+      type: integer
+      format: int64
+
+InvestmentReinvestmentReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, replacement]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted reinvested dividend is being corrected.
+    reconciliation_override:
+      type: boolean
+      description: Omit or set false to preserve affected reconciliation checkpoints.
+    gain_impact_acknowledgement:
+      type: string
+      description: >-
+        The gain_impact.acknowledgement token from this command's
+        reconciliation-impact preview, accepting the committed-disposal gain
+        changes it disclosed. A non-empty change set without it is refused
+        with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token for any
+        other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE.
+    replacement:
+      $ref: "#/ReinvestedDividendRequest"
+
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1180,6 +1268,16 @@ InvestmentCorrectionChainResponse:
       description: Whether the effective posted split can be reversed or replaced (T-129). Dependent replay may still refuse the command.
     effective_split:
       $ref: '#/InvestmentCorrectionSplitTerms'
+    can_correct_dividend:
+      type: boolean
+      description: Whether the effective posted cash dividend can be reversed or replaced (T-115). Imported lineage requires a committed source identity.
+    effective_dividend:
+      $ref: '#/InvestmentCorrectionDividendTerms'
+    can_correct_reinvested_dividend:
+      type: boolean
+      description: Whether the effective posted reinvested dividend can be reversed or replaced (T-115). Dependent replay may still refuse the command.
+    effective_reinvestment:
+      $ref: '#/InvestmentCorrectionReinvestmentTerms'
     operations:
       type: array
       minItems: 1

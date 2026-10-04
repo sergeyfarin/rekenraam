@@ -1,0 +1,61 @@
+post:
+  summary: Reverse a posted reinvested dividend
+  description: >-
+    Posts the exact inverse, retires the reinvestment's trade price and replays
+    later long-position decisions under their recorded methods and specific-lot
+    elections in one audited transaction (T-115). The original reinvestment and
+    its opening lot remain history. A later disposal that cannot be satisfied
+    refuses the command without durable effects. A non-empty gain change set
+    requires the preview's exact gain_impact_acknowledgement.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalRequest"
+  responses:
+    "201":
+      description: Reinvested dividend reversed and dependent position replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted reinvested dividend not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected (INVESTMENT_REINVESTMENT_ALREADY_CORRECTED), changed (INVESTMENT_REINVESTMENT_CHANGED), a later disposal impossible (INVESTMENT_BUY_DEPENDENCY), or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

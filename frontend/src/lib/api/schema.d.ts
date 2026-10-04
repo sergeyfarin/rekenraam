@@ -15222,6 +15222,698 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-dividend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a posted cash dividend
+         * @description Posts the exact inverse of a cash dividend, including any withholding, as a reversal operation under one audit event (T-115). The original dividend remains posted history. A reconciled cash, income or withholding balance requires reconciliation_override. An imported dividend is correctable only while its committed source identity still points to it; that identity stays on the original so a re-fetch keeps deduplicating. gain_impact_acknowledgement is ignored: a cash dividend replays no disposal.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentBuyReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Dividend reversed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentBuyReversalResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted cash dividend not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected (INVESTMENT_DIVIDEND_ALREADY_CORRECTED), imported without its committed source (INVESTMENT_IMPORTED_DIVIDEND), changed (INVESTMENT_DIVIDEND_CHANGED), or reconciliation override required */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-dividend/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a cash dividend reversal
+         * @description Runs the reversal writer in a rolled-back transaction and returns the reconciliation checkpoints it would invalidate. No gain_impact is returned: a cash dividend replays no disposal.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentBuyReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted cash dividend not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, imported without its committed source, or changed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-dividend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a posted cash dividend
+         * @description Posts the inverse and the corrected dividend — gross amount, withholding, income and withholding accounts — under one audit event (T-115). The replacement keeps the dividend date, cash account and currency. The original remains posted history; an imported dividend keeps its committed source identity on the original.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentDividendReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Dividend replaced */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentDividendReplacementResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted cash dividend not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected (INVESTMENT_DIVIDEND_ALREADY_CORRECTED), imported without its committed source (INVESTMENT_IMPORTED_DIVIDEND), changed (INVESTMENT_DIVIDEND_CHANGED), or reconciliation override required */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-dividend/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a cash dividend replacement
+         * @description Runs the replacement writer in a rolled-back transaction and returns the reconciliation checkpoints it would invalidate.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentDividendReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted cash dividend not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, imported without its committed source, or changed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-reinvested-dividend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a posted reinvested dividend
+         * @description Posts the exact inverse, retires the reinvestment's trade price and replays later long-position decisions under their recorded methods and specific-lot elections in one audited transaction (T-115). The original reinvestment and its opening lot remain history. A later disposal that cannot be satisfied refuses the command without durable effects. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentBuyReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Reinvested dividend reversed and dependent position replayed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentBuyReversalResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted reinvested dividend not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected (INVESTMENT_REINVESTMENT_ALREADY_CORRECTED), changed (INVESTMENT_REINVESTMENT_CHANGED), a later disposal impossible (INVESTMENT_BUY_DEPENDENCY), or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-reinvested-dividend/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a reinvested dividend reversal
+         * @description Runs the reversal writer and dependent replay in a rolled-back transaction. Returns affected checkpoints and gain_impact, whose acknowledgement token the command needs as gain_impact_acknowledgement.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentBuyReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Replay and reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted reinvested dividend not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, changed, or a later disposal impossible (INVESTMENT_BUY_DEPENDENCY) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-reinvested-dividend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a posted reinvested dividend
+         * @description Posts the inverse and a corrected reinvestment — quantity, amount and income account — opens a new lot, replays later long disposals, retires the original trade price and updates reconciliation under one audit event (T-115). The replacement keeps the date, holding account, instrument and currency. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentReinvestmentReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Reinvested dividend replaced and dependent position replayed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentBuyReplacementResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted reinvested dividend not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected (INVESTMENT_REINVESTMENT_ALREADY_CORRECTED), changed (INVESTMENT_REINVESTMENT_CHANGED), a later disposal impossible (INVESTMENT_BUY_DEPENDENCY), or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-reinvested-dividend/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a reinvested dividend replacement
+         * @description Runs the whole replacement writer and dependent replay in a rolled-back transaction. Returns affected checkpoints and gain_impact.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentReinvestmentReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Replay and reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted reinvested dividend not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, changed, or a later disposal impossible (INVESTMENT_BUY_DEPENDENCY) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/write-off": {
         parameters: {
             query?: never;
@@ -19912,6 +20604,48 @@ export interface components {
             /** Format: int64 */
             ratio_denominator: number;
         };
+        /** @description The effective cash dividend's posted facts, for pre-filling a replacement. The date, cash account and currency are fixed for a replacement. */
+        InvestmentCorrectionDividendTerms: {
+            /** Format: date */
+            event_date: string;
+            /** Format: int64 */
+            cash_account_id: number;
+            /** Format: int64 */
+            cash_commodity_id: number;
+            /** Format: int64 */
+            income_account_id: number;
+            /** @description Gross dividend coefficient. */
+            amount_value: string;
+            amount_scale: number;
+            /** Format: int64 */
+            withholding_account_id?: number;
+            /** @description Withheld amount coefficient. */
+            withholding_value?: string;
+            withholding_scale?: number;
+            memo?: string;
+            /** Format: int64 */
+            payee_id?: number;
+        };
+        /** @description The effective reinvested dividend's posted facts, for pre-filling a replacement. Date, holding account, instrument and currency are fixed. */
+        InvestmentCorrectionReinvestmentTerms: {
+            /** Format: date */
+            event_date: string;
+            /** Format: int64 */
+            holding_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: int64 */
+            cash_commodity_id: number;
+            /** Format: int64 */
+            income_account_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            amount_value: string;
+            amount_scale: number;
+            memo?: string;
+            /** Format: int64 */
+            payee_id?: number;
+        };
         InvestmentSaleReversalRequest: {
             /** @description Why the posted manual long sale is being reversed. */
             reason: string;
@@ -19983,6 +20717,28 @@ export interface components {
             /** Format: int64 */
             corrected_transaction_id: number;
         };
+        InvestmentDividendReplacementRequest: {
+            /** @description Why the posted cash dividend is being corrected. */
+            reason: string;
+            /** @description Omit or set false to preserve affected reconciliation checkpoints. */
+            reconciliation_override?: boolean;
+            replacement: components["schemas"]["DividendRequest"];
+        };
+        InvestmentDividendReplacementResponse: {
+            inverse_transaction: components["schemas"]["TransactionResponse"];
+            replacement_transaction: components["schemas"]["TransactionResponse"];
+            /** Format: int64 */
+            corrected_transaction_id: number;
+        };
+        InvestmentReinvestmentReplacementRequest: {
+            /** @description Why the posted reinvested dividend is being corrected. */
+            reason: string;
+            /** @description Omit or set false to preserve affected reconciliation checkpoints. */
+            reconciliation_override?: boolean;
+            /** @description The gain_impact.acknowledgement token from this command's reconciliation-impact preview, accepting the committed-disposal gain changes it disclosed. A non-empty change set without it is refused with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED, a token for any other set with INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE. */
+            gain_impact_acknowledgement?: string;
+            replacement: components["schemas"]["ReinvestedDividendRequest"];
+        };
         InvestmentCorrectionChainResponse: {
             /** Format: int64 */
             root_operation_id: number;
@@ -20002,6 +20758,12 @@ export interface components {
             /** @description Whether the effective posted split can be reversed or replaced (T-129). Dependent replay may still refuse the command. */
             can_correct_split: boolean;
             effective_split?: components["schemas"]["InvestmentCorrectionSplitTerms"];
+            /** @description Whether the effective posted cash dividend can be reversed or replaced (T-115). Imported lineage requires a committed source identity. */
+            can_correct_dividend: boolean;
+            effective_dividend?: components["schemas"]["InvestmentCorrectionDividendTerms"];
+            /** @description Whether the effective posted reinvested dividend can be reversed or replaced (T-115). Dependent replay may still refuse the command. */
+            can_correct_reinvested_dividend: boolean;
+            effective_reinvestment?: components["schemas"]["InvestmentCorrectionReinvestmentTerms"];
             operations: components["schemas"]["InvestmentCorrectionNodeResponse"][];
         };
         /** @description Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility. */
@@ -20478,7 +21240,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

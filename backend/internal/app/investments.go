@@ -1713,9 +1713,23 @@ func (s *InvestmentService) dividendPlan(ctx context.Context, input DividendInpu
 }
 
 func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, postWrite func(*sql.Tx, int64) error) (Transaction, error) {
-	plan, err := s.dividendPlan(ctx, input)
+	params, err := s.prepareDividendWrite(ctx, input)
 	if err != nil {
 		return Transaction{}, err
+	}
+	record, err := s.transactionService.repository.CreateTransactionWithPostWrite(ctx, params, postWrite)
+	if err != nil {
+		return Transaction{}, mapTransactionDBError(err)
+	}
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
+}
+
+// prepareDividendWrite freezes the journal and its gross and withholding
+// components. Ordinary entry and replacement (T-115) share it.
+func (s *InvestmentService) prepareDividendWrite(ctx context.Context, input DividendInput) (db.CreateTransactionParams, error) {
+	plan, err := s.dividendPlan(ctx, input)
+	if err != nil {
+		return db.CreateTransactionParams{}, err
 	}
 	createInput := plan.Create
 	// A cash dividend touches cash, income and withholding only — it creates no
@@ -1725,7 +1739,7 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 	// the shares (T-98).
 	params, err := s.transactionService.prepareCreateTransactionForWriteCarrying(ctx, createInput, plan.AccountRuleDependencies)
 	if err != nil {
-		return Transaction{}, err
+		return db.CreateTransactionParams{}, err
 	}
 	params.InvestmentComponents = []db.InvestmentComponentSpec{{
 		Kind: "dividend_gross", CommodityID: input.CashCommodityID,
@@ -1743,14 +1757,16 @@ func (s *InvestmentService) dividend(ctx context.Context, input DividendInput, p
 			AmountDate: plan.Date,
 		})
 	}
-	record, err := s.transactionService.repository.CreateTransactionWithPostWrite(ctx, params, postWrite)
-	if err != nil {
-		return Transaction{}, mapTransactionDBError(err)
-	}
-	return s.transactionService.enrichOne(ctx, toTransaction(record))
+	return params, nil
 }
 
 func (s *InvestmentService) reinvestedDividendPlan(ctx context.Context, input ReinvestedDividendInput) (investmentTransactionPlan, error) {
+	return s.reinvestedDividendPlanAs(ctx, input, "investment.reinvested_dividend")
+}
+
+// reinvestedDividendPlanAs plans the journal under a command's own audit
+// operation code, so a replacement records investment.reinvested_dividend.replace.
+func (s *InvestmentService) reinvestedDividendPlanAs(ctx context.Context, input ReinvestedDividendInput, operationCode string) (investmentTransactionPlan, error) {
 	date, err := validateReinvestedDividendInput(input)
 	if err != nil {
 		return investmentTransactionPlan{}, err
@@ -1796,7 +1812,7 @@ func (s *InvestmentService) reinvestedDividendPlan(ctx context.Context, input Re
 			AuthSessionID:          input.AuthSessionID,
 			RequestID:              input.RequestID,
 			OriginType:             "browser_api",
-			Operation:              "investment.reinvested_dividend",
+			Operation:              operationCode,
 			ChangeReason:           input.ChangeReason,
 			ReconciliationOverride: input.ReconciliationOverride,
 			Spec: TransactionInput{
@@ -1836,7 +1852,13 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 }
 
 func (s *InvestmentService) prepareReinvestmentWrite(ctx context.Context, input ReinvestedDividendInput) (db.CreateTransactionParams, db.CreateInvestmentLotParams, error) {
-	plan, err := s.reinvestedDividendPlan(ctx, input)
+	return s.prepareReinvestmentWriteAs(ctx, input, "investment.reinvested_dividend")
+}
+
+// prepareReinvestmentWriteAs freezes the journal, income component, trade
+// price and opening lot. Ordinary entry and replacement share it.
+func (s *InvestmentService) prepareReinvestmentWriteAs(ctx context.Context, input ReinvestedDividendInput, operationCode string) (db.CreateTransactionParams, db.CreateInvestmentLotParams, error) {
+	plan, err := s.reinvestedDividendPlanAs(ctx, input, operationCode)
 	if err != nil {
 		return db.CreateTransactionParams{}, db.CreateInvestmentLotParams{}, err
 	}

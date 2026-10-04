@@ -97,3 +97,40 @@ func TestImportIdentityRefusesUnlinkedInvestmentJournal(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, found)
 }
+
+// T-115: dividend and reinvestment corrections export one row per operation
+// with their correction link, mode and reason, like trade corrections.
+func TestDividendAndReinvestmentCorrectionsExportAsOperations(t *testing.T) {
+	ctx := context.Background()
+	f := newInvestmentsTestFixture(t)
+	dividend, err := f.investmentService.Dividend(ctx, cashDividendInput(f, 0, 10000, 0))
+	require.NoError(t, err)
+	replaced, err := f.investmentService.ReplaceDividend(ctx, ReplaceInvestmentDividendInput{OwnerUserID: f.ownerUserID,
+		TransactionID: dividend.ID, Reason: "wrong gross", Replacement: cashDividendInput(f, 0, 12000, 0)})
+	require.NoError(t, err)
+	reinvestment := reinvestOn(t, f, "2026-01-01", 2, 400)
+	reversal, err := f.investmentService.ReverseReinvestedDividend(ctx, ReverseReinvestedDividendInput{
+		OwnerUserID: f.ownerUserID, TransactionID: reinvestment.Transaction.ID, Reason: "paid as cash"})
+	require.NoError(t, err)
+
+	snapshot, err := db.NewExportRepository(f.database).Snapshot(ctx)
+	require.NoError(t, err)
+	var out bytes.Buffer
+	_, err = NewExportService(db.NewExportRepository(f.database)).writeInvestmentOperationsCSV(ctx, &out, snapshot)
+	require.NoError(t, err)
+	require.NoError(t, snapshot.Rollback())
+	rows, err := csv.NewReader(bytes.NewReader(out.Bytes())).ReadAll()
+	require.NoError(t, err)
+	byTransaction := make(map[string][]string)
+	for _, row := range rows[1:] {
+		byTransaction[row[1]] = row
+	}
+	require.Len(t, byTransaction, 4)
+	original := byTransaction[strconv.FormatInt(dividend.ID, 10)]
+	replacement := byTransaction[strconv.FormatInt(replaced.Replacement.ID, 10)]
+	require.Equal(t, []string{"dividend", original[0], "replace", "wrong gross"},
+		[]string{replacement[2], replacement[5], replacement[6], replacement[7]})
+	reversed := byTransaction[strconv.FormatInt(reversal.ID, 10)]
+	require.Equal(t, []string{"reversal", "reverse", "paid as cash"}, []string{reversed[2], reversed[6], reversed[7]})
+	require.Equal(t, byTransaction[strconv.FormatInt(reinvestment.Transaction.ID, 10)][0], reversed[5])
+}

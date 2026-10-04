@@ -331,6 +331,22 @@ paths:
     $ref: "./paths/investments-replace-buy.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-buy/reconciliation-impact:
     $ref: "./paths/investments-replace-buy-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-dividend:
+    $ref: "./paths/investments-reverse-dividend.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-dividend/reconciliation-impact:
+    $ref: "./paths/investments-reverse-dividend-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-dividend:
+    $ref: "./paths/investments-replace-dividend.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-dividend/reconciliation-impact:
+    $ref: "./paths/investments-replace-dividend-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-reinvested-dividend:
+    $ref: "./paths/investments-reverse-reinvested-dividend.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-reinvested-dividend/reconciliation-impact:
+    $ref: "./paths/investments-reverse-reinvested-dividend-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-reinvested-dividend:
+    $ref: "./paths/investments-replace-reinvested-dividend.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-reinvested-dividend/reconciliation-impact:
+    $ref: "./paths/investments-replace-reinvested-dividend-reconciliation-impact.yaml"
   /api/v1/investments/write-off:
     $ref: "./paths/investments-write-off.yaml"
   /api/v1/investments/sell/preview:
@@ -1016,6 +1032,10 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitReplacementResponse"
     InvestmentCorrectionSplitTerms:
       $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionSplitTerms"
+    InvestmentCorrectionDividendTerms:
+      $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionDividendTerms"
+    InvestmentCorrectionReinvestmentTerms:
+      $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionReinvestmentTerms"
     InvestmentSaleReversalRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReversalRequest"
     InvestmentSaleReversalResponse:
@@ -1036,6 +1056,12 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentBuyReplacementTradeRequest"
     InvestmentBuyReplacementResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentBuyReplacementResponse"
+    InvestmentDividendReplacementRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentDividendReplacementRequest"
+    InvestmentDividendReplacementResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentDividendReplacementResponse"
+    InvestmentReinvestmentReplacementRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentReinvestmentReplacementRequest"
     InvestmentCorrectionChainResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionChainResponse"
     InvestmentTradeCorrectionContextResponse:

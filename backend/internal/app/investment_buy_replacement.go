@@ -146,22 +146,54 @@ func (s *InvestmentService) ReplaceBuyReconciliationImpact(ctx context.Context, 
 }
 
 func (s *InvestmentService) buyReplacementPlan(ctx context.Context, input ReplaceInvestmentBuyInput) (db.BuyOperationRecord, CreateTransactionInput, error) {
+	return s.acquisitionCorrectionPlan(ctx, acquisitionCorrectionRequest{
+		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
+		TransactionID: input.TransactionID, Reason: input.Reason, ReconciliationOverride: input.ReconciliationOverride,
+		OperationKind: "buy", Operation: "investment.buy.replace", Noun: "buy",
+	})
+}
+
+// acquisitionCorrectionRequest names the posted acquisition a reversal or
+// replacement starts from. OperationKind fences each command to its own
+// family: a buy command never corrects a reinvested dividend, and vice versa.
+type acquisitionCorrectionRequest struct {
+	OwnerUserID            int64
+	AuthSessionID          int64
+	RequestID              string
+	TransactionID          int64
+	Reason                 string
+	ReconciliationOverride bool
+	OperationKind          string
+	Operation              string
+	Noun                   string
+}
+
+// acquisitionCorrectionPlan pins the effective acquisition and plans its
+// exact inverse journal. The writer rechecks the same facts in its transaction.
+func (s *InvestmentService) acquisitionCorrectionPlan(ctx context.Context, input acquisitionCorrectionRequest) (db.BuyOperationRecord, CreateTransactionInput, error) {
 	if input.OwnerUserID <= 0 || input.TransactionID <= 0 {
-		return db.BuyOperationRecord{}, CreateTransactionInput{}, ValidationError{Message: "owner and buy id are required"}
+		return db.BuyOperationRecord{}, CreateTransactionInput{}, ValidationError{Message: "owner and " + input.Noun + " id are required"}
 	}
 	if strings.TrimSpace(input.Reason) == "" {
-		return db.BuyOperationRecord{}, CreateTransactionInput{}, ValidationError{Message: "buy replacement reason is required"}
+		return db.BuyOperationRecord{}, CreateTransactionInput{}, ValidationError{Message: input.Noun + " correction reason is required"}
 	}
 	reason, err := cleanChangeReason(input.Reason, "")
 	if err != nil {
 		return db.BuyOperationRecord{}, CreateTransactionInput{}, err
 	}
+	notFound, alreadyCorrected, changed := ErrInvestmentBuyNotFound, ErrInvestmentBuyAlreadyCorrected, ErrInvestmentBuyChanged
+	if input.OperationKind == "reinvested_dividend" {
+		notFound, alreadyCorrected, changed = ErrInvestmentReinvestmentNotFound, ErrInvestmentReinvestmentAlreadyCorrected, ErrInvestmentReinvestmentChanged
+	}
 	operation, err := s.repository.BuyOperationByTransactionID(ctx, BookID, input.TransactionID)
+	if errors.Is(err, db.ErrNotFound) || (err == nil && operation.OperationKind != input.OperationKind) {
+		return db.BuyOperationRecord{}, CreateTransactionInput{}, notFound
+	}
 	if err != nil {
 		return db.BuyOperationRecord{}, CreateTransactionInput{}, mapBuyReplacementError(err)
 	}
 	if operation.AlreadyCorrected {
-		return db.BuyOperationRecord{}, CreateTransactionInput{}, ErrInvestmentBuyAlreadyCorrected
+		return db.BuyOperationRecord{}, CreateTransactionInput{}, alreadyCorrected
 	}
 	if operation.ImportedLineage {
 		linked, err := s.repository.HasCommittedImportSource(ctx, BookID, operation.OperationID)
@@ -179,12 +211,12 @@ func (s *InvestmentService) buyReplacementPlan(ctx context.Context, input Replac
 	if original.VersionID != operation.CurrentVersionID || original.Status != "posted" ||
 		original.TransactionKind != "investment" || original.DeletedAt != "" ||
 		original.TransactionDate != operation.EventDate {
-		return db.BuyOperationRecord{}, CreateTransactionInput{}, ErrInvestmentBuyChanged
+		return db.BuyOperationRecord{}, CreateTransactionInput{}, changed
 	}
 	return operation, CreateTransactionInput{
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 		RequestID: input.RequestID, OriginType: "browser_api",
-		Operation: "investment.buy.replace", CorrectionOfTransactionID: &operation.TransactionID,
+		Operation: input.Operation, CorrectionOfTransactionID: &operation.TransactionID,
 		Spec: invertedInvestmentTransactionSpec(original), ChangeReason: reason,
 		ReconciliationOverride: input.ReconciliationOverride,
 	}, nil

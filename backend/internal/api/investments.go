@@ -298,6 +298,10 @@ type investmentCorrectionChainResponse struct {
 	CanReverseBuy          bool                               `json:"can_reverse_buy"`
 	CanCorrectSplit        bool                               `json:"can_correct_split"`
 	EffectiveSplit         *investmentCorrectionSplitTerms    `json:"effective_split,omitempty"`
+	CanCorrectDividend     bool                               `json:"can_correct_dividend"`
+	EffectiveDividend      *investmentCorrectionDividendTerms `json:"effective_dividend,omitempty"`
+	CanCorrectReinvested   bool                               `json:"can_correct_reinvested_dividend"`
+	EffectiveReinvestment  *investmentCorrectionReinvestTerms `json:"effective_reinvestment,omitempty"`
 	Operations             []investmentCorrectionNodeResponse `json:"operations"`
 }
 
@@ -1106,6 +1110,8 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanReverseManualSale: chain.CanReverseManualSale, CanReverseManualBuy: chain.CanReverseManualBuy,
 			CanReverseSale: chain.CanReverseSale, CanReverseBuy: chain.CanReverseBuy,
 			CanCorrectSplit: chain.CanCorrectSplit, EffectiveSplit: toInvestmentCorrectionSplitTerms(chain.EffectiveSplit),
+			CanCorrectDividend: chain.CanCorrectDividend, EffectiveDividend: toInvestmentCorrectionDividendTerms(chain.EffectiveDividend),
+			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
 			Operations: operations,
 		})
 	}
@@ -1794,6 +1800,20 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_BUY_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentBuyDependency):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_BUY_DEPENDENCY", err.Error())
+	case errors.Is(err, app.ErrInvestmentDividendNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment dividend operation not found")
+	case errors.Is(err, app.ErrInvestmentDividendAlreadyCorrected):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_DIVIDEND_ALREADY_CORRECTED", err.Error())
+	case errors.Is(err, app.ErrInvestmentImportedDividend):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_IMPORTED_DIVIDEND", err.Error())
+	case errors.Is(err, app.ErrInvestmentDividendChanged):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_DIVIDEND_CHANGED", err.Error())
+	case errors.Is(err, app.ErrInvestmentReinvestmentNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "reinvested dividend operation not found")
+	case errors.Is(err, app.ErrInvestmentReinvestmentAlreadyCorrected):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED", err.Error())
+	case errors.Is(err, app.ErrInvestmentReinvestmentChanged):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_REINVESTMENT_CHANGED", err.Error())
 	case errors.Is(err, app.ErrGainImpactAcknowledgementRequired):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED", err.Error())
 	case errors.Is(err, app.ErrGainImpactAcknowledgementStale):
@@ -2520,4 +2540,53 @@ func toInvestmentCorrectionSplitTerms(terms *app.InvestmentCorrectionSplitTerms)
 	}
 	return &investmentCorrectionSplitTerms{HoldingAccountID: terms.HoldingAccountID, CommodityID: terms.CommodityID,
 		EffectiveOn: terms.EffectiveOn, RatioNumerator: terms.RatioNumerator, RatioDenominator: terms.RatioDenominator}
+}
+
+type investmentCorrectionDividendTerms struct {
+	EventDate            string             `json:"event_date"`
+	CashAccountID        int64              `json:"cash_account_id"`
+	CashCommodityID      int64              `json:"cash_commodity_id"`
+	IncomeAccountID      int64              `json:"income_account_id"`
+	AmountValue          exact.Coefficient  `json:"amount_value"`
+	AmountScale          int                `json:"amount_scale"`
+	WithholdingAccountID *int64             `json:"withholding_account_id,omitempty"`
+	WithholdingValue     *exact.Coefficient `json:"withholding_value,omitempty"`
+	WithholdingScale     *int               `json:"withholding_scale,omitempty"`
+	Memo                 string             `json:"memo,omitempty"`
+	PayeeID              *int64             `json:"payee_id,omitempty"`
+}
+
+func toInvestmentCorrectionDividendTerms(terms *app.InvestmentCorrectionDividendTerms) *investmentCorrectionDividendTerms {
+	if terms == nil {
+		return nil
+	}
+	return &investmentCorrectionDividendTerms{EventDate: terms.EventDate, CashAccountID: terms.CashAccountID,
+		CashCommodityID: terms.CashCommodityID, IncomeAccountID: terms.IncomeAccountID,
+		AmountValue: terms.AmountValue, AmountScale: terms.AmountScale,
+		WithholdingAccountID: terms.WithholdingAccountID, WithholdingValue: terms.WithholdingValue,
+		WithholdingScale: terms.WithholdingScale, Memo: terms.Memo, PayeeID: terms.PayeeID}
+}
+
+type investmentCorrectionReinvestTerms struct {
+	EventDate        string            `json:"event_date"`
+	HoldingAccountID int64             `json:"holding_account_id"`
+	CommodityID      int64             `json:"commodity_id"`
+	CashCommodityID  int64             `json:"cash_commodity_id"`
+	IncomeAccountID  int64             `json:"income_account_id"`
+	QuantityValue    exact.Coefficient `json:"quantity_value"`
+	QuantityScale    int               `json:"quantity_scale"`
+	AmountValue      exact.Coefficient `json:"amount_value"`
+	AmountScale      int               `json:"amount_scale"`
+	Memo             string            `json:"memo,omitempty"`
+	PayeeID          *int64            `json:"payee_id,omitempty"`
+}
+
+func toInvestmentCorrectionReinvestTerms(terms *app.InvestmentCorrectionReinvestmentTerms) *investmentCorrectionReinvestTerms {
+	if terms == nil {
+		return nil
+	}
+	return &investmentCorrectionReinvestTerms{EventDate: terms.EventDate, HoldingAccountID: terms.HoldingAccountID,
+		CommodityID: terms.CommodityID, CashCommodityID: terms.CashCommodityID, IncomeAccountID: terms.IncomeAccountID,
+		QuantityValue: terms.QuantityValue, QuantityScale: terms.QuantityScale,
+		AmountValue: terms.AmountValue, AmountScale: terms.AmountScale, Memo: terms.Memo, PayeeID: terms.PayeeID}
 }

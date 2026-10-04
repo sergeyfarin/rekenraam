@@ -1,0 +1,48 @@
+post:
+  summary: Preview a reinvested dividend reversal
+  description: >-
+    Runs the reversal writer and dependent replay in a rolled-back transaction.
+    Returns affected checkpoints and gain_impact, whose acknowledgement token
+    the command needs as gain_impact_acknowledgement.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalRequest"
+  responses:
+    "200":
+      description: Replay and reconciliation impact computed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ReconciliationImpactResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted reinvested dividend not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected, changed, or a later disposal impossible (INVESTMENT_BUY_DEPENDENCY)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

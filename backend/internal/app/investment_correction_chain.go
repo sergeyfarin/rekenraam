@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"rekenraam/backend/internal/db"
+	"rekenraam/backend/internal/exact"
 )
 
 var ErrInvestmentOperationNotFound = errors.New("investment operation not found")
@@ -34,7 +35,45 @@ type InvestmentCorrectionChain struct {
 	// EffectiveSplit then carries the split's terms for a replacement form.
 	CanCorrectSplit bool
 	EffectiveSplit  *InvestmentCorrectionSplitTerms
-	Operations      []InvestmentCorrectionNode
+	// CanCorrectDividend / CanCorrectReinvestedDividend allow native reversal
+	// and replacement (T-115); the Effective* terms pre-fill the replacement.
+	CanCorrectDividend           bool
+	EffectiveDividend            *InvestmentCorrectionDividendTerms
+	CanCorrectReinvestedDividend bool
+	EffectiveReinvestment        *InvestmentCorrectionReinvestmentTerms
+	Operations                   []InvestmentCorrectionNode
+}
+
+// InvestmentCorrectionDividendTerms are an effective cash dividend's posted
+// facts. The date, cash account and currency are fixed for a replacement.
+type InvestmentCorrectionDividendTerms struct {
+	EventDate            string
+	CashAccountID        int64
+	CashCommodityID      int64
+	IncomeAccountID      int64
+	AmountValue          exact.Coefficient
+	AmountScale          int
+	WithholdingAccountID *int64
+	WithholdingValue     *exact.Coefficient
+	WithholdingScale     *int
+	Memo                 string
+	PayeeID              *int64
+}
+
+// InvestmentCorrectionReinvestmentTerms are an effective reinvested
+// dividend's posted facts. Date, holding, instrument and currency are fixed.
+type InvestmentCorrectionReinvestmentTerms struct {
+	EventDate        string
+	HoldingAccountID int64
+	CommodityID      int64
+	CashCommodityID  int64
+	IncomeAccountID  int64
+	QuantityValue    exact.Coefficient
+	QuantityScale    int
+	AmountValue      exact.Coefficient
+	AmountScale      int
+	Memo             string
+	PayeeID          *int64
 }
 
 // InvestmentCorrectionSplitTerms are an effective split's current terms.
@@ -113,6 +152,22 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 				RatioNumerator: split.RatioNumerator, RatioDenominator: split.RatioDenominator,
 			}
 		}
+		correctable := effective && (!importedLineage || committedSource) &&
+			record.TransactionStatus.String == "posted" && !record.TransactionDeleted
+		if correctable && record.OperationKind == "dividend" {
+			transaction, err := s.transactionService.Transaction(ctx, record.TransactionID.Int64)
+			if err != nil {
+				return InvestmentCorrectionChain{}, err
+			}
+			chain.EffectiveDividend, chain.CanCorrectDividend = dividendCorrectionTerms(transaction)
+		}
+		if correctable && record.OperationKind == "reinvested_dividend" && !importedLineage {
+			transaction, err := s.transactionService.Transaction(ctx, record.TransactionID.Int64)
+			if err != nil {
+				return InvestmentCorrectionChain{}, err
+			}
+			chain.EffectiveReinvestment, chain.CanCorrectReinvestedDividend = reinvestmentCorrectionTerms(transaction)
+		}
 		if effective && record.OperationKind == "buy" && (!importedLineage || committedSource) &&
 			record.TransactionStatus.String == "posted" && !record.TransactionDeleted {
 			chain.CanReverseBuy = true
@@ -120,4 +175,62 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 		}
 	}
 	return chain, nil
+}
+
+// dividendCorrectionTerms reads a posted cash dividend in the shape
+// dividendPlan writes: cash +gross, income -gross, then optionally
+// withholding +w and cash -w. Any other shape is not offered for correction.
+func dividendCorrectionTerms(transaction Transaction) (*InvestmentCorrectionDividendTerms, bool) {
+	if len(transaction.JournalEntries) != 1 {
+		return nil, false
+	}
+	postings := transaction.JournalEntries[0].Postings
+	if len(postings) != 2 && len(postings) != 4 {
+		return nil, false
+	}
+	cash, income := postings[0], postings[1]
+	if cash.CommodityID != income.CommodityID || cash.QuantityScale != income.QuantityScale ||
+		cash.QuantityValue.Sign() <= 0 || income.QuantityValue != cash.QuantityValue.Negated() {
+		return nil, false
+	}
+	terms := &InvestmentCorrectionDividendTerms{
+		EventDate: transaction.TransactionDate, CashAccountID: cash.AccountID, CashCommodityID: cash.CommodityID,
+		IncomeAccountID: income.AccountID, AmountValue: cash.QuantityValue, AmountScale: cash.QuantityScale,
+		Memo: transaction.Description, PayeeID: transaction.PayeeID,
+	}
+	if len(postings) == 4 {
+		withholding, paid := postings[2], postings[3]
+		if paid.AccountID != cash.AccountID || withholding.CommodityID != cash.CommodityID ||
+			paid.CommodityID != cash.CommodityID || withholding.QuantityScale != paid.QuantityScale ||
+			withholding.QuantityValue.Sign() <= 0 || paid.QuantityValue != withholding.QuantityValue.Negated() {
+			return nil, false
+		}
+		account, value, scale := withholding.AccountID, withholding.QuantityValue, withholding.QuantityScale
+		terms.WithholdingAccountID, terms.WithholdingValue, terms.WithholdingScale = &account, &value, &scale
+	}
+	return terms, true
+}
+
+// reinvestmentCorrectionTerms reads a posted reinvestment in the shape
+// reinvestedDividendPlan writes: holding +q, trading -q, trading +amount,
+// income -amount.
+func reinvestmentCorrectionTerms(transaction Transaction) (*InvestmentCorrectionReinvestmentTerms, bool) {
+	if len(transaction.JournalEntries) != 1 || len(transaction.JournalEntries[0].Postings) != 4 {
+		return nil, false
+	}
+	postings := transaction.JournalEntries[0].Postings
+	holding, units, cost, income := postings[0], postings[1], postings[2], postings[3]
+	if holding.QuantityValue.Sign() <= 0 || units.CommodityID != holding.CommodityID ||
+		units.QuantityValue != holding.QuantityValue.Negated() || units.AccountID != cost.AccountID ||
+		cost.CommodityID != income.CommodityID || cost.QuantityScale != income.QuantityScale ||
+		cost.QuantityValue.Sign() <= 0 || income.QuantityValue != cost.QuantityValue.Negated() {
+		return nil, false
+	}
+	return &InvestmentCorrectionReinvestmentTerms{
+		EventDate: transaction.TransactionDate, HoldingAccountID: holding.AccountID, CommodityID: holding.CommodityID,
+		CashCommodityID: cost.CommodityID, IncomeAccountID: income.AccountID,
+		QuantityValue: holding.QuantityValue, QuantityScale: holding.QuantityScale,
+		AmountValue: cost.QuantityValue, AmountScale: cost.QuantityScale,
+		Memo: transaction.Description, PayeeID: transaction.PayeeID,
+	}, true
 }
