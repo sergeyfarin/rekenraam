@@ -4,6 +4,10 @@ post:
     Posts an inverse and corrected sale, rebuilds the position, retires the
     original trade price, and updates reconciliation under one audit event.
     Older dependent sales are replayed. The original remains posted history.
+    The replacement may change the trade date, holding account, instrument or
+    cost currency (T-116): the inverse keeps the original dates, the source
+    position replays without the sale, and the corrected sale is admitted at
+    its new date in its root's same-day slot, replaying later decisions there.
     An imported sale needs an immutable committed source identity effect
     pointing to that operation; the original source row and dedupe fingerprint
     remain unchanged.

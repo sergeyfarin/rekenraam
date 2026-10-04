@@ -472,6 +472,17 @@ notes record design decisions per area; they carry no status or order.
   `investment_lots`.
 - **Correction families** (T-115, T-116, T-118, T-119, T-120). Field and
   transfer changes reuse general backdating and the cross-position closure.
+  T-116 (shipped) admits a buy or sale replacement with a different trade
+  date, holding account, instrument or cost currency. The inverse keeps every
+  original journal date; the replacement posts at its corrected trade,
+  settlement and charge dates. The source position replays without the trade
+  and the new one with it, in one transaction with transfer propagation; a
+  moved sale is a backdated disposal (T-117) in its correction root's same-day
+  slot. A broken later disposal, specific-lot election, transfer of the moved
+  acquisition or changed pooled lineage is a named refusal. An imported trade
+  may move; its committed identity stays on the original, so re-fetches stay
+  duplicates and later provider revisions are refused for review. Dividend
+  date/account/currency remain fixed.
   Provider cancellation/wider revisions (T-121) require verified execution
   evidence; cancelled order status is insufficient.
 - **Remaining slice 5 actions, shorts, compound actions.** Outbound transfers,

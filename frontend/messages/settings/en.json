@@ -755,6 +755,7 @@
   "transactions_investment_replace_sale_gain_copy": "The corrected gain is recalculated when you save. Review it in Gains afterwards.",
   "transactions_investment_replace_lots_title": "Choose lots",
   "transactions_investment_replace_lots_copy": "Allocate the full sale quantity across lots available immediately before this sale.",
+  "transactions_investment_replace_moved_lots_hint": "Choosing specific lots needs the original holding account and instrument; a moved sale uses FIFO, LIFO or average cost.",
   "transactions_investment_replace_lot": "Lot",
   "transactions_investment_replace_lot_select": "Select lot",
   "transactions_investment_replace_lot_add": "Add lot",

@@ -756,6 +756,7 @@
   "transactions_investment_replace_sale_gain_copy": "La ganancia corregida se recalcula al guardar. Revísala después en Ganancias.",
   "transactions_investment_replace_lots_title": "Elegir lotes",
   "transactions_investment_replace_lots_copy": "Distribuye toda la cantidad vendida entre los lotes disponibles justo antes de esta venta.",
+  "transactions_investment_replace_moved_lots_hint": "Elegir lotes concretos requiere la cuenta de valores y el instrumento originales; una venta trasladada usa FIFO, LIFO o coste medio.",
   "transactions_investment_replace_lot": "Lote",
   "transactions_investment_replace_lot_select": "Seleccionar lote",
   "transactions_investment_replace_lot_add": "Añadir lote",

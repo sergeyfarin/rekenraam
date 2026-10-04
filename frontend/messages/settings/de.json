@@ -756,6 +756,7 @@
   "transactions_investment_replace_sale_gain_copy": "Der korrigierte Gewinn wird beim Speichern neu berechnet. Prüfen Sie ihn danach unter Gewinne.",
   "transactions_investment_replace_lots_title": "Lots auswählen",
   "transactions_investment_replace_lots_copy": "Verteilen Sie die gesamte Verkaufsmenge auf Lots, die unmittelbar vor diesem Verkauf verfügbar waren.",
+  "transactions_investment_replace_moved_lots_hint": "Bestimmte Lots können nur beim ursprünglichen Depotkonto und Instrument gewählt werden; ein verschobener Verkauf verwendet FIFO, LIFO oder Durchschnittskosten.",
   "transactions_investment_replace_lot": "Lot",
   "transactions_investment_replace_lot_select": "Lot auswählen",
   "transactions_investment_replace_lot_add": "Lot hinzufügen",

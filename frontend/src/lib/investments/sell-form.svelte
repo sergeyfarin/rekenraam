@@ -65,11 +65,15 @@
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
   // Instrument autocomplete
-  let instrumentSearch = $state('');
+  let instrumentSearch = $state(untrack(() => correction?.commodity_code) ?? '');
   let instrumentSearchDebounced = $state('');
   let instrumentDebounceTimer: ReturnType<typeof setTimeout> | undefined;
   let instrumentDropdownOpen = $state(false);
   let selectedInstrument = $state<InvestmentInstrumentResponse | null>(null);
+  // A correction may move the trade to another instrument (T-116). Until the
+  // user picks one, the recorded instrument stays selected.
+  const commodityID = $derived(selectedInstrument?.commodity_id ??
+    (correction && instrumentSearch === correction.commodity_code ? correction.commodity_id : undefined));
 
   const instrumentSearchQuery = createQuery(() => ({
     queryKey: [...investmentInstrumentsQueryKey, 'search', instrumentSearchDebounced] as const,
@@ -159,7 +163,6 @@
         a.account_class === 'asset' &&
         a.status === 'active' &&
         a.allows_postings &&
-        (!correction || a.default_commodity_id === correction.cost_commodity_id) &&
         a.account_kind !== 'security_holding' &&
         a.account_kind !== 'fund_holding'
     )
@@ -199,7 +202,7 @@
   }
 
   const previewReady = $derived(
-    (!!correction || !!selectedInstrument) &&
+    !!commodityID &&
     holdingAccountID !== '' &&
     cashAccountID !== '' &&
     !!cashCommodityID &&
@@ -288,7 +291,7 @@
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
-    if (!canSubmit || (!correction && !selectedInstrument) || !cashCommodityID) return;
+    if (!canSubmit || !commodityID || !cashCommodityID) return;
     if (correction && !reason.trim()) return;
     if (correction && charges.some((charge) => !charge.treatment)) {
       formError = new Error(m.transactions_investment_replace_charge_treatment());
@@ -326,7 +329,7 @@
 
     const payload: InvestmentTradeRequest = {
       transaction_date: transactionDate,
-      commodity_id: correction?.commodity_id ?? selectedInstrument!.commodity_id,
+      commodity_id: commodityID,
       holding_account_id: Number(holdingAccountID),
       cash_account_id: Number(cashAccountID),
       quantity_value: quantity.value,
@@ -423,6 +426,16 @@
   const COST_BASIS_METHODS: CostBasisMethod[] = initialCorrection
     ? ['fifo', 'lifo', 'average_cost', 'specific_lot'] : ['fifo', 'lifo', 'average_cost'];
 
+  // The listed lots belong to the recorded position. A sale moved to another
+  // holding or instrument cannot elect them; it uses a recorded order method.
+  const positionMoved = $derived(!!correction &&
+    (Number(holdingAccountID) !== correction.holding_account_id || commodityID !== correction.commodity_id));
+  const availableMethods = $derived(positionMoved
+    ? COST_BASIS_METHODS.filter((method) => method !== 'specific_lot') : COST_BASIS_METHODS);
+  $effect(() => {
+    if (positionMoved && costBasisMethod === 'specific_lot') costBasisMethod = 'fifo';
+  });
+
   function replacementMethodLabel(method: CostBasisMethod): string {
     switch (method) {
       case 'fifo': return m.transactions_investment_replace_method_fifo();
@@ -475,16 +488,12 @@
       id="sell-date"
       type="date"
       bind:value={transactionDate}
-      disabled={!!correction}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
       required
     />
   </div>
 
   <!-- Instrument autocomplete -->
-  {#if correction}
-    <p class="text-sm text-foreground">{m.investments_form_instrument()}: <strong>{correction.commodity_code}</strong></p>
-  {:else}
   <div class="relative">
     <label for="sell-instrument" class="mb-1 block text-sm font-medium text-foreground">
       {m.investments_form_instrument()}
@@ -525,7 +534,6 @@
       </div>
     {/if}
   </div>
-  {/if}
 
   <!-- Holding account -->
   <div>
@@ -535,7 +543,6 @@
     <select
       id="sell-holding-account"
       bind:value={holdingAccountID}
-      disabled={!!correction}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
       required
     >
@@ -624,10 +631,13 @@
       bind:value={costBasisMethod}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
     >
-      {#each COST_BASIS_METHODS as method (method)}
+      {#each availableMethods as method (method)}
         <option value={method}>{correction ? replacementMethodLabel(method) : costBasisMethodLabel(method)}</option>
       {/each}
     </select>
+    {#if positionMoved}
+      <p class="mt-1 text-xs text-muted">{m.transactions_investment_replace_moved_lots_hint()}</p>
+    {/if}
   </div>
 
   {#if correction && costBasisMethod === 'specific_lot'}

@@ -756,6 +756,7 @@
   "transactions_investment_replace_sale_gain_copy": "De gecorrigeerde winst wordt bij het opslaan opnieuw berekend. Controleer die daarna bij Resultaten.",
   "transactions_investment_replace_lots_title": "Kies partijen",
   "transactions_investment_replace_lots_copy": "Verdeel de volledige verkochte hoeveelheid over partijen die direct vóór deze verkoop beschikbaar waren.",
+  "transactions_investment_replace_moved_lots_hint": "Specifieke partijen kiezen kan alleen bij de oorspronkelijke beleggingsrekening en het oorspronkelijke instrument; een verplaatste verkoop gebruikt FIFO, LIFO of gemiddelde kostprijs.",
   "transactions_investment_replace_lot": "Partij",
   "transactions_investment_replace_lot_select": "Selecteer partij",
   "transactions_investment_replace_lot_add": "Partij toevoegen",

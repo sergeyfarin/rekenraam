@@ -47,9 +47,15 @@ func disposeBehindLaterRewriteTx(ctx context.Context, tx *sql.Tx, transaction Tr
 	if err != nil {
 		return nil, DisposalDecisionRecord{}, err
 	}
+	// A corrected sale keeps its root's same-day slot, as committed replay
+	// will order it once the decision exists (T-116).
+	orderOperationID, err := investmentCorrectionRootTx(ctx, tx, params.BookID, operationID)
+	if err != nil {
+		return nil, DisposalDecisionRecord{}, err
+	}
 	// The proposed decision has no ID yet; zero marks it in the projection.
 	proposed := append(slices.Clone(intents), InvestmentReplayIntent{
-		OperationID: operationID, OrderOperationID: operationID, EffectSeq: 1,
+		OperationID: operationID, OrderOperationID: orderOperationID, EffectSeq: 1,
 		EventDate: params.EventDate, Kind: "disposal",
 		QuantityValue: params.QuantityValue, QuantityScale: params.QuantityScale,
 		AmountValue: exact.New(params.ProceedsValue), AmountScale: params.ProceedsScale,
@@ -137,4 +143,21 @@ func historicalDisposalCostCommodityTx(ctx context.Context, tx *sql.Tx, params D
 	default:
 		return 0, fmt.Errorf("%w: cost commodity is required when a position has lots in multiple currencies", ErrInvalidDisposalParams)
 	}
+}
+
+// investmentCorrectionRootTx returns the first operation of a correction
+// chain, whose ID is every member's same-day replay slot.
+func investmentCorrectionRootTx(ctx context.Context, tx *sql.Tx, bookID, operationID int64) (int64, error) {
+	var rootID int64
+	if err := tx.QueryRowContext(ctx, `WITH RECURSIVE chain(id, parent_id) AS (
+		SELECT id, correction_of_operation_id FROM investment_operations WHERE book_id = ? AND id = ?
+		UNION ALL
+		SELECT parent.id, parent.correction_of_operation_id
+		FROM investment_operations parent JOIN chain ON parent.id = chain.parent_id
+		WHERE parent.book_id = ?
+	)
+	SELECT id FROM chain WHERE parent_id IS NULL`, bookID, operationID, bookID).Scan(&rootID); err != nil {
+		return 0, fmt.Errorf("read investment correction root: %w", err)
+	}
+	return rootID, nil
 }

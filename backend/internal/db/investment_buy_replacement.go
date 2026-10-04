@@ -168,10 +168,8 @@ func (r *InvestmentRepository) replaceBuy(ctx context.Context, expected BuyOpera
 		replacementParams.Spec.InvestmentOperationKind != expected.OperationKind ||
 		replacementParams.Spec.TransactionKind != "investment" || replacementParams.Spec.Status != "posted" ||
 		inverseParams.Spec.TransactionDate != expected.EventDate ||
-		replacementParams.Spec.TransactionDate != expected.EventDate ||
-		lotParams.OpenedOn != expected.EventDate ||
-		lotParams.AccountID != expected.AccountID || lotParams.CommodityID != expected.CommodityID ||
-		lotParams.CostCommodityID != expected.CostCommodityID ||
+		lotParams.OpenedOn != replacementParams.Spec.TransactionDate ||
+		lotParams.AccountID <= 0 || lotParams.CommodityID <= 0 || lotParams.CostCommodityID <= 0 ||
 		replacementParams.InvestmentCorrectionOfOperationID != expected.OperationID ||
 		replacementParams.InvestmentCorrectionMode != "replace" ||
 		replacementParams.InvestmentCorrectionReason == "" ||
@@ -220,24 +218,16 @@ func (r *InvestmentRepository) replaceBuy(ctx context.Context, expected BuyOpera
 			if err != nil {
 				return InvestmentLotRecord{}, err
 			}
-			intents, err := investmentReplayIntentsQuery(ctx, tx, replacementParams.BookID,
-				current.AccountID, current.CommodityID, current.CostCommodityID, "long")
-			if err != nil {
-				return InvestmentLotRecord{}, err
-			}
-			projection, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
-				current.AccountID, current.CommodityID, current.CostCommodityID, intents)
-			if err != nil {
-				if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) {
-					return InvestmentLotRecord{}, fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)
+			// A corrected date, holding, instrument or cost currency (T-116)
+			// leaves the source position without the acquisition and opens it
+			// in another; both replay in this transaction or neither does.
+			for _, position := range correctedTradePositions(
+				investmentReplayPositionKey{current.AccountID, current.CommodityID, current.CostCommodityID},
+				investmentReplayPositionKey{lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID}) {
+				if err := replayCorrectedPositionTx(ctx, tx, replacementParams.BookID, position,
+					operationID, auditEventID, replacementParams.ActorUserID, replacementParams.CreatedAt); err != nil {
+					return InvestmentLotRecord{}, err
 				}
-				return InvestmentLotRecord{}, err
-			}
-			if err := persistInvestmentReplayProjectionTx(ctx, tx, replacementParams.BookID,
-				current.AccountID, current.CommodityID, current.CostCommodityID,
-				operationID, auditEventID, replacementParams.ActorUserID, replacementParams.CreatedAt,
-				intents, projection); err != nil {
-				return InvestmentLotRecord{}, err
 			}
 			if err := voidTradePricesForVersionTx(ctx, tx, inverseParams, current.TransactionVersionID, auditEventID); err != nil {
 				return InvestmentLotRecord{}, err
@@ -248,4 +238,39 @@ func (r *InvestmentRepository) replaceBuy(ctx context.Context, expected BuyOpera
 		return BuyReplacementRecord{}, err
 	}
 	return BuyReplacementRecord{Inverse: journals[0], Replacement: journals[1], Lot: lot}, nil
+}
+
+// correctedTradePositions lists the source position and, when a correction
+// moved the trade, its new position. Replaying the source first names a
+// dependency the removal breaks before one the new position cannot satisfy.
+func correctedTradePositions(source, replacement investmentReplayPositionKey) []investmentReplayPositionKey {
+	if source == replacement {
+		return []investmentReplayPositionKey{source}
+	}
+	return []investmentReplayPositionKey{source, replacement}
+}
+
+// replayCorrectedPositionTx replays one long position from its committed
+// effective intents and installs the result, propagating changed transfer
+// basis. A later decision the corrected history cannot satisfy is a named
+// correction dependency.
+func replayCorrectedPositionTx(ctx context.Context, tx *sql.Tx, bookID int64, position investmentReplayPositionKey,
+	operationID, auditEventID, actorUserID int64, createdAt string,
+) error {
+	intents, err := investmentReplayIntentsQuery(ctx, tx, bookID,
+		position.accountID, position.commodityID, position.costCommodityID, "long")
+	if err != nil {
+		return err
+	}
+	projection, err := simulateInvestmentReplayTx(ctx, tx, bookID,
+		position.accountID, position.commodityID, position.costCommodityID, intents)
+	if err != nil {
+		if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) {
+			return fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)
+		}
+		return err
+	}
+	return persistInvestmentReplayProjectionTx(ctx, tx, bookID,
+		position.accountID, position.commodityID, position.costCommodityID,
+		operationID, auditEventID, actorUserID, createdAt, intents, projection)
 }

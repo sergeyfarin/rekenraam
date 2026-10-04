@@ -756,6 +756,7 @@
   "transactions_investment_replace_sale_gain_copy": "Исправленная прибыль пересчитывается при сохранении. Затем проверьте её в отчёте о прибыли.",
   "transactions_investment_replace_lots_title": "Выбрать лоты",
   "transactions_investment_replace_lots_copy": "Распределите всю продаваемую долю между лотами, доступными непосредственно перед продажей.",
+  "transactions_investment_replace_moved_lots_hint": "Выбор конкретных лотов возможен только для исходного счёта ценных бумаг и инструмента; перенесённая продажа использует FIFO, LIFO или среднюю стоимость.",
   "transactions_investment_replace_lot": "Лот",
   "transactions_investment_replace_lot_select": "Выберите лот",
   "transactions_investment_replace_lot_add": "Добавить лот",

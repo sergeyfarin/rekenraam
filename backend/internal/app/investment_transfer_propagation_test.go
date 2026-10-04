@@ -261,9 +261,9 @@ func TestTransferPropagationRollsBackOnLateRefusal(t *testing.T) {
 }
 
 // Units, lots and dates stay fixed. Removing the transferred acquisition is
-// still refused with the transfer named. (Buy replacement cannot move a date
-// at all yet, T-116; replay itself also refuses a successor lot opened on
-// another date, because the link's original date orders the destination.)
+// still refused with the transfer named. (Moving its date or holding is
+// refused the same way, TestReplaceTransferredBuyFieldChangeNamesTransfer:
+// the link's original date and lot order the destination.)
 func TestRemovingTransferredAcquisitionStaysNamedRefusal(t *testing.T) {
 	t.Parallel()
 	f := newInvestmentsTestFixture(t)

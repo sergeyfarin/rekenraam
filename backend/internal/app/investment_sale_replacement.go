@@ -88,10 +88,9 @@ func (s *InvestmentService) prepareSaleReplacementWrite(ctx context.Context, inp
 	if err != nil {
 		return preparedSaleReplacementWrite{}, err
 	}
+	// The date, holding account, instrument and cost currency may change
+	// (T-116); the writer replays the source and the new position together.
 	replacement := input.Replacement
-	if err := validateSaleReplacementPosition(replacement, operation); err != nil {
-		return preparedSaleReplacementWrite{}, err
-	}
 	if err := validateSaleReplacementElections(replacement); err != nil {
 		return preparedSaleReplacementWrite{}, err
 	}
@@ -155,16 +154,6 @@ func mergeInvestmentCorrectionImpacts(inverseImpact, replacementImpact Reconcili
 		}
 	}
 	return inverseImpact
-}
-
-func validateSaleReplacementPosition(replacement InvestmentTradeInput, operation db.SaleOperationRecord) error {
-	if replacement.TransactionDate != operation.EventDate ||
-		replacement.HoldingAccountID != operation.AccountID ||
-		replacement.CommodityID != operation.CommodityID ||
-		replacement.CashCommodityID != operation.CostCommodityID {
-		return ValidationError{Message: "replacement must keep the sale date, holding account, instrument and cost currency"}
-	}
-	return nil
 }
 
 func validateSaleReplacementElections(replacement InvestmentTradeInput) error {

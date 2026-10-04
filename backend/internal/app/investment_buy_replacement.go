@@ -105,7 +105,7 @@ func (s *InvestmentService) prepareBuyReplacementWrite(ctx context.Context, inpu
 	replacement.Operation = operationCode
 	replacement.ChangeReason = inversePlan.ChangeReason
 	replacement.ReconciliationOverride = input.ReconciliationOverride
-	if err := validateBuyReplacementTrade(replacement, operation); err != nil {
+	if err := validateBuyReplacementTrade(replacement); err != nil {
 		return preparedBuyReplacementWrite{}, err
 	}
 	inversePlan.OriginType = originType
@@ -222,13 +222,10 @@ func (s *InvestmentService) acquisitionCorrectionPlan(ctx context.Context, input
 	}, nil
 }
 
-func validateBuyReplacementTrade(replacement InvestmentTradeInput, operation db.BuyOperationRecord) error {
-	if replacement.TransactionDate != operation.EventDate ||
-		replacement.HoldingAccountID != operation.AccountID ||
-		replacement.CommodityID != operation.CommodityID ||
-		replacement.CashCommodityID != operation.CostCommodityID {
-		return ValidationError{Message: "replacement must keep the buy date, holding account, instrument and cost currency"}
-	}
+// validateBuyReplacementTrade requires explicit economic elections. The trade
+// date, holding account, instrument and cost currency may change (T-116): the
+// writer replays the source and the new position together.
+func validateBuyReplacementTrade(replacement InvestmentTradeInput) error {
 	for index, charge := range replacement.Charges {
 		if charge.Treatment == "" {
 			return ValidationError{Message: fmt.Sprintf("replacement charge %d treatment is required", index+1)}

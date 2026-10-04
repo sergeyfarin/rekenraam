@@ -572,6 +572,57 @@ func TestReplaceOldManualBuyAPI(t *testing.T) {
 	require.Contains(t, conflict.Body.String(), "INVESTMENT_BUY_ALREADY_CORRECTED")
 }
 
+// T-116: the replacement may move the buy's date and holding account. A move
+// past the dependent sale names it; a move to another account replays both.
+func TestReplaceBuyDateAndHoldingAccountAPI(t *testing.T) {
+	handler, database := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "MOVE")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	other := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 50000), http.StatusCreated)
+	var bought investmentTradeResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&bought))
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "2", 24000)
+	sale.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/sell", sale, http.StatusCreated)
+	path := "/api/v1/investments/transactions/" + strconv.FormatInt(bought.Transaction.ID, 10) + "/replace-buy"
+
+	late := tradeRequestBody(f, holding.ID, instrument.CommodityID, "5", 50000)
+	late.TransactionDate = "2026-04-01"
+	dependency := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path,
+		investmentBuyReplacementRequest{Reason: "settled in April", Replacement: late}, http.StatusConflict)
+	require.Contains(t, dependency.Body.String(), "INVESTMENT_BUY_DEPENDENCY")
+
+	// The sale needs two shares the moved buy no longer provides, so first
+	// give the source account a second acquisition.
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", tradeRequestBody(f, holding.ID, instrument.CommodityID, "2", 30000), http.StatusCreated)
+	moved := tradeRequestBody(f, other.ID, instrument.CommodityID, "5", 50000)
+	moved.TransactionDate = "2026-01-15"
+	request := investmentBuyReplacementRequest{Reason: "bought at the other broker", Replacement: moved}
+	preview := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path+"/reconciliation-impact", request, http.StatusOK)
+	var impact reconciliationImpactResponse
+	require.NoError(t, json.NewDecoder(preview.Body).Decode(&impact))
+	require.NotNil(t, impact.GainImpact)
+	request.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
+	var corrected investmentBuyReplacementResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&corrected))
+	require.Equal(t, "2026-01-15", corrected.Replacement.Transaction.TransactionDate)
+	require.Equal(t, "2026-02-01", corrected.InverseTransaction.TransactionDate)
+	var movedLots, sourceOpen int
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM current_investment_lots
+		WHERE account_id = ? AND remaining_quantity_value = '5'`, other.ID).Scan(&movedLots))
+	require.Equal(t, 1, movedLots)
+	require.NoError(t, database.QueryRow(`SELECT count(*) FROM current_investment_lots
+		WHERE account_id = ? AND status = 'open'`, holding.ID).Scan(&sourceOpen))
+	require.Zero(t, sourceOpen)
+}
+
 // --- Lifecycle ---
 
 // assertMoneyValue compares a coefficient/scale pair against an expected

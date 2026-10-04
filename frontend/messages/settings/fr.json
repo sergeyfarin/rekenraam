@@ -756,6 +756,7 @@
   "transactions_investment_replace_sale_gain_copy": "Le gain corrigé est recalculé à l’enregistrement. Vérifiez-le ensuite dans les gains.",
   "transactions_investment_replace_lots_title": "Choisir les lots",
   "transactions_investment_replace_lots_copy": "Répartissez toute la quantité vendue entre les lots disponibles juste avant cette vente.",
+  "transactions_investment_replace_moved_lots_hint": "Le choix de lots précis exige le compte titres et l’instrument d’origine ; une vente déplacée utilise FIFO, LIFO ou le coût moyen.",
   "transactions_investment_replace_lot": "Lot",
   "transactions_investment_replace_lot_select": "Sélectionner un lot",
   "transactions_investment_replace_lot_add": "Ajouter un lot",
