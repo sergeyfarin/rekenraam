@@ -3,9 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"math"
 )
 
 // executeInvestmentWriteTx commits an investment journal, its domain effects,
@@ -138,6 +136,10 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 		if journal.BookID != params[0].BookID || journal.ActorUserID != params[0].ActorUserID {
 			return nil, zero, fmt.Errorf("investment journals must share book and actor")
 		}
+		// The combined checkpoint guard applies one decision to the command.
+		if journal.ReconciliationOverride != params[0].ReconciliationOverride {
+			return nil, zero, fmt.Errorf("investment journals must share one reconciliation override")
+		}
 	}
 	tx, err := database.BeginTx(ctx, nil)
 	if err != nil {
@@ -187,6 +189,39 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 	if err != nil {
 		return nil, zero, err
 	}
+	// One combined guard for the whole command (T-120 #135): every journal it
+	// appended — inverse, replacement, and any split adjustment replay posted
+	// that the caller could not name in advance (T-129) — is netted per
+	// account and commodity at each checkpoint's own boundary. Guarding each
+	// journal alone invalidated checkpoints whose balance the command as a
+	// whole leaves unchanged. A preview reports exactly this set. It runs
+	// before the gain acknowledgement, so a command needing both is refused
+	// for reconciliation first, as the per-journal early check used to.
+	deltas, err := commandCheckpointDeltasTx(ctx, tx, params[0].BookID, auditEventID)
+	if err != nil {
+		return nil, zero, err
+	}
+	refs, err := netCheckpointInvalidationRefs(ctx, tx, params[0].BookID, deltas)
+	if err != nil {
+		return nil, zero, err
+	}
+	if len(refs) > 0 {
+		if !params[0].ReconciliationOverride {
+			return nil, zero, ErrReconciliationOverrideRequired
+		}
+		invalidatedIDs, err := invalidateReconciliationCheckpoints(ctx, tx, checkpointInvalidationParams{
+			BookID: params[0].BookID, Refs: refs, ActorUserID: params[0].ActorUserID,
+			AuditEventID: auditEventID, OccurredAt: params[0].CreatedAt,
+			Reason: params[0].InvalidateCheckpointReason,
+		})
+		if err != nil {
+			return nil, zero, err
+		}
+		journals[0].InvalidatedCheckpointIDs = invalidatedIDs
+		if !persist {
+			journals[0].InvalidatedCheckpointRefs = refs
+		}
+	}
 	if gainPolicy != nil {
 		gainsAfter, err := investmentGainSnapshotTx(ctx, tx, params[0].BookID)
 		if err != nil {
@@ -199,43 +234,6 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 			}
 		}
 		journals[0].GainImpact = &impact
-	}
-	for index, journal := range params {
-		invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, journal, auditEventID)
-		if err != nil {
-			return nil, zero, err
-		}
-		journals[index].InvalidatedCheckpointIDs = invalidatedIDs
-		if !persist {
-			refs, err := investmentInvalidatedCheckpointRefsTx(ctx, tx, journal.BookID, invalidatedIDs, journal.CheckpointCandidates)
-			if err != nil {
-				return nil, zero, err
-			}
-			journals[index].InvalidatedCheckpointRefs = refs
-		}
-	}
-	// Replay may have posted split adjustment journals the caller could not
-	// name in advance (T-129). They meet the same guard, override and reason
-	// as the command's own journals, and a preview reports what they touch.
-	adjustments, err := splitAdjustmentCheckpointCandidatesTx(ctx, tx, params[0].BookID, auditEventID)
-	if err != nil {
-		return nil, zero, err
-	}
-	if len(adjustments) > 0 {
-		guarded := params[0]
-		guarded.CheckpointCandidates = adjustments
-		invalidatedIDs, err := invalidateCreateTransactionCheckpointsTx(ctx, tx, guarded, auditEventID)
-		if err != nil {
-			return nil, zero, err
-		}
-		journals[0].InvalidatedCheckpointIDs = append(journals[0].InvalidatedCheckpointIDs, invalidatedIDs...)
-		if !persist {
-			refs, err := investmentInvalidatedCheckpointRefsTx(ctx, tx, guarded.BookID, invalidatedIDs, adjustments)
-			if err != nil {
-				return nil, zero, err
-			}
-			journals[0].InvalidatedCheckpointRefs = append(journals[0].InvalidatedCheckpointRefs, refs...)
-		}
 	}
 	if postWrite != nil {
 		if err := postWrite(tx, journals, auditEventID); err != nil {
@@ -251,77 +249,4 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 	}
 	finished = true
 	return journals, result, nil
-}
-
-// Hydrate only the checkpoint IDs actually invalidated by the writer, while
-// still in its transaction. This does not calculate another boundary decision.
-func investmentInvalidatedCheckpointRefsTx(ctx context.Context, tx *sql.Tx, bookID int64,
-	ids []int64, candidates []PeriodScopedCheckpointRef,
-) ([]CheckpointInvalidationRef, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	encoded, err := json.Marshal(ids)
-	if err != nil {
-		return nil, fmt.Errorf("encode invalidated checkpoint IDs: %w", err)
-	}
-	rows, err := tx.QueryContext(ctx, `SELECT id, account_id, commodity_id, statement_date, statement_account_sequence
-        FROM reconciliation_checkpoints WHERE book_id = ? AND id IN (SELECT value FROM json_each(?))
-        ORDER BY account_id, commodity_id, statement_date, id`, bookID, string(encoded))
-	if err != nil {
-		return nil, fmt.Errorf("read investment preview checkpoints: %w", err)
-	}
-	defer rows.Close()
-	var refs []CheckpointInvalidationRef
-	for rows.Next() {
-		var ref CheckpointInvalidationRef
-		if err := rows.Scan(&ref.CheckpointID, &ref.AccountID, &ref.CommodityID, &ref.StatementDate, &ref.StatementAccountSequence); err != nil {
-			return nil, fmt.Errorf("scan investment preview checkpoint: %w", err)
-		}
-		for _, candidate := range candidates {
-			if candidate.AccountID == ref.AccountID && candidate.CommodityID == ref.CommodityID &&
-				(ref.EntryDate == "" || candidate.EntryDate < ref.EntryDate) {
-				ref.EntryDate = candidate.EntryDate
-			}
-		}
-		if ref.EntryDate == "" {
-			return nil, fmt.Errorf("investment preview checkpoint has no affected account/commodity")
-		}
-		refs = append(refs, ref)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate investment preview checkpoints: %w", err)
-	}
-	if len(refs) != len(ids) {
-		return nil, fmt.Errorf("investment preview checkpoint metadata is incomplete")
-	}
-	return refs, nil
-}
-
-// splitAdjustmentCheckpointCandidatesTx lists every position touched by a
-// split adjustment journal posted under this audit event. Replay decides those
-// journals inside the domain effects, so they are found afterwards.
-func splitAdjustmentCheckpointCandidatesTx(ctx context.Context, tx *sql.Tx, bookID, auditEventID int64) ([]PeriodScopedCheckpointRef, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT pv.account_id, pv.commodity_id, je.entry_date
-		FROM investment_split_revisions r
-		JOIN posting_versions pv ON pv.transaction_version_id = r.adjustment_transaction_version_id
-		JOIN journal_entries je ON je.id = pv.journal_entry_id
-		WHERE r.book_id = ? AND r.created_audit_event_id = ?
-		ORDER BY pv.id`, bookID, auditEventID)
-	if err != nil {
-		return nil, fmt.Errorf("read split adjustment positions: %w", err)
-	}
-	defer rows.Close()
-	var candidates []PeriodScopedCheckpointRef
-	for rows.Next() {
-		candidate := PeriodScopedCheckpointRef{AccountDaySequence: math.MaxInt64}
-		if err := rows.Scan(&candidate.AccountID, &candidate.CommodityID, &candidate.EntryDate); err != nil {
-			return nil, fmt.Errorf("scan split adjustment position: %w", err)
-		}
-		candidates = append(candidates, candidate)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate split adjustment positions: %w", err)
-	}
-	return candidates, nil
 }

@@ -58,6 +58,10 @@ func TestReplacementWriterRollsBackLateFailure(t *testing.T) {
 			}
 			corrected := sellInput(f, target.TransactionDate, 4)
 			corrected.CostBasisMethod = "fifo"
+			// Changed proceeds change the reconciled cash balance, so the
+			// command reaches checkpoint invalidation; a quantity-only
+			// correction nets to zero in cash (T-120 #135).
+			corrected.CashAmountValue = 12000
 			saleReplacement := ReplaceInvestmentSaleInput{
 				OwnerUserID: f.ownerUserID, TransactionID: target.ID, Reason: "correct disposal", ReconciliationOverride: true,
 				Replacement: corrected,

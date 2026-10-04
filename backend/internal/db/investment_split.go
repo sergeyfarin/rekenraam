@@ -544,7 +544,8 @@ func persistSplitRevisionTx(ctx context.Context, tx *sql.Tx, bookID, costCommodi
 // commodity_trading, in the security, under the enclosing command's audit
 // event. The journal is linked to the split operation as 'split_adjustment';
 // the investment writer applies the reconciliation guard to it after the
-// domain effects (splitAdjustmentCheckpointCandidatesTx).
+// domain effects, netted with the command's other journals
+// (commandCheckpointDeltasTx).
 func postSplitAdjustmentJournalTx(ctx context.Context, tx *sql.Tx, bookID, splitOperationID int64, delta *exact.ScaledInt,
 	auditEventID, actorUserID int64, createdAt string) (int64, error) {
 	var accountID, commodityID, tradingID int64

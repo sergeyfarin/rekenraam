@@ -58,9 +58,12 @@ func (s *TransactionService) prepareCreateTransactionForWrite(ctx context.Contex
 // prepareCreateTransactionForWriteCarrying is prepareCreateTransactionForWrite
 // for a caller that already made account decisions of its own — the dividend
 // plan validates roles before any posting exists — and must have those earlier
-// reads, not this one's, bound to the write (T-100).
+// reads, not this one's, bound to the write (T-100). Its journals commit
+// through the investment writer, which owns their checkpoint guard.
 func (s *TransactionService) prepareCreateTransactionForWriteCarrying(ctx context.Context, input CreateTransactionInput, dependencies *accountRuleDependencies) (db.CreateTransactionParams, error) {
-	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{AccountRuleDependencies: dependencies})
+	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{
+		AccountRuleDependencies: dependencies, WriterGuardsCheckpoints: true,
+	})
 }
 
 // prepareInvestmentTransactionForWrite is the investment subledger's entry into
@@ -74,6 +77,7 @@ func (s *TransactionService) prepareInvestmentTransactionForWrite(ctx context.Co
 	return s.prepareCreateTransactionForWriteWithOptions(ctx, input, cleanTransactionOptions{
 		AllowSubledgerManagedPostings: true,
 		AccountRuleDependencies:       dependencies,
+		WriterGuardsCheckpoints:       true,
 	})
 }
 
@@ -99,7 +103,7 @@ func (s *TransactionService) prepareCreateTransactionForWriteWithOptions(ctx con
 	// the way, and it is what the import loop reads to mark a row skipped. A
 	// checkpoint that appears after this point is caught at commit instead.
 	candidates := reconciliationCandidatesFromSpec(params.Spec)
-	if !input.ReconciliationOverride {
+	if !input.ReconciliationOverride && !options.WriterGuardsCheckpoints {
 		refs, err := s.resolveCheckpointRefs(ctx, candidates)
 		if err != nil {
 			return db.CreateTransactionParams{}, err

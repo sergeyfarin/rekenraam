@@ -989,8 +989,9 @@ selector: a position reaches each active checkpoint whose own
 `(statement_date, statement_account_sequence)` is at or after it, so a same-day
 posting after an earlier boundary leaves that checkpoint active, and a
 same-day reorder is guarded when it crosses any checkpoint's boundary, not only
-the latest one (T-120 #135). Netting a correction command's combined balance
-delta per boundary remains T-120 #135.
+the latest one (T-120 #135). An investment command that appends several
+journals is guarded once on its combined delta per boundary (see
+`docs/conventions.md`); edits of existing postings keep the per-posting rule.
 
 Minimum query parameters:
 

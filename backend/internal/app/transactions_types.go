@@ -347,6 +347,11 @@ type cleanTransactionOptions struct {
 	// struct rather than on CreateTransactionInput so that the exemption cannot
 	// be reached from the API layer by populating a request field.
 	AllowSubledgerManagedPostings bool
+	// WriterGuardsCheckpoints marks a journal headed for the investment
+	// writer, whose combined guard nets every journal of the command at each
+	// checkpoint boundary (T-120 #135). Rejecting the journal alone up front
+	// would refuse an inverse that its replacement cancels.
+	WriterGuardsCheckpoints bool
 	// AccountRuleDependencies, when non-nil, collects the accounts whose
 	// versions this spec's posting checks were decided against, so the write
 	// can refuse the spec if one of them is restructured before it commits

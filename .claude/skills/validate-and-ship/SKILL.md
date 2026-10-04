@@ -197,6 +197,10 @@ non-trivial diff (yours or reviewed):
     `activeCheckpointRefsAtOrAfter`; judging only the latest checkpoint let a
     same-day reorder across an earlier boundary through without override
     (T-120 #135, `TestPostingMoveAcrossEarlierSameDayCheckpointRequiresOverride`).
+    A multi-journal investment command is guarded once on its combined delta
+    read from every posting under its audit event; never re-add a per-journal
+    guard or an up-front per-journal rejection, which refuses an inverse its
+    replacement cancels (`TestQuantityOnlyBuyCorrectionPreservesCashCheckpointAndGuardsHolding`).
     Gain disclosure now also runs through these writer previews (T-114 #129 / T-126 #141).
 
 23. **Replay silently restating committed gains** — a backdated or corrective

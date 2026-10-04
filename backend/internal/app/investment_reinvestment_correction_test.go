@@ -215,8 +215,11 @@ func TestReinvestedDividendReplacementRollsBackLateFailure(t *testing.T) {
 	f := newInvestmentsTestFixture(t)
 	original := reinvestmentWithLaterSale(t, f)
 	reconcileHolding(t, f, "2026-04-01", 15)
+	// The replacement changes the reconciled holding quantity, so the command
+	// reaches checkpoint invalidation; an amount-only correction nets to zero
+	// in the holding and leaves the checkpoint active (T-120 #135).
 	input := ReplaceReinvestedDividendInput{OwnerUserID: f.ownerUserID, TransactionID: original.Transaction.ID,
-		Reason: "broker restated", ReconciliationOverride: true, Replacement: reinvestmentInput(f, "2026-01-01", 10, 4000)}
+		Reason: "broker restated", ReconciliationOverride: true, Replacement: reinvestmentInput(f, "2026-01-01", 11, 4000)}
 	impact, err := f.investmentService.ReplaceReinvestedDividendReconciliationImpact(ctx, input)
 	require.NoError(t, err)
 	input.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement

@@ -86,6 +86,10 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   edit, void, unvoid, soft-delete, restore, reorder across the boundary).
 - Non-financial edits (category, payee, description, note, tags) never change a
   balance and are always allowed.
+- Each checkpoint is tested against its own `(date, sequence)` boundary. An
+  investment command that only appends journals is guarded once on its
+  combined per-account/commodity delta at each boundary (T-120); edits of
+  existing postings keep the per-posting rule.
 - Every new mutation path over postings must be wired through the guard — see
   how `app/transactions_write.go` and `app/reconciliation.go` do it. Forgetting
   the guard on a new path is a severity-1 bug.

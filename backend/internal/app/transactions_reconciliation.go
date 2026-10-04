@@ -20,8 +20,27 @@ func (s *TransactionService) ReconciliationImpactForCreate(ctx context.Context, 
 // write will, so it needs the same T-96 exemption — otherwise every investment
 // impact preview is refused for a posting the commit would have accepted, and
 // preview and commit stop agreeing.
+//
+// Its commit nets the journal in the investment writer's combined guard
+// (T-120 #135), so the preview nets the same postings at the same positions.
 func (s *TransactionService) investmentReconciliationImpactForCreate(ctx context.Context, input CreateReconciliationImpactInput) (ReconciliationImpact, error) {
-	return s.reconciliationImpactForCreate(ctx, input, cleanTransactionOptions{AllowSubledgerManagedPostings: true})
+	if input.OwnerUserID <= 0 {
+		return ReconciliationImpact{}, ValidationError{Message: "owner user is required"}
+	}
+	spec, err := s.cleanTransactionSpec(ctx, input.Spec, cleanTransactionOptions{
+		AllowSubledgerManagedPostings: true, DefaultStatus: "posted",
+	})
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	refs, err := s.repository.NetCheckpointInvalidationRefs(ctx, BookID, db.CheckpointDeltasFromSpec(spec))
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	if err := s.enrichCheckpointRefs(ctx, refs); err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return ReconciliationImpact{AffectedCheckpoints: refs}, nil
 }
 
 func (s *TransactionService) reconciliationImpactForCreate(ctx context.Context, input CreateReconciliationImpactInput, options cleanTransactionOptions) (ReconciliationImpact, error) {

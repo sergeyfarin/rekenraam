@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
 
@@ -495,50 +494,41 @@ func TestSplitAdjustmentIntoReconciledPeriodNeedsOverride(t *testing.T) {
 	requireSelfCheckPasses(t, f)
 }
 
-// TestSplitAdjustmentJournalMeetsCheckpointGuardOnItsOwn isolates the
-// writer's guard over adjustment journals. Every current command also posts
-// its own journal earlier in the same holding, which would reach the
-// checkpoint first; with those positions removed from the triggering journal,
-// only the adjustment the replay posts on the split date can reach it.
-func TestSplitAdjustmentJournalMeetsCheckpointGuardOnItsOwn(t *testing.T) {
+// TestCombinedGuardNetsSplitAdjustmentJournal proves the writer's guard counts
+// the adjustment journal replay posts, which the caller cannot name in advance
+// (T-129), inside the command's combined delta (T-120 #135). Moving a 3-share
+// February buy to after the split as its 6-share equivalent posts −3 (inverse),
+// −3 (the split now multiplies 3 fewer shares) and +6 (replacement): the
+// reconciled April holding is unchanged, so the checkpoint stays active with
+// no override. Leaving the adjustment out would see +3 and refuse.
+func TestCombinedGuardNetsSplitAdjustmentJournal(t *testing.T) {
 	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buyOn(t, f, "2026-01-10", 10, 10000)
+	target := buyOn(t, f, "2026-02-01", 3, 3000)
 	_, err := f.investmentService.Split(ctx, splitInput(f, "2026-03-01", 2, 1))
 	require.NoError(t, err)
-	reconcileHoldingThrough(t, f, "2026-04-30", 20)
-	journal, lot, err := f.investmentService.prepareBuyWrite(ctx, InvestmentTradeInput{
-		OwnerUserID: f.ownerUserID, TransactionDate: "2026-02-01", CommodityID: f.stockCommodityID,
-		HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
-		QuantityValue: exact.New(3), CashAmountValue: 3000, CashAmountScale: 2, CashCommodityID: f.eurCommodityID,
-		ReconciliationOverride: true,
-	})
-	require.NoError(t, err)
-	journal.CheckpointCandidates = nil
+	reconcileHoldingThrough(t, f, "2026-04-30", 26)
+	adjustmentsBefore := len(splitAdjustments(t, f))
+	input := ReplaceInvestmentBuyInput{
+		OwnerUserID: f.ownerUserID, TransactionID: target.Transaction.ID, Reason: "bought after the split",
+		Replacement: InvestmentTradeInput{
+			TransactionDate: "2026-03-15", CommodityID: f.stockCommodityID,
+			HoldingAccountID: f.holdingAccountID, CashAccountID: f.cashAccountID,
+			CashCommodityID: f.eurCommodityID, QuantityValue: exact.New(6),
+			CashAmountValue: 3000, CashAmountScale: 2,
+		},
+	}
 
-	// The preview reports the checkpoint at the adjustment's date.
-	journal.GainImpact = gainImpactPolicy("")
-	simulated, err := f.investmentService.repository.SimulateLotOpening(ctx, journal, lot)
+	impact, err := f.investmentService.ReplaceBuyReconciliationImpact(ctx, input)
 	require.NoError(t, err)
-	require.Len(t, simulated.InvalidatedCheckpointRefs, 1)
-	assert.Equal(t, f.holdingAccountID, simulated.InvalidatedCheckpointRefs[0].AccountID)
-	assert.Equal(t, "2026-03-01", simulated.InvalidatedCheckpointRefs[0].EntryDate)
-
-	// Without an override the commit is refused and leaves nothing behind.
-	before := countSplitRows(t, f.database)
-	journal.ReconciliationOverride = false
-	_, _, err = f.investmentService.repository.CreateTransactionAndLot(ctx, journal, lot)
-	require.ErrorIs(t, err, db.ErrReconciliationOverrideRequired)
-	assert.Equal(t, before, countSplitRows(t, f.database))
-
-	// With it, the checkpoint the adjustment reaches is invalidated.
-	journal.ReconciliationOverride = true
-	_, _, err = f.investmentService.repository.CreateTransactionAndLot(ctx, journal, lot)
-	require.NoError(t, err)
-	var status string
-	require.NoError(t, f.database.QueryRow(`SELECT status FROM reconciliation_checkpoints`).Scan(&status))
-	assert.NotEqual(t, "active", status)
+	require.Empty(t, impact.AffectedCheckpoints)
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, input)
+	require.NoError(t, err, "the command leaves the reconciled holding unchanged")
+	assert.Len(t, splitAdjustments(t, f), adjustmentsBefore+1, "replay posted the adjustment the guard netted")
+	assert.Len(t, activeCheckpointIDsFor(t, f, f.holdingAccountID, f.stockCommodityID), 1)
+	assert.Zero(t, holdingQuantity(t, f).Cmp(exact.ScaledIntFromInt64(26, 0)))
 	requireSelfCheckPasses(t, f)
 }
 
