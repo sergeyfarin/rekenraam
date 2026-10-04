@@ -94,6 +94,10 @@ Earlier cross-document code reconciliation:
 [2026-08-31 documentation review](reviews/documentation-code-review-2026-08-31.md).
 It records findings at that date; T-79 has since closed and T-80 remains open.
 
+Recent change and issue-closure audit:
+[2026-10-04 review since a0487f9d](reviews/changes-since-a0487f9d-2026-10-04.md).
+It distinguishes reproduced defects from R16 work still tracked in open issues.
+
 ## Rules of thumb
 
 1. Dated snapshot → `reviews/`. Feature design → `plans/`. Everything else
