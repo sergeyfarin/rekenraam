@@ -1306,7 +1306,7 @@ func (s *SelfCheckService) checkpointIntegrityCheck(ctx context.Context, snapsho
 
 	var mismatched, stale int64
 	for _, checkpoint := range checkpoints {
-		total := exact.NewScaledInt()
+		total := exact.ScaledIntFromCoefficient(checkpoint.StartingBalanceValue, checkpoint.StartingBalanceScale)
 		for _, posting := range checkpoint.Postings {
 			total.AddCoefficient(posting.QuantityValue, posting.QuantityScale)
 		}

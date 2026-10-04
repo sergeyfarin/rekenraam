@@ -249,6 +249,19 @@ non-trivial diff (yours or reviewed):
     reader of a latest revision for current state joins it too. Named
     regression: `TestReverseRevisedInternalTransferKeepsRevisionAsEvidence`.
 
+27. **A self-check that reports damage on healthy books** — `checkpoint_integrity`
+    summed only the postings a session cleared, ignoring the starting balance
+    it carried from the previous checkpoint, so every second reconciliation
+    failed; and it called a snapshot posting superseded whenever its
+    transaction gained a version, so an unguarded description edit failed it
+    too. A diagnostic is only trusted if it passes on the ordinary workflows:
+    test each new check over chained and non-financially-edited data, and keep
+    a damaged-data case beside it. Judge staleness by financial facts and
+    position, never by version identity. Named regressions:
+    `TestCheckpointIntegrityPassesAcrossChainedReconciliations`,
+    `TestCheckpointIntegrityIgnoresNonFinancialEdits`,
+    `TestCheckpointIntegrityStillFlagsChangedReconciledFacts`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

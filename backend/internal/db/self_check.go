@@ -636,9 +636,13 @@ type SelfCheckCheckpointRecord struct {
 	CommodityID           int64
 	StatementBalanceValue exact.Coefficient
 	StatementBalanceScale int
-	PostingCount          int64
-	StalePostingCount     int64
-	Postings              []SelfCheckPostingRecord
+	// The balance the reconciling session started from — the previous
+	// checkpoint's statement balance — which its cleared postings add to.
+	StartingBalanceValue exact.Coefficient
+	StartingBalanceScale int
+	PostingCount         int64
+	StalePostingCount    int64
+	Postings             []SelfCheckPostingRecord
 }
 
 // SelfCheckActiveCheckpoints returns each active checkpoint with its
@@ -648,12 +652,16 @@ type SelfCheckCheckpointRecord struct {
 // The second number is the T-53 case: a posting edited after being reconciled
 // should have invalidated its checkpoint. A checkpoint still calling itself
 // active over superseded postings is a claim the ledger no longer supports.
+// Superseded means the posting line's financial facts changed — not merely
+// that its transaction gained a version, which a description edit does.
 func (r *SelfCheckRepository) SelfCheckActiveCheckpoints(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckCheckpointRecord, error) {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT id, account_id, commodity_id, statement_balance_value, statement_balance_scale
-		FROM reconciliation_checkpoints
-		WHERE book_id = ? AND status = 'active'
-		ORDER BY id
+		SELECT c.id, c.account_id, c.commodity_id, c.statement_balance_value, c.statement_balance_scale,
+			COALESCE(s.starting_balance_value, '0'), COALESCE(s.starting_balance_scale, 0)
+		FROM reconciliation_checkpoints c
+		LEFT JOIN reconciliation_sessions s ON s.id = c.session_id
+		WHERE c.book_id = ? AND c.status = 'active'
+		ORDER BY c.id
 	`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read self-check checkpoints: %w", err)
@@ -664,7 +672,8 @@ func (r *SelfCheckRepository) SelfCheckActiveCheckpoints(ctx context.Context, tr
 	for rows.Next() {
 		var checkpoint SelfCheckCheckpointRecord
 		if err := rows.Scan(&checkpoint.CheckpointID, &checkpoint.AccountID, &checkpoint.CommodityID,
-			&checkpoint.StatementBalanceValue, &checkpoint.StatementBalanceScale); err != nil {
+			&checkpoint.StatementBalanceValue, &checkpoint.StatementBalanceScale,
+			&checkpoint.StartingBalanceValue, &checkpoint.StartingBalanceScale); err != nil {
 			return nil, fmt.Errorf("scan self-check checkpoint: %w", err)
 		}
 		checkpoints = append(checkpoints, checkpoint)
@@ -695,13 +704,30 @@ func (r *SelfCheckRepository) checkpointPostings(ctx context.Context, transactio
 			cp.entry_date,
 			cp.quantity_value,
 			cp.quantity_scale,
+			-- Stale unless the posting line is still current, posted and not
+			-- deleted, with the snapshot's account, commodity, date and
+			-- quantity, at a position inside the checkpoint's boundary.
 			CASE WHEN EXISTS (
 				SELECT 1
-				FROM posting_versions pv
-				JOIN current_transaction_versions tv ON tv.id = pv.transaction_version_id
-				WHERE pv.id = cp.posting_version_id
+				FROM posting_versions current_pv
+				JOIN current_transaction_versions tv ON tv.id = current_pv.transaction_version_id
+				JOIN transactions t ON t.id = tv.transaction_id
+				JOIN journal_entries je ON je.id = current_pv.journal_entry_id
+				WHERE current_pv.posting_line_id = snapshot_pv.posting_line_id
+					AND tv.status = 'posted'
+					AND t.deleted_at IS NULL
+					AND current_pv.account_id = cp.account_id
+					AND current_pv.commodity_id = cp.commodity_id
+					AND je.entry_date = cp.entry_date
+					AND current_pv.quantity_value = cp.quantity_value
+					AND current_pv.quantity_scale = cp.quantity_scale
+					AND (je.entry_date < c.statement_date
+						OR (je.entry_date = c.statement_date
+							AND current_pv.account_day_sequence <= c.statement_account_sequence))
 			) THEN 0 ELSE 1 END AS stale
 		FROM reconciliation_checkpoint_postings cp
+		JOIN posting_versions snapshot_pv ON snapshot_pv.id = cp.posting_version_id
+		JOIN reconciliation_checkpoints c ON c.id = cp.checkpoint_id
 		WHERE cp.checkpoint_id = ?
 		ORDER BY cp.posting_version_id
 	`, checkpointID)
