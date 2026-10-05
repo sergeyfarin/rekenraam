@@ -125,6 +125,20 @@ func checkSplitOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID 
 	if current != expected {
 		return SplitOperationRecord{}, ErrSplitPositionChanged
 	}
+	// An effective cash in lieu settles this split's fraction; correcting the
+	// split first would leave it settling nothing (T-147). It is named.
+	var settledBy int64
+	err = tx.QueryRowContext(ctx, `SELECT f.operation_id FROM investment_cash_in_lieu_facts f
+		JOIN effective_investment_operations o ON o.id = f.operation_id
+		WHERE f.book_id = ? AND f.split_operation_id = ? ORDER BY f.operation_id LIMIT 1`,
+		bookID, current.OperationID).Scan(&settledBy)
+	if err == nil {
+		return SplitOperationRecord{}, &InvestmentReplayDependencyError{OperationID: settledBy,
+			Cause: fmt.Errorf("%w: a cash in lieu settles this split", ErrInvestmentCorrectionDependency)}
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return SplitOperationRecord{}, fmt.Errorf("read split cash in lieu: %w", err)
+	}
 	if err := checkInvestmentSourceJournalTx(ctx, tx, bookID, current.TransactionID,
 		current.EventDate, current.TransactionVersionID, current.CurrentVersionID); err != nil {
 		return SplitOperationRecord{}, err

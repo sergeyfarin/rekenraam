@@ -193,7 +193,7 @@ func (r *SelfCheckRepository) StreamDisposalClearing(ctx context.Context, transa
 		WITH decisions AS (
 			SELECT d.* FROM investment_disposal_decisions d
 			JOIN investment_operations o ON o.id = d.operation_id AND o.book_id = d.book_id
-			WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
+			WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')
 		), clearing_groups AS (
 			SELECT DISTINCT book_id, operation_id, transaction_version_id, cost_commodity_id
 			FROM decisions

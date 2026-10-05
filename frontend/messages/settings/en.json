@@ -1212,6 +1212,7 @@
   "investments_split_load_error": "Holdings could not be loaded. Try again.",
   "api_error_investment_split_no_holdings": "Nothing was held on the split date, so there is nothing to split.",
   "api_error_investment_capital_return_no_holdings": "Nothing was held on the effective date, so there is no basis to return capital against.",
+  "api_error_investment_cash_in_lieu_split_unavailable": "The split this cash in lieu settles is no longer effective or belongs to another holding.",
   "api_error_investment_split_fraction_unrepresentable": "The split would leave a fraction this security cannot record exactly. Splits are never rounded.",
   "api_error_investment_split_changed": "The holding changed after the preview. Preview the split again.",
   "api_error_investment_split_dependency": "A later sale or transfer would no longer be possible after this split.",

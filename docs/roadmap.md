@@ -109,16 +109,13 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions, in this order (the outbound
-   transfer API shipped 2026-10-05): outbound entry UI
-   [T-142 #157](https://github.com/sergeyfarin/rekenraam/issues/157), bridge adjustments and backdated outbound
-   admission [T-143 #158](https://github.com/sergeyfarin/rekenraam/issues/158), outbound correction
-   [T-144 #159](https://github.com/sergeyfarin/rekenraam/issues/159), return of capital
-   [T-146 #161](https://github.com/sergeyfarin/rekenraam/issues/161) then its completion
-   [T-148 #163](https://github.com/sergeyfarin/rekenraam/issues/163), cash in lieu
-   [T-147 #162](https://github.com/sergeyfarin/rekenraam/issues/162), then unknown basis
-   [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160) last: it reaches every disposal, pooling,
-   replay and read path, while the two actions above ship known-basis first and leave an
+1. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions. Shipped 2026-10-05: the
+   outbound transfer with entry, bridge adjustments, backdating and correction (T-142–T-144), and the
+   first return-of-capital and cash-in-lieu commands (T-146, T-147). Remaining, in order: return of
+   capital completion [T-148 #163](https://github.com/sergeyfarin/rekenraam/issues/163), cash-in-lieu
+   correction and entry [T-150 #165](https://github.com/sergeyfarin/rekenraam/issues/165), then unknown
+   basis [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160) last: it reaches every disposal,
+   pooling, replay and read path, while the actions above ship known-basis first and leave an
    unknown-basis lot unresolved, as the contract allows.
 
 **Next, in order**
@@ -126,7 +123,8 @@ below is execution order, not a chain of hard dependencies.
 2. Short sale/cover
    [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103), then compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
 
-**Placed, not sequenced:** zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146);
+**Placed, not sequenced:** race-gate headroom for the backend app package
+[T-149 #164](https://github.com/sergeyfarin/rekenraam/issues/164); zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146);
 lot-opening `NOT NULL` [T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) before the v0.1.0 tag; Refresh
 reach for revised Trading 212 fills before the fetch cursor [T-137 #152](https://github.com/sergeyfarin/rekenraam/issues/152). Blocked on
 provider evidence: [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145), [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136).

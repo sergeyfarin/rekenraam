@@ -305,6 +305,10 @@ paths:
     $ref: "./paths/investments-external-transfer-out-impact.yaml"
   /api/v1/investments/transfers/external/out/preview:
     $ref: "./paths/investments-external-transfer-out-preview.yaml"
+  /api/v1/investments/cash-in-lieu:
+    $ref: "./paths/investments-cash-in-lieu.yaml"
+  /api/v1/investments/cash-in-lieu/preview:
+    $ref: "./paths/investments-cash-in-lieu-preview.yaml"
   /api/v1/investments/return-of-capital:
     $ref: "./paths/investments-return-of-capital.yaml"
   /api/v1/investments/return-of-capital/preview:
@@ -1072,6 +1076,10 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentTransferOutReplacementRequest"
     InvestmentTransferOutReplacementResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentTransferOutReplacementResponse"
+    CashInLieuRequest:
+      $ref: "./components/schemas/investments.yaml#/CashInLieuRequest"
+    CashInLieuPreviewResponse:
+      $ref: "./components/schemas/investments.yaml#/CashInLieuPreviewResponse"
     CapitalReturnRequest:
       $ref: "./components/schemas/investments.yaml#/CapitalReturnRequest"
     CapitalReturnEffect:

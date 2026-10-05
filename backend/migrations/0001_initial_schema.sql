@@ -2057,6 +2057,47 @@ BEFORE DELETE ON investment_capital_return_effects
 BEGIN SELECT RAISE(ABORT, 'investment capital return effects are immutable'); END;
 -- +goose StatementEnd
 
+-- Cash in lieu (slice 5, T-147): an ordinary long disposal of a split's
+-- fractional entitlement, operation kind cash_in_lieu, linked here to the
+-- effective split of the same holding it settles. Its security legs post on
+-- the disposal date, its cash on payment_on (the trade's settlement date).
+CREATE TABLE IF NOT EXISTS investment_cash_in_lieu_facts (
+  operation_id INTEGER PRIMARY KEY REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  split_operation_id INTEGER NOT NULL REFERENCES investment_split_facts(operation_id) ON DELETE RESTRICT,
+  payment_on TEXT NOT NULL CHECK (payment_on GLOB '????-??-??'),
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT
+);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_cash_in_lieu_facts_valid
+BEFORE INSERT ON investment_cash_in_lieu_facts
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_operations o
+  JOIN investment_disposal_decisions d ON d.operation_id = o.id
+  JOIN investment_split_facts s ON s.operation_id = NEW.split_operation_id
+  WHERE o.id = NEW.operation_id AND o.book_id = NEW.book_id AND o.operation_kind = 'cash_in_lieu'
+    AND o.created_audit_event_id = NEW.created_audit_event_id AND o.event_date <= NEW.payment_on
+    AND s.book_id = NEW.book_id AND d.account_id = s.account_id AND d.commodity_id = s.commodity_id
+    AND d.event_date >= s.effective_on
+    -- The split it settles must still be effective (T-147 seam fence).
+    AND NOT EXISTS (SELECT 1 FROM investment_operations successor
+      WHERE successor.correction_of_operation_id = s.operation_id)
+)
+BEGIN SELECT RAISE(ABORT, 'investment cash in lieu fact is outside its disposal or split'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_cash_in_lieu_facts_no_update
+BEFORE UPDATE ON investment_cash_in_lieu_facts
+BEGIN SELECT RAISE(ABORT, 'investment cash in lieu facts are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_cash_in_lieu_facts_no_delete
+BEFORE DELETE ON investment_cash_in_lieu_facts
+BEGIN SELECT RAISE(ABORT, 'investment cash in lieu facts are immutable'); END;
+-- +goose StatementEnd
+
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_split_revisions_no_update
 BEFORE UPDATE ON investment_split_revisions
@@ -4029,6 +4070,10 @@ DROP TRIGGER IF EXISTS investment_capital_return_facts_no_delete;
 DROP TRIGGER IF EXISTS investment_capital_return_facts_no_update;
 DROP TRIGGER IF EXISTS investment_capital_return_effects_valid;
 DROP TRIGGER IF EXISTS investment_capital_return_facts_valid;
+DROP TRIGGER IF EXISTS investment_cash_in_lieu_facts_no_delete;
+DROP TRIGGER IF EXISTS investment_cash_in_lieu_facts_no_update;
+DROP TRIGGER IF EXISTS investment_cash_in_lieu_facts_valid;
+DROP TABLE IF EXISTS investment_cash_in_lieu_facts;
 DROP TABLE IF EXISTS investment_capital_return_effects;
 DROP TABLE IF EXISTS investment_capital_return_facts;
 DROP TABLE IF EXISTS investment_split_revision_effects;

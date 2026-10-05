@@ -225,6 +225,9 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		{"investment-split-revision-effects.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "split-revision-effects", []string{"revision_id", "effect_seq", "lot_id", "quantity_delta_value", "quantity_delta_scale"})
 		}},
+		{"investment-cash-in-lieu-facts.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "cash-in-lieu-facts", []string{"operation_id", "split_operation_id", "payment_on", "audit_event_id"})
+		}},
 		{"investment-capital-return-facts.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "capital-return-facts", []string{"operation_id", "account_id", "commodity_id", "cost_commodity_id", "cash_account_id", "effective_on", "payment_on", "amount_value", "amount_scale", "entitlement_rule", "source_evidence_json", "audit_event_id"})
 		}},
@@ -904,6 +907,7 @@ value in this archive was ever a floating-point number.`,
   investment-split-facts.csv  sourced split and reverse-split ratios and dates
   investment-split-revisions.csv  replay revisions of split lot effects per cost currency, with any adjustment journal
   investment-split-revision-effects.csv  per-lot quantity changes for those revisions
+  investment-cash-in-lieu-facts.csv  cash-in-lieu disposals and the split each settles, with payment dates
   investment-capital-return-facts.csv  returns of capital: receipt, payment and effective dates, entitlement rule
   investment-capital-return-effects.csv  per-lot allocated receipt, basis reduction and unresolved excess
   investment-fee-policies.csv  book and account charge policy identities

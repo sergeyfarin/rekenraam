@@ -1184,6 +1184,7 @@
   "investments_split_load_error": "Bestände konnten nicht geladen werden. Bitte erneut versuchen.",
   "api_error_investment_split_no_holdings": "Am Stichtag wurde nichts gehalten, daher gibt es nichts zu splitten.",
   "api_error_investment_capital_return_no_holdings": "Am Stichtag wurde nichts gehalten, daher gibt es keine Anschaffungskosten für eine Kapitalrückzahlung.",
+  "api_error_investment_cash_in_lieu_split_unavailable": "Der Split, den dieser Barausgleich für Spitzen abrechnet, gilt nicht mehr oder gehört zu einer anderen Position.",
   "api_error_investment_split_fraction_unrepresentable": "Der Split ergäbe einen Bruchteil, den dieses Wertpapier nicht exakt erfassen kann. Splits werden nie gerundet.",
   "api_error_investment_split_changed": "Der Bestand hat sich nach der Vorschau geändert. Bitte den Split erneut prüfen.",
   "api_error_investment_split_dependency": "Ein späterer Verkauf oder Übertrag wäre nach diesem Split nicht mehr möglich.",

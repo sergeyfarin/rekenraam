@@ -72,6 +72,8 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 			e.quantity_delta_value, e.quantity_delta_scale
 			FROM investment_split_revision_effects e WHERE e.book_id = ?
 			ORDER BY e.revision_id, e.effect_seq`,
+		"cash-in-lieu-facts": `SELECT f.operation_id, f.split_operation_id, f.payment_on, f.created_audit_event_id
+			FROM investment_cash_in_lieu_facts f WHERE f.book_id = ? ORDER BY f.operation_id`,
 		"capital-return-facts": `SELECT f.operation_id, f.account_id, f.commodity_id, f.cost_commodity_id,
 			f.cash_account_id, f.effective_on, f.payment_on, f.amount_value, f.amount_scale, f.entitlement_rule,
 			f.source_evidence_json, f.created_audit_event_id

@@ -1004,6 +1004,70 @@ InvestmentTransferOutReplacementResponse:
       type: integer
       format: int64
 
+CashInLieuRequest:
+  type: object
+  additionalProperties: false
+  required: [split_transaction_id, disposal_on, payment_on, quantity_value, quantity_scale, cash_account_id,
+    currency_id, proceeds_value, proceeds_scale]
+  properties:
+    split_transaction_id:
+      type: integer
+      format: int64
+      description: The posted split this fraction comes from; the holding and security are its own.
+    disposal_on:
+      type: string
+      format: date
+    payment_on:
+      type: string
+      format: date
+    quantity_value:
+      type: string
+      pattern: '^[1-9][0-9]{0,37}$'
+      description: The fraction, below one share.
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
+    cash_account_id:
+      type: integer
+      format: int64
+    currency_id:
+      type: integer
+      format: int64
+    proceeds_value:
+      type: string
+      pattern: '^[1-9][0-9]{0,18}$'
+    proceeds_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    cost_basis_method:
+      type: string
+      enum: [fifo, lifo, average_cost, specific_lot]
+    lot_allocations:
+      type: array
+      items:
+        $ref: "../schemas/investments.yaml#/InvestmentLotAllocationRequest"
+    memo:
+      type: string
+    change_reason:
+      type: string
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+
+CashInLieuPreviewResponse:
+  type: object
+  required: [allocations, impact]
+  properties:
+    allocations:
+      type: array
+      items:
+        $ref: "#/InvestmentLotDisposalResponse"
+    impact:
+      $ref: "../schemas/transactions.yaml#/ReconciliationImpactResponse"
+
 CapitalReturnRequest:
   type: object
   additionalProperties: false

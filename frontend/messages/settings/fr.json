@@ -1184,6 +1184,7 @@
   "investments_split_load_error": "Les positions n'ont pas pu être chargées. Réessayez.",
   "api_error_investment_split_no_holdings": "Rien n'était détenu à la date de la division : il n'y a rien à diviser.",
   "api_error_investment_capital_return_no_holdings": "Rien n’était détenu à la date d’effet : il n’y a pas de prix de revient sur lequel rembourser du capital.",
+  "api_error_investment_cash_in_lieu_split_unavailable": "La division réglée par ces espèces en lieu et place des rompus n’est plus en vigueur ou concerne une autre position.",
   "api_error_investment_split_fraction_unrepresentable": "La division laisserait une fraction que ce titre ne peut pas enregistrer exactement. Une division n'est jamais arrondie.",
   "api_error_investment_split_changed": "La position a changé après la prévisualisation. Prévisualisez de nouveau la division.",
   "api_error_investment_split_dependency": "Une vente ou un transfert ultérieur ne serait plus possible après cette division.",

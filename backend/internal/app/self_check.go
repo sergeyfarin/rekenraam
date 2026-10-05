@@ -610,6 +610,12 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				JOIN investment_lot_events ev ON ev.id = x.lot_event_id
 				WHERE x.operation_id = o.id AND NOT EXISTS (SELECT 1 FROM investment_capital_return_effects e
 					WHERE e.operation_id = o.id AND e.lot_event_id = ev.id)))`},
+		{"cash in lieu missing its link to an effective split", `
+			SELECT o.id FROM effective_investment_operations o WHERE o.book_id = ?
+			AND o.operation_kind = 'cash_in_lieu'
+			AND NOT EXISTS (SELECT 1 FROM investment_cash_in_lieu_facts f
+				JOIN effective_investment_operations split ON split.id = f.split_operation_id
+				WHERE f.operation_id = o.id)`},
 		{"split missing its sourced ratio or lot effects", `
 			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
 			AND o.operation_kind = 'split'
@@ -636,13 +642,13 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 						WHERE je.transaction_version_id = v.id AND je.entry_date <> f.effective_on))`},
 		{"posted long disposal missing proceeds decision", `
 			SELECT o.id FROM investment_operations o
-			WHERE o.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
+			WHERE o.book_id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')
 			AND NOT EXISTS (SELECT 1 FROM investment_disposal_decisions d
 				WHERE d.operation_id = o.id AND d.position_side = 'long')`},
 		{"disposal decision has no matching operation journal link", `
 			SELECT d.id FROM investment_disposal_decisions d
 			JOIN investment_operations o ON o.id = d.operation_id
-			WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
+			WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')
 			AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links l
 				WHERE l.operation_id = d.operation_id AND l.book_id = d.book_id
 				AND l.transaction_version_id = d.transaction_version_id AND l.role <> 'reversal')`},

@@ -114,6 +114,7 @@ consumer products than *conciliado*, which is already taken by "reconciled";
 | Cost basis transferred out (bridge journal label) | Coste de adquisición transferido | Prix de revient transféré | Kostprijs uitgeboekt | Anschaffungskosten ausgebucht | Перенос себестоимости |
 | Transfer out (investments leaving the book) | Transferir … salientes | Transférer … sortants | Uitboeken | Ausbuchen | Вывод / вывести |
 | Return of capital | Devolución de capital | Remboursement de capital | Kapitaalteruggave | Kapitalrückzahlung | Возврат капитала |
+| Cash in lieu (of fractional shares) | Efectivo en lugar de fracciones | Espèces en lieu et place des rompus | Contante afrekening van fracties | Barausgleich für Spitzen | Компенсация за дробные акции |
 
 **Void is not delete.** A voided transaction stays in the ledger with its
 effect reversed, which is exactly what Dutch *storneren* and German

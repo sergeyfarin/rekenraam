@@ -281,6 +281,10 @@ type InvestmentTradeInput struct {
 	// sell endpoint — so a mistyped sell amount can never become a write-off.
 	// The trade carries no cash legs; its disposal decision records zero proceeds.
 	WriteOff bool
+	// CashInLieu marks the disposal of a split's fractional entitlement for
+	// cash (T-147). It is set only by CashInLieu(); the operation kind is
+	// cash_in_lieu and the cash posts on SettlementDate, its payment date.
+	CashInLieu bool
 	// OriginType/Operation override the default "browser_api"/"investment.buy"
 	// (or "investment.sell") attribution — set by the Trading 212 import
 	// commit path (B-T212-INVST) so an auto-booked trade is correctly
@@ -1515,7 +1519,7 @@ func (s *InvestmentService) sellPlan(ctx context.Context, input InvestmentTradeI
 			Spec: TransactionInput{
 				Status:                  status,
 				TransactionKind:         "investment",
-				InvestmentOperationKind: map[bool]string{true: "write_off", false: "sell"}[input.WriteOff],
+				InvestmentOperationKind: disposalOperationKind(input),
 				TransactionDate:         input.TransactionDate,
 				PayeeID:                 input.PayeeID,
 				Description:             memo,
@@ -2967,4 +2971,16 @@ func (s *InvestmentService) reconciliationImpactForPlan(ctx context.Context, pla
 		OwnerUserID: plan.Create.OwnerUserID,
 		Spec:        plan.Create.Spec,
 	})
+}
+
+// disposalOperationKind names the long disposal a trade input records.
+func disposalOperationKind(input InvestmentTradeInput) string {
+	switch {
+	case input.WriteOff:
+		return "write_off"
+	case input.CashInLieu:
+		return "cash_in_lieu"
+	default:
+		return "sell"
+	}
 }

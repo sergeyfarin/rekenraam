@@ -1,0 +1,60 @@
+post:
+  summary: Record cash in lieu of a split fraction
+  description: >-
+    Disposes the fractional share a split left (quantity below one) for cash
+    (T-147): an ordinary long disposal under the holding's election, with the
+    cash as proceeds. The security legs post on disposal_on and the cash on
+    payment_on, as separate dated journal entries of one transaction. The
+    disposal is linked to the split it settles, which must be an effective
+    split of the holding on or before disposal_on
+    (INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE otherwise); that split cannot
+    then be corrected until the cash in lieu is. The realized result comes
+    from replay at the disposal slot; it is never a dividend.
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CashInLieuRequest"
+  responses:
+    "201":
+      description: Disposal, both dated journal entries, split link and audit recorded atomically
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentTradeResponse"
+    "400":
+      description: Invalid facts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Reconciliation override or gain acknowledgement required, split unavailable, insufficient lots or out of order
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

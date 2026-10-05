@@ -1,0 +1,43 @@
+post:
+  summary: Preview cash in lieu
+  description: >-
+    Authenticated read-only preview; no CSRF token or write occurs. Runs the
+    disposal writer and rolls back, returning the lots the fraction takes with
+    their basis, and the checkpoint and gain impact.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CashInLieuRequest"
+  responses:
+    "200":
+      description: Lot allocations and impact
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CashInLieuPreviewResponse"
+    "400":
+      description: Invalid facts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Split unavailable, insufficient lots or out of order
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

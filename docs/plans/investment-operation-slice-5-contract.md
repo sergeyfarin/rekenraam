@@ -270,6 +270,18 @@ ordinary long-disposal election and allocation rules, with explicit lot
 selection when the corporate action identifies the affected fraction.
 Unknown basis leaves gain unresolved. Do not treat the cash as a dividend.
 
+**First command (2026-10-05, T-147 #162).** `POST
+/api/v1/investments/cash-in-lieu` (plus `/preview`) runs the ordinary long
+disposal writer with operation kind `cash_in_lieu`: the fraction (below one
+share) is disposed under the holding's election with the cash as proceeds,
+the security legs on `disposal_on` and the cash on `payment_on` as separate
+dated entries of one transaction. `investment_cash_in_lieu_facts` links it to
+the split it settles, written inside the same transaction where a trigger
+rechecks that the split is still effective and matches the holding; a split
+correction is then refused with the cash in lieu named. Replay revises its
+disposed basis like any disposal decision. Correction of a cash in lieu
+itself and entry UI follow (T-150 #165).
+
 For the 3-for-2 example above, suppose 0.5 share receives 8.00 EUR. The
 linked cash-in-lieu journal posts security `H −0.5`, `T +0.5` and EUR
 `A +8.00`, `T −8.00`. The fraction's disposed basis is allocated from the

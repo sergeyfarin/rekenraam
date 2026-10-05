@@ -23,7 +23,7 @@ func (r *SelfCheckRepository) StreamDisposalClearingAllocations(ctx context.Cont
 	rows, err := tx.QueryContext(ctx, `WITH decisions AS (
 		SELECT d.* FROM investment_disposal_decisions d
 		JOIN investment_operations o ON o.id = d.operation_id AND o.book_id = d.book_id
-		WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off')
+		WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')
 	), postings AS (
 		SELECT DISTINCT pv.id, pv.quantity_value, pv.quantity_scale FROM decisions d
 		JOIN posting_versions pv ON pv.book_id = d.book_id

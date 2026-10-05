@@ -59,6 +59,8 @@ GitHub numbers are distinct; cite both.
 | T-146 | [#161 — Return of capital](https://github.com/sergeyfarin/rekenraam/issues/161) |
 | T-147 | [#162 — Cash in lieu](https://github.com/sergeyfarin/rekenraam/issues/162) |
 | T-148 | [#163 — Complete return of capital: revisions, entitlement, correction, entry UI](https://github.com/sergeyfarin/rekenraam/issues/163) |
+| T-149 | [#164 — Backend app package race run near its timeout](https://github.com/sergeyfarin/rekenraam/issues/164) |
+| T-150 | [#165 — Cash in lieu correction and entry UI](https://github.com/sergeyfarin/rekenraam/issues/165) |
 
 IDs not listed here were closed before the GitHub migration; see the
 [pre-migration snapshot](reviews/open-backlog-before-github-2026-09-27.md)
