@@ -13852,7 +13852,7 @@ export interface paths {
         put?: never;
         /**
          * Transfer an investment holding out of the book
-         * @description Moves selected long lots with their own basis (individual-lot source) or a quantity at the dated average-cost pool rate (average-cost source) to a destination outside the book, without cash or gain. Posts the security legs and a separate bridge journal (system_label transfer_bridge) carrying the depleted basis from commodity_trading to the external transfer equity account. A transfer dated behind a later depletion of the holding is refused (INVESTMENT_EVENT_OUT_OF_ORDER).
+         * @description Moves selected long lots with their own basis (individual-lot source) or a quantity at the dated average-cost pool rate (average-cost source) to a destination outside the book, without cash or gain. Posts the security legs and a separate bridge journal (system_label transfer_bridge) carrying the depleted basis from commodity_trading to the external transfer equity account. A transfer dated behind a later depletion of the holding is admitted through replay at its own slot; a later decision it makes impossible is refused by name (INVESTMENT_SALE_DEPENDENCY), and changed later gains need the preview's gain_impact_acknowledgement.
          */
         post: {
             parameters: {

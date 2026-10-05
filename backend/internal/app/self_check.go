@@ -384,7 +384,7 @@ func replayMismatchLabel(kind string) string {
 	case db.ReplayMismatchSplit:
 		return "split effects"
 	case db.ReplayMismatchTransferLink:
-		return "internal transfers carrying stale basis"
+		return "transfers carrying stale basis"
 	case db.ReplayMismatchMethodFamily:
 		return "method locks"
 	default:

@@ -165,7 +165,7 @@ func (s *InvestmentService) externalTransferOutWrite(ctx context.Context, input 
 	transfer := db.CreateExternalTransferOutParams{
 		BookID: BookID, SourceAccountID: input.SourceAccountID, CommodityID: input.CommodityID,
 		CostCommodityID: input.CostCommodityID, EffectiveOn: date, Allocations: allocations,
-		SourceEvidenceJSON: evidence, SourceCostBasisMethod: method, SourceMethodSource: methodSource, Memo: memo,
+		SourceEvidenceJSON: evidence, SourceCostBasisMethod: method, SourceMethodSource: methodSource,
 	}
 	if pooled {
 		transfer.PooledQuantityValue, transfer.PooledQuantityScale = quantity, total.Scale()
@@ -185,7 +185,7 @@ func (s *InvestmentService) PreviewExternalTransferOut(ctx context.Context, inpu
 	journal.GainImpact = gainImpactPolicy("")
 	simulated, result, err := s.repository.SimulateExternalTransferOut(ctx, journal, transfer)
 	if err != nil {
-		return ExternalTransferOutPreview{}, mapInternalTransferError(err)
+		return ExternalTransferOutPreview{}, mapExternalTransferOutError(err)
 	}
 	impact, err := s.simulatedReconciliationImpact(ctx, simulated)
 	if err != nil {
@@ -204,9 +204,19 @@ func (s *InvestmentService) ExternalTransferOut(ctx context.Context, input Exter
 	journal.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
 	transaction, result, err := s.repository.CreateExternalTransferOut(ctx, journal, transfer)
 	if err != nil {
-		return ExternalTransferOutResult{}, mapInternalTransferError(err)
+		return ExternalTransferOutResult{}, mapExternalTransferOutError(err)
 	}
 	return ExternalTransferOutResult{Transaction: toTransaction(transaction), Plan: toExternalTransferOutPlan(result)}, nil
+}
+
+// mapExternalTransferOutError names a later decision a backdated outbound
+// transfer makes impossible, as a backdated sale does (T-143).
+func mapExternalTransferOutError(err error) error {
+	var dependency *db.InvestmentReplayDependencyError
+	if errors.As(err, &dependency) {
+		return InvestmentSaleDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
+	}
+	return mapInternalTransferError(err)
 }
 
 func toExternalTransferOutPlan(result db.ExternalTransferOutResult) ExternalTransferOutPlan {

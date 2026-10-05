@@ -180,7 +180,7 @@ func TestReplaySelfCheckReportsStaleTransferBasis(t *testing.T) {
 	requireConsolidatedReadersPass(t, run)
 	replay := resultFor(t, run, CheckInvestmentReplay)
 	assert.Equal(t, SelfCheckFailed, replay.Status)
-	assert.Contains(t, replay.Summary, "internal transfers carrying stale basis")
+	assert.Contains(t, replay.Summary, "transfers carrying stale basis")
 	assert.Contains(t, replay.Sample, transferOperationID(t, f, transfer.Transaction.ID))
 }
 

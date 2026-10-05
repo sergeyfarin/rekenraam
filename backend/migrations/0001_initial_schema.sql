@@ -1687,8 +1687,10 @@ WHEN NOT EXISTS (
   JOIN investment_operations o ON o.id = NEW.caused_by_operation_id
   JOIN audit_events a ON a.id = NEW.created_audit_event_id
   WHERE x.operation_id = NEW.operation_id AND x.link_seq = NEW.link_seq
-    AND f.book_id = NEW.book_id AND f.transfer_kind = 'internal' AND x.basis_knowledge = 'known'
-    AND ((f.destination_lineage = 'source_lots' AND EXISTS (
+    AND f.book_id = NEW.book_id AND f.transfer_kind IN ('internal', 'external_out') AND x.basis_knowledge = 'known'
+    -- A source-lot link (internal source_lots, or outbound, T-143) may move
+    -- to the corrected successor of its source acquisition, same date.
+    AND (((f.destination_lineage = 'source_lots' OR f.transfer_kind = 'external_out') AND EXISTS (
         SELECT 1 FROM investment_lots source JOIN investment_lots original ON original.id = x.source_lot_id
         WHERE source.id = NEW.source_lot_id AND source.book_id = NEW.book_id
           AND source.account_id = f.source_account_id AND source.commodity_id = f.commodity_id

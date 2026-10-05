@@ -54,8 +54,8 @@ func TestExternalTransferOutAPIPreviewMatchesCommitAndLabelsBridge(t *testing.T)
 	listed := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, "/api/v1/transactions", nil, http.StatusOK)
 	assert.Contains(t, listed.Body.String(), `"system_label":"transfer_bridge"`)
 
-	// A transfer dated behind the holding's latest depletion is refused by name.
+	// A transfer dated behind the holding's latest depletion is admitted
+	// through replay at its own slot (T-143).
 	request.EffectiveOn = "2026-01-15"
-	refused := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusConflict)
-	assert.Contains(t, refused.Body.String(), "INVESTMENT_EVENT_OUT_OF_ORDER")
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
 }

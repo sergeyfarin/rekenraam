@@ -18,10 +18,11 @@ import (
 // operation as 'transfer_bridge'. The writer's combined checkpoint guard nets
 // it with the security journal.
 
-// ErrExternalTransferBasisChanged refuses a history change that would move the
-// basis an outbound transfer already carried out of the book, until dated
-// bridge adjustments ship.
-var ErrExternalTransferBasisChanged = errors.New("an outbound transfer's carried basis would change")
+// ErrExternalTransferLotsChanged refuses a history change that would make a
+// pooled outbound transfer take different source lots or quantities: its
+// links are fixed per source lot. A change of the basis it carried is revised
+// with a dated bridge adjustment instead (T-143).
+var ErrExternalTransferLotsChanged = errors.New("an outbound transfer's source lots would change")
 
 type CreateExternalTransferOutParams struct {
 	BookID          int64
@@ -37,7 +38,6 @@ type CreateExternalTransferOutParams struct {
 	SourceEvidenceJSON    string
 	SourceCostBasisMethod string
 	SourceMethodSource    DisposalDecisionSource
-	Memo                  string
 }
 
 // ExternalTransferOutLink is one source lot's depletion carried out of the book.
@@ -93,18 +93,25 @@ func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateT
 		(len(transfer.Allocations) == 0) != (transfer.PooledQuantityValue.Sign() > 0) {
 		return ExternalTransferOutResult{}, ErrInvalidDisposalParams
 	}
-	// Backdated admission through replay, with its dated bridge adjustments,
-	// is a later slice; until then a later depletion refuses by name.
-	if err := requirePositionEventInOrderTx(ctx, tx, transfer.BookID, transfer.SourceAccountID,
-		transfer.CommodityID, transfer.EffectiveOn, "an outbound transfer"); err != nil {
+	// A transfer dated behind a later depletion of its source is admitted the
+	// way a backdated sale is: replay takes its depletion at its own slot and
+	// revises every later decision under its recorded policy (T-143).
+	latest, err := latestPositionRewriteDateTx(ctx, tx, transfer.BookID, transfer.SourceAccountID, transfer.CommodityID)
+	if err != nil {
 		return ExternalTransferOutResult{}, err
 	}
-	policy, err := internalTransferPolicyTx(ctx, tx, CreateInternalTransferParams{
+	backdated := latest != "" && transfer.EffectiveOn < latest
+	asInternal := CreateInternalTransferParams{
 		BookID: transfer.BookID, SourceAccountID: transfer.SourceAccountID, CommodityID: transfer.CommodityID,
-		CostCommodityID: transfer.CostCommodityID, Allocations: transfer.Allocations,
+		CostCommodityID: transfer.CostCommodityID, EffectiveOn: transfer.EffectiveOn, Allocations: transfer.Allocations,
 		PooledQuantityValue: transfer.PooledQuantityValue, PooledQuantityScale: transfer.PooledQuantityScale,
+		SourceEvidenceJSON:    transfer.SourceEvidenceJSON,
 		SourceCostBasisMethod: transfer.SourceCostBasisMethod, SourceMethodSource: transfer.SourceMethodSource,
-	})
+		// Outbound links are per source lot: a pool depletes as a pooled
+		// transfer out, never into one pooled lot.
+		DestinationLineage: InternalTransferSourceLots,
+	}
+	policy, err := internalTransferPolicyTx(ctx, tx, asInternal)
 	if err != nil {
 		return ExternalTransferOutResult{}, err
 	}
@@ -130,7 +137,10 @@ func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateT
 		EventKind: "transfer_out", MetadataJSON: transfer.SourceEvidenceJSON,
 		CreatedAt: journal.CreatedAt, ActorUserID: journal.ActorUserID}
 	var moved []LotDisposalRecord
-	if policy.allocation == InternalTransferAverageCostPool {
+	if backdated {
+		moved, err = subjectTransferDepletionTx(ctx, tx, operationID, "external_transfer_out", asInternal, policy,
+			transaction, journal, operationID, auditEventID)
+	} else if policy.allocation == InternalTransferAverageCostPool {
 		params.QuantityValue, params.QuantityScale = transfer.PooledQuantityValue, transfer.PooledQuantityScale
 		moved, err = pooledTransferOutTx(ctx, tx, params, auditEventID)
 	} else {
@@ -175,8 +185,8 @@ func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateT
 	}
 	result.BasisScale = basis.Scale()
 	if basis.Sign() > 0 {
-		if _, err := postExternalTransferBridgeJournalTx(ctx, tx, transfer, operationID, basis,
-			auditEventID, journal.ActorUserID, journal.CreatedAt); err != nil {
+		if _, err := postTransferBridgeJournalTx(ctx, tx, transfer.BookID, operationID, transfer.CostCommodityID,
+			basis, operationID, auditEventID, journal.ActorUserID, journal.CreatedAt); err != nil {
 			return ExternalTransferOutResult{}, err
 		}
 	}
@@ -185,20 +195,36 @@ func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateT
 	if err := updatePositionMethodFamilyTx(ctx, tx, params, policy.method, auditEventID); err != nil {
 		return ExternalTransferOutResult{}, fmt.Errorf("save outbound transfer source basis method: %w", err)
 	}
+	if backdated {
+		// The source now replays with this transfer at its slot; later
+		// decisions are revised and anything they carry on propagates.
+		if err := replayCorrectedPositionTx(ctx, tx, transfer.BookID, investmentReplayPositionKey{
+			transfer.SourceAccountID, transfer.CommodityID, transfer.CostCommodityID},
+			operationID, auditEventID, journal.ActorUserID, journal.CreatedAt); err != nil {
+			return ExternalTransferOutResult{}, err
+		}
+	}
 	return result, nil
 }
 
-// postExternalTransferBridgeJournalTx posts the basis an outbound transfer
-// carries out of the book, T −b and E +b in its cost currency, dated to the
-// transfer and linked to its operation as 'transfer_bridge'.
-func postExternalTransferBridgeJournalTx(ctx context.Context, tx *sql.Tx, transfer CreateExternalTransferOutParams,
-	operationID int64, basis *exact.ScaledInt, auditEventID, actorUserID int64, createdAt string) (int64, error) {
+// postTransferBridgeJournalTx posts basis an outbound transfer carries out of
+// the book, T −b and E +b in its cost currency, dated to the transfer and
+// linked to its operation as 'transfer_bridge'. The first bridge carries the
+// transfer's own basis; a replay that later changes it posts the signed
+// difference here, caused by causedByOperationID (T-143).
+func postTransferBridgeJournalTx(ctx context.Context, tx *sql.Tx, bookID, operationID, costCommodityID int64,
+	basis *exact.ScaledInt, causedByOperationID, auditEventID, actorUserID int64, createdAt string) (int64, error) {
 	var tradingID, equityID int64
-	if err := tx.QueryRowContext(ctx, `SELECT trading.id, equity.id FROM accounts trading
-		JOIN accounts equity ON equity.book_id = trading.book_id
+	var effectiveOn, memo string
+	if err := tx.QueryRowContext(ctx, `SELECT trading.id, equity.id, f.effective_on, v.description
+		FROM investment_transfer_facts f
+		JOIN accounts trading ON trading.book_id = f.book_id AND trading.system_role = 'commodity_trading'
+		JOIN accounts equity ON equity.book_id = f.book_id
 			AND equity.system_role = 'external_investment_transfer_equity'
-		WHERE trading.book_id = ? AND trading.system_role = 'commodity_trading'`,
-		transfer.BookID).Scan(&tradingID, &equityID); err != nil {
+		JOIN investment_operation_journal_links link ON link.operation_id = f.operation_id AND link.role = 'primary'
+		JOIN transaction_versions v ON v.id = link.transaction_version_id
+		WHERE f.operation_id = ? AND f.book_id = ? AND f.transfer_kind = 'external_out'
+		ORDER BY link.link_seq LIMIT 1`, operationID, bookID).Scan(&tradingID, &equityID, &effectiveOn, &memo); err != nil {
 		return 0, fmt.Errorf("read outbound transfer bridge accounts: %w", err)
 	}
 	value, err := basis.Coefficient()
@@ -207,16 +233,20 @@ func postExternalTransferBridgeJournalTx(ctx context.Context, tx *sql.Tx, transf
 	}
 	posting := func(key string, account int64, quantity exact.Coefficient) PostingSpec {
 		return PostingSpec{LineKey: key, AccountID: account, QuantityValue: quantity, QuantityScale: basis.Scale(),
-			CommodityID: transfer.CostCommodityID, ReconciliationStatus: "uncleared", Memo: transfer.Memo, MetadataJSON: "{}"}
+			CommodityID: costCommodityID, ReconciliationStatus: "uncleared", Memo: memo, MetadataJSON: "{}"}
+	}
+	metadata := fmt.Sprintf(`{"transfer_bridge_of_operation_id":%d}`, operationID)
+	if causedByOperationID != operationID {
+		metadata = fmt.Sprintf(`{"transfer_bridge_of_operation_id":%d,"caused_by_operation_id":%d}`,
+			operationID, causedByOperationID)
 	}
 	record, err := insertTransactionWithAuditEventTx(ctx, tx, CreateTransactionParams{
-		BookID: transfer.BookID, ActorUserID: actorUserID, CreatedAt: createdAt,
+		BookID: bookID, ActorUserID: actorUserID, CreatedAt: createdAt,
 		Spec: TransactionSpec{
-			Status: "posted", TransactionKind: "investment", TransactionDate: transfer.EffectiveOn,
-			Description:  transfer.Memo,
-			MetadataJSON: fmt.Sprintf(`{"transfer_bridge_of_operation_id":%d}`, operationID),
-			JournalEntries: []JournalEntrySpec{{EntryDate: transfer.EffectiveOn, EntryKind: "investment",
-				Memo: transfer.Memo, MetadataJSON: "{}",
+			Status: "posted", TransactionKind: "investment", TransactionDate: effectiveOn,
+			Description: memo, MetadataJSON: metadata,
+			JournalEntries: []JournalEntrySpec{{EntryDate: effectiveOn, EntryKind: "investment",
+				Memo: memo, MetadataJSON: "{}",
 				Postings: []PostingSpec{
 					posting("transfer-bridge-trading", tradingID, value.Negated()),
 					posting("transfer-bridge-equity", equityID, value),
@@ -230,7 +260,7 @@ func postExternalTransferBridgeJournalTx(ctx context.Context, tx *sql.Tx, transf
 		(book_id, operation_id, transaction_version_id, link_seq, role)
 		SELECT ?, ?, ?, COALESCE(MAX(link_seq), 0) + 1, 'transfer_bridge'
 		FROM investment_operation_journal_links WHERE operation_id = ?`,
-		transfer.BookID, operationID, record.VersionID, operationID); err != nil {
+		bookID, operationID, record.VersionID, operationID); err != nil {
 		return 0, fmt.Errorf("link outbound transfer bridge journal: %w", err)
 	}
 	return record.VersionID, nil

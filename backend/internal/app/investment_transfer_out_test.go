@@ -149,39 +149,6 @@ func TestExternalTransferOutOfZeroBasisLotPostsNoBridge(t *testing.T) {
 	requireInvestmentSelfCheckPasses(t, f)
 }
 
-func TestExternalTransferOutBehindLaterDepletionIsRefused(t *testing.T) {
-	t.Parallel()
-	f := newTransferOutFixture(t)
-	buy := buyOn(t, f, "2026-05-01", 3, 3000)
-	_, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-07-01", 1))
-	require.NoError(t, err)
-	transactionsBefore := f.transactionCount(t)
-	_, err = f.investmentService.ExternalTransferOut(context.Background(), transferOutOfLot(f, "2026-06-01", *buy.LotID, 1))
-	require.ErrorIs(t, err, db.ErrOutOfOrderPositionEvent)
-	assert.Equal(t, transactionsBefore, f.transactionCount(t))
-}
-
-// Until dated bridge adjustments ship, history that would change the basis an
-// outbound transfer already carried out of the book is refused with the
-// transfer named, and nothing is written.
-func TestBuyCorrectionThatChangesOutboundBasisIsRefusedWithTransferNamed(t *testing.T) {
-	t.Parallel()
-	f := newTransferOutFixture(t)
-	ctx := context.Background()
-	buy := buyOn(t, f, "2026-05-01", 3, 3000)
-	out, err := f.investmentService.ExternalTransferOut(ctx, transferOutOfLot(f, "2026-06-01", *buy.LotID, 2))
-	require.NoError(t, err)
-	transactionsBefore := f.transactionCount(t)
-
-	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, replaceBuyPrice(f, buy, "2026-05-01", 3, 3300))
-	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	var dependency InvestmentBuyDependencyError
-	require.ErrorAs(t, err, &dependency)
-	assert.Equal(t, transferOperationID(t, f, out.Transaction.ID), dependency.OperationID, "the outbound transfer is named")
-	assert.Equal(t, transactionsBefore, f.transactionCount(t))
-	requireInvestmentSelfCheckPasses(t, f)
-}
-
 func TestExternalTransferOutIntoReconciledPeriodNeedsOverride(t *testing.T) {
 	t.Parallel()
 	f := newTransferOutFixture(t)
@@ -220,4 +187,188 @@ func TestSelfCheckDetectsOutboundBridgeThatDisagreesWithLinks(t *testing.T) {
 	result := resultFor(t, run, CheckInvestmentFoundation)
 	assert.Equal(t, SelfCheckFailed, result.Status)
 	assert.Contains(t, result.Summary, "outbound transfers bridge a different basis")
+}
+
+// bridgeTotal sums every bridge journal of an outbound transfer (the first
+// bridge plus later adjustments) on one system account, and counts them.
+func bridgeTotal(t *testing.T, f *investmentsTestFixture, transactionID int64, role string) (*exact.ScaledInt, int) {
+	t.Helper()
+	rows, err := f.database.Query(`SELECT pv.quantity_value, pv.quantity_scale, v.transaction_date
+		FROM investment_operation_journal_links primary_link
+		JOIN transaction_versions primary_version ON primary_version.id = primary_link.transaction_version_id
+		JOIN investment_operation_journal_links bridge ON bridge.operation_id = primary_link.operation_id
+			AND bridge.role = 'transfer_bridge'
+		JOIN transaction_versions v ON v.id = bridge.transaction_version_id
+		JOIN posting_versions pv ON pv.transaction_version_id = bridge.transaction_version_id
+		JOIN accounts a ON a.id = pv.account_id AND a.system_role = ?
+		WHERE primary_link.role = 'primary' AND primary_version.transaction_id = ?`, role, transactionID)
+	require.NoError(t, err)
+	defer rows.Close()
+	total, count := exact.NewScaledInt(), 0
+	for rows.Next() {
+		var value, date string
+		var scale int
+		require.NoError(t, rows.Scan(&value, &scale, &date))
+		assert.Equal(t, "2026-06-01", date, "every bridge is dated to the transfer")
+		total.AddCoefficient(exact.Coefficient(value), scale)
+		count++
+	}
+	require.NoError(t, rows.Err())
+	return total, count
+}
+
+// T-143: replay that changes the basis already bridged out of the book posts
+// a dated adjustment for the difference and revises the link; the first
+// bridge and link stay as committed.
+func TestBuyCorrectionRevisesOutboundBasisWithDatedBridgeAdjustment(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	buy := buyOn(t, f, "2026-05-01", 3, 3000)
+	out, err := f.investmentService.ExternalTransferOut(ctx, transferOutOfLot(f, "2026-06-01", *buy.LotID, 2))
+	require.NoError(t, err)
+
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, replaceBuyPrice(f, buy, "2026-05-01", 3, 3300))
+	require.NoError(t, err)
+	equity, bridges := bridgeTotal(t, f, out.Transaction.ID, "external_investment_transfer_equity")
+	assert.Equal(t, 2, bridges, "the first bridge plus one adjustment")
+	requireScaled(t, 2200, 2, equity, "E carries the corrected basis in total")
+	trading, _ := bridgeTotal(t, f, out.Transaction.ID, "commodity_trading")
+	requireScaled(t, -2200, 2, trading, "T mirrors it")
+	basis, revisions := effectiveTransferBasis(t, f, out.Transaction.ID, 1)
+	requireScaled(t, 2200, 2, basis, "link revised to the corrected basis")
+	assert.Equal(t, 1, revisions)
+	var original exact.Coefficient
+	var originalScale int
+	require.NoError(t, f.database.QueryRow(`SELECT carried_basis_value, carried_basis_scale FROM investment_transfer_lot_links
+		WHERE operation_id = ?`, transferOperationID(t, f, out.Transaction.ID)).Scan(&original, &originalScale))
+	requireScaled(t, 2000, 2, exact.ScaledIntFromCoefficient(original, originalScale), "the first link is immutable evidence")
+	requireInvestmentSelfCheckPasses(t, f)
+}
+
+func TestPooledOutboundBasisRevisesAtCorrectedPoolRate(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	setHoldingCostBasisMethod(t, f, "average_cost")
+	buyOn(t, f, "2026-02-01", 2, 2000)
+	second := buyOn(t, f, "2026-02-02", 2, 4000)
+	input := transferOutOfLot(f, "2026-06-01", 0, 0)
+	input.Allocations, input.QuantityValue = nil, exact.New(1)
+	out, err := f.investmentService.ExternalTransferOut(ctx, input)
+	require.NoError(t, err)
+
+	// The second lot's price changes, not its date: the pool depletes the same
+	// FIFO lineage at a new rate, 100.00 / 4.
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, replaceBuyPrice(f, second, "2026-02-02", 2, 8000))
+	require.NoError(t, err)
+	equity, _ := bridgeTotal(t, f, out.Transaction.ID, "external_investment_transfer_equity")
+	requireScaled(t, 2500, 2, equity, "bridge total at the corrected pool rate")
+	requireInvestmentSelfCheckPasses(t, f)
+}
+
+func TestBackdatedBuyRefusesChangedOutboundPoolLineageWithoutWriting(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	setHoldingCostBasisMethod(t, f, "average_cost")
+	buyOn(t, f, "2026-02-01", 2, 2000)
+	input := transferOutOfLot(f, "2026-03-01", 0, 0)
+	input.Allocations, input.QuantityValue = nil, exact.New(1)
+	out, err := f.investmentService.ExternalTransferOut(ctx, input)
+	require.NoError(t, err)
+	// A January purchase becomes the pool's first FIFO lot: the outbound pool
+	// would take a different source lot, which its fixed links cannot express.
+	buy := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-01-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		QuantityValue: exact.New(2), CashAmountValue: 4000, CashAmountScale: 2}
+	before := buyReplacementPreviewSnapshot(t, f.database)
+	_, err = f.investmentService.Buy(ctx, buy)
+	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
+	var dependency InvestmentBuyDependencyError
+	require.ErrorAs(t, err, &dependency)
+	assert.Equal(t, transferOperationID(t, f, out.Transaction.ID), dependency.OperationID)
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+}
+
+// A transfer dated behind a later sale is admitted through replay: the sale
+// is revised under its recorded FIFO policy and its gain change needs the
+// preview's acknowledgement.
+func TestBackdatedExternalTransferOutReplaysLaterSale(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	first := buyOn(t, f, "2026-05-01", 3, 3000)
+	buyOn(t, f, "2026-05-15", 3, 6000)
+	sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 2))
+	require.NoError(t, err)
+	requireScaled(t, 2000, 2, saleEffectiveBasis(t, f, sold.Transaction.ID), "FIFO from the first lot")
+
+	input := transferOutOfLot(f, "2026-06-01", *first.LotID, 2)
+	_, err = f.investmentService.ExternalTransferOut(ctx, input)
+	require.ErrorIs(t, err, db.ErrGainImpactAcknowledgementRequired)
+	preview, err := f.investmentService.PreviewExternalTransferOut(ctx, input)
+	require.NoError(t, err)
+	require.NotNil(t, preview.Impact.GainImpact)
+	require.Len(t, preview.Impact.GainImpact.Changes, 1, "the later sale's gain change is disclosed")
+	input.GainImpactAcknowledgement = preview.Impact.GainImpact.Acknowledgement
+	out, err := f.investmentService.ExternalTransferOut(ctx, input)
+	require.NoError(t, err)
+	requireScaled(t, 2000, 2, exact.ScaledIntFromInt64(out.Plan.BasisValue, out.Plan.BasisScale), "bridged at its own slot")
+	// The sale now takes the first lot's last unit (10.00) and one from the
+	// second (20.00).
+	requireScaled(t, 3000, 2, saleEffectiveBasis(t, f, sold.Transaction.ID), "sale revised by replay")
+	requireInvestmentSelfCheckPasses(t, f)
+}
+
+func TestBackdatedExternalTransferOutThatBreaksLaterSaleIsRefusedWithSaleNamed(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	buy := buyOn(t, f, "2026-05-01", 3, 3000)
+	sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 3))
+	require.NoError(t, err)
+	transactionsBefore := f.transactionCount(t)
+	_, err = f.investmentService.ExternalTransferOut(ctx, transferOutOfLot(f, "2026-06-01", *buy.LotID, 1))
+	require.ErrorIs(t, err, ErrInvestmentSaleDependency)
+	var dependency InvestmentSaleDependencyError
+	require.ErrorAs(t, err, &dependency)
+	assert.Equal(t, transferOperationID(t, f, sold.Transaction.ID), dependency.OperationID)
+	assert.Equal(t, transactionsBefore, f.transactionCount(t))
+}
+
+// The bridge adjustment is part of the correction's write: its preview writes
+// nothing, and a late refusal (here a stale gain acknowledgement) rolls the
+// adjustment and the link revision back with everything else.
+func TestOutboundBridgeAdjustmentPreviewsAndRollsBackWithItsCommand(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	buy := buyOn(t, f, "2026-05-01", 3, 3000)
+	out, err := f.investmentService.ExternalTransferOut(ctx, transferOutOfLot(f, "2026-06-01", *buy.LotID, 2))
+	require.NoError(t, err)
+	_, err = f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 1))
+	require.NoError(t, err)
+	countRevisions := func() int {
+		var n int
+		require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_transfer_link_revisions`).Scan(&n))
+		return n
+	}
+
+	input := replaceBuyPrice(f, buy, "2026-05-01", 3, 3300)
+	impact, err := f.investmentService.ReplaceBuyReconciliationImpact(ctx, input)
+	require.NoError(t, err)
+	require.NotNil(t, impact.GainImpact, "the later sale's gain changes")
+	_, bridges := bridgeTotal(t, f, out.Transaction.ID, "external_investment_transfer_equity")
+	assert.Equal(t, 1, bridges, "preview posts no adjustment")
+	assert.Zero(t, countRevisions())
+
+	input.GainImpactAcknowledgement = "stale-token"
+	_, err = f.investmentService.ReplaceBuy(ctx, input)
+	require.Error(t, err)
+	_, bridges = bridgeTotal(t, f, out.Transaction.ID, "external_investment_transfer_equity")
+	assert.Equal(t, 1, bridges, "the refused command leaves no adjustment")
+	assert.Zero(t, countRevisions())
+	requireInvestmentSelfCheckPasses(t, f)
 }

@@ -533,14 +533,16 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	// A reversed transfer's revisions are evidence only (T-119).
 	transfers, err := transaction.QueryContext(ctx, `
 		SELECT revision.source_lot_id, source.account_id, source.commodity_id, source.cost_commodity_id,
-			link.destination_lot_id, destination.account_id, destination.commodity_id, destination.cost_commodity_id,
+			COALESCE(link.destination_lot_id, 0), COALESCE(destination.account_id, 0),
+			COALESCE(destination.commodity_id, 0), COALESCE(destination.cost_commodity_id, 0),
 			link.quantity_value, link.quantity_scale, revision.carried_basis_value, revision.carried_basis_scale
 		FROM latest_investment_transfer_link_revisions revision
 		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
 		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
 			AND link.link_seq = revision.link_seq
 		JOIN current_investment_lots source ON source.id = revision.source_lot_id
-		JOIN current_investment_lots destination ON destination.id = link.destination_lot_id
+		-- An outbound link (T-143) has no destination: only its source side.
+		LEFT JOIN current_investment_lots destination ON destination.id = link.destination_lot_id
 		WHERE revision.book_id = ?
 		ORDER BY revision.operation_id, revision.link_seq`, bookID)
 	if err != nil {
@@ -565,7 +567,10 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		}
 		in.QuantityValue, in.QuantityScale, in.CostBasisValue, in.CostBasisScale = quantity, scale, value, basisScale
 		out.QuantityValue, out.QuantityScale, out.CostBasisValue, out.CostBasisScale = quantity.Negated(), scale, -value, basisScale
-		events = append(events, out, in)
+		events = append(events, out)
+		if in.LotID > 0 {
+			events = append(events, in)
+		}
 	}
 	if err := transfers.Err(); err != nil {
 		transfers.Close()
@@ -1185,8 +1190,9 @@ func (r *SelfCheckRepository) SelfCheckPooledTransferSets(ctx context.Context, t
 }
 
 // SelfCheckTransferBridge is one outbound transfer's carried basis in one
-// cost currency: what its links record and what its bridge journals post to
-// the transfer equity account. They must agree exactly.
+// cost currency: what its effective links carry and what its bridge journal
+// plus every later bridge adjustment (T-143) post to the transfer equity
+// account. They must agree exactly.
 type SelfCheckTransferBridge struct {
 	OperationID     int64
 	CostCommodityID int64
@@ -1200,7 +1206,7 @@ func (r *SelfCheckRepository) SelfCheckTransferBridges(ctx context.Context, tran
 	rows, err := transaction.QueryContext(ctx, `
 		SELECT f.operation_id, x.cost_commodity_id, 0, x.carried_basis_value, x.carried_basis_scale
 		FROM investment_transfer_facts f
-		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
+		JOIN effective_investment_transfer_links x ON x.operation_id = f.operation_id
 		WHERE f.book_id = ? AND f.transfer_kind = 'external_out'
 		UNION ALL
 		SELECT link.operation_id, pv.commodity_id, 1, pv.quantity_value, pv.quantity_scale

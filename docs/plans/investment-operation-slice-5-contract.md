@@ -113,15 +113,22 @@ legs `T −b`, `E +b` as a separate bridge journal in the same audit event,
 linked to the operation as `transfer_bridge` (system label
 `transfer_bridge`, localized) and netted by the command's checkpoint guard.
 A known zero basis posts no bridge. Each depleted source lot gets one link
-with no destination. Replay includes the depletion; until dated bridge
-adjustments ship, a history change that would change `b` or the lots it
-takes refuses with the transfer named, and an outbound transfer dated
-behind a later depletion is refused (`INVESTMENT_EVENT_OUT_OF_ORDER`).
-Self-check verifies the links against the depletions and that each bridge
-posts exactly the links' carried basis per cost currency. Mobile entry
-shipped as T-142 #157. Still open: correction/reversal (T-144 #159), bridge
-adjustments under replay and backdated admission (T-143 #158), and unknown
-basis (T-145 #160).
+with no destination. Replay includes the depletion. A history change that
+changes `b` (T-143 #158, 2026-10-05) appends a link revision (the corrected
+successor lot and new basis) and posts one dated `transfer_bridge`
+adjustment per transfer and cost currency, `T −(b_new − b_old)`,
+`E +(b_new − b_old)`, under the causing command's audit event and checkpoint
+guard; the first bridge and link stay immutable evidence. A change in which
+source lots a pooled outbound takes is still refused with the transfer named:
+its links are fixed per source lot. An outbound transfer dated behind a later
+depletion is admitted through replay at its own slot (as a backdated sale
+is), revising later decisions under the gain acknowledgement, or refusing
+with the impossible decision named (`INVESTMENT_SALE_DEPENDENCY`).
+Self-check verifies the links against the depletions, that the bridge plus
+its adjustments post exactly the effective links' carried basis per cost
+currency, and replays revised outbound depletions. Mobile entry shipped as
+T-142 #157. Still open: correction/reversal (T-144 #159) and unknown basis
+(T-145 #160).
 
 Example: transfer 2 shares carrying 80.00 EUR into the book. Post security
 `H +2`, `T −2` and EUR `T +80.00`, `E −80.00`. A later full sale for 100.00

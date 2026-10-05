@@ -40,13 +40,13 @@ func propagateInvestmentTransferRevisionsTx(ctx context.Context, tx *sql.Tx, boo
 		return nil
 	}
 	affected := make(map[investmentReplayPositionKey]bool)
-	for _, revision := range revisions {
-		destination, _, err := appendTransferLinkRevisionTx(ctx, tx, bookID, causedByOperationID,
-			auditEventID, createdAt, revision)
-		if err != nil {
-			return err
-		}
-		affected[destination] = true
+	if err := recordTransferRevisionsTx(ctx, tx, bookID, causedByOperationID, auditEventID, actorUserID,
+		createdAt, revisions, affected); err != nil {
+		return err
+	}
+	if len(affected) == 0 {
+		// Only outbound links moved: nothing in the book replays from them.
+		return nil
 	}
 	// Every position downstream of a changed link, whatever its date: the
 	// pass then never meets a destination outside the positions it replays.
@@ -68,13 +68,9 @@ func propagateInvestmentTransferRevisionsTx(ctx context.Context, tx *sql.Tx, boo
 	if err != nil {
 		return err
 	}
-	for _, revision := range pass.revisions {
-		destination, _, err := appendTransferLinkRevisionTx(ctx, tx, bookID, causedByOperationID,
-			auditEventID, createdAt, revision)
-		if err != nil {
-			return err
-		}
-		affected[destination] = true
+	if err := recordTransferRevisionsTx(ctx, tx, bookID, causedByOperationID, auditEventID, actorUserID,
+		createdAt, pass.revisions, affected); err != nil {
+		return err
 	}
 	persisted := make([]investmentReplayPositionKey, 0, len(affected))
 	for key := range affected {
@@ -96,6 +92,58 @@ func propagateInvestmentTransferRevisionsTx(ctx context.Context, tx *sql.Tx, boo
 		if err := persistInvestmentReplayPositionTx(ctx, tx, bookID, key.accountID, key.commodityID,
 			key.costCommodityID, causedByOperationID, auditEventID, actorUserID, createdAt,
 			intents, projection); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// recordTransferRevisionsTx appends each changed link's revision. An internal
+// link adds its destination to affected; an outbound link's basis change is
+// summed per transfer and cost currency and posted as one dated bridge
+// adjustment, T −Δ and E +Δ, under the causing command's audit event (T-143).
+// The original bridge and link stay immutable evidence.
+func recordTransferRevisionsTx(ctx context.Context, tx *sql.Tx, bookID, causedByOperationID, auditEventID,
+	actorUserID int64, createdAt string, revisions []InvestmentReplayTransferRevision,
+	affected map[investmentReplayPositionKey]bool,
+) error {
+	type bridgeKey struct{ operationID, costCommodityID int64 }
+	deltas := make(map[bridgeKey]*exact.ScaledInt)
+	var order []bridgeKey
+	for _, revision := range revisions {
+		if revision.ExternalOut {
+			var prior exact.Coefficient
+			var priorScale int
+			var costID int64
+			if err := tx.QueryRowContext(ctx, `SELECT carried_basis_value, carried_basis_scale, cost_commodity_id
+				FROM effective_investment_transfer_links WHERE operation_id = ? AND link_seq = ?
+					AND basis_knowledge = 'known'`, revision.OperationID, revision.LinkSeq).Scan(
+				&prior, &priorScale, &costID); err != nil {
+				return fmt.Errorf("read outbound transfer link basis: %w", err)
+			}
+			key := bridgeKey{revision.OperationID, costID}
+			if deltas[key] == nil {
+				deltas[key] = exact.NewScaledInt()
+				order = append(order, key)
+			}
+			deltas[key].AddInt64(revision.CostBasisValue, revision.CostBasisScale)
+			deltas[key].SubScaled(exact.ScaledIntFromCoefficient(prior, priorScale))
+		}
+		destination, _, err := appendTransferLinkRevisionTx(ctx, tx, bookID, causedByOperationID,
+			auditEventID, createdAt, revision)
+		if err != nil {
+			return err
+		}
+		if !revision.ExternalOut {
+			affected[destination] = true
+		}
+	}
+	for _, key := range order {
+		if deltas[key].Sign() == 0 {
+			continue
+		}
+		if _, err := postTransferBridgeJournalTx(ctx, tx, bookID, key.operationID, key.costCommodityID,
+			deltas[key], causedByOperationID, auditEventID, actorUserID, createdAt); err != nil {
 			return err
 		}
 	}
@@ -182,6 +230,12 @@ func runInvestmentReplayClosureTx(ctx context.Context, tx *sql.Tx, bookID, cause
 			return pass, err
 		}
 		for _, revision := range projection.TransferRevisions[before:] {
+			if revision.ExternalOut {
+				// Nothing in the book opens from an outbound link; its revision
+				// and bridge adjustment are written after the pass.
+				pass.revisions = append(pass.revisions, revision)
+				continue
+			}
 			destination, lotID, err := appendTransferLinkRevisionTx(ctx, tx, bookID, causedByOperationID,
 				auditEventID, createdAt, revision)
 			if err != nil {
@@ -216,14 +270,21 @@ func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, cause
 	}
 	var destination investmentReplayPositionKey
 	var destinationLotID int64
-	if err := tx.QueryRowContext(ctx, `SELECT d.id, d.account_id, d.commodity_id, d.cost_commodity_id
+	var external bool
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(d.id, 0), COALESCE(d.account_id, 0),
+			COALESCE(d.commodity_id, 0), COALESCE(d.cost_commodity_id, 0), f.transfer_kind = 'external_out'
 		FROM investment_transfer_lot_links x
 		JOIN investment_transfer_facts f ON f.operation_id = x.operation_id
-		JOIN investment_lots d ON d.id = x.destination_lot_id
-		WHERE x.operation_id = ? AND x.link_seq = ? AND f.book_id = ? AND f.transfer_kind = 'internal'`,
+		LEFT JOIN investment_lots d ON d.id = x.destination_lot_id
+		WHERE x.operation_id = ? AND x.link_seq = ? AND f.book_id = ?
+			AND f.transfer_kind IN ('internal', 'external_out')`,
 		revision.OperationID, revision.LinkSeq, bookID).Scan(&destinationLotID,
-		&destination.accountID, &destination.commodityID, &destination.costCommodityID); err != nil {
+		&destination.accountID, &destination.commodityID, &destination.costCommodityID, &external); err != nil {
 		return investmentReplayPositionKey{}, 0, fmt.Errorf("read revised transfer link destination: %w", err)
+	}
+	// An outbound link has no destination to replay (T-143).
+	if external != revision.ExternalOut || external == (destinationLotID > 0) {
+		return investmentReplayPositionKey{}, 0, fmt.Errorf("%w: transfer link revision does not match its transfer kind", ErrInvalidDisposalParams)
 	}
 	var priorID sql.NullInt64
 	priorSeq := 1

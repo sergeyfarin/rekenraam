@@ -270,7 +270,7 @@ func (r *InvestmentRepository) replaceInternalTransfer(ctx context.Context, expe
 			if err := insertInternalTransferFactTx(ctx, tx, transfer, policy, operationID, auditEventID); err != nil {
 				return InternalTransferResult{}, err
 			}
-			moved, err := subjectTransferDepletionTx(ctx, tx, expected, transfer, policy, replacement,
+			moved, err := subjectTransferDepletionTx(ctx, tx, expected.OperationID, "internal_transfer", transfer, policy, replacement,
 				replacementParams, operationID, auditEventID)
 			if err != nil {
 				return InternalTransferResult{}, err
@@ -294,10 +294,12 @@ func (r *InvestmentRepository) replaceInternalTransfer(ctx context.Context, expe
 	return InternalTransferReplacementRecord{Inverse: journals[0], Replacement: journals[1], Result: result}, nil
 }
 
-// subjectTransferDepletionTx replays the replacement's source with the new
-// transfer as the subject at the correction root's slot, then records the
-// depletions it reported as the replacement's transfer_out lot events.
-func subjectTransferDepletionTx(ctx context.Context, tx *sql.Tx, expected TransferOperationRecord,
+// subjectTransferDepletionTx replays the transfer's source with the new
+// transfer as the subject at slotOperationID's correction-root slot (the
+// replaced transfer for a replacement, the transfer itself for a backdated
+// outbound, T-143), then records the depletions it reported as the transfer's
+// transfer_out lot events.
+func subjectTransferDepletionTx(ctx context.Context, tx *sql.Tx, slotOperationID int64, operationKind string,
 	transfer CreateInternalTransferParams, policy internalTransferPolicy, replacement TransactionRecord,
 	journal CreateTransactionParams, operationID, auditEventID int64,
 ) ([]LotDisposalRecord, error) {
@@ -305,9 +307,9 @@ func subjectTransferDepletionTx(ctx context.Context, tx *sql.Tx, expected Transf
 	if err != nil {
 		return nil, err
 	}
-	orderID := roots[expected.OperationID]
+	orderID := roots[slotOperationID]
 	if orderID <= 0 {
-		return nil, fmt.Errorf("%w: replaced transfer %d has no correction root", ErrInvalidDisposalParams, expected.OperationID)
+		return nil, fmt.Errorf("%w: transfer %d has no correction root", ErrInvalidDisposalParams, slotOperationID)
 	}
 	intents, err := investmentReplayIntentsQuery(ctx, tx, transfer.BookID, transfer.SourceAccountID,
 		transfer.CommodityID, transfer.CostCommodityID, "long")
@@ -315,7 +317,7 @@ func subjectTransferDepletionTx(ctx context.Context, tx *sql.Tx, expected Transf
 		return nil, err
 	}
 	subject := InvestmentReplayIntent{OperationID: operationID, OrderOperationID: orderID,
-		OperationKind: "internal_transfer", EventDate: transfer.EffectiveOn, TransferIsSubject: true,
+		OperationKind: operationKind, EventDate: transfer.EffectiveOn, TransferIsSubject: true,
 		TransactionID: replacement.ID, AuditEventID: auditEventID,
 		CreatedByUserID: journal.ActorUserID, CreatedAt: journal.CreatedAt}
 	switch {
