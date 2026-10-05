@@ -299,6 +299,12 @@ paths:
     $ref: "./paths/investments-internal-transfer-impact.yaml"
   /api/v1/investments/transfers/internal/preview:
     $ref: "./paths/investments-internal-transfer-preview.yaml"
+  /api/v1/investments/transfers/external/out:
+    $ref: "./paths/investments-external-transfer-out.yaml"
+  /api/v1/investments/transfers/external/out/reconciliation-impact:
+    $ref: "./paths/investments-external-transfer-out-impact.yaml"
+  /api/v1/investments/transfers/external/out/preview:
+    $ref: "./paths/investments-external-transfer-out-preview.yaml"
   /api/v1/investments/splits:
     $ref: "./paths/investments-split.yaml"
   /api/v1/investments/splits/preview:
@@ -1034,6 +1040,16 @@ components:
       $ref: "./components/schemas/investments.yaml#/ExternalTransferInRequest"
     ExternalTransferInResponse:
       $ref: "./components/schemas/investments.yaml#/ExternalTransferInResponse"
+    ExternalTransferOutRequest:
+      $ref: "./components/schemas/investments.yaml#/ExternalTransferOutRequest"
+    ExternalTransferOutLink:
+      $ref: "./components/schemas/investments.yaml#/ExternalTransferOutLink"
+    ExternalTransferOutPlan:
+      $ref: "./components/schemas/investments.yaml#/ExternalTransferOutPlan"
+    ExternalTransferOutPreviewResponse:
+      $ref: "./components/schemas/investments.yaml#/ExternalTransferOutPreviewResponse"
+    ExternalTransferOutResponse:
+      $ref: "./components/schemas/investments.yaml#/ExternalTransferOutResponse"
     InternalTransferRequest:
       $ref: "./components/schemas/investments.yaml#/InternalTransferRequest"
     InternalTransferResponse:

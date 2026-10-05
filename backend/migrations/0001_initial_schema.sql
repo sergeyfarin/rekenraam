@@ -1518,11 +1518,11 @@ CREATE TABLE IF NOT EXISTS investment_transfer_facts (
   destination_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
-  -- Internal transfers snapshot how the source basis was allocated (T-123):
-  -- carried per selected lot, or at the dated average-cost pool rate. The
-  -- method and its provenance are the policy that applied at commit; a later
-  -- default never reinterprets them. position_lock means an open average-cost
-  -- position fixed the method regardless of the current default.
+  -- Internal and outbound transfers snapshot how the source basis was
+  -- allocated (T-123): carried per selected lot, or at the dated average-cost
+  -- pool rate. The method and its provenance are the policy that applied at
+  -- commit; a later default never reinterprets them. position_lock means an
+  -- open position's method family fixed it regardless of the current default.
   basis_allocation TEXT CHECK (basis_allocation IS NULL OR basis_allocation IN ('selected_lots', 'average_cost_pool')),
   cost_basis_method TEXT CHECK (cost_basis_method IS NULL OR cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')),
   method_resolution_tier TEXT CHECK (method_resolution_tier IS NULL
@@ -1536,7 +1536,7 @@ CREATE TABLE IF NOT EXISTS investment_transfer_facts (
   -- original acquisition date among the units moved; replay may revise its
   -- basis, date and source depletions but never its identity or quantity.
   destination_lineage TEXT CHECK (destination_lineage IS NULL OR destination_lineage IN ('source_lots', 'pooled_lot')),
-  CHECK ((transfer_kind = 'internal') = (basis_allocation IS NOT NULL
+  CHECK ((transfer_kind IN ('internal', 'external_out')) = (basis_allocation IS NOT NULL
     AND cost_basis_method IS NOT NULL AND method_resolution_tier IS NOT NULL)),
   CHECK ((transfer_kind = 'internal') = (destination_lineage IS NOT NULL)),
   CHECK (destination_lineage IS NOT 'pooled_lot' OR basis_allocation = 'average_cost_pool'),

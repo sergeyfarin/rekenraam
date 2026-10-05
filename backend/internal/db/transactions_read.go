@@ -468,9 +468,10 @@ func transactionVersionSelect(source string, extraConditions string) string {
 			tv.changed_by_user_id,
 			tv.change_reason,
 			-- A stable code for journals the system posts without user text
-			-- (T-136); the frontend localizes it.
+			-- (T-136; an outbound transfer's basis bridge too); the frontend
+			-- localizes it.
 			COALESCE((SELECT link.role FROM investment_operation_journal_links link
-				WHERE link.transaction_version_id = tv.id AND link.role = 'split_adjustment'), '')
+				WHERE link.transaction_version_id = tv.id AND link.role IN ('split_adjustment', 'transfer_bridge')), '')
 		FROM transactions t
 		JOIN ` + source + ` tv ON tv.transaction_id = t.id
 	` + extraConditions
@@ -503,9 +504,10 @@ func accountRegisterSelect(extraConditions string) string {
 			tv.changed_by_user_id,
 			tv.change_reason,
 			-- A stable code for journals the system posts without user text
-			-- (T-136); the frontend localizes it.
+			-- (T-136; an outbound transfer's basis bridge too); the frontend
+			-- localizes it.
 			COALESCE((SELECT link.role FROM investment_operation_journal_links link
-				WHERE link.transaction_version_id = tv.id AND link.role = 'split_adjustment'), ''),
+				WHERE link.transaction_version_id = tv.id AND link.role IN ('split_adjustment', 'transfer_bridge')), ''),
 			je.id,
 			je.book_id,
 			je.transaction_version_id,

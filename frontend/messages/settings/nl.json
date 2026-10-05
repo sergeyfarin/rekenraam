@@ -1197,6 +1197,7 @@
   "investments_split_replace_reason": "Reden voor correctie",
   "investments_split_replace_submit": "Splitsing corrigeren",
   "transactions_system_label_split_adjustment": "Correctie op splitsing",
+  "transactions_system_label_transfer_bridge": "Kostprijs uitgeboekt",
   "api_error_investment_split_already_corrected": "Deze splitsing is al gecorrigeerd. Open de correctiegeschiedenis om de laatste boeking te zien.",
   "api_error_investment_imported_split": "Deze splitsing is gekoppeld aan een importregel die er niet meer naar verwijst. Controleer de import voordat u de splitsing corrigeert."
 }

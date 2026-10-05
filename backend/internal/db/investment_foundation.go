@@ -23,6 +23,7 @@ func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params Create
 	if params.Spec.InvestmentOperationKind == "dividend" || params.Spec.InvestmentOperationKind == "reinvested_dividend" {
 		dateRole = "payment"
 	} else if params.Spec.InvestmentOperationKind == "external_transfer_in" ||
+		params.Spec.InvestmentOperationKind == "external_transfer_out" ||
 		params.Spec.InvestmentOperationKind == "internal_transfer" ||
 		params.Spec.InvestmentOperationKind == "split" {
 		dateRole = "effective"

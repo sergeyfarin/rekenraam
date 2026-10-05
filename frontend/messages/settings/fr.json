@@ -1197,6 +1197,7 @@
   "investments_split_replace_reason": "Motif de la correction",
   "investments_split_replace_submit": "Corriger la division",
   "transactions_system_label_split_adjustment": "Ajustement de division",
+  "transactions_system_label_transfer_bridge": "Prix de revient transféré",
   "api_error_investment_split_already_corrected": "Cette division a déjà été corrigée. Consultez son historique pour voir la dernière opération.",
   "api_error_investment_imported_split": "Cette division est liée à une ligne d’importation qui ne la désigne plus. Vérifiez l’importation avant de la corriger."
 }

@@ -555,9 +555,42 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 						WHERE x.operation_id = o.id AND (source.account_id <> f.source_account_id
 							OR source.commodity_id <> f.commodity_id OR source.cost_commodity_id <> link.cost_commodity_id))))
 			)`},
-		{"internal transfer basis allocation disagrees with its source depletions", `
+		{"outbound transfer missing linked source effects", `
+			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
+			AND o.operation_kind = 'external_transfer_out'
+			AND (NOT EXISTS (SELECT 1 FROM investment_transfer_facts f
+				JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
+				WHERE f.operation_id = o.id AND f.transfer_kind = 'external_out')
+			OR EXISTS (SELECT 1 FROM investment_transfer_lot_links x
+				JOIN investment_transfer_facts f ON f.operation_id = x.operation_id
+				WHERE f.operation_id = o.id AND (x.destination_lot_id IS NOT NULL OR x.basis_knowledge <> 'known'
+					OR NOT EXISTS (
+					SELECT 1 FROM investment_lots source
+					JOIN investment_lot_events source_event ON source_event.lot_id = source.id
+						AND source_event.event_kind = 'transfer_out'
+					JOIN investment_operation_lot_effects source_effect ON source_effect.lot_event_id = source_event.id
+						AND source_effect.operation_id = o.id
+					WHERE source.id = x.source_lot_id AND source.book_id = f.book_id
+						AND source.account_id = f.source_account_id AND source.commodity_id = f.commodity_id
+						AND source.cost_commodity_id = x.cost_commodity_id
+						AND EXISTS (SELECT 1 FROM investment_operation_journal_links link
+							JOIN transaction_versions v ON v.id = link.transaction_version_id
+							WHERE link.operation_id = o.id AND link.role = 'primary'
+							AND v.transaction_id = source_event.transaction_id)
+						AND source_event.quantity_value = '-' || x.quantity_value
+						AND source_event.quantity_scale = x.quantity_scale
+						AND source_event.cost_basis_scale = x.carried_basis_scale
+						AND (source_event.cost_basis_value = '-' || x.carried_basis_value
+							OR (source_event.cost_basis_value = '0' AND x.carried_basis_value = '0')))))
+			-- Every depletion the operation made is one of its links.
+			OR EXISTS (SELECT 1 FROM investment_operation_lot_effects effect
+				JOIN investment_lot_events e ON e.id = effect.lot_event_id
+				WHERE effect.operation_id = o.id AND (e.event_kind <> 'transfer_out' OR NOT EXISTS (
+					SELECT 1 FROM investment_transfer_lot_links x
+					WHERE x.operation_id = o.id AND x.source_lot_id = e.lot_id))))`},
+		{"transfer basis allocation disagrees with its source depletions", `
 			SELECT f.operation_id FROM investment_transfer_facts f
-			WHERE f.book_id = ? AND f.transfer_kind = 'internal'
+			WHERE f.book_id = ? AND f.transfer_kind IN ('internal', 'external_out')
 			AND EXISTS (SELECT 1 FROM investment_operation_lot_effects x
 				JOIN investment_lot_events e ON e.id = x.lot_event_id AND e.event_kind = 'transfer_out'
 				WHERE x.operation_id = f.operation_id
@@ -723,6 +756,28 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		result.Status = SelfCheckFailed
 		result.FindingCount += pooledMismatch
 		summaries = append(summaries, fmt.Sprintf("%d pooled transfer depletion sets do not carry their link's quantity and basis", pooledMismatch))
+	}
+	// An outbound transfer's bridge must post to the transfer equity account
+	// exactly the basis its links carried out, in each cost currency.
+	bridges, err := s.repository.SelfCheckTransferBridges(ctx, snapshot, BookID)
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	var bridgeMismatch int64
+	for _, bridge := range bridges {
+		if bridge.Carried.Cmp(bridge.Bridged) == 0 {
+			continue
+		}
+		bridgeMismatch++
+		if len(result.Sample) < db.SelfCheckSampleLimit {
+			result.Sample = append(result.Sample, bridge.OperationID)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("operation #%d", bridge.OperationID))
+		}
+	}
+	if bridgeMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += bridgeMismatch
+		summaries = append(summaries, fmt.Sprintf("%d outbound transfers bridge a different basis than their links carried", bridgeMismatch))
 	}
 	type clearingKey struct {
 		operationID, versionID, currencyID int64

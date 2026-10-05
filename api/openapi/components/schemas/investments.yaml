@@ -821,6 +821,119 @@ InternalTransferResponse:
         type: integer
         format: int64
 
+ExternalTransferOutRequest:
+  type: object
+  additionalProperties: false
+  description: >-
+    Send lot_allocations for an individual-lot source, or quantity_value and
+    quantity_scale for an average-cost source (pooled allocation). The source
+    position's method-family lock, or else its resolved default, decides which
+    is accepted. The basis carried out is computed from the depletion, never
+    supplied; source_evidence may record the broker's figure as evidence only.
+  required: [effective_on, source_account_id, commodity_id, cost_commodity_id]
+  properties:
+    effective_on:
+      type: string
+      format: date
+      description: Date the holding leaves the book.
+    source_account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    cost_commodity_id:
+      type: integer
+      format: int64
+      description: All depleted source lots must carry basis in this currency.
+    lot_allocations:
+      type: array
+      items:
+        $ref: "../schemas/investments.yaml#/InvestmentLotAllocationRequest"
+    quantity_value:
+      type: string
+      pattern: '^[1-9][0-9]{0,37}$'
+      description: Pooled transfer quantity coefficient; omit when lot_allocations are sent.
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    change_reason:
+      type: string
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+
+ExternalTransferOutLink:
+  type: object
+  required: [source_lot_id, quantity_value, quantity_scale, carried_basis_value, carried_basis_scale, original_date_knowledge, original_acquired_on]
+  properties:
+    source_lot_id:
+      type: integer
+      format: int64
+    quantity_value:
+      type: string
+    quantity_scale:
+      type: integer
+    carried_basis_value:
+      type: string
+      description: Basis taken from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot.
+    carried_basis_scale:
+      type: integer
+    original_date_knowledge:
+      type: string
+      enum: [known, unknown]
+    original_acquired_on:
+      type: [string, "null"]
+      format: date
+
+ExternalTransferOutPlan:
+  type: object
+  required: [basis_allocation, cost_basis_method, resolution_tier, links, basis_value, basis_scale]
+  properties:
+    basis_allocation:
+      type: string
+      enum: [selected_lots, average_cost_pool]
+    cost_basis_method:
+      type: string
+      enum: [fifo, lifo, average_cost, specific_lot]
+    resolution_tier:
+      type: string
+      enum: [account, global, fallback, position_lock]
+    links:
+      type: array
+      items:
+        $ref: "../schemas/investments.yaml#/ExternalTransferOutLink"
+    basis_value:
+      type: string
+      description: Exact total basis carried out of the book; the bridge journal's amount. Zero posts no bridge.
+    basis_scale:
+      type: integer
+
+ExternalTransferOutPreviewResponse:
+  type: object
+  required: [plan, impact]
+  properties:
+    plan:
+      $ref: "../schemas/investments.yaml#/ExternalTransferOutPlan"
+    impact:
+      $ref: "../schemas/transactions.yaml#/ReconciliationImpactResponse"
+
+ExternalTransferOutResponse:
+  type: object
+  required: [transaction, plan]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    plan:
+      $ref: "../schemas/investments.yaml#/ExternalTransferOutPlan"
+
 InvestmentTransferReplacementRequest:
   type: object
   additionalProperties: false

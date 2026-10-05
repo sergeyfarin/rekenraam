@@ -50,11 +50,15 @@ type InvestmentReplayIntent struct {
 	// recording (T-119). It has no committed links yet, so replay reports its
 	// source depletions instead of comparing them.
 	TransferIsSubject bool
-	AmountValue       exact.Coefficient // opening consideration or disposal proceeds
-	AmountScale       int
-	CostBasisMethod   string
-	DecisionSource    DisposalDecisionSource
-	SpecificLots      []LotAllocation
+	// ExternalOut marks the depletion of an outbound transfer: its basis left
+	// the book through a posted bridge, so replay must reproduce it (until
+	// dated bridge adjustments ship) instead of revising a link.
+	ExternalOut     bool
+	AmountValue     exact.Coefficient // opening consideration or disposal proceeds
+	AmountScale     int
+	CostBasisMethod string
+	DecisionSource  DisposalDecisionSource
+	SpecificLots    []LotAllocation
 	// PooledLinks are a pooled transfer's committed per-lot carried amounts,
 	// in link order. Replay must reproduce them exactly.
 	PooledLinks []InvestmentReplayTransferLink
@@ -206,7 +210,7 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			COALESCE(revision.carried_basis_value, x.carried_basis_value),
 			COALESCE(revision.carried_basis_scale, x.carried_basis_scale),
 			e.transaction_id, e.created_audit_event_id, e.created_by_user_id, e.created_at,
-			effect.effect_seq, f.basis_allocation
+			effect.effect_seq, f.basis_allocation, f.transfer_kind = 'external_out'
 		FROM investment_transfer_facts f
 		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
 		JOIN effective_investment_operations o ON o.id = f.operation_id
@@ -217,7 +221,8 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		LEFT JOIN latest_investment_transfer_link_revisions revision
 			ON revision.operation_id = x.operation_id AND revision.link_seq = x.link_seq
 		WHERE f.book_id = ? AND f.source_account_id = ? AND f.commodity_id = ?
-			AND f.transfer_kind = 'internal' AND f.destination_lineage = 'source_lots'
+			AND ((f.transfer_kind = 'internal' AND f.destination_lineage = 'source_lots')
+				OR f.transfer_kind = 'external_out')
 			AND x.cost_commodity_id = ?
 		ORDER BY f.operation_id, x.link_seq
 	`, bookID, accountID, commodityID, costCommodityID)
@@ -237,7 +242,7 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			&intent.LinkSeq, &intent.transferSource.lotID, &intent.RecordedLotID, &sourceOperationID,
 			&intent.transferSource.openedOn, &intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale,
 			&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID,
-			&intent.CreatedAt, &intent.EffectSeq, &allocation); err != nil {
+			&intent.CreatedAt, &intent.EffectSeq, &allocation, &intent.ExternalOut); err != nil {
 			transfers.Close()
 			return nil, fmt.Errorf("scan replay transfer depletion: %w", err)
 		}

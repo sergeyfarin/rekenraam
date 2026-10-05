@@ -1183,3 +1183,67 @@ func (r *SelfCheckRepository) SelfCheckPooledTransferSets(ctx context.Context, t
 	}
 	return sets, nil
 }
+
+// SelfCheckTransferBridge is one outbound transfer's carried basis in one
+// cost currency: what its links record and what its bridge journals post to
+// the transfer equity account. They must agree exactly.
+type SelfCheckTransferBridge struct {
+	OperationID     int64
+	CostCommodityID int64
+	Carried         *exact.ScaledInt
+	Bridged         *exact.ScaledInt
+}
+
+// SelfCheckTransferBridges folds every outbound transfer's link basis and
+// bridge postings per cost currency. Coefficients are summed in Go.
+func (r *SelfCheckRepository) SelfCheckTransferBridges(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckTransferBridge, error) {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT f.operation_id, x.cost_commodity_id, 0, x.carried_basis_value, x.carried_basis_scale
+		FROM investment_transfer_facts f
+		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
+		WHERE f.book_id = ? AND f.transfer_kind = 'external_out'
+		UNION ALL
+		SELECT link.operation_id, pv.commodity_id, 1, pv.quantity_value, pv.quantity_scale
+		FROM investment_operation_journal_links link
+		JOIN posting_versions pv ON pv.transaction_version_id = link.transaction_version_id
+		JOIN accounts equity ON equity.id = pv.account_id
+			AND equity.system_role = 'external_investment_transfer_equity'
+		WHERE link.book_id = ? AND link.role = 'transfer_bridge'
+		ORDER BY 1, 2`, bookID, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read self-check transfer bridges: %w", err)
+	}
+	var bridges []SelfCheckTransferBridge
+	for rows.Next() {
+		var operationID, costID int64
+		var bridged bool
+		var value sql.NullString
+		var scale sql.NullInt64
+		if err := rows.Scan(&operationID, &costID, &bridged, &value, &scale); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan self-check transfer bridge: %w", err)
+		}
+		if len(bridges) == 0 || bridges[len(bridges)-1].OperationID != operationID ||
+			bridges[len(bridges)-1].CostCommodityID != costID {
+			bridges = append(bridges, SelfCheckTransferBridge{OperationID: operationID, CostCommodityID: costID,
+				Carried: exact.NewScaledInt(), Bridged: exact.NewScaledInt()})
+		}
+		if !value.Valid {
+			continue
+		}
+		amount, err := exact.Parse(value.String)
+		if err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("parse self-check transfer bridge amount: %w", err)
+		}
+		if bridged {
+			bridges[len(bridges)-1].Bridged.AddCoefficient(amount, int(scale.Int64))
+		} else {
+			bridges[len(bridges)-1].Carried.AddCoefficient(amount, int(scale.Int64))
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, fmt.Errorf("read self-check transfer bridges: %w", err)
+	}
+	return bridges, nil
+}

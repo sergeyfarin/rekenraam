@@ -1197,6 +1197,7 @@
   "investments_split_replace_reason": "Motivo de la corrección",
   "investments_split_replace_submit": "Corregir desdoblamiento",
   "transactions_system_label_split_adjustment": "Ajuste de desdoblamiento",
+  "transactions_system_label_transfer_bridge": "Coste de adquisición transferido",
   "api_error_investment_split_already_corrected": "Este desdoblamiento ya se corrigió. Abra el historial de correcciones para ver la última operación.",
   "api_error_investment_imported_split": "Este desdoblamiento está vinculado a una fila de importación que ya no lo identifica. Revise la importación antes de corregirlo."
 }

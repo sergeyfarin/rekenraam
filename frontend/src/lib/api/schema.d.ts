@@ -13841,6 +13841,245 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/transfers/external/out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transfer an investment holding out of the book
+         * @description Moves selected long lots with their own basis (individual-lot source) or a quantity at the dated average-cost pool rate (average-cost source) to a destination outside the book, without cash or gain. Posts the security legs and a separate bridge journal (system_label transfer_bridge) carrying the depleted basis from commodity_trading to the external transfer equity account. A transfer dated behind a later depletion of the holding is refused (INVESTMENT_EVENT_OUT_OF_ORDER).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExternalTransferOutRequest"];
+                };
+            };
+            responses: {
+                /** @description Security journal, source depletions, links and bridge journal recorded atomically */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExternalTransferOutResponse"];
+                    };
+                };
+                /** @description Invalid transfer facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Reconciliation override or gain acknowledgement required, the allocation does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED / INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a dated lot dependency conflicts */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transfers/external/out/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation impact of an outbound investment transfer
+         * @description Authenticated read-only preview; no CSRF token or write occurs.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExternalTransferOutRequest"];
+                };
+            };
+            responses: {
+                /** @description Affected checkpoints and postings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid transfer facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transfers/external/out/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview an outbound investment transfer
+         * @description Authenticated read-only preview; no CSRF token or write occurs. Runs the complete transfer writer and rolls back, returning the basis carried out per source lot and in total, plus checkpoint and gain impact.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExternalTransferOutRequest"];
+                };
+            };
+            responses: {
+                /** @description Carried allocation plan and its reconciliation/gain impact */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExternalTransferOutPreviewResponse"];
+                    };
+                };
+                /** @description Invalid transfer facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Allocation does not match the source method or a dated lot dependency conflicts */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/splits": {
         parameters: {
             query?: never;
@@ -20178,7 +20417,7 @@ export interface components {
              * @description Stable code for a journal the system posted without user text (T-136); the client localizes it. Absent for ordinary journals.
              * @enum {string}
              */
-            system_label?: "split_adjustment";
+            system_label?: "split_adjustment" | "transfer_bridge";
             invalidated_checkpoint_ids: number[];
         };
         TransactionsResponse: {
@@ -20234,7 +20473,7 @@ export interface components {
              * @description Stable code for a journal the system posted without user text (T-136); the client localizes it. Absent for ordinary journals.
              * @enum {string}
              */
-            system_label?: "split_adjustment";
+            system_label?: "split_adjustment" | "transfer_bridge";
             correction_chain?: components["schemas"]["RegisterCorrectionChain"];
         };
         /** @description Present when the row's transaction belongs to a correction chain of more than one transaction (T-120). The original, reversal and replacement stay separate posted rows, so the running balance counts each posting once; every row carries the whole chain, so members on other register pages are still named. */
@@ -21346,6 +21585,67 @@ export interface components {
             transaction: components["schemas"]["TransactionResponse"];
             /** Format: int64 */
             lot_id: number;
+        };
+        /** @description Send lot_allocations for an individual-lot source, or quantity_value and quantity_scale for an average-cost source (pooled allocation). The source position's method-family lock, or else its resolved default, decides which is accepted. The basis carried out is computed from the depletion, never supplied; source_evidence may record the broker's figure as evidence only. */
+        ExternalTransferOutRequest: {
+            /**
+             * Format: date
+             * @description Date the holding leaves the book.
+             */
+            effective_on: string;
+            /** Format: int64 */
+            source_account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /**
+             * Format: int64
+             * @description All depleted source lots must carry basis in this currency.
+             */
+            cost_commodity_id: number;
+            lot_allocations?: components["schemas"]["InvestmentLotAllocationRequest"][];
+            /** @description Pooled transfer quantity coefficient; omit when lot_allocations are sent. */
+            quantity_value?: string;
+            quantity_scale?: number;
+            source_evidence?: {
+                [key: string]: unknown;
+            };
+            memo?: string;
+            change_reason?: string;
+            reconciliation_override?: boolean;
+            gain_impact_acknowledgement?: string;
+        };
+        ExternalTransferOutLink: {
+            /** Format: int64 */
+            source_lot_id: number;
+            quantity_value: string;
+            quantity_scale: number;
+            /** @description Basis taken from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot. */
+            carried_basis_value: string;
+            carried_basis_scale: number;
+            /** @enum {string} */
+            original_date_knowledge: "known" | "unknown";
+            /** Format: date */
+            original_acquired_on: string | null;
+        };
+        ExternalTransferOutPlan: {
+            /** @enum {string} */
+            basis_allocation: "selected_lots" | "average_cost_pool";
+            /** @enum {string} */
+            cost_basis_method: "fifo" | "lifo" | "average_cost" | "specific_lot";
+            /** @enum {string} */
+            resolution_tier: "account" | "global" | "fallback" | "position_lock";
+            links: components["schemas"]["ExternalTransferOutLink"][];
+            /** @description Exact total basis carried out of the book; the bridge journal's amount. Zero posts no bridge. */
+            basis_value: string;
+            basis_scale: number;
+        };
+        ExternalTransferOutPreviewResponse: {
+            plan: components["schemas"]["ExternalTransferOutPlan"];
+            impact: components["schemas"]["ReconciliationImpactResponse"];
+        };
+        ExternalTransferOutResponse: {
+            transaction: components["schemas"]["TransactionResponse"];
+            plan: components["schemas"]["ExternalTransferOutPlan"];
         };
         /** @description Send lot_allocations for an individual-lot source, or quantity_value and quantity_scale for an average-cost source (pooled allocation, T-123). The source position's method-family lock, or else its resolved default, decides which is accepted. A pooled quantity opens one pooled destination lot unless destination_lineage is source_lots (T-135). */
         InternalTransferRequest: {

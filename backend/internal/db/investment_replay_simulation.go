@@ -260,6 +260,9 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		// the successor lot of a corrected acquisition, follow history.
 		if moved.LotID != intent.RecordedLotID || exact.ScaledIntFromInt64(moved.CostBasisValue, moved.CostBasisScale).Cmp(
 			exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale)) != 0 {
+			if intent.ExternalOut {
+				return replayTransferError(intent, ErrExternalTransferBasisChanged)
+			}
 			projection.TransferRevisions = append(projection.TransferRevisions, InvestmentReplayTransferRevision{
 				OperationID: intent.OperationID, LinkSeq: intent.LinkSeq, SourceLotID: moved.LotID,
 				CostBasisValue: moved.CostBasisValue, CostBasisScale: moved.CostBasisScale})
@@ -275,6 +278,9 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 			projection.SubjectTransferOut, projection.SubjectTransferMethod = moved, "average_cost"
 			return nil
 		}
+		if err == nil && intent.ExternalOut && !pooledTransferLineageReproduced(moved, intent.PooledLinks) {
+			err = ErrExternalTransferBasisChanged
+		}
 		if err == nil && !pooledTransferLineageReproduced(moved, intent.PooledLinks) {
 			// Each destination lot is tied to one source lot and its original
 			// date; a pool that now depletes other lots or quantities would
@@ -289,6 +295,9 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 			depletion := moved[index]
 			if depletion.LotID != link.RecordedLotID || exact.ScaledIntFromInt64(depletion.CostBasisValue, depletion.CostBasisScale).Cmp(
 				exact.ScaledIntFromCoefficient(link.CostBasisValue, link.CostBasisScale)) != 0 {
+				if intent.ExternalOut {
+					return replayTransferError(intent, ErrExternalTransferBasisChanged)
+				}
 				projection.TransferRevisions = append(projection.TransferRevisions, InvestmentReplayTransferRevision{
 					OperationID: intent.OperationID, LinkSeq: link.LinkSeq, SourceLotID: depletion.LotID,
 					CostBasisValue: depletion.CostBasisValue, CostBasisScale: depletion.CostBasisScale})

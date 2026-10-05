@@ -1225,6 +1225,7 @@
   "investments_split_replace_reason": "Reason for correction",
   "investments_split_replace_submit": "Correct split",
   "transactions_system_label_split_adjustment": "Split adjustment",
+  "transactions_system_label_transfer_bridge": "Cost basis transferred out",
   "api_error_investment_split_already_corrected": "This split has already been corrected. Open its correction history to see the latest entry.",
   "api_error_investment_imported_split": "This split is linked to an import row that no longer refers to it. Review the import before correcting the split."
 }

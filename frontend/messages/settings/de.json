@@ -1197,6 +1197,7 @@
   "investments_split_replace_reason": "Grund für die Korrektur",
   "investments_split_replace_submit": "Split korrigieren",
   "transactions_system_label_split_adjustment": "Split-Anpassung",
+  "transactions_system_label_transfer_bridge": "Anschaffungskosten ausgebucht",
   "api_error_investment_split_already_corrected": "Dieser Split wurde bereits korrigiert. Die letzte Buchung steht im Korrekturverlauf.",
   "api_error_investment_imported_split": "Dieser Split ist mit einer Importzeile verknüpft, die nicht mehr auf ihn verweist. Prüfen Sie den Import, bevor Sie den Split korrigieren."
 }

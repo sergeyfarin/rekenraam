@@ -1197,6 +1197,7 @@
   "investments_split_replace_reason": "Причина исправления",
   "investments_split_replace_submit": "Исправить сплит",
   "transactions_system_label_split_adjustment": "Корректировка сплита",
+  "transactions_system_label_transfer_bridge": "Перенос себестоимости",
   "api_error_investment_split_already_corrected": "Этот сплит уже исправлен. Последнюю запись можно увидеть в истории исправлений.",
   "api_error_investment_imported_split": "Этот сплит связан со строкой импорта, которая больше на него не ссылается. Проверьте импорт, прежде чем исправлять сплит."
 }

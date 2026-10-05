@@ -12,6 +12,8 @@ describe('transactionTitle', () => {
   it('localizes a system label when the journal has no user text', () => {
     expect(transactionTitle({ description: '', system_label: 'split_adjustment' }, label, '—'))
       .toBe('label:split_adjustment');
+    expect(transactionTitle({ description: '', system_label: 'transfer_bridge' }, label, '—'))
+      .toBe('label:transfer_bridge');
   });
 
   it('keeps user text ahead of a system label', () => {

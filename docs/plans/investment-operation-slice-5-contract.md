@@ -5,8 +5,9 @@ govern. This document fixes the journal, lot, date, and reconciliation rules
 that each slice 5 command must satisfy. The known-basis external inbound API
 command shipped in slice 5b, its entry screen in 5c, the explicit-lot
 internal transfer API in 5d, and its entry screen in 5e. The manual split /
-reverse split command shipped under T-122 #137 (see below). The remaining
-commands are unimplemented.
+reverse split command shipped under T-122 #137 (see below). The known-basis
+external outbound API shipped 2026-10-05 (*Outbound transfer, first command*
+below). The remaining commands are unimplemented.
 
 ## Common rules
 
@@ -99,6 +100,27 @@ outbound `b_old` to `b_new`, append an adjustment dated to that transfer:
 turn a known outbound bridge into unknown basis. A bridge adjustment is
 linked to the operation whose replay caused it; it does not rewrite the
 original journal.
+
+**Outbound transfer, first command (2026-10-05).**
+`POST /api/v1/investments/transfers/external/out` (plus `/preview` and
+`/reconciliation-impact`) allocates like an internal transfer: selected lots for
+an individual-lot source, a dated pool quantity for an average-cost source,
+under the same method-lock and policy snapshot (`basis_allocation`,
+`cost_basis_method` and tier on the `external_out` fact). The primary journal
+carries only `H −q`, `T +q`. Because `b` is an output of the depletion, which
+writes lot events against the posted journal, the writer posts the basis
+legs `T −b`, `E +b` as a separate bridge journal in the same audit event,
+linked to the operation as `transfer_bridge` (system label
+`transfer_bridge`, localized) and netted by the command's checkpoint guard.
+A known zero basis posts no bridge. Each depleted source lot gets one link
+with no destination. Replay includes the depletion; until dated bridge
+adjustments ship, a history change that would change `b` or the lots it
+takes refuses with the transfer named, and an outbound transfer dated
+behind a later depletion is refused (`INVESTMENT_EVENT_OUT_OF_ORDER`).
+Self-check verifies the links against the depletions and that each bridge
+posts exactly the links' carried basis per cost currency. Still open: entry
+UI, correction/reversal, bridge adjustments under replay and backdated
+admission, and unknown basis.
 
 Example: transfer 2 shares carrying 80.00 EUR into the book. Post security
 `H +2`, `T −2` and EUR `T +80.00`, `E −80.00`. A later full sale for 100.00
