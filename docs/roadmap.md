@@ -113,10 +113,12 @@ below is execution order, not a chain of hard dependencies.
    transfer API shipped 2026-10-05): outbound entry UI
    [T-142 #157](https://github.com/sergeyfarin/rekenraam/issues/157), bridge adjustments and backdated outbound
    admission [T-143 #158](https://github.com/sergeyfarin/rekenraam/issues/158), outbound correction
-   [T-144 #159](https://github.com/sergeyfarin/rekenraam/issues/159), unknown basis
-   [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160), return of capital
+   [T-144 #159](https://github.com/sergeyfarin/rekenraam/issues/159), return of capital
    [T-146 #161](https://github.com/sergeyfarin/rekenraam/issues/161), cash in lieu
-   [T-147 #162](https://github.com/sergeyfarin/rekenraam/issues/162).
+   [T-147 #162](https://github.com/sergeyfarin/rekenraam/issues/162), then unknown basis
+   [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160) last: it reaches every disposal, pooling,
+   replay and read path, while the two actions above ship known-basis first and leave an
+   unknown-basis lot unresolved, as the contract allows.
 
 **Next, in order**
 
