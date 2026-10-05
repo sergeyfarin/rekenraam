@@ -1852,6 +1852,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED", err.Error())
 	case errors.Is(err, app.ErrGainImpactAcknowledgementStale):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE", err.Error())
+	case errors.Is(err, app.ErrCapitalReturnNoHoldings):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS", err.Error())
 	case errors.Is(err, app.ErrInvestmentSplitNoHoldings):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_NO_HOLDINGS", err.Error())
 	case errors.Is(err, app.ErrInvestmentSplitFraction):

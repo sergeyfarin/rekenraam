@@ -1,0 +1,43 @@
+post:
+  summary: Preview a return of capital
+  description: >-
+    Authenticated read-only preview; no CSRF token or write occurs. Runs the
+    complete writer and rolls back, returning each entitled lot's allocation,
+    basis reduction and unresolved excess with the checkpoint and gain impact.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CapitalReturnRequest"
+  responses:
+    "200":
+      description: Per-lot effects and impact
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CapitalReturnPreviewResponse"
+    "400":
+      description: Invalid facts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: No holdings or out of order
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

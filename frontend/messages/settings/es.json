@@ -1183,6 +1183,7 @@
   "investments_split_empty": "Todavía no hay posiciones que desdoblar.",
   "investments_split_load_error": "No se pudieron cargar las posiciones. Inténtalo de nuevo.",
   "api_error_investment_split_no_holdings": "No se mantenía nada en la fecha del desdoblamiento, así que no hay nada que desdoblar.",
+  "api_error_investment_capital_return_no_holdings": "No se mantenía nada en la fecha efectiva, así que no hay coste de adquisición sobre el que devolver capital.",
   "api_error_investment_split_fraction_unrepresentable": "El desdoblamiento dejaría una fracción que este valor no puede registrar con exactitud. Nunca se redondea.",
   "api_error_investment_split_changed": "La posición cambió tras la previsualización. Vuelve a previsualizar el desdoblamiento.",
   "api_error_investment_split_dependency": "Una venta o transferencia posterior dejaría de ser posible tras este desdoblamiento.",

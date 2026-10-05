@@ -344,6 +344,21 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		// the projection posts that difference as an adjustment journal.
 		projection.Splits = append(projection.Splits, InvestmentReplaySplit{
 			OperationID: intent.OperationID, Subject: intent.SplitIsSubject, Effects: effects})
+	case "capital_return":
+		// The basis action at its slot must reproduce the recorded effects;
+		// revising them is T-148, so a change names the operation.
+		effects, err := capitalReturnEffectsTx(ctx, tx, bookID, accountID, commodityID, costCommodityID,
+			intent.EventDate, exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale))
+		if err == nil && !sameCapitalReturnEffects(effects, intent.CapitalReturnEffects) {
+			err = ErrCapitalReturnChanged
+		}
+		if err == nil {
+			err = applyCapitalReturnEffectsTx(ctx, tx, bookID, effects, intent.CreatedAt, intent.CreatedByUserID, intent.AuditEventID)
+		}
+		if err != nil {
+			return &InvestmentReplayDependencyError{OperationID: intent.OperationID,
+				Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
+		}
 	default:
 		return fmt.Errorf("%w: replay intent kind %q is unsupported", ErrInvalidDisposalParams, intent.Kind)
 	}

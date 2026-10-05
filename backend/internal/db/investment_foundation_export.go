@@ -72,6 +72,14 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 			e.quantity_delta_value, e.quantity_delta_scale
 			FROM investment_split_revision_effects e WHERE e.book_id = ?
 			ORDER BY e.revision_id, e.effect_seq`,
+		"capital-return-facts": `SELECT f.operation_id, f.account_id, f.commodity_id, f.cost_commodity_id,
+			f.cash_account_id, f.effective_on, f.payment_on, f.amount_value, f.amount_scale, f.entitlement_rule,
+			f.source_evidence_json, f.created_audit_event_id
+			FROM investment_capital_return_facts f WHERE f.book_id = ? ORDER BY f.operation_id`,
+		"capital-return-effects": `SELECT e.operation_id, e.effect_seq, e.lot_id, e.lot_event_id,
+			e.entitled_quantity_value, e.entitled_quantity_scale, e.allocated_value, e.allocated_scale,
+			e.reduction_value, e.reduction_scale, e.excess_value, e.excess_scale
+			FROM investment_capital_return_effects e WHERE e.book_id = ? ORDER BY e.operation_id, e.effect_seq`,
 		"fee-policies": `SELECT p.id, p.account_id, p.charge_kind, p.created_at, p.created_audit_event_id
 			FROM investment_fee_policies p WHERE p.book_id = ? ORDER BY p.id`,
 		"fee-policy-versions": `SELECT v.id, v.policy_id, v.version_seq, v.effective_from,

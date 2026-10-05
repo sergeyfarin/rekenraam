@@ -158,6 +158,23 @@ date requires separately linked journal and basis dates; the payment must
 never be backdated merely to simplify replay. An unknown-basis eligible lot
 cannot yield a definitive reduction/excess split and remains unresolved.
 
+**First command (2026-10-05, T-146 #161).** `POST
+/api/v1/investments/return-of-capital` (plus `/preview`) applies the
+documented per-share rule (`entitlement_rule` `open_lots_per_share`): every
+long lot of the holding open on the effective date, in stable lot order, with
+truncated allocations and the exact remainder on the last lot. The receipt
+currency must be the position's cost currency. Facts and per-lot effects
+(entitled quantity, allocated, reduction, excess) are immutable, each with a
+`basis_reduction` lot event (quantity 0, basis −reduction) linked to the
+operation. Replay recomputes the effects at the effective-date slot and
+refuses, with the operation named, any history change that would alter them;
+a return dated behind a later depletion and an unknown-basis lot are refused.
+Self-check verifies facts, events and conservation (allocations sum to the
+receipt, reduction + excess = allocation, event = −reduction); bundle files
+`investment-capital-return-facts.csv` and `-effects.csv`. Still open (T-148
+#163): replay revisions, backdated admission, explicit lot entitlement,
+correction/reversal and entry UI.
+
 Example: 10.00 EUR return of capital on one lot with 7.00 EUR remaining
 basis reduces basis to zero and records 3.00 EUR unresolved excess. The cash
 journal still posts the full 10.00 EUR. Later source correction of an earlier

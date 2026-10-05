@@ -1183,6 +1183,7 @@
   "investments_split_empty": "Er zijn nog geen posities om te splitsen.",
   "investments_split_load_error": "Posities konden niet worden geladen. Probeer het opnieuw.",
   "api_error_investment_split_no_holdings": "Op de splitsingsdatum werd niets aangehouden, dus er valt niets te splitsen.",
+  "api_error_investment_capital_return_no_holdings": "Op de ingangsdatum werd niets aangehouden, dus er is geen kostprijs om kapitaal op terug te betalen.",
   "api_error_investment_split_fraction_unrepresentable": "De splitsing zou een fractie opleveren die dit effect niet exact kan vastleggen. Splitsingen worden nooit afgerond.",
   "api_error_investment_split_changed": "De positie is na het voorbeeld gewijzigd. Bekijk de splitsing opnieuw.",
   "api_error_investment_split_dependency": "Een latere verkoop of overboeking zou na deze splitsing niet meer mogelijk zijn.",

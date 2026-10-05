@@ -113,6 +113,7 @@ consumer products than *conciliado*, which is already taken by "reconciled";
 | Withholding tax | Retención | Retenue à la source | Bronbelasting | Quellensteuer | Налог у источника |
 | Cost basis transferred out (bridge journal label) | Coste de adquisición transferido | Prix de revient transféré | Kostprijs uitgeboekt | Anschaffungskosten ausgebucht | Перенос себестоимости |
 | Transfer out (investments leaving the book) | Transferir … salientes | Transférer … sortants | Uitboeken | Ausbuchen | Вывод / вывести |
+| Return of capital | Devolución de capital | Remboursement de capital | Kapitaalteruggave | Kapitalrückzahlung | Возврат капитала |
 
 **Void is not delete.** A voided transaction stays in the ledger with its
 effect reversed, which is exactly what Dutch *storneren* and German

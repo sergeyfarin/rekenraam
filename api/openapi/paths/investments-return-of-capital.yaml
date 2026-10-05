@@ -1,0 +1,60 @@
+post:
+  summary: Record a return of capital
+  description: >-
+    Posts the receipt on the payment date (cash +r, commodity_trading -r in the
+    receipt currency, which must be the position's cost currency) and applies a
+    basis action on the effective date to every long lot of the holding open
+    then, per share (T-146). Each lot's allocation reduces its known remaining
+    basis by min(allocated, basis); the rest is an unresolved excess, never
+    negative basis or income. A return dated behind a later depletion of the
+    holding is refused (INVESTMENT_EVENT_OUT_OF_ORDER); no open lot on the
+    effective date is INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS. A later history
+    change that would change the effects is refused with this operation named.
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CapitalReturnRequest"
+  responses:
+    "201":
+      description: Receipt, basis action, per-lot effects and audit recorded atomically
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CapitalReturnResponse"
+    "400":
+      description: Invalid facts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Reconciliation override or gain acknowledgement required, no holdings, or out of order
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

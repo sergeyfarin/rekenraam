@@ -20,7 +20,8 @@ func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params Create
 		return fmt.Errorf("link investment operation to posted version: %w", err)
 	}
 	dateRole := "trade"
-	if params.Spec.InvestmentOperationKind == "dividend" || params.Spec.InvestmentOperationKind == "reinvested_dividend" {
+	if params.Spec.InvestmentOperationKind == "dividend" || params.Spec.InvestmentOperationKind == "reinvested_dividend" ||
+		params.Spec.InvestmentOperationKind == "return_of_capital" {
 		dateRole = "payment"
 	} else if params.Spec.InvestmentOperationKind == "external_transfer_in" ||
 		params.Spec.InvestmentOperationKind == "external_transfer_out" ||

@@ -1221,7 +1221,7 @@ CREATE TABLE IF NOT EXISTS investment_lot_events (
   id INTEGER PRIMARY KEY,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
   lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
-  event_kind TEXT NOT NULL CHECK (event_kind IN ('acquisition', 'disposal', 'split_adjustment', 'reinvested_dividend', 'manual_adjustment', 'transfer_in', 'transfer_out')),
+  event_kind TEXT NOT NULL CHECK (event_kind IN ('acquisition', 'disposal', 'split_adjustment', 'reinvested_dividend', 'manual_adjustment', 'transfer_in', 'transfer_out', 'basis_reduction')),
   transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
   event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
@@ -1964,6 +1964,99 @@ CREATE TRIGGER IF NOT EXISTS investment_split_facts_no_delete
 BEFORE DELETE ON investment_split_facts
 BEGIN SELECT RAISE(ABORT, 'investment split facts are immutable'); END;
 -- +goose StatementEnd
+-- Return of capital (slice 5, T-146). The cash receipt posts on the payment
+-- date; the basis action applies on the effective date to every long lot open
+-- then, per share. Each entitled lot's allocated cash r_i reduces its known
+-- remaining basis by min(r_i, basis_i); the rest is an unresolved excess,
+-- never negative basis or income. Effects are immutable replay outputs at the
+-- commit; replay must reproduce them (revisions are T-148).
+CREATE TABLE IF NOT EXISTS investment_capital_return_facts (
+  operation_id INTEGER PRIMARY KEY REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  cash_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
+  effective_on TEXT NOT NULL CHECK (effective_on GLOB '????-??-??'),
+  payment_on TEXT NOT NULL CHECK (payment_on GLOB '????-??-??'),
+  amount_value TEXT NOT NULL CHECK (length(amount_value) BETWEEN 1 AND 38
+    AND amount_value NOT GLOB '*[^0-9]*' AND substr(amount_value, 1, 1) BETWEEN '1' AND '9'),
+  amount_scale INTEGER NOT NULL CHECK (amount_scale BETWEEN 0 AND 12),
+  entitlement_rule TEXT NOT NULL CHECK (entitlement_rule IN ('open_lots_per_share')),
+  source_evidence_json TEXT NOT NULL DEFAULT '{}',
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  CHECK (effective_on <= payment_on)
+);
+
+CREATE TABLE IF NOT EXISTS investment_capital_return_effects (
+  operation_id INTEGER NOT NULL REFERENCES investment_capital_return_facts(operation_id) ON DELETE RESTRICT,
+  effect_seq INTEGER NOT NULL CHECK (effect_seq > 0),
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  lot_event_id INTEGER NOT NULL UNIQUE REFERENCES investment_lot_events(id) ON DELETE RESTRICT,
+  entitled_quantity_value TEXT NOT NULL CHECK (length(entitled_quantity_value) BETWEEN 1 AND 38
+    AND entitled_quantity_value NOT GLOB '*[^0-9]*' AND substr(entitled_quantity_value, 1, 1) BETWEEN '1' AND '9'),
+  entitled_quantity_scale INTEGER NOT NULL CHECK (entitled_quantity_scale BETWEEN 0 AND 24),
+  allocated_value TEXT NOT NULL CHECK (length(allocated_value) BETWEEN 1 AND 38 AND allocated_value NOT GLOB '*[^0-9]*'),
+  allocated_scale INTEGER NOT NULL CHECK (allocated_scale BETWEEN 0 AND 12),
+  reduction_value TEXT NOT NULL CHECK (length(reduction_value) BETWEEN 1 AND 38 AND reduction_value NOT GLOB '*[^0-9]*'),
+  reduction_scale INTEGER NOT NULL CHECK (reduction_scale BETWEEN 0 AND 12),
+  excess_value TEXT NOT NULL CHECK (length(excess_value) BETWEEN 1 AND 38 AND excess_value NOT GLOB '*[^0-9]*'),
+  excess_scale INTEGER NOT NULL CHECK (excess_scale BETWEEN 0 AND 12),
+  PRIMARY KEY (operation_id, effect_seq),
+  UNIQUE (operation_id, lot_id)
+);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_facts_valid
+BEFORE INSERT ON investment_capital_return_facts
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_operations o JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  JOIN commodities c ON c.id = NEW.commodity_id JOIN commodities cost ON cost.id = NEW.cost_commodity_id
+  JOIN accounts h ON h.id = NEW.account_id JOIN accounts cash ON cash.id = NEW.cash_account_id
+  WHERE o.id = NEW.operation_id AND o.book_id = NEW.book_id AND o.event_date = NEW.payment_on
+    AND o.operation_kind = 'return_of_capital' AND a.book_id = NEW.book_id AND a.id = o.created_audit_event_id
+    AND c.book_id = NEW.book_id AND cost.book_id = NEW.book_id AND h.book_id = NEW.book_id AND cash.book_id = NEW.book_id
+)
+BEGIN SELECT RAISE(ABORT, 'investment capital return fact is outside its operation or book'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_effects_valid
+BEFORE INSERT ON investment_capital_return_effects
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_capital_return_facts f
+  JOIN investment_lots l ON l.id = NEW.lot_id
+  JOIN investment_lot_events e ON e.id = NEW.lot_event_id
+  WHERE f.operation_id = NEW.operation_id AND f.book_id = NEW.book_id
+    AND l.book_id = f.book_id AND l.account_id = f.account_id AND l.commodity_id = f.commodity_id
+    AND l.cost_commodity_id = f.cost_commodity_id AND l.position_side = 'long' AND l.opened_on <= f.effective_on
+    AND e.lot_id = l.id AND e.event_kind = 'basis_reduction' AND e.event_date = f.effective_on
+)
+BEGIN SELECT RAISE(ABORT, 'investment capital return effect is outside its operation or lot'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_facts_no_update
+BEFORE UPDATE ON investment_capital_return_facts
+BEGIN SELECT RAISE(ABORT, 'investment capital return facts are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_facts_no_delete
+BEFORE DELETE ON investment_capital_return_facts
+BEGIN SELECT RAISE(ABORT, 'investment capital return facts are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_effects_no_update
+BEFORE UPDATE ON investment_capital_return_effects
+BEGIN SELECT RAISE(ABORT, 'investment capital return effects are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_effects_no_delete
+BEFORE DELETE ON investment_capital_return_effects
+BEGIN SELECT RAISE(ABORT, 'investment capital return effects are immutable'); END;
+-- +goose StatementEnd
+
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_split_revisions_no_update
 BEFORE UPDATE ON investment_split_revisions
@@ -3930,6 +4023,14 @@ DROP TRIGGER IF EXISTS investment_disposal_revisions_valid;
 DROP TRIGGER IF EXISTS investment_disposal_decisions_same_book;
 DROP TRIGGER IF EXISTS investment_components_same_book;
 DROP TRIGGER IF EXISTS investment_operation_links_valid;
+DROP TRIGGER IF EXISTS investment_capital_return_effects_no_delete;
+DROP TRIGGER IF EXISTS investment_capital_return_effects_no_update;
+DROP TRIGGER IF EXISTS investment_capital_return_facts_no_delete;
+DROP TRIGGER IF EXISTS investment_capital_return_facts_no_update;
+DROP TRIGGER IF EXISTS investment_capital_return_effects_valid;
+DROP TRIGGER IF EXISTS investment_capital_return_facts_valid;
+DROP TABLE IF EXISTS investment_capital_return_effects;
+DROP TABLE IF EXISTS investment_capital_return_facts;
 DROP TABLE IF EXISTS investment_split_revision_effects;
 DROP TABLE IF EXISTS investment_split_revisions;
 DROP TABLE IF EXISTS investment_split_facts;

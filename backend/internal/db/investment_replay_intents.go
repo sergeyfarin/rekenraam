@@ -51,14 +51,17 @@ type InvestmentReplayIntent struct {
 	// source depletions instead of comparing them.
 	TransferIsSubject bool
 	// ExternalOut marks the depletion of an outbound transfer: its basis left
-	// the book through a posted bridge, so replay must reproduce it (until
-	// dated bridge adjustments ship) instead of revising a link.
-	ExternalOut     bool
-	AmountValue     exact.Coefficient // opening consideration or disposal proceeds
-	AmountScale     int
-	CostBasisMethod string
-	DecisionSource  DisposalDecisionSource
-	SpecificLots    []LotAllocation
+	// the book through a posted bridge, so a changed basis revises its link and
+	// posts a dated bridge adjustment instead of replaying a destination (T-143).
+	ExternalOut bool
+	// CapitalReturnEffects are a return of capital's recorded per-lot effects
+	// (T-146); AmountValue is its receipt. Replay must reproduce them.
+	CapitalReturnEffects []CapitalReturnEffect
+	AmountValue          exact.Coefficient // opening consideration or disposal proceeds
+	AmountScale          int
+	CostBasisMethod      string
+	DecisionSource       DisposalDecisionSource
+	SpecificLots         []LotAllocation
 	// PooledLinks are a pooled transfer's committed per-lot carried amounts,
 	// in link order. Replay must reproduce them exactly.
 	PooledLinks []InvestmentReplayTransferLink
@@ -303,6 +306,12 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		return nil, err
 	}
 	intents = append(intents, splits...)
+
+	capitalReturns, err := capitalReturnIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
+	if err != nil {
+		return nil, err
+	}
+	intents = append(intents, capitalReturns...)
 
 	selected, err := reader.QueryContext(ctx, `
 		SELECT a.decision_id, a.lot_id, a.quantity_value, a.quantity_scale,

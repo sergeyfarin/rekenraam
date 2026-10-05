@@ -1253,3 +1253,55 @@ func (r *SelfCheckRepository) SelfCheckTransferBridges(ctx context.Context, tran
 	}
 	return bridges, nil
 }
+
+// SelfCheckCapitalReturn is one return of capital's receipt and the per-lot
+// effects that must conserve it: allocations sum to the receipt, reduction
+// plus excess equals each allocation, and each lot event takes exactly the
+// reduction (T-146).
+type SelfCheckCapitalReturn struct {
+	OperationID int64
+	Amount      *exact.ScaledInt
+	Allocated   *exact.ScaledInt
+	Mismatched  bool
+}
+
+func (r *SelfCheckRepository) SelfCheckCapitalReturns(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckCapitalReturn, error) {
+	rows, err := transaction.QueryContext(ctx, `
+		SELECT f.operation_id, f.amount_value, f.amount_scale, e.allocated_value, e.allocated_scale,
+			e.reduction_value, e.reduction_scale, e.excess_value, e.excess_scale,
+			ev.cost_basis_value, ev.cost_basis_scale
+		FROM investment_capital_return_facts f
+		JOIN investment_capital_return_effects e ON e.operation_id = f.operation_id
+		JOIN investment_lot_events ev ON ev.id = e.lot_event_id
+		WHERE f.book_id = ? ORDER BY f.operation_id, e.effect_seq`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read self-check returns of capital: %w", err)
+	}
+	defer rows.Close()
+	var returns []SelfCheckCapitalReturn
+	for rows.Next() {
+		var operationID int64
+		var amount, allocated, reduction, excess, event exact.Coefficient
+		var amountScale, allocatedScale, reductionScale, excessScale, eventScale int
+		if err := rows.Scan(&operationID, &amount, &amountScale, &allocated, &allocatedScale,
+			&reduction, &reductionScale, &excess, &excessScale, &event, &eventScale); err != nil {
+			return nil, fmt.Errorf("scan self-check return of capital: %w", err)
+		}
+		if len(returns) == 0 || returns[len(returns)-1].OperationID != operationID {
+			returns = append(returns, SelfCheckCapitalReturn{OperationID: operationID,
+				Amount: exact.ScaledIntFromCoefficient(amount, amountScale), Allocated: exact.NewScaledInt()})
+		}
+		current := &returns[len(returns)-1]
+		current.Allocated.AddCoefficient(allocated, allocatedScale)
+		parts := exact.ScaledIntFromCoefficient(reduction, reductionScale)
+		parts.AddCoefficient(excess, excessScale)
+		if parts.Cmp(exact.ScaledIntFromCoefficient(allocated, allocatedScale)) != 0 ||
+			exact.ScaledIntFromCoefficient(event, eventScale).Cmp(exact.ScaledIntFromCoefficient(reduction, reductionScale).Negated()) != 0 {
+			current.Mismatched = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate self-check returns of capital: %w", err)
+	}
+	return returns, nil
+}

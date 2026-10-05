@@ -595,6 +595,21 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				JOIN investment_lot_events e ON e.id = x.lot_event_id AND e.event_kind = 'transfer_out'
 				WHERE x.operation_id = f.operation_id
 				AND (e.cost_basis_method IS 'average_cost') <> (f.basis_allocation = 'average_cost_pool'))`},
+		{"return of capital missing its facts or matching basis-reduction events", `
+			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
+			AND o.operation_kind = 'return_of_capital'
+			AND (NOT EXISTS (SELECT 1 FROM investment_capital_return_facts f
+				JOIN investment_capital_return_effects e ON e.operation_id = f.operation_id
+				WHERE f.operation_id = o.id AND f.payment_on = o.event_date)
+			OR EXISTS (SELECT 1 FROM investment_capital_return_effects e
+				JOIN investment_lot_events ev ON ev.id = e.lot_event_id
+				WHERE e.operation_id = o.id AND (ev.event_kind <> 'basis_reduction' OR ev.quantity_value <> '0'
+					OR NOT EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+						WHERE x.operation_id = o.id AND x.lot_event_id = ev.id)))
+			OR EXISTS (SELECT 1 FROM investment_operation_lot_effects x
+				JOIN investment_lot_events ev ON ev.id = x.lot_event_id
+				WHERE x.operation_id = o.id AND NOT EXISTS (SELECT 1 FROM investment_capital_return_effects e
+					WHERE e.operation_id = o.id AND e.lot_event_id = ev.id)))`},
 		{"split missing its sourced ratio or lot effects", `
 			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
 			AND o.operation_kind = 'split'
@@ -778,6 +793,26 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		result.Status = SelfCheckFailed
 		result.FindingCount += bridgeMismatch
 		summaries = append(summaries, fmt.Sprintf("%d outbound transfers bridge a different basis than their links carried", bridgeMismatch))
+	}
+	capitalReturns, err := s.repository.SelfCheckCapitalReturns(ctx, snapshot, BookID)
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	var capitalReturnMismatch int64
+	for _, capitalReturn := range capitalReturns {
+		if !capitalReturn.Mismatched && capitalReturn.Allocated.Cmp(capitalReturn.Amount) == 0 {
+			continue
+		}
+		capitalReturnMismatch++
+		if len(result.Sample) < db.SelfCheckSampleLimit {
+			result.Sample = append(result.Sample, capitalReturn.OperationID)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("operation #%d", capitalReturn.OperationID))
+		}
+	}
+	if capitalReturnMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += capitalReturnMismatch
+		summaries = append(summaries, fmt.Sprintf("%d returns of capital do not conserve their receipt across lot effects", capitalReturnMismatch))
 	}
 	type clearingKey struct {
 		operationID, versionID, currencyID int64

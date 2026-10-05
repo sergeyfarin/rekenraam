@@ -1004,6 +1004,101 @@ InvestmentTransferOutReplacementResponse:
       type: integer
       format: int64
 
+CapitalReturnRequest:
+  type: object
+  additionalProperties: false
+  required: [holding_account_id, commodity_id, cash_account_id, currency_id, effective_on, payment_on, amount_value, amount_scale]
+  properties:
+    holding_account_id:
+      type: integer
+      format: int64
+    commodity_id:
+      type: integer
+      format: int64
+    cash_account_id:
+      type: integer
+      format: int64
+    currency_id:
+      type: integer
+      format: int64
+      description: Receipt currency; must be the position's cost currency.
+    effective_on:
+      type: string
+      format: date
+      description: Basis action date; entitles every lot open then.
+    payment_on:
+      type: string
+      format: date
+      description: Cash receipt date, on or after effective_on.
+    amount_value:
+      type: string
+      pattern: '^[1-9][0-9]{0,37}$'
+    amount_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    change_reason:
+      type: string
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+
+CapitalReturnEffect:
+  type: object
+  required: [lot_id, entitled_quantity_value, entitled_quantity_scale, allocated_value, allocated_scale,
+    reduction_value, reduction_scale, excess_value, excess_scale]
+  properties:
+    lot_id:
+      type: integer
+      format: int64
+    entitled_quantity_value:
+      type: string
+    entitled_quantity_scale:
+      type: integer
+    allocated_value:
+      type: string
+      description: This lot's per-share share of the receipt; the last lot takes the exact remainder.
+    allocated_scale:
+      type: integer
+    reduction_value:
+      type: string
+      description: min(allocated, remaining basis).
+    reduction_scale:
+      type: integer
+    excess_value:
+      type: string
+      description: Unresolved amount beyond the lot's basis; never income or negative basis.
+    excess_scale:
+      type: integer
+
+CapitalReturnResponse:
+  type: object
+  required: [transaction, effects]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    effects:
+      type: array
+      items:
+        $ref: "../schemas/investments.yaml#/CapitalReturnEffect"
+
+CapitalReturnPreviewResponse:
+  type: object
+  required: [effects, impact]
+  properties:
+    effects:
+      type: array
+      items:
+        $ref: "../schemas/investments.yaml#/CapitalReturnEffect"
+    impact:
+      $ref: "../schemas/transactions.yaml#/ReconciliationImpactResponse"
+
 InvestmentTransferInReplacementRequest:
   type: object
   additionalProperties: false
