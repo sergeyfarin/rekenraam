@@ -197,3 +197,101 @@ func mapCapitalReturnError(err error) error {
 		return fmt.Errorf("return of capital: %w", mapTransactionDBError(err))
 	}
 }
+
+var (
+	ErrInvestmentCapitalReturnNotFound         = errors.New("return of capital operation not found")
+	ErrInvestmentCapitalReturnAlreadyCorrected = errors.New("return of capital already corrected")
+	ErrInvestmentCapitalReturnChanged          = errors.New("return of capital changed")
+)
+
+type ReverseInvestmentCapitalReturnInput struct {
+	OwnerUserID               int64
+	AuthSessionID             int64
+	RequestID                 string
+	TransactionID             int64
+	Reason                    string
+	ReconciliationOverride    bool
+	GainImpactAcknowledgement string
+}
+
+// ReverseCapitalReturn posts the exact inverse of the receipt and removes the
+// basis action from effective history; the holding replays, so later
+// disposals' gains change under the preview's acknowledgement (T-148).
+func (s *InvestmentService) ReverseCapitalReturn(ctx context.Context, input ReverseInvestmentCapitalReturnInput) (Transaction, error) {
+	operation, params, err := s.prepareCapitalReturnReversal(ctx, input)
+	if err != nil {
+		return Transaction{}, err
+	}
+	params.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
+	record, err := s.repository.ReverseCapitalReturn(ctx, params, operation)
+	if err != nil {
+		return Transaction{}, mapCapitalReturnCorrectionError(err)
+	}
+	return toTransaction(record), nil
+}
+
+func (s *InvestmentService) ReverseCapitalReturnReconciliationImpact(ctx context.Context, input ReverseInvestmentCapitalReturnInput) (ReconciliationImpact, error) {
+	input.ReconciliationOverride = true
+	operation, params, err := s.prepareCapitalReturnReversal(ctx, input)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	params.GainImpact = gainImpactPolicy("")
+	simulated, err := s.repository.PreviewCapitalReturnReversal(ctx, params, operation)
+	if err != nil {
+		return ReconciliationImpact{}, mapCapitalReturnCorrectionError(err)
+	}
+	return s.simulatedReconciliationImpact(ctx, simulated)
+}
+
+func (s *InvestmentService) prepareCapitalReturnReversal(ctx context.Context, input ReverseInvestmentCapitalReturnInput) (db.CapitalReturnOperationRecord, db.CreateTransactionParams, error) {
+	if input.OwnerUserID <= 0 || input.TransactionID <= 0 {
+		return db.CapitalReturnOperationRecord{}, db.CreateTransactionParams{}, ValidationError{Message: "owner and return of capital id are required"}
+	}
+	reason, err := cleanChangeReason(input.Reason, "")
+	if err != nil || reason == "" {
+		return db.CapitalReturnOperationRecord{}, db.CreateTransactionParams{}, ValidationError{Message: "return of capital correction reason is required"}
+	}
+	operation, err := s.repository.CapitalReturnOperationByTransactionID(ctx, BookID, input.TransactionID)
+	if err != nil {
+		return db.CapitalReturnOperationRecord{}, db.CreateTransactionParams{}, mapCapitalReturnCorrectionError(err)
+	}
+	if operation.AlreadyCorrected {
+		return db.CapitalReturnOperationRecord{}, db.CreateTransactionParams{}, ErrInvestmentCapitalReturnAlreadyCorrected
+	}
+	original, err := s.transactionService.Transaction(ctx, operation.TransactionID)
+	if err != nil {
+		return db.CapitalReturnOperationRecord{}, db.CreateTransactionParams{}, err
+	}
+	if original.VersionID != operation.CurrentVersionID || original.Status != "posted" || original.DeletedAt != "" ||
+		original.TransactionDate != operation.EventDate {
+		return db.CapitalReturnOperationRecord{}, db.CreateTransactionParams{}, ErrInvestmentCapitalReturnChanged
+	}
+	spec := invertedInvestmentTransactionSpec(original)
+	spec.InvestmentOperationKind = "reversal"
+	params, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, CreateTransactionInput{
+		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
+		OriginType: "browser_api", Operation: "investment.return_of_capital.reverse", ChangeReason: reason,
+		ReconciliationOverride: input.ReconciliationOverride, CorrectionOfTransactionID: &operation.TransactionID,
+		Spec: spec,
+	}, nil)
+	if err != nil {
+		return db.CapitalReturnOperationRecord{}, db.CreateTransactionParams{}, err
+	}
+	params.InvestmentCorrectionOfOperationID = operation.OperationID
+	params.InvestmentCorrectionMode = "reverse"
+	params.InvestmentCorrectionReason = reason
+	return operation, params, nil
+}
+
+func mapCapitalReturnCorrectionError(err error) error {
+	switch {
+	case errors.Is(err, db.ErrNotFound):
+		return ErrInvestmentCapitalReturnNotFound
+	case errors.Is(err, db.ErrInvestmentOperationAlreadyCorrected):
+		return ErrInvestmentCapitalReturnAlreadyCorrected
+	case errors.Is(err, db.ErrInvestmentSaleChanged):
+		return ErrInvestmentCapitalReturnChanged
+	}
+	return mapCapitalReturnError(err)
+}

@@ -122,3 +122,47 @@ func capitalReturnPreview(logger *slog.Logger, authService *app.AuthService, inv
 		})
 	}
 }
+
+func reverseCapitalReturn(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, request, ok := correctionRoute[investmentSaleReversalRequest](w, r)
+		if !ok {
+			return
+		}
+		transaction, err := investmentService.ReverseCapitalReturn(r.Context(), app.ReverseInvestmentCapitalReturnInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			TransactionID: transactionID, Reason: request.Reason, ReconciliationOverride: request.ReconciliationOverride,
+			GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "reverse return of capital", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSaleReversalResponse{Transaction: toTransactionResponse(transaction), CorrectedTransactionID: transactionID})
+	}))
+}
+
+func reverseCapitalReturnReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, request, ok := correctionRoute[investmentSaleReversalRequest](w, r)
+		if !ok {
+			return
+		}
+		impact, err := investmentService.ReverseCapitalReturnReconciliationImpact(r.Context(), app.ReverseInvestmentCapitalReturnInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview return of capital reversal", err)
+			return
+		}
+		writeReconciliationImpact(w, impact)
+	}
+}

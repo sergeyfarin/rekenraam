@@ -234,6 +234,8 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-write-off/reconciliation-impact", reverseInvestmentWriteOffReconciliationImpact(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/replace-write-off", replaceInvestmentWriteOff(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/replace-write-off/reconciliation-impact", replaceInvestmentWriteOffReconciliationImpact(logger, services.Auth, services.Investment))
+	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-return-of-capital", reverseCapitalReturn(logger, services.Auth, services.Investment, options))
+	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-return-of-capital/reconciliation-impact", reverseCapitalReturnReconciliationImpact(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-dividend", reverseInvestmentDividend(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-dividend/reconciliation-impact", reverseInvestmentDividendReconciliationImpact(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/replace-dividend", replaceInvestmentDividend(logger, services.Auth, services.Investment, options))

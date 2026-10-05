@@ -1,0 +1,62 @@
+post:
+  summary: Reverse a posted return of capital
+  description: >-
+    Posts the exact inverse of a return of capital's receipt as a reversal
+    operation under one audit event (T-148). The basis action leaves effective
+    history and the holding replays, so its lots regain their basis and later
+    disposals' gains change: a non-empty gain change set requires the
+    preview's gain_impact_acknowledgement. A reconciled cash balance requires
+    reconciliation_override. The original receipt and effects stay posted
+    history.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalRequest"
+  responses:
+    "201":
+      description: Return of capital reversed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted cash dividend not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected (INVESTMENT_DIVIDEND_ALREADY_CORRECTED), imported without its committed source (INVESTMENT_IMPORTED_DIVIDEND), changed (INVESTMENT_DIVIDEND_CHANGED), or reconciliation override required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

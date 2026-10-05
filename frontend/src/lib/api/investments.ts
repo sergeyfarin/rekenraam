@@ -25,6 +25,10 @@ export type ExternalTransferOutRequest = components['schemas']['ExternalTransfer
 export type ExternalTransferOutResponse = components['schemas']['ExternalTransferOutResponse'];
 export type ExternalTransferOutPreviewResponse = components['schemas']['ExternalTransferOutPreviewResponse'];
 export type ExternalTransferOutPlan = components['schemas']['ExternalTransferOutPlan'];
+export type CapitalReturnRequest = components['schemas']['CapitalReturnRequest'];
+export type CapitalReturnResponse = components['schemas']['CapitalReturnResponse'];
+export type CapitalReturnPreviewResponse = components['schemas']['CapitalReturnPreviewResponse'];
+export type CapitalReturnEffect = components['schemas']['CapitalReturnEffect'];
 export type InvestmentTransferOutReplacementRequest = components['schemas']['InvestmentTransferOutReplacementRequest'];
 export type InvestmentTransferOutReplacementResponse = components['schemas']['InvestmentTransferOutReplacementResponse'];
 export type InvestmentSplitRequest = components['schemas']['InvestmentSplitRequest'];
@@ -1035,6 +1039,59 @@ export async function reverseDividend(transactionID: number, input: InvestmentBu
       '/api/v1/investments/transactions/{transaction_id}/reverse-dividend',
       { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
     );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewCapitalReturnReversalReconciliation(transactionID: number, input: InvestmentBuyReversalRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-return-of-capital/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseCapitalReturn(transactionID: number, input: InvestmentBuyReversalRequest, csrfToken: string): Promise<InvestmentBuyReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-return-of-capital',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+/** Runs the complete return-of-capital writer and rolls back: per-lot effects plus impact. */
+export async function previewCapitalReturn(input: CapitalReturnRequest): Promise<CapitalReturnPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/return-of-capital/preview', { body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordCapitalReturn(input: CapitalReturnRequest, csrfToken: string): Promise<CapitalReturnResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/return-of-capital', {
+      params: { header: { 'X-CSRF-Token': csrfToken } }, body: input
+    });
     if (data !== undefined) return data;
     throw toAPIClientError(response, error);
   } catch (error) {

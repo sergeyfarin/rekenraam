@@ -35,6 +35,8 @@
     previewTransferReversalReconciliation,
     previewWriteOffReversalReconciliation,
     reverseDividend,
+    reverseCapitalReturn,
+    previewCapitalReturnReversalReconciliation,
     reverseManualBuy,
     reverseReinvestedDividend,
     reverseManualSale,
@@ -78,6 +80,8 @@
     chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_split);
 
   // Dividends and reinvestments pre-fill from the chain's effective terms (T-115).
+  const capitalReturnReversible = $derived(chainQuery.data?.can_reverse_return_of_capital === true &&
+    chainQuery.data.effective_transaction_id === transactionID);
   const dividendCorrectable = $derived(chainQuery.data?.can_correct_dividend === true &&
     chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_dividend);
   const reinvestmentCorrectable = $derived(chainQuery.data?.can_correct_reinvested_dividend === true &&
@@ -99,7 +103,7 @@
   );
 
   let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
-  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer'>('sale');
+  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return'>('sale');
   let reason = $state('');
   let pending = $state(false);
   let actionError = $state<unknown>(undefined);
@@ -159,7 +163,9 @@
               ? await previewWriteOffReversalReconciliation(transactionID, body)
               : reversalKind === 'transfer'
                 ? await previewTransferReversalReconciliation(transactionID, body)
-                : await previewSaleReversalReconciliation(transactionID, body);
+                : reversalKind === 'capital_return'
+                  ? await previewCapitalReturnReversalReconciliation(transactionID, body)
+                  : await previewSaleReversalReconciliation(transactionID, body);
     if (!impactNeedsReview(preview)) return false;
     impacts = preview.affected_checkpoints;
     gainImpact = hasGainChanges(preview.gain_impact) ? preview.gain_impact : null;
@@ -188,6 +194,8 @@
       await reverseWriteOff(transactionID, body, csrfToken);
     } else if (reversalKind === 'transfer') {
       await reverseTransfer(transactionID, body, csrfToken);
+    } else if (reversalKind === 'capital_return') {
+      await reverseCapitalReturn(transactionID, body, csrfToken);
     } else {
       await reverseManualSale(transactionID, body, csrfToken);
     }
@@ -306,6 +314,18 @@
           disabled={!csrfToken}
           onclick={() => { replacementKind = 'split'; }}>
           {m.transactions_investment_replace_split_action()}
+        </button>
+      </div>
+    {/if}
+    {#if capitalReturnReversible}
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+          disabled={!csrfToken || pending}
+          onclick={() => { reversalKind = 'capital_return'; reason = ''; actionError = undefined; modal = 'reason'; }}
+        >
+          {m.transactions_investment_reverse_capital_return_action()}
         </button>
       </div>
     {/if}
@@ -507,6 +527,7 @@
               : reversalKind === 'reinvestment' ? m.transactions_investment_reverse_reinvestment_title()
               : reversalKind === 'write_off' ? m.transactions_investment_reverse_write_off_title()
               : reversalKind === 'transfer' ? m.transactions_investment_reverse_transfer_title()
+              : reversalKind === 'capital_return' ? m.transactions_investment_reverse_capital_return_title()
               : m.transactions_investment_reverse_title()
             : impacts.length > 0 ? m.transactions_reconciliation_warning_title() : m.investments_gain_impact_title()}
         </h3>
@@ -519,6 +540,7 @@
                 : reversalKind === 'reinvestment' ? m.transactions_investment_reverse_reinvestment_copy()
                 : reversalKind === 'write_off' ? m.transactions_investment_reverse_write_off_copy()
                 : reversalKind === 'transfer' ? m.transactions_investment_reverse_transfer_copy()
+                : reversalKind === 'capital_return' ? m.transactions_investment_reverse_capital_return_copy()
                 : m.transactions_investment_reverse_copy()
               : m.transactions_reconciliation_warning_copy()}
           </p>

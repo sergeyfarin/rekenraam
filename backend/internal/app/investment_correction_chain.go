@@ -37,7 +37,9 @@ type InvestmentCorrectionChain struct {
 	EffectiveSplit  *InvestmentCorrectionSplitTerms
 	// CanCorrectDividend / CanCorrectReinvestedDividend allow native reversal
 	// and replacement (T-115); the Effective* terms pre-fill the replacement.
-	CanCorrectDividend           bool
+	CanCorrectDividend bool
+	// CanReverseCapitalReturn allows reversing a return of capital (T-148).
+	CanReverseCapitalReturn      bool
 	EffectiveDividend            *InvestmentCorrectionDividendTerms
 	CanCorrectReinvestedDividend bool
 	EffectiveReinvestment        *InvestmentCorrectionReinvestmentTerms
@@ -199,6 +201,9 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 				return InvestmentCorrectionChain{}, err
 			}
 			chain.EffectiveReinvestment, chain.CanCorrectReinvestedDividend = reinvestmentCorrectionTerms(transaction)
+		}
+		if correctable && record.OperationKind == "return_of_capital" {
+			chain.CanReverseCapitalReturn = true
 		}
 		if correctable && record.OperationKind == "write_off" {
 			chain.CanCorrectWriteOff = true

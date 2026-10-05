@@ -175,8 +175,11 @@ dated behind a later depletion is admitted through replay at its own slot. An
 unknown-basis lot is refused.
 Self-check verifies facts, events and conservation (allocations sum to the
 receipt, reduction + excess = allocation, event = −reduction); bundle files
-`investment-capital-return-facts.csv` and `-effects.csv`. Still open (T-148
-#163): explicit lot entitlement, correction/reversal and entry UI.
+`investment-capital-return-facts.csv` and `-effects.csv`. Reversal
+(`reverse-return-of-capital`, T-148) inverts the receipt, removes the basis
+action from effective history and replays the holding under the gain
+acknowledgement; mobile entry previews each lot's reduction and unresolved
+excess. Still open (T-148 #163): explicit lot entitlement.
 
 Example: 10.00 EUR return of capital on one lot with 7.00 EUR remaining
 basis reduces basis to zero and records 3.00 EUR unresolved excess. The cash

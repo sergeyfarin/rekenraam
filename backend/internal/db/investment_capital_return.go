@@ -475,3 +475,122 @@ func persistCapitalReturnRevisionTx(ctx context.Context, tx *sql.Tx, bookID, cau
 	}
 	return nil
 }
+
+// CapitalReturnOperationRecord pins a posted return of capital and its
+// holding for correction (T-148). A correction rechecks it inside the write.
+type CapitalReturnOperationRecord struct {
+	OperationID          int64
+	TransactionID        int64
+	TransactionVersionID int64
+	CurrentVersionID     int64
+	EventDate            string
+	AccountID            int64
+	CommodityID          int64
+	CostCommodityID      int64
+	AlreadyCorrected     bool
+	ImportedLineage      bool
+}
+
+func (r *InvestmentRepository) CapitalReturnOperationByTransactionID(ctx context.Context, bookID, transactionID int64) (CapitalReturnOperationRecord, error) {
+	return capitalReturnOperationByTransactionIDQuery(ctx, r.database, bookID, transactionID)
+}
+
+func capitalReturnOperationByTransactionIDQuery(ctx context.Context, reader saleOperationReader, bookID, transactionID int64) (CapitalReturnOperationRecord, error) {
+	var record CapitalReturnOperationRecord
+	var corrected int
+	err := reader.QueryRowContext(ctx, `SELECT o.id, linked_version.transaction_id, link.transaction_version_id,
+		current.id, o.event_date, f.account_id, f.commodity_id, f.cost_commodity_id,
+		EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id)
+		FROM investment_operations o
+		JOIN investment_capital_return_facts f ON f.operation_id = o.id
+		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
+		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
+		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
+		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind = 'return_of_capital'`,
+		bookID, transactionID).Scan(&record.OperationID, &record.TransactionID, &record.TransactionVersionID,
+		&record.CurrentVersionID, &record.EventDate, &record.AccountID, &record.CommodityID, &record.CostCommodityID,
+		&corrected)
+	if errors.Is(err, sql.ErrNoRows) {
+		return CapitalReturnOperationRecord{}, ErrNotFound
+	}
+	if err != nil {
+		return CapitalReturnOperationRecord{}, fmt.Errorf("read return of capital operation: %w", err)
+	}
+	record.AlreadyCorrected = corrected != 0
+	if record.ImportedLineage, err = investmentOperationHasImportedLineageQuery(ctx, reader, bookID, record.OperationID); err != nil {
+		return CapitalReturnOperationRecord{}, err
+	}
+	return record, nil
+}
+
+func checkCapitalReturnOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected CapitalReturnOperationRecord) error {
+	current, err := capitalReturnOperationByTransactionIDQuery(ctx, tx, bookID, expected.TransactionID)
+	if err != nil {
+		return err
+	}
+	if current.AlreadyCorrected {
+		return ErrInvestmentOperationAlreadyCorrected
+	}
+	if current.ImportedLineage {
+		linked, err := investmentOperationHasCommittedSourceQuery(ctx, tx, bookID, current.OperationID)
+		if err != nil {
+			return err
+		}
+		if !linked {
+			return ErrInvestmentImportedCorrection
+		}
+	}
+	if current != expected {
+		return ErrInvestmentSaleChanged
+	}
+	return checkInvestmentSourceJournalTx(ctx, tx, bookID, current.TransactionID,
+		current.EventDate, current.TransactionVersionID, current.CurrentVersionID)
+}
+
+// ReverseCapitalReturn posts the exact inverse of the receipt as a reversal
+// operation, which removes the basis action from effective history, and
+// replays the holding so its lots get their basis back (T-148).
+func (r *InvestmentRepository) ReverseCapitalReturn(ctx context.Context, params CreateTransactionParams, expected CapitalReturnOperationRecord) (TransactionRecord, error) {
+	return r.reverseCapitalReturn(ctx, params, expected, false)
+}
+
+// PreviewCapitalReturnReversal runs the reversal writer and its replay, then
+// rolls back.
+func (r *InvestmentRepository) PreviewCapitalReturnReversal(ctx context.Context, params CreateTransactionParams, expected CapitalReturnOperationRecord) (SimulatedInvestmentWrite, error) {
+	transaction, err := r.reverseCapitalReturn(ctx, params, expected, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, err
+	}
+	return simulatedInvestmentWrite(transaction), nil
+}
+
+func (r *InvestmentRepository) reverseCapitalReturn(ctx context.Context, params CreateTransactionParams, expected CapitalReturnOperationRecord, preview bool) (TransactionRecord, error) {
+	if params.BookID <= 0 || params.ActorUserID <= 0 || expected.OperationID <= 0 || expected.AccountID <= 0 ||
+		params.Spec.InvestmentOperationKind != "reversal" || params.Spec.TransactionKind != "investment" ||
+		params.Spec.Status != "posted" || params.Spec.TransactionDate != expected.EventDate ||
+		params.InvestmentCorrectionOfOperationID != expected.OperationID ||
+		params.InvestmentCorrectionMode != "reverse" || params.InvestmentCorrectionReason == "" ||
+		!params.CorrectionOfTransactionID.Valid || params.CorrectionOfTransactionID.Int64 != expected.TransactionID {
+		return TransactionRecord{}, fmt.Errorf("%w: return of capital reversal is incomplete", ErrInvalidDisposalParams)
+	}
+	guard := func(tx *sql.Tx) error {
+		return checkCapitalReturnOperationForCorrectionTx(ctx, tx, params.BookID, expected)
+	}
+	effect := func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (struct{}, error) {
+		operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
+		if err != nil {
+			return struct{}{}, err
+		}
+		return struct{}{}, replayCorrectedPositionTx(ctx, tx, params.BookID, investmentReplayPositionKey{
+			expected.AccountID, expected.CommodityID, expected.CostCommodityID},
+			operationID, auditEventID, params.ActorUserID, params.CreatedAt)
+	}
+	var transaction TransactionRecord
+	var err error
+	if preview {
+		transaction, _, err = previewInvestmentWriteWithGuardTx(ctx, r.database, params, guard, effect)
+	} else {
+		transaction, _, err = executeInvestmentWriteWithGuardTx(ctx, r.database, params, guard, effect, nil)
+	}
+	return transaction, err
+}

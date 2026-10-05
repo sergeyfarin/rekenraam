@@ -369,6 +369,10 @@ paths:
     $ref: "./paths/investments-replace-write-off.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-write-off/reconciliation-impact:
     $ref: "./paths/investments-replace-write-off-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-return-of-capital:
+    $ref: "./paths/investments-reverse-return-of-capital.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-return-of-capital/reconciliation-impact:
+    $ref: "./paths/investments-reverse-return-of-capital-reconciliation-impact.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-dividend:
     $ref: "./paths/investments-reverse-dividend.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-dividend/reconciliation-impact:

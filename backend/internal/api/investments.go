@@ -305,23 +305,24 @@ type investmentCorrectionNodeResponse struct {
 }
 
 type investmentCorrectionChainResponse struct {
-	RootOperationID        int64                              `json:"root_operation_id"`
-	EffectiveTransactionID *int64                             `json:"effective_transaction_id"`
-	CanReverseManualSale   bool                               `json:"can_reverse_manual_sale"`
-	CanReverseManualBuy    bool                               `json:"can_reverse_manual_buy"`
-	CanReverseSale         bool                               `json:"can_reverse_sale"`
-	CanReverseBuy          bool                               `json:"can_reverse_buy"`
-	CanCorrectSplit        bool                               `json:"can_correct_split"`
-	EffectiveSplit         *investmentCorrectionSplitTerms    `json:"effective_split,omitempty"`
-	CanCorrectDividend     bool                               `json:"can_correct_dividend"`
-	EffectiveDividend      *investmentCorrectionDividendTerms `json:"effective_dividend,omitempty"`
-	CanCorrectReinvested   bool                               `json:"can_correct_reinvested_dividend"`
-	CanCorrectWriteOff     bool                               `json:"can_correct_write_off"`
-	CanReverseTransfer     bool                               `json:"can_reverse_transfer"`
-	CanReplaceTransfer     bool                               `json:"can_replace_transfer"`
-	EffectiveTransfer      *investmentCorrectionTransferTerms `json:"effective_transfer,omitempty"`
-	EffectiveReinvestment  *investmentCorrectionReinvestTerms `json:"effective_reinvestment,omitempty"`
-	Operations             []investmentCorrectionNodeResponse `json:"operations"`
+	RootOperationID         int64                              `json:"root_operation_id"`
+	EffectiveTransactionID  *int64                             `json:"effective_transaction_id"`
+	CanReverseManualSale    bool                               `json:"can_reverse_manual_sale"`
+	CanReverseManualBuy     bool                               `json:"can_reverse_manual_buy"`
+	CanReverseSale          bool                               `json:"can_reverse_sale"`
+	CanReverseBuy           bool                               `json:"can_reverse_buy"`
+	CanCorrectSplit         bool                               `json:"can_correct_split"`
+	EffectiveSplit          *investmentCorrectionSplitTerms    `json:"effective_split,omitempty"`
+	CanCorrectDividend      bool                               `json:"can_correct_dividend"`
+	CanReverseCapitalReturn bool                               `json:"can_reverse_return_of_capital"`
+	EffectiveDividend       *investmentCorrectionDividendTerms `json:"effective_dividend,omitempty"`
+	CanCorrectReinvested    bool                               `json:"can_correct_reinvested_dividend"`
+	CanCorrectWriteOff      bool                               `json:"can_correct_write_off"`
+	CanReverseTransfer      bool                               `json:"can_reverse_transfer"`
+	CanReplaceTransfer      bool                               `json:"can_replace_transfer"`
+	EffectiveTransfer       *investmentCorrectionTransferTerms `json:"effective_transfer,omitempty"`
+	EffectiveReinvestment   *investmentCorrectionReinvestTerms `json:"effective_reinvestment,omitempty"`
+	Operations              []investmentCorrectionNodeResponse `json:"operations"`
 }
 
 type investmentTradeCorrectionChargeResponse struct {
@@ -1134,7 +1135,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanReverseManualSale: chain.CanReverseManualSale, CanReverseManualBuy: chain.CanReverseManualBuy,
 			CanReverseSale: chain.CanReverseSale, CanReverseBuy: chain.CanReverseBuy,
 			CanCorrectSplit: chain.CanCorrectSplit, EffectiveSplit: toInvestmentCorrectionSplitTerms(chain.EffectiveSplit),
-			CanCorrectDividend: chain.CanCorrectDividend, EffectiveDividend: toInvestmentCorrectionDividendTerms(chain.EffectiveDividend),
+			CanCorrectDividend: chain.CanCorrectDividend, CanReverseCapitalReturn: chain.CanReverseCapitalReturn, EffectiveDividend: toInvestmentCorrectionDividendTerms(chain.EffectiveDividend),
 			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
 			CanCorrectWriteOff: chain.CanCorrectWriteOff,
 			CanReverseTransfer: chain.CanReverseTransfer,
@@ -1834,6 +1835,10 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_BUY_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentBuyDependency):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_BUY_DEPENDENCY", err.Error())
+	case errors.Is(err, app.ErrInvestmentCapitalReturnNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "return of capital operation not found")
+	case errors.Is(err, app.ErrInvestmentCapitalReturnAlreadyCorrected), errors.Is(err, app.ErrInvestmentCapitalReturnChanged):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", err.Error())
 	case errors.Is(err, app.ErrInvestmentDividendNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment dividend operation not found")
 	case errors.Is(err, app.ErrInvestmentDividendAlreadyCorrected):

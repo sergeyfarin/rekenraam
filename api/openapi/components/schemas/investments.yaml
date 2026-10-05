@@ -1720,7 +1720,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_correct_write_off, can_reverse_transfer, can_replace_transfer, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_correct_write_off, can_reverse_transfer, can_replace_transfer, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1757,6 +1757,9 @@ InvestmentCorrectionChainResponse:
       description: Whether the effective posted internal or external-in transfer can attempt replacement (T-119); internal ones use replace-transfer, external ones replace-transfer-in.
     effective_transfer:
       $ref: '#/InvestmentCorrectionTransferTerms'
+    can_reverse_return_of_capital:
+      type: boolean
+      description: The effective operation is a return of capital that can be reversed (T-148).
     can_correct_dividend:
       type: boolean
       description: Whether the effective posted cash dividend can be reversed or replaced (T-115). Imported lineage requires a committed source identity.

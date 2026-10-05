@@ -269,3 +269,39 @@ func TestSelfCheckDetectsCapitalReturnThatDoesNotConserveItsReceipt(t *testing.T
 	assert.Equal(t, SelfCheckFailed, result.Status)
 	assert.Contains(t, result.Summary, "returns of capital do not conserve")
 }
+
+// T-148: reversing a return of capital restores the basis it reduced and
+// revises later disposals under the preview's acknowledgement.
+func TestReverseCapitalReturnRestoresBasisAndRevisesLaterSale(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-05-01", 2, 2000)
+	roc, err := f.investmentService.CapitalReturn(ctx, capitalReturnInput(f, "2026-06-01", 400))
+	require.NoError(t, err)
+	sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 1))
+	require.NoError(t, err)
+	requireScaled(t, 800, 2, saleEffectiveBasis(t, f, sold.Transaction.ID), "on the reduced basis")
+
+	input := ReverseInvestmentCapitalReturnInput{OwnerUserID: f.ownerUserID, TransactionID: roc.Transaction.ID,
+		Reason: "notice was withdrawn"}
+	_, err = f.investmentService.ReverseCapitalReturn(ctx, input)
+	require.ErrorIs(t, err, db.ErrGainImpactAcknowledgementRequired)
+	impact, err := f.investmentService.ReverseCapitalReturnReconciliationImpact(ctx, input)
+	require.NoError(t, err)
+	require.NotNil(t, impact.GainImpact)
+	input.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	inverse, err := f.investmentService.ReverseCapitalReturn(ctx, input)
+	require.NoError(t, err)
+	require.Len(t, inverse.JournalEntries, 1)
+	assert.Equal(t, "-400", inverse.JournalEntries[0].Postings[0].QuantityValue.String(), "the receipt is inverted")
+	requireScaled(t, 1000, 2, saleEffectiveBasis(t, f, sold.Transaction.ID), "the sale regains the full basis")
+	_, basis := openPositionBasis(t, f, f.holdingAccountID)
+	requireScaled(t, 1000, 2, basis, "the remaining share too")
+	chain, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, roc.Transaction.ID)
+	require.NoError(t, err)
+	assert.False(t, chain.CanReverseCapitalReturn, "not offered twice")
+	_, err = f.investmentService.ReverseCapitalReturn(ctx, input)
+	require.ErrorIs(t, err, ErrInvestmentCapitalReturnAlreadyCorrected)
+	requireInvestmentSelfCheckPasses(t, f)
+}
