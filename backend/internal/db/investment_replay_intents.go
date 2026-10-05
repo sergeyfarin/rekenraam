@@ -57,6 +57,11 @@ type InvestmentReplayIntent struct {
 	// CapitalReturnEffects are a return of capital's recorded per-lot effects
 	// (T-146); AmountValue is its receipt. Replay must reproduce them.
 	CapitalReturnEffects []CapitalReturnEffect
+	// CapitalReturnEntitledLots are an explicit_lots return of capital's
+	// entitled lots, followed to their correction-root successors (T-148);
+	// empty applies the per-share rule.
+	CapitalReturnEntitledLots       []int64
+	capitalReturnEntitlementSources []transferSourceOpening
 	// CapitalReturnIsSubject marks the return of capital a command is
 	// recording behind later depletions; replay reports its effects.
 	CapitalReturnIsSubject bool
@@ -436,6 +441,20 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		}
 		if err != nil {
 			return nil, err
+		}
+	}
+	// An explicitly entitled lot follows its acquisition's correction root,
+	// exactly as a transfer source does.
+	for index := range intents {
+		if intents[index].Kind != "capital_return" {
+			continue
+		}
+		for _, source := range intents[index].capitalReturnEntitlementSources {
+			lotID, err := effectiveSource(source)
+			if err != nil {
+				return nil, err
+			}
+			intents[index].CapitalReturnEntitledLots = append(intents[index].CapitalReturnEntitledLots, lotID)
 		}
 	}
 	sortInvestmentReplayIntents(intents)

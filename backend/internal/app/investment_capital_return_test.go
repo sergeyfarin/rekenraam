@@ -305,3 +305,61 @@ func TestReverseCapitalReturnRestoresBasisAndRevisesLaterSale(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvestmentCapitalReturnAlreadyCorrected)
 	requireInvestmentSelfCheckPasses(t, f)
 }
+
+// T-148: an explicit entitlement reduces only the lots the corporate action
+// names; others keep their basis.
+func TestExplicitEntitlementReducesOnlyNamedLots(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	first := buyOn(t, f, "2026-05-01", 2, 2000)
+	second := buyOn(t, f, "2026-05-15", 2, 4000)
+	input := capitalReturnInput(f, "2026-06-01", 400)
+	input.EntitledLotIDs = []int64{*first.LotID}
+	result, err := f.investmentService.CapitalReturn(ctx, input)
+	require.NoError(t, err)
+	require.Len(t, result.Effects, 1)
+	assert.Equal(t, *first.LotID, result.Effects[0].LotID)
+	requireScaled(t, 1600, 2, lotRemainingBasis(t, f, *first.LotID), "named lot reduced")
+	requireScaled(t, 4000, 2, lotRemainingBasis(t, f, *second.LotID), "unnamed lot untouched")
+	var rule string
+	require.NoError(t, f.database.QueryRow(`SELECT entitlement_rule FROM investment_capital_return_facts`).Scan(&rule))
+	assert.Equal(t, "explicit_lots", rule)
+	requireInvestmentSelfCheckPasses(t, f)
+}
+
+func TestExplicitEntitlementRefusesLotNotOpenOnEffectiveDate(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	buyOn(t, f, "2026-05-01", 2, 2000)
+	later := buyOn(t, f, "2026-06-15", 1, 1000)
+	input := capitalReturnInput(f, "2026-06-01", 400)
+	input.EntitledLotIDs = []int64{*later.LotID}
+	_, err := f.investmentService.CapitalReturn(context.Background(), input)
+	var validation ValidationError
+	require.ErrorAs(t, err, &validation)
+}
+
+// A named lot whose acquisition is corrected is followed to its successor,
+// and the reduction is revised on that lot.
+func TestExplicitEntitlementFollowsCorrectedAcquisition(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	first := buyOn(t, f, "2026-05-01", 1, 300)
+	buyOn(t, f, "2026-05-15", 1, 5000)
+	input := capitalReturnInput(f, "2026-06-01", 400)
+	input.EntitledLotIDs = []int64{*first.LotID}
+	_, err := f.investmentService.CapitalReturn(ctx, input)
+	require.NoError(t, err)
+	replaced, err := acknowledgedReplaceBuy(ctx, f.investmentService, replaceBuyPrice(f, first, "2026-05-01", 1, 1000))
+	require.NoError(t, err)
+	var lotID int64
+	var reduction exact.Coefficient
+	var scale int
+	require.NoError(t, f.database.QueryRow(`SELECT lot_id, reduction_value, reduction_scale
+		FROM investment_capital_return_revision_effects`).Scan(&lotID, &reduction, &scale))
+	assert.Equal(t, *replaced.Replacement.LotID, lotID, "the entitlement follows the corrected lot")
+	requireScaled(t, 400, 2, coefScaled(reduction, scale), "now fully within the corrected basis")
+	requireInvestmentSelfCheckPasses(t, f)
+}

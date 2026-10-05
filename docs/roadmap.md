@@ -111,8 +111,7 @@ below is execution order, not a chain of hard dependencies.
 
 1. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions. Shipped 2026-10-05: the
    outbound transfer with entry, bridge adjustments, backdating and correction (T-142–T-144), and the
-   first return-of-capital and cash-in-lieu commands (T-146, T-147). Remaining, in order: return of
-   capital completion [T-148 #163](https://github.com/sergeyfarin/rekenraam/issues/163), cash-in-lieu
+   first return-of-capital and cash-in-lieu commands (T-146, T-147). Return-of-capital completion T-148 shipped the same day. Remaining, in order: cash-in-lieu
    correction and entry [T-150 #165](https://github.com/sergeyfarin/rekenraam/issues/165), then unknown
    basis [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160) last: it reaches every disposal,
    pooling, replay and read path, while the actions above ship known-basis first and leave an

@@ -22485,6 +22485,8 @@ export interface components {
              * @description Cash receipt date, on or after effective_on.
              */
             payment_on: string;
+            /** @description Explicit entitlement (T-148): the lots the corporate action names, each entitled to its whole remaining quantity on the effective date. Omit to apply the per-share rule to every lot open then. A named lot that is not open in the holding on that date is refused. */
+            entitled_lot_ids?: number[];
             amount_value: string;
             amount_scale: number;
             source_evidence?: {

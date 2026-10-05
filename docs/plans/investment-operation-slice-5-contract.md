@@ -179,7 +179,13 @@ receipt, reduction + excess = allocation, event = −reduction); bundle files
 (`reverse-return-of-capital`, T-148) inverts the receipt, removes the basis
 action from effective history and replays the holding under the gain
 acknowledgement; mobile entry previews each lot's reduction and unresolved
-excess. Still open (T-148 #163): explicit lot entitlement.
+excess. Explicit entitlement (`entitled_lot_ids`, rule `explicit_lots`, API
+only) names whole lots instead of the per-share rule; each takes its full
+remaining quantity at the slot, and replay follows a named lot to its
+correction-root successor. A partial-lot entitlement would need a
+proportional basis cap and is not supported. The bundle adds
+`investment-capital-return-entitlements.csv`, `-revisions.csv` and
+`-revision-effects.csv`.
 
 Example: 10.00 EUR return of capital on one lot with 7.00 EUR remaining
 basis reduces basis to zero and records 3.00 EUR unresolved excess. The cash

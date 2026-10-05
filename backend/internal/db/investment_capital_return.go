@@ -24,6 +24,9 @@ import (
 var (
 	// ErrCapitalReturnNoHoldings means no lot is open on the effective date.
 	ErrCapitalReturnNoHoldings = errors.New("no holdings are open on the return of capital effective date")
+	// ErrCapitalReturnEntitlementUnavailable means an explicitly entitled lot
+	// is not an open lot of the position on the effective date.
+	ErrCapitalReturnEntitlementUnavailable = errors.New("an entitled lot is not open in this position on the return of capital effective date")
 )
 
 type CreateCapitalReturnParams struct {
@@ -37,6 +40,10 @@ type CreateCapitalReturnParams struct {
 	AmountValue        exact.Coefficient
 	AmountScale        int
 	SourceEvidenceJSON string
+	// EntitledLotIDs, when set, names the lots the corporate action entitles
+	// (explicit_lots, T-148); each takes its whole remaining quantity. Empty
+	// applies the per-share rule to every lot open on the effective date.
+	EntitledLotIDs []int64
 }
 
 // CapitalReturnEffect is one entitled lot's share of the receipt.
@@ -61,7 +68,11 @@ type CapitalReturnResult struct {
 // capitalReturnEffectsTx derives each entitled lot's allocation, reduction and
 // excess from the position's current projection without writing anything.
 func capitalReturnEffectsTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64,
-	effectiveOn string, amount *exact.ScaledInt) ([]CapitalReturnEffect, error) {
+	effectiveOn string, amount *exact.ScaledInt, entitledLotIDs []int64) ([]CapitalReturnEffect, error) {
+	named := make(map[int64]bool, len(entitledLotIDs))
+	for _, lotID := range entitledLotIDs {
+		named[lotID] = true
+	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, remaining_quantity_value, remaining_quantity_scale, basis_knowledge,
 			remaining_cost_basis_value, remaining_cost_basis_scale
@@ -87,7 +98,7 @@ func capitalReturnEffectsTx(ctx context.Context, tx *sql.Tx, bookID, accountID, 
 			rows.Close()
 			return nil, fmt.Errorf("scan return of capital entitled lot: %w", err)
 		}
-		if lot.effect.EntitledQuantityValue.Sign() <= 0 {
+		if lot.effect.EntitledQuantityValue.Sign() <= 0 || (len(named) > 0 && !named[lot.effect.LotID]) {
 			continue
 		}
 		// An unknown basis cannot yield a definitive reduction/excess split.
@@ -101,6 +112,9 @@ func capitalReturnEffectsTx(ctx context.Context, tx *sql.Tx, bookID, accountID, 
 	}
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return nil, fmt.Errorf("read return of capital entitled lots: %w", err)
+	}
+	if len(named) > 0 && len(lots) != len(named) {
+		return nil, ErrCapitalReturnEntitlementUnavailable
 	}
 	if len(lots) == 0 {
 		return nil, ErrCapitalReturnNoHoldings
@@ -259,7 +273,8 @@ func writeCapitalReturnTx(ctx context.Context, tx *sql.Tx, journal CreateTransac
 		intents = append(intents, InvestmentReplayIntent{Kind: "capital_return", OperationID: operationID,
 			OrderOperationID: operationID, OperationKind: "return_of_capital", EventDate: params.EffectiveOn,
 			EffectSeq: 1, AmountValue: params.AmountValue, AmountScale: params.AmountScale,
-			CapitalReturnIsSubject: true, TransactionID: transaction.ID, AuditEventID: auditEventID,
+			CapitalReturnIsSubject: true, CapitalReturnEntitledLots: params.EntitledLotIDs,
+			TransactionID: transaction.ID, AuditEventID: auditEventID,
 			CreatedByUserID: journal.ActorUserID, CreatedAt: journal.CreatedAt})
 		projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
 			params.CostCommodityID, intents)
@@ -268,7 +283,7 @@ func writeCapitalReturnTx(ctx context.Context, tx *sql.Tx, journal CreateTransac
 		}
 		effects = projection.SubjectCapitalReturn
 	} else if effects, err = capitalReturnEffectsTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
-		params.CostCommodityID, params.EffectiveOn, amount); err != nil {
+		params.CostCommodityID, params.EffectiveOn, amount, params.EntitledLotIDs); err != nil {
 		return CapitalReturnResult{}, err
 	}
 	if len(effects) == 0 {
@@ -278,11 +293,25 @@ func writeCapitalReturnTx(ctx context.Context, tx *sql.Tx, journal CreateTransac
 		(operation_id, book_id, account_id, commodity_id, cost_commodity_id, cash_account_id,
 		 effective_on, payment_on, amount_value, amount_scale, entitlement_rule, source_evidence_json,
 		 created_audit_event_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open_lots_per_share', ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		operationID, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID,
 		params.CashAccountID, params.EffectiveOn, params.PaymentOn, params.AmountValue, params.AmountScale,
-		params.SourceEvidenceJSON, auditEventID); err != nil {
+		capitalReturnEntitlementRule(params.EntitledLotIDs), params.SourceEvidenceJSON, auditEventID); err != nil {
 		return CapitalReturnResult{}, fmt.Errorf("record return of capital fact: %w", err)
+	}
+	if len(params.EntitledLotIDs) > 0 {
+		quantities := make(map[int64]CapitalReturnEffect, len(effects))
+		for _, effect := range effects {
+			quantities[effect.LotID] = effect
+		}
+		for index, lotID := range params.EntitledLotIDs {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_capital_return_entitlements
+				(operation_id, entitlement_seq, book_id, lot_id, quantity_value, quantity_scale)
+				VALUES (?, ?, ?, ?, ?, ?)`, operationID, index+1, params.BookID, lotID,
+				quantities[lotID].EntitledQuantityValue, quantities[lotID].EntitledQuantityScale); err != nil {
+				return CapitalReturnResult{}, fmt.Errorf("record return of capital entitlement: %w", err)
+			}
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_dates (operation_id, date_role, event_date)
 		VALUES (?, 'effective', ?)`, operationID, params.EffectiveOn); err != nil {
@@ -348,7 +377,8 @@ func writeCapitalReturnTx(ctx context.Context, tx *sql.Tx, journal CreateTransac
 func capitalReturnIntentsQuery(ctx context.Context, reader queryer, bookID, accountID, commodityID, costCommodityID int64) ([]InvestmentReplayIntent, error) {
 	rows, err := reader.QueryContext(ctx, `
 		SELECT f.operation_id, o.operation_kind, f.effective_on, f.amount_value, f.amount_scale,
-			ev.transaction_id, ev.created_audit_event_id, ev.created_by_user_id, ev.created_at
+			ev.transaction_id, ev.created_audit_event_id, ev.created_by_user_id, ev.created_at,
+			f.entitlement_rule = 'explicit_lots'
 		FROM investment_capital_return_facts f
 		JOIN effective_investment_operations o ON o.id = f.operation_id
 		JOIN investment_capital_return_effects first ON first.operation_id = f.operation_id AND first.effect_seq = 1
@@ -359,20 +389,29 @@ func capitalReturnIntentsQuery(ctx context.Context, reader queryer, bookID, acco
 		return nil, fmt.Errorf("read replay returns of capital: %w", err)
 	}
 	var intents []InvestmentReplayIntent
+	var explicit []bool
 	for rows.Next() {
 		intent := InvestmentReplayIntent{Kind: "capital_return", EffectSeq: 1}
+		var isExplicit bool
 		if err := rows.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
 			&intent.AmountValue, &intent.AmountScale, &intent.TransactionID, &intent.AuditEventID,
-			&intent.CreatedByUserID, &intent.CreatedAt); err != nil {
+			&intent.CreatedByUserID, &intent.CreatedAt, &isExplicit); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan replay return of capital: %w", err)
 		}
 		intents = append(intents, intent)
+		explicit = append(explicit, isExplicit)
 	}
 	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
 		return nil, fmt.Errorf("read replay returns of capital: %w", err)
 	}
 	for index := range intents {
+		if explicit[index] {
+			if intents[index].capitalReturnEntitlementSources, err = capitalReturnEntitlementsQuery(ctx, reader,
+				intents[index].OperationID); err != nil {
+				return nil, err
+			}
+		}
 		effects, _, err := effectiveCapitalReturnEffectsQuery(ctx, reader, intents[index].OperationID)
 		if err != nil {
 			return nil, err
@@ -593,4 +632,36 @@ func (r *InvestmentRepository) reverseCapitalReturn(ctx context.Context, params 
 		transaction, _, err = executeInvestmentWriteWithGuardTx(ctx, r.database, params, guard, effect, nil)
 	}
 	return transaction, err
+}
+
+func capitalReturnEntitlementRule(entitledLotIDs []int64) string {
+	if len(entitledLotIDs) > 0 {
+		return "explicit_lots"
+	}
+	return "open_lots_per_share"
+}
+
+// capitalReturnEntitlementsQuery reads the lots an explicit_lots return of
+// capital names, with the opening each came from, so replay can follow a
+// corrected acquisition to its successor lot.
+func capitalReturnEntitlementsQuery(ctx context.Context, reader queryer, operationID int64) ([]transferSourceOpening, error) {
+	rows, err := reader.QueryContext(ctx, `SELECT e.lot_id, COALESCE(l.operation_id, 0), l.opened_on
+		FROM investment_capital_return_entitlements e JOIN investment_lots l ON l.id = e.lot_id
+		WHERE e.operation_id = ? ORDER BY e.entitlement_seq`, operationID)
+	if err != nil {
+		return nil, fmt.Errorf("read return of capital entitlements: %w", err)
+	}
+	defer rows.Close()
+	var sources []transferSourceOpening
+	for rows.Next() {
+		var source transferSourceOpening
+		if err := rows.Scan(&source.lotID, &source.operationID, &source.openedOn); err != nil {
+			return nil, fmt.Errorf("scan return of capital entitlement: %w", err)
+		}
+		sources = append(sources, source)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate return of capital entitlements: %w", err)
+	}
+	return sources, nil
 }

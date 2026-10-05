@@ -1094,6 +1094,15 @@ CapitalReturnRequest:
       type: string
       format: date
       description: Cash receipt date, on or after effective_on.
+    entitled_lot_ids:
+      type: array
+      items:
+        type: integer
+        format: int64
+      description: >-
+        Explicit entitlement (T-148): the lots the corporate action names, each entitled to its whole remaining
+        quantity on the effective date. Omit to apply the per-share rule to every lot open then. A named lot that
+        is not open in the holding on that date is refused.
     amount_value:
       type: string
       pattern: '^[1-9][0-9]{0,37}$'

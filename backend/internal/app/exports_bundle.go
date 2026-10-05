@@ -234,6 +234,15 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		{"investment-capital-return-effects.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "capital-return-effects", []string{"operation_id", "effect_seq", "lot_id", "lot_event_id", "entitled_quantity_value", "entitled_quantity_scale", "allocated_value", "allocated_scale", "reduction_value", "reduction_scale", "excess_value", "excess_scale"})
 		}},
+		{"investment-capital-return-entitlements.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "capital-return-entitlements", []string{"operation_id", "entitlement_seq", "lot_id", "quantity_value", "quantity_scale"})
+		}},
+		{"investment-capital-return-revisions.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "capital-return-revisions", []string{"revision_id", "operation_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "created_at", "audit_event_id"})
+		}},
+		{"investment-capital-return-revision-effects.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "capital-return-revision-effects", []string{"revision_id", "effect_seq", "lot_id", "entitled_quantity_value", "entitled_quantity_scale", "allocated_value", "allocated_scale", "reduction_value", "reduction_scale", "excess_value", "excess_scale"})
+		}},
 		{"investment-fee-policies.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "fee-policies", []string{"policy_id", "account_id", "charge_kind", "created_at", "audit_event_id"})
 		}},
@@ -910,6 +919,9 @@ value in this archive was ever a floating-point number.`,
   investment-cash-in-lieu-facts.csv  cash-in-lieu disposals and the split each settles, with payment dates
   investment-capital-return-facts.csv  returns of capital: receipt, payment and effective dates, entitlement rule
   investment-capital-return-effects.csv  per-lot allocated receipt, basis reduction and unresolved excess
+  investment-capital-return-entitlements.csv  lots an explicit entitlement names, with quantities held at commit
+  investment-capital-return-revisions.csv  replay revisions of return-of-capital effects
+  investment-capital-return-revision-effects.csv  per-lot effects of those revisions
   investment-fee-policies.csv  book and account charge policy identities
   investment-fee-policy-versions.csv  dated, immutable charge policy versions
   import-identities.csv  committed source-row fingerprints and provenance

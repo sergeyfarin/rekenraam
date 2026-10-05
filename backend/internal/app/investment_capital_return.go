@@ -33,6 +33,9 @@ type CapitalReturnInput struct {
 	ChangeReason              string
 	ReconciliationOverride    bool
 	GainImpactAcknowledgement string
+	// EntitledLotIDs names the lots the corporate action entitles; each takes
+	// its whole remaining quantity. Empty applies the per-share rule (T-148).
+	EntitledLotIDs []int64
 }
 
 type CapitalReturnEffect struct {
@@ -77,6 +80,13 @@ func (s *InvestmentService) capitalReturnWrite(ctx context.Context, input Capita
 	}
 	if input.CurrencyID <= 0 || input.CommodityID <= 0 {
 		return db.CreateTransactionParams{}, db.CreateCapitalReturnParams{}, ValidationError{Message: "security and currency are required"}
+	}
+	seen := make(map[int64]bool, len(input.EntitledLotIDs))
+	for _, lotID := range input.EntitledLotIDs {
+		if lotID <= 0 || seen[lotID] {
+			return db.CreateTransactionParams{}, db.CreateCapitalReturnParams{}, ValidationError{Message: "entitled lots must be distinct lot ids"}
+		}
+		seen[lotID] = true
 	}
 	dependencies := newAccountRuleDependencies()
 	if _, err := s.accountInRole(ctx, input.HoldingAccountID, effective, holdingRole, dependencies); err != nil {
@@ -130,7 +140,7 @@ func (s *InvestmentService) capitalReturnWrite(ctx context.Context, input Capita
 		BookID: BookID, AccountID: input.HoldingAccountID, CommodityID: input.CommodityID,
 		CostCommodityID: input.CurrencyID, CashAccountID: input.CashAccountID,
 		EffectiveOn: effective, PaymentOn: payment, AmountValue: input.AmountValue, AmountScale: input.AmountScale,
-		SourceEvidenceJSON: evidence,
+		SourceEvidenceJSON: evidence, EntitledLotIDs: input.EntitledLotIDs,
 	}, nil
 }
 
@@ -185,6 +195,8 @@ func mapCapitalReturnError(err error) error {
 	switch {
 	case errors.Is(err, db.ErrCapitalReturnNoHoldings):
 		return ErrCapitalReturnNoHoldings
+	case errors.Is(err, db.ErrCapitalReturnEntitlementUnavailable):
+		return ValidationError{Message: "an entitled lot is not open in this holding on the effective date"}
 	case errors.Is(err, db.ErrUnknownInvestmentBasis):
 		return ValidationError{Message: "a holding with unresolved basis cannot take a return of capital yet"}
 	case errors.Is(err, db.ErrOutOfOrderPositionEvent),

@@ -23,6 +23,7 @@ type capitalReturnRequest struct {
 	ChangeReason              string            `json:"change_reason"`
 	ReconciliationOverride    bool              `json:"reconciliation_override"`
 	GainImpactAcknowledgement string            `json:"gain_impact_acknowledgement,omitempty"`
+	EntitledLotIDs            []int64           `json:"entitled_lot_ids,omitempty"`
 }
 
 type capitalReturnEffectResponse struct {
@@ -61,6 +62,7 @@ func capitalReturnInput(owner app.Owner, r *http.Request, request capitalReturnR
 		SourceEvidenceJSON: evidence, Memo: request.Memo, ChangeReason: request.ChangeReason,
 		ReconciliationOverride:    request.ReconciliationOverride,
 		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+		EntitledLotIDs:            request.EntitledLotIDs,
 	}
 }
 

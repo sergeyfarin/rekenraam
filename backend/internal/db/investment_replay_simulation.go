@@ -355,7 +355,8 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		// revised (T-148). A slot with no entitled lot, or an unknown basis,
 		// cannot express the receipt and names the operation.
 		effects, err := capitalReturnEffectsTx(ctx, tx, bookID, accountID, commodityID, costCommodityID,
-			intent.EventDate, exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale))
+			intent.EventDate, exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale),
+			intent.CapitalReturnEntitledLots)
 		if err == nil {
 			switch {
 			case intent.CapitalReturnIsSubject:

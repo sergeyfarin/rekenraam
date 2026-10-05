@@ -78,6 +78,15 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 			f.cash_account_id, f.effective_on, f.payment_on, f.amount_value, f.amount_scale, f.entitlement_rule,
 			f.source_evidence_json, f.created_audit_event_id
 			FROM investment_capital_return_facts f WHERE f.book_id = ? ORDER BY f.operation_id`,
+		"capital-return-entitlements": `SELECT e.operation_id, e.entitlement_seq, e.lot_id, e.quantity_value, e.quantity_scale
+			FROM investment_capital_return_entitlements e WHERE e.book_id = ? ORDER BY e.operation_id, e.entitlement_seq`,
+		"capital-return-revisions": `SELECT r.id, r.operation_id, r.revision_seq, r.caused_by_operation_id,
+			r.supersedes_revision_id, r.created_at, r.created_audit_event_id
+			FROM investment_capital_return_revisions r WHERE r.book_id = ? ORDER BY r.operation_id, r.revision_seq`,
+		"capital-return-revision-effects": `SELECT e.revision_id, e.effect_seq, e.lot_id,
+			e.entitled_quantity_value, e.entitled_quantity_scale, e.allocated_value, e.allocated_scale,
+			e.reduction_value, e.reduction_scale, e.excess_value, e.excess_scale
+			FROM investment_capital_return_revision_effects e WHERE e.book_id = ? ORDER BY e.revision_id, e.effect_seq`,
 		"capital-return-effects": `SELECT e.operation_id, e.effect_seq, e.lot_id, e.lot_event_id,
 			e.entitled_quantity_value, e.entitled_quantity_scale, e.allocated_value, e.allocated_scale,
 			e.reduction_value, e.reduction_scale, e.excess_value, e.excess_scale

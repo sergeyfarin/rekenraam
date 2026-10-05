@@ -1986,7 +1986,9 @@ CREATE TABLE IF NOT EXISTS investment_capital_return_facts (
   amount_value TEXT NOT NULL CHECK (length(amount_value) BETWEEN 1 AND 38
     AND amount_value NOT GLOB '*[^0-9]*' AND substr(amount_value, 1, 1) BETWEEN '1' AND '9'),
   amount_scale INTEGER NOT NULL CHECK (amount_scale BETWEEN 0 AND 12),
-  entitlement_rule TEXT NOT NULL CHECK (entitlement_rule IN ('open_lots_per_share')),
+  -- open_lots_per_share: every lot open on the effective date; explicit_lots:
+  -- the lot/quantity set the corporate action names (T-148).
+  entitlement_rule TEXT NOT NULL CHECK (entitlement_rule IN ('open_lots_per_share', 'explicit_lots')),
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
   CHECK (effective_on <= payment_on)
@@ -2010,6 +2012,43 @@ CREATE TABLE IF NOT EXISTS investment_capital_return_effects (
   PRIMARY KEY (operation_id, effect_seq),
   UNIQUE (operation_id, lot_id)
 );
+
+-- The lots and quantities an explicit_lots return of capital names. Replay
+-- follows a named lot to its correction-root successor, as a specific-lot
+-- election does.
+CREATE TABLE IF NOT EXISTS investment_capital_return_entitlements (
+  operation_id INTEGER NOT NULL REFERENCES investment_capital_return_facts(operation_id) ON DELETE RESTRICT,
+  entitlement_seq INTEGER NOT NULL CHECK (entitlement_seq > 0),
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38
+    AND quantity_value NOT GLOB '*[^0-9]*' AND substr(quantity_value, 1, 1) BETWEEN '1' AND '9'),
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
+  PRIMARY KEY (operation_id, entitlement_seq),
+  UNIQUE (operation_id, lot_id)
+);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_entitlements_valid
+BEFORE INSERT ON investment_capital_return_entitlements
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_capital_return_facts f JOIN investment_lots l ON l.id = NEW.lot_id
+  WHERE f.operation_id = NEW.operation_id AND f.book_id = NEW.book_id AND f.entitlement_rule = 'explicit_lots'
+    AND l.book_id = f.book_id AND l.account_id = f.account_id AND l.commodity_id = f.commodity_id
+    AND l.cost_commodity_id = f.cost_commodity_id AND l.position_side = 'long' AND l.opened_on <= f.effective_on
+)
+BEGIN SELECT RAISE(ABORT, 'investment capital return entitlement is outside its operation or lot'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_entitlements_no_update
+BEFORE UPDATE ON investment_capital_return_entitlements
+BEGIN SELECT RAISE(ABORT, 'investment capital return entitlements are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_entitlements_no_delete
+BEFORE DELETE ON investment_capital_return_entitlements
+BEGIN SELECT RAISE(ABORT, 'investment capital return entitlements are immutable'); END;
+-- +goose StatementEnd
 
 -- History that changes a return of capital's entitled lots, allocations,
 -- reductions or excess appends a revision of the whole effect set (T-148);
@@ -4176,6 +4215,10 @@ DROP TRIGGER IF EXISTS investment_capital_return_revisions_no_update;
 DROP TRIGGER IF EXISTS investment_capital_return_revision_effects_valid;
 DROP TRIGGER IF EXISTS investment_capital_return_revisions_valid;
 DROP VIEW IF EXISTS latest_investment_capital_return_revisions;
+DROP TRIGGER IF EXISTS investment_capital_return_entitlements_no_delete;
+DROP TRIGGER IF EXISTS investment_capital_return_entitlements_no_update;
+DROP TRIGGER IF EXISTS investment_capital_return_entitlements_valid;
+DROP TABLE IF EXISTS investment_capital_return_entitlements;
 DROP TABLE IF EXISTS investment_capital_return_revision_effects;
 DROP TABLE IF EXISTS investment_capital_return_revisions;
 DROP TABLE IF EXISTS investment_capital_return_effects;
