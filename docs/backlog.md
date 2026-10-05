@@ -52,6 +52,12 @@ GitHub numbers are distinct; cite both.
 | T-139 | [#154 — Recheck import batch status inside the split-link writer](https://github.com/sergeyfarin/rekenraam/issues/154) |
 | T-140 | [#155 — Unbounded-depth transfer basis propagation](https://github.com/sergeyfarin/rekenraam/issues/155) |
 | T-141 | [#156 — R16 completion bar, TypeScript policy and closure notes](https://github.com/sergeyfarin/rekenraam/issues/156) |
+| T-142 | [#157 — Mobile entry for outbound in-kind transfers](https://github.com/sergeyfarin/rekenraam/issues/157) |
+| T-143 | [#158 — Outbound transfer bridge adjustments and backdated admission](https://github.com/sergeyfarin/rekenraam/issues/158) |
+| T-144 | [#159 — Correct and reverse outbound transfers](https://github.com/sergeyfarin/rekenraam/issues/159) |
+| T-145 | [#160 — Unknown-basis transfers and sourced resolution](https://github.com/sergeyfarin/rekenraam/issues/160) |
+| T-146 | [#161 — Return of capital](https://github.com/sergeyfarin/rekenraam/issues/161) |
+| T-147 | [#162 — Cash in lieu](https://github.com/sergeyfarin/rekenraam/issues/162) |
 
 IDs not listed here were closed before the GitHub migration; see the
 [pre-migration snapshot](reviews/open-backlog-before-github-2026-09-27.md)

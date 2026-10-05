@@ -109,8 +109,14 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions (outbound/unknown-basis transfers,
-   return of capital, cash in lieu).
+1. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions, in this order (the outbound
+   transfer API shipped 2026-10-05): outbound entry UI
+   [T-142 #157](https://github.com/sergeyfarin/rekenraam/issues/157), bridge adjustments and backdated outbound
+   admission [T-143 #158](https://github.com/sergeyfarin/rekenraam/issues/158), outbound correction
+   [T-144 #159](https://github.com/sergeyfarin/rekenraam/issues/159), unknown basis
+   [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160), return of capital
+   [T-146 #161](https://github.com/sergeyfarin/rekenraam/issues/161), cash in lieu
+   [T-147 #162](https://github.com/sergeyfarin/rekenraam/issues/162).
 
 **Next, in order**
 
