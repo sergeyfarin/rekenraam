@@ -21,6 +21,10 @@ export type InternalTransferRequest = components['schemas']['InternalTransferReq
 export type InternalTransferResponse = components['schemas']['InternalTransferResponse'];
 export type InternalTransferPreviewResponse = components['schemas']['InternalTransferPreviewResponse'];
 export type InternalTransferPlan = components['schemas']['InternalTransferPlan'];
+export type ExternalTransferOutRequest = components['schemas']['ExternalTransferOutRequest'];
+export type ExternalTransferOutResponse = components['schemas']['ExternalTransferOutResponse'];
+export type ExternalTransferOutPreviewResponse = components['schemas']['ExternalTransferOutPreviewResponse'];
+export type ExternalTransferOutPlan = components['schemas']['ExternalTransferOutPlan'];
 export type InvestmentSplitRequest = components['schemas']['InvestmentSplitRequest'];
 export type InvestmentSplitPlan = components['schemas']['InvestmentSplitPlan'];
 export type InvestmentSplitPreviewResponse = components['schemas']['InvestmentSplitPreviewResponse'];
@@ -282,6 +286,40 @@ export async function recordInternalTransfer(
 ): Promise<InternalTransferResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/transfers/internal', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+/** Runs the complete outbound writer and rolls back: basis carried out plus impact. */
+export async function previewExternalTransferOut(
+  input: ExternalTransferOutRequest
+): Promise<ExternalTransferOutPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transfers/external/out/preview',
+      { body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordExternalTransferOut(
+  input: ExternalTransferOutRequest,
+  csrfToken: string
+): Promise<ExternalTransferOutResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/transfers/external/out', {
       params: { header: { 'X-CSRF-Token': csrfToken } },
       body: input
     });

@@ -118,9 +118,10 @@ adjustments ship, a history change that would change `b` or the lots it
 takes refuses with the transfer named, and an outbound transfer dated
 behind a later depletion is refused (`INVESTMENT_EVENT_OUT_OF_ORDER`).
 Self-check verifies the links against the depletions and that each bridge
-posts exactly the links' carried basis per cost currency. Still open: entry
-UI, correction/reversal, bridge adjustments under replay and backdated
-admission, and unknown basis.
+posts exactly the links' carried basis per cost currency. Mobile entry
+shipped as T-142 #157. Still open: correction/reversal (T-144 #159), bridge
+adjustments under replay and backdated admission (T-143 #158), and unknown
+basis (T-145 #160).
 
 Example: transfer 2 shares carrying 80.00 EUR into the book. Post security
 `H +2`, `T −2` and EUR `T +80.00`, `E −80.00`. A later full sale for 100.00
