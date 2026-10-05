@@ -785,6 +785,8 @@
   "transactions_investment_reverse_transfer_title": "Annuler ce transfert",
   "transactions_investment_reverse_transfer_copy": "Passe l’écriture inverse exacte. Les titres retournent à leur origine, les lots ouverts par ce transfert sont clôturés et les ventes ultérieures sur les deux comptes sont recalculées. L’original reste dans l’historique d’audit.",
   "transactions_investment_replace_transfer_action": "Corriger le transfert…",
+  "transactions_investment_replace_transfer_out_title": "Corriger ce transfert sortant",
+  "transactions_investment_replace_transfer_out_copy": "Comptabilise ensemble l’inverse exact, y compris le prix de revient sorti, et le transfert corrigé. La position est diminuée à la date du transfert, les ventes ultérieures sont recalculées et l’original reste dans l’historique d’audit.",
   "transactions_investment_replace_transfer_title": "Corriger ce transfert",
   "transactions_investment_replace_transfer_copy": "Passe ensemble l’écriture inverse exacte et le transfert corrigé. La source est débitée à la date du transfert, les deux comptes et les ventes ultérieures sont recalculés, et l’original reste dans l’historique d’audit.",
   "transactions_investment_replace_transfer_in_copy": "Passe ensemble l’écriture inverse exacte et le transfert corrigé : l’écart de la contrepartie d’ouverture est ajouté plutôt qu’écrasé. Le compte et les ventes ultérieures sont recalculés, et l’original reste dans l’historique d’audit.",

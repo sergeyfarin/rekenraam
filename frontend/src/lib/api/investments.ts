@@ -25,6 +25,8 @@ export type ExternalTransferOutRequest = components['schemas']['ExternalTransfer
 export type ExternalTransferOutResponse = components['schemas']['ExternalTransferOutResponse'];
 export type ExternalTransferOutPreviewResponse = components['schemas']['ExternalTransferOutPreviewResponse'];
 export type ExternalTransferOutPlan = components['schemas']['ExternalTransferOutPlan'];
+export type InvestmentTransferOutReplacementRequest = components['schemas']['InvestmentTransferOutReplacementRequest'];
+export type InvestmentTransferOutReplacementResponse = components['schemas']['InvestmentTransferOutReplacementResponse'];
 export type InvestmentSplitRequest = components['schemas']['InvestmentSplitRequest'];
 export type InvestmentSplitPlan = components['schemas']['InvestmentSplitPlan'];
 export type InvestmentSplitPreviewResponse = components['schemas']['InvestmentSplitPreviewResponse'];
@@ -1201,6 +1203,34 @@ export async function replaceTransfer(transactionID: number, input: InvestmentTr
   try {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/investments/transactions/{transaction_id}/replace-transfer',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewTransferOutReplacement(transactionID: number, input: InvestmentTransferOutReplacementRequest): Promise<ExternalTransferOutPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-transfer-out/preview',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceTransferOut(transactionID: number, input: InvestmentTransferOutReplacementRequest, csrfToken: string): Promise<InvestmentTransferOutReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-transfer-out',
       { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
     );
     if (data !== undefined) return data;

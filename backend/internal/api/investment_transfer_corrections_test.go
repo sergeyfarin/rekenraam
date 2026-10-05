@@ -113,7 +113,8 @@ func TestReplaceInternalTransferAPIPreviewMatchesCommit(t *testing.T) {
 	require.True(t, chain.CanReplaceTransfer)
 	require.NotNil(t, chain.EffectiveTransfer)
 	require.Equal(t, "2026-02-01", chain.EffectiveTransfer.EffectiveOn)
-	require.Equal(t, wrong.ID, chain.EffectiveTransfer.DestinationAccountID)
+	require.NotNil(t, chain.EffectiveTransfer.DestinationAccountID)
+	require.Equal(t, wrong.ID, *chain.EffectiveTransfer.DestinationAccountID)
 	require.Equal(t, "selected_lots", chain.EffectiveTransfer.BasisAllocation)
 	require.Len(t, chain.EffectiveTransfer.LotAllocations, 1)
 	require.Equal(t, *bought.LotID, chain.EffectiveTransfer.LotAllocations[0].LotID)
@@ -143,7 +144,8 @@ func TestReplaceInternalTransferAPIPreviewMatchesCommit(t *testing.T) {
 	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
 	require.True(t, chain.CanReverseTransfer)
 	require.True(t, chain.CanReplaceTransfer)
-	require.Equal(t, right.ID, chain.EffectiveTransfer.DestinationAccountID)
+	require.NotNil(t, chain.EffectiveTransfer.DestinationAccountID)
+	require.Equal(t, right.ID, *chain.EffectiveTransfer.DestinationAccountID)
 }
 
 // T-119: external transfer-in replacement over HTTP, pre-filled from the

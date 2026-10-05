@@ -2574,7 +2574,7 @@ type investmentCorrectionTransferTerms struct {
 	TransferKind         string                           `json:"transfer_kind"`
 	EffectiveOn          string                           `json:"effective_on"`
 	SourceAccountID      *int64                           `json:"source_account_id"`
-	DestinationAccountID int64                            `json:"destination_account_id"`
+	DestinationAccountID *int64                           `json:"destination_account_id"`
 	CommodityID          int64                            `json:"commodity_id"`
 	CostCommodityID      int64                            `json:"cost_commodity_id"`
 	BasisAllocation      string                           `json:"basis_allocation"`
@@ -2594,7 +2594,7 @@ func toInvestmentCorrectionTransferTerms(terms *app.InvestmentCorrectionTransfer
 		return nil
 	}
 	out := &investmentCorrectionTransferTerms{TransferKind: terms.TransferKind, EffectiveOn: terms.EffectiveOn,
-		DestinationAccountID: terms.DestinationAccountID, CommodityID: terms.CommodityID,
+		CommodityID:     terms.CommodityID,
 		CostCommodityID: terms.CostCommodityID, BasisAllocation: terms.BasisAllocation,
 		DestinationLineage: terms.DestinationLineage, Memo: terms.Memo,
 		LotAllocations: make([]investmentLotAllocationRequest, 0, len(terms.Allocations)),
@@ -2610,6 +2610,10 @@ func toInvestmentCorrectionTransferTerms(terms *app.InvestmentCorrectionTransfer
 	if terms.SourceAccountID > 0 {
 		id := terms.SourceAccountID
 		out.SourceAccountID = &id
+	}
+	if terms.DestinationAccountID > 0 {
+		id := terms.DestinationAccountID
+		out.DestinationAccountID = &id
 	}
 	if terms.TransferKind == "external_in" {
 		value, scale := terms.CarriedBasisValue, terms.CarriedBasisScale

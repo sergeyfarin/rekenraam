@@ -345,6 +345,10 @@ paths:
     $ref: "./paths/investments-replace-transfer.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-transfer/preview:
     $ref: "./paths/investments-replace-transfer-preview.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-transfer-out:
+    $ref: "./paths/investments-replace-transfer-out.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-transfer-out/preview:
+    $ref: "./paths/investments-replace-transfer-out-preview.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-transfer-in:
     $ref: "./paths/investments-replace-transfer-in.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-transfer-in/reconciliation-impact:
@@ -1060,6 +1064,10 @@ components:
       $ref: "./components/schemas/investments.yaml#/InternalTransferPlan"
     InternalTransferPreviewResponse:
       $ref: "./components/schemas/investments.yaml#/InternalTransferPreviewResponse"
+    InvestmentTransferOutReplacementRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTransferOutReplacementRequest"
+    InvestmentTransferOutReplacementResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentTransferOutReplacementResponse"
     InvestmentTransferInReplacementRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentTransferInReplacementRequest"
     InvestmentTransferInReplacementResponse:

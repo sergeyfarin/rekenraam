@@ -203,7 +203,8 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 		if correctable && record.OperationKind == "write_off" {
 			chain.CanCorrectWriteOff = true
 		}
-		if correctable && (record.OperationKind == "internal_transfer" || record.OperationKind == "external_transfer_in") {
+		if correctable && (record.OperationKind == "internal_transfer" || record.OperationKind == "external_transfer_in" ||
+			record.OperationKind == "external_transfer_out") {
 			chain.CanReverseTransfer = true
 			chain.CanReplaceTransfer = true
 			if chain.CanReplaceTransfer {

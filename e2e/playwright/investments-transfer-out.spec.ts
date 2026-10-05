@@ -72,3 +72,47 @@ test('part of a lot transfers out of the book with its computed cost basis on mo
   await page.goto('/app/transactions');
   await expect(page.getByText('Cost basis transferred out').first()).toBeVisible();
 });
+
+// T-144: an outbound transfer is corrected, then the correction is reversed,
+// from the transaction detail on a phone.
+test('an outbound transfer is corrected and then reversed on mobile', async ({ page }) => {
+  const { csrfToken } = await readyForLedger(page);
+  const s = await setup(page);
+  const positions = await apiJSON<{ positions: Array<{ account_id: number; cost_commodity_id: number }> }>(
+    page, 'GET', '/api/v1/investments/positions');
+  const costID = positions.positions.find((position) => position.account_id === s.holdingID)!.cost_commodity_id;
+  const lots = await apiJSON<{ lots: Array<{ id: number }> }>(page, 'GET',
+    `/api/v1/investments/lots?account_id=${s.holdingID}&commodity_id=${s.commodityID}`);
+  const out = await apiJSON<{ transaction: { id: number } }>(page, 'POST', '/api/v1/investments/transfers/external/out', csrfToken, {
+    effective_on: daysFromTodayISO(-10), source_account_id: s.holdingID, commodity_id: s.commodityID,
+    cost_commodity_id: costID, lot_allocations: [{ lot_id: lots.lots[0].id, quantity_value: '2', quantity_scale: 0 }]
+  });
+  const held = async () => {
+    const result = await apiJSON<{ positions: Array<{ account_id: number; commodity_id: number; quantity_value: string }> }>(
+      page, 'GET', '/api/v1/investments/positions');
+    return result.positions.find((position) =>
+      position.account_id === s.holdingID && position.commodity_id === s.commodityID)?.quantity_value ?? '0';
+  };
+
+  await page.goto(`/app/transactions?transaction_id=${out.transaction.id}`);
+  await page.getByRole('button', { name: 'Correct transfer…' }).click();
+  const form = page.getByRole('dialog', { name: 'Correct this transfer out' });
+  await expect(form.getByLabel('Destination holding account')).toHaveCount(0);
+  const lot = form.getByLabel(/^Lot #/);
+  await expect(lot).toHaveValue('2');
+  await form.getByLabel('Reason for correction').fill('only one share left');
+  await lot.fill('1');
+  await form.getByRole('button', { name: 'Review and replace' }).click();
+  await expect(form).toBeHidden();
+  await expect.poll(held).toBe('2');
+
+  const chain = await apiJSON<{ effective_transaction_id: number }>(page, 'GET',
+    `/api/v1/investments/transactions/${out.transaction.id}/correction-chain`);
+  await page.goto(`/app/transactions?transaction_id=${chain.effective_transaction_id}`);
+  await page.getByRole('button', { name: 'Reverse transfer…' }).click();
+  const dialog = page.getByRole('alertdialog');
+  await dialog.getByLabel('Reason for reversal').fill('the transfer was cancelled');
+  await dialog.getByRole('button', { name: 'Review and reverse' }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(held).toBe('3');
+});

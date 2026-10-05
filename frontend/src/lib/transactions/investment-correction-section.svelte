@@ -429,7 +429,8 @@
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
     role="presentation">
     <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
-      role="dialog" aria-modal="true" aria-label={m.transactions_investment_replace_transfer_title()}>
+      role="dialog" aria-modal="true" aria-label={chainQuery.data.effective_transfer.transfer_kind === 'external_out'
+        ? m.transactions_investment_replace_transfer_out_title() : m.transactions_investment_replace_transfer_title()}>
       {#if chainQuery.data.effective_transfer.transfer_kind === 'external_in'}
         <TransferInCorrectionForm {csrfToken} {transactionID} transfer={chainQuery.data.effective_transfer}
           onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />

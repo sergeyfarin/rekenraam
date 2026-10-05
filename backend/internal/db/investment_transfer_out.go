@@ -82,12 +82,16 @@ func (r *InvestmentRepository) createExternalTransferOut(ctx context.Context, jo
 	}
 	return write(ctx, r.database, journal,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (ExternalTransferOutResult, error) {
-			return writeExternalTransferOutTx(ctx, tx, journal, transfer, transaction, auditEventID)
+			return writeExternalTransferOutTx(ctx, tx, journal, transfer, transaction, auditEventID, 0)
 		}, nil)
 }
 
+// writeExternalTransferOutTx records an outbound transfer for a journal the
+// enclosing writer just posted. A replacement passes the replaced transfer as
+// slotOperationID: its depletion then always comes from replay at that slot,
+// and the caller replays every position either transfer touched (T-144).
 func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateTransactionParams,
-	transfer CreateExternalTransferOutParams, transaction TransactionRecord, auditEventID int64,
+	transfer CreateExternalTransferOutParams, transaction TransactionRecord, auditEventID, slotOperationID int64,
 ) (ExternalTransferOutResult, error) {
 	if transfer.BookID <= 0 || transfer.SourceAccountID <= 0 || transfer.CostCommodityID <= 0 ||
 		(len(transfer.Allocations) == 0) != (transfer.PooledQuantityValue.Sign() > 0) {
@@ -100,7 +104,8 @@ func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateT
 	if err != nil {
 		return ExternalTransferOutResult{}, err
 	}
-	backdated := latest != "" && transfer.EffectiveOn < latest
+	correcting := slotOperationID > 0
+	backdated := correcting || (latest != "" && transfer.EffectiveOn < latest)
 	asInternal := CreateInternalTransferParams{
 		BookID: transfer.BookID, SourceAccountID: transfer.SourceAccountID, CommodityID: transfer.CommodityID,
 		CostCommodityID: transfer.CostCommodityID, EffectiveOn: transfer.EffectiveOn, Allocations: transfer.Allocations,
@@ -138,7 +143,11 @@ func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateT
 		CreatedAt: journal.CreatedAt, ActorUserID: journal.ActorUserID}
 	var moved []LotDisposalRecord
 	if backdated {
-		moved, err = subjectTransferDepletionTx(ctx, tx, operationID, "external_transfer_out", asInternal, policy,
+		slot := operationID
+		if correcting {
+			slot = slotOperationID
+		}
+		moved, err = subjectTransferDepletionTx(ctx, tx, slot, "external_transfer_out", asInternal, policy,
 			transaction, journal, operationID, auditEventID)
 	} else if policy.allocation == InternalTransferAverageCostPool {
 		params.QuantityValue, params.QuantityScale = transfer.PooledQuantityValue, transfer.PooledQuantityScale
@@ -195,7 +204,7 @@ func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateT
 	if err := updatePositionMethodFamilyTx(ctx, tx, params, policy.method, auditEventID); err != nil {
 		return ExternalTransferOutResult{}, fmt.Errorf("save outbound transfer source basis method: %w", err)
 	}
-	if backdated {
+	if backdated && !correcting {
 		// The source now replays with this transfer at its slot; later
 		// decisions are revised and anything they carry on propagates.
 		if err := replayCorrectedPositionTx(ctx, tx, transfer.BookID, investmentReplayPositionKey{
@@ -264,4 +273,97 @@ func postTransferBridgeJournalTx(ctx context.Context, tx *sql.Tx, bookID, operat
 		return 0, fmt.Errorf("link outbound transfer bridge journal: %w", err)
 	}
 	return record.VersionID, nil
+}
+
+// ExternalTransferOutReplacementRecord is the inverse and replacement journals
+// and what the replacement carried out.
+type ExternalTransferOutReplacementRecord struct {
+	Inverse     TransactionRecord
+	Replacement TransactionRecord
+	Result      ExternalTransferOutResult
+}
+
+// ReplaceExternalTransferOut reverses an outbound transfer (its security legs
+// and net bridge) and records corrected terms as its successor at the
+// correction root's slot, replaying both sources under one audit event (T-144).
+func (r *InvestmentRepository) ReplaceExternalTransferOut(ctx context.Context, expected TransferOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, transfer CreateExternalTransferOutParams,
+) (ExternalTransferOutReplacementRecord, error) {
+	return r.replaceExternalTransferOut(ctx, expected, inverseParams, replacementParams, transfer, false)
+}
+
+// SimulateExternalTransferOutReplacement runs the replacement writer, both
+// replays and the gain comparison, then rolls back.
+func (r *InvestmentRepository) SimulateExternalTransferOutReplacement(ctx context.Context, expected TransferOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, transfer CreateExternalTransferOutParams,
+) (SimulatedInvestmentWrite, ExternalTransferOutResult, error) {
+	record, err := r.replaceExternalTransferOut(ctx, expected, inverseParams, replacementParams, transfer, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, ExternalTransferOutResult{}, err
+	}
+	return simulatedInvestmentWrite(record.Inverse, record.Replacement), record.Result, nil
+}
+
+func (r *InvestmentRepository) replaceExternalTransferOut(ctx context.Context, expected TransferOperationRecord,
+	inverseParams, replacementParams CreateTransactionParams, transfer CreateExternalTransferOutParams, preview bool,
+) (ExternalTransferOutReplacementRecord, error) {
+	if expected.OperationID <= 0 || expected.TransferKind != "external_out" || expected.SourceAccountID <= 0 ||
+		inverseParams.BookID <= 0 || inverseParams.BookID != replacementParams.BookID ||
+		inverseParams.BookID != transfer.BookID ||
+		inverseParams.ActorUserID != replacementParams.ActorUserID ||
+		inverseParams.Spec.InvestmentOperationKind != "" ||
+		inverseParams.Spec.TransactionKind != "investment" || inverseParams.Spec.Status != "posted" ||
+		inverseParams.Spec.TransactionDate != expected.EventDate ||
+		replacementParams.Spec.InvestmentOperationKind != "external_transfer_out" ||
+		replacementParams.Spec.TransactionKind != "investment" || replacementParams.Spec.Status != "posted" ||
+		replacementParams.Spec.TransactionDate != transfer.EffectiveOn || transfer.SourceAccountID <= 0 ||
+		transfer.CommodityID != expected.CommodityID || transfer.CostCommodityID != expected.CostCommodityID ||
+		(len(transfer.Allocations) == 0) != (transfer.PooledQuantityValue.Sign() > 0) ||
+		replacementParams.InvestmentCorrectionOfOperationID != expected.OperationID ||
+		replacementParams.InvestmentCorrectionMode != "replace" || replacementParams.InvestmentCorrectionReason == "" ||
+		!inverseParams.CorrectionOfTransactionID.Valid || inverseParams.CorrectionOfTransactionID.Int64 != expected.TransactionID ||
+		!replacementParams.CorrectionOfTransactionID.Valid || replacementParams.CorrectionOfTransactionID.Int64 != expected.TransactionID {
+		return ExternalTransferOutReplacementRecord{}, fmt.Errorf("%w: outbound transfer replacement is incomplete", ErrInvalidDisposalParams)
+	}
+	write := executeInvestmentJournalsWithGuardTx[ExternalTransferOutResult]
+	if preview {
+		write = previewInvestmentJournalsWithGuardTx[ExternalTransferOutResult]
+	}
+	journals, result, err := write(ctx, r.database,
+		[]CreateTransactionParams{inverseParams, replacementParams},
+		func(tx *sql.Tx) error {
+			_, err := checkTransferOperationForCorrectionTx(ctx, tx, inverseParams.BookID, expected)
+			return err
+		}, func(tx *sql.Tx, journals []TransactionRecord, auditEventID int64) (ExternalTransferOutResult, error) {
+			inverse, replacement := journals[0], journals[1]
+			operationID, err := investmentOperationIDTx(ctx, tx, transfer.BookID, replacement.ID)
+			if err != nil {
+				return ExternalTransferOutResult{}, err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
+				(book_id, operation_id, transaction_version_id, link_seq, role)
+				VALUES (?, ?, ?, 2, 'reversal')`, transfer.BookID, operationID, inverse.VersionID); err != nil {
+				return ExternalTransferOutResult{}, fmt.Errorf("link outbound transfer replacement inverse: %w", err)
+			}
+			result, err := writeExternalTransferOutTx(ctx, tx, replacementParams, transfer, replacement,
+				auditEventID, expected.OperationID)
+			if err != nil {
+				return ExternalTransferOutResult{}, err
+			}
+			positions := []investmentReplayPositionKey{{expected.SourceAccountID, expected.CommodityID, expected.CostCommodityID}}
+			if transfer.SourceAccountID != expected.SourceAccountID {
+				positions = append(positions, investmentReplayPositionKey{transfer.SourceAccountID, transfer.CommodityID, transfer.CostCommodityID})
+			}
+			for _, position := range positions {
+				if err := replayCorrectedPositionTx(ctx, tx, transfer.BookID, position,
+					operationID, auditEventID, replacementParams.ActorUserID, replacementParams.CreatedAt); err != nil {
+					return ExternalTransferOutResult{}, err
+				}
+			}
+			return result, nil
+		}, nil)
+	if err != nil {
+		return ExternalTransferOutReplacementRecord{}, err
+	}
+	return ExternalTransferOutReplacementRecord{Inverse: journals[0], Replacement: journals[1], Result: result}, nil
 }

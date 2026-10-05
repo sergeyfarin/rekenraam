@@ -785,6 +785,8 @@
   "transactions_investment_reverse_transfer_title": "Revertir esta transferencia",
   "transactions_investment_reverse_transfer_copy": "Registra el asiento inverso exacto. Las unidades vuelven a su origen, los lotes que abrió esta transferencia se cierran y las ventas posteriores en ambas cuentas se recalculan. La original permanece en el historial de auditoría.",
   "transactions_investment_replace_transfer_action": "Corregir transferencia…",
+  "transactions_investment_replace_transfer_out_title": "Corregir esta transferencia saliente",
+  "transactions_investment_replace_transfer_out_copy": "Contabiliza a la vez el inverso exacto, incluido el coste de adquisición que salió, y la transferencia corregida. La posición se reduce a la fecha de la transferencia, las ventas posteriores se recalculan y el original queda en el historial de auditoría.",
   "transactions_investment_replace_transfer_title": "Corregir esta transferencia",
   "transactions_investment_replace_transfer_copy": "Registra juntos el asiento inverso exacto y la transferencia corregida. El origen se reduce a la fecha de la transferencia, ambas cuentas y las ventas posteriores se recalculan y la original permanece en el historial de auditoría.",
   "transactions_investment_replace_transfer_in_copy": "Registra juntos el asiento inverso exacto y la transferencia corregida, de modo que la diferencia del puente de apertura se añade en lugar de sobrescribirse. La cuenta y las ventas posteriores se recalculan y la original permanece en el historial de auditoría.",

@@ -785,6 +785,8 @@
   "transactions_investment_reverse_transfer_title": "Diesen Übertrag stornieren",
   "transactions_investment_reverse_transfer_copy": "Bucht die exakte Gegenbuchung. Die Stücke kehren an ihren Ursprung zurück, die durch den Übertrag eröffneten Posten werden geschlossen und spätere Verkäufe auf beiden Konten neu berechnet. Das Original bleibt im Prüfverlauf erhalten.",
   "transactions_investment_replace_transfer_action": "Übertrag korrigieren…",
+  "transactions_investment_replace_transfer_out_title": "Diese Ausbuchung korrigieren",
+  "transactions_investment_replace_transfer_out_copy": "Bucht die exakte Gegenbuchung einschließlich der ausgebuchten Anschaffungskosten und die korrigierte Übertragung gemeinsam. Die Position wird zum Übertragungsdatum vermindert, spätere Verkäufe werden neu berechnet, und das Original bleibt in der Prüfhistorie.",
   "transactions_investment_replace_transfer_title": "Diesen Übertrag korrigieren",
   "transactions_investment_replace_transfer_copy": "Bucht die exakte Gegenbuchung und den korrigierten Übertrag gemeinsam. Die Quelle wird zum Übertragsdatum belastet, beide Depots und spätere Verkäufe werden neu berechnet, und das Original bleibt im Prüfverlauf erhalten.",
   "transactions_investment_replace_transfer_in_copy": "Bucht die exakte Gegenbuchung und den korrigierten Übertrag gemeinsam, sodass die Differenz der Eröffnungsbrücke ergänzt statt überschrieben wird. Das Depot und spätere Verkäufe werden neu berechnet, und das Original bleibt im Prüfverlauf erhalten.",

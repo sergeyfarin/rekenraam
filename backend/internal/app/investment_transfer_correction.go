@@ -9,8 +9,7 @@ import (
 	"rekenraam/backend/internal/db"
 )
 
-// T-119: an internal or external-in transfer is corrected by its own
-// commands. A reversal posts the exact inverse journal and replays every
+// T-119: a transfer is corrected by its own commands (outbound since T-144). A reversal posts the exact inverse journal and replays every
 // position the transfer moved in one transaction; downstream positions follow
 // through transfer propagation. The original journal, facts, links and lot
 // events stay immutable evidence, changed gains need the exact
@@ -138,10 +137,31 @@ func (s *InvestmentService) transferCorrectionPlan(ctx context.Context, ownerUse
 		original.TransactionDate != operation.EventDate {
 		return db.TransferOperationRecord{}, CreateTransactionInput{}, ErrInvestmentTransferChanged
 	}
+	spec := invertedInvestmentTransactionSpec(original)
+	// An outbound transfer's basis left through its bridge journals; the
+	// inverse returns their net total, T +b and E −b, in the same journal
+	// (T-144). The writer refuses if that total moved since this plan.
+	if operation.TransferKind == "external_out" && operation.BridgeValue.Sign() != 0 {
+		tradingID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
+		if err != nil {
+			return db.TransferOperationRecord{}, CreateTransactionInput{}, fmt.Errorf("resolve commodity trading account: %w", err)
+		}
+		equityID, err := s.repository.ExternalInvestmentTransferEquityAccountID(ctx, BookID)
+		if err != nil {
+			return db.TransferOperationRecord{}, CreateTransactionInput{}, fmt.Errorf("resolve external investment transfer equity account: %w", err)
+		}
+		spec.JournalEntries = append(spec.JournalEntries, JournalEntryInput{EntryDate: operation.EventDate,
+			EntryKind: "investment", Memo: spec.Description, Postings: []PostingInput{
+				{AccountID: tradingID, CommodityID: operation.CostCommodityID,
+					QuantityValue: operation.BridgeValue, QuantityScale: operation.BridgeScale, Memo: spec.Description},
+				{AccountID: equityID, CommodityID: operation.CostCommodityID,
+					QuantityValue: operation.BridgeValue.Negated(), QuantityScale: operation.BridgeScale, Memo: spec.Description},
+			}})
+	}
 	return operation, CreateTransactionInput{
 		OwnerUserID: ownerUserID, OriginType: "browser_api",
 		CorrectionOfTransactionID: &operation.TransactionID,
-		Spec:                      invertedInvestmentTransactionSpec(original), ChangeReason: reason,
+		Spec:                      spec, ChangeReason: reason,
 	}, nil
 }
 

@@ -784,6 +784,8 @@
   "transactions_investment_reverse_transfer_title": "Reverse this transfer",
   "transactions_investment_reverse_transfer_copy": "Posts the exact inverse. The units go back to where they came from, the lots this transfer opened are retired, and later sales on both accounts are recalculated. The original stays in the audit history.",
   "transactions_investment_replace_transfer_action": "Correct transfer…",
+  "transactions_investment_replace_transfer_out_title": "Correct this transfer out",
+  "transactions_investment_replace_transfer_out_copy": "Posts the exact inverse, including the cost basis that left, and the corrected transfer together. The holding is depleted as of the transfer date, later sales are recalculated, and the original stays in the audit history.",
   "transactions_investment_replace_transfer_title": "Correct this transfer",
   "transactions_investment_replace_transfer_copy": "Posts the exact inverse and the corrected transfer together. The source is depleted as of the transfer date, both holdings and later sales are recalculated, and the original stays in the audit history.",
   "transactions_investment_replace_transfer_in_copy": "Posts the exact inverse and the corrected transfer together, so the opening-balance bridge difference is added rather than overwritten. The holding and later sales are recalculated, and the original stays in the audit history.",

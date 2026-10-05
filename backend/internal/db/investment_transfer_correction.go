@@ -22,8 +22,8 @@ import (
 
 var ErrInvestmentTransferChanged = errors.New("investment transfer changed after its correction was prepared")
 
-// TransferOperationRecord pins a posted internal or external-in transfer and
-// the positions it moved. A correction rechecks it inside the write.
+// TransferOperationRecord pins a posted transfer and the positions it moved.
+// A correction rechecks it inside the write.
 type TransferOperationRecord struct {
 	OperationID          int64
 	TransferKind         string
@@ -31,22 +31,36 @@ type TransferOperationRecord struct {
 	TransactionVersionID int64
 	CurrentVersionID     int64
 	EventDate            string
-	// SourceAccountID is zero for an external transfer in.
+	// SourceAccountID is zero for an external transfer in;
+	// DestinationAccountID is zero for an outbound transfer.
 	SourceAccountID      int64
 	DestinationAccountID int64
 	CommodityID          int64
 	CostCommodityID      int64
 	AlreadyCorrected     bool
 	ImportedLineage      bool
+	// BridgeValue/Scale is an outbound transfer's net bridged basis: its
+	// first bridge plus every later adjustment (T-143), normalized. Its
+	// inverse cancels exactly this; pinning it lets the write refuse an
+	// adjustment that landed after the correction was planned (T-144).
+	BridgeValue exact.Coefficient
+	BridgeScale int
 }
 
 func (r *InvestmentRepository) TransferOperationByTransactionID(ctx context.Context, bookID, transactionID int64) (TransferOperationRecord, error) {
 	return transferOperationByTransactionIDQuery(ctx, r.database, bookID, transactionID)
 }
 
-func transferOperationByTransactionIDQuery(ctx context.Context, reader saleOperationReader, bookID, transactionID int64) (TransferOperationRecord, error) {
+// transferOperationReader reads a transfer's pinned facts and bridge rows,
+// from the database or inside a write.
+type transferOperationReader interface {
+	saleOperationReader
+	queryer
+}
+
+func transferOperationByTransactionIDQuery(ctx context.Context, reader transferOperationReader, bookID, transactionID int64) (TransferOperationRecord, error) {
 	var record TransferOperationRecord
-	var source sql.NullInt64
+	var source, destination sql.NullInt64
 	var costCommodities, corrected int
 	err := reader.QueryRowContext(ctx, `SELECT o.id, f.transfer_kind, linked_version.transaction_id,
 		link.transaction_version_id, current.id, f.effective_on, f.source_account_id, f.destination_account_id,
@@ -59,10 +73,11 @@ func transferOperationByTransactionIDQuery(ctx context.Context, reader saleOpera
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
 		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
 		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
-		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND f.transfer_kind IN ('internal', 'external_in')`,
+		WHERE o.book_id = ? AND linked_version.transaction_id = ?
+			AND f.transfer_kind IN ('internal', 'external_in', 'external_out')`,
 		bookID, transactionID).Scan(&record.OperationID, &record.TransferKind, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.EventDate, &source,
-		&record.DestinationAccountID, &record.CommodityID, &record.CostCommodityID, &costCommodities, &corrected)
+		&destination, &record.CommodityID, &record.CostCommodityID, &costCommodities, &corrected)
 	if errors.Is(err, sql.ErrNoRows) {
 		return TransferOperationRecord{}, ErrNotFound
 	}
@@ -72,12 +87,50 @@ func transferOperationByTransactionIDQuery(ctx context.Context, reader saleOpera
 	if costCommodities != 1 {
 		return TransferOperationRecord{}, fmt.Errorf("%w: transfer %d does not carry one cost currency", ErrInvalidDisposalParams, record.OperationID)
 	}
-	record.SourceAccountID = source.Int64
+	record.SourceAccountID, record.DestinationAccountID = source.Int64, destination.Int64
 	record.AlreadyCorrected = corrected != 0
 	if record.ImportedLineage, err = investmentOperationHasImportedLineageQuery(ctx, reader, bookID, record.OperationID); err != nil {
 		return TransferOperationRecord{}, err
 	}
+	if record.TransferKind == "external_out" {
+		if record.BridgeValue, record.BridgeScale, err = transferBridgeTotalQuery(ctx, reader, bookID, record.OperationID); err != nil {
+			return TransferOperationRecord{}, err
+		}
+	}
 	return record, nil
+}
+
+// transferBridgeTotalQuery sums what an outbound transfer's bridge journals
+// posted to the transfer equity account, normalized.
+func transferBridgeTotalQuery(ctx context.Context, reader queryer, bookID, operationID int64) (exact.Coefficient, int, error) {
+	rows, err := reader.QueryContext(ctx, `SELECT pv.quantity_value, pv.quantity_scale
+		FROM investment_operation_journal_links link
+		JOIN posting_versions pv ON pv.transaction_version_id = link.transaction_version_id
+		JOIN accounts equity ON equity.id = pv.account_id
+			AND equity.system_role = 'external_investment_transfer_equity'
+		WHERE link.operation_id = ? AND link.book_id = ? AND link.role = 'transfer_bridge'`, operationID, bookID)
+	if err != nil {
+		return "", 0, fmt.Errorf("read outbound transfer bridge: %w", err)
+	}
+	total := exact.NewScaledInt()
+	for rows.Next() {
+		var value exact.Coefficient
+		var scale int
+		if err := rows.Scan(&value, &scale); err != nil {
+			rows.Close()
+			return "", 0, fmt.Errorf("scan outbound transfer bridge: %w", err)
+		}
+		total.AddCoefficient(value, scale)
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return "", 0, fmt.Errorf("read outbound transfer bridge: %w", err)
+	}
+	normalized := total.Normalized()
+	value, err := normalized.Coefficient()
+	if err != nil {
+		return "", 0, err
+	}
+	return value, normalized.Scale(), nil
 }
 
 // checkTransferOperationForCorrectionTx applies the shared correction fences:
@@ -121,6 +174,10 @@ func (t TransferOperationRecord) transferPositions() []investmentReplayPositionK
 	if t.SourceAccountID <= 0 {
 		return []investmentReplayPositionKey{destination}
 	}
+	if t.DestinationAccountID <= 0 {
+		// An outbound transfer moved only its source in this book.
+		return []investmentReplayPositionKey{{t.SourceAccountID, t.CommodityID, t.CostCommodityID}}
+	}
 	return []investmentReplayPositionKey{
 		{t.SourceAccountID, t.CommodityID, t.CostCommodityID}, destination}
 }
@@ -142,9 +199,9 @@ func (r *InvestmentRepository) PreviewTransferReversal(ctx context.Context, para
 }
 
 func (r *InvestmentRepository) reverseTransfer(ctx context.Context, params CreateTransactionParams, expected TransferOperationRecord, preview bool) (TransactionRecord, error) {
-	if params.BookID <= 0 || params.ActorUserID <= 0 || expected.OperationID <= 0 ||
-		expected.DestinationAccountID <= 0 || expected.CostCommodityID <= 0 ||
-		(expected.TransferKind == "internal") != (expected.SourceAccountID > 0) ||
+	if params.BookID <= 0 || params.ActorUserID <= 0 || expected.OperationID <= 0 || expected.CostCommodityID <= 0 ||
+		(expected.TransferKind != "external_in") != (expected.SourceAccountID > 0) ||
+		(expected.TransferKind != "external_out") != (expected.DestinationAccountID > 0) ||
 		params.Spec.InvestmentOperationKind != "reversal" || params.Spec.TransactionKind != "investment" ||
 		params.Spec.Status != "posted" || params.Spec.TransactionDate != expected.EventDate ||
 		params.InvestmentCorrectionOfOperationID != expected.OperationID ||
@@ -415,13 +472,12 @@ type TransferTerms struct {
 
 func (r *InvestmentRepository) TransferTerms(ctx context.Context, bookID, operationID int64) (TransferTerms, error) {
 	var terms TransferTerms
-	var source sql.NullInt64
+	var source, destination sql.NullInt64
 	var allocation, lineage sql.NullString
 	err := r.database.QueryRowContext(ctx, `SELECT f.transfer_kind, f.effective_on, f.source_account_id,
 		f.destination_account_id, f.commodity_id, f.basis_allocation, f.destination_lineage, f.source_evidence_json
-		FROM investment_transfer_facts f
-		WHERE f.book_id = ? AND f.operation_id = ? AND f.transfer_kind IN ('internal', 'external_in')`,
-		bookID, operationID).Scan(&terms.TransferKind, &terms.EffectiveOn, &source, &terms.DestinationAccountID,
+		FROM investment_transfer_facts f WHERE f.book_id = ? AND f.operation_id = ?`,
+		bookID, operationID).Scan(&terms.TransferKind, &terms.EffectiveOn, &source, &destination,
 		&terms.CommodityID, &allocation, &lineage, &terms.SourceEvidenceJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return TransferTerms{}, ErrNotFound
@@ -429,7 +485,8 @@ func (r *InvestmentRepository) TransferTerms(ctx context.Context, bookID, operat
 	if err != nil {
 		return TransferTerms{}, fmt.Errorf("read transfer terms: %w", err)
 	}
-	terms.SourceAccountID, terms.BasisAllocation, terms.DestinationLineage = source.Int64, allocation.String, lineage.String
+	terms.SourceAccountID, terms.DestinationAccountID = source.Int64, destination.Int64
+	terms.BasisAllocation, terms.DestinationLineage = allocation.String, lineage.String
 	// The committed link rows hold what was moved: each selected lot and its
 	// quantity, a pool's lots (whose quantities sum to the move), or the one
 	// external lot with its carried basis and original date.

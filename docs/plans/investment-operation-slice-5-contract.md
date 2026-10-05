@@ -127,8 +127,13 @@ with the impossible decision named (`INVESTMENT_SALE_DEPENDENCY`).
 Self-check verifies the links against the depletions, that the bridge plus
 its adjustments post exactly the effective links' carried basis per cost
 currency, and replays revised outbound depletions. Mobile entry shipped as
-T-142 #157. Still open: correction/reversal (T-144 #159) and unknown basis
-(T-145 #160).
+T-142 #157. Correction (T-144 #159): `reverse-transfer` posts one inverse
+journal that cancels the security legs and the net bridge (first bridge plus
+adjustments, pinned in the correction record so an adjustment landing after
+planning refuses the write) and replays the source; `replace-transfer-out`
+posts that inverse and a corrected outbound transfer whose depletion replays
+at the replaced transfer's slot, replaying every source either depleted.
+Still open: unknown basis (T-145 #160).
 
 Example: transfer 2 shares carrying 80.00 EUR into the book. Post security
 `H +2`, `T −2` and EUR `T +80.00`, `E −80.00`. A later full sale for 100.00

@@ -236,3 +236,110 @@ func (s *InvestmentService) PreviewExternalTransferOutReconciliationImpact(ctx c
 	}
 	return preview.Impact, nil
 }
+
+// ReplaceInvestmentTransferOutInput corrects a posted outbound transfer.
+// Replacement is the full corrected transfer: date, source holding and lots
+// or quantity may change; the security and basis currency stay its own.
+type ReplaceInvestmentTransferOutInput struct {
+	OwnerUserID               int64
+	AuthSessionID             int64
+	RequestID                 string
+	TransactionID             int64
+	Reason                    string
+	ReconciliationOverride    bool
+	GainImpactAcknowledgement string
+	Replacement               ExternalTransferOutInput
+}
+
+type ReplaceInvestmentTransferOutResult struct {
+	Inverse                Transaction
+	Replacement            ExternalTransferOutResult
+	CorrectedTransactionID int64
+}
+
+type preparedTransferOutReplacement struct {
+	operation   db.TransferOperationRecord
+	inverse     db.CreateTransactionParams
+	replacement db.CreateTransactionParams
+	transfer    db.CreateExternalTransferOutParams
+}
+
+// ReplaceTransferOut posts the inverse (security legs and net bridge) and a
+// corrected outbound transfer at the replaced transfer's slot under one audit
+// event, replaying every source either transfer depleted (T-144).
+func (s *InvestmentService) ReplaceTransferOut(ctx context.Context, input ReplaceInvestmentTransferOutInput) (ReplaceInvestmentTransferOutResult, error) {
+	prepared, err := s.prepareTransferOutReplacement(ctx, input)
+	if err != nil {
+		return ReplaceInvestmentTransferOutResult{}, err
+	}
+	record, err := s.repository.ReplaceExternalTransferOut(ctx, prepared.operation, prepared.inverse, prepared.replacement, prepared.transfer)
+	if err != nil {
+		return ReplaceInvestmentTransferOutResult{}, mapTransferReplacementError(err)
+	}
+	return ReplaceInvestmentTransferOutResult{
+		Inverse: toTransaction(record.Inverse),
+		Replacement: ExternalTransferOutResult{Transaction: toTransaction(record.Replacement),
+			Plan: toExternalTransferOutPlan(record.Result)},
+		CorrectedTransactionID: prepared.operation.TransactionID,
+	}, nil
+}
+
+// PreviewTransferOutReplacement runs the replacement writer and every replay,
+// then rolls back.
+func (s *InvestmentService) PreviewTransferOutReplacement(ctx context.Context, input ReplaceInvestmentTransferOutInput) (ExternalTransferOutPreview, error) {
+	input.ReconciliationOverride = true
+	prepared, err := s.prepareTransferOutReplacement(ctx, input)
+	if err != nil {
+		return ExternalTransferOutPreview{}, err
+	}
+	simulated, result, err := s.repository.SimulateExternalTransferOutReplacement(ctx, prepared.operation,
+		prepared.inverse, prepared.replacement, prepared.transfer)
+	if err != nil {
+		return ExternalTransferOutPreview{}, mapTransferReplacementError(err)
+	}
+	impact, err := s.simulatedReconciliationImpact(ctx, simulated)
+	if err != nil {
+		return ExternalTransferOutPreview{}, err
+	}
+	return ExternalTransferOutPreview{Plan: toExternalTransferOutPlan(result), Impact: impact}, nil
+}
+
+func (s *InvestmentService) prepareTransferOutReplacement(ctx context.Context, input ReplaceInvestmentTransferOutInput) (preparedTransferOutReplacement, error) {
+	operation, inversePlan, err := s.transferCorrectionPlan(ctx, input.OwnerUserID, input.TransactionID, input.Reason)
+	if err != nil {
+		return preparedTransferOutReplacement{}, err
+	}
+	if operation.TransferKind != "external_out" {
+		return preparedTransferOutReplacement{}, ErrInvestmentTransferNotFound
+	}
+	replacement := input.Replacement
+	replacement.OwnerUserID, replacement.AuthSessionID, replacement.RequestID =
+		input.OwnerUserID, input.AuthSessionID, input.RequestID
+	replacement.ChangeReason, replacement.ReconciliationOverride = inversePlan.ChangeReason, input.ReconciliationOverride
+	if replacement.CommodityID != operation.CommodityID || replacement.CostCommodityID != operation.CostCommodityID {
+		return preparedTransferOutReplacement{}, ValidationError{Message: "a transfer replacement keeps the security and its basis currency"}
+	}
+	replacementParams, transfer, err := s.externalTransferOutWrite(ctx, replacement)
+	if err != nil {
+		return preparedTransferOutReplacement{}, err
+	}
+	inversePlan.AuthSessionID, inversePlan.RequestID = input.AuthSessionID, input.RequestID
+	inversePlan.Operation = "investment.transfer.replace"
+	inversePlan.ReconciliationOverride = input.ReconciliationOverride
+	inversePlan.Spec.InvestmentOperationKind = ""
+	inverse, err := s.transactionService.prepareInvestmentTransactionForWrite(ctx, inversePlan, nil)
+	if err != nil {
+		return preparedTransferOutReplacement{}, err
+	}
+	replacementParams.Operation = "investment.transfer.replace"
+	replacementParams.CorrectionOfTransactionID = inverse.CorrectionOfTransactionID
+	replacementParams.InvestmentCorrectionOfOperationID = operation.OperationID
+	replacementParams.InvestmentCorrectionMode = "replace"
+	replacementParams.InvestmentCorrectionReason = inversePlan.ChangeReason
+	replacementParams.CreatedAt = inverse.CreatedAt
+	// The compound command's first journal carries the disclosure policy.
+	inverse.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
+	replacementParams.GainImpact = nil
+	return preparedTransferOutReplacement{operation: operation, inverse: inverse,
+		replacement: replacementParams, transfer: transfer}, nil
+}

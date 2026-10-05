@@ -372,3 +372,158 @@ func TestOutboundBridgeAdjustmentPreviewsAndRollsBackWithItsCommand(t *testing.T
 	assert.Zero(t, countRevisions())
 	requireInvestmentSelfCheckPasses(t, f)
 }
+
+// equityBalance is the transfer equity account's whole balance in EUR: every
+// bridge, adjustment and inverse posted to it.
+func equityBalance(t *testing.T, f *investmentsTestFixture) *exact.ScaledInt {
+	t.Helper()
+	rows, err := f.database.Query(`SELECT pv.quantity_value, pv.quantity_scale FROM posting_versions pv
+		JOIN current_transaction_versions v ON v.id = pv.transaction_version_id
+		JOIN accounts a ON a.id = pv.account_id AND a.system_role = 'external_investment_transfer_equity'`)
+	require.NoError(t, err)
+	defer rows.Close()
+	total := exact.NewScaledInt()
+	for rows.Next() {
+		var value string
+		var scale int
+		require.NoError(t, rows.Scan(&value, &scale))
+		total.AddCoefficient(exact.Coefficient(value), scale)
+	}
+	require.NoError(t, rows.Err())
+	return total
+}
+
+// T-144: reversing an outbound transfer returns its units to the source and
+// cancels its net bridge, adjustments included, in one inverse journal.
+func TestReverseExternalTransferOutRestoresUnitsAndCancelsNetBridge(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	buy := buyOn(t, f, "2026-05-01", 3, 3000)
+	out, err := f.investmentService.ExternalTransferOut(ctx, transferOutOfLot(f, "2026-06-01", *buy.LotID, 2))
+	require.NoError(t, err)
+	replaced, err := acknowledgedReplaceBuy(ctx, f.investmentService, replaceBuyPrice(f, buy, "2026-05-01", 3, 3300))
+	require.NoError(t, err)
+	requireScaled(t, 2200, 2, equityBalance(t, f), "bridge plus adjustment")
+
+	inverse, err := f.investmentService.ReverseTransfer(ctx, ReverseInvestmentTransferInput{
+		OwnerUserID: f.ownerUserID, TransactionID: out.Transaction.ID, Reason: "transfer was cancelled"})
+	require.NoError(t, err)
+	require.Len(t, inverse.JournalEntries, 2, "security legs and the bridge in one inverse")
+	assert.Zero(t, equityBalance(t, f).Sign(), "the net bridge is cancelled")
+	quantity, basis := openPositionBasis(t, f, f.holdingAccountID)
+	requireScaled(t, 3, 0, quantity, "units back in the source")
+	requireScaled(t, 3300, 2, basis, "at the corrected basis")
+	requireScaled(t, 3300, 2, lotRemainingBasis(t, f, *replaced.Replacement.LotID), "on the corrected lot")
+	chain, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, out.Transaction.ID)
+	require.NoError(t, err)
+	assert.False(t, chain.CanReverseTransfer, "a reversed transfer is not offered again")
+	requireInvestmentSelfCheckPasses(t, f)
+}
+
+// A bridge adjustment that lands after the reversal was planned changes the
+// net bridge the inverse must cancel: the write refuses instead of posting a
+// stale inverse.
+func TestOutboundReversalRefusesBridgeChangedAfterPlanning(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	buy := buyOn(t, f, "2026-05-01", 3, 3000)
+	out, err := f.investmentService.ExternalTransferOut(ctx, transferOutOfLot(f, "2026-06-01", *buy.LotID, 2))
+	require.NoError(t, err)
+	operation, params, err := f.investmentService.prepareTransferReversalWrite(ctx, ReverseInvestmentTransferInput{
+		OwnerUserID: f.ownerUserID, TransactionID: out.Transaction.ID, Reason: "cancelled"})
+	require.NoError(t, err)
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, replaceBuyPrice(f, buy, "2026-05-01", 3, 3300))
+	require.NoError(t, err)
+
+	_, err = f.investmentService.repository.ReverseTransfer(ctx, params, operation)
+	require.ErrorIs(t, err, db.ErrInvestmentTransferChanged)
+	requireScaled(t, 2200, 2, equityBalance(t, f), "nothing posted")
+}
+
+func TestReverseBackdatedExternalTransferOutRevisesLaterSaleUnderAcknowledgement(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	first := buyOn(t, f, "2026-05-01", 3, 3000)
+	buyOn(t, f, "2026-05-15", 3, 6000)
+	sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 2))
+	require.NoError(t, err)
+	input := transferOutOfLot(f, "2026-06-01", *first.LotID, 2)
+	preview, err := f.investmentService.PreviewExternalTransferOut(ctx, input)
+	require.NoError(t, err)
+	input.GainImpactAcknowledgement = preview.Impact.GainImpact.Acknowledgement
+	out, err := f.investmentService.ExternalTransferOut(ctx, input)
+	require.NoError(t, err)
+	requireScaled(t, 3000, 2, saleEffectiveBasis(t, f, sold.Transaction.ID), "after the backdated transfer")
+
+	reverse := ReverseInvestmentTransferInput{OwnerUserID: f.ownerUserID, TransactionID: out.Transaction.ID, Reason: "entered in error"}
+	_, err = f.investmentService.ReverseTransfer(ctx, reverse)
+	require.ErrorIs(t, err, db.ErrGainImpactAcknowledgementRequired)
+	impact, err := f.investmentService.ReverseTransferReconciliationImpact(ctx, reverse)
+	require.NoError(t, err)
+	require.NotNil(t, impact.GainImpact)
+	reverse.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	_, err = f.investmentService.ReverseTransfer(ctx, reverse)
+	require.NoError(t, err)
+	requireScaled(t, 2000, 2, saleEffectiveBasis(t, f, sold.Transaction.ID), "back to FIFO from the first lot")
+	assert.Zero(t, equityBalance(t, f).Sign())
+	requireInvestmentSelfCheckPasses(t, f)
+}
+
+// T-144: a replacement reverses the transfer's security legs and net bridge
+// and records the corrected transfer at the same slot, so a later sale keeps
+// its FIFO place and only changes by what the correction moved.
+func TestReplaceExternalTransferOutRebridgesCorrectedQuantityAtItsSlot(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	buy := buyOn(t, f, "2026-05-01", 4, 4000)
+	out, err := f.investmentService.ExternalTransferOut(ctx, transferOutOfLot(f, "2026-06-01", *buy.LotID, 2))
+	require.NoError(t, err)
+	sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 1))
+	require.NoError(t, err)
+
+	replacement := transferOutOfLot(f, "2026-06-01", *buy.LotID, 3)
+	input := ReplaceInvestmentTransferOutInput{OwnerUserID: f.ownerUserID, TransactionID: out.Transaction.ID,
+		Reason: "statement shows three shares", Replacement: replacement}
+	preview, err := f.investmentService.PreviewTransferOutReplacement(ctx, input)
+	require.NoError(t, err)
+	requireScaled(t, 3000, 2, exact.ScaledIntFromInt64(preview.Plan.BasisValue, preview.Plan.BasisScale), "previewed basis")
+	if preview.Impact.GainImpact != nil {
+		input.GainImpactAcknowledgement = preview.Impact.GainImpact.Acknowledgement
+	}
+	result, err := f.investmentService.ReplaceTransferOut(ctx, input)
+	require.NoError(t, err)
+	assert.Equal(t, preview.Plan.BasisValue, result.Replacement.Plan.BasisValue, "preview equals commit")
+	requireScaled(t, 3000, 2, equityBalance(t, f), "net bridge is the corrected 30.00")
+	quantity, _ := openPositionBasis(t, f, f.holdingAccountID)
+	assert.Zero(t, quantity.Sign(), "four bought, three out, one sold")
+	requireScaled(t, 1000, 2, saleEffectiveBasis(t, f, sold.Transaction.ID), "the sale keeps its unit")
+	chain, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, result.Replacement.Transaction.ID)
+	require.NoError(t, err)
+	require.NotNil(t, chain.EffectiveTransfer)
+	assert.Equal(t, "external_out", chain.EffectiveTransfer.TransferKind)
+	requireInvestmentSelfCheckPasses(t, f)
+}
+
+func TestReplaceExternalTransferOutThatBreaksLaterSaleIsRefusedWithSaleNamed(t *testing.T) {
+	t.Parallel()
+	f := newTransferOutFixture(t)
+	ctx := context.Background()
+	buy := buyOn(t, f, "2026-05-01", 3, 3000)
+	out, err := f.investmentService.ExternalTransferOut(ctx, transferOutOfLot(f, "2026-06-01", *buy.LotID, 1))
+	require.NoError(t, err)
+	sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 2))
+	require.NoError(t, err)
+	before := equityBalance(t, f)
+	_, err = f.investmentService.ReplaceTransferOut(ctx, ReplaceInvestmentTransferOutInput{
+		OwnerUserID: f.ownerUserID, TransactionID: out.Transaction.ID, Reason: "three left",
+		Replacement: transferOutOfLot(f, "2026-06-01", *buy.LotID, 2)})
+	require.ErrorIs(t, err, ErrInvestmentTransferDependency)
+	var dependency InvestmentTransferDependencyError
+	require.ErrorAs(t, err, &dependency)
+	assert.Equal(t, transferOperationID(t, f, sold.Transaction.ID), dependency.OperationID)
+	assert.Zero(t, before.Cmp(equityBalance(t, f)), "nothing posted")
+}

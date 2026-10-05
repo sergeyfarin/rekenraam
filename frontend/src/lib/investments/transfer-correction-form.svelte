@@ -19,8 +19,11 @@
     isGainAcknowledgementRefusal
   } from '#lib/investments/gain-impact.ts';
   import {
+    previewTransferOutReplacement,
     previewTransferReplacement,
     replaceTransfer,
+    replaceTransferOut,
+    type ExternalTransferOutRequest,
     type GainImpact,
     type InternalTransferRequest,
     type InvestmentCorrectionTransferTerms,
@@ -28,11 +31,12 @@
   } from '#lib/api/investments.ts';
   import { invalidateInvestmentReads } from './invalidate';
 
-  // Replaces a posted internal transfer (T-119). The source holding, security
-  // and basis currency are fixed; the date, destination, the quantity taken
-  // from each originally selected lot (or the pooled quantity) and the
-  // destination lineage may change. The server depletes the source as of the
-  // transfer date, so availability is checked there, not here.
+  // Replaces a posted internal transfer (T-119) or outbound transfer (T-144).
+  // The source holding, security and basis currency are fixed; the date, the
+  // quantity taken from each originally selected lot (or the pooled quantity)
+  // and, for an internal move, the destination and lineage may change. The
+  // server depletes the source as of the transfer date, so availability is
+  // checked there, not here.
   let {
     csrfToken,
     transactionID,
@@ -49,6 +53,7 @@
 
   const source = untrack(() => transfer);
   const pooled = source.basis_allocation === 'average_cost_pool';
+  const outbound = source.transfer_kind === 'external_out';
   const sourceAccountID = source.source_account_id ?? 0;
   const locale = getLocale();
   const queryClient = useQueryClient();
@@ -57,7 +62,7 @@
 
   let reason = $state('');
   let effectiveOn = $state(source.effective_on);
-  let destinationAccountID = $state(String(source.destination_account_id));
+  let destinationAccountID = $state(outbound ? '' : String(source.destination_account_id));
   let quantities = $state<Record<string, string>>(Object.fromEntries(source.lot_allocations.map((lot) =>
     [String(lot.lot_id), formatLedgerAmount(lot.quantity_value, lot.quantity_scale)])));
   let pooledQuantity = $state(source.quantity_value !== null && source.quantity_scale !== null
@@ -72,11 +77,13 @@
     reasonInputElement?.focus();
   });
 
+  type TransferPayload = InternalTransferRequest | ExternalTransferOutRequest;
+
   let review = $state<{
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
     gainImpact: GainImpact | null;
     gainRefreshed: boolean;
-    payload: InternalTransferRequest;
+    payload: TransferPayload;
   } | null>(null);
 
   const accounts = $derived(accountsQuery.data?.accounts ?? []);
@@ -89,15 +96,16 @@
     (currenciesQuery.data?.currencies ?? []).map((currency: CurrencyResponse) => [currency.id, currency])));
   const gainRows = $derived(review?.gainImpact
     ? gainImpactRows(review.gainImpact.changes, gainImpactCurrency(currenciesByID), locale) : []);
-  const canSubmit = $derived(!!reason.trim() && effectiveOn !== '' && destinationAccountID !== '' &&
+  const canSubmit = $derived(!!reason.trim() && effectiveOn !== '' && (outbound || destinationAccountID !== '') &&
     (pooled ? !!pooledQuantity.trim() : Object.values(quantities).some((value) => !!value.trim())));
 
-  function buildPayload(): InternalTransferRequest | null {
+  function buildPayload(): TransferPayload | null {
     const base = {
       effective_on: effectiveOn, source_account_id: sourceAccountID,
-      destination_account_id: Number(destinationAccountID), commodity_id: source.commodity_id,
+      commodity_id: source.commodity_id,
       cost_commodity_id: source.cost_commodity_id, source_evidence: source.source_evidence,
-      memo: memo.trim() || undefined
+      memo: memo.trim() || undefined,
+      ...(outbound ? {} : { destination_account_id: Number(destinationAccountID) })
     };
     if (pooled) {
       const parsed = parseMagnitude(pooledQuantity);
@@ -105,7 +113,8 @@
         formError = new TranslatedFormError(m.investments_transfer_internal_pooled_quantity_error());
         return null;
       }
-      return { ...base, quantity_value: parsed.field.value, quantity_scale: parsed.field.scale, destination_lineage: lineage };
+      return { ...base, quantity_value: parsed.field.value, quantity_scale: parsed.field.scale,
+        ...(outbound ? {} : { destination_lineage: lineage }) } as TransferPayload;
     }
     const allocations: InternalTransferRequest['lot_allocations'] = [];
     for (const lot of source.lot_allocations) {
@@ -122,7 +131,7 @@
       formError = new TranslatedFormError(m.investments_transfer_internal_select_lot());
       return null;
     }
-    return { ...base, lot_allocations: allocations };
+    return { ...base, lot_allocations: allocations } as TransferPayload;
   }
 
   async function handleSubmit(event: Event) {
@@ -143,26 +152,34 @@
 
   // Preview through the actual replacement writer; checkpoints or changed
   // gains go to the confirmation.
-  async function reviewImpact(payload: InternalTransferRequest, refreshed: boolean): Promise<boolean> {
-    const preview = await previewTransferReplacement(transactionID, { reason: reason.trim(), replacement: payload });
+  async function reviewImpact(payload: TransferPayload, refreshed: boolean): Promise<boolean> {
+    const preview = outbound
+      ? await previewTransferOutReplacement(transactionID, { reason: reason.trim(), replacement: payload as ExternalTransferOutRequest })
+      : await previewTransferReplacement(transactionID, { reason: reason.trim(), replacement: payload as InternalTransferRequest });
     if (!impactNeedsReview(preview.impact)) return false;
     const gainImpact = hasGainChanges(preview.impact.gain_impact) ? preview.impact.gain_impact : null;
     review = { impacts: preview.impact.affected_checkpoints, gainImpact, gainRefreshed: refreshed && !!gainImpact, payload };
     return true;
   }
 
-  async function commit(payload: InternalTransferRequest, override: boolean, acknowledgement: string) {
-    await replaceTransfer(transactionID, {
-      reason: reason.trim(), replacement: payload,
+  async function commit(payload: TransferPayload, override: boolean, acknowledgement: string) {
+    const confirmations = {
       ...(override ? { reconciliation_override: true } : {}),
       ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
-    }, csrfToken);
+    };
+    if (outbound) {
+      await replaceTransferOut(transactionID, { reason: reason.trim(),
+        replacement: payload as ExternalTransferOutRequest, ...confirmations }, csrfToken);
+    } else {
+      await replaceTransfer(transactionID, { reason: reason.trim(),
+        replacement: payload as InternalTransferRequest, ...confirmations }, csrfToken);
+    }
     await invalidateInvestmentReads(queryClient);
     onSaved();
   }
 
   // The gain set changed since review: show the current set, not a dead end.
-  async function recover(error: unknown, payload: InternalTransferRequest) {
+  async function recover(error: unknown, payload: TransferPayload) {
     try {
       if (!isGainAcknowledgementRefusal(error) || !(await reviewImpact(payload, true))) formError = error;
     } catch (previewError) {
@@ -192,8 +209,8 @@
 {/if}
 
 <form onsubmit={handleSubmit} class="space-y-4" aria-busy={pending}>
-  <h2 class="text-base font-semibold text-foreground">{m.transactions_investment_replace_transfer_title()}</h2>
-  <p class="text-sm text-muted">{m.transactions_investment_replace_transfer_copy()}</p>
+  <h2 class="text-base font-semibold text-foreground">{outbound ? m.transactions_investment_replace_transfer_out_title() : m.transactions_investment_replace_transfer_title()}</h2>
+  <p class="text-sm text-muted">{outbound ? m.transactions_investment_replace_transfer_out_copy() : m.transactions_investment_replace_transfer_copy()}</p>
 
   <div>
     <label for="transfer-correction-reason" class="mb-1 block text-sm font-medium text-foreground">
@@ -207,24 +224,26 @@
   <p class="text-sm text-foreground">{m.investments_transfer_internal_source()}: <strong>{sourceAccount?.name ?? `#${sourceAccountID}`}</strong></p>
 
   <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-    <div>
+    <div class={outbound ? 'sm:col-span-2' : ''}>
       <label for="transfer-correction-date" class="mb-1 block text-sm font-medium text-foreground">
         {m.investments_transfer_effective_date()}
       </label>
       <input id="transfer-correction-date" type="date" bind:value={effectiveOn} required
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
     </div>
-    <div>
-      <label for="transfer-correction-destination" class="mb-1 block text-sm font-medium text-foreground">
-        {m.investments_transfer_internal_destination()}
-      </label>
-      <select id="transfer-correction-destination" bind:value={destinationAccountID} required
-        class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
-        {#each destinationAccounts as account (account.id)}
-          <option value={String(account.id)}>{account.name}</option>
-        {/each}
-      </select>
-    </div>
+    {#if !outbound}
+      <div>
+        <label for="transfer-correction-destination" class="mb-1 block text-sm font-medium text-foreground">
+          {m.investments_transfer_internal_destination()}
+        </label>
+        <select id="transfer-correction-destination" bind:value={destinationAccountID} required
+          class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
+          {#each destinationAccounts as account (account.id)}
+            <option value={String(account.id)}>{account.name}</option>
+          {/each}
+        </select>
+      </div>
+    {/if}
   </div>
 
   {#if pooled}
@@ -235,7 +254,7 @@
       <input id="transfer-correction-pooled-quantity" type="text" inputmode="decimal" autocomplete="off"
         bind:value={pooledQuantity} required
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 font-mono text-sm text-foreground" />
-      <fieldset class="space-y-2 pt-1">
+      <fieldset class="space-y-2 pt-1" hidden={outbound}>
         <legend class="text-sm font-medium text-foreground">{m.investments_transfer_internal_lineage_legend()}</legend>
         {#each [
           { value: 'pooled_lot', label: m.investments_transfer_internal_lineage_pooled(), help: m.investments_transfer_internal_lineage_pooled_help() },

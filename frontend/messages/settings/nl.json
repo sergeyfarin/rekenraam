@@ -785,6 +785,8 @@
   "transactions_investment_reverse_transfer_title": "Deze overboeking terugdraaien",
   "transactions_investment_reverse_transfer_copy": "Boekt de exacte tegenboeking. De eenheden gaan terug naar waar ze vandaan kwamen, de posities die deze overboeking opende worden gesloten en latere verkopen op beide rekeningen worden herberekend. Het origineel blijft in de controlegeschiedenis.",
   "transactions_investment_replace_transfer_action": "Overboeking corrigeren…",
+  "transactions_investment_replace_transfer_out_title": "Deze uitboeking corrigeren",
+  "transactions_investment_replace_transfer_out_copy": "Boekt de exacte tegenboeking, inclusief de uitgeboekte kostprijs, en de gecorrigeerde overboeking samen. De positie wordt per de overboekingsdatum verminderd, latere verkopen worden herberekend en het origineel blijft in de audithistorie.",
   "transactions_investment_replace_transfer_title": "Deze overboeking corrigeren",
   "transactions_investment_replace_transfer_copy": "Boekt de exacte tegenboeking en de gecorrigeerde overboeking samen. De bron wordt per overboekingsdatum afgeboekt, beide rekeningen en latere verkopen worden herberekend en het origineel blijft in de controlegeschiedenis.",
   "transactions_investment_replace_transfer_in_copy": "Boekt de exacte tegenboeking en de gecorrigeerde overboeking samen, zodat het verschil in de openingsbrug wordt toegevoegd in plaats van overschreven. De rekening en latere verkopen worden herberekend en het origineel blijft in de controlegeschiedenis.",

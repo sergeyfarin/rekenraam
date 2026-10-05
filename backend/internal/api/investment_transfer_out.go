@@ -167,3 +167,91 @@ func externalTransferOutReconciliationImpact(logger *slog.Logger, authService *a
 		writeReconciliationImpact(w, impact)
 	}
 }
+
+// investmentTransferOutReplacementRequest corrects an outbound transfer
+// (T-144). Replacement is a full outbound transfer; its own reason, override
+// and acknowledgement fields are ignored in favour of the outer ones.
+type investmentTransferOutReplacementRequest struct {
+	Reason                    string                     `json:"reason"`
+	ReconciliationOverride    bool                       `json:"reconciliation_override"`
+	GainImpactAcknowledgement string                     `json:"gain_impact_acknowledgement,omitempty"`
+	Replacement               externalTransferOutRequest `json:"replacement"`
+}
+
+type investmentTransferOutReplacementResponse struct {
+	Inverse                transactionResponse         `json:"inverse"`
+	Replacement            externalTransferOutResponse `json:"replacement"`
+	CorrectedTransactionID int64                       `json:"corrected_transaction_id"`
+}
+
+func investmentTransferOutReplacementInput(owner app.Owner, r *http.Request, transactionID int64,
+	request investmentTransferOutReplacementRequest) app.ReplaceInvestmentTransferOutInput {
+	return app.ReplaceInvestmentTransferOutInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		TransactionID: transactionID, Reason: request.Reason,
+		ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+		Replacement: externalTransferOutInput(owner, r, request.Replacement),
+	}
+}
+
+func replaceInvestmentTransferOut(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentTransferOutReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.ReplaceTransferOut(r.Context(), investmentTransferOutReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "replace outbound investment transfer", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentTransferOutReplacementResponse{
+			Inverse: toTransactionResponse(result.Inverse),
+			Replacement: externalTransferOutResponse{Transaction: toTransactionResponse(result.Replacement.Transaction),
+				Plan: toExternalTransferOutPlanResponse(result.Replacement.Plan)},
+			CorrectedTransactionID: result.CorrectedTransactionID,
+		})
+	}))
+}
+
+func replaceInvestmentTransferOutPreview(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentTransferOutReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		preview, err := investmentService.PreviewTransferOutReplacement(r.Context(), investmentTransferOutReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview outbound investment transfer replacement", err)
+			return
+		}
+		impact := toReconciliationImpactResponse(preview.Impact)
+		gainImpact, err := toGainImpactResponse(preview.Impact.GainImpact)
+		if err != nil {
+			writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+			return
+		}
+		impact.GainImpact = gainImpact
+		writeJSON(w, http.StatusOK, externalTransferOutPreviewResponse{
+			Plan: toExternalTransferOutPlanResponse(preview.Plan), Impact: impact,
+		})
+	}
+}

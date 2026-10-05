@@ -970,6 +970,40 @@ InvestmentTransferReplacementResponse:
       type: integer
       format: int64
 
+InvestmentTransferOutReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, replacement]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      description: Why the posted outbound transfer is being corrected.
+    reconciliation_override:
+      type: boolean
+      description: Omit or set false to keep affected reconciliation checkpoints active.
+    gain_impact_acknowledgement:
+      type: string
+      description: The gain_impact.acknowledgement token from this command's preview.
+    replacement:
+      $ref: "../schemas/investments.yaml#/ExternalTransferOutRequest"
+      description: >-
+        The full corrected outbound transfer. Date, source holding and lots or pooled quantity may change;
+        commodity_id and cost_commodity_id must equal the transfer's. Its change_reason,
+        reconciliation_override and gain_impact_acknowledgement are ignored.
+
+InvestmentTransferOutReplacementResponse:
+  type: object
+  required: [inverse, replacement, corrected_transaction_id]
+  properties:
+    inverse:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    replacement:
+      $ref: "../schemas/investments.yaml#/ExternalTransferOutResponse"
+    corrected_transaction_id:
+      type: integer
+      format: int64
+
 InvestmentTransferInReplacementRequest:
   type: object
   additionalProperties: false
@@ -1157,8 +1191,9 @@ InvestmentSplitReplacementResponse:
 InvestmentCorrectionTransferTerms:
   type: object
   description: >-
-    The effective transfer's committed terms, for pre-filling a replacement (T-119). Internal selected-lot
-    transfers list lot_allocations; internal pool transfers and external transfers in give quantity_value/scale.
+    The effective transfer's committed terms, for pre-filling a replacement (T-119, outbound T-144).
+    Selected-lot transfers list lot_allocations; pool transfers and external transfers in give quantity_value/scale.
+    An outbound transfer has no destination account or lineage.
     An external transfer in has no source account or lineage and gives its carried basis and original date.
   required: [transfer_kind, effective_on, source_account_id, destination_account_id, commodity_id, cost_commodity_id,
     basis_allocation, destination_lineage, lot_allocations, quantity_value, quantity_scale,
@@ -1166,7 +1201,7 @@ InvestmentCorrectionTransferTerms:
   properties:
     transfer_kind:
       type: string
-      enum: [internal, external_in]
+      enum: [internal, external_in, external_out]
     effective_on:
       type: string
       format: date
@@ -1174,8 +1209,9 @@ InvestmentCorrectionTransferTerms:
       type: [integer, "null"]
       format: int64
     destination_account_id:
-      type: integer
+      type: [integer, "null"]
       format: int64
+      description: Null for an outbound transfer.
     commodity_id:
       type: integer
       format: int64
