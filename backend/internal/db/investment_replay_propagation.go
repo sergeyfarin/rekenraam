@@ -11,13 +11,6 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-// maxInvestmentTransferPropagationRounds bounds the fixed-point walk. Each
-// round crosses one more transfer; carried basis only flows forward in time,
-// so a real book settles in at most one round per transfer in its longest
-// chain. Hitting the bound means the inputs are inconsistent, not that the
-// book is large.
-const maxInvestmentTransferPropagationRounds = 256
-
 // propagateInvestmentTransferRevisionsTx carries changed internal-transfer
 // basis to the destination positions, within the caller's transaction
 // (ADR 0013 cross-position replay refinement, T-132).
@@ -25,85 +18,212 @@ const maxInvestmentTransferPropagationRounds = 256
 // The only input one position gives another is a link's carried basis and,
 // for a pooled_lot link (T-135), its original acquisition date: destination
 // lots and quantities of a transfer are fixed, and a source_lots replay that
-// would change which lots it takes is refused with the transfer named. So the
-// merged dated stream the ADR describes is computed exactly by replaying each
-// destination from its links' effective inputs and repeating until no link
-// changes. A source's depletion at a transfer's slot depends only on that
-// source's earlier history, so a cycle (A→B, later B→A) settles: the return
-// leg's new basis cannot reach back before it. Destinations reached this way
-// are a subset of InvestmentReplayClosure — only links that actually moved.
+// would change which lots it takes is refused with the transfer named. A
+// source's depletion at a transfer's slot depends only on that source's
+// earlier history, so the dependency closure is replayed once as the merged
+// dated stream the ADR describes (T-140): every position's intents in one
+// causal order, each transfer handing its new basis to its destination lot
+// before that lot opens. Chains and cycles (A→B, later B→A) settle in that
+// single pass whatever their depth, and each affected position is persisted
+// once from its final inputs.
 //
 // Every write joins the caller's transaction. Any refusal (an impossible
 // disposal, an invalid election, a split quantity dependency, a basis range
 // overflow) rolls back the triggering command with the dependent operation
-// named. A position in a cycle may be replayed twice in one command; each
-// replay appends its effective revision, and the last one is current.
+// named. A position in a cycle through the caller's own position is persisted
+// again here; each persist appends its effective revision, and the last one
+// is current.
 func propagateInvestmentTransferRevisionsTx(ctx context.Context, tx *sql.Tx, bookID,
 	causedByOperationID, auditEventID, actorUserID int64, createdAt string,
 	revisions []InvestmentReplayTransferRevision) error {
-	pending := revisions
-	for round := 0; len(pending) > 0; round++ {
-		if round == maxInvestmentTransferPropagationRounds {
-			return fmt.Errorf("%w: internal transfer basis did not settle", ErrInvalidDisposalParams)
+	if len(revisions) == 0 {
+		return nil
+	}
+	affected := make(map[investmentReplayPositionKey]bool)
+	for _, revision := range revisions {
+		destination, _, err := appendTransferLinkRevisionTx(ctx, tx, bookID, causedByOperationID,
+			auditEventID, createdAt, revision)
+		if err != nil {
+			return err
 		}
-		destinations := make(map[investmentReplayPositionKey]bool)
-		for _, revision := range pending {
-			destination, err := appendTransferLinkRevisionTx(ctx, tx, bookID, causedByOperationID,
-				auditEventID, createdAt, revision)
-			if err != nil {
-				return err
-			}
-			destinations[destination] = true
+		affected[destination] = true
+	}
+	// Every position downstream of a changed link, whatever its date: the
+	// pass then never meets a destination outside the positions it replays.
+	seeds := make([]InvestmentReplayPosition, 0, len(affected))
+	for key := range affected {
+		seeds = append(seeds, InvestmentReplayPosition{AccountID: key.accountID, CommodityID: key.commodityID,
+			CostCommodityID: key.costCommodityID, AffectedFrom: "0001-01-01"})
+	}
+	closure, err := investmentReplayClosureQuery(ctx, tx, bookID, seeds)
+	if err != nil {
+		return err
+	}
+	keys := make([]investmentReplayPositionKey, 0, len(closure))
+	for _, position := range closure {
+		keys = append(keys, investmentReplayPositionKey{position.AccountID, position.CommodityID, position.CostCommodityID})
+	}
+	sortInvestmentReplayPositionKeys(keys)
+	pass, err := simulateInvestmentReplayClosureTx(ctx, tx, bookID, causedByOperationID, auditEventID, createdAt, keys)
+	if err != nil {
+		return err
+	}
+	for _, revision := range pass.revisions {
+		destination, _, err := appendTransferLinkRevisionTx(ctx, tx, bookID, causedByOperationID,
+			auditEventID, createdAt, revision)
+		if err != nil {
+			return err
 		}
-		keys := make([]investmentReplayPositionKey, 0, len(destinations))
-		for key := range destinations {
-			keys = append(keys, key)
+		affected[destination] = true
+	}
+	persisted := make([]investmentReplayPositionKey, 0, len(affected))
+	for key := range affected {
+		persisted = append(persisted, key)
+	}
+	sortInvestmentReplayPositionKeys(persisted)
+	for _, key := range persisted {
+		projection, replayed := pass.projections[key]
+		if !replayed {
+			return fmt.Errorf("%w: transfer destination is outside the replayed closure", ErrInvalidDisposalParams)
 		}
-		slices.SortFunc(keys, func(a, b investmentReplayPositionKey) int {
-			return cmp.Or(cmp.Compare(a.accountID, b.accountID), cmp.Compare(a.commodityID, b.commodityID),
-				cmp.Compare(a.costCommodityID, b.costCommodityID))
-		})
-		var next []InvestmentReplayTransferRevision
-		for _, key := range keys {
-			intents, err := investmentReplayIntentsQuery(ctx, tx, bookID, key.accountID,
-				key.commodityID, key.costCommodityID, "long")
-			if err != nil {
-				return err
-			}
-			projection, err := simulateInvestmentReplayTx(ctx, tx, bookID, key.accountID,
-				key.commodityID, key.costCommodityID, intents)
-			if err != nil {
-				return err
-			}
-			if err := persistInvestmentReplayPositionTx(ctx, tx, bookID, key.accountID, key.commodityID,
-				key.costCommodityID, causedByOperationID, auditEventID, actorUserID, createdAt,
-				intents, projection); err != nil {
-				return err
-			}
-			next = append(next, projection.TransferRevisions...)
+		// The pass read each position's inputs before its own revisions; the
+		// persisted intents are the final ones it effectively replayed.
+		intents, err := investmentReplayIntentsQuery(ctx, tx, bookID, key.accountID,
+			key.commodityID, key.costCommodityID, "long")
+		if err != nil {
+			return err
 		}
-		pending = next
+		if err := persistInvestmentReplayPositionTx(ctx, tx, bookID, key.accountID, key.commodityID,
+			key.costCommodityID, causedByOperationID, auditEventID, actorUserID, createdAt,
+			intents, projection); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
+func sortInvestmentReplayPositionKeys(keys []investmentReplayPositionKey) {
+	slices.SortFunc(keys, func(a, b investmentReplayPositionKey) int {
+		return cmp.Or(cmp.Compare(a.accountID, b.accountID), cmp.Compare(a.commodityID, b.commodityID),
+			cmp.Compare(a.costCommodityID, b.costCommodityID))
+	})
+}
+
+type investmentReplayClosurePass struct {
+	projections map[investmentReplayPositionKey]InvestmentReplayProjection
+	// revisions are the links the pass changed, in causal order.
+	revisions []InvestmentReplayTransferRevision
+}
+
+// simulateInvestmentReplayClosureTx replays the positions as one merged dated
+// stream inside a savepoint and rolls every write back. A changed link's
+// revision is appended inside the pass, so the destination's lot order sees
+// its original date, and its destination lot opens at the new basis.
+func simulateInvestmentReplayClosureTx(ctx context.Context, tx *sql.Tx, bookID, causedByOperationID,
+	auditEventID int64, createdAt string, keys []investmentReplayPositionKey) (investmentReplayClosurePass, error) {
+	if _, err := tx.ExecContext(ctx, `SAVEPOINT investment_replay_closure`); err != nil {
+		return investmentReplayClosurePass{}, fmt.Errorf("start investment replay closure: %w", err)
+	}
+	pass, passErr := runInvestmentReplayClosureTx(ctx, tx, bookID, causedByOperationID, auditEventID, createdAt, keys)
+	if _, err := tx.ExecContext(ctx, `ROLLBACK TO investment_replay_closure`); err != nil {
+		abortErr := tx.Rollback()
+		return investmentReplayClosurePass{}, errors.Join(passErr,
+			fmt.Errorf("restore projection after investment replay closure: %w", err), abortErr)
+	}
+	if _, err := tx.ExecContext(ctx, `RELEASE investment_replay_closure`); err != nil {
+		abortErr := tx.Rollback()
+		return investmentReplayClosurePass{}, errors.Join(passErr,
+			fmt.Errorf("release investment replay closure savepoint: %w", err), abortErr)
+	}
+	return pass, passErr
+}
+
+func runInvestmentReplayClosureTx(ctx context.Context, tx *sql.Tx, bookID, causedByOperationID,
+	auditEventID int64, createdAt string, keys []investmentReplayPositionKey) (investmentReplayClosurePass, error) {
+	type positionIntent struct {
+		key    investmentReplayPositionKey
+		intent InvestmentReplayIntent
+	}
+	pass := investmentReplayClosurePass{projections: make(map[investmentReplayPositionKey]InvestmentReplayProjection, len(keys))}
+	projections := make(map[investmentReplayPositionKey]*InvestmentReplayProjection, len(keys))
+	var stream []positionIntent
+	for _, key := range keys {
+		intents, err := investmentReplayIntentsQuery(ctx, tx, bookID, key.accountID, key.commodityID, key.costCommodityID, "long")
+		if err != nil {
+			return pass, err
+		}
+		if err := resetInvestmentReplayPositionTx(ctx, tx, bookID, key.accountID, key.commodityID, key.costCommodityID); err != nil {
+			return pass, err
+		}
+		projections[key] = &InvestmentReplayProjection{}
+		for _, intent := range intents {
+			stream = append(stream, positionIntent{key, intent})
+		}
+	}
+	// Each position's intents keep their own order; across positions the same
+	// date, correction-root slot and effect order puts a transfer's source
+	// depletion before the destination lot it opens.
+	slices.SortStableFunc(stream, func(a, b positionIntent) int {
+		return compareInvestmentReplayIntents(a.intent, b.intent)
+	})
+	carried := make(map[int64]InvestmentReplayTransferRevision) // destination lot → revised link
+	opened := make(map[int64]bool)
+	for _, item := range stream {
+		intent, projection := item.intent, projections[item.key]
+		if intent.Kind == "opening" {
+			if revision, revised := carried[intent.LotID]; revised {
+				intent.AmountValue, intent.AmountScale = exact.New(revision.CostBasisValue), revision.CostBasisScale
+			}
+			opened[intent.LotID] = true
+		}
+		before := len(projection.TransferRevisions)
+		if err := applyInvestmentReplayIntentTx(ctx, tx, bookID, item.key.accountID, item.key.commodityID,
+			item.key.costCommodityID, intent, projection); err != nil {
+			return pass, err
+		}
+		for _, revision := range projection.TransferRevisions[before:] {
+			destination, lotID, err := appendTransferLinkRevisionTx(ctx, tx, bookID, causedByOperationID,
+				auditEventID, createdAt, revision)
+			if err != nil {
+				return pass, err
+			}
+			if projections[destination] == nil || opened[lotID] {
+				return pass, fmt.Errorf("%w: transfer operation %d reached its destination out of causal order",
+					ErrInvalidDisposalParams, revision.OperationID)
+			}
+			carried[lotID] = revision
+			pass.revisions = append(pass.revisions, revision)
+		}
+	}
+	for _, key := range keys {
+		projection := projections[key]
+		if err := finishInvestmentReplayPositionTx(ctx, tx, bookID, key.accountID, key.commodityID,
+			key.costCommodityID, projection); err != nil {
+			return pass, err
+		}
+		pass.projections[key] = *projection
+	}
+	return pass, nil
+}
+
 // appendTransferLinkRevisionTx records one link's new effective depletion and
-// returns the destination position that must replay from it.
+// returns the destination position and lot that must replay from it.
 func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, causedByOperationID,
-	auditEventID int64, createdAt string, revision InvestmentReplayTransferRevision) (investmentReplayPositionKey, error) {
+	auditEventID int64, createdAt string, revision InvestmentReplayTransferRevision) (investmentReplayPositionKey, int64, error) {
 	if revision.OperationID <= 0 || revision.LinkSeq <= 0 || revision.CostBasisValue < 0 ||
 		(revision.SourceLotID > 0) == revision.PooledLot || (revision.PooledLot && len(revision.Depletions) == 0) {
-		return investmentReplayPositionKey{}, fmt.Errorf("%w: transfer link revision is incomplete", ErrInvalidDisposalParams)
+		return investmentReplayPositionKey{}, 0, fmt.Errorf("%w: transfer link revision is incomplete", ErrInvalidDisposalParams)
 	}
 	var destination investmentReplayPositionKey
-	if err := tx.QueryRowContext(ctx, `SELECT d.account_id, d.commodity_id, d.cost_commodity_id
+	var destinationLotID int64
+	if err := tx.QueryRowContext(ctx, `SELECT d.id, d.account_id, d.commodity_id, d.cost_commodity_id
 		FROM investment_transfer_lot_links x
 		JOIN investment_transfer_facts f ON f.operation_id = x.operation_id
 		JOIN investment_lots d ON d.id = x.destination_lot_id
 		WHERE x.operation_id = ? AND x.link_seq = ? AND f.book_id = ? AND f.transfer_kind = 'internal'`,
-		revision.OperationID, revision.LinkSeq, bookID).Scan(
+		revision.OperationID, revision.LinkSeq, bookID).Scan(&destinationLotID,
 		&destination.accountID, &destination.commodityID, &destination.costCommodityID); err != nil {
-		return investmentReplayPositionKey{}, fmt.Errorf("read revised transfer link destination: %w", err)
+		return investmentReplayPositionKey{}, 0, fmt.Errorf("read revised transfer link destination: %w", err)
 	}
 	var priorID sql.NullInt64
 	priorSeq := 1
@@ -111,7 +231,7 @@ func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, cause
 		WHERE book_id = ? AND operation_id = ? AND link_seq = ?`,
 		bookID, revision.OperationID, revision.LinkSeq).Scan(&priorID, &priorSeq)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return investmentReplayPositionKey{}, fmt.Errorf("read current transfer link revision: %w", err)
+		return investmentReplayPositionKey{}, 0, fmt.Errorf("read current transfer link revision: %w", err)
 	}
 	var originalKnowledge, originalDate sql.NullString
 	if revision.PooledLot {
@@ -127,11 +247,11 @@ func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, cause
 		nullablePositiveInt64(revision.SourceLotID), exact.New(revision.CostBasisValue), revision.CostBasisScale,
 		originalKnowledge, originalDate, createdAt, auditEventID)
 	if err != nil {
-		return investmentReplayPositionKey{}, fmt.Errorf("append transfer link revision: %w", err)
+		return investmentReplayPositionKey{}, 0, fmt.Errorf("append transfer link revision: %w", err)
 	}
 	revisionID, err := result.LastInsertId()
 	if err != nil {
-		return investmentReplayPositionKey{}, fmt.Errorf("read transfer link revision id: %w", err)
+		return investmentReplayPositionKey{}, 0, fmt.Errorf("read transfer link revision id: %w", err)
 	}
 	for index, depletion := range revision.Depletions {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_link_revision_depletions (
@@ -139,8 +259,8 @@ func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, cause
 			cost_basis_value, cost_basis_scale
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, revisionID, index+1, bookID, depletion.LotID,
 			depletion.QuantityValue, depletion.QuantityScale, depletion.CostBasisValue, depletion.CostBasisScale); err != nil {
-			return investmentReplayPositionKey{}, fmt.Errorf("append transfer revision depletion: %w", err)
+			return investmentReplayPositionKey{}, 0, fmt.Errorf("append transfer revision depletion: %w", err)
 		}
 	}
-	return destination, nil
+	return destination, destinationLotID, nil
 }

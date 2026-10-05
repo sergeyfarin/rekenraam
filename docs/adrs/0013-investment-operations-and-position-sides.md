@@ -214,6 +214,22 @@ history, so a cycle settles; a position in a cycle may be replayed (and its
 disposals revised) twice in one command, and the last revision is current.
 Positions reached are the subset of the closure whose links actually moved.
 
+*Single merged pass (2026-10-05, [T-140 #155](https://github.com/sergeyfarin/rekenraam/issues/155)).*
+The first implementation reached that result by rounds: each round replayed
+every destination whose incoming link had changed, up to a fixed 256 rounds.
+One round crosses one transfer, so a valid chain deeper than the bound (one
+share moved back and forth 257 times between two accounts) was refused as
+non-convergent, and a chain of n transfers replayed whole histories n times
+(128 transfers: 25 s). Propagation now runs the merged dated stream itself:
+the closure downstream of the changed links is simulated once in a savepoint,
+all positions' intents in one causal order (date, correction-root slot,
+effect sequence). Each transfer appends its revised link inside the pass, so
+the destination lot opens at the new basis and its FIFO/LIFO order reads the
+new original date; a destination reached out of causal order is an internal
+refusal, not a silent result. Every changed link gets one revision and every
+affected position is persisted once from its final inputs. There is no round
+bound; depth costs one pass (300 transfers: about 2 s).
+
 - A transfer from a replaced acquisition depletes the replacement lot of the
   same correction root, as a specific-lot election does; the revision records
   that effective source lot. A successor opened on another date is not

@@ -164,7 +164,7 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   never route an audit through them. Cross-position replay is scoped to the
   dependency closure (`InvestmentReplayClosure`, ADR 0013 T-124 refinement):
   `persistInvestmentReplayProjectionTx` appends transfer link revisions and
-  replays destinations to a fixed point (T-132). Any new reader of a
+  replays the downstream closure once as a merged dated stream (T-132, T-140). Any new reader of a
   transferred lot's basis must use the latest link revision, not the link.
 - Transfers are corrected by their own commands (T-119, ADR 0013 *Transfer
   Correction Refinement*): a reversal inverts the whole journal (bridge

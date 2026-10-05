@@ -1819,3 +1819,31 @@ func seedTestAccountOpenedOn(t *testing.T, database *sql.DB, openedOn string) in
 	require.NoError(t, err)
 	return accountID
 }
+
+// T-139: the same seam in batch commit. A discard after CommitImportBatch's
+// open-batch check refuses the row write and leaves the batch discarded.
+func TestCommitImportBatchRefusesRowsOfBatchDiscardedMidCommit(t *testing.T) {
+	t.Parallel()
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	batchID, rowID := f.stageOrderFillRow(t, conn.ID, trading212OrderFill{
+		FillType: "TRADE", FillID: "discard-race", OrderID: "discard-race-order", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "1", Price: "150.00", Currency: "USD",
+		FilledAt: "2026-06-01T09:00:00Z", NetValue: "-150.00", NetValueCurrency: "EUR",
+	})
+	before := transactionCount(t, f)
+	f.importService.beforeImportRowCommitForTest = func() {
+		require.NoError(t, f.importService.DiscardImportBatch(ctx, DiscardImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID}))
+	}
+
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.ErrorIs(t, err, ErrImportBatchNotOpen)
+	assert.Equal(t, before, transactionCount(t, f), "nothing posts from a discarded batch")
+	row, err := f.importRepo.ImportStagedRowByID(ctx, rowID)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", row.CommitStatus)
+	batch, err := f.importRepo.ImportBatchByID(ctx, BookID, batchID)
+	require.NoError(t, err)
+	assert.Equal(t, "discarded", batch.Status)
+}

@@ -6,10 +6,7 @@
   import { formatLedgerAmount } from '#lib/money/amount.ts';
   import { parseDividendAmounts, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
-  import { forecastQueryKey } from '#lib/api/forecast.ts';
   import {
-    investmentPositionsQueryKey,
-    investmentLotsQueryKey,
     investmentInstrumentsQueryKey,
     searchInvestmentInstruments,
     getDividendDefaults,
@@ -23,6 +20,7 @@
     type ReinvestedDividendRequest,
     type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
+  import { invalidateInvestmentReads } from './invalidate';
   import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import {
@@ -355,9 +353,7 @@
   }
 
   async function refreshAfterSave() {
-    await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
-    await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
-    await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
+    await invalidateInvestmentReads(queryClient);
     onSaved();
   }
 

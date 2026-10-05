@@ -6,8 +6,6 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
-  import { forecastQueryKey } from '#lib/api/forecast.ts';
-  import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transactions.ts';
   import { formatLedgerAmount } from '#lib/money/amount.ts';
   import { parseMagnitude } from '#lib/investments/form-amounts.ts';
   import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
@@ -21,9 +19,6 @@
     isGainAcknowledgementRefusal
   } from '#lib/investments/gain-impact.ts';
   import {
-    investmentGainsQueryKey,
-    investmentLotsQueryKey,
-    investmentPositionsQueryKey,
     previewTransferReplacement,
     replaceTransfer,
     type GainImpact,
@@ -31,6 +26,7 @@
     type InvestmentCorrectionTransferTerms,
     type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
+  import { invalidateInvestmentReads } from './invalidate';
 
   // Replaces a posted internal transfer (T-119). The source holding, security
   // and basis currency are fixed; the date, destination, the quantity taken
@@ -161,14 +157,7 @@
       ...(override ? { reconciliation_override: true } : {}),
       ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
     }, csrfToken);
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: investmentGainsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: forecastQueryKey }),
-      queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: accountRegisterQueryKey })
-    ]);
+    await invalidateInvestmentReads(queryClient);
     onSaved();
   }
 

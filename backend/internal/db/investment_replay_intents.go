@@ -620,21 +620,27 @@ func investmentReplaySplitIntentsQuery(ctx context.Context, reader queryer, book
 }
 
 func sortInvestmentReplayIntents(intents []InvestmentReplayIntent) {
-	slices.SortFunc(intents, func(a, b InvestmentReplayIntent) int {
-		if order := cmp.Compare(a.EventDate, b.EventDate); order != 0 {
-			return order
+	slices.SortFunc(intents, compareInvestmentReplayIntents)
+}
+
+// compareInvestmentReplayIntents is replay's causal order: date, then the
+// correction root's same-day slot, then the operation's effect order. It
+// orders intents of different positions too, so a transfer's source
+// depletion precedes the destination lot it opens.
+func compareInvestmentReplayIntents(a, b InvestmentReplayIntent) int {
+	if order := cmp.Compare(a.EventDate, b.EventDate); order != 0 {
+		return order
+	}
+	orderID := func(intent InvestmentReplayIntent) int64 {
+		if intent.OrderOperationID > 0 {
+			return intent.OrderOperationID
 		}
-		orderID := func(intent InvestmentReplayIntent) int64 {
-			if intent.OrderOperationID > 0 {
-				return intent.OrderOperationID
-			}
-			return intent.OperationID
-		}
-		if order := cmp.Compare(orderID(a), orderID(b)); order != 0 {
-			return order
-		}
-		return cmp.Compare(a.EffectSeq, b.EffectSeq)
-	})
+		return intent.OperationID
+	}
+	if order := cmp.Compare(orderID(a), orderID(b)); order != 0 {
+		return order
+	}
+	return cmp.Compare(a.EffectSeq, b.EffectSeq)
 }
 
 func investmentReplayOrderOperationIDsQuery(ctx context.Context, reader queryer, bookID int64) (map[int64]int64, error) {

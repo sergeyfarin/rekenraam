@@ -6,7 +6,6 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
-  import { forecastQueryKey } from '#lib/api/forecast.ts';
   import { formatLedgerAmount } from '#lib/money/amount.ts';
   import { formatScaledValue } from '#lib/investments/investment-labels.ts';
   import { parseMagnitude, type AmountFieldError } from '#lib/investments/form-amounts.ts';
@@ -21,9 +20,6 @@
     isGainAcknowledgementRefusal
   } from '#lib/investments/gain-impact.ts';
   import {
-    investmentGainsQueryKey,
-    investmentLotsQueryKey,
-    investmentPositionsQueryKey,
     previewWriteOffReplacementReconciliation,
     replaceWriteOff,
     type GainImpact,
@@ -31,6 +27,7 @@
     type InvestmentWriteOffRequest,
     type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
+  import { invalidateInvestmentReads } from './invalidate';
 
   // Replaces a posted write-off (T-118). Proceeds stay zero and there is no
   // cash leg; quantity, method, lot elections, date and holding may change.
@@ -167,10 +164,7 @@
       ...(override ? { reconciliation_override: true } : {}),
       ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
     }, csrfToken);
-    await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
-    await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
-    await queryClient.invalidateQueries({ queryKey: investmentGainsQueryKey });
-    await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
+    await invalidateInvestmentReads(queryClient);
     onSaved();
   }
 

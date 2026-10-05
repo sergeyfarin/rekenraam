@@ -32,6 +32,19 @@ async function setup(page: Page, label: string): Promise<Setup> {
   return { csrfToken, currencyID, cashID: cash.id, incomeID: income.id, suffix };
 }
 
+// Navigate through the SvelteKit router, as an in-app link does: the query
+// cache survives, unlike page.goto's full reload.
+async function clientNavigate(page: Page, href: string): Promise<void> {
+  await page.evaluate((target) => {
+    const link = document.createElement('a');
+    link.href = target;
+    document.getElementById('app-root')!.appendChild(link);
+    link.click();
+    link.remove();
+  }, href);
+  await page.waitForURL((url) => `${url.pathname}${url.search}` === href);
+}
+
 async function chainEffective(page: Page, transactionID: number): Promise<number | null> {
   const chain = await apiJSON<{ effective_transaction_id: number | null }>(page, 'GET',
     `/api/v1/investments/transactions/${transactionID}/correction-chain`);
@@ -99,7 +112,13 @@ test.describe('on a phone', () => {
     await trade('buy', 20, '10', '20000');
     await trade('sell', 10, '5', '15000');
 
-    await page.goto(`/app/transactions?transaction_id=${reinvestment.transaction.id}`);
+    // T-138: the gains read is cached before the correction and must not
+    // survive it.
+    const saleRow = page.locator('tbody tr', { hasText: name }).filter({ hasText: daysFromTodayISO(-10) });
+    await page.goto('/app/investments');
+    await page.getByRole('button', { name: 'Gains', exact: true }).click();
+    await expect(saleRow).toContainText('140.00');
+    await clientNavigate(page, `/app/transactions?transaction_id=${reinvestment.transaction.id}`);
     await page.getByRole('button', { name: 'Correct reinvested dividend…' }).click();
     const form = page.getByRole('dialog', { name: 'Correct this reinvested dividend' });
     await expect(form.getByLabel('Quantity')).toHaveValue('10');
@@ -120,6 +139,10 @@ test.describe('on a phone', () => {
       return gains.realized.filter((gain) => gain.commodity_id === instrument.commodity_id)
         .map((gain) => ((BigInt(gain.realized_gain_value) * 100n) / 10n ** BigInt(gain.realized_gain_scale)).toString());
     }).toEqual(['9000']);
+    await clientNavigate(page, '/app/investments');
+    await page.getByRole('button', { name: 'Gains', exact: true }).click();
+    await expect(saleRow).toContainText('90.00');
+    await expect(saleRow).not.toContainText('140.00');
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });

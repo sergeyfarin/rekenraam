@@ -143,9 +143,20 @@ events remain unclassified warnings. The
 [slice 5 contract](plans/investment-operation-slice-5-contract.md) govern
 design; [implemented](implemented.md) records the shipped boundary.
 
-R16 is complete when focus items 1–8 above are closed. Write-off UI and
-provider return-of-capital/cash-in-lieu suggestions remain follow-ups outside
-that bar.
+R16 is complete when these issues are closed: the remaining
+[#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions, short
+sale/cover [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103),
+compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115),
+zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)
+and Refresh reach for revised fills
+[T-137 #152](https://github.com/sergeyfarin/rekenraam/issues/152). Outside that
+bar: the lot-opening `NOT NULL` constraint
+[T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) is a v0.1.0
+release gate, not an R16 one; the evidence-blocked provider mappings
+[T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145) and
+[T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) wait on
+provider evidence and do not hold R16 open; write-off entry UI and provider
+return-of-capital/cash-in-lieu suggestions remain follow-ups.
 
 ### R11 — price and FX management UI, promoted after R16
 

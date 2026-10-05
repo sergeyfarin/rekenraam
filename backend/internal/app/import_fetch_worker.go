@@ -580,11 +580,12 @@ func (s *ImportService) markTrading212FetchTerminalFailure(ctx context.Context, 
 	batch, err := s.repository.ImportBatchByID(ctx, BookID, payload.BatchID)
 	if err == nil && batch.Status == "previewing" {
 		if err := s.repository.UpdateImportBatchStatus(ctx, db.UpdateImportBatchStatusParams{
-			BatchID:    payload.BatchID,
-			Status:     "failed",
-			EventKind:  "failed",
-			DetailJSON: string(metaJSON),
-			OccurredAt: now,
+			BatchID:      payload.BatchID,
+			Status:       "failed",
+			EventKind:    "failed",
+			DetailJSON:   string(metaJSON),
+			FromStatuses: []string{"previewing"},
+			OccurredAt:   now,
 		}); err != nil {
 			logger.WarnContext(ctx, "mark import batch failed", slog.Int64("batch_id", payload.BatchID), slog.Any("err", err))
 		}

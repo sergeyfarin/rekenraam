@@ -13,7 +13,19 @@ var (
 	ErrImportProfileNotFound           = errors.New("import profile not found")
 	ErrImportRuleNotFound              = errors.New("import rule not found")
 	ErrImportStagedRowAlreadyCommitted = errors.New("import staged row is already committed")
+	// ErrImportBatchDiscarded refuses a staged-row outcome once its batch is
+	// discarded: admission checked before the write must hold at the write.
+	ErrImportBatchDiscarded = errors.New("import batch is discarded")
+	// ErrImportBatchStatusChanged means a conditional status transition found
+	// the batch in a status outside its FromStatuses.
+	ErrImportBatchStatusChanged = errors.New("import batch status changed")
 )
+
+// stagedRowBatchOpenSQL keeps every staged-row outcome write out of a
+// discarded batch (T-139). It is evaluated inside the writer's statement, so
+// a discard that lands after the caller's admission check still wins.
+const stagedRowBatchOpenSQL = `NOT EXISTS (SELECT 1 FROM import_batches b
+	WHERE b.id = import_staged_rows.batch_id AND b.status = 'discarded')`
 
 type ImportRepository struct {
 	database *sql.DB
@@ -240,6 +252,9 @@ type UpdateImportBatchStatusParams struct {
 	Status     string
 	EventKind  string
 	DetailJSON string
+	// FromStatuses, when set, makes the transition conditional: the batch must
+	// still be in one of them inside the update, else ErrImportBatchStatusChanged.
+	FromStatuses []string
 	// Audit (optional — some events carry an audit_event_id)
 	ActorUserID   int64
 	AuthSessionID int64
@@ -858,9 +873,14 @@ func (r *ImportRepository) UpdateImportBatchStatus(ctx context.Context, params U
 		}
 	}()
 
-	result, err := tx.ExecContext(ctx, `
-		UPDATE import_batches SET status = ? WHERE id = ?
-	`, params.Status, params.BatchID)
+	query, args := `UPDATE import_batches SET status = ? WHERE id = ?`, []any{params.Status, params.BatchID}
+	if len(params.FromStatuses) > 0 {
+		query += ` AND status IN (?` + strings.Repeat(`, ?`, len(params.FromStatuses)-1) + `)`
+		for _, status := range params.FromStatuses {
+			args = append(args, status)
+		}
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("update import batch status: %w", err)
 	}
@@ -869,6 +889,14 @@ func (r *ImportRepository) UpdateImportBatchStatus(ctx context.Context, params U
 		return fmt.Errorf("rows affected: %w", err)
 	}
 	if n == 0 {
+		var exists bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM import_batches WHERE id = ?)`,
+			params.BatchID).Scan(&exists); err != nil {
+			return fmt.Errorf("read import batch after status transition: %w", err)
+		}
+		if exists {
+			return ErrImportBatchStatusChanged
+		}
 		return ErrImportBatchNotFound
 	}
 
@@ -1393,13 +1421,13 @@ func (r *ImportRepository) CommitImportStagedRowInTx(ctx context.Context, tx *sq
 // MarkImportStagedRowCommittedIfPending records a successful idempotent
 // outcome without overwriting a terminal result written by a concurrent
 // commit. The identity and winning row marker are written atomically, so a
-// no-op here means the other caller has already marked the row committed.
+// no-op here means the other caller has already marked the row committed, or
+// the batch was discarded and the row must stay uncommitted.
 func (r *ImportRepository) MarkImportStagedRowCommittedIfPending(ctx context.Context, rowID, identityID, transactionID int64) (bool, error) {
 	result, err := r.database.ExecContext(ctx, `
 		UPDATE import_staged_rows
 		SET commit_status = 'committed', committed_identity_id = ?, committed_transaction_id = NULLIF(?, 0), commit_error = NULL
-		WHERE id = ? AND commit_status = 'pending'
-	`, identityID, transactionID, rowID)
+		WHERE id = ? AND commit_status = 'pending' AND `+stagedRowBatchOpenSQL, identityID, transactionID, rowID)
 	if err != nil {
 		return false, fmt.Errorf("mark staged row committed if pending: %w", err)
 	}
@@ -1479,8 +1507,8 @@ func commitImportStagedRowExec(ctx context.Context, db execContexter, params Com
 	result, err := db.ExecContext(ctx, `
 		UPDATE import_staged_rows
 		SET commit_status = ?, committed_identity_id = ?, committed_transaction_id = ?, commit_error = ?
-		WHERE id = ? AND commit_status <> 'committed'
-	`, params.CommitStatus, params.CommittedIdentityID, params.CommittedTransactionID, params.CommitError, params.RowID)
+		WHERE id = ? AND commit_status <> 'committed' AND `+stagedRowBatchOpenSQL,
+		params.CommitStatus, params.CommittedIdentityID, params.CommittedTransactionID, params.CommitError, params.RowID)
 	if err != nil {
 		return fmt.Errorf("commit staged row: %w", err)
 	}
@@ -1489,8 +1517,9 @@ func commitImportStagedRowExec(ctx context.Context, db execContexter, params Com
 		return fmt.Errorf("rows affected: %w", err)
 	}
 	if n == 0 {
-		var commitStatus string
-		err := db.QueryRowContext(ctx, `SELECT commit_status FROM import_staged_rows WHERE id = ?`, params.RowID).Scan(&commitStatus)
+		var commitStatus, batchStatus string
+		err := db.QueryRowContext(ctx, `SELECT r.commit_status, b.status FROM import_staged_rows r
+			JOIN import_batches b ON b.id = r.batch_id WHERE r.id = ?`, params.RowID).Scan(&commitStatus, &batchStatus)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNotFound
 		}
@@ -1499,6 +1528,9 @@ func commitImportStagedRowExec(ctx context.Context, db execContexter, params Com
 		}
 		if commitStatus == "committed" {
 			return ErrImportStagedRowAlreadyCommitted
+		}
+		if batchStatus == "discarded" {
+			return ErrImportBatchDiscarded
 		}
 		return fmt.Errorf("staged row %d terminal transition was not applied from status %q", params.RowID, commitStatus)
 	}

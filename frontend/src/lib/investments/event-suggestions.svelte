@@ -9,6 +9,7 @@
     type InvestmentEventSuggestionResponse
   } from '#lib/api/investments.ts';
   import { m } from '#lib/paraglide/messages.js';
+  import { invalidateInvestmentReads } from './invalidate';
 
   interface Props {
     csrfToken: string;
@@ -32,7 +33,11 @@
     errors = new Map([...errors].filter(([k]) => k !== s.id));
     try {
       await acceptEventSuggestion(s.id, csrfToken);
-      await queryClient.invalidateQueries({ queryKey: ['api', 'investments', 'event-suggestions'] });
+      // Accepting posts the proposed dividend.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['api', 'investments', 'event-suggestions'] }),
+        invalidateInvestmentReads(queryClient)
+      ]);
     } catch {
       errors = new Map([...errors, [s.id, m.investments_suggestion_accept_error()]]);
     } finally {

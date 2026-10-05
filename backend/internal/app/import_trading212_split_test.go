@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/db"
 )
 
 // splitImportFixture holds an imported Trading 212 position with a manually
@@ -158,4 +160,34 @@ func requireInvestSelfCheckPasses(t *testing.T, f *investTestFixture) {
 		result := resultFor(t, run, check)
 		assert.Equal(t, SelfCheckPassed, result.Status, "%s: %s", check, result.Summary)
 	}
+}
+
+// T-139: the admission check runs before the write transaction. A discard
+// between the service's preparation and the writer must still refuse the link.
+func TestTrading212SplitLinkRefusesBatchDiscardedAfterPreparation(t *testing.T) {
+	t.Parallel()
+	f := newSplitImportFixture(t)
+	ctx := context.Background()
+	batchID, rowID := f.stageOrderFillRow(t, f.connectionID, f.splitFill)
+	split, err := f.importService.trading212SplitRow(ctx,
+		Trading212SplitRowInput{OwnerUserID: f.ownerUserID, BatchID: batchID, RowID: rowID})
+	require.NoError(t, err)
+	require.True(t, split.found)
+
+	require.NoError(t, f.importService.DiscardImportBatch(ctx, DiscardImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID}))
+	_, err = f.importRepo.LinkStagedRowToSplit(ctx, db.LinkStagedRowToSplitParams{
+		BookID: BookID, BatchID: batchID, RowID: rowID,
+		DedupeFingerprint: split.row.DedupeFingerprint, SourceKind: split.sourceKind,
+		OperationID: f.splitOpID, CommodityID: split.commodityID,
+		ActorUserID: f.ownerUserID, Now: "2026-06-02T00:00:00Z",
+	})
+	require.ErrorIs(t, err, db.ErrSplitLinkUnavailable)
+
+	row, err := f.importRepo.ImportStagedRowByID(ctx, rowID)
+	require.NoError(t, err)
+	assert.NotEqual(t, "committed", row.CommitStatus)
+	var identities int
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM import_commit_identity_effects WHERE operation_id = ?`,
+		f.splitOpID).Scan(&identities))
+	assert.Zero(t, identities, "no source identity is admitted for a discarded batch")
 }

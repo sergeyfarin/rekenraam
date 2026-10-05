@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createQuery } from '@tanstack/svelte-query';
+  import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { parseISO } from 'date-fns';
   import AlertTriangle from '@lucide/svelte/icons/triangle-alert';
   import { m } from '#lib/paraglide/messages.js';
@@ -13,6 +13,7 @@
   import TransferCorrectionForm from '#lib/investments/transfer-correction-form.svelte';
   import TransferInCorrectionForm from '#lib/investments/transfer-in-correction-form.svelte';
   import GainImpactList from '#lib/investments/gain-impact-list.svelte';
+  import { invalidateInvestmentReads } from '#lib/investments/invalidate.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     gainAcknowledgement,
@@ -56,6 +57,8 @@
     // A split adjustment journal shows the chain of the split it adjusts (T-136).
     systemLabel?: string;
   } = $props();
+
+  const queryClient = useQueryClient();
 
   const chainQuery = createQuery(() => ({
     queryKey: [...investmentCorrectionChainQueryKey, transactionID],
@@ -188,6 +191,9 @@
     } else {
       await reverseManualSale(transactionID, body, csrfToken);
     }
+    // A reversal restates positions, lots and realized gains, not only the
+    // transaction lists the parent refreshes (T-138).
+    await invalidateInvestmentReads(queryClient);
     closeModal();
     onRefresh?.();
   }

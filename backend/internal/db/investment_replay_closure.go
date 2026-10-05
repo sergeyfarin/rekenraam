@@ -33,9 +33,9 @@ type InvestmentReplayPosition struct {
 // Positions with no transfer path to a seed are excluded, because none of
 // their replay inputs can differ.
 //
-// This is the scope primitive only. Replaying the closure as one merged dated
-// stream, and the guarded bridge adjustment at the book boundary, are follow-up
-// work; until then the replay itself still refuses a changed carried basis.
+// This is the scope primitive only. propagateInvestmentTransferRevisionsTx
+// replays a closure as one merged dated stream (T-140); the guarded bridge
+// adjustment at the book boundary is follow-up work.
 func (r *InvestmentRepository) InvestmentReplayClosure(ctx context.Context, bookID int64, seeds []InvestmentReplayPosition) ([]InvestmentReplayPosition, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {

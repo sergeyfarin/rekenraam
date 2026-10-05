@@ -78,7 +78,7 @@
     type ImportConnection
   } from '#lib/api/connections.ts';
   import { m } from '#lib/paraglide/messages.js';
-  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { invalidateInvestmentReads } from '#lib/investments/invalidate.ts';
 
   // ── Page state ─────────────────────────────────────────────────────
   type Step = 'upload' | 'fetching' | 'preview' | 'result';
@@ -578,7 +578,7 @@
             : row)
         };
       }
-      await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
+      await invalidateInvestmentReads(queryClient);
       try {
         const refreshed = await getFullImportBatch(batchId);
         if (previewData) previewData = { ...previewData, batch: refreshed.batch, rows: refreshed.rows };
@@ -696,7 +696,7 @@
       csrfToken
     );
     commitResult = result;
-    await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
+    await invalidateInvestmentReads(queryClient);
     step = 'result';
   }
 

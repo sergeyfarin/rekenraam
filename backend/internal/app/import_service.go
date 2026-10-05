@@ -851,6 +851,16 @@ func (s *ImportService) PreviewCommit(ctx context.Context, input PreviewCommitIn
 // CommitImportBatch commits all pending staged rows via the transaction service.
 // Each row is its own DB transaction (partial-commit semantics).
 func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImportBatchInput) (CommitImportBatchResult, error) {
+	result, err := s.commitImportBatch(ctx, input)
+	// A discard that lands after the open-batch check refuses the remaining
+	// row writes and the final transition (T-139).
+	if errors.Is(err, db.ErrImportBatchDiscarded) || errors.Is(err, db.ErrImportBatchStatusChanged) {
+		return result, ErrImportBatchNotOpen
+	}
+	return result, err
+}
+
+func (s *ImportService) commitImportBatch(ctx context.Context, input CommitImportBatchInput) (CommitImportBatchResult, error) {
 	if input.OwnerUserID <= 0 {
 		return CommitImportBatchResult{}, ValidationError{Message: "owner user is required"}
 	}
@@ -1121,10 +1131,13 @@ func (s *ImportService) CommitImportBatch(ctx context.Context, input CommitImpor
 	}
 
 	if err := s.repository.UpdateImportBatchStatus(ctx, db.UpdateImportBatchStatusParams{
-		BatchID:       input.BatchID,
-		Status:        finalStatus,
-		EventKind:     eventKind,
-		DetailJSON:    string(detailJSON),
+		BatchID:    input.BatchID,
+		Status:     finalStatus,
+		EventKind:  eventKind,
+		DetailJSON: string(detailJSON),
+		// A concurrent commit of the same batch may already have finished;
+		// only a discard (or failure) since the open check refuses.
+		FromStatuses:  []string{"previewing", "partially_committed", "committed"},
 		ActorUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
@@ -1238,16 +1251,21 @@ func (s *ImportService) DiscardImportBatch(ctx context.Context, input DiscardImp
 	}
 
 	now := s.now().UTC().Format(time.RFC3339)
-	return s.repository.UpdateImportBatchStatus(ctx, db.UpdateImportBatchStatusParams{
+	err = s.repository.UpdateImportBatchStatus(ctx, db.UpdateImportBatchStatusParams{
 		BatchID:       input.BatchID,
 		Status:        "discarded",
 		EventKind:     "discarded",
 		DetailJSON:    "{}",
+		FromStatuses:  []string{"previewing"},
 		ActorUserID:   input.OwnerUserID,
 		AuthSessionID: input.AuthSessionID,
 		RequestID:     input.RequestID,
 		OccurredAt:    now,
 	})
+	if errors.Is(err, db.ErrImportBatchStatusChanged) {
+		return ErrImportBatchNotOpen
+	}
+	return err
 }
 
 // ListImportBatches returns paginated batch history.

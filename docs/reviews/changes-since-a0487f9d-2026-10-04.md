@@ -245,3 +245,33 @@ Sandbox runs initially failed because HTTP tests could not bind local sockets.
 The backend and browser suites passed with local networking enabled; those sandbox
 errors are environment limitations, not application regressions. GitHub issues
 were read only: no issues were closed, reopened, edited or created by this review.
+
+## Resolution (2026-10-05)
+
+Findings were filed as issues and fixed in one follow-up change:
+
+- **Finding 1** → [T-138 #153](https://github.com/sergeyfarin/rekenraam/issues/153).
+  The sweep found the omission wider than the dividend form: the reversal
+  dispatcher, import commit, Trading 212 source corrections, new dividends and
+  suggestion accept also left gains, positions or lots cached. All now call one
+  helper, `invalidateInvestmentReads`. The browser case preloads Gains, corrects
+  the reinvestment through client-side navigation and requires 90.00; it shows
+  140.00 without the fix.
+- **Finding 2** → [T-139 #154](https://github.com/sergeyfarin/rekenraam/issues/154).
+  The split-link writer rechecks the batch in its transaction. The suggested
+  sweep found the same race in batch commit: a discard after
+  `CommitImportBatch`'s open check still posted rows. Every staged-row outcome
+  write now refuses a discarded batch in the same statement, and batch status
+  transitions are conditional, so a discard cannot overwrite a commit or the
+  reverse. Both interleavings have named regressions that fail without the fix.
+- **Finding 3** → [T-140 #155](https://github.com/sergeyfarin/rekenraam/issues/155),
+  which is broader than reported. Two accounts are enough to hit the limit: one
+  share moved back and forth 257 times failed. Latency was quadratic, all in the
+  writer transaction: 64 transfers took 5.9 s and 128 took 24.9 s. Propagation now
+  replays the downstream closure once as the merged dated stream. There is no
+  round bound. A 128-transfer correction takes 0.8 s and a 300-transfer one 2.2 s,
+  with one link revision each. ADR 0013 records the change.
+- **Findings 4–6** → [T-141 #156](https://github.com/sergeyfarin/rekenraam/issues/156):
+  the R16 bar now names its issues, the TypeScript 6.0 exception is documented
+  separately from #112, and the closure notes were added to #138, #132, #151 and
+  #144.

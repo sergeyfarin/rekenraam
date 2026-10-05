@@ -48,6 +48,10 @@ GitHub numbers are distinct; cite both.
 | T-135 | [#150 — Admit changed pooled-transfer lineage under replay](https://github.com/sergeyfarin/rekenraam/issues/150) |
 | T-136 | [#151 — Label split adjustment journals in transaction lists and registers](https://github.com/sergeyfarin/rekenraam/issues/151) |
 | T-137 | [#152 — Revised Trading 212 fills before the fetch cursor reachable from Refresh](https://github.com/sergeyfarin/rekenraam/issues/152) |
+| T-138 | [#153 — Invalidate investment reads after corrections and reversals](https://github.com/sergeyfarin/rekenraam/issues/153) |
+| T-139 | [#154 — Recheck import batch status inside the split-link writer](https://github.com/sergeyfarin/rekenraam/issues/154) |
+| T-140 | [#155 — Unbounded-depth transfer basis propagation](https://github.com/sergeyfarin/rekenraam/issues/155) |
+| T-141 | [#156 — R16 completion bar, TypeScript policy and closure notes](https://github.com/sergeyfarin/rekenraam/issues/156) |
 
 IDs not listed here were closed before the GitHub migration; see the
 [pre-migration snapshot](reviews/open-backlog-before-github-2026-09-27.md)

@@ -11,11 +11,7 @@
   } from '#lib/investments/trade-economics.ts';
   import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
-  import { forecastQueryKey } from '#lib/api/forecast.ts';
   import {
-    investmentPositionsQueryKey,
-    investmentLotsQueryKey,
-    investmentGainsQueryKey,
     investmentInstrumentsQueryKey,
     searchInvestmentInstruments,
     previewSell,
@@ -30,6 +26,7 @@
     type CostBasisMethod,
     type InvestmentTradeCorrectionContextResponse
   } from '#lib/api/investments.ts';
+  import { invalidateInvestmentReads } from './invalidate';
   import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
   import {
     gainAcknowledgement,
@@ -416,10 +413,7 @@
       }, csrfToken);
     }
 
-    await queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey });
-    await queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey });
-    await queryClient.invalidateQueries({ queryKey: investmentGainsQueryKey });
-    await queryClient.invalidateQueries({ queryKey: forecastQueryKey });
+    await invalidateInvestmentReads(queryClient);
     onSaved();
   }
 

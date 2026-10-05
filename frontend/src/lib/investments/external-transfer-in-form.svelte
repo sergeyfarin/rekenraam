@@ -3,20 +3,16 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
-  import { forecastQueryKey } from '#lib/api/forecast.ts';
-  import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transactions.ts';
   import { TranslatedFormError } from '#lib/form-errors.ts';
   import {
     externalTransferInReconciliationImpact,
-    investmentGainsQueryKey,
     investmentInstrumentsQueryOptions,
-    investmentLotsQueryKey,
-    investmentPositionsQueryKey,
     recordExternalTransferIn,
     type ExternalTransferInRequest,
     type GainImpact,
     type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
+  import { invalidateInvestmentReads } from './invalidate';
   import { parseTransferInAmounts } from '#lib/investments/form-amounts.ts';
   import {
     gainAcknowledgement, gainImpactCurrency, gainImpactRows, hasGainChanges, impactNeedsReview,
@@ -86,14 +82,7 @@
 
   async function post(payload: ExternalTransferInRequest) {
     await recordExternalTransferIn(payload, csrfToken);
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: investmentPositionsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: investmentLotsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: investmentGainsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: forecastQueryKey }),
-      queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: accountRegisterQueryKey })
-    ]);
+    await invalidateInvestmentReads(queryClient);
     onSaved();
   }
 

@@ -192,6 +192,37 @@ func TestTransferCycleBasisPropagationSettles(t *testing.T) {
 	requireInvestmentSelfCheckPasses(t, f)
 }
 
+// T-140: propagation is one merged dated pass, not a bounded number of
+// rounds. Moving one share back and forth between two accounts is a valid
+// chain as deep as its transfers; the former 256-round limit refused it.
+func TestTransferChainDeeperThanFormerRoundLimitPropagatesInOnePass(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	b := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
+	buy := buyOn(t, f, "2026-05-01", 1, 1000)
+	const hops = 260
+	transfers := make([]InternalTransferResult, 0, hops)
+	lot, from, to := *buy.LotID, f.holdingAccountID, b
+	for range hops {
+		transfer := chainTransfer(t, f, from, to, lot, "2026-06-01")
+		transfers = append(transfers, transfer)
+		lot, from, to = transfer.DestinationLotIDs[0], to, from
+	}
+
+	_, err := acknowledgedReplaceBuy(context.Background(), f.investmentService, replaceBuyPrice(f, buy, "2026-05-01", 1, 2000))
+	require.NoError(t, err)
+	for _, transfer := range []InternalTransferResult{transfers[0], transfers[hops/2], transfers[hops-1]} {
+		basis, revisions := effectiveTransferBasis(t, f, transfer.Transaction.ID, 1)
+		requireScaled(t, 2000, 2, basis, "every hop carries the corrected basis")
+		assert.Equal(t, 1, revisions, "each link is revised once, not once per round")
+	}
+	var linkRevisions int
+	require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM investment_transfer_link_revisions`).Scan(&linkRevisions))
+	assert.Equal(t, hops, linkRevisions)
+	requireScaled(t, 2000, 2, lotRemainingBasis(t, f, transfers[hops-1].DestinationLotIDs[0]), "final destination lot")
+	requireInvestmentSelfCheckPasses(t, f)
+}
+
 func TestPooledTransferBasisPropagatesWhenLineageIsUnchanged(t *testing.T) {
 	t.Parallel()
 	f := newInvestmentsTestFixture(t)

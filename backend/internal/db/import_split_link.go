@@ -14,8 +14,9 @@ import (
 // again (T-122).
 
 // ErrSplitLinkUnavailable means the staged row or split can no longer be
-// linked: the row was committed or is not a provider split, or the split is
-// not effective, belongs to another security, or is already linked.
+// linked: the row was committed, its batch discarded, or it is not a provider
+// split, or the split is not effective, belongs to another security, or is
+// already linked.
 var ErrSplitLinkUnavailable = errors.New("staged split row cannot be linked to this split")
 
 // SplitLinkCandidate is an effective recorded split of a security, with the
@@ -87,17 +88,22 @@ func (r *ImportRepository) LinkStagedRowToSplit(ctx context.Context, params Link
 		return 0, fmt.Errorf("begin split link: %w", err)
 	}
 	defer rollbackTx(ctx, tx)
+	// The batch is re-read here, not trusted from the caller's preparation: a
+	// discard between the two must not admit source evidence (T-139).
 	var batchID int64
-	var commitStatus, fingerprint string
-	err = tx.QueryRowContext(ctx, `SELECT batch_id, commit_status, dedupe_fingerprint FROM import_staged_rows
-		WHERE id = ? AND book_id = ?`, params.RowID, params.BookID).Scan(&batchID, &commitStatus, &fingerprint)
+	var commitStatus, fingerprint, batchStatus, sourceKind string
+	err = tx.QueryRowContext(ctx, `SELECT r.batch_id, r.commit_status, r.dedupe_fingerprint, b.status, b.source_kind
+		FROM import_staged_rows r JOIN import_batches b ON b.id = r.batch_id AND b.book_id = r.book_id
+		WHERE r.id = ? AND r.book_id = ?`, params.RowID, params.BookID).
+		Scan(&batchID, &commitStatus, &fingerprint, &batchStatus, &sourceKind)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, ErrSplitLinkUnavailable
 	}
 	if err != nil {
 		return 0, fmt.Errorf("read staged split row: %w", err)
 	}
-	if batchID != params.BatchID || commitStatus == "committed" || fingerprint != params.DedupeFingerprint {
+	if batchID != params.BatchID || commitStatus == "committed" || fingerprint != params.DedupeFingerprint ||
+		batchStatus == "discarded" || batchStatus == "rolled_back" || sourceKind != params.SourceKind {
 		return 0, ErrSplitLinkUnavailable
 	}
 	var accountID, transactionID int64
