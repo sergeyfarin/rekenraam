@@ -44,7 +44,7 @@ func (r *InvestmentRepository) SaleOperationByTransactionID(ctx context.Context,
 		JOIN investment_operation_journal_links link ON link.operation_id = operation.id
 			AND link.book_id = operation.book_id AND link.role = 'primary'
 		JOIN transaction_versions version ON version.id = link.transaction_version_id
-		WHERE operation.book_id = ? AND version.transaction_id = ? AND operation.operation_kind IN ('sell', 'write_off')`, bookID, transactionID).Scan(&operationID)
+		WHERE operation.book_id = ? AND version.transaction_id = ? AND operation.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')`, bookID, transactionID).Scan(&operationID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SaleOperationRecord{}, ErrNotFound
 	}
@@ -78,7 +78,7 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
 		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
 		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
-		WHERE o.book_id = ? AND o.id = ? AND o.operation_kind IN ('sell', 'write_off')
+		WHERE o.book_id = ? AND o.id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')
 	`, bookID, operationID).Scan(&record.OperationID, &record.OperationKind, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.EventDate, &record.AccountID,
 		&record.CommodityID, &record.CostCommodityID, &corrected, &imported,

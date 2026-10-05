@@ -105,3 +105,56 @@ func TestCashInLieuOfReversedSplitIsRefused(t *testing.T) {
 	_, err = f.investmentService.CashInLieu(ctx, cashInLieuInput(f, split.Transaction.ID))
 	require.ErrorIs(t, err, ErrCashInLieuSplitNotFound)
 }
+
+// T-150: reversing a cash in lieu restores the fraction and frees its split
+// for correction again.
+func TestReverseCashInLieuRestoresFractionAndFreesSplit(t *testing.T) {
+	t.Parallel()
+	f, split := cashInLieuSetup(t)
+	ctx := context.Background()
+	cil, err := f.investmentService.CashInLieu(ctx, cashInLieuInput(f, split.Transaction.ID))
+	require.NoError(t, err)
+	input := ReverseInvestmentSaleInput{OwnerUserID: f.ownerUserID, TransactionID: cil.Transaction.ID, Reason: "paid in shares instead"}
+	impact, err := f.investmentService.ReverseCashInLieuReconciliationImpact(ctx, input)
+	require.NoError(t, err)
+	if impact.GainImpact != nil {
+		input.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	}
+	_, err = f.investmentService.ReverseCashInLieu(ctx, input)
+	require.NoError(t, err)
+	quantity, _ := openPositionBasis(t, f, f.holdingAccountID)
+	requireScaled(t, 45, 1, quantity, "the fraction is held again")
+	_, err = f.investmentService.ReverseSale(ctx, input)
+	require.ErrorIs(t, err, ErrInvestmentSaleNotFound, "a cash in lieu is not a sale")
+	requireInvestmentSelfCheckPasses(t, f)
+
+	_, err = acknowledgedReverseSplit(ctx, f.investmentService, ReverseInvestmentSplitInput{
+		OwnerUserID: f.ownerUserID, TransactionID: split.Transaction.ID, Reason: "entered in error"})
+	require.NoError(t, err, "with the cash in lieu reversed, the split may be corrected")
+}
+
+func TestReplaceCashInLieuKeepsItsSplitAndPreviewMatchesCommit(t *testing.T) {
+	t.Parallel()
+	f, split := cashInLieuSetup(t)
+	ctx := context.Background()
+	cil, err := f.investmentService.CashInLieu(ctx, cashInLieuInput(f, split.Transaction.ID))
+	require.NoError(t, err)
+	replacement := cashInLieuInput(f, 0)
+	replacement.ProceedsValue, replacement.PaymentOn = 850, "2026-06-08"
+	input := ReplaceCashInLieuInput{OwnerUserID: f.ownerUserID, TransactionID: cil.Transaction.ID,
+		Reason: "broker paid 8.50", Replacement: replacement}
+	impact, err := f.investmentService.ReplaceCashInLieuReconciliationImpact(ctx, input)
+	require.NoError(t, err)
+	if impact.GainImpact != nil {
+		input.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	}
+	result, err := f.investmentService.ReplaceCashInLieu(ctx, input)
+	require.NoError(t, err)
+	require.Len(t, result.Replacement.Transaction.JournalEntries, 2)
+	assert.Equal(t, "2026-06-08", result.Replacement.Transaction.JournalEntries[1].EntryDate)
+	var linked int64
+	require.NoError(t, f.database.QueryRow(`SELECT f.split_operation_id FROM investment_cash_in_lieu_facts f
+		JOIN effective_investment_operations o ON o.id = f.operation_id`).Scan(&linked))
+	assert.Equal(t, transferOperationID(t, f, split.Transaction.ID), linked, "the successor settles the same split")
+	requireInvestmentSelfCheckPasses(t, f)
+}

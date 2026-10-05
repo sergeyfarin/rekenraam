@@ -18,6 +18,16 @@ import (
 var (
 	ErrCashInLieuSplitNotFound = errors.New("the split this cash in lieu settles was not found or is no longer effective")
 	ErrCashInLieuNotFraction   = errors.New("cash in lieu settles a fraction of one share")
+
+	ErrInvestmentCashInLieuNotFound         = errors.New("cash in lieu operation not found")
+	ErrInvestmentCashInLieuAlreadyCorrected = errors.New("cash in lieu already corrected")
+	ErrInvestmentCashInLieuChanged          = errors.New("cash in lieu changed")
+
+	// cashInLieuCorrectionFamily reverses and replaces a cash in lieu through
+	// the shared disposal correction writers (T-150).
+	cashInLieuCorrectionFamily = disposalCorrectionFamily{kind: "cash_in_lieu", noun: "cash in lieu",
+		reverseOperation: "investment.cash_in_lieu.reverse", notFound: ErrInvestmentCashInLieuNotFound,
+		alreadyCorrected: ErrInvestmentCashInLieuAlreadyCorrected, changed: ErrInvestmentCashInLieuChanged}
 )
 
 type CashInLieuInput struct {
@@ -119,4 +129,77 @@ func (s *InvestmentService) CashInLieu(ctx context.Context, input CashInLieuInpu
 		return InvestmentTradeResult{}, ErrCashInLieuSplitNotFound
 	}
 	return result, err
+}
+
+// ReverseCashInLieu posts the inverse of a cash in lieu's journal and removes
+// its disposal from effective history; the holding replays (T-150).
+func (s *InvestmentService) ReverseCashInLieu(ctx context.Context, input ReverseInvestmentSaleInput) (Transaction, error) {
+	return s.reverseDisposal(ctx, input, cashInLieuCorrectionFamily)
+}
+
+func (s *InvestmentService) ReverseCashInLieuReconciliationImpact(ctx context.Context, input ReverseInvestmentSaleInput) (ReconciliationImpact, error) {
+	return s.reverseDisposalReconciliationImpact(ctx, input, cashInLieuCorrectionFamily)
+}
+
+// ReplaceCashInLieuInput corrects a cash in lieu. Replacement carries the
+// corrected disposal and payment; the split it settles stays the same.
+type ReplaceCashInLieuInput struct {
+	OwnerUserID               int64
+	AuthSessionID             int64
+	RequestID                 string
+	TransactionID             int64
+	Reason                    string
+	ReconciliationOverride    bool
+	GainImpactAcknowledgement string
+	Replacement               CashInLieuInput
+}
+
+func (s *InvestmentService) cashInLieuReplacement(ctx context.Context, input ReplaceCashInLieuInput) (ReplaceInvestmentSaleInput, int64, string, error) {
+	splitTransactionID, err := s.repository.CashInLieuSplitTransactionID(ctx, BookID, input.TransactionID)
+	if errors.Is(err, db.ErrNotFound) {
+		return ReplaceInvestmentSaleInput{}, 0, "", ErrInvestmentCashInLieuNotFound
+	}
+	if err != nil {
+		return ReplaceInvestmentSaleInput{}, 0, "", err
+	}
+	replacement := input.Replacement
+	replacement.OwnerUserID, replacement.SplitTransactionID = input.OwnerUserID, splitTransactionID
+	trade, splitOperationID, payment, err := s.cashInLieuTrade(ctx, replacement)
+	if err != nil {
+		return ReplaceInvestmentSaleInput{}, 0, "", err
+	}
+	// A replacement names its election; default to the holding's own.
+	if trade.CostBasisMethod == "" {
+		if trade.CostBasisMethod, _, err = s.resolveCostBasisMethod(ctx, trade.HoldingAccountID, ""); err != nil {
+			return ReplaceInvestmentSaleInput{}, 0, "", err
+		}
+	}
+	return ReplaceInvestmentSaleInput{OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
+		RequestID: input.RequestID, TransactionID: input.TransactionID, Reason: input.Reason,
+		ReconciliationOverride: input.ReconciliationOverride, Replacement: trade,
+		GainImpactAcknowledgement: input.GainImpactAcknowledgement}, splitOperationID, payment, nil
+}
+
+// ReplaceCashInLieu posts the inverse and the corrected disposal at the
+// replaced slot under one audit event, linking the successor to the same
+// split.
+func (s *InvestmentService) ReplaceCashInLieu(ctx context.Context, input ReplaceCashInLieuInput) (ReplaceInvestmentSaleResult, error) {
+	sale, splitOperationID, payment, err := s.cashInLieuReplacement(ctx, input)
+	if err != nil {
+		return ReplaceInvestmentSaleResult{}, err
+	}
+	result, err := s.replaceDisposal(ctx, sale, "browser_api", "investment.cash_in_lieu.replace",
+		db.CashInLieuReplacementFactWriter(ctx, BookID, splitOperationID, payment), cashInLieuCorrectionFamily)
+	if errors.Is(err, db.ErrCashInLieuSplitUnavailable) {
+		return ReplaceInvestmentSaleResult{}, ErrCashInLieuSplitNotFound
+	}
+	return result, err
+}
+
+func (s *InvestmentService) ReplaceCashInLieuReconciliationImpact(ctx context.Context, input ReplaceCashInLieuInput) (ReconciliationImpact, error) {
+	sale, _, _, err := s.cashInLieuReplacement(ctx, input)
+	if err != nil {
+		return ReconciliationImpact{}, err
+	}
+	return s.replaceDisposalReconciliationImpact(ctx, sale, "investment.cash_in_lieu.replace", cashInLieuCorrectionFamily)
 }

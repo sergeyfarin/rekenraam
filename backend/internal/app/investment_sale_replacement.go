@@ -108,6 +108,7 @@ func (s *InvestmentService) prepareSaleReplacementWrite(ctx context.Context, inp
 	replacement.ChangeReason = inversePlan.ChangeReason
 	replacement.ReconciliationOverride = input.ReconciliationOverride
 	replacement.WriteOff = family.kind == "write_off"
+	replacement.CashInLieu = family.kind == "cash_in_lieu"
 	inversePlan.OriginType = originType
 	inversePlan.Operation = operationCode
 	inversePlan.Spec.InvestmentOperationKind = ""

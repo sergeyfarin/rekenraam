@@ -49,7 +49,7 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 		inverseParams.ActorUserID != replacementParams.ActorUserID || inverseParams.ActorUserID != disposalParams.ActorUserID ||
 		inverseParams.Spec.InvestmentOperationKind != "" ||
 		inverseParams.Spec.TransactionKind != "investment" || inverseParams.Spec.Status != "posted" ||
-		(expected.OperationKind != "sell" && expected.OperationKind != "write_off") ||
+		(expected.OperationKind != "sell" && expected.OperationKind != "write_off" && expected.OperationKind != "cash_in_lieu") ||
 		replacementParams.Spec.InvestmentOperationKind != expected.OperationKind ||
 		replacementParams.Spec.TransactionKind != "investment" || replacementParams.Spec.Status != "posted" ||
 		inverseParams.Spec.TransactionDate != expected.EventDate ||
