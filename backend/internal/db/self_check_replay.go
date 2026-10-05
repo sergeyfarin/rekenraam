@@ -26,8 +26,11 @@ const (
 	ReplayMismatchDisposal     = "disposal"
 	ReplayMismatchSplit        = "split"
 	ReplayMismatchTransferLink = "transfer_link"
-	ReplayMismatchMethodFamily = "method_family"
-	ReplayMismatchRefused      = "replay_refused"
+	// ReplayMismatchCapitalReturn is a return of capital whose stored
+	// effective effects differ from what replay computes (T-148).
+	ReplayMismatchCapitalReturn = "capital_return"
+	ReplayMismatchMethodFamily  = "method_family"
+	ReplayMismatchRefused       = "replay_refused"
 )
 
 // InvestmentReplayMismatch names one stored fact that the position's replay
@@ -171,6 +174,9 @@ func (r *SelfCheckRepository) positionReplayEquivalence(ctx context.Context, boo
 		}
 	}
 	reported := make(map[int64]bool)
+	for _, revision := range projection.CapitalReturns {
+		found = append(found, mismatch(ReplayMismatchCapitalReturn, revision.OperationID))
+	}
 	for _, revision := range projection.TransferRevisions {
 		if !reported[revision.OperationID] {
 			reported[revision.OperationID] = true

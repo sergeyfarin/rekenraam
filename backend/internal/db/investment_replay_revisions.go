@@ -153,6 +153,12 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 			return err
 		}
 	}
+	for _, revision := range projection.CapitalReturns {
+		if err := persistCapitalReturnRevisionTx(ctx, tx, bookID, causedByOperationID, auditEventID,
+			createdAt, revision); err != nil {
+			return err
+		}
+	}
 	for _, lot := range projection.Lots {
 		result, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_state (status,
 		remaining_quantity_value, remaining_quantity_scale, remaining_cost_basis_value, remaining_cost_basis_scale,

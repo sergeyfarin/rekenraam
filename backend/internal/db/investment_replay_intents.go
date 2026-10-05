@@ -57,11 +57,14 @@ type InvestmentReplayIntent struct {
 	// CapitalReturnEffects are a return of capital's recorded per-lot effects
 	// (T-146); AmountValue is its receipt. Replay must reproduce them.
 	CapitalReturnEffects []CapitalReturnEffect
-	AmountValue          exact.Coefficient // opening consideration or disposal proceeds
-	AmountScale          int
-	CostBasisMethod      string
-	DecisionSource       DisposalDecisionSource
-	SpecificLots         []LotAllocation
+	// CapitalReturnIsSubject marks the return of capital a command is
+	// recording behind later depletions; replay reports its effects.
+	CapitalReturnIsSubject bool
+	AmountValue            exact.Coefficient // opening consideration or disposal proceeds
+	AmountScale            int
+	CostBasisMethod        string
+	DecisionSource         DisposalDecisionSource
+	SpecificLots           []LotAllocation
 	// PooledLinks are a pooled transfer's committed per-lot carried amounts,
 	// in link order. Replay must reproduce them exactly.
 	PooledLinks []InvestmentReplayTransferLink

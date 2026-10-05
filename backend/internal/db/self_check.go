@@ -630,6 +630,39 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	if err := pooled.Close(); err != nil {
 		return nil, fmt.Errorf("close effective self-check pooled transfer revisions: %w", err)
 	}
+	// A revised return of capital reduces each lot by its latest revision's
+	// reduction; its original basis_reduction events are no longer effective
+	// (T-148).
+	reductions, err := transaction.QueryContext(ctx, `
+		SELECT e.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id, e.reduction_value, e.reduction_scale
+		FROM latest_investment_capital_return_revisions revision
+		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
+		JOIN investment_capital_return_revision_effects e ON e.revision_id = revision.id
+		JOIN current_investment_lots l ON l.id = e.lot_id
+		WHERE revision.book_id = ?`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("read effective self-check capital return revisions: %w", err)
+	}
+	for reductions.Next() {
+		var event SelfCheckLotEventRecord
+		var reduction exact.Coefficient
+		var scale int
+		if err := reductions.Scan(&event.LotID, &event.AccountID, &event.CommodityID, &event.CostCommodityID,
+			&reduction, &scale); err != nil {
+			reductions.Close()
+			return nil, fmt.Errorf("scan effective self-check capital return revision: %w", err)
+		}
+		value, err := exact.ScaledIntFromCoefficient(reduction, scale).Negated().Int64()
+		if err != nil {
+			reductions.Close()
+			return nil, fmt.Errorf("invalid capital return revision reduction for lot %d", event.LotID)
+		}
+		event.QuantityValue, event.CostBasisValue, event.CostBasisScale = "0", value, scale
+		events = append(events, event)
+	}
+	if err := errors.Join(reductions.Err(), reductions.Close()); err != nil {
+		return nil, fmt.Errorf("read effective self-check capital return revisions: %w", err)
+	}
 	return events, nil
 }
 
@@ -1273,7 +1306,19 @@ func (r *SelfCheckRepository) SelfCheckCapitalReturns(ctx context.Context, trans
 		FROM investment_capital_return_facts f
 		JOIN investment_capital_return_effects e ON e.operation_id = f.operation_id
 		JOIN investment_lot_events ev ON ev.id = e.lot_event_id
-		WHERE f.book_id = ? ORDER BY f.operation_id, e.effect_seq`, bookID)
+		WHERE f.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_capital_return_revisions r
+			WHERE r.operation_id = f.operation_id)
+		UNION ALL
+		-- A revised return has no lot events for its effects: the event check
+		-- compares the reduction with itself.
+		SELECT f.operation_id, f.amount_value, f.amount_scale, e.allocated_value, e.allocated_scale,
+			e.reduction_value, e.reduction_scale, e.excess_value, e.excess_scale,
+			CASE WHEN e.reduction_value = '0' THEN '0' ELSE '-' || e.reduction_value END, e.reduction_scale
+		FROM investment_capital_return_facts f
+		JOIN latest_investment_capital_return_revisions revision ON revision.operation_id = f.operation_id
+		JOIN investment_capital_return_revision_effects e ON e.revision_id = revision.id
+		WHERE f.book_id = ?
+		ORDER BY 1`, bookID, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read self-check returns of capital: %w", err)
 	}

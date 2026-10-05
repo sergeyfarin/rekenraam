@@ -166,14 +166,17 @@ truncated allocations and the exact remainder on the last lot. The receipt
 currency must be the position's cost currency. Facts and per-lot effects
 (entitled quantity, allocated, reduction, excess) are immutable, each with a
 `basis_reduction` lot event (quantity 0, basis −reduction) linked to the
-operation. Replay recomputes the effects at the effective-date slot and
-refuses, with the operation named, any history change that would alter them;
-a return dated behind a later depletion and an unknown-basis lot are refused.
+operation. Replay recomputes the effects at the effective-date slot; a
+history change that alters them appends a revision of the whole effect set
+(T-148 #163: `investment_capital_return_revisions` and `-revision_effects`,
+the original basis_reduction events then leave the effective lot events), and
+a slot with no entitled lot is refused with the operation named. A return
+dated behind a later depletion is admitted through replay at its own slot. An
+unknown-basis lot is refused.
 Self-check verifies facts, events and conservation (allocations sum to the
 receipt, reduction + excess = allocation, event = −reduction); bundle files
 `investment-capital-return-facts.csv` and `-effects.csv`. Still open (T-148
-#163): replay revisions, backdated admission, explicit lot entitlement,
-correction/reversal and entry UI.
+#163): explicit lot entitlement, correction/reversal and entry UI.
 
 Example: 10.00 EUR return of capital on one lot with 7.00 EUR remaining
 basis reduces basis to zero and records 3.00 EUR unresolved excess. The cash

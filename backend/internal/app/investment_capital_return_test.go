@@ -112,33 +112,125 @@ func TestCapitalReturnWithoutHoldingsIsRefused(t *testing.T) {
 	require.ErrorIs(t, err, ErrCapitalReturnNoHoldings, "the only lot opens after the effective date")
 }
 
-func TestCapitalReturnBehindLaterDepletionIsRefused(t *testing.T) {
+// T-148: a return of capital dated behind a later sale is admitted through
+// replay: the sale's basis is revised and its gain change needs the preview's
+// acknowledgement.
+func TestBackdatedCapitalReturnRevisesLaterSaleUnderAcknowledgement(t *testing.T) {
 	t.Parallel()
 	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
 	buyOn(t, f, "2026-05-01", 2, 2000)
-	_, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-07-01", 1))
+	sold, err := f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 1))
 	require.NoError(t, err)
-	_, err = f.investmentService.CapitalReturn(context.Background(), capitalReturnInput(f, "2026-06-01", 400))
-	require.ErrorIs(t, err, db.ErrOutOfOrderPositionEvent)
+	requireScaled(t, 1000, 2, saleEffectiveBasis(t, f, sold.Transaction.ID), "before the return")
+
+	input := capitalReturnInput(f, "2026-06-01", 400)
+	_, err = f.investmentService.CapitalReturn(ctx, input)
+	require.ErrorIs(t, err, db.ErrGainImpactAcknowledgementRequired)
+	preview, err := f.investmentService.PreviewCapitalReturn(ctx, input)
+	require.NoError(t, err)
+	require.NotNil(t, preview.Impact.GainImpact)
+	input.GainImpactAcknowledgement = preview.Impact.GainImpact.Acknowledgement
+	result, err := f.investmentService.CapitalReturn(ctx, input)
+	require.NoError(t, err)
+	require.Len(t, result.Effects, 1)
+	requireScaled(t, 400, 2, coefScaled(result.Effects[0].ReductionValue, result.Effects[0].ReductionScale), "reduction at its slot")
+	requireScaled(t, 800, 2, saleEffectiveBasis(t, f, sold.Transaction.ID), "the later sale takes the reduced basis")
+	quantity, basis := openPositionBasis(t, f, f.holdingAccountID)
+	requireScaled(t, 1, 0, quantity, "one share left")
+	requireScaled(t, 800, 2, basis, "at its reduced basis")
+	requireInvestmentSelfCheckPasses(t, f)
 }
 
-// Until revisions ship (T-148), history that would change the reduction or
-// excess is refused with the return of capital named, and nothing is written.
-func TestBuyCorrectionThatChangesCapitalReturnIsRefusedWithItNamed(t *testing.T) {
+// capitalReturnRevisionCount counts a return of capital's revisions.
+func capitalReturnRevisionCount(t *testing.T, f *investmentsTestFixture) int {
+	t.Helper()
+	var n int
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_capital_return_revisions`).Scan(&n))
+	return n
+}
+
+// T-148: history that changes the reduction/excess split revises the effects;
+// the receipt and the original effects stay immutable evidence.
+func TestBuyCorrectionRevisesCapitalReturnReductionAndExcess(t *testing.T) {
 	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	buy := buyOn(t, f, "2026-05-01", 1, 700)
 	roc, err := f.investmentService.CapitalReturn(ctx, capitalReturnInput(f, "2026-06-01", 1000))
 	require.NoError(t, err)
-	before := f.transactionCount(t)
-	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, replaceBuyPrice(f, buy, "2026-05-01", 1, 500))
-	require.ErrorIs(t, err, ErrInvestmentBuyDependency)
-	var dependency InvestmentBuyDependencyError
-	require.ErrorAs(t, err, &dependency)
-	assert.Equal(t, transferOperationID(t, f, roc.Transaction.ID), dependency.OperationID)
-	assert.Equal(t, before, f.transactionCount(t))
+	transactionsBefore := f.transactionCount(t)
+
+	replaced, err := acknowledgedReplaceBuy(ctx, f.investmentService, replaceBuyPrice(f, buy, "2026-05-01", 1, 500))
+	require.NoError(t, err)
+	assert.Equal(t, transactionsBefore+2, f.transactionCount(t), "only the buy correction posts; the receipt is unchanged")
+	assert.Equal(t, 1, capitalReturnRevisionCount(t, f))
+	var reduction, excess exact.Coefficient
+	var reductionScale, excessScale int
+	var lotID int64
+	require.NoError(t, f.database.QueryRow(`SELECT e.lot_id, e.reduction_value, e.reduction_scale, e.excess_value, e.excess_scale
+		FROM investment_capital_return_revision_effects e`).Scan(&lotID, &reduction, &reductionScale, &excess, &excessScale))
+	assert.Equal(t, *replaced.Replacement.LotID, lotID, "the revision names the corrected lot")
+	requireScaled(t, 500, 2, coefScaled(reduction, reductionScale), "reduction follows the corrected basis")
+	requireScaled(t, 500, 2, coefScaled(excess, excessScale), "excess grows by the difference")
+	assert.Zero(t, lotRemainingBasis(t, f, *replaced.Replacement.LotID).Sign())
+	original := roc.Effects[0]
+	var storedReduction exact.Coefficient
+	var storedScale int
+	require.NoError(t, f.database.QueryRow(`SELECT reduction_value, reduction_scale FROM investment_capital_return_effects`).Scan(&storedReduction, &storedScale))
+	assert.Zero(t, coefScaled(storedReduction, storedScale).Cmp(coefScaled(original.ReductionValue, original.ReductionScale)),
+		"the original effect is immutable evidence")
 	requireInvestmentSelfCheckPasses(t, f)
+}
+
+// A purchase backdated before the effective date joins the entitled lots, so
+// the receipt is re-allocated per share across both.
+func TestBackdatedBuyReallocatesCapitalReturnAcrossEntitledLots(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buyOn(t, f, "2026-05-01", 1, 5000)
+	_, err := f.investmentService.CapitalReturn(ctx, capitalReturnInput(f, "2026-06-01", 1000))
+	require.NoError(t, err)
+	_, err = f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 1))
+	require.NoError(t, err)
+
+	input := InvestmentTradeInput{OwnerUserID: f.ownerUserID, TransactionDate: "2026-04-01",
+		CommodityID: f.stockCommodityID, HoldingAccountID: f.holdingAccountID,
+		CashAccountID: f.cashAccountID, CashCommodityID: f.eurCommodityID,
+		QuantityValue: exact.New(1), CashAmountValue: 5000, CashAmountScale: 2}
+	impact, err := f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactBuy, input)
+	require.NoError(t, err)
+	if impact.GainImpact != nil {
+		input.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	}
+	_, err = f.investmentService.Buy(ctx, input)
+	require.NoError(t, err)
+	var effects int
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_capital_return_revision_effects`).Scan(&effects))
+	assert.Equal(t, 2, effects, "both lots are entitled now")
+	requireInvestmentSelfCheckPasses(t, f)
+}
+
+func TestSelfCheckReportsStaleCapitalReturnRevision(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	buy := buyOn(t, f, "2026-05-01", 1, 700)
+	_, err := f.investmentService.CapitalReturn(ctx, capitalReturnInput(f, "2026-06-01", 1000))
+	require.NoError(t, err)
+	_, err = acknowledgedReplaceBuy(ctx, f.investmentService, replaceBuyPrice(f, buy, "2026-05-01", 1, 500))
+	require.NoError(t, err)
+	requireInvestmentSelfCheckPasses(t, f)
+	_, err = f.database.Exec(`DROP TRIGGER investment_capital_return_revision_effects_no_update`)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`UPDATE investment_capital_return_revision_effects SET reduction_value = '400', excess_value = '600'`)
+	require.NoError(t, err)
+	run, err := selfCheckOver(t, f.database).RunSelfCheck(ctx, "manual")
+	require.NoError(t, err)
+	replay := resultFor(t, run, CheckInvestmentReplay)
+	assert.Equal(t, SelfCheckFailed, replay.Status)
+	assert.Contains(t, replay.Summary, "returns of capital with stale effects")
 }
 
 // A later sale's reversal replays the position through the return of capital

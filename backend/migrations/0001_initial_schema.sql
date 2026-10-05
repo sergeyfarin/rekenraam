@@ -1930,6 +1930,10 @@ WHERE NOT EXISTS (
     JOIN investment_split_revisions revision ON revision.operation_id = effect.operation_id
       AND revision.cost_commodity_id = l.cost_commodity_id
     WHERE effect.lot_event_id = e.id))
+  AND NOT (e.event_kind = 'basis_reduction' AND EXISTS (
+    SELECT 1 FROM investment_operation_lot_effects effect
+    JOIN investment_capital_return_revisions revision ON revision.operation_id = effect.operation_id
+    WHERE effect.lot_event_id = e.id))
   AND NOT (e.event_kind IN ('transfer_out', 'transfer_in') AND EXISTS (
     SELECT 1 FROM investment_operation_lot_effects effect
     JOIN investment_transfer_lot_links link ON link.operation_id = effect.operation_id
@@ -2006,6 +2010,97 @@ CREATE TABLE IF NOT EXISTS investment_capital_return_effects (
   PRIMARY KEY (operation_id, effect_seq),
   UNIQUE (operation_id, lot_id)
 );
+
+-- History that changes a return of capital's entitled lots, allocations,
+-- reductions or excess appends a revision of the whole effect set (T-148);
+-- the receipt and the original effects stay immutable evidence.
+CREATE TABLE IF NOT EXISTS investment_capital_return_revisions (
+  id INTEGER PRIMARY KEY,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  operation_id INTEGER NOT NULL REFERENCES investment_capital_return_facts(operation_id) ON DELETE RESTRICT,
+  revision_seq INTEGER NOT NULL CHECK (revision_seq >= 2),
+  caused_by_operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  supersedes_revision_id INTEGER REFERENCES investment_capital_return_revisions(id) ON DELETE RESTRICT,
+  created_at TEXT NOT NULL,
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  UNIQUE (operation_id, revision_seq),
+  CHECK ((revision_seq = 2) = (supersedes_revision_id IS NULL))
+);
+
+CREATE TABLE IF NOT EXISTS investment_capital_return_revision_effects (
+  revision_id INTEGER NOT NULL REFERENCES investment_capital_return_revisions(id) ON DELETE RESTRICT,
+  effect_seq INTEGER NOT NULL CHECK (effect_seq > 0),
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  entitled_quantity_value TEXT NOT NULL CHECK (length(entitled_quantity_value) BETWEEN 1 AND 38
+    AND entitled_quantity_value NOT GLOB '*[^0-9]*' AND substr(entitled_quantity_value, 1, 1) BETWEEN '1' AND '9'),
+  entitled_quantity_scale INTEGER NOT NULL CHECK (entitled_quantity_scale BETWEEN 0 AND 24),
+  allocated_value TEXT NOT NULL CHECK (length(allocated_value) BETWEEN 1 AND 38 AND allocated_value NOT GLOB '*[^0-9]*'),
+  allocated_scale INTEGER NOT NULL CHECK (allocated_scale BETWEEN 0 AND 12),
+  reduction_value TEXT NOT NULL CHECK (length(reduction_value) BETWEEN 1 AND 38 AND reduction_value NOT GLOB '*[^0-9]*'),
+  reduction_scale INTEGER NOT NULL CHECK (reduction_scale BETWEEN 0 AND 12),
+  excess_value TEXT NOT NULL CHECK (length(excess_value) BETWEEN 1 AND 38 AND excess_value NOT GLOB '*[^0-9]*'),
+  excess_scale INTEGER NOT NULL CHECK (excess_scale BETWEEN 0 AND 12),
+  PRIMARY KEY (revision_id, effect_seq),
+  UNIQUE (revision_id, lot_id)
+);
+
+CREATE VIEW latest_investment_capital_return_revisions AS
+SELECT r.* FROM investment_capital_return_revisions r
+WHERE NOT EXISTS (SELECT 1 FROM investment_capital_return_revisions later
+  WHERE later.operation_id = r.operation_id AND later.revision_seq > r.revision_seq);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_revisions_valid
+BEFORE INSERT ON investment_capital_return_revisions
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_capital_return_facts f
+  JOIN investment_operations o ON o.id = NEW.caused_by_operation_id
+  JOIN audit_events a ON a.id = NEW.created_audit_event_id
+  WHERE f.operation_id = NEW.operation_id AND f.book_id = NEW.book_id
+    AND o.book_id = NEW.book_id AND a.book_id = NEW.book_id AND o.created_audit_event_id = NEW.created_audit_event_id
+    AND ((NEW.revision_seq = 2 AND NEW.supersedes_revision_id IS NULL)
+      OR EXISTS (SELECT 1 FROM investment_capital_return_revisions previous
+        WHERE previous.id = NEW.supersedes_revision_id AND previous.operation_id = NEW.operation_id
+          AND previous.revision_seq = NEW.revision_seq - 1))
+)
+BEGIN SELECT RAISE(ABORT, 'investment capital return revision is outside its operation or chain'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_revision_effects_valid
+BEFORE INSERT ON investment_capital_return_revision_effects
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_capital_return_revisions r
+  JOIN investment_capital_return_facts f ON f.operation_id = r.operation_id
+  JOIN investment_lots l ON l.id = NEW.lot_id
+  WHERE r.id = NEW.revision_id AND r.book_id = NEW.book_id
+    AND l.book_id = f.book_id AND l.account_id = f.account_id AND l.commodity_id = f.commodity_id
+    AND l.cost_commodity_id = f.cost_commodity_id AND l.position_side = 'long' AND l.opened_on <= f.effective_on
+)
+BEGIN SELECT RAISE(ABORT, 'investment capital return revision effect is outside its operation or lot'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_revisions_no_update
+BEFORE UPDATE ON investment_capital_return_revisions
+BEGIN SELECT RAISE(ABORT, 'investment capital return revisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_revisions_no_delete
+BEFORE DELETE ON investment_capital_return_revisions
+BEGIN SELECT RAISE(ABORT, 'investment capital return revisions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_revision_effects_no_update
+BEFORE UPDATE ON investment_capital_return_revision_effects
+BEGIN SELECT RAISE(ABORT, 'investment capital return revision effects are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_capital_return_revision_effects_no_delete
+BEFORE DELETE ON investment_capital_return_revision_effects
+BEGIN SELECT RAISE(ABORT, 'investment capital return revision effects are immutable'); END;
+-- +goose StatementEnd
 
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_capital_return_facts_valid
@@ -4074,6 +4169,15 @@ DROP TRIGGER IF EXISTS investment_cash_in_lieu_facts_no_delete;
 DROP TRIGGER IF EXISTS investment_cash_in_lieu_facts_no_update;
 DROP TRIGGER IF EXISTS investment_cash_in_lieu_facts_valid;
 DROP TABLE IF EXISTS investment_cash_in_lieu_facts;
+DROP TRIGGER IF EXISTS investment_capital_return_revision_effects_no_delete;
+DROP TRIGGER IF EXISTS investment_capital_return_revision_effects_no_update;
+DROP TRIGGER IF EXISTS investment_capital_return_revisions_no_delete;
+DROP TRIGGER IF EXISTS investment_capital_return_revisions_no_update;
+DROP TRIGGER IF EXISTS investment_capital_return_revision_effects_valid;
+DROP TRIGGER IF EXISTS investment_capital_return_revisions_valid;
+DROP VIEW IF EXISTS latest_investment_capital_return_revisions;
+DROP TABLE IF EXISTS investment_capital_return_revision_effects;
+DROP TABLE IF EXISTS investment_capital_return_revisions;
 DROP TABLE IF EXISTS investment_capital_return_effects;
 DROP TABLE IF EXISTS investment_capital_return_facts;
 DROP TABLE IF EXISTS investment_split_revision_effects;

@@ -14260,7 +14260,7 @@ export interface paths {
         put?: never;
         /**
          * Record a return of capital
-         * @description Posts the receipt on the payment date (cash +r, commodity_trading -r in the receipt currency, which must be the position's cost currency) and applies a basis action on the effective date to every long lot of the holding open then, per share (T-146). Each lot's allocation reduces its known remaining basis by min(allocated, basis); the rest is an unresolved excess, never negative basis or income. A return dated behind a later depletion of the holding is refused (INVESTMENT_EVENT_OUT_OF_ORDER); no open lot on the effective date is INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS. A later history change that would change the effects is refused with this operation named.
+         * @description Posts the receipt on the payment date (cash +r, commodity_trading -r in the receipt currency, which must be the position's cost currency) and applies a basis action on the effective date to every long lot of the holding open then, per share (T-146). Each lot's allocation reduces its known remaining basis by min(allocated, basis); the rest is an unresolved excess, never negative basis or income. A return dated behind a later depletion of the holding is admitted through replay at its own slot, revising later decisions under the gain acknowledgement; no open lot on the effective date is INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS. A later history change that changes the effects appends a revision of them (T-148).
          */
         post: {
             parameters: {

@@ -18,15 +18,12 @@ import (
 // stable lot order, so the allocations sum to r) reduces its known remaining
 // basis by min(r_i, basis_i). The rest, r_i − reduction_i, is an unresolved
 // excess: never negative basis, never income. Each effect is an immutable
-// replay output with a basis_reduction lot event. Replay reproduces the
-// effects or refuses with the operation named; revising them is T-148.
+// replay output with a basis_reduction lot event; history that changes them
+// appends a revision of the whole effect set (T-148).
 
 var (
 	// ErrCapitalReturnNoHoldings means no lot is open on the effective date.
 	ErrCapitalReturnNoHoldings = errors.New("no holdings are open on the return of capital effective date")
-	// ErrCapitalReturnChanged refuses a history change that would change a
-	// return of capital's per-lot reduction or excess (until T-148).
-	ErrCapitalReturnChanged = errors.New("a return of capital's basis reduction would change")
 )
 
 type CreateCapitalReturnParams struct {
@@ -239,20 +236,43 @@ func writeCapitalReturnTx(ctx context.Context, tx *sql.Tx, journal CreateTransac
 		params.AmountValue.Sign() <= 0 {
 		return CapitalReturnResult{}, fmt.Errorf("%w: return of capital terms are incomplete", ErrInvalidDisposalParams)
 	}
-	// Backdated admission through replay is T-148.
-	if err := requirePositionEventInOrderTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
-		params.EffectiveOn, "a return of capital"); err != nil {
-		return CapitalReturnResult{}, err
-	}
-	amount := exact.ScaledIntFromCoefficient(params.AmountValue, params.AmountScale)
-	effects, err := capitalReturnEffectsTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
-		params.CostCommodityID, params.EffectiveOn, amount)
+	// A return dated behind a later depletion is admitted through replay:
+	// its effects come from the position at its own slot, and every later
+	// decision replays under its recorded policy (T-148).
+	latest, err := latestPositionRewriteDateTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID)
 	if err != nil {
 		return CapitalReturnResult{}, err
 	}
+	backdated := latest != "" && params.EffectiveOn < latest
+	amount := exact.ScaledIntFromCoefficient(params.AmountValue, params.AmountScale)
 	operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
 	if err != nil {
 		return CapitalReturnResult{}, err
+	}
+	var effects []CapitalReturnEffect
+	if backdated {
+		intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
+			params.CostCommodityID, "long")
+		if err != nil {
+			return CapitalReturnResult{}, err
+		}
+		intents = append(intents, InvestmentReplayIntent{Kind: "capital_return", OperationID: operationID,
+			OrderOperationID: operationID, OperationKind: "return_of_capital", EventDate: params.EffectiveOn,
+			EffectSeq: 1, AmountValue: params.AmountValue, AmountScale: params.AmountScale,
+			CapitalReturnIsSubject: true, TransactionID: transaction.ID, AuditEventID: auditEventID,
+			CreatedByUserID: journal.ActorUserID, CreatedAt: journal.CreatedAt})
+		projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
+			params.CostCommodityID, intents)
+		if err != nil {
+			return CapitalReturnResult{}, err
+		}
+		effects = projection.SubjectCapitalReturn
+	} else if effects, err = capitalReturnEffectsTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
+		params.CostCommodityID, params.EffectiveOn, amount); err != nil {
+		return CapitalReturnResult{}, err
+	}
+	if len(effects) == 0 {
+		return CapitalReturnResult{}, ErrCapitalReturnNoHoldings
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_capital_return_facts
 		(operation_id, book_id, account_id, commodity_id, cost_commodity_id, cash_account_id,
@@ -301,6 +321,16 @@ func writeCapitalReturnTx(ctx context.Context, tx *sql.Tx, journal CreateTransac
 			return CapitalReturnResult{}, fmt.Errorf("record return of capital effect: %w", err)
 		}
 	}
+	if backdated {
+		// The position replays with this return at its slot; later decisions
+		// are revised and anything they carry on propagates.
+		if err := replayCorrectedPositionTx(ctx, tx, params.BookID, investmentReplayPositionKey{
+			params.AccountID, params.CommodityID, params.CostCommodityID},
+			operationID, auditEventID, journal.ActorUserID, journal.CreatedAt); err != nil {
+			return CapitalReturnResult{}, err
+		}
+		return CapitalReturnResult{Effects: effects}, nil
+	}
 	if err := applyCapitalReturnEffectsTx(ctx, tx, params.BookID, effects, journal.CreatedAt,
 		journal.ActorUserID, auditEventID); err != nil {
 		return CapitalReturnResult{}, err
@@ -313,45 +343,135 @@ func writeCapitalReturnTx(ctx context.Context, tx *sql.Tx, journal CreateTransac
 }
 
 // capitalReturnIntentsQuery reads the position's effective returns of capital
-// as replay intents carrying their recorded effects.
+// as replay intents carrying their effective effects: the latest revision's
+// (T-148), else the original commit's.
 func capitalReturnIntentsQuery(ctx context.Context, reader queryer, bookID, accountID, commodityID, costCommodityID int64) ([]InvestmentReplayIntent, error) {
 	rows, err := reader.QueryContext(ctx, `
 		SELECT f.operation_id, o.operation_kind, f.effective_on, f.amount_value, f.amount_scale,
-			e.effect_seq, e.lot_id, e.entitled_quantity_value, e.entitled_quantity_scale,
-			e.allocated_value, e.allocated_scale, e.reduction_value, e.reduction_scale,
-			e.excess_value, e.excess_scale, ev.transaction_id, ev.created_audit_event_id,
-			ev.created_by_user_id, ev.created_at
+			ev.transaction_id, ev.created_audit_event_id, ev.created_by_user_id, ev.created_at
 		FROM investment_capital_return_facts f
 		JOIN effective_investment_operations o ON o.id = f.operation_id
-		JOIN investment_capital_return_effects e ON e.operation_id = f.operation_id
-		JOIN investment_lot_events ev ON ev.id = e.lot_event_id
+		JOIN investment_capital_return_effects first ON first.operation_id = f.operation_id AND first.effect_seq = 1
+		JOIN investment_lot_events ev ON ev.id = first.lot_event_id
 		WHERE f.book_id = ? AND f.account_id = ? AND f.commodity_id = ? AND f.cost_commodity_id = ?
-		ORDER BY f.operation_id, e.effect_seq`, bookID, accountID, commodityID, costCommodityID)
+		ORDER BY f.operation_id`, bookID, accountID, commodityID, costCommodityID)
 	if err != nil {
 		return nil, fmt.Errorf("read replay returns of capital: %w", err)
 	}
-	defer rows.Close()
 	var intents []InvestmentReplayIntent
 	for rows.Next() {
-		var intent InvestmentReplayIntent
-		var effect CapitalReturnEffect
-		var seq int
+		intent := InvestmentReplayIntent{Kind: "capital_return", EffectSeq: 1}
 		if err := rows.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
-			&intent.AmountValue, &intent.AmountScale, &seq, &effect.LotID,
-			&effect.EntitledQuantityValue, &effect.EntitledQuantityScale, &effect.AllocatedValue, &effect.AllocatedScale,
-			&effect.ReductionValue, &effect.ReductionScale, &effect.ExcessValue, &effect.ExcessScale,
-			&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID, &intent.CreatedAt); err != nil {
+			&intent.AmountValue, &intent.AmountScale, &intent.TransactionID, &intent.AuditEventID,
+			&intent.CreatedByUserID, &intent.CreatedAt); err != nil {
+			rows.Close()
 			return nil, fmt.Errorf("scan replay return of capital: %w", err)
 		}
-		if len(intents) == 0 || intents[len(intents)-1].OperationID != intent.OperationID {
-			intent.Kind, intent.EffectSeq = "capital_return", seq
-			intents = append(intents, intent)
-		}
-		last := &intents[len(intents)-1]
-		last.CapitalReturnEffects = append(last.CapitalReturnEffects, effect)
+		intents = append(intents, intent)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate replay returns of capital: %w", err)
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, fmt.Errorf("read replay returns of capital: %w", err)
+	}
+	for index := range intents {
+		effects, _, err := effectiveCapitalReturnEffectsQuery(ctx, reader, intents[index].OperationID)
+		if err != nil {
+			return nil, err
+		}
+		intents[index].CapitalReturnEffects = effects
 	}
 	return intents, nil
+}
+
+// effectiveCapitalReturnEffectsQuery returns a return of capital's current
+// per-lot effects and the revision they come from (zero for the original).
+func effectiveCapitalReturnEffectsQuery(ctx context.Context, reader queryer, operationID int64) ([]CapitalReturnEffect, int64, error) {
+	var revisionID int64
+	query := `SELECT lot_id, entitled_quantity_value, entitled_quantity_scale, allocated_value, allocated_scale,
+		reduction_value, reduction_scale, excess_value, excess_scale
+		FROM investment_capital_return_effects WHERE operation_id = ? ORDER BY effect_seq`
+	args := []any{operationID}
+	revisions, err := reader.QueryContext(ctx, `SELECT id FROM latest_investment_capital_return_revisions
+		WHERE operation_id = ?`, operationID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("read return of capital revision: %w", err)
+	}
+	for revisions.Next() {
+		if err := revisions.Scan(&revisionID); err != nil {
+			revisions.Close()
+			return nil, 0, fmt.Errorf("scan return of capital revision: %w", err)
+		}
+	}
+	if err := errors.Join(revisions.Err(), revisions.Close()); err != nil {
+		return nil, 0, fmt.Errorf("read return of capital revision: %w", err)
+	}
+	if revisionID > 0 {
+		query = `SELECT lot_id, entitled_quantity_value, entitled_quantity_scale, allocated_value, allocated_scale,
+			reduction_value, reduction_scale, excess_value, excess_scale
+			FROM investment_capital_return_revision_effects WHERE revision_id = ? ORDER BY effect_seq`
+		args = []any{revisionID}
+	}
+	rows, err := reader.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("read return of capital effects: %w", err)
+	}
+	defer rows.Close()
+	var effects []CapitalReturnEffect
+	for rows.Next() {
+		var effect CapitalReturnEffect
+		if err := rows.Scan(&effect.LotID, &effect.EntitledQuantityValue, &effect.EntitledQuantityScale,
+			&effect.AllocatedValue, &effect.AllocatedScale, &effect.ReductionValue, &effect.ReductionScale,
+			&effect.ExcessValue, &effect.ExcessScale); err != nil {
+			return nil, 0, fmt.Errorf("scan return of capital effect: %w", err)
+		}
+		effects = append(effects, effect)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate return of capital effects: %w", err)
+	}
+	return effects, revisionID, nil
+}
+
+// InvestmentReplayCapitalReturn is a return of capital whose replayed
+// effects differ from its effective ones; persisting appends a revision.
+type InvestmentReplayCapitalReturn struct {
+	OperationID int64
+	Effects     []CapitalReturnEffect
+}
+
+// persistCapitalReturnRevisionTx appends a revision of the whole effect set.
+func persistCapitalReturnRevisionTx(ctx context.Context, tx *sql.Tx, bookID, causedByOperationID, auditEventID int64,
+	createdAt string, revision InvestmentReplayCapitalReturn) error {
+	_, priorID, err := effectiveCapitalReturnEffectsQuery(ctx, tx, revision.OperationID)
+	if err != nil {
+		return err
+	}
+	priorSeq := 1
+	if priorID > 0 {
+		if err := tx.QueryRowContext(ctx, `SELECT revision_seq FROM investment_capital_return_revisions WHERE id = ?`,
+			priorID).Scan(&priorSeq); err != nil {
+			return fmt.Errorf("read return of capital revision sequence: %w", err)
+		}
+	}
+	result, err := tx.ExecContext(ctx, `INSERT INTO investment_capital_return_revisions
+		(book_id, operation_id, revision_seq, caused_by_operation_id, supersedes_revision_id, created_at, created_audit_event_id)
+		VALUES (?, ?, ?, ?, NULLIF(?, 0), ?, ?)`, bookID, revision.OperationID, priorSeq+1, causedByOperationID,
+		priorID, createdAt, auditEventID)
+	if err != nil {
+		return fmt.Errorf("append return of capital revision: %w", err)
+	}
+	revisionID, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("read return of capital revision id: %w", err)
+	}
+	for index, effect := range revision.Effects {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO investment_capital_return_revision_effects
+			(revision_id, effect_seq, book_id, lot_id, entitled_quantity_value, entitled_quantity_scale,
+			 allocated_value, allocated_scale, reduction_value, reduction_scale, excess_value, excess_scale)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, revisionID, index+1, bookID, effect.LotID,
+			effect.EntitledQuantityValue, effect.EntitledQuantityScale, effect.AllocatedValue, effect.AllocatedScale,
+			effect.ReductionValue, effect.ReductionScale, effect.ExcessValue, effect.ExcessScale); err != nil {
+			return fmt.Errorf("append return of capital revision effect: %w", err)
+		}
+	}
+	return nil
 }

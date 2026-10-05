@@ -27,6 +27,12 @@ type InvestmentReplayProjection struct {
 	// lot events record (average_cost for a pool, empty for selected lots).
 	SubjectTransferOut    []LotDisposalRecord
 	SubjectTransferMethod string
+	// CapitalReturns are returns of capital whose replayed effects differ
+	// from their effective ones; persisting appends a revision (T-148).
+	CapitalReturns []InvestmentReplayCapitalReturn
+	// SubjectCapitalReturn is the effect set of the return of capital the
+	// command is recording, at its replay slot.
+	SubjectCapitalReturn []CapitalReturnEffect
 }
 
 // InvestmentReplayTransferRevision is one link's replayed depletion: the
@@ -345,17 +351,27 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		projection.Splits = append(projection.Splits, InvestmentReplaySplit{
 			OperationID: intent.OperationID, Subject: intent.SplitIsSubject, Effects: effects})
 	case "capital_return":
-		// The basis action at its slot must reproduce the recorded effects;
-		// revising them is T-148, so a change names the operation.
+		// The basis action at its slot follows history: changed effects are
+		// revised (T-148). A slot with no entitled lot, or an unknown basis,
+		// cannot express the receipt and names the operation.
 		effects, err := capitalReturnEffectsTx(ctx, tx, bookID, accountID, commodityID, costCommodityID,
 			intent.EventDate, exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale))
-		if err == nil && !sameCapitalReturnEffects(effects, intent.CapitalReturnEffects) {
-			err = ErrCapitalReturnChanged
+		if err == nil {
+			switch {
+			case intent.CapitalReturnIsSubject:
+				projection.SubjectCapitalReturn = effects
+			case !sameCapitalReturnEffects(effects, intent.CapitalReturnEffects):
+				projection.CapitalReturns = append(projection.CapitalReturns,
+					InvestmentReplayCapitalReturn{OperationID: intent.OperationID, Effects: effects})
+			}
 		}
 		if err == nil {
 			err = applyCapitalReturnEffectsTx(ctx, tx, bookID, effects, intent.CreatedAt, intent.CreatedByUserID, intent.AuditEventID)
 		}
 		if err != nil {
+			if intent.CapitalReturnIsSubject {
+				return err
+			}
 			return &InvestmentReplayDependencyError{OperationID: intent.OperationID,
 				Cause: fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)}
 		}
