@@ -1234,5 +1234,12 @@
   "transactions_system_label_split_adjustment": "Split-Anpassung",
   "transactions_system_label_transfer_bridge": "Anschaffungskosten ausgebucht",
   "api_error_investment_split_already_corrected": "Dieser Split wurde bereits korrigiert. Die letzte Buchung steht im Korrekturverlauf.",
-  "api_error_investment_imported_split": "Dieser Split ist mit einer Importzeile verknüpft, die nicht mehr auf ihn verweist. Prüfen Sie den Import, bevor Sie den Split korrigieren."
+  "api_error_investment_imported_split": "Dieser Split ist mit einer Importzeile verknüpft, die nicht mehr auf ihn verweist. Prüfen Sie den Import, bevor Sie den Split korrigieren.",
+  "investments_capital_return_correct": "Kapitalrückzahlung korrigieren",
+  "investments_capital_return_correct_submit": "Korrigierte Rückzahlung speichern",
+  "investments_capital_return_specific_quantities": "Bestimmte Stückzahlen je Los",
+  "investments_capital_return_entitlement_help": "Laden Sie in der Vorschau die Lose am Wirksamkeitsdatum und geben Sie die berechtigte Stückzahl je Los ein. Leer oder null schließt ein Los aus.",
+  "investments_capital_return_entitled_quantity": "Los {lot}: berechtigte Stückzahl (Bestand: {quantity})",
+  "investments_capital_return_entitlement_error": "Geben Sie für mindestens ein Los eine positive berechtigte Stückzahl ein.",
+  "api_error_investment_capital_return_dependency": "Diese Rückzahlung kann nicht geändert werden, weil eine abhängige Buchung nicht erneut berechnet werden kann. Prüfen Sie zuerst die späteren Buchungen."
 }

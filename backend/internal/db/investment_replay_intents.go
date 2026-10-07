@@ -61,7 +61,9 @@ type InvestmentReplayIntent struct {
 	// entitled lots, followed to their correction-root successors (T-148);
 	// empty applies the per-share rule.
 	CapitalReturnEntitledLots       []int64
-	capitalReturnEntitlementSources []transferSourceOpening
+	capitalReturnEntitlementSources []capitalReturnEntitlementSource
+	CapitalReturnEntitlements       []CapitalReturnEntitlement
+	CapitalReturnFixedQuantities    bool
 	// CapitalReturnIsSubject marks the return of capital a command is
 	// recording behind later depletions; replay reports its effects.
 	CapitalReturnIsSubject bool
@@ -450,11 +452,15 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			continue
 		}
 		for _, source := range intents[index].capitalReturnEntitlementSources {
-			lotID, err := effectiveSource(source)
+			lotID, err := effectiveSource(source.transferSourceOpening)
 			if err != nil {
 				return nil, err
 			}
-			intents[index].CapitalReturnEntitledLots = append(intents[index].CapitalReturnEntitledLots, lotID)
+			if intents[index].CapitalReturnFixedQuantities {
+				intents[index].CapitalReturnEntitlements = append(intents[index].CapitalReturnEntitlements, CapitalReturnEntitlement{LotID: lotID, QuantityValue: source.quantityValue, QuantityScale: source.quantityScale})
+			} else {
+				intents[index].CapitalReturnEntitledLots = append(intents[index].CapitalReturnEntitledLots, lotID)
+			}
 		}
 	}
 	sortInvestmentReplayIntents(intents)

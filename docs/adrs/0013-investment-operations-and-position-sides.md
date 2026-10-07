@@ -404,3 +404,33 @@ its preview), internal replacement (`.../replace-transfer` and its
 `/preview`) and external-in replacement (`.../replace-transfer-in` and its
 `/reconciliation-impact`). Outbound correction waits for the outbound writer
 (#114).
+
+## Return Of Capital Completion Refinement (2026-10-07, T-148)
+
+A native replacement posts the exact inverse receipt and corrected receipt
+under one audit event, and derives the replacement's basis effects by subject
+replay at the correction root's same-day slot. Amount, effective/payment dates,
+cash account, evidence and entitlement may change; holding, security and cost
+currency stay fixed. Reconciliation and gain disclosure guard the combined
+command, including every dependent replay. Originals remain audit evidence.
+
+`explicit_quantities` fixes a positive quantity per named lot, no greater than
+the units held at the action's slot. Receipt allocations are proportional to
+those entitled units; each lot's reduction is capped to the entitled units'
+proportional share of its remaining basis, truncated at the position allocation
+scale. Unentitled basis cannot absorb unresolved excess. Replay follows a named
+lot's corrected acquisition successor while retaining the fixed quantity.
+Existing `explicit_lots` continues to mean the whole remaining quantity at the
+slot; its historical quantity snapshot is not reinterpreted as a fixed election.
+
+Allocations use the cost currency's maximum allocation scale, backed off only
+for the int64 basis projection range, never below recorded basis precision or
+the normalized receipt scale. Equivalent receipt spellings allocate identically.
+Self-check audits each original and each revision effect set independently,
+including superseded and missing sets, while projection checks use effective
+history. Unknown-basis handling remains T-145; excess is unresolved, not income.
+
+**BREAKING DEV DATABASE:** the pre-release baseline adds `explicit_quantities`
+to the entitlement rule and its insert guard. Its checksum is updated. Reset
+only disposable development databases as documented in developer-workflow;
+no supported installed database exists. Export columns are unchanged.

@@ -1234,5 +1234,12 @@
   "transactions_system_label_split_adjustment": "Корректировка сплита",
   "transactions_system_label_transfer_bridge": "Перенос себестоимости",
   "api_error_investment_split_already_corrected": "Этот сплит уже исправлен. Последнюю запись можно увидеть в истории исправлений.",
-  "api_error_investment_imported_split": "Этот сплит связан со строкой импорта, которая больше на него не ссылается. Проверьте импорт, прежде чем исправлять сплит."
+  "api_error_investment_imported_split": "Этот сплит связан со строкой импорта, которая больше на него не ссылается. Проверьте импорт, прежде чем исправлять сплит.",
+  "investments_capital_return_correct": "Исправить возврат капитала",
+  "investments_capital_return_correct_submit": "Сохранить исправленный возврат",
+  "investments_capital_return_specific_quantities": "Точное количество по лотам",
+  "investments_capital_return_entitlement_help": "Предпросмотр загрузит лоты на дату действия. Затем укажите количество, имеющее право на возврат, для каждого лота. Пустое поле или ноль исключает лот.",
+  "investments_capital_return_entitled_quantity": "Лот {lot}: количество с правом на возврат (в наличии: {quantity})",
+  "investments_capital_return_entitlement_error": "Укажите положительное количество с правом на возврат хотя бы для одного лота.",
+  "api_error_investment_capital_return_dependency": "Нельзя изменить этот возврат: зависимую операцию не удастся пересчитать. Сначала проверьте последующие операции."
 }

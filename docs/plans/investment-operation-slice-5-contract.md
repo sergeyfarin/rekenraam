@@ -182,8 +182,19 @@ acknowledgement; mobile entry previews each lot's reduction and unresolved
 excess. Explicit entitlement (`entitled_lot_ids`, rule `explicit_lots`, API
 only) names whole lots instead of the per-share rule; each takes its full
 remaining quantity at the slot, and replay follows a named lot to its
-correction-root successor. A partial-lot entitlement would need a
-proportional basis cap and is not supported. The bundle adds
+correction-root successor. Completion (2026-10-07, T-148) adds
+`lot_entitlements` with fixed positive quantities (`explicit_quantities`),
+mutually exclusive with whole-lot IDs. Receipt allocations follow the entitled
+units; reduction is capped to their proportional share of each lot's remaining
+basis at the action slot. Quantity above the held units is refused. Allocation
+precision follows the cost currency's allocation scale (with normalized receipt
+precision retained), so equivalent amount spellings have identical effects.
+Native `replace-return-of-capital` and `/preview` atomically invert the receipt
+and replace its basis action at the correction root's slot; dates, cash account,
+amount and entitlement may change, holding/security/currency stay fixed. Both
+correction and explicit quantity entry are available on mobile in six locales.
+Self-check conserves every original and revision effect set independently,
+including superseded and missing sets. The bundle adds
 `investment-capital-return-entitlements.csv`, `-revisions.csv` and
 `-revision-effects.csv`.
 

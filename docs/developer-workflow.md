@@ -426,6 +426,13 @@ basis fields are NULL, with quantities and independently priced value retained.
 Unknown-input commands still require their immutable-fact/replay contracts.
 No legacy or installed databases exist.
 
+**BREAKING DEV DATABASE, return-of-capital quantities (T-148, 2026-10-07):**
+`0001` adds the `explicit_quantities` entitlement rule and expands its insert
+guard; whole-lot entitlements retain their original meaning. The checksum
+changed, with fresh/seeded schema equivalence validation. Stop the app and
+reset only the same disposable `DATABASE_URL` database and sidecars using the
+command above, then redo owner setup. No installed v0.1 database exists.
+
 The final pre-`v0.1.0` consolidation changed the highest schema version from 8
 to 1. Databases and backups made before that consolidation are incompatible in
 both directions: export anything worth keeping before updating, then recreate

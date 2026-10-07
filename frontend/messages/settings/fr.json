@@ -1234,5 +1234,12 @@
   "transactions_system_label_split_adjustment": "Ajustement de division",
   "transactions_system_label_transfer_bridge": "Prix de revient transféré",
   "api_error_investment_split_already_corrected": "Cette division a déjà été corrigée. Consultez son historique pour voir la dernière opération.",
-  "api_error_investment_imported_split": "Cette division est liée à une ligne d’importation qui ne la désigne plus. Vérifiez l’importation avant de la corriger."
+  "api_error_investment_imported_split": "Cette division est liée à une ligne d’importation qui ne la désigne plus. Vérifiez l’importation avant de la corriger.",
+  "investments_capital_return_correct": "Corriger le remboursement de capital",
+  "investments_capital_return_correct_submit": "Enregistrer le remboursement corrigé",
+  "investments_capital_return_specific_quantities": "Quantités précises par lot",
+  "investments_capital_return_entitlement_help": "Affichez l’aperçu pour charger les lots détenus à la date d’effet, puis indiquez la quantité admissible par lot. Laissez vide ou saisissez zéro pour exclure un lot.",
+  "investments_capital_return_entitled_quantity": "Lot {lot} : quantité admissible (détenue : {quantity})",
+  "investments_capital_return_entitlement_error": "Saisissez une quantité admissible positive pour au moins un lot.",
+  "api_error_investment_capital_return_dependency": "Ce remboursement ne peut pas être modifié car une opération dépendante ne pourrait plus être recalculée. Vérifiez d’abord les opérations ultérieures."
 }

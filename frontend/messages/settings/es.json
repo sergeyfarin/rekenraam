@@ -1234,5 +1234,12 @@
   "transactions_system_label_split_adjustment": "Ajuste de desdoblamiento",
   "transactions_system_label_transfer_bridge": "Coste de adquisición transferido",
   "api_error_investment_split_already_corrected": "Este desdoblamiento ya se corrigió. Abra el historial de correcciones para ver la última operación.",
-  "api_error_investment_imported_split": "Este desdoblamiento está vinculado a una fila de importación que ya no lo identifica. Revise la importación antes de corregirlo."
+  "api_error_investment_imported_split": "Este desdoblamiento está vinculado a una fila de importación que ya no lo identifica. Revise la importación antes de corregirlo.",
+  "investments_capital_return_correct": "Corregir la devolución de capital",
+  "investments_capital_return_correct_submit": "Guardar devolución corregida",
+  "investments_capital_return_specific_quantities": "Cantidades específicas por lote",
+  "investments_capital_return_entitlement_help": "Obtenga la vista previa para cargar los lotes en la fecha efectiva y luego indique la cantidad con derecho por lote. Déjelo vacío o introduzca cero para excluir un lote.",
+  "investments_capital_return_entitled_quantity": "Lote {lot}: cantidad con derecho (tenencia: {quantity})",
+  "investments_capital_return_entitlement_error": "Introduzca una cantidad positiva con derecho para al menos un lote.",
+  "api_error_investment_capital_return_dependency": "Esta devolución no se puede cambiar porque una operación dependiente ya no se podría recalcular. Revise primero las operaciones posteriores."
 }

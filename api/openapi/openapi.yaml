@@ -329,6 +329,10 @@ paths:
     $ref: "./paths/investments-reverse-split.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-split/reconciliation-impact:
     $ref: "./paths/investments-reverse-split-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-return-of-capital:
+    $ref: "./paths/investments-replace-return-of-capital.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-return-of-capital/preview:
+    $ref: "./paths/investments-replace-return-of-capital-preview.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-split:
     $ref: "./paths/investments-replace-split.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-split/preview:
@@ -1084,6 +1088,12 @@ components:
       $ref: "./components/schemas/investments.yaml#/CashInLieuRequest"
     CashInLieuPreviewResponse:
       $ref: "./components/schemas/investments.yaml#/CashInLieuPreviewResponse"
+    CapitalReturnEntitlement:
+      $ref: "./components/schemas/investments.yaml#/CapitalReturnEntitlement"
+    CapitalReturnReplacementRequest:
+      $ref: "./components/schemas/investments.yaml#/CapitalReturnReplacementRequest"
+    CapitalReturnReplacementResponse:
+      $ref: "./components/schemas/investments.yaml#/CapitalReturnReplacementResponse"
     CapitalReturnRequest:
       $ref: "./components/schemas/investments.yaml#/CapitalReturnRequest"
     CapitalReturnEffect:

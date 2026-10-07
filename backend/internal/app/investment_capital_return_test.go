@@ -65,16 +65,16 @@ func TestCapitalReturnAllocatesPerShareWithExactRemainder(t *testing.T) {
 	result, err := f.investmentService.CapitalReturn(ctx, capitalReturnInput(f, "2026-06-01", 1000))
 	require.NoError(t, err)
 	require.Len(t, result.Effects, 2)
-	requireScaled(t, 333, 2, coefScaled(result.Effects[0].AllocatedValue, result.Effects[0].AllocatedScale), "one share of three")
-	requireScaled(t, 667, 2, coefScaled(result.Effects[1].AllocatedValue, result.Effects[1].AllocatedScale), "remainder on the last lot")
+	requireScaled(t, 3333333, 6, coefScaled(result.Effects[0].AllocatedValue, result.Effects[0].AllocatedScale), "one share of three")
+	requireScaled(t, 6666667, 6, coefScaled(result.Effects[1].AllocatedValue, result.Effects[1].AllocatedScale), "remainder on the last lot")
 	total := exact.NewScaledInt()
 	for _, effect := range result.Effects {
 		total.AddCoefficient(effect.AllocatedValue, effect.AllocatedScale)
 		assert.Zero(t, effect.ExcessValue.Sign(), "basis covers each share")
 	}
 	requireScaled(t, 1000, 2, total, "allocations sum to the receipt")
-	requireScaled(t, 4667, 2, lotRemainingBasis(t, f, *first.LotID), "first lot")
-	requireScaled(t, 9333, 2, lotRemainingBasis(t, f, *second.LotID), "second lot")
+	requireScaled(t, 46666667, 6, lotRemainingBasis(t, f, *first.LotID), "first lot")
+	requireScaled(t, 93333333, 6, lotRemainingBasis(t, f, *second.LotID), "second lot")
 	requireInvestmentSelfCheckPasses(t, f)
 }
 

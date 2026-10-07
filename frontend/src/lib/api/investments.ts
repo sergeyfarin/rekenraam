@@ -1353,3 +1353,31 @@ export async function replaceWriteOff(transactionID: number, input: InvestmentWr
     throw toNetworkError(error);
   }
 }
+
+export type CapitalReturnReplacementRequest = components['schemas']['CapitalReturnReplacementRequest'];
+
+export async function previewCapitalReturnReplacement(transactionID: number, input: CapitalReturnReplacementRequest): Promise<CapitalReturnPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/transactions/{transaction_id}/replace-return-of-capital/preview', {
+      params: { path: { transaction_id: transactionID } }, body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceCapitalReturn(transactionID: number, input: CapitalReturnReplacementRequest, csrfToken: string): Promise<components['schemas']['CapitalReturnReplacementResponse']> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/transactions/{transaction_id}/replace-return-of-capital', {
+      params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}

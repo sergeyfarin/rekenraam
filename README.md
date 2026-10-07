@@ -89,6 +89,10 @@ Product and architecture decisions live in the
 
 ### Consolidated development schema
 
+The T-148 return-of-capital quantity entitlement change (2026-10-07) revises
+the pre-release baseline. Reset disposable development databases before using
+it; see [database reset guidance](docs/developer-workflow.md#migrations-and-resetting-your-database).
+
 No legacy databases exist. The pre-release schema is consolidated into
 `0001_initial_schema.sql`, including source revisions, authoritative journal
 links, separate immutable lot identity/mutable lot state, and immutable disposal

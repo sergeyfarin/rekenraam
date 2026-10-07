@@ -356,7 +356,7 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		// cannot express the receipt and names the operation.
 		effects, err := capitalReturnEffectsTx(ctx, tx, bookID, accountID, commodityID, costCommodityID,
 			intent.EventDate, exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale),
-			intent.CapitalReturnEntitledLots)
+			intent.CapitalReturnEntitledLots, intent.CapitalReturnEntitlements)
 		if err == nil {
 			switch {
 			case intent.CapitalReturnIsSubject:

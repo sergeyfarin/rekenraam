@@ -1103,6 +1103,17 @@ CapitalReturnRequest:
         Explicit entitlement (T-148): the lots the corporate action names, each entitled to its whole remaining
         quantity on the effective date. Omit to apply the per-share rule to every lot open then. A named lot that
         is not open in the holding on that date is refused.
+    lot_entitlements:
+      type: array
+      minItems: 1
+      items:
+        $ref: '#/CapitalReturnEntitlement'
+      description: >-
+        Fixed lot/quantity entitlement from the corporate action. Quantities must be positive,
+        distinct by lot, and no greater than that lot holds at the effective-date slot. Receipt
+        allocation is per entitled unit; reduction is capped to the entitled units' proportional
+        share of each lot's basis. Mutually exclusive with entitled_lot_ids. Replay follows
+        corrected acquisition successors while keeping the named quantity fixed.
     amount_value:
       type: string
       pattern: '^[1-9][0-9]{0,37}$'
@@ -1141,7 +1152,7 @@ CapitalReturnEffect:
       type: integer
     reduction_value:
       type: string
-      description: min(allocated, remaining basis).
+      description: Minimum of allocated cash and eligible basis (proportional to entitled quantity for explicit_quantities).
     reduction_scale:
       type: integer
     excess_value:
@@ -1729,7 +1740,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_correct_write_off, can_reverse_transfer, can_replace_transfer, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_reverse_transfer, can_replace_transfer, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1766,6 +1777,11 @@ InvestmentCorrectionChainResponse:
       description: Whether the effective posted internal or external-in transfer can attempt replacement (T-119); internal ones use replace-transfer, external ones replace-transfer-in.
     effective_transfer:
       $ref: '#/InvestmentCorrectionTransferTerms'
+    can_replace_return_of_capital:
+      type: boolean
+      description: Whether the effective posted return can be replaced atomically at its correction-root slot.
+    effective_return_of_capital:
+      $ref: '#/CapitalReturnRequest'
     can_reverse_return_of_capital:
       type: boolean
       description: The effective operation is a return of capital that can be reversed (T-148).
@@ -2834,3 +2850,47 @@ GainImpactState:
       description: proceeds minus disposed basis; null when basis is unknown.
     realized_gain_scale:
       type: [integer, "null"]
+
+CapitalReturnEntitlement:
+  type: object
+  additionalProperties: false
+  required: [lot_id, quantity_value, quantity_scale]
+  properties:
+    lot_id:
+      type: integer
+      format: int64
+      minimum: 1
+    quantity_value:
+      type: string
+      pattern: '^[1-9][0-9]{0,37}$'
+    quantity_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
+
+CapitalReturnReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, replacement]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+    replacement:
+      $ref: '#/CapitalReturnRequest'
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+
+CapitalReturnReplacementResponse:
+  type: object
+  required: [inverse, replacement, corrected_transaction_id]
+  properties:
+    inverse:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    replacement:
+      $ref: '#/CapitalReturnResponse'
+    corrected_transaction_id:
+      type: integer
+      format: int64

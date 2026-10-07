@@ -41,6 +41,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED: () => m.api_error_investment_gain_impact_acknowledgement_required(),
   INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE: () => m.api_error_investment_gain_impact_acknowledgement_stale(),
   INVESTMENT_SPLIT_NO_HOLDINGS: () => m.api_error_investment_split_no_holdings(),
+  INVESTMENT_CAPITAL_RETURN_DEPENDENCY: () => m.api_error_investment_capital_return_dependency(),
   INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS: () => m.api_error_investment_capital_return_no_holdings(),
   INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE: () => m.api_error_investment_cash_in_lieu_split_unavailable(),
   INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE: () => m.api_error_investment_split_fraction_unrepresentable(),

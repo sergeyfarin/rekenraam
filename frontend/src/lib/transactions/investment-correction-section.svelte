@@ -5,6 +5,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import APIFormError from '#lib/components/api-form-error.svelte';
+  import CapitalReturnForm from '#lib/investments/capital-return-form.svelte';
   import BuyForm from '#lib/investments/buy-form.svelte';
   import SellForm from '#lib/investments/sell-form.svelte';
   import SplitForm from '#lib/investments/split-form.svelte';
@@ -68,7 +69,7 @@
     enabled: transactionID > 0
   }));
 
-  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | null>(null);
+  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | null>(null);
   // Splits pre-fill from the chain's effective_split; only trades need the
   // separate source-facts read.
   const replacementQuery = createQuery(() => ({
@@ -327,6 +328,11 @@
         >
           {m.transactions_investment_reverse_capital_return_action()}
         </button>
+        {#if chainQuery.data?.can_replace_return_of_capital && chainQuery.data.effective_return_of_capital}
+          <button type="button" disabled={!csrfToken}
+            class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+            onclick={() => (replacementKind = 'capital_return')}>{m.investments_capital_return_correct()}</button>
+        {/if}
       </div>
     {/if}
     {#if dividendCorrectable || reinvestmentCorrectable}
@@ -426,7 +432,15 @@
   {/if}
 </section>
 
-{#if (replacementKind === 'dividend' || replacementKind === 'reinvestment') && csrfToken}
+{#if replacementKind === 'capital_return' && csrfToken && chainQuery.data?.effective_return_of_capital}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm" role="presentation">
+    <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
+      role="dialog" aria-modal="true" aria-label={m.investments_capital_return_correct()}>
+      <CapitalReturnForm {csrfToken} correction={{ transactionID, terms: chainQuery.data.effective_return_of_capital }}
+        onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+    </div>
+  </div>
+{:else if (replacementKind === 'dividend' || replacementKind === 'reinvestment') && csrfToken}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
     role="presentation">
     <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"

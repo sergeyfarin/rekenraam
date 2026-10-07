@@ -314,6 +314,8 @@ type investmentCorrectionChainResponse struct {
 	CanCorrectSplit         bool                               `json:"can_correct_split"`
 	EffectiveSplit          *investmentCorrectionSplitTerms    `json:"effective_split,omitempty"`
 	CanCorrectDividend      bool                               `json:"can_correct_dividend"`
+	CanReplaceCapitalReturn bool                               `json:"can_replace_return_of_capital"`
+	EffectiveCapitalReturn  *capitalReturnRequest              `json:"effective_return_of_capital,omitempty"`
 	CanReverseCapitalReturn bool                               `json:"can_reverse_return_of_capital"`
 	EffectiveDividend       *investmentCorrectionDividendTerms `json:"effective_dividend,omitempty"`
 	CanCorrectReinvested    bool                               `json:"can_correct_reinvested_dividend"`
@@ -1135,7 +1137,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanReverseManualSale: chain.CanReverseManualSale, CanReverseManualBuy: chain.CanReverseManualBuy,
 			CanReverseSale: chain.CanReverseSale, CanReverseBuy: chain.CanReverseBuy,
 			CanCorrectSplit: chain.CanCorrectSplit, EffectiveSplit: toInvestmentCorrectionSplitTerms(chain.EffectiveSplit),
-			CanCorrectDividend: chain.CanCorrectDividend, CanReverseCapitalReturn: chain.CanReverseCapitalReturn, EffectiveDividend: toInvestmentCorrectionDividendTerms(chain.EffectiveDividend),
+			CanCorrectDividend: chain.CanCorrectDividend, CanReverseCapitalReturn: chain.CanReverseCapitalReturn, CanReplaceCapitalReturn: chain.CanReplaceCapitalReturn, EffectiveCapitalReturn: toCapitalReturnTerms(chain.EffectiveCapitalReturn), EffectiveDividend: toInvestmentCorrectionDividendTerms(chain.EffectiveDividend),
 			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
 			CanCorrectWriteOff: chain.CanCorrectWriteOff,
 			CanReverseTransfer: chain.CanReverseTransfer,
@@ -1861,6 +1863,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE", err.Error())
 	case errors.Is(err, app.ErrCashInLieuNotFraction):
 		writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", err.Error())
+	case errors.Is(err, app.ErrInvestmentCapitalReturnDependency):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_CAPITAL_RETURN_DEPENDENCY", err.Error())
 	case errors.Is(err, app.ErrCapitalReturnNoHoldings):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS", err.Error())
 	case errors.Is(err, app.ErrInvestmentSplitNoHoldings):

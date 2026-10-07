@@ -1988,7 +1988,7 @@ CREATE TABLE IF NOT EXISTS investment_capital_return_facts (
   amount_scale INTEGER NOT NULL CHECK (amount_scale BETWEEN 0 AND 12),
   -- open_lots_per_share: every lot open on the effective date; explicit_lots:
   -- the lot/quantity set the corporate action names (T-148).
-  entitlement_rule TEXT NOT NULL CHECK (entitlement_rule IN ('open_lots_per_share', 'explicit_lots')),
+  entitlement_rule TEXT NOT NULL CHECK (entitlement_rule IN ('open_lots_per_share', 'explicit_lots', 'explicit_quantities')),
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
   CHECK (effective_on <= payment_on)
@@ -2033,7 +2033,7 @@ CREATE TRIGGER IF NOT EXISTS investment_capital_return_entitlements_valid
 BEFORE INSERT ON investment_capital_return_entitlements
 WHEN NOT EXISTS (
   SELECT 1 FROM investment_capital_return_facts f JOIN investment_lots l ON l.id = NEW.lot_id
-  WHERE f.operation_id = NEW.operation_id AND f.book_id = NEW.book_id AND f.entitlement_rule = 'explicit_lots'
+  WHERE f.operation_id = NEW.operation_id AND f.book_id = NEW.book_id AND f.entitlement_rule IN ('explicit_lots', 'explicit_quantities')
     AND l.book_id = f.book_id AND l.account_id = f.account_id AND l.commodity_id = f.commodity_id
     AND l.cost_commodity_id = f.cost_commodity_id AND l.position_side = 'long' AND l.opened_on <= f.effective_on
 )

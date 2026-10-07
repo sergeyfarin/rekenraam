@@ -14,6 +14,8 @@ import (
 // currency is the position's cost currency: no implicit FX. The reduction and
 // any unresolved excess are writer outputs, never inputs.
 
+var ErrInvestmentCapitalReturnDependency = errors.New("return of capital cannot replay a dependent operation")
+
 var ErrCapitalReturnNoHoldings = errors.New("no holdings are open on the return of capital effective date")
 
 type CapitalReturnInput struct {
@@ -35,8 +37,11 @@ type CapitalReturnInput struct {
 	GainImpactAcknowledgement string
 	// EntitledLotIDs names the lots the corporate action entitles; each takes
 	// its whole remaining quantity. Empty applies the per-share rule (T-148).
-	EntitledLotIDs []int64
+	EntitledLotIDs  []int64
+	LotEntitlements []CapitalReturnEntitlement
 }
+
+type CapitalReturnEntitlement = db.CapitalReturnEntitlement
 
 type CapitalReturnEffect struct {
 	LotID                 int64
@@ -87,6 +92,18 @@ func (s *InvestmentService) capitalReturnWrite(ctx context.Context, input Capita
 			return db.CreateTransactionParams{}, db.CreateCapitalReturnParams{}, ValidationError{Message: "entitled lots must be distinct lot ids"}
 		}
 		seen[lotID] = true
+	}
+	if input.LotEntitlements != nil && len(input.LotEntitlements) == 0 {
+		return db.CreateTransactionParams{}, db.CreateCapitalReturnParams{}, ValidationError{Message: "explicit quantity entitlement must name at least one lot"}
+	}
+	if len(input.EntitledLotIDs) > 0 && len(input.LotEntitlements) > 0 {
+		return db.CreateTransactionParams{}, db.CreateCapitalReturnParams{}, ValidationError{Message: "choose whole lots or explicit quantities, not both"}
+	}
+	for _, entitlement := range input.LotEntitlements {
+		if entitlement.LotID <= 0 || seen[entitlement.LotID] || entitlement.QuantityValue.Sign() <= 0 || entitlement.QuantityScale < 0 || entitlement.QuantityScale > 24 {
+			return db.CreateTransactionParams{}, db.CreateCapitalReturnParams{}, ValidationError{Message: "entitlements require distinct lots and positive quantities at a valid scale"}
+		}
+		seen[entitlement.LotID] = true
 	}
 	dependencies := newAccountRuleDependencies()
 	if _, err := s.accountInRole(ctx, input.HoldingAccountID, effective, holdingRole, dependencies); err != nil {
@@ -140,7 +157,7 @@ func (s *InvestmentService) capitalReturnWrite(ctx context.Context, input Capita
 		BookID: BookID, AccountID: input.HoldingAccountID, CommodityID: input.CommodityID,
 		CostCommodityID: input.CurrencyID, CashAccountID: input.CashAccountID,
 		EffectiveOn: effective, PaymentOn: payment, AmountValue: input.AmountValue, AmountScale: input.AmountScale,
-		SourceEvidenceJSON: evidence, EntitledLotIDs: input.EntitledLotIDs,
+		SourceEvidenceJSON: evidence, EntitledLotIDs: input.EntitledLotIDs, LotEntitlements: input.LotEntitlements,
 	}, nil
 }
 
@@ -192,11 +209,15 @@ func toCapitalReturnEffects(effects []db.CapitalReturnEffect) []CapitalReturnEff
 }
 
 func mapCapitalReturnError(err error) error {
+	var dependency *db.InvestmentReplayDependencyError
+	if errors.As(err, &dependency) {
+		return fmt.Errorf("%w: operation #%d", ErrInvestmentCapitalReturnDependency, dependency.OperationID)
+	}
 	switch {
 	case errors.Is(err, db.ErrCapitalReturnNoHoldings):
 		return ErrCapitalReturnNoHoldings
 	case errors.Is(err, db.ErrCapitalReturnEntitlementUnavailable):
-		return ValidationError{Message: "an entitled lot is not open in this holding on the effective date"}
+		return ValidationError{Message: "an entitled lot or quantity is unavailable in this holding on the effective date"}
 	case errors.Is(err, db.ErrUnknownInvestmentBasis):
 		return ValidationError{Message: "a holding with unresolved basis cannot take a return of capital yet"}
 	case errors.Is(err, db.ErrOutOfOrderPositionEvent),
@@ -306,4 +327,82 @@ func mapCapitalReturnCorrectionError(err error) error {
 		return ErrInvestmentCapitalReturnChanged
 	}
 	return mapCapitalReturnError(err)
+}
+
+type ReplaceInvestmentCapitalReturnInput struct {
+	OwnerUserID               int64
+	AuthSessionID             int64
+	RequestID                 string
+	TransactionID             int64
+	Reason                    string
+	ReconciliationOverride    bool
+	GainImpactAcknowledgement string
+	Replacement               CapitalReturnInput
+}
+
+type ReplaceCapitalReturnResult struct {
+	Inverse                Transaction
+	Replacement            CapitalReturnResult
+	CorrectedTransactionID int64
+}
+
+func (s *InvestmentService) prepareCapitalReturnReplacement(ctx context.Context, input ReplaceInvestmentCapitalReturnInput) (db.CapitalReturnOperationRecord, db.CreateTransactionParams, db.CreateTransactionParams, db.CreateCapitalReturnParams, error) {
+	operation, inverse, err := s.prepareCapitalReturnReversal(ctx, ReverseInvestmentCapitalReturnInput{
+		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
+		TransactionID: input.TransactionID, Reason: input.Reason, ReconciliationOverride: input.ReconciliationOverride,
+	})
+	if err != nil {
+		return operation, inverse, db.CreateTransactionParams{}, db.CreateCapitalReturnParams{}, err
+	}
+	replacement := input.Replacement
+	if replacement.HoldingAccountID != operation.AccountID || replacement.CommodityID != operation.CommodityID || replacement.CurrencyID != operation.CostCommodityID {
+		return operation, inverse, db.CreateTransactionParams{}, db.CreateCapitalReturnParams{}, ValidationError{Message: "replacement must keep the holding, instrument and currency"}
+	}
+	replacement.OwnerUserID, replacement.AuthSessionID, replacement.RequestID = input.OwnerUserID, input.AuthSessionID, input.RequestID
+	replacement.ChangeReason, replacement.ReconciliationOverride = inverse.InvestmentCorrectionReason, input.ReconciliationOverride
+	journal, params, err := s.capitalReturnWrite(ctx, replacement)
+	if err != nil {
+		return operation, inverse, journal, params, err
+	}
+	inverse.Spec.InvestmentOperationKind = ""
+	inverse.InvestmentCorrectionOfOperationID, inverse.InvestmentCorrectionMode = 0, ""
+	inverse.InvestmentCorrectionReason = ""
+	inverse.Operation = "investment.return_of_capital.replace"
+	journal.Operation = inverse.Operation
+	journal.CorrectionOfTransactionID = inverse.CorrectionOfTransactionID
+	journal.InvestmentCorrectionOfOperationID, journal.InvestmentCorrectionMode = operation.OperationID, "replace"
+	journal.InvestmentCorrectionReason = replacement.ChangeReason
+	journal.CreatedAt = inverse.CreatedAt
+	inverse.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
+	journal.GainImpact = nil
+	return operation, inverse, journal, params, nil
+}
+
+func (s *InvestmentService) ReplaceCapitalReturn(ctx context.Context, input ReplaceInvestmentCapitalReturnInput) (ReplaceCapitalReturnResult, error) {
+	operation, inverse, replacement, params, err := s.prepareCapitalReturnReplacement(ctx, input)
+	if err != nil {
+		return ReplaceCapitalReturnResult{}, err
+	}
+	record, result, err := s.repository.ReplaceCapitalReturn(ctx, operation, inverse, replacement, params)
+	if err != nil {
+		return ReplaceCapitalReturnResult{}, mapCapitalReturnCorrectionError(err)
+	}
+	return ReplaceCapitalReturnResult{Inverse: toTransaction(record.Inverse), Replacement: CapitalReturnResult{Transaction: toTransaction(record.Replacement), Effects: toCapitalReturnEffects(result.Effects)}, CorrectedTransactionID: operation.TransactionID}, nil
+}
+
+func (s *InvestmentService) PreviewCapitalReturnReplacement(ctx context.Context, input ReplaceInvestmentCapitalReturnInput) (CapitalReturnPreview, error) {
+	input.ReconciliationOverride = true
+	operation, inverse, replacement, params, err := s.prepareCapitalReturnReplacement(ctx, input)
+	if err != nil {
+		return CapitalReturnPreview{}, err
+	}
+	simulated, result, err := s.repository.SimulateCapitalReturnReplacement(ctx, operation, inverse, replacement, params)
+	if err != nil {
+		return CapitalReturnPreview{}, mapCapitalReturnCorrectionError(err)
+	}
+	impact, err := s.simulatedReconciliationImpact(ctx, simulated)
+	if err != nil {
+		return CapitalReturnPreview{}, err
+	}
+	return CapitalReturnPreview{Effects: toCapitalReturnEffects(result.Effects), Impact: impact}, nil
 }

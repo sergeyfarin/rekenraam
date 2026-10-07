@@ -1,0 +1,67 @@
+post:
+  summary: Correct a posted return of capital
+  description: >-
+    Atomically posts the inverse receipt and a corrected return with its basis
+    action at the correction-root same-day slot. Amount, dates, cash account,
+    source evidence and entitlement may change; holding, security and currency
+    stay fixed. Originals and revisions remain immutable audit evidence.
+    Changed gains require the exact preview acknowledgement; reconciled balance
+    changes require the override. Later operations replay under their recorded policies.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CapitalReturnReplacementRequest"
+  responses:
+    "201":
+      description: Return of capital replaced and holding replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CapitalReturnReplacementResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted return of capital not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected, unlinked import, changed, no eligible holdings, later disposal impossible, reconciliation override required, or gain changes not acknowledged
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Invalid entitlement, unknown basis, or coefficient range exceeded
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

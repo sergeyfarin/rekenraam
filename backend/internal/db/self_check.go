@@ -1300,39 +1300,41 @@ type SelfCheckCapitalReturn struct {
 
 func (r *SelfCheckRepository) SelfCheckCapitalReturns(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckCapitalReturn, error) {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT f.operation_id, f.amount_value, f.amount_scale, e.allocated_value, e.allocated_scale,
-			e.reduction_value, e.reduction_scale, e.excess_value, e.excess_scale,
-			ev.cost_basis_value, ev.cost_basis_scale
+		SELECT f.operation_id, 0 AS revision_id, f.amount_value, f.amount_scale, COALESCE(e.allocated_value, '0'), COALESCE(e.allocated_scale, 0),
+			COALESCE(e.reduction_value, '0'), COALESCE(e.reduction_scale, 0), COALESCE(e.excess_value, '0'), COALESCE(e.excess_scale, 0),
+			COALESCE(ev.cost_basis_value, '0'), COALESCE(ev.cost_basis_scale, 0), e.lot_id IS NULL OR ev.id IS NULL
 		FROM investment_capital_return_facts f
-		JOIN investment_capital_return_effects e ON e.operation_id = f.operation_id
-		JOIN investment_lot_events ev ON ev.id = e.lot_event_id
-		WHERE f.book_id = ? AND NOT EXISTS (SELECT 1 FROM investment_capital_return_revisions r
-			WHERE r.operation_id = f.operation_id)
+		LEFT JOIN investment_capital_return_effects e ON e.operation_id = f.operation_id
+		LEFT JOIN investment_lot_events ev ON ev.id = e.lot_event_id
+		WHERE f.book_id = ?
 		UNION ALL
 		-- A revised return has no lot events for its effects: the event check
 		-- compares the reduction with itself.
-		SELECT f.operation_id, f.amount_value, f.amount_scale, e.allocated_value, e.allocated_scale,
-			e.reduction_value, e.reduction_scale, e.excess_value, e.excess_scale,
-			CASE WHEN e.reduction_value = '0' THEN '0' ELSE '-' || e.reduction_value END, e.reduction_scale
+		SELECT f.operation_id, revision.id AS revision_id, f.amount_value, f.amount_scale, COALESCE(e.allocated_value, '0'), COALESCE(e.allocated_scale, 0),
+			COALESCE(e.reduction_value, '0'), COALESCE(e.reduction_scale, 0), COALESCE(e.excess_value, '0'), COALESCE(e.excess_scale, 0),
+			CASE WHEN e.reduction_value = '0' THEN '0' ELSE '-' || COALESCE(e.reduction_value, '0') END, COALESCE(e.reduction_scale, 0), e.lot_id IS NULL
 		FROM investment_capital_return_facts f
-		JOIN latest_investment_capital_return_revisions revision ON revision.operation_id = f.operation_id
-		JOIN investment_capital_return_revision_effects e ON e.revision_id = revision.id
+		JOIN investment_capital_return_revisions revision ON revision.operation_id = f.operation_id
+		LEFT JOIN investment_capital_return_revision_effects e ON e.revision_id = revision.id
 		WHERE f.book_id = ?
-		ORDER BY 1`, bookID, bookID)
+		ORDER BY 1, 2`, bookID, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read self-check returns of capital: %w", err)
 	}
 	defer rows.Close()
 	var returns []SelfCheckCapitalReturn
+	var priorRevisionID int64
 	for rows.Next() {
-		var operationID int64
+		var operationID, revisionID int64
+		var missing bool
 		var amount, allocated, reduction, excess, event exact.Coefficient
 		var amountScale, allocatedScale, reductionScale, excessScale, eventScale int
-		if err := rows.Scan(&operationID, &amount, &amountScale, &allocated, &allocatedScale,
-			&reduction, &reductionScale, &excess, &excessScale, &event, &eventScale); err != nil {
+		if err := rows.Scan(&operationID, &revisionID, &amount, &amountScale, &allocated, &allocatedScale,
+			&reduction, &reductionScale, &excess, &excessScale, &event, &eventScale, &missing); err != nil {
 			return nil, fmt.Errorf("scan self-check return of capital: %w", err)
 		}
-		if len(returns) == 0 || returns[len(returns)-1].OperationID != operationID {
+		if len(returns) == 0 || returns[len(returns)-1].OperationID != operationID || priorRevisionID != revisionID {
+			priorRevisionID = revisionID
 			returns = append(returns, SelfCheckCapitalReturn{OperationID: operationID,
 				Amount: exact.ScaledIntFromCoefficient(amount, amountScale), Allocated: exact.NewScaledInt()})
 		}
@@ -1340,7 +1342,7 @@ func (r *SelfCheckRepository) SelfCheckCapitalReturns(ctx context.Context, trans
 		current.Allocated.AddCoefficient(allocated, allocatedScale)
 		parts := exact.ScaledIntFromCoefficient(reduction, reductionScale)
 		parts.AddCoefficient(excess, excessScale)
-		if parts.Cmp(exact.ScaledIntFromCoefficient(allocated, allocatedScale)) != 0 ||
+		if missing || parts.Cmp(exact.ScaledIntFromCoefficient(allocated, allocatedScale)) != 0 ||
 			exact.ScaledIntFromCoefficient(event, eventScale).Cmp(exact.ScaledIntFromCoefficient(reduction, reductionScale).Negated()) != 0 {
 			current.Mismatched = true
 		}

@@ -40,6 +40,8 @@ type InvestmentCorrectionChain struct {
 	CanCorrectDividend bool
 	// CanReverseCapitalReturn allows reversing a return of capital (T-148).
 	CanReverseCapitalReturn      bool
+	CanReplaceCapitalReturn      bool
+	EffectiveCapitalReturn       *CapitalReturnInput
 	EffectiveDividend            *InvestmentCorrectionDividendTerms
 	CanCorrectReinvestedDividend bool
 	EffectiveReinvestment        *InvestmentCorrectionReinvestmentTerms
@@ -204,6 +206,21 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 		}
 		if correctable && record.OperationKind == "return_of_capital" {
 			chain.CanReverseCapitalReturn = true
+			terms, err := s.repository.CapitalReturnTerms(ctx, BookID, record.OperationID)
+			if err != nil {
+				return InvestmentCorrectionChain{}, err
+			}
+			transaction, err := s.transactionService.Transaction(ctx, record.TransactionID.Int64)
+			if err != nil {
+				return InvestmentCorrectionChain{}, err
+			}
+			chain.CanReplaceCapitalReturn = true
+			chain.EffectiveCapitalReturn = &CapitalReturnInput{
+				HoldingAccountID: terms.AccountID, CommodityID: terms.CommodityID, CurrencyID: terms.CostCommodityID,
+				CashAccountID: terms.CashAccountID, EffectiveOn: terms.EffectiveOn, PaymentOn: terms.PaymentOn,
+				AmountValue: terms.AmountValue, AmountScale: terms.AmountScale, SourceEvidenceJSON: terms.SourceEvidenceJSON,
+				Memo: transaction.Description, EntitledLotIDs: terms.EntitledLotIDs, LotEntitlements: terms.LotEntitlements,
+			}
 		}
 		if correctable && record.OperationKind == "write_off" {
 			chain.CanCorrectWriteOff = true

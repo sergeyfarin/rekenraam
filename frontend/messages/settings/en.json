@@ -1262,5 +1262,12 @@
   "transactions_system_label_split_adjustment": "Split adjustment",
   "transactions_system_label_transfer_bridge": "Cost basis transferred out",
   "api_error_investment_split_already_corrected": "This split has already been corrected. Open its correction history to see the latest entry.",
-  "api_error_investment_imported_split": "This split is linked to an import row that no longer refers to it. Review the import before correcting the split."
+  "api_error_investment_imported_split": "This split is linked to an import row that no longer refers to it. Review the import before correcting the split.",
+  "investments_capital_return_correct": "Correct return of capital",
+  "investments_capital_return_correct_submit": "Save corrected return",
+  "investments_capital_return_specific_quantities": "Specific lot quantities",
+  "investments_capital_return_entitlement_help": "Preview to load lots held on the effective date, then enter the entitled quantity for each lot. Leave blank or enter zero to exclude a lot.",
+  "investments_capital_return_entitled_quantity": "Lot {lot}: entitled quantity (held: {quantity})",
+  "investments_capital_return_entitlement_error": "Enter a positive entitled quantity for at least one lot.",
+  "api_error_investment_capital_return_dependency": "This return cannot be changed because a dependent operation would no longer replay. Review the later operations first."
 }

@@ -1234,5 +1234,12 @@
   "transactions_system_label_split_adjustment": "Correctie op splitsing",
   "transactions_system_label_transfer_bridge": "Kostprijs uitgeboekt",
   "api_error_investment_split_already_corrected": "Deze splitsing is al gecorrigeerd. Open de correctiegeschiedenis om de laatste boeking te zien.",
-  "api_error_investment_imported_split": "Deze splitsing is gekoppeld aan een importregel die er niet meer naar verwijst. Controleer de import voordat u de splitsing corrigeert."
+  "api_error_investment_imported_split": "Deze splitsing is gekoppeld aan een importregel die er niet meer naar verwijst. Controleer de import voordat u de splitsing corrigeert.",
+  "investments_capital_return_correct": "Kapitaalteruggave corrigeren",
+  "investments_capital_return_correct_submit": "Gecorrigeerde teruggave opslaan",
+  "investments_capital_return_specific_quantities": "Specifieke aantallen per lot",
+  "investments_capital_return_entitlement_help": "Bekijk het voorbeeld om lots op de ingangsdatum te laden. Vul daarna het gerechtigde aantal per lot in. Laat leeg of vul nul in om een lot uit te sluiten.",
+  "investments_capital_return_entitled_quantity": "Lot {lot}: gerechtigd aantal (in bezit: {quantity})",
+  "investments_capital_return_entitlement_error": "Vul voor minstens één lot een positief gerechtigd aantal in.",
+  "api_error_investment_capital_return_dependency": "Deze teruggave kan niet worden gewijzigd omdat een afhankelijke verrichting niet opnieuw kan worden berekend. Controleer eerst de latere verrichtingen."
 }
