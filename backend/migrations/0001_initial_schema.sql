@@ -1567,8 +1567,12 @@ CREATE TABLE IF NOT EXISTS investment_transfer_lot_links (
   PRIMARY KEY (operation_id, link_seq),
   UNIQUE (operation_id, source_lot_id),
   UNIQUE (destination_lot_id),
-  CHECK ((basis_knowledge = 'known') =
-    (carried_basis_value IS NOT NULL AND carried_basis_scale IS NOT NULL AND cost_commodity_id IS NOT NULL)),
+  -- Unknown may retain a named basis currency for later resolution, but
+  -- neither amount field. Negating a complete-known triple also admits
+  -- partially populated amounts, which is not an unknown basis fact.
+  CHECK ((basis_knowledge = 'known' AND carried_basis_value IS NOT NULL
+      AND carried_basis_scale IS NOT NULL AND cost_commodity_id IS NOT NULL)
+    OR (basis_knowledge = 'unknown' AND carried_basis_value IS NULL AND carried_basis_scale IS NULL)),
   CHECK ((original_date_knowledge = 'known') = (original_acquired_on IS NOT NULL)),
   CHECK (source_lot_id IS NOT NULL OR destination_lot_id IS NOT NULL)
 );

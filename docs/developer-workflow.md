@@ -426,6 +426,15 @@ basis fields are NULL, with quantities and independently priced value retained.
 Unknown-input commands still require their immutable-fact/replay contracts.
 No legacy or installed databases exist.
 
+**BREAKING DEV DATABASE, transfer-basis evidence (T-145, 2026-10-07):**
+`0001` now requires both carried-basis amount fields to be NULL when an
+immutable transfer link is marked unknown. A named cost currency may remain;
+known basis still requires the complete amount and currency. This closes the
+partial-amount admission gap without enabling unknown transfer commands.
+The candidate checksum changed; stop the app and reset the disposable
+development database using the reset procedure above. The known-basis frozen
+seed remains valid without changes to its data or column layout.
+
 **BREAKING DEV DATABASE, return-of-capital quantities (T-148, 2026-10-07):**
 `0001` adds the `explicit_quantities` entitlement rule and expands its insert
 guard; whole-lot entitlements retain their original meaning. The checksum

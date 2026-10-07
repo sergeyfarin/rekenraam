@@ -116,10 +116,13 @@ below is execution order, not a chain of hard dependencies.
    is delivered 2026-10-07: native correction, fixed lot/quantity entitlement,
    input-independent allocation and complete historical effect self-checks.
    Cash-in-lieu correction and mobile entry [T-150 #165](https://github.com/sergeyfarin/rekenraam/issues/165)
-   is implemented and validated locally (2026-10-07), pending delivery.
-   Next: unknown basis [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160) last: it reaches every disposal,
+   is delivered 2026-10-07.
+   Current: unknown basis [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160) last: it reaches every disposal,
    pooling, replay and read path, while the actions above ship known-basis first and leave an
    unknown-basis lot unresolved, as the contract allows.
+   Start with immutable basis knowledge, then disposal/pool propagation, transfer admission,
+   sourced resolution and the UI; the [#160 implementation contract](plans/investment-unknown-basis-plan.md)
+   records the boundaries and acceptance cases.
 
 **Next, in order**
 
