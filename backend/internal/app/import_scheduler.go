@@ -15,16 +15,9 @@ import (
 // rolling window since the last attempt — simpler (no book-owner-timezone
 // plumbing needed) and better suited to a rate-limited third-party API: no
 // thundering-herd at a fixed hour, and self-correcting if the server was
-// down at the usual time. A var, not a const, so tests can shrink it.
-var trading212AutoRefreshInterval = 24 * time.Hour
-
-// SetAutoRefreshIntervalForTest overrides trading212AutoRefreshInterval for
-// the duration of a test and returns a restore function.
-func SetAutoRefreshIntervalForTest(d time.Duration) (restore func()) {
-	old := trading212AutoRefreshInterval
-	trading212AutoRefreshInterval = d
-	return func() { trading212AutoRefreshInterval = old }
-}
+// down at the usual time. The cadence is fixed; tests move their service's
+// clock across this boundary rather than changing process-wide state.
+const trading212AutoRefreshInterval = 24 * time.Hour
 
 // StartScheduler starts the Trading 212 auto-refresh scheduler loop,
 // mirroring PricingService.StartScheduler (pricing_scheduler.go): a

@@ -73,9 +73,6 @@ func TestRunDueTrading212AutoRefreshes_NeverFetchedTriggersImmediately(t *testin
 // considered from just over the interval later must.
 func TestRunDueTrading212AutoRefreshes_BoundaryJustUnderAndOverInterval(t *testing.T) {
 	t.Parallel()
-	restore := SetAutoRefreshIntervalForTest(24 * time.Hour)
-	defer restore()
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writeFakeT212JSON(w, nil)
 	}))
