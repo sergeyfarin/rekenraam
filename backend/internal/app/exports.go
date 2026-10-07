@@ -523,6 +523,15 @@ func nullableID(value sql.NullInt64) string {
 	return strconv.FormatInt(value.Int64, 10)
 }
 
+// optionalExportDecimal renders unknown basis (a NULL pair) as an empty field,
+// never as zero.
+func optionalExportDecimal(value sql.NullString, scale sql.NullInt64) string {
+	if !value.Valid || !scale.Valid {
+		return ""
+	}
+	return exact.Decimal(exact.Coefficient(value.String), int(scale.Int64))
+}
+
 // boolToken keeps CSV booleans as the lowercase tokens the schema promises,
 // rather than Go's default formatting drifting from the contract later.
 func boolToken(value bool) string {

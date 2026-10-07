@@ -68,10 +68,12 @@ type SelfCheckDisposalAllocationRecord struct {
 	IsAllocation  bool
 	QuantityValue exact.Coefficient
 	QuantityScale int
-	BasisValue    exact.Coefficient
-	BasisScale    int
-	ProceedsValue exact.Coefficient
-	ProceedsScale int
+	// BasisValue/Scale are NULL exactly when BasisKnowledge is unknown.
+	BasisValue     sql.NullString
+	BasisScale     sql.NullInt64
+	BasisKnowledge string
+	ProceedsValue  exact.Coefficient
+	ProceedsScale  int
 }
 
 func (r *SelfCheckRepository) StreamDisposalAllocationSets(ctx context.Context, transaction *sql.Tx, bookID int64, visit func(SelfCheckDisposalAllocationRecord) error) error {
@@ -83,19 +85,23 @@ func (r *SelfCheckRepository) StreamDisposalAllocationSets(ctx context.Context, 
 			JOIN decisions d ON d.id = revision.decision_id AND d.book_id = revision.book_id
 		)
 		SELECT d.id AS decision_id, 0 AS revision_id, 1 AS revision_seq, 0 AS is_allocation, 0 AS allocation_seq,
-			d.quantity_value, d.quantity_scale, d.disposed_basis_value, d.disposed_basis_scale, d.proceeds_value, d.proceeds_scale
+			d.quantity_value, d.quantity_scale, d.disposed_basis_value, d.disposed_basis_scale, d.basis_knowledge,
+			d.proceeds_value, d.proceeds_scale
 		FROM decisions d
 		UNION ALL
 		SELECT d.id, 0, 1, 1, a.allocation_seq,
-			a.quantity_value, a.quantity_scale, a.cost_basis_value, a.cost_basis_scale, a.proceeds_value, a.proceeds_scale
+			a.quantity_value, a.quantity_scale, a.cost_basis_value, a.cost_basis_scale, a.basis_knowledge,
+			a.proceeds_value, a.proceeds_scale
 		FROM decisions d JOIN investment_disposal_allocations a ON a.decision_id = d.id AND a.book_id = d.book_id
 		UNION ALL
 		SELECT d.id, revision.id, revision.revision_seq, 0, 0,
-			d.quantity_value, d.quantity_scale, revision.disposed_basis_value, revision.disposed_basis_scale, d.proceeds_value, d.proceeds_scale
+			d.quantity_value, d.quantity_scale, revision.disposed_basis_value, revision.disposed_basis_scale,
+			revision.basis_knowledge, d.proceeds_value, d.proceeds_scale
 		FROM revisions revision JOIN decisions d ON d.id = revision.decision_id
 		UNION ALL
 		SELECT revision.decision_id, revision.id, revision.revision_seq, 1, a.allocation_seq,
-			a.quantity_value, a.quantity_scale, a.cost_basis_value, a.cost_basis_scale, a.proceeds_value, a.proceeds_scale
+			a.quantity_value, a.quantity_scale, a.cost_basis_value, a.cost_basis_scale, a.basis_knowledge,
+			a.proceeds_value, a.proceeds_scale
 		FROM revisions revision JOIN investment_disposal_revision_allocations a
 			ON a.revision_id = revision.id AND a.book_id = revision.book_id
 		ORDER BY decision_id, revision_seq, is_allocation, allocation_seq
@@ -108,7 +114,8 @@ func (r *SelfCheckRepository) StreamDisposalAllocationSets(ctx context.Context, 
 		var record SelfCheckDisposalAllocationRecord
 		var allocationSeq int
 		if err := rows.Scan(&record.DecisionID, &record.RevisionID, &record.RevisionSeq, &record.IsAllocation, &allocationSeq,
-			&record.QuantityValue, &record.QuantityScale, &record.BasisValue, &record.BasisScale, &record.ProceedsValue, &record.ProceedsScale); err != nil {
+			&record.QuantityValue, &record.QuantityScale, &record.BasisValue, &record.BasisScale, &record.BasisKnowledge,
+			&record.ProceedsValue, &record.ProceedsScale); err != nil {
 			return fmt.Errorf("scan disposal allocation set: %w", err)
 		}
 		if err := visit(record); err != nil {
@@ -473,7 +480,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	revised, err := transaction.QueryContext(ctx, `
 		SELECT allocation.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
 			allocation.quantity_value, allocation.quantity_scale,
-			allocation.cost_basis_value, allocation.cost_basis_scale
+			allocation.cost_basis_value, allocation.cost_basis_scale, allocation.basis_knowledge
 		FROM latest_investment_disposal_revisions revision
 		JOIN investment_disposal_decisions decision ON decision.id = revision.decision_id
 		JOIN effective_investment_operations operation ON operation.id = decision.operation_id
@@ -487,19 +494,20 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	for revised.Next() {
 		var event SelfCheckLotEventRecord
 		var quantity exact.Coefficient
-		var basis int64
+		var value, scale sql.NullInt64
 		if err := revised.Scan(&event.LotID, &event.AccountID, &event.CommodityID,
 			&event.CostCommodityID, &quantity, &event.QuantityScale,
-			&basis, &event.CostBasisScale); err != nil {
+			&value, &scale, &event.BasisKnowledge); err != nil {
 			revised.Close()
 			return nil, fmt.Errorf("scan effective self-check allocation: %w", err)
 		}
-		if basis < 0 || quantity.Sign() <= 0 {
+		basis, basisScale, err := projectedBasis(value, scale, event.BasisKnowledge)
+		if err != nil || basis < 0 || quantity.Sign() <= 0 {
 			revised.Close()
 			return nil, fmt.Errorf("invalid effective self-check allocation for lot %d", event.LotID)
 		}
 		event.QuantityValue = quantity.Negated()
-		event.CostBasisValue = -basis
+		event.CostBasisValue, event.CostBasisScale = -basis, basisScale
 		events = append(events, event)
 	}
 	if err := revised.Err(); err != nil {

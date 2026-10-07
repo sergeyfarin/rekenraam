@@ -75,14 +75,15 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 			return fmt.Errorf("%w: replay disposal output is missing or repeated", ErrInvalidDisposalParams)
 		}
 		seen[disposal.DecisionID] = true
-		quantity, basis, proceeds := exact.NewScaledInt(), exact.NewScaledInt(), exact.NewScaledInt()
-		for _, allocation := range disposal.Allocations {
+		quantity, proceeds := exact.NewScaledInt(), exact.NewScaledInt()
+		allocationBasis := make([]disposalAllocationBasis, len(disposal.Allocations))
+		for index, allocation := range disposal.Allocations {
 			if !lotIDs[allocation.LotID] || allocation.QuantityValue.Sign() <= 0 ||
 				allocation.CostBasisValue < 0 {
 				return fmt.Errorf("%w: replay allocation is invalid", ErrInvalidDisposalParams)
 			}
 			quantity.AddCoefficient(allocation.QuantityValue, allocation.QuantityScale)
-			basis.AddInt64(allocation.CostBasisValue, allocation.CostBasisScale)
+			allocationBasis[index] = disposalAllocationBasis{allocation.CostBasisValue, allocation.CostBasisScale, allocation.BasisKnowledge}
 			proceeds.AddInt64(allocation.ProceedsValue, allocation.ProceedsScale)
 		}
 		wantQuantity := exact.ScaledIntFromCoefficient(intent.QuantityValue, intent.QuantityScale)
@@ -90,7 +91,7 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 		if quantity.Cmp(wantQuantity) != 0 || proceeds.Cmp(wantProceeds) != 0 {
 			return fmt.Errorf("%w: replay allocation does not conserve quantity and proceeds for decision %d", ErrInvalidDisposalParams, disposal.DecisionID)
 		}
-		basisValue, err := basis.Coefficient()
+		basis, err := disposalTotalBasis(allocationBasis)
 		if err != nil {
 			return fmt.Errorf("compute replay disposed basis: %w", err)
 		}
@@ -107,12 +108,12 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 		}
 		result, err := tx.ExecContext(ctx, `INSERT INTO investment_disposal_revisions (
 			book_id, decision_id, revision_seq, caused_by_operation_id, supersedes_revision_id,
-			disposed_basis_value, disposed_basis_scale, created_at, created_audit_event_id
-		) SELECT ?, d.id, ?, ?, ?, ?, ?, ?, ? FROM investment_disposal_decisions d
+			disposed_basis_value, disposed_basis_scale, basis_knowledge, created_at, created_audit_event_id
+		) SELECT ?, d.id, ?, ?, ?, ?, ?, ?, ?, ? FROM investment_disposal_decisions d
 			WHERE d.id = ? AND d.book_id = ? AND d.account_id = ? AND d.commodity_id = ?
 				AND d.cost_commodity_id = ? AND d.position_side = 'long'`,
-			bookID, priorSeq+1, causedByOperationID, priorID, basisValue, basis.Scale(),
-			createdAt, auditEventID, disposal.DecisionID, bookID, accountID, commodityID, costCommodityID)
+			bookID, priorSeq+1, causedByOperationID, priorID, basis.nullableValue(), basis.nullableScale(),
+			basis.knowledge, createdAt, auditEventID, disposal.DecisionID, bookID, accountID, commodityID, costCommodityID)
 		if err != nil {
 			return fmt.Errorf("append disposal revision for decision %d: %w", disposal.DecisionID, err)
 		}
@@ -127,11 +128,12 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 		for index, allocation := range disposal.Allocations {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_disposal_revision_allocations (
 				book_id, revision_id, allocation_seq, lot_id, quantity_value, quantity_scale,
-				cost_basis_value, cost_basis_scale, proceeds_value, proceeds_scale
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				cost_basis_value, cost_basis_scale, proceeds_value, proceeds_scale, basis_knowledge
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				bookID, revisionID, index+1, allocation.LotID, allocation.QuantityValue,
-				allocation.QuantityScale, allocation.CostBasisValue, allocation.CostBasisScale,
-				allocation.ProceedsValue, allocation.ProceedsScale); err != nil {
+				allocation.QuantityScale, nullableBasisValue(allocation.CostBasisValue, allocation.BasisKnowledge),
+				nullableBasisScale(allocation.CostBasisScale, allocation.BasisKnowledge),
+				allocation.ProceedsValue, allocation.ProceedsScale, normalizedBasisKnowledge(allocation.BasisKnowledge)); err != nil {
 				return fmt.Errorf("append disposal revision allocation: %w", err)
 			}
 		}

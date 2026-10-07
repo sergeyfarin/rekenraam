@@ -230,6 +230,13 @@ When a feature introduces a durable new rule, update one of those documents in t
   stays numeric. `opening_basis_knowledge` describes original acquisition
   evidence independently of the current remaining projection. Replay preserves
   that distinction; it must not turn an unknown opening into known zero.
+- Disposal decisions, allocations and their replay revisions carry the same
+  explicit knowledge. One unknown allocation makes its decision or revision
+  total unknown (NULL), while known allocation amounts stay on their rows and
+  quantity and proceeds stay conserved. A revision's knowledge and amounts are
+  read as one tuple and never filled from the original snapshot. Read models
+  that cannot yet present an unresolved result refuse with
+  `ErrUnknownInvestmentBasis`; they never read unknown as zero.
 - Projected investment basis has explicit `known`/`unknown` knowledge. Unknown
   coefficient and scale are NULL in storage and on the API, and empty in CSV;
   known zero remains numeric. Numeric read-model fields are usable only when

@@ -5,10 +5,11 @@ ADR 0013 and the [slice 5 contract](investment-operation-slice-5-contract.md)
 govern; `roadmap.md` alone defines execution order. This work is in progress.
 
 Nullable **remaining** basis alone is insufficient to admit an unknown transfer.
-Immutable openings and lot events now carry explicit knowledge and NULL pairs,
-with faithful reads, exports and opening replay. Disposal snapshots, allocations
-and their replay revisions still require numeric basis. Public admission stays
-closed until those paths carry knowledge end to end. Known zero remains known.
+Immutable openings, lot events, disposal decisions, allocations and their replay
+revisions now carry explicit knowledge and NULL pairs, with faithful exports,
+self-check and gain-impact reads. Disposal and pool *writers* and replay still
+produce known basis only. Public admission stays closed until those paths
+carry knowledge end to end. Known zero remains known.
 
 ## Evidence prerequisite delivered
 
@@ -32,7 +33,23 @@ knowledge, immutable paired NULLs, nullable original API fields, bundle schema 9
 opening intent/activation/output/persistence and replay-equivalence diagnostics.
 Named cases cover NULL pairs, original-versus-projected knowledge, exports,
 invented-zero and quantity damage, plus preservation of known-zero behavior.
-Disposal evidence in boundary 1 and boundaries 2–5 remain open.
+
+The disposal portion of boundary 1 is implemented: decisions, allocations,
+revisions and revision allocations store paired NULLs with explicit
+knowledge; insert guards tie allocation knowledge to its total and lot event;
+the decision and revision writers derive an unknown total from any unknown
+allocation; exports leave unknown amounts blank; the gain-impact snapshot reads
+revision knowledge as one tuple; self-check conserves quantity and proceeds
+regardless of knowledge and replay equivalence compares allocation knowledge.
+The realized-gains read refuses unknown evidence with `ErrUnknownInvestmentBasis`
+until boundary 5 exposes unresolved gains. Named cases:
+`TestDisposalBasisKnowledgeRequiresCompleteAmountPair`,
+`TestUnknownDisposalAllocationRequiresUnknownTotalAndMatchingLotEvent`,
+`TestUnknownDisposalRevisionKeepsAllocationSetsHealthyAndDamageVisible`,
+`TestUnknownDisposalRevisionExportsBlankAmountsAndKnowledge`,
+`TestRealizedGainsRefuseUnknownEffectiveDisposalInsteadOfReadingZero`,
+`TestInvestmentGainSnapshotReadsRevisionKnowledgeAsOneTuple`.
+Boundary 1 is complete; boundaries 2–5 remain open.
 
 1. **Immutable knowledge.** Add explicit knowledge with paired nullable basis
    fields to opening facts, lot events, disposal decisions and allocations,
@@ -109,11 +126,12 @@ Disposal evidence in boundary 1 and boundaries 2–5 remain open.
 
 | Path | Required change before admission |
 | --- | --- |
-| `backend/migrations/0001_initial_schema.sql` | Opening/event NULL pairs are implemented; decision/allocation and revision pairs, sourced resolution facts and historical conservation guards remain. Transfer revision admission currently requires a known original link; resolution needs an explicitly validated unknown-to-known path. `effective_investment_transfer_links` currently always reports original knowledge, even when selecting a revision's amount. |
+| `backend/migrations/0001_initial_schema.sql` | Opening/event and decision/allocation/revision NULL pairs are implemented; sourced resolution facts and historical conservation guards remain. Transfer revision admission currently requires a known original link; resolution needs an explicitly validated unknown-to-known path. `effective_investment_transfer_links` currently always reports original knowledge, even when selecting a revision's amount. |
 | `backend/internal/db/investments.go` | Original lot scanners now carry immutable knowledge. Disposal/pool selection, allocation precision and range admission remain known-only; separate quantity from basis arithmetic without inventing zero. |
 | `backend/internal/db/investment_replay_intents.go` | Opening intents select an effective amount/scale/knowledge tuple. Transfer depletions and pooled replay inputs still need unknown knowledge. |
 | `backend/internal/db/investment_replay_simulation.go`, `investment_replay_revisions.go` | Opening reset/activation, lot outputs and persistence preserve unknown knowledge. Disposal outputs, allocations, revisions and pool redistribution still require propagation without erasing unresolved history. |
 | `backend/internal/db/investment_replay_propagation.go` | Propagate knowledge across the dependency closure and distinguish the first omitted bridge from a later numeric bridge adjustment. |
-| `backend/internal/db/investment_gain_impact.go` | Effective snapshot construction currently sets every disposal to known. Read original/revised knowledge, preserve NULL totals and bind unknown-to-known transitions into the acknowledgement token. |
+| `backend/internal/db/investment_gain_impact.go` | Implemented: the snapshot reads original/revised knowledge as one tuple, keeps NULL totals and binds unknown-to-known transitions into the token. Remaining: exercise it through real resolution commands. |
 | `backend/internal/db/self_check.go`, `self_check_replay.go`; `backend/internal/app/self_check.go` | Opening/event scans and replay equivalence now retain quantity and knowledge checks. Extend conservation auditing to unknown original/revised disposal sets while preserving every historical snapshot. |
+| `backend/internal/app/investment_cash_in_lieu.go`, `app/investments.go` sale results, `api/investment_cash_in_lieu.go` | `DisposalDecisionRecord` now carries `BasisKnowledge`; command results still compute gain from `DisposedBasisValue`. Before any writer can produce an unknown decision, these results must return NULL basis/gain for unknown instead of reading an empty amount. |
 | `backend/internal/api/investments.go`, OpenAPI, export bundle writers and investment forms | Original fields are nullable with immutable knowledge (bundle schema 9). Disposed basis/gain contracts and six-locale entry/resolution flows still need nullable results and explicit unresolved labels. |

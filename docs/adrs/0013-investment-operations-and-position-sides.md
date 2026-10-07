@@ -481,3 +481,24 @@ schema 9 exports original/event knowledge and blank unknown amounts. Self-check
 keeps quantity verification, verifies replay knowledge and names unresolved
 basis rather than comparing it as zero. Public unknown transfer admission,
 unknown disposal/pool snapshots and sourced resolution remain open in #160.
+
+## Immutable disposal knowledge refinement (T-145, 2026-10-07)
+
+Disposal decisions, their allocations, replay revisions and revision
+allocations store explicit `basis_knowledge` with paired nullable basis
+amounts. A total is unknown exactly when at least one of its allocations is
+unknown; independently known allocation amounts remain stored, and quantity
+and signed proceeds stay known and conserved. Insert guards refuse an unknown
+allocation under a known total and an original allocation whose knowledge
+differs from its disposal lot event. Whether an unknown total has an unknown
+allocation is a self-check finding, because totals are written first.
+
+The gain-impact snapshot reads the latest revision's knowledge and amounts as
+one tuple, so an unknown result has no disposed basis or gain and a later
+resolution is a disclosed, acknowledgement-bound change. Self-check conserves
+quantity and proceeds for every set, conserves basis only for known totals,
+and compares replay allocation knowledge before amounts. The realized-gains
+read model stays known-only and refuses unknown evidence until it can expose
+unresolved gains. Writers still produce known allocations only: pool
+propagation, unknown-input replay, transfer admission and sourced resolution
+remain open in #160.

@@ -209,6 +209,8 @@ type storedReplayLot struct {
 type storedReplayAllocation struct {
 	lotID                     int64
 	quantity, basis, proceeds *exact.ScaledInt
+	basisKnowledge            string // basis is nil when unknown
+	invalidBasis              bool   // an inconsistent knowledge/amount pair
 }
 
 type storedInvestmentProjection struct {
@@ -264,17 +266,17 @@ func storedInvestmentProjectionQuery(ctx context.Context, tx *sql.Tx, bookID int
 
 	rows, err = tx.QueryContext(ctx, `
 		SELECT d.id, a.lot_id, a.quantity_value, a.quantity_scale, a.cost_basis_value, a.cost_basis_scale,
-			a.proceeds_value, a.proceeds_scale
+			a.proceeds_value, a.proceeds_scale, a.basis_knowledge
 		FROM investment_disposal_decisions d
 		JOIN effective_investment_operations o ON o.id = d.operation_id
 		LEFT JOIN latest_investment_disposal_revisions revision ON revision.decision_id = d.id
 		JOIN (
 			SELECT decision_id, 0 AS revision_id, allocation_seq, lot_id, quantity_value, quantity_scale,
-				cost_basis_value, cost_basis_scale, proceeds_value, proceeds_scale
+				cost_basis_value, cost_basis_scale, proceeds_value, proceeds_scale, basis_knowledge
 			FROM investment_disposal_allocations
 			UNION ALL
 			SELECT r.decision_id, r.id, a.allocation_seq, a.lot_id, a.quantity_value, a.quantity_scale,
-				a.cost_basis_value, a.cost_basis_scale, a.proceeds_value, a.proceeds_scale
+				a.cost_basis_value, a.cost_basis_scale, a.proceeds_value, a.proceeds_scale, a.basis_knowledge
 			FROM investment_disposal_revision_allocations a JOIN investment_disposal_revisions r ON r.id = a.revision_id
 		) a ON a.decision_id = d.id AND a.revision_id = COALESCE(revision.id, 0)
 		WHERE d.book_id = ? AND d.account_id = ? AND d.commodity_id = ? AND d.cost_commodity_id = ?
@@ -289,12 +291,17 @@ func storedInvestmentProjectionQuery(ctx context.Context, tx *sql.Tx, bookID int
 		var quantity, basis, proceeds sql.NullString
 		var quantityScale, basisScale, proceedsScale sql.NullInt64
 		if err := rows.Scan(&decisionID, &allocation.lotID, &quantity, &quantityScale,
-			&basis, &basisScale, &proceeds, &proceedsScale); err != nil {
+			&basis, &basisScale, &proceeds, &proceedsScale, &allocation.basisKnowledge); err != nil {
 			rows.Close()
 			return storedInvestmentProjection{}, fmt.Errorf("scan stored disposal allocation: %w", err)
 		}
 		allocation.quantity = storedScaled(quantity, quantityScale)
-		allocation.basis = storedScaled(basis, basisScale)
+		if allocation.basisKnowledge == InvestmentBasisUnknown {
+			allocation.invalidBasis = basis.Valid || basisScale.Valid
+		} else {
+			allocation.basis = storedScaled(basis, basisScale)
+			allocation.invalidBasis = allocation.basis == nil
+		}
 		allocation.proceeds = storedScaled(proceeds, proceedsScale)
 		if _, seen := stored.allocations[decisionID]; !seen {
 			stored.decisionOrder = append(stored.decisionOrder, decisionID)
@@ -335,10 +342,16 @@ func sameReplayAllocations(stored []storedReplayAllocation, replayed []Investmen
 	}
 	for index := range stored {
 		a, b := stored[index], replayed[index]
-		if a.lotID != b.LotID || a.quantity == nil || a.basis == nil || a.proceeds == nil ||
+		knowledge := normalizedBasisKnowledge(b.BasisKnowledge)
+		if a.lotID != b.LotID || a.quantity == nil || a.invalidBasis || a.proceeds == nil ||
+			a.basisKnowledge != knowledge ||
 			a.quantity.Cmp(exact.ScaledIntFromCoefficient(b.QuantityValue, b.QuantityScale)) != 0 ||
-			a.basis.Cmp(exact.ScaledIntFromInt64(b.CostBasisValue, b.CostBasisScale)) != 0 ||
 			a.proceeds.Cmp(exact.ScaledIntFromInt64(b.ProceedsValue, b.ProceedsScale)) != 0 {
+			return false
+		}
+		// Unknown basis is unresolved information, never compared as zero.
+		if knowledge == InvestmentBasisKnown &&
+			a.basis.Cmp(exact.ScaledIntFromInt64(b.CostBasisValue, b.CostBasisScale)) != 0 {
 			return false
 		}
 	}

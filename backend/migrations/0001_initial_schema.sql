@@ -1279,8 +1279,8 @@ CREATE TABLE IF NOT EXISTS investment_disposal_decisions (
   event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
   quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38),
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
-  disposed_basis_value TEXT NOT NULL CHECK (length(disposed_basis_value) BETWEEN 1 AND 38),
-  disposed_basis_scale INTEGER NOT NULL CHECK (disposed_basis_scale BETWEEN 0 AND 12),
+  disposed_basis_value TEXT CHECK (length(disposed_basis_value) BETWEEN 1 AND 38),
+  disposed_basis_scale INTEGER CHECK (disposed_basis_scale BETWEEN 0 AND 12),
   proceeds_value TEXT NOT NULL DEFAULT '0' CHECK (length(proceeds_value) BETWEEN 1 AND 38),
   proceeds_scale INTEGER NOT NULL DEFAULT 0 CHECK (proceeds_scale BETWEEN 0 AND 12),
   cost_basis_method TEXT NOT NULL CHECK (cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')),
@@ -1293,6 +1293,11 @@ CREATE TABLE IF NOT EXISTS investment_disposal_decisions (
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  -- Unknown when any allocation consumed unknown basis: the total and its
+  -- gain are then unresolved, never a fabricated zero (T-145).
+  basis_knowledge TEXT NOT NULL DEFAULT 'known' CHECK (basis_knowledge IN ('known', 'unknown')),
+  CHECK ((basis_knowledge = 'known' AND disposed_basis_value IS NOT NULL AND disposed_basis_scale IS NOT NULL)
+    OR (basis_knowledge = 'unknown' AND disposed_basis_value IS NULL AND disposed_basis_scale IS NULL)),
   UNIQUE (operation_id, decision_seq),
   CHECK (
     (resolution_tier = 'account' AND account_version_id IS NOT NULL AND profile_id IS NULL AND profile_version_id IS NULL)
@@ -1310,10 +1315,13 @@ CREATE TABLE IF NOT EXISTS investment_disposal_allocations (
   allocation_seq INTEGER NOT NULL CHECK (allocation_seq > 0),
   quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38),
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
-  cost_basis_value TEXT NOT NULL CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
-  cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  cost_basis_value TEXT CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
+  cost_basis_scale INTEGER CHECK (cost_basis_scale BETWEEN 0 AND 12),
   proceeds_value TEXT NOT NULL CHECK (length(proceeds_value) BETWEEN 1 AND 38),
   proceeds_scale INTEGER NOT NULL CHECK (proceeds_scale BETWEEN 0 AND 12),
+  basis_knowledge TEXT NOT NULL DEFAULT 'known' CHECK (basis_knowledge IN ('known', 'unknown')),
+  CHECK ((basis_knowledge = 'known' AND cost_basis_value IS NOT NULL AND cost_basis_scale IS NOT NULL)
+    OR (basis_knowledge = 'unknown' AND cost_basis_value IS NULL AND cost_basis_scale IS NULL)),
   UNIQUE (decision_id, allocation_seq),
   UNIQUE (lot_event_id)
 );
@@ -1342,10 +1350,13 @@ CREATE TABLE IF NOT EXISTS investment_disposal_revisions (
   revision_seq INTEGER NOT NULL CHECK (revision_seq >= 2),
   caused_by_operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
   supersedes_revision_id INTEGER REFERENCES investment_disposal_revisions(id) ON DELETE RESTRICT,
-  disposed_basis_value TEXT NOT NULL CHECK (length(disposed_basis_value) BETWEEN 1 AND 38),
-  disposed_basis_scale INTEGER NOT NULL CHECK (disposed_basis_scale BETWEEN 0 AND 12),
+  disposed_basis_value TEXT CHECK (length(disposed_basis_value) BETWEEN 1 AND 38),
+  disposed_basis_scale INTEGER CHECK (disposed_basis_scale BETWEEN 0 AND 12),
   created_at TEXT NOT NULL,
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  basis_knowledge TEXT NOT NULL DEFAULT 'known' CHECK (basis_knowledge IN ('known', 'unknown')),
+  CHECK ((basis_knowledge = 'known' AND disposed_basis_value IS NOT NULL AND disposed_basis_scale IS NOT NULL)
+    OR (basis_knowledge = 'unknown' AND disposed_basis_value IS NULL AND disposed_basis_scale IS NULL)),
   UNIQUE (decision_id, revision_seq),
   CHECK ((revision_seq = 2) = (supersedes_revision_id IS NULL))
 );
@@ -1358,10 +1369,13 @@ CREATE TABLE IF NOT EXISTS investment_disposal_revision_allocations (
   lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
   quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38),
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
-  cost_basis_value TEXT NOT NULL CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
-  cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  cost_basis_value TEXT CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
+  cost_basis_scale INTEGER CHECK (cost_basis_scale BETWEEN 0 AND 12),
   proceeds_value TEXT NOT NULL CHECK (length(proceeds_value) BETWEEN 1 AND 38),
   proceeds_scale INTEGER NOT NULL CHECK (proceeds_scale BETWEEN 0 AND 12),
+  basis_knowledge TEXT NOT NULL DEFAULT 'known' CHECK (basis_knowledge IN ('known', 'unknown')),
+  CHECK ((basis_knowledge = 'known' AND cost_basis_value IS NOT NULL AND cost_basis_scale IS NOT NULL)
+    OR (basis_knowledge = 'unknown' AND cost_basis_value IS NULL AND cost_basis_scale IS NULL)),
   UNIQUE (revision_id, allocation_seq)
 );
 
@@ -2362,8 +2376,25 @@ WHEN NOT EXISTS (
     AND l.book_id = NEW.book_id AND l.account_id = d.account_id
     AND l.commodity_id = d.commodity_id AND l.cost_commodity_id = d.cost_commodity_id
     AND l.position_side = d.position_side
+    AND (NEW.basis_knowledge = 'known' OR r.basis_knowledge = 'unknown')
 )
-BEGIN SELECT RAISE(ABORT, 'investment disposal revision allocation is outside its position'); END;
+BEGIN SELECT RAISE(ABORT, 'investment disposal revision allocation is outside its position or knowledge'); END;
+-- +goose StatementEnd
+
+-- An unknown allocation makes its decision's total unknown, and each original
+-- allocation states the same knowledge as the disposal lot event it snapshots.
+-- Whether an unknown decision has at least one unknown allocation is checked
+-- by self-check, because the decision row is written before its allocations.
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_disposal_allocations_knowledge
+BEFORE INSERT ON investment_disposal_allocations
+WHEN (NEW.basis_knowledge = 'unknown' AND NOT EXISTS (
+    SELECT 1 FROM investment_disposal_decisions d
+    WHERE d.id = NEW.decision_id AND d.basis_knowledge = 'unknown'))
+  OR NOT EXISTS (
+    SELECT 1 FROM investment_lot_events e
+    WHERE e.id = NEW.lot_event_id AND e.basis_knowledge = NEW.basis_knowledge)
+BEGIN SELECT RAISE(ABORT, 'disposal allocation basis knowledge disagrees with its decision or lot event'); END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
@@ -4206,6 +4237,7 @@ DROP TRIGGER IF EXISTS investment_disposal_revision_allocations_no_update;
 DROP TRIGGER IF EXISTS investment_disposal_revisions_no_delete;
 DROP TRIGGER IF EXISTS investment_disposal_revisions_no_update;
 DROP TRIGGER IF EXISTS investment_disposal_revision_allocations_valid;
+DROP TRIGGER IF EXISTS investment_disposal_allocations_knowledge;
 DROP TRIGGER IF EXISTS investment_disposal_revisions_valid;
 DROP TRIGGER IF EXISTS investment_disposal_decisions_same_book;
 DROP TRIGGER IF EXISTS investment_components_same_book;

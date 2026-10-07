@@ -257,6 +257,9 @@ type LotDisposalRecord struct {
 	CostCommodityID int64
 	ProceedsValue   int64
 	ProceedsScale   int
+	// BasisKnowledge is empty or known for every current writer. Unknown
+	// means CostBasisValue/Scale are unused and stored as NULL (T-145).
+	BasisKnowledge string
 }
 
 // allocateDisposalProceeds snapshots a position's exact proceeds across its
@@ -346,6 +349,9 @@ type DisposalDecisionRecord struct {
 	ProceedsValue        int64
 	ProceedsScale        int
 	CostBasisMethod      string
+	// BasisKnowledge is unknown when any allocation consumed unknown basis;
+	// DisposedBasisValue/Scale are then unused.
+	BasisKnowledge string
 	DisposalDecisionSource
 	CreatedAt    string
 	AuditEventID int64
@@ -2044,11 +2050,11 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 			return DisposalDecisionRecord{}, fmt.Errorf("read disposal decision cost commodity: %w", err)
 		}
 	}
-	disposedBasis := exact.NewScaledInt()
-	for _, allocation := range disposals {
-		disposedBasis.AddInt64(allocation.CostBasisValue, allocation.CostBasisScale)
+	allocationBasis := make([]disposalAllocationBasis, len(disposals))
+	for index, allocation := range disposals {
+		allocationBasis[index] = disposalAllocationBasis{allocation.CostBasisValue, allocation.CostBasisScale, allocation.BasisKnowledge}
 	}
-	disposedBasisValue, err := disposedBasis.Coefficient()
+	disposedBasis, err := disposalTotalBasis(allocationBasis)
 	if err != nil {
 		return DisposalDecisionRecord{}, fmt.Errorf("compute disposal decision basis: %w", err)
 	}
@@ -2062,14 +2068,15 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 			cost_commodity_id, event_date, quantity_value, quantity_scale,
 			disposed_basis_value, disposed_basis_scale, proceeds_value, proceeds_scale, cost_basis_method, resolution_tier,
 			account_version_id, profile_id, profile_version_id, source_effective_from,
-			source_recorded_at, created_at, created_by_user_id, created_audit_event_id
-		) VALUES (?, ?, ?, ?, 1, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			source_recorded_at, created_at, created_by_user_id, created_audit_event_id, basis_knowledge
+		) VALUES (?, ?, ?, ?, 1, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, params.BookID, transaction.ID, transaction.VersionID, operationID, params.AccountID, params.CommodityID,
 		costCommodityID, params.EventDate, params.QuantityValue, params.QuantityScale,
-		disposedBasisValue, disposedBasis.Scale(), params.ProceedsValue, params.ProceedsScale, params.CostBasisMethod, source.ResolutionTier,
+		disposedBasis.nullableValue(), disposedBasis.nullableScale(), params.ProceedsValue, params.ProceedsScale, params.CostBasisMethod, source.ResolutionTier,
 		nullablePositiveInt64(source.AccountVersionID), nullablePositiveInt64(source.ProfileID),
 		nullablePositiveInt64(source.ProfileVersionID), nullableStringValue(sql.NullString{String: source.SourceEffectiveFrom, Valid: source.SourceEffectiveFrom != ""}),
-		nullableStringValue(sql.NullString{String: source.SourceRecordedAt, Valid: source.SourceRecordedAt != ""}), params.CreatedAt, params.ActorUserID, auditEventID)
+		nullableStringValue(sql.NullString{String: source.SourceRecordedAt, Valid: source.SourceRecordedAt != ""}), params.CreatedAt, params.ActorUserID, auditEventID,
+		disposedBasis.knowledge)
 	if err != nil {
 		return DisposalDecisionRecord{}, fmt.Errorf("insert disposal decision: %w", err)
 	}
@@ -2089,11 +2096,13 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 			INSERT INTO investment_disposal_allocations (
 				book_id, decision_id, lot_event_id, lot_id, allocation_seq,
 				quantity_value, quantity_scale, cost_basis_value, cost_basis_scale,
-				proceeds_value, proceeds_scale
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				proceeds_value, proceeds_scale, basis_knowledge
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, params.BookID, decisionID, allocation.EventID, allocation.LotID, index+1,
-			allocation.QuantityValue, allocation.QuantityScale, allocation.CostBasisValue,
-			allocation.CostBasisScale, allocation.ProceedsValue, allocation.ProceedsScale); err != nil {
+			allocation.QuantityValue, allocation.QuantityScale,
+			nullableBasisValue(allocation.CostBasisValue, allocation.BasisKnowledge),
+			nullableBasisScale(allocation.CostBasisScale, allocation.BasisKnowledge),
+			allocation.ProceedsValue, allocation.ProceedsScale, normalizedBasisKnowledge(allocation.BasisKnowledge)); err != nil {
 			return DisposalDecisionRecord{}, fmt.Errorf("insert disposal decision allocation: %w", err)
 		}
 	}
@@ -2101,7 +2110,7 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 		ID: decisionID, DecisionSeq: 1, TransactionID: transaction.ID, TransactionVersionID: transaction.VersionID,
 		AccountID: params.AccountID, CommodityID: params.CommodityID, CostCommodityID: costCommodityID,
 		EventDate: params.EventDate, QuantityValue: params.QuantityValue, QuantityScale: params.QuantityScale,
-		DisposedBasisValue: disposedBasisValue, DisposedBasisScale: disposedBasis.Scale(),
+		DisposedBasisValue: disposedBasis.value, DisposedBasisScale: disposedBasis.scale, BasisKnowledge: disposedBasis.knowledge,
 		ProceedsValue: params.ProceedsValue, ProceedsScale: params.ProceedsScale,
 		CostBasisMethod: params.CostBasisMethod, DisposalDecisionSource: source,
 		CreatedAt: params.CreatedAt, AuditEventID: auditEventID, Allocations: disposals,
@@ -3294,10 +3303,14 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	var events []realizedGainEventRow
 	for rows.Next() {
 		var e realizedGainEventRow
-		if err := rows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID, &e.commodityID, &e.costCommodityID, &e.quantityValue, &e.quantityScale, &e.costBasisValue, &e.costBasisScale); err != nil {
+		// The realized-gain read model is known-only until it exposes
+		// unresolved gains (T-145); unknown basis refuses, never reads as zero.
+		var basis knownInvestmentBasis
+		if err := rows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID, &e.commodityID, &e.costCommodityID, &e.quantityValue, &e.quantityScale, &basis, &e.costBasisScale); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan realized gain event: %w", err)
 		}
+		e.costBasisValue = int64(basis)
 		events = append(events, e)
 	}
 	if err := rows.Close(); err != nil {
@@ -3328,7 +3341,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	for revisedRows.Next() {
 		var e realizedGainEventRow
 		var quantity exact.Coefficient
-		var basis int64
+		var basis knownInvestmentBasis
 		if err := revisedRows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID,
 			&e.commodityID, &e.costCommodityID, &quantity, &e.quantityScale,
 			&basis, &e.costBasisScale); err != nil {
@@ -3336,7 +3349,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			return nil, fmt.Errorf("scan effective realized gain allocation: %w", err)
 		}
 		e.quantityValue = quantity.Negated()
-		e.costBasisValue = -basis
+		e.costBasisValue = -int64(basis)
 		events = append(events, e)
 	}
 	if err := revisedRows.Err(); err != nil {

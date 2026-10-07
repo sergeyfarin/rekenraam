@@ -261,10 +261,10 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "disposal-clearing-allocations", []string{"decision_id", "posting_version_id", "proceeds_value", "proceeds_scale"})
 		}},
 		{"disposal-revisions.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "disposal-revisions", []string{"revision_id", "decision_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "disposed_basis_value", "disposed_basis_scale", "created_at", "audit_event_id"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "disposal-revisions", []string{"revision_id", "decision_id", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "disposed_basis_value", "disposed_basis_scale", "created_at", "audit_event_id", "basis_knowledge"})
 		}},
 		{"disposal-revision-allocations.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "disposal-revision-allocations", []string{"revision_id", "allocation_seq", "lot_id", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "proceeds_value", "proceeds_scale"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "disposal-revision-allocations", []string{"revision_id", "allocation_seq", "lot_id", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "proceeds_value", "proceeds_scale", "basis_knowledge"})
 		}},
 		{"prices.csv", func(w io.Writer) (int64, error) { return s.writePricesCSV(ctx, w, snapshot) }},
 		{"trial-balance.csv", func(w io.Writer) (int64, error) {
@@ -626,7 +626,7 @@ func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Wr
 		"cost_commodity_id", "event_date", "quantity", "disposed_basis", "cost_basis_method",
 		"resolution_tier", "account_version_id", "profile_id", "profile_version_id",
 		"source_effective_from", "source_recorded_at", "created_at", "audit_event_id",
-		"operation_id", "position_side", "proceeds_value", "proceeds_scale",
+		"operation_id", "position_side", "proceeds_value", "proceeds_scale", "basis_knowledge",
 	})
 	if err != nil {
 		return 0, err
@@ -637,12 +637,12 @@ func (s *ExportService) writeDisposalDecisionsCSV(ctx context.Context, out io.Wr
 			strconv.FormatInt(decision.TransactionVersionID, 10), strconv.FormatInt(decision.AccountID, 10),
 			strconv.FormatInt(decision.CommodityID, 10), strconv.FormatInt(decision.CostCommodityID, 10),
 			decision.EventDate, exact.Decimal(decision.QuantityValue, decision.QuantityScale),
-			exact.Decimal(decision.DisposedBasisValue, decision.DisposedBasisScale), decision.CostBasisMethod,
+			optionalExportDecimal(decision.DisposedBasisValue, decision.DisposedBasisScale), decision.CostBasisMethod,
 			decision.ResolutionTier, nullableID(decision.AccountVersionID), nullableID(decision.ProfileID),
 			nullableID(decision.ProfileVersionID), decision.SourceEffectiveFrom.String,
 			decision.SourceRecordedAt.String, decision.CreatedAt, strconv.FormatInt(decision.CreatedAuditEventID, 10),
 			strconv.FormatInt(decision.OperationID, 10), decision.PositionSide,
-			strconv.FormatInt(decision.ProceedsValue, 10), strconv.Itoa(decision.ProceedsScale),
+			strconv.FormatInt(decision.ProceedsValue, 10), strconv.Itoa(decision.ProceedsScale), decision.BasisKnowledge,
 		}); err != nil {
 			return int64(index), fmt.Errorf("write disposal decision row: %w", err)
 		}
@@ -657,7 +657,7 @@ func (s *ExportService) writeDisposalAllocationsCSV(ctx context.Context, out io.
 	}
 	writer, err := newBundleCSV(out, []string{
 		"decision_id", "allocation_seq", "lot_event_id", "lot_id", "quantity", "cost_basis",
-		"proceeds_value", "proceeds_scale",
+		"proceeds_value", "proceeds_scale", "basis_knowledge",
 	})
 	if err != nil {
 		return 0, err
@@ -667,8 +667,9 @@ func (s *ExportService) writeDisposalAllocationsCSV(ctx context.Context, out io.
 			strconv.FormatInt(allocation.DecisionID, 10), strconv.FormatInt(allocation.AllocationSeq, 10),
 			strconv.FormatInt(allocation.LotEventID, 10), strconv.FormatInt(allocation.LotID, 10),
 			exact.Decimal(allocation.QuantityValue, allocation.QuantityScale),
-			exact.Decimal(exact.New(allocation.CostBasisValue), allocation.CostBasisScale),
+			optionalExportDecimal(allocation.CostBasisValue, allocation.CostBasisScale),
 			strconv.FormatInt(allocation.ProceedsValue, 10), strconv.Itoa(allocation.ProceedsScale),
+			allocation.BasisKnowledge,
 		}); err != nil {
 			return int64(index), fmt.Errorf("write disposal allocation row: %w", err)
 		}
@@ -993,7 +994,10 @@ zero; known zero remains explicit. Quantity and immutable opening facts remain
 separate from that current knowledge state.
 Bundle schema 9 appends opening_basis_knowledge to lots.csv and the immutable
 opening facts, and basis_knowledge to lot events. Original unknown amounts are
-blank independently of the remaining projection's knowledge.
+blank independently of the remaining projection's knowledge. Disposal
+decisions, allocations and their replay revisions append basis_knowledge; an
+unknown allocation leaves its basis blank and makes its decision or revision
+total blank, while quantity and proceeds stay populated.
 The investment-operation, lot-fact, and lot-event files preserve the source
 and projection evidence separately. A net-only trade explicitly marks gross
 unknown. A trade-implied price derived from net cash remains usable for

@@ -109,7 +109,8 @@ func investmentGainSnapshotTx(ctx context.Context, tx *sql.Tx, bookID int64) (ma
 		SELECT d.id, d.operation_id, d.decision_seq, d.transaction_id, d.account_id,
 			d.commodity_id, d.cost_commodity_id, d.event_date, d.cost_basis_method,
 			d.quantity_value, d.quantity_scale, d.disposed_basis_value, d.disposed_basis_scale,
-			d.proceeds_value, d.proceeds_scale, r.disposed_basis_value, r.disposed_basis_scale
+			d.basis_knowledge, d.proceeds_value, d.proceeds_scale, r.id,
+			r.disposed_basis_value, r.disposed_basis_scale, r.basis_knowledge
 		FROM investment_disposal_decisions d
 		JOIN effective_investment_operations o ON o.id = d.operation_id
 		LEFT JOIN latest_investment_disposal_revisions r ON r.decision_id = d.id
@@ -121,21 +122,23 @@ func investmentGainSnapshotTx(ctx context.Context, tx *sql.Tx, bookID int64) (ma
 	snapshot := make(map[InvestmentGainIdentity]investmentGainSnapshotEntry)
 	for rows.Next() {
 		var entry investmentGainSnapshotEntry
-		var seq, quantityScale, basisScale, proceedsScale int
-		var quantity, basis, proceeds exact.Coefficient
-		var revisedBasis sql.NullString
-		var revisedScale sql.NullInt64
+		var seq, quantityScale, proceedsScale int
+		var quantity, proceeds exact.Coefficient
+		var basis, revisedBasis sql.NullString
+		var basisScale, revisionID, revisedScale sql.NullInt64
+		var knowledge string
+		var revisedKnowledge sql.NullString
 		if err := rows.Scan(&entry.decisionID, &entry.operationID, &seq, &entry.transactionID,
 			&entry.state.AccountID, &entry.state.CommodityID, &entry.state.CostCommodityID,
 			&entry.state.DisposalDate, &entry.state.CostBasisMethod, &quantity, &quantityScale,
-			&basis, &basisScale, &proceeds, &proceedsScale, &revisedBasis, &revisedScale); err != nil {
+			&basis, &basisScale, &knowledge, &proceeds, &proceedsScale, &revisionID,
+			&revisedBasis, &revisedScale, &revisedKnowledge); err != nil {
 			return nil, fmt.Errorf("scan effective disposal for gain impact: %w", err)
 		}
-		if revisedBasis.Valid != revisedScale.Valid {
-			return nil, fmt.Errorf("disposal decision %d has an incomplete effective revision", entry.decisionID)
-		}
-		if revisedBasis.Valid {
-			basis, basisScale = exact.Coefficient(revisedBasis.String), int(revisedScale.Int64)
+		// The latest revision's knowledge and amounts replace the snapshot's
+		// as one tuple; a NULL revised amount is never filled from the original.
+		if revisionID.Valid {
+			basis, basisScale, knowledge = revisedBasis, revisedScale, revisedKnowledge.String
 		}
 		root, ok := roots[entry.operationID]
 		if !ok {
@@ -143,12 +146,18 @@ func investmentGainSnapshotTx(ctx context.Context, tx *sql.Tx, bookID int64) (ma
 		}
 		entry.state.Quantity = exact.ScaledIntFromCoefficient(quantity, quantityScale)
 		entry.state.Proceeds = exact.ScaledIntFromCoefficient(proceeds, proceedsScale)
-		// Posted disposals refuse unknown-basis lots today, so every effective
-		// decision has a known basis. The state still carries knowledge so a
-		// future unknown-basis result is a disclosed transition, never a zero.
-		entry.state.BasisKnowledge = InvestmentBasisKnown
-		entry.state.DisposedBasis = exact.ScaledIntFromCoefficient(basis, basisScale)
-		entry.state.Gain = investmentGainValue(entry.state.Proceeds, entry.state.DisposedBasis)
+		// Unknown basis has no disposed basis or gain, so an unknown-to-known
+		// transition is a disclosed change, never a comparison against zero.
+		switch {
+		case knowledge == InvestmentBasisUnknown && !basis.Valid && !basisScale.Valid:
+			entry.state.BasisKnowledge = InvestmentBasisUnknown
+		case knowledge == InvestmentBasisKnown && basis.Valid && basisScale.Valid:
+			entry.state.BasisKnowledge = InvestmentBasisKnown
+			entry.state.DisposedBasis = exact.ScaledIntFromCoefficient(exact.Coefficient(basis.String), int(basisScale.Int64))
+			entry.state.Gain = investmentGainValue(entry.state.Proceeds, entry.state.DisposedBasis)
+		default:
+			return nil, fmt.Errorf("disposal decision %d has an invalid effective basis knowledge/amount pair", entry.decisionID)
+		}
 		identity := InvestmentGainIdentity{RootOperationID: root, DecisionSeq: seq}
 		if _, duplicate := snapshot[identity]; duplicate {
 			return nil, fmt.Errorf("correction root %d has two effective decisions with sequence %d", root, seq)

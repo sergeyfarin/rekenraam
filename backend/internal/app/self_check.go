@@ -1333,20 +1333,26 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 // disposalAllocationCheck checks the original snapshot and every replay
 // revision independently. Revision basis replaces the original basis, while
 // the decision's quantity and signed proceeds remain the conserved facts.
+// Quantity and proceeds are checked whatever the basis knowledge. A known
+// total must equal its all-known allocations; an unknown total is unresolved
+// information only when at least one allocation is unknown, so an invented
+// unknown (or a known total over unknown allocations) is damage.
 func (s *SelfCheckService) disposalAllocationCheck(ctx context.Context, snapshot *sql.Tx) (SelfCheckResult, error) {
 	result := SelfCheckResult{CheckID: CheckLotReconciliation, Status: SelfCheckPassed}
 	var decisionID, revisionID int64
 	var expectedQuantity, expectedBasis, expectedProceeds *exact.ScaledInt
 	var quantity, basis, proceeds *exact.ScaledInt
-	var allocationCount int
-	var invalid bool
+	var allocationCount, unknownAllocations int
+	var expectedUnknown, invalid bool
 	var references []string
 	finishSet := func() {
 		if decisionID == 0 {
 			return
 		}
+		basisConserved := unknownAllocations > 0 && expectedUnknown ||
+			unknownAllocations == 0 && !expectedUnknown && basis.Cmp(expectedBasis) == 0
 		if allocationCount > 0 && !invalid && quantity.Cmp(expectedQuantity) == 0 &&
-			basis.Cmp(expectedBasis) == 0 && proceeds.Cmp(expectedProceeds) == 0 {
+			basisConserved && proceeds.Cmp(expectedProceeds) == 0 {
 			return
 		}
 		result.Status = SelfCheckFailed
@@ -1361,21 +1367,27 @@ func (s *SelfCheckService) disposalAllocationCheck(ctx context.Context, snapshot
 		}
 	}
 	err := s.repository.StreamDisposalAllocationSets(ctx, snapshot, BookID, func(record db.SelfCheckDisposalAllocationRecord) error {
+		known, value, ok := selfCheckDisposalBasis(record)
 		if !record.IsAllocation {
 			finishSet()
 			decisionID, revisionID = record.DecisionID, record.RevisionID
 			expectedQuantity = exact.ScaledIntFromCoefficient(record.QuantityValue, record.QuantityScale)
-			expectedBasis = exact.ScaledIntFromCoefficient(record.BasisValue, record.BasisScale)
+			expectedBasis = value
+			expectedUnknown = !known
 			expectedProceeds = exact.ScaledIntFromCoefficient(record.ProceedsValue, record.ProceedsScale)
 			quantity, basis, proceeds = exact.NewScaledInt(), exact.NewScaledInt(), exact.NewScaledInt()
-			allocationCount = 0
-			invalid = record.QuantityValue.Sign() <= 0 || record.BasisValue.Sign() < 0
+			allocationCount, unknownAllocations = 0, 0
+			invalid = !ok || record.QuantityValue.Sign() <= 0
 			return nil
 		}
 		allocationCount++
-		invalid = invalid || record.QuantityValue.Sign() <= 0 || record.BasisValue.Sign() < 0
+		invalid = invalid || !ok || record.QuantityValue.Sign() <= 0
 		quantity.AddCoefficient(record.QuantityValue, record.QuantityScale)
-		basis.AddCoefficient(record.BasisValue, record.BasisScale)
+		if known {
+			basis.AddScaled(value)
+		} else {
+			unknownAllocations++
+		}
 		proceeds.AddCoefficient(record.ProceedsValue, record.ProceedsScale)
 		return nil
 	})
@@ -1388,6 +1400,24 @@ func (s *SelfCheckService) disposalAllocationCheck(ctx context.Context, snapshot
 			result.FindingCount, strings.Join(references, ", "))
 	}
 	return result, nil
+}
+
+// selfCheckDisposalBasis reads one stored basis knowledge/amount tuple. ok is
+// false for an inconsistent pair, an unparseable amount or a negative known
+// basis; an unknown basis is valid with no value.
+func selfCheckDisposalBasis(record db.SelfCheckDisposalAllocationRecord) (known bool, value *exact.ScaledInt, ok bool) {
+	switch {
+	case record.BasisKnowledge == db.InvestmentBasisUnknown && !record.BasisValue.Valid && !record.BasisScale.Valid:
+		return false, nil, true
+	case record.BasisKnowledge == db.InvestmentBasisKnown && record.BasisValue.Valid && record.BasisScale.Valid:
+		coefficient, err := exact.Parse(record.BasisValue.String)
+		if err != nil || coefficient.Sign() < 0 {
+			return true, exact.NewScaledInt(), false
+		}
+		return true, exact.ScaledIntFromCoefficient(coefficient, int(record.BasisScale.Int64)), true
+	default:
+		return false, nil, false
+	}
 }
 
 // checkpointIntegrityCheck asks whether a reconciliation still means what it

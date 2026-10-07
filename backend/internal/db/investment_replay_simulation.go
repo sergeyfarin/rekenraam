@@ -86,6 +86,7 @@ type InvestmentReplayAllocation struct {
 	CostBasisScale int
 	ProceedsValue  int64
 	ProceedsScale  int
+	BasisKnowledge string // Empty means known; unknown leaves CostBasis unused.
 }
 
 // InvestmentReplayDependencyError identifies the later decision that a

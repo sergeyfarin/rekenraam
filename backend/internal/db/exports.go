@@ -193,8 +193,9 @@ type ExportDisposalDecisionRecord struct {
 	EventDate            string
 	QuantityValue        exact.Coefficient
 	QuantityScale        int
-	DisposedBasisValue   exact.Coefficient
-	DisposedBasisScale   int
+	DisposedBasisValue   sql.NullString
+	DisposedBasisScale   sql.NullInt64
+	BasisKnowledge       string
 	CostBasisMethod      string
 	ResolutionTier       string
 	AccountVersionID     sql.NullInt64
@@ -217,8 +218,9 @@ type ExportDisposalAllocationRecord struct {
 	LotID          int64
 	QuantityValue  exact.Coefficient
 	QuantityScale  int
-	CostBasisValue int64
-	CostBasisScale int
+	CostBasisValue sql.NullString
+	CostBasisScale sql.NullInt64
+	BasisKnowledge string
 	ProceedsValue  int64
 	ProceedsScale  int
 }
@@ -889,7 +891,7 @@ func (r *ExportRepository) ExportDisposalDecisions(ctx context.Context, transact
 			disposed_basis_value, disposed_basis_scale, cost_basis_method, resolution_tier,
 			account_version_id, profile_id, profile_version_id, source_effective_from,
 			source_recorded_at, created_at, created_audit_event_id, operation_id, position_side,
-			proceeds_value, proceeds_scale
+			proceeds_value, proceeds_scale, basis_knowledge
 		FROM investment_disposal_decisions
 		WHERE book_id = ?
 		ORDER BY event_date, id
@@ -908,7 +910,7 @@ func (r *ExportRepository) ExportDisposalDecisions(ctx context.Context, transact
 			&record.AccountVersionID, &record.ProfileID, &record.ProfileVersionID,
 			&record.SourceEffectiveFrom, &record.SourceRecordedAt, &record.CreatedAt,
 			&record.CreatedAuditEventID, &record.OperationID, &record.PositionSide,
-			&record.ProceedsValue, &record.ProceedsScale); err != nil {
+			&record.ProceedsValue, &record.ProceedsScale, &record.BasisKnowledge); err != nil {
 			return nil, fmt.Errorf("scan export disposal decision: %w", err)
 		}
 		records = append(records, record)
@@ -923,7 +925,7 @@ func (r *ExportRepository) ExportDisposalAllocations(ctx context.Context, transa
 	rows, err := transaction.QueryContext(ctx, `
 		SELECT decision_id, allocation_seq, lot_event_id, lot_id, quantity_value,
 			quantity_scale, cost_basis_value, cost_basis_scale,
-			proceeds_value, proceeds_scale
+			proceeds_value, proceeds_scale, basis_knowledge
 		FROM investment_disposal_allocations
 		WHERE book_id = ?
 		ORDER BY decision_id, allocation_seq
@@ -938,7 +940,7 @@ func (r *ExportRepository) ExportDisposalAllocations(ctx context.Context, transa
 		if err := rows.Scan(&record.DecisionID, &record.AllocationSeq, &record.LotEventID,
 			&record.LotID, &record.QuantityValue, &record.QuantityScale,
 			&record.CostBasisValue, &record.CostBasisScale,
-			&record.ProceedsValue, &record.ProceedsScale); err != nil {
+			&record.ProceedsValue, &record.ProceedsScale, &record.BasisKnowledge); err != nil {
 			return nil, fmt.Errorf("scan export disposal allocation: %w", err)
 		}
 		records = append(records, record)

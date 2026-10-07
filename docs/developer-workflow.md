@@ -435,6 +435,15 @@ The candidate checksum changed; stop the app and reset the disposable
 development database using the reset procedure above. The known-basis frozen
 seed remains valid without changes to its data or column layout.
 
+**BREAKING DEV DATABASE, immutable disposal knowledge (T-145, 2026-10-07):**
+`0001` adds `basis_knowledge` with paired nullable basis amounts to disposal
+decisions, allocations, replay revisions and revision allocations, plus an
+insert guard that ties each allocation's knowledge to its decision/revision
+total and disposal lot event. The checksum, the frozen seed's explicit known
+flags and the schema-object count change together. Bundle schema 9 appends the
+knowledge columns. Stop the app and reset the disposable database and its
+sidecars using the procedure above. No installed database exists.
+
 **BREAKING DEV DATABASE, immutable opening knowledge (T-145, 2026-10-07):**
 `0001` adds `opening_basis_knowledge` to immutable lots and `basis_knowledge`
 to lot events, permitting only paired NULL amounts for unknown evidence.
