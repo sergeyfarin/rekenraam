@@ -89,6 +89,9 @@
   const isError = $derived(positionsQuery.isError || instrumentsQuery.isError);
   const positions = $derived(positionsQuery.data?.positions ?? []);
   const openPositions = $derived(positions.filter((p) => coefficientSign(p.quantity_value) !== 0));
+  const selectedLots = $derived(
+    (lotsQuery.data?.lots ?? []).filter((lot) => lot.cost_commodity_id === selectedPosition?.cost_commodity_id)
+  );
 
   // Trade form modal
   type TradeModal = 'buy' | 'sell' | 'dividend' | 'reinvested' | 'external-transfer-in' | 'external-transfer-out' | 'internal-transfer' | 'split' | 'capital-return' | null;
@@ -247,9 +250,9 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
-                  {#each openPositions as pos (pos.account_id + '_' + pos.commodity_id)}
+                  {#each openPositions as pos (pos.account_id + '_' + pos.commodity_id + '_' + pos.cost_commodity_id)}
                     <tr
-                      class={`cursor-pointer transition hover:bg-surface-strong/30 ${selectedPosition?.account_id === pos.account_id && selectedPosition?.commodity_id === pos.commodity_id ? 'bg-surface-strong/50' : ''}`}
+                      class={`cursor-pointer transition hover:bg-surface-strong/30 ${selectedPosition?.account_id === pos.account_id && selectedPosition?.commodity_id === pos.commodity_id && selectedPosition?.cost_commodity_id === pos.cost_commodity_id ? 'bg-surface-strong/50' : ''}`}
                       onclick={() => selectPosition(pos)}
                       role="button"
                       tabindex="0"
@@ -323,11 +326,11 @@
                   <p class="text-sm text-muted">{m.investments_lots_loading()}</p>
                 {:else if lotsQuery.isError}
                   <p class="text-sm text-destructive">{m.investments_lots_error()}</p>
-                {:else if (lotsQuery.data?.lots ?? []).length === 0}
+                {:else if selectedLots.length === 0}
                   <p class="text-sm text-muted">{m.investments_lots_empty()}</p>
                 {:else}
                   <div class="space-y-3">
-                    {#each lotsQuery.data!.lots as lot (lot.id)}
+                    {#each selectedLots as lot (lot.id)}
                       <div class="rounded-(--radius-panel) border border-border p-3 text-sm">
                         <div class="flex items-center justify-between gap-2">
                           <span class="font-medium text-foreground">{formatDate(lot.opened_on)}</span>

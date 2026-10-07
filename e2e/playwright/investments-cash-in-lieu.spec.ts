@@ -16,7 +16,7 @@ async function setup(page:Page, multipleLots=false) {
   if (multipleLots) {await trade('buy',40,'1','600');await trade('buy',39,'1','2400');}
   else await trade('buy',40,'3','3000');
   const split=await apiJSON<{transaction:{id:number}}>(page,'POST','/api/v1/investments/splits',csrfToken,{effective_on:ago(30),holding_account_id:holding.id,commodity_id:instrument.commodity_id,ratio_numerator:3,ratio_denominator:2});
-  return {csrfToken,currencyID,cash,holding,instrument,splitID:split.transaction.id,trade};
+  return {csrfToken,currencyID,cash,holding,instrument,name:`CIL ${suffix}`,splitID:split.transaction.id,trade};
 }
 
 async function entry(page:Page,p:Awaited<ReturnType<typeof setup>>,days=30) {
@@ -130,4 +130,16 @@ test('a specific-lot cash-in-lieu correction changes currency without hidden old
   await expect(review).toContainText(`gain 4.666667 ${originalCode} → 1.833334 ${targetCode}`);
   await review.getByRole('button',{name:'Accept changed gains'}).click();
   await expect(correction).toBeHidden();
+  // Both cost-currency positions share one holding and instrument. The
+  // overview must give them distinct identities and remain usable afterward.
+  await page.goto('/app/investments');
+  await expect(page.getByRole('button',{name:'Record buy',exact:true})).toBeVisible();
+  const positionRows=page.getByRole('button').filter({hasText:p.name});
+  await expect(positionRows).toHaveCount(2);
+  for (let index=0;index<2;index++) {
+    await positionRows.nth(index).click();
+    const detail=page.getByRole('complementary',{name:'Lot detail'});
+    await expect(detail.getByText('Original qty',{exact:true})).toHaveCount(1);
+    await detail.getByRole('button',{name:'Close lot detail'}).click();
+  }
 });

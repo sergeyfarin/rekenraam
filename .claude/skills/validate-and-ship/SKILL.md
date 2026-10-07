@@ -274,6 +274,14 @@ non-trivial diff (yours or reviewed):
     base × accent pairing from `app.css`; a new text-on-tint pairing gets a
     line there. Named check: `theme-contrast.test.ts` (30 combinations).
 
+29. **Position identity dropping cost currency** — one holding and instrument
+    can contain several separately denominated positions. Svelte row keys,
+    selection highlighting and lot-detail filters must include cost currency;
+    a two-field key crashes the whole overview after a currency-changing
+    correction. Browser regression: the currency-changing case in
+    `investments-cash-in-lieu.spec.ts` visits the overview afterward and opens
+    both positions, checking that each shows only its own lots.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 
