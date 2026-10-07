@@ -4,10 +4,11 @@ Implementation contract for [#160](https://github.com/sergeyfarin/rekenraam/issu
 ADR 0013 and the [slice 5 contract](investment-operation-slice-5-contract.md)
 govern; `roadmap.md` alone defines execution order. This work is in progress.
 
-The existing nullable **remaining** basis projection is insufficient to admit
-an unknown transfer. Original opening facts, lot events, disposal snapshots,
-allocations and replay revisions still require numeric basis. Admission stays
-closed until these paths carry knowledge end to end. Known zero remains known.
+Nullable **remaining** basis alone is insufficient to admit an unknown transfer.
+Immutable openings and lot events now carry explicit knowledge and NULL pairs,
+with faithful reads, exports and opening replay. Disposal snapshots, allocations
+and their replay revisions still require numeric basis. Public admission stays
+closed until those paths carry knowledge end to end. Known zero remains known.
 
 ## Evidence prerequisite delivered
 
@@ -25,6 +26,13 @@ This prerequisite does not implement unknown openings, disposals or resolution,
 and does not complete any of #160's end-to-end acceptance items.
 
 ## Remaining implementation boundaries
+
+The opening/event portion of boundary 1 is implemented: independent original
+knowledge, immutable paired NULLs, nullable original API fields, bundle schema 9,
+opening intent/activation/output/persistence and replay-equivalence diagnostics.
+Named cases cover NULL pairs, original-versus-projected knowledge, exports,
+invented-zero and quantity damage, plus preservation of known-zero behavior.
+Disposal evidence in boundary 1 and boundaries 2–5 remain open.
 
 1. **Immutable knowledge.** Add explicit knowledge with paired nullable basis
    fields to opening facts, lot events, disposal decisions and allocations,
@@ -101,11 +109,11 @@ and does not complete any of #160's end-to-end acceptance items.
 
 | Path | Required change before admission |
 | --- | --- |
-| `backend/migrations/0001_initial_schema.sql` | Nullable immutable opening/event/decision/allocation and revision pairs, explicit knowledge, sourced resolution facts, effective views and historical conservation guards. Transfer revision admission currently requires a known original link; resolution needs an explicitly validated unknown-to-known path. `effective_investment_transfer_links` currently always reports original knowledge, even when selecting a revision's amount. |
-| `backend/internal/db/investments.go` | Original lot scanners currently require numeric basis. Separate availability/selection from known-basis arithmetic and precision/range admission; never replace NULL with zero. |
-| `backend/internal/db/investment_replay_intents.go` | Opening intents and transfer depletions need knowledge. Select effective basis with its own effective knowledge rather than using independent amount `COALESCE`s. |
-| `backend/internal/db/investment_replay_simulation.go`, `investment_replay_revisions.go` | Reset, activation and persistence currently write `basis_knowledge = 'known'` unconditionally. Carry knowledge through each output and avoid erasing unresolved history on depletion. |
+| `backend/migrations/0001_initial_schema.sql` | Opening/event NULL pairs are implemented; decision/allocation and revision pairs, sourced resolution facts and historical conservation guards remain. Transfer revision admission currently requires a known original link; resolution needs an explicitly validated unknown-to-known path. `effective_investment_transfer_links` currently always reports original knowledge, even when selecting a revision's amount. |
+| `backend/internal/db/investments.go` | Original lot scanners now carry immutable knowledge. Disposal/pool selection, allocation precision and range admission remain known-only; separate quantity from basis arithmetic without inventing zero. |
+| `backend/internal/db/investment_replay_intents.go` | Opening intents select an effective amount/scale/knowledge tuple. Transfer depletions and pooled replay inputs still need unknown knowledge. |
+| `backend/internal/db/investment_replay_simulation.go`, `investment_replay_revisions.go` | Opening reset/activation, lot outputs and persistence preserve unknown knowledge. Disposal outputs, allocations, revisions and pool redistribution still require propagation without erasing unresolved history. |
 | `backend/internal/db/investment_replay_propagation.go` | Propagate knowledge across the dependency closure and distinguish the first omitted bridge from a later numeric bridge adjustment. |
 | `backend/internal/db/investment_gain_impact.go` | Effective snapshot construction currently sets every disposal to known. Read original/revised knowledge, preserve NULL totals and bind unknown-to-known transitions into the acknowledgement token. |
-| `backend/internal/db/self_check.go`, `self_check_replay.go`; `backend/internal/app/self_check.go` | Original/event scans and conservation folds require numeric basis. Check quantity independently; audit knowledge and NULL pairs for every historical set, then compare effective replay knowledge and amounts. |
-| `backend/internal/api/investments.go`, OpenAPI, export bundle writers and investment forms | Original and disposed basis fields are still numeric. Make their contracts nullable with explicit knowledge before any writer can return unknown evidence; update bundle schema and six-locale operator flows together. |
+| `backend/internal/db/self_check.go`, `self_check_replay.go`; `backend/internal/app/self_check.go` | Opening/event scans and replay equivalence now retain quantity and knowledge checks. Extend conservation auditing to unknown original/revised disposal sets while preserving every historical snapshot. |
+| `backend/internal/api/investments.go`, OpenAPI, export bundle writers and investment forms | Original fields are nullable with immutable knowledge (bundle schema 9). Disposed basis/gain contracts and six-locale entry/resolution flows still need nullable results and explicit unresolved labels. |

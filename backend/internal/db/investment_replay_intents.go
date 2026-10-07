@@ -15,7 +15,8 @@ import (
 // excluded from current replay. A disposal carries its elected method and any
 // explicit specific-lot choice, never the lots selected by FIFO/LIFO/average.
 type InvestmentReplayIntent struct {
-	OperationID int64
+	BasisKnowledge string // Opening consideration; empty means known for legacy callers.
+	OperationID    int64
 	// OrderOperationID is the root operation's original same-day slot. A
 	// replacement inherits that slot so a later same-day sale still follows
 	// the corrected acquisition when replay sorts the effective intents.
@@ -123,8 +124,9 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	openings, err := reader.QueryContext(ctx, `
 		SELECT l.id, l.operation_id, o.operation_kind, l.opened_on,
 			l.quantity_value, l.quantity_scale,
-			COALESCE(revision.carried_basis_value, l.cost_basis_value),
-			COALESCE(revision.carried_basis_scale, l.cost_basis_scale),
+			CASE WHEN revision.operation_id IS NULL THEN l.cost_basis_value ELSE revision.carried_basis_value END,
+			CASE WHEN revision.operation_id IS NULL THEN l.cost_basis_scale ELSE revision.carried_basis_scale END,
+			CASE WHEN revision.operation_id IS NULL THEN l.opening_basis_knowledge ELSE revision.basis_knowledge END,
 			(SELECT x.effect_seq FROM investment_operation_lot_effects x
 			 JOIN investment_lot_events e ON e.id = x.lot_event_id
 			 WHERE x.operation_id = l.operation_id AND e.lot_id = l.id
@@ -144,10 +146,24 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	for openings.Next() {
 		var intent InvestmentReplayIntent
 		var seq sql.NullInt64
+		var value sql.NullString
+		var scale sql.NullInt64
 		if err := openings.Scan(&intent.LotID, &intent.OperationID, &intent.OperationKind, &intent.EventDate,
-			&intent.QuantityValue, &intent.QuantityScale, &intent.AmountValue, &intent.AmountScale, &seq); err != nil {
+			&intent.QuantityValue, &intent.QuantityScale, &value, &scale, &intent.BasisKnowledge, &seq); err != nil {
 			openings.Close()
 			return nil, fmt.Errorf("scan replay opening: %w", err)
+		}
+		if intent.BasisKnowledge == InvestmentBasisUnknown && !value.Valid && !scale.Valid {
+			intent.AmountValue = exact.New(0) // Unused; activation writes NULL.
+		} else if intent.BasisKnowledge == InvestmentBasisKnown && value.Valid && scale.Valid {
+			intent.AmountValue, err = exact.Parse(value.String)
+			intent.AmountScale = int(scale.Int64)
+		} else {
+			err = fmt.Errorf("invalid replay opening basis knowledge/amount pair")
+		}
+		if err != nil {
+			openings.Close()
+			return nil, fmt.Errorf("read replay opening lot %d: %w", intent.LotID, err)
 		}
 		if !seq.Valid || seq.Int64 <= 0 {
 			openings.Close()

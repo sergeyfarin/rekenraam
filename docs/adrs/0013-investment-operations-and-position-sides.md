@@ -460,3 +460,24 @@ amount in its own currency instead of suggesting a common-currency comparison.
 This completes manual known-basis entry/correction in six locales. It adds no
 schema change and does not admit unknown basis or unverified provider mapping;
 those retain their own open acceptance in T-145 and T-130.
+
+## Immutable opening knowledge refinement (T-145, 2026-10-07)
+
+Original lot-opening evidence and lot events now distinguish known basis from
+unknown basis with an explicit code and paired nullable coefficient/scale.
+Known zero remains known. The current projection's knowledge is separate:
+rebuilding an unresolved opening must keep NULL amounts, while replay of known
+original evidence can repair a damaged unknown projection.
+
+Opening intents select a transfer link's amount, scale and knowledge as one
+effective tuple; they do not independently coalesce NULLs back to the original
+lot's numeric amount. Replay activation, its output and persistence preserve
+knowledge. Range admission for an opening replay verifies the known subtotal;
+existing known-basis command guards still refuse unresolved inputs.
+
+The API names immutable knowledge `opening_basis_knowledge`, independent of
+remaining `basis_knowledge`; original amounts are NULL when unknown. Bundle
+schema 9 exports original/event knowledge and blank unknown amounts. Self-check
+keeps quantity verification, verifies replay knowledge and names unresolved
+basis rather than comparing it as zero. Public unknown transfer admission,
+unknown disposal/pool snapshots and sourced resolution remain open in #160.

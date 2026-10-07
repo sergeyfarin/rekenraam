@@ -69,21 +69,21 @@ func TestInvestmentSlice1FreshAndSeededBundleContract(t *testing.T) {
 				} `json:"files"`
 			}
 			require.NoError(t, json.Unmarshal(files["manifest.json"], &manifest))
-			require.Equal(t, 8, manifest.SchemaVersion)
+			require.Equal(t, 9, manifest.SchemaVersion)
 			manifestRows := map[string]int64{}
 			for _, file := range manifest.Files {
 				manifestRows[file.Name] = file.Rows
 			}
 			for file, header := range map[string][]string{
 				"disposal-clearing-allocations.csv":                {"decision_id", "posting_version_id", "proceeds_value", "proceeds_scale"},
-				"lots.csv":                                         {"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status", "quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis", "cost_commodity_id", "source_transaction_id", "basis_knowledge"},
+				"lots.csv":                                         {"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status", "quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis", "cost_commodity_id", "source_transaction_id", "basis_knowledge", "opening_basis_knowledge"},
 				"investment-operations.csv":                        {"operation_id", "transaction_id", "operation_kind", "event_date", "audit_event_id", "correction_of_operation_id", "correction_mode", "correction_reason"},
 				"investment-operation-journal-links.csv":           {"operation_id", "link_seq", "transaction_version_id", "role"},
 				"investment-operation-dates.csv":                   {"operation_id", "date_role", "event_date"},
 				"investment-operation-components.csv":              {"component_id", "operation_id", "component_seq", "component_kind", "commodity_id", "amount_value", "amount_scale", "amount_date", "gross_unknown", "charge_treatment", "charge_account_id", "resolution_tier", "fee_policy_version_id", "source_evidence_json", "audit_event_id", "charge_kind", "cash_account_id", "separately_paid", "posting_version_id"},
 				"investment-lot-state.csv":                         {"lot_id", "status", "remaining_quantity_value", "remaining_quantity_scale", "remaining_cost_basis_value", "remaining_cost_basis_scale", "updated_at", "updated_by_user_id", "audit_event_id", "basis_knowledge"},
-				"investment-lot-facts.csv":                         {"lot_id", "operation_id", "account_id", "commodity_id", "position_side", "opened_on", "quantity_value", "quantity_scale", "consideration_value", "consideration_scale", "cost_commodity_id", "audit_event_id"},
-				"investment-lot-events.csv":                        {"lot_event_id", "lot_id", "event_kind", "transaction_id", "event_date", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "cost_basis_method", "metadata_json", "audit_event_id"},
+				"investment-lot-facts.csv":                         {"lot_id", "operation_id", "account_id", "commodity_id", "position_side", "opened_on", "quantity_value", "quantity_scale", "consideration_value", "consideration_scale", "cost_commodity_id", "audit_event_id", "opening_basis_knowledge"},
+				"investment-lot-events.csv":                        {"lot_event_id", "lot_id", "event_kind", "transaction_id", "event_date", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "cost_basis_method", "metadata_json", "audit_event_id", "basis_knowledge"},
 				"investment-lot-effects.csv":                       {"operation_id", "effect_seq", "lot_event_id"},
 				"investment-transfer-facts.csv":                    {"operation_id", "transfer_kind", "effective_on", "commodity_id", "source_account_id", "destination_account_id", "source_evidence_json", "audit_event_id", "basis_allocation", "cost_basis_method", "method_resolution_tier", "method_account_version_id", "method_profile_version_id", "destination_lineage"},
 				"investment-transfer-lot-links.csv":                {"operation_id", "link_seq", "source_lot_id", "destination_lot_id", "quantity_value", "quantity_scale", "basis_knowledge", "carried_basis_value", "carried_basis_scale", "cost_commodity_id", "original_date_knowledge", "original_acquired_on", "source_evidence_json"},

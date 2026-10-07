@@ -195,6 +195,7 @@ type SaveDividendDefaultParams struct {
 }
 
 type InvestmentLotRecord struct {
+	OpeningBasisKnowledge   string
 	ID                      int64
 	BookID                  int64
 	AccountID               int64
@@ -218,25 +219,26 @@ type InvestmentLotRecord struct {
 }
 
 type CreateInvestmentLotParams struct {
-	BookID              int64
-	AccountID           int64
-	CommodityID         int64
-	OpenedOn            string
-	SourceTransactionID int64
-	QuantityValue       exact.Coefficient
-	QuantityScale       int
-	CostBasisValue      int64
-	CostBasisScale      int
-	CostCommodityID     int64
-	MetadataJSON        string
-	CreatedAt           string
-	CreatedByUserID     int64
-	AuthSessionID       int64
-	RequestID           string
-	OriginType          string
-	Operation           string
-	ChangeReason        string
-	EventKind           string
+	OpeningBasisKnowledge string
+	BookID                int64
+	AccountID             int64
+	CommodityID           int64
+	OpenedOn              string
+	SourceTransactionID   int64
+	QuantityValue         exact.Coefficient
+	QuantityScale         int
+	CostBasisValue        int64
+	CostBasisScale        int
+	CostCommodityID       int64
+	MetadataJSON          string
+	CreatedAt             string
+	CreatedByUserID       int64
+	AuthSessionID         int64
+	RequestID             string
+	OriginType            string
+	Operation             string
+	ChangeReason          string
+	EventKind             string
 }
 
 type LotAllocation struct {
@@ -1111,6 +1113,11 @@ func rescaleQuantity(value exact.Coefficient, from int, to int) (exact.Coefficie
 }
 
 func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotParams, auditEventID int64, replayAdmission bool) (InvestmentLotRecord, error) {
+	knowledge := normalizedBasisKnowledge(params.OpeningBasisKnowledge)
+	if knowledge != InvestmentBasisKnown && knowledge != InvestmentBasisUnknown ||
+		knowledge == InvestmentBasisUnknown && (params.CostBasisValue != 0 || params.CostBasisScale != 0 || params.EventKind != "transfer_in") {
+		return InvestmentLotRecord{}, fmt.Errorf("%w: invalid immutable opening basis knowledge", ErrInvalidDisposalParams)
+	}
 	// A lot the position should have owned when it was last disposed of cannot
 	// be added afterwards: the disposal took its basis from a pool this lot was
 	// not in, and nothing recomputes that (T-95).
@@ -1144,12 +1151,12 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 	result, err := tx.ExecContext(ctx, `INSERT INTO investment_lots (
 		book_id, account_id, commodity_id, opened_on, source_transaction_id,
 		quantity_value, quantity_scale, cost_basis_value, cost_basis_scale,
-		cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id, operation_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id, operation_id, opening_basis_knowledge
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		params.BookID, params.AccountID, params.CommodityID, params.OpenedOn, nullablePositiveInt64(params.SourceTransactionID),
-		params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale,
+		params.QuantityValue, params.QuantityScale, nullableBasisValue(params.CostBasisValue, knowledge), nullableBasisScale(params.CostBasisScale, knowledge),
 		params.CostCommodityID, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID,
-		nullablePositiveInt64(operationID))
+		nullablePositiveInt64(operationID), knowledge)
 	if err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("insert investment lot: %w", err)
 	}
@@ -1159,20 +1166,20 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_state
 		(lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale,
-		remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id)
-		VALUES (?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)`, lotID, params.BookID,
-		params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale,
-		params.CreatedAt, params.CreatedByUserID, auditEventID); err != nil {
+		remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id, basis_knowledge)
+		VALUES (?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?)`, lotID, params.BookID,
+		params.QuantityValue, params.QuantityScale, nullableBasisValue(params.CostBasisValue, knowledge), nullableBasisScale(params.CostBasisScale, knowledge),
+		params.CreatedAt, params.CreatedByUserID, auditEventID, knowledge); err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("initialize investment lot state: %w", err)
 	}
 
 	eventResult, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_lot_events (
 			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
-			cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id
+			cost_basis_value, cost_basis_scale, metadata_json, created_at, created_by_user_id, created_audit_event_id, basis_knowledge
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, params.BookID, lotID, params.EventKind, nullablePositiveInt64(params.SourceTransactionID), params.OpenedOn, params.QuantityValue, params.QuantityScale, params.CostBasisValue, params.CostBasisScale, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, lotID, params.EventKind, nullablePositiveInt64(params.SourceTransactionID), params.OpenedOn, params.QuantityValue, params.QuantityScale, nullableBasisValue(params.CostBasisValue, knowledge), nullableBasisScale(params.CostBasisScale, knowledge), params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID, knowledge)
 	if err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("insert investment lot event: %w", err)
 	}
@@ -1186,7 +1193,11 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 		}
 	}
 	if !replayAdmission {
-		if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
+		rangeGuard := requirePositionBasisRangeTx
+		if knowledge == InvestmentBasisUnknown {
+			rangeGuard = requireKnownPositionBasisSubtotalRangeTx
+		}
+		if err := rangeGuard(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
 			return InvestmentLotRecord{}, err
 		}
 	}
@@ -2860,7 +2871,7 @@ func investmentLotSelect(whereClause string) string {
 		SELECT id, book_id, account_id, commodity_id, opened_on, source_transaction_id, status,
 			quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
 			cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
-			cost_commodity_id, metadata_json, created_at, updated_at, basis_knowledge
+			cost_commodity_id, metadata_json, created_at, updated_at, basis_knowledge, opening_basis_knowledge
 		FROM current_investment_lots
 	` + whereClause
 }
@@ -2873,14 +2884,18 @@ func investmentLotByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, lotID in
 
 func scanInvestmentLotRow(row rowScanner) (InvestmentLotRecord, error) {
 	var record InvestmentLotRecord
-	var basisValue, basisScale sql.NullInt64
-	if err := row.Scan(&record.ID, &record.BookID, &record.AccountID, &record.CommodityID, &record.OpenedOn, &record.SourceTransactionID, &record.Status, &record.QuantityValue, &record.QuantityScale, &record.RemainingQuantityValue, &record.RemainingQuantityScale, &record.CostBasisValue, &record.CostBasisScale, &basisValue, &basisScale, &record.CostCommodityID, &record.MetadataJSON, &record.CreatedAt, &record.UpdatedAt, &record.BasisKnowledge); err != nil {
+	var basisValue, basisScale, openingValue, openingScale sql.NullInt64
+	if err := row.Scan(&record.ID, &record.BookID, &record.AccountID, &record.CommodityID, &record.OpenedOn, &record.SourceTransactionID, &record.Status, &record.QuantityValue, &record.QuantityScale, &record.RemainingQuantityValue, &record.RemainingQuantityScale, &openingValue, &openingScale, &basisValue, &basisScale, &record.CostCommodityID, &record.MetadataJSON, &record.CreatedAt, &record.UpdatedAt, &record.BasisKnowledge, &record.OpeningBasisKnowledge); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return InvestmentLotRecord{}, ErrNotFound
 		}
 		return InvestmentLotRecord{}, fmt.Errorf("scan investment lot: %w", err)
 	}
 	var err error
+	record.CostBasisValue, record.CostBasisScale, err = projectedBasis(openingValue, openingScale, record.OpeningBasisKnowledge)
+	if err != nil {
+		return InvestmentLotRecord{}, fmt.Errorf("read immutable opening basis: %w", err)
+	}
 	record.RemainingCostBasisValue, record.RemainingCostBasisScale, err = projectedBasis(basisValue, basisScale, record.BasisKnowledge)
 	if err != nil {
 		return InvestmentLotRecord{}, err
@@ -3660,12 +3675,22 @@ func mapInvestmentConstraintError(err error) error {
 // audit writes. Never accept a new projection that the position read model
 // cannot sum exactly. This also covers reinvestment/import acquisition paths.
 func requirePositionBasisRangeTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64) error {
+	return requirePositionBasisRangeQueryTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, false)
+}
+
+// Replay of unknown openings can check the representable known subtotal;
+// known-basis writers keep the strict full-position guard above.
+func requireKnownPositionBasisSubtotalRangeTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64) error {
+	return requirePositionBasisRangeQueryTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, true)
+}
+
+func requirePositionBasisRangeQueryTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, knownOnly bool) error {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT remaining_cost_basis_value, remaining_cost_basis_scale
 		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
-			AND status = 'open'
-	`, bookID, accountID, commodityID, costCommodityID)
+			AND status = 'open' AND (? = 0 OR basis_knowledge = 'known')
+	`, bookID, accountID, commodityID, costCommodityID, knownOnly)
 	if err != nil {
 		return fmt.Errorf("read position basis range: %w", err)
 	}

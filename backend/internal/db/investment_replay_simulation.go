@@ -64,6 +64,7 @@ type InvestmentReplaySplit struct {
 }
 
 type InvestmentReplayLotState struct {
+	BasisKnowledge          string
 	LotID                   int64
 	Status                  string
 	RemainingQuantityValue  exact.Coefficient
@@ -167,12 +168,13 @@ func resetInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, ac
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_state
 		(lot_id, book_id, status, remaining_quantity_value, remaining_quantity_scale,
-		remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id)
-		SELECT id, book_id, 'closed', '0', quantity_scale, '0', cost_basis_scale,
-		created_at, created_by_user_id, created_audit_event_id FROM investment_lots
+		remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id, basis_knowledge)
+		SELECT id, book_id, 'closed', '0', quantity_scale,
+		CASE WHEN opening_basis_knowledge = 'known' THEN '0' ELSE NULL END, cost_basis_scale,
+		created_at, created_by_user_id, created_audit_event_id, opening_basis_knowledge FROM investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'
-		ON CONFLICT(lot_id) DO UPDATE SET basis_knowledge = 'known', status = 'closed', remaining_quantity_value = '0',
-		remaining_quantity_scale = excluded.remaining_quantity_scale, remaining_cost_basis_value = '0',
+		ON CONFLICT(lot_id) DO UPDATE SET basis_knowledge = excluded.basis_knowledge, status = 'closed', remaining_quantity_value = '0',
+		remaining_quantity_scale = excluded.remaining_quantity_scale, remaining_cost_basis_value = excluded.remaining_cost_basis_value,
 		remaining_cost_basis_scale = excluded.remaining_cost_basis_scale`, bookID, accountID, commodityID, costCommodityID); err != nil {
 		return fmt.Errorf("reset replay lot projection: %w", err)
 	}
@@ -191,16 +193,19 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 	intent InvestmentReplayIntent, projection *InvestmentReplayProjection) error {
 	switch intent.Kind {
 	case "opening":
+		knowledge := normalizedBasisKnowledge(intent.BasisKnowledge)
 		basis, err := exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale).Int64()
-		if err != nil || basis < 0 || intent.QuantityValue.Sign() <= 0 {
+		if err != nil || basis < 0 || intent.QuantityValue.Sign() <= 0 ||
+			(knowledge != InvestmentBasisKnown && knowledge != InvestmentBasisUnknown) ||
+			(knowledge == InvestmentBasisUnknown && (basis != 0 || intent.AmountScale != 0)) {
 			return fmt.Errorf("%w: replay opening lot %d has invalid quantity or basis", ErrInvestmentBasisRange, intent.LotID)
 		}
 		result, err := tx.ExecContext(ctx, `
-			UPDATE investment_lot_state SET basis_knowledge = 'known', status = 'open',
+			UPDATE investment_lot_state SET basis_knowledge = ?, status = 'open',
 				remaining_quantity_value = ?, remaining_quantity_scale = ?,
 				remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?
 			WHERE lot_id IN (SELECT id FROM investment_lots WHERE id = ? AND book_id = ? AND account_id = ? AND commodity_id = ?
-				AND cost_commodity_id = ? AND position_side = 'long' AND opened_on = ?)`, intent.QuantityValue, intent.QuantityScale, basis, intent.AmountScale,
+				AND cost_commodity_id = ? AND position_side = 'long' AND opened_on = ?)`, knowledge, intent.QuantityValue, intent.QuantityScale, nullableBasisValue(basis, knowledge), nullableBasisScale(intent.AmountScale, knowledge),
 			intent.LotID, bookID, accountID, commodityID, costCommodityID, intent.EventDate)
 		if err != nil {
 			return fmt.Errorf("activate replay opening lot %d: %w", intent.LotID, err)
@@ -209,7 +214,7 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		if err != nil || changed != 1 {
 			return fmt.Errorf("%w: replay opening lot %d does not match this position and date", ErrInvalidDisposalParams, intent.LotID)
 		}
-		if err := requirePositionBasisRangeTx(ctx, tx, bookID, accountID, commodityID, costCommodityID); err != nil {
+		if err := requireKnownPositionBasisSubtotalRangeTx(ctx, tx, bookID, accountID, commodityID, costCommodityID); err != nil {
 			return fmt.Errorf("replay opening lot %d: %w", intent.LotID, err)
 		}
 	case "disposal":
@@ -395,7 +400,7 @@ func finishInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, a
 	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, status, remaining_quantity_value, remaining_quantity_scale,
-			remaining_cost_basis_value, remaining_cost_basis_scale
+			remaining_cost_basis_value, remaining_cost_basis_scale, basis_knowledge
 		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
 			AND cost_commodity_id = ? AND position_side = 'long'
@@ -405,11 +410,16 @@ func finishInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, a
 	}
 	for rows.Next() {
 		var lot InvestmentReplayLotState
+		var basis, scale sql.NullInt64
 		if err := rows.Scan(&lot.LotID, &lot.Status, &lot.RemainingQuantityValue,
-			&lot.RemainingQuantityScale, (*knownInvestmentBasis)(&lot.RemainingCostBasisValue),
-			&lot.RemainingCostBasisScale); err != nil {
+			&lot.RemainingQuantityScale, &basis, &scale, &lot.BasisKnowledge); err != nil {
 			rows.Close()
 			return fmt.Errorf("scan replay lot projection: %w", err)
+		}
+		lot.RemainingCostBasisValue, lot.RemainingCostBasisScale, err = projectedBasis(basis, scale, lot.BasisKnowledge)
+		if err != nil {
+			rows.Close()
+			return fmt.Errorf("read replay lot basis: %w", err)
 		}
 		projection.Lots = append(projection.Lots, lot)
 	}

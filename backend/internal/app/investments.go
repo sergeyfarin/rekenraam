@@ -557,6 +557,7 @@ type ReinvestedDividendInput struct {
 }
 
 type InvestmentLot struct {
+	OpeningBasisKnowledge   string
 	ID                      int64
 	BookID                  int64
 	AccountID               int64
@@ -2618,6 +2619,7 @@ func toInvestmentLot(record db.InvestmentLotRecord) InvestmentLot {
 		RemainingQuantityValue:  record.RemainingQuantityValue,
 		RemainingQuantityScale:  record.RemainingQuantityScale,
 		CostBasisValue:          record.CostBasisValue,
+		OpeningBasisKnowledge:   record.OpeningBasisKnowledge,
 		CostBasisScale:          record.CostBasisScale,
 		RemainingCostBasisValue: record.RemainingCostBasisValue,
 		BasisKnowledge:          record.BasisKnowledge,

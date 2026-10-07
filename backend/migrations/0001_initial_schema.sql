@@ -1114,8 +1114,8 @@ CREATE TABLE IF NOT EXISTS investment_lots (
   source_transaction_id INTEGER REFERENCES transactions(id) ON DELETE RESTRICT,
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 38),
   quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
-  cost_basis_value TEXT NOT NULL CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
-  cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  cost_basis_value TEXT CHECK (length(cost_basis_value) BETWEEN 1 AND 38),
+  cost_basis_scale INTEGER CHECK (cost_basis_scale BETWEEN 0 AND 12),
   cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
@@ -1128,11 +1128,14 @@ CREATE TABLE IF NOT EXISTS investment_lots (
   -- duplicate). NULL only for a lot with no source transaction, which replay
   -- refuses as unmodeled; source_transaction_id stays as journal provenance.
   operation_id INTEGER REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  opening_basis_knowledge TEXT NOT NULL DEFAULT 'known' CHECK (opening_basis_knowledge IN ('known', 'unknown')),
+  CHECK ((opening_basis_knowledge = 'known' AND cost_basis_value IS NOT NULL AND cost_basis_scale IS NOT NULL)
+    OR (opening_basis_knowledge = 'unknown' AND cost_basis_value IS NULL AND cost_basis_scale IS NULL)),
   CHECK (operation_id IS NULL OR (
     length(quantity_value) BETWEEN 1 AND 38 AND quantity_value NOT GLOB '*[^0-9]*'
     AND substr(quantity_value, 1, 1) BETWEEN '1' AND '9'
-    AND length(cost_basis_value) BETWEEN 1 AND 38 AND (cost_basis_value = '0' OR
-      (cost_basis_value NOT GLOB '*[^0-9]*' AND substr(cost_basis_value, 1, 1) BETWEEN '1' AND '9'))
+    AND (opening_basis_knowledge = 'unknown' OR (length(cost_basis_value) BETWEEN 1 AND 38 AND (cost_basis_value = '0' OR
+      (cost_basis_value NOT GLOB '*[^0-9]*' AND substr(cost_basis_value, 1, 1) BETWEEN '1' AND '9'))))
     AND source_transaction_id IS NOT NULL AND created_audit_event_id IS NOT NULL))
 );
 
@@ -1197,7 +1200,8 @@ SELECT
   state.updated_by_user_id,
   state.updated_audit_event_id,
   lot.position_side,
-  state.basis_knowledge
+  state.basis_knowledge,
+  lot.opening_basis_knowledge
 FROM investment_lots lot LEFT JOIN investment_lot_state state
   ON state.lot_id = lot.id AND state.book_id = lot.book_id;
 
@@ -1226,15 +1230,18 @@ CREATE TABLE IF NOT EXISTS investment_lot_events (
   event_date TEXT NOT NULL CHECK (event_date GLOB '????-??-??'),
   quantity_value TEXT NOT NULL DEFAULT '0' CHECK (length(quantity_value) BETWEEN 1 AND 39),
   quantity_scale INTEGER NOT NULL DEFAULT 0 CHECK (quantity_scale BETWEEN 0 AND 24),
-  cost_basis_value TEXT NOT NULL DEFAULT '0' CHECK (length(cost_basis_value) BETWEEN 1 AND 39),
-  cost_basis_scale INTEGER NOT NULL DEFAULT 0 CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  cost_basis_value TEXT DEFAULT '0' CHECK (length(cost_basis_value) BETWEEN 1 AND 39),
+  cost_basis_scale INTEGER DEFAULT 0 CHECK (cost_basis_scale BETWEEN 0 AND 12),
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   created_audit_event_id INTEGER REFERENCES audit_events(id) ON DELETE RESTRICT,
   cost_basis_method TEXT CHECK (
     cost_basis_method IS NULL OR cost_basis_method IN ('fifo', 'lifo', 'average_cost', 'specific_lot')
-  )
+  ),
+  basis_knowledge TEXT NOT NULL DEFAULT 'known' CHECK (basis_knowledge IN ('known', 'unknown')),
+  CHECK ((basis_knowledge = 'known' AND cost_basis_value IS NOT NULL AND cost_basis_scale IS NOT NULL)
+    OR (basis_knowledge = 'unknown' AND cost_basis_value IS NULL AND cost_basis_scale IS NULL))
 );
 
 CREATE INDEX IF NOT EXISTS investment_lot_events_lot_idx
@@ -4101,6 +4108,7 @@ WHEN NEW.id IS NOT OLD.id
   OR NEW.quantity_scale IS NOT OLD.quantity_scale
   OR NEW.cost_basis_value IS NOT OLD.cost_basis_value
   OR NEW.cost_basis_scale IS NOT OLD.cost_basis_scale
+  OR NEW.opening_basis_knowledge IS NOT OLD.opening_basis_knowledge
   OR NEW.cost_commodity_id IS NOT OLD.cost_commodity_id
   OR NEW.metadata_json IS NOT OLD.metadata_json
   OR NEW.created_at IS NOT OLD.created_at

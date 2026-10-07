@@ -139,9 +139,14 @@ func (r *SelfCheckRepository) positionReplayEquivalence(ctx context.Context, boo
 	}
 	for _, lot := range stored.lots {
 		replayed, ok := replayedLots[lot.lotID]
-		if !ok || lot.basis == nil || replayed.Status != lot.status ||
-			exact.ScaledIntFromCoefficient(replayed.RemainingQuantityValue, replayed.RemainingQuantityScale).Cmp(lot.quantity) != 0 ||
-			exact.ScaledIntFromInt64(replayed.RemainingCostBasisValue, replayed.RemainingCostBasisScale).Cmp(lot.basis) != 0 {
+		basisMatches := !lot.invalidBasis && normalizedBasisKnowledge(replayed.BasisKnowledge) == lot.basisKnowledge
+		if normalizedBasisKnowledge(replayed.BasisKnowledge) == InvestmentBasisKnown {
+			basisMatches = basisMatches && lot.basis != nil && exact.ScaledIntFromInt64(replayed.RemainingCostBasisValue, replayed.RemainingCostBasisScale).Cmp(lot.basis) == 0
+		} else {
+			basisMatches = basisMatches && lot.basis == nil
+		}
+		if !ok || !basisMatches || replayed.Status != lot.status ||
+			lot.quantity == nil || exact.ScaledIntFromCoefficient(replayed.RemainingQuantityValue, replayed.RemainingQuantityScale).Cmp(lot.quantity) != 0 {
 			found = append(found, mismatch(ReplayMismatchLotState, lot.lotID))
 		}
 		delete(replayedLots, lot.lotID)
@@ -193,10 +198,12 @@ func (r *SelfCheckRepository) positionReplayEquivalence(ctx context.Context, boo
 // values, so damaged or out-of-range rows compare unequal instead of failing
 // the run. A nil basis is unknown or unreadable.
 type storedReplayLot struct {
-	lotID    int64
-	status   string
-	quantity *exact.ScaledInt
-	basis    *exact.ScaledInt
+	basisKnowledge string
+	invalidBasis   bool
+	lotID          int64
+	status         string
+	quantity       *exact.ScaledInt
+	basis          *exact.ScaledInt
 }
 
 type storedReplayAllocation struct {
@@ -236,8 +243,14 @@ func storedInvestmentProjectionQuery(ctx context.Context, tx *sql.Tx, bookID int
 		}
 		lot.status = status.String
 		lot.quantity = storedScaled(quantity, quantityScale)
-		if known.Bool {
+		if known.Valid && known.Bool {
+			lot.basisKnowledge = InvestmentBasisKnown
 			lot.basis = storedScaled(basis, basisScale)
+		} else if known.Valid {
+			lot.basisKnowledge = InvestmentBasisUnknown
+			lot.invalidBasis = basis.Valid || basisScale.Valid
+		} else {
+			lot.invalidBasis = true
 		}
 		if lot.quantity == nil {
 			lot.status = ""

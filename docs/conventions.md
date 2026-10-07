@@ -225,6 +225,11 @@ When a feature introduces a durable new rule, update one of those documents in t
   be represented at its recorded scale, inside the same transaction as all
   journal, lot and audit writes. Include future-dated lots when checking the
   current position; never truncate recorded residuals to satisfy this limit.
+- Immutable lot openings and lot events carry explicit basis knowledge.
+  Unknown opening/event basis has both coefficient and scale NULL; known zero
+  stays numeric. `opening_basis_knowledge` describes original acquisition
+  evidence independently of the current remaining projection. Replay preserves
+  that distinction; it must not turn an unknown opening into known zero.
 - Projected investment basis has explicit `known`/`unknown` knowledge. Unknown
   coefficient and scale are NULL in storage and on the API, and empty in CSV;
   known zero remains numeric. Numeric read-model fields are usable only when

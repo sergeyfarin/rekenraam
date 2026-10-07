@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-
-	"rekenraam/backend/internal/exact"
 )
 
 type CreateExternalTransferInParams struct {
@@ -58,6 +56,16 @@ func writeExternalTransferInTx(ctx context.Context, tx *sql.Tx, journal CreateTr
 	lot := transfer.Lot
 	lot.SourceTransactionID = transaction.ID
 	lot.EventKind = "transfer_in"
+	knowledge := normalizedBasisKnowledge(lot.OpeningBasisKnowledge)
+	if knowledge == InvestmentBasisUnknown {
+		for _, entry := range transaction.JournalEntries {
+			for _, posting := range entry.Postings {
+				if posting.CommodityID != lot.CommodityID {
+					return InvestmentLotRecord{}, fmt.Errorf("%w: unknown transfer basis requires a security-only journal", ErrInvalidDisposalParams)
+				}
+			}
+		}
+	}
 	latest, err := latestPositionRewriteDateTx(ctx, tx, lot.BookID, lot.AccountID, lot.CommodityID)
 	if err != nil {
 		return InvestmentLotRecord{}, err
@@ -89,9 +97,9 @@ func writeExternalTransferInTx(ctx context.Context, tx *sql.Tx, journal CreateTr
 			(operation_id, link_seq, destination_lot_id, quantity_value, quantity_scale,
 			 basis_knowledge, carried_basis_value, carried_basis_scale, cost_commodity_id,
 			 original_date_knowledge, original_acquired_on, source_evidence_json)
-		VALUES (?, 1, ?, ?, ?, 'known', ?, ?, ?, ?, NULLIF(?, ''), ?)
+		VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)
 	`, operationID, record.ID, lot.QuantityValue, lot.QuantityScale,
-		exact.New(lot.CostBasisValue), lot.CostBasisScale, lot.CostCommodityID,
+		knowledge, nullableBasisValue(lot.CostBasisValue, knowledge), nullableBasisScale(lot.CostBasisScale, knowledge), lot.CostCommodityID,
 		originalKnowledge, transfer.OriginalAcquiredOn, transfer.SourceEvidenceJSON); err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("link external transfer lot: %w", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -159,7 +160,7 @@ func TestUnknownProjectionExportsEmptyBasisAndKnowledge(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, reader.Close())
 		require.Len(t, rows, 2)
-		require.Equal(t, "unknown", rows[1][len(rows[1])-1])
+		require.Equal(t, "unknown", rows[1][slices.Index(rows[0], "basis_knowledge")])
 		if file.Name == "lots.csv" {
 			require.Empty(t, rows[1][10])
 			require.Equal(t, "2", rows[1][8])

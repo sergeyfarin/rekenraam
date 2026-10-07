@@ -27,14 +27,14 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 		remaining_cost_basis_value, remaining_cost_basis_scale, updated_at, updated_by_user_id, updated_audit_event_id, basis_knowledge
 		FROM investment_lot_state WHERE book_id = ? ORDER BY lot_id`,
 		// Opening facts live on the operation-linked lot row itself (T-124);
-		// the bundle keeps its investment-lot-facts.csv shape.
+		// original knowledge remains separate from the current projection.
 		"lot-facts": `SELECT l.id, l.operation_id, l.account_id, l.commodity_id,
 			l.position_side, l.opened_on, l.quantity_value, l.quantity_scale,
-			l.cost_basis_value, l.cost_basis_scale, l.cost_commodity_id, l.created_audit_event_id
+			l.cost_basis_value, l.cost_basis_scale, l.cost_commodity_id, l.created_audit_event_id, l.opening_basis_knowledge
 			FROM investment_lots l WHERE l.book_id = ? AND l.operation_id IS NOT NULL ORDER BY l.id`,
 		"lot-events": `SELECT e.id, e.lot_id, e.event_kind, e.transaction_id, e.event_date,
 			e.quantity_value, e.quantity_scale, e.cost_basis_value, e.cost_basis_scale,
-			e.cost_basis_method, e.metadata_json, e.created_audit_event_id
+			e.cost_basis_method, e.metadata_json, e.created_audit_event_id, e.basis_knowledge
 			FROM investment_lot_events e WHERE e.book_id = ? ORDER BY e.id`,
 		"lot-effects": `SELECT e.operation_id, e.effect_seq, e.lot_event_id
 			FROM investment_operation_lot_effects e JOIN investment_operations o ON o.id = e.operation_id

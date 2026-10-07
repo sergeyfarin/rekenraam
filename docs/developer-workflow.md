@@ -435,6 +435,15 @@ The candidate checksum changed; stop the app and reset the disposable
 development database using the reset procedure above. The known-basis frozen
 seed remains valid without changes to its data or column layout.
 
+**BREAKING DEV DATABASE, immutable opening knowledge (T-145, 2026-10-07):**
+`0001` adds `opening_basis_knowledge` to immutable lots and `basis_knowledge`
+to lot events, permitting only paired NULL amounts for unknown evidence.
+The checksum and explicit known flags in the frozen event seed change together.
+Bundle schema 9 appends original/event knowledge; original lot amounts become
+nullable in the API. Public unknown-transfer/disposal commands remain gated.
+Stop the app and reset the same disposable database and its sidecars using the
+procedure above before starting this baseline. No installed database exists.
+
 **BREAKING DEV DATABASE, return-of-capital quantities (T-148, 2026-10-07):**
 `0001` adds the `explicit_quantities` entitlement rule and expands its insert
 guard; whole-lot entitlements retain their original meaning. The checksum

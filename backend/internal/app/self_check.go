@@ -481,10 +481,10 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				AND EXISTS (SELECT 1 FROM investment_operation_journal_links link
 					JOIN transaction_versions v ON v.id = link.transaction_version_id
 					WHERE link.operation_id = o.id AND v.transaction_id = l.source_transaction_id)
-				AND x.basis_knowledge = 'known' AND x.quantity_value = l.quantity_value
+				AND x.basis_knowledge = l.opening_basis_knowledge AND x.quantity_value = l.quantity_value
 				AND x.quantity_scale = l.quantity_scale
-				AND x.carried_basis_value = l.cost_basis_value
-				AND x.carried_basis_scale = l.cost_basis_scale
+				AND x.carried_basis_value IS l.cost_basis_value
+				AND x.carried_basis_scale IS l.cost_basis_scale
 				AND x.cost_commodity_id = l.cost_commodity_id)`},
 		{"internal transfer missing linked source and destination effects", `
 			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
@@ -1212,6 +1212,10 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 		}
 		eventQuantity[event.LotID].AddCoefficient(event.QuantityValue, event.QuantityScale)
 		key := basisPosition{accountID: event.AccountID, commodityID: event.CommodityID, costCommodityID: event.CostCommodityID}
+		if event.BasisKnowledge == db.InvestmentBasisUnknown {
+			unknownBasis[key] = true
+			continue
+		}
 		if eventBasis[key] == nil {
 			eventBasis[key] = exact.NewScaledInt()
 		}

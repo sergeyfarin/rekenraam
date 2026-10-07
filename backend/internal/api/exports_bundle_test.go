@@ -172,7 +172,7 @@ func TestExportBundleChecksumsVerify(t *testing.T) {
 		assert.Equalf(t, int64(len(content)), file.Bytes, "%s byte count is wrong", file.Name)
 	}
 
-	assert.Equal(t, 8, bundle.manifest.SchemaVersion)
+	assert.Equal(t, 9, bundle.manifest.SchemaVersion)
 	assert.Equal(t, "journal_entry", bundle.manifest.SelectionUnit)
 	assert.True(t, bundle.manifest.IncludesSystemAccounts)
 	assert.True(t, bundle.manifest.AllTransactionsComplete)
@@ -640,7 +640,7 @@ func TestBundleLotsFileCarriesCostBasisAtItsOwnScale(t *testing.T) {
 	require.Equal(t, []string{
 		"lot_id", "account_id", "account_path", "commodity_id", "position_side", "opened_on", "status",
 		"quantity", "remaining_quantity", "cost_basis", "remaining_cost_basis",
-		"cost_commodity_id", "source_transaction_id", "basis_knowledge",
+		"cost_commodity_id", "source_transaction_id", "basis_knowledge", "opening_basis_knowledge",
 	}, lots.header)
 	require.Len(t, lots.rows, 1)
 

@@ -355,6 +355,7 @@ func (r *SelfCheckRepository) StreamPostedNonCurrencyPostings(ctx context.Contex
 
 // SelfCheckLotRecord is one investment lot's current standing.
 type SelfCheckLotRecord struct {
+	OpeningBasisKnowledge   string
 	InvalidBasisProjection  bool
 	BasisKnowledge          string
 	MissingProjection       bool
@@ -378,7 +379,7 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 		SELECT lot.id, lot.account_id, lot.commodity_id, COALESCE(state.status, ''),
 		lot.quantity_value, lot.quantity_scale, COALESCE(state.remaining_quantity_value, '0'), COALESCE(state.remaining_quantity_scale, 0),
 		lot.cost_basis_value, lot.cost_basis_scale, state.remaining_cost_basis_value,
-		state.remaining_cost_basis_scale, lot.cost_commodity_id, state.lot_id IS NULL, COALESCE(state.basis_knowledge, '')
+		state.remaining_cost_basis_scale, lot.cost_commodity_id, state.lot_id IS NULL, COALESCE(state.basis_knowledge, ''), lot.opening_basis_knowledge
 		FROM investment_lots lot LEFT JOIN investment_lot_state state ON state.lot_id = lot.id AND state.book_id = lot.book_id
 		WHERE lot.book_id = ? ORDER BY lot.account_id, lot.commodity_id, lot.id
 	`, bookID)
@@ -390,13 +391,17 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 	var lots []SelfCheckLotRecord
 	for rows.Next() {
 		var lot SelfCheckLotRecord
-		var basisValue, basisScale sql.NullInt64
+		var basisValue, basisScale, openingValue, openingScale sql.NullInt64
 		if err := rows.Scan(&lot.LotID, &lot.AccountID, &lot.CommodityID, &lot.Status,
 			&lot.QuantityValue, &lot.QuantityScale,
 			&lot.RemainingQuantityValue, &lot.RemainingQuantityScale,
-			&lot.CostBasisValue, &lot.CostBasisScale,
-			&basisValue, &basisScale, &lot.CostCommodityID, &lot.MissingProjection, &lot.BasisKnowledge); err != nil {
+			&openingValue, &openingScale,
+			&basisValue, &basisScale, &lot.CostCommodityID, &lot.MissingProjection, &lot.BasisKnowledge, &lot.OpeningBasisKnowledge); err != nil {
 			return nil, fmt.Errorf("scan self-check lot: %w", err)
+		}
+		lot.CostBasisValue, lot.CostBasisScale, err = projectedBasis(openingValue, openingScale, lot.OpeningBasisKnowledge)
+		if err != nil {
+			lot.InvalidBasisProjection = true
 		}
 		if !lot.MissingProjection {
 			lot.RemainingCostBasisValue, lot.RemainingCostBasisScale, err = projectedBasis(basisValue, basisScale, lot.BasisKnowledge)
@@ -413,6 +418,7 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 }
 
 type SelfCheckLotEventRecord struct {
+	BasisKnowledge  string
 	LotID           int64
 	AccountID       int64
 	CommodityID     int64
@@ -430,7 +436,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	rows, err := transaction.QueryContext(ctx, `
 		SELECT le.lot_id, l.account_id, l.commodity_id, l.cost_commodity_id,
 			le.quantity_value, le.quantity_scale, le.cost_basis_value, le.cost_basis_scale,
-			le.event_kind = 'split_adjustment'
+			le.event_kind = 'split_adjustment', le.basis_knowledge
 		FROM effective_investment_lot_events le
 		JOIN current_investment_lots l ON l.id = le.lot_id
 		WHERE le.book_id = ?
@@ -442,10 +448,16 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	var events []SelfCheckLotEventRecord
 	for rows.Next() {
 		var event SelfCheckLotEventRecord
+		var value, scale sql.NullInt64
 		if err := rows.Scan(&event.LotID, &event.AccountID, &event.CommodityID, &event.CostCommodityID,
-			&event.QuantityValue, &event.QuantityScale, &event.CostBasisValue, &event.CostBasisScale, &event.IsSplit); err != nil {
+			&event.QuantityValue, &event.QuantityScale, &value, &scale, &event.IsSplit, &event.BasisKnowledge); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan self-check lot event: %w", err)
+		}
+		event.CostBasisValue, event.CostBasisScale, err = projectedBasis(value, scale, event.BasisKnowledge)
+		if err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("read self-check event basis: %w", err)
 		}
 		events = append(events, event)
 	}

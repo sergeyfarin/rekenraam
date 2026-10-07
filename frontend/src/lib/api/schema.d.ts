@@ -23782,8 +23782,14 @@ export interface components {
             /** @description Lossless exact integer coefficient normalized to remaining_quantity_scale. */
             remaining_quantity_value: string;
             remaining_quantity_scale: number;
-            cost_basis_value: string;
-            cost_basis_scale: number;
+            /** @description Immutable opening amount; null when original basis was unknown. */
+            cost_basis_value: string | null;
+            cost_basis_scale: number | null;
+            /**
+             * @description Original opening evidence, independent of remaining projected basis.
+             * @enum {string}
+             */
+            opening_basis_knowledge: "known" | "unknown";
             /** @description Null when projected basis is unknown; known zero remains an explicit coefficient. */
             remaining_cost_basis_value: string | null;
             remaining_cost_basis_scale: number | null;

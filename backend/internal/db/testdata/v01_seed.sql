@@ -242,10 +242,10 @@ INSERT INTO investment_operation_components (id,book_id,operation_id,component_s
 INSERT INTO investment_operation_components (id,book_id,operation_id,component_seq,component_kind,commodity_id,amount_value,amount_scale,amount_date,gross_unknown,created_audit_event_id) VALUES(4,1,4,1,'dividend_gross',1,'1234',2,'2026-05-02',0,33);
 INSERT INTO investment_fee_policies VALUES(1,1,NULL,'commission','2026-09-13T11:34:58Z',3);
 INSERT INTO investment_fee_policy_versions VALUES(1,1,1,'0001-01-01','clearing_included',NULL,'2026-09-13T11:34:58Z',3);
-INSERT INTO investment_lot_events VALUES(1,1,1,'acquisition',7,'2026-02-02','10',0,100000,2,'{}','2026-09-13T11:34:58Z',1,27,NULL);
-INSERT INTO investment_lot_events VALUES(2,1,2,'acquisition',8,'2026-03-02','5',0,60000,2,'{}','2026-09-13T11:34:58Z',1,29,NULL);
-INSERT INTO investment_lot_events VALUES(3,1,1,'disposal',9,'2026-04-02','-1000',2,-100000,2,'{}','2026-09-13T11:34:58Z',1,31,'fifo');
-INSERT INTO investment_lot_events VALUES(4,1,2,'disposal',9,'2026-04-02','-250',2,-30000,2,'{}','2026-09-13T11:34:58Z',1,31,'fifo');
+INSERT INTO investment_lot_events VALUES(1,1,1,'acquisition',7,'2026-02-02','10',0,100000,2,'{}','2026-09-13T11:34:58Z',1,27,NULL,'known');
+INSERT INTO investment_lot_events VALUES(2,1,2,'acquisition',8,'2026-03-02','5',0,60000,2,'{}','2026-09-13T11:34:58Z',1,29,NULL,'known');
+INSERT INTO investment_lot_events VALUES(3,1,1,'disposal',9,'2026-04-02','-1000',2,-100000,2,'{}','2026-09-13T11:34:58Z',1,31,'fifo','known');
+INSERT INTO investment_lot_events VALUES(4,1,2,'disposal',9,'2026-04-02','-250',2,-30000,2,'{}','2026-09-13T11:34:58Z',1,31,'fifo','known');
 INSERT INTO investment_operation_lot_effects VALUES(1,1,1);
 INSERT INTO investment_operation_lot_effects VALUES(2,2,1);
 INSERT INTO investment_operation_lot_effects VALUES(3,3,1);

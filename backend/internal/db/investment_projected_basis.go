@@ -10,6 +10,29 @@ const (
 	InvestmentBasisUnknown = "unknown"
 )
 
+// Empty means known only for existing internal Go callers. Stored facts and
+// wire responses always carry explicit knowledge.
+func normalizedBasisKnowledge(knowledge string) string {
+	if knowledge == "" {
+		return InvestmentBasisKnown
+	}
+	return knowledge
+}
+
+func nullableBasisValue(value int64, knowledge string) any {
+	if knowledge == InvestmentBasisUnknown {
+		return nil
+	}
+	return value
+}
+
+func nullableBasisScale(scale int, knowledge string) any {
+	if knowledge == InvestmentBasisUnknown {
+		return nil
+	}
+	return scale
+}
+
 // Legacy arithmetic consumers may only use a known amount. The read models
 // carry knowledge separately and expose NULL on the wire for unknown basis.
 var ErrUnknownInvestmentBasis = fmt.Errorf("%w: remaining investment basis is unknown", ErrInvalidDisposalParams)

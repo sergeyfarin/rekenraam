@@ -575,8 +575,9 @@ type investmentLotResponse struct {
 	QuantityScale           int               `json:"quantity_scale"`
 	RemainingQuantityValue  exact.Coefficient `json:"remaining_quantity_value"`
 	RemainingQuantityScale  int               `json:"remaining_quantity_scale"`
-	CostBasisValue          moneyCoefficient  `json:"cost_basis_value"`
-	CostBasisScale          int               `json:"cost_basis_scale"`
+	CostBasisValue          *moneyCoefficient `json:"cost_basis_value"`
+	CostBasisScale          *int              `json:"cost_basis_scale"`
+	OpeningBasisKnowledge   string            `json:"opening_basis_knowledge"`
 	RemainingCostBasisValue *moneyCoefficient `json:"remaining_cost_basis_value"`
 	RemainingCostBasisScale *int              `json:"remaining_cost_basis_scale"`
 	BasisKnowledge          string            `json:"basis_knowledge"`
@@ -2086,7 +2087,10 @@ func toInvestmentLotDisposalResponses(disposals []app.InvestmentLotDisposal) []i
 }
 
 func toInvestmentLotResponse(lot app.InvestmentLot) investmentLotResponse {
-	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: moneyCoefficient(lot.CostBasisValue), CostBasisScale: lot.CostBasisScale, RemainingCostBasisValue: projectedBasisValue(lot.RemainingCostBasisValue, lot.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(lot.RemainingCostBasisScale, lot.BasisKnowledge), BasisKnowledge: lot.BasisKnowledge, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt}
+	if lot.OpeningBasisKnowledge == "" {
+		lot.OpeningBasisKnowledge = "known"
+	}
+	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: projectedBasisValue(lot.CostBasisValue, lot.OpeningBasisKnowledge), CostBasisScale: projectedBasisScale(lot.CostBasisScale, lot.OpeningBasisKnowledge), OpeningBasisKnowledge: lot.OpeningBasisKnowledge, RemainingCostBasisValue: projectedBasisValue(lot.RemainingCostBasisValue, lot.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(lot.RemainingCostBasisScale, lot.BasisKnowledge), BasisKnowledge: lot.BasisKnowledge, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt}
 }
 
 func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse {
