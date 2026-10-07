@@ -1059,8 +1059,21 @@ CashInLieuRequest:
 
 CashInLieuPreviewResponse:
   type: object
-  required: [allocations, impact]
+  required: [allocations, impact, disposed_basis_value, disposed_basis_scale, realized_gain_value, realized_gain_scale, cost_basis_method]
   properties:
+    disposed_basis_value:
+      type: string
+      description: Total exact basis of the fraction taken by the dated writer.
+    disposed_basis_scale:
+      type: integer
+    realized_gain_value:
+      type: string
+      description: Signed proceeds minus disposed basis, computed on the server.
+    realized_gain_scale:
+      type: integer
+    cost_basis_method:
+      type: string
+      enum: [fifo, lifo, average_cost, specific_lot]
     allocations:
       type: array
       items:
@@ -1740,7 +1753,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_reverse_transfer, can_replace_transfer, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1766,6 +1779,9 @@ InvestmentCorrectionChainResponse:
       description: Whether the effective posted split can be reversed or replaced (T-129). Dependent replay may still refuse the command.
     effective_split:
       $ref: '#/InvestmentCorrectionSplitTerms'
+    can_correct_cash_in_lieu:
+      type: boolean
+      description: Effective cash in lieu may attempt native reversal or replacement; dependent replay remains guarded.
     can_correct_write_off:
       type: boolean
       description: Whether the effective posted write-off can be reversed or replaced (T-118). The trade correction context pre-fills the replacement; dependent replay may still refuse the command.
@@ -1810,9 +1826,14 @@ InvestmentTradeCorrectionContextResponse:
     imported, source_identity_id, source_kind, already_corrected, charges, elected_lots, can_replace_sale,
     available_lots, effective_elected_lots]
   properties:
+    split_transaction_id:
+      type: integer
+      format: int64
+      description: The fixed split link, present for cash-in-lieu correction context.
+
     operation_id: { type: integer, format: int64 }
     transaction_id: { type: integer, format: int64 }
-    operation_kind: { type: string, enum: [buy, sell, write_off] }
+    operation_kind: { type: string, enum: [buy, sell, write_off, cash_in_lieu] }
     event_date: { type: string, format: date }
     holding_account_id: { type: integer, format: int64 }
     commodity_id: { type: integer, format: int64 }
@@ -2894,3 +2915,27 @@ CapitalReturnReplacementResponse:
     corrected_transaction_id:
       type: integer
       format: int64
+
+CashInLieuReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, replacement]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+    replacement:
+      $ref: '#/CashInLieuRequest'
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+
+CashInLieuLotsResponse:
+  type: object
+  required: [lots]
+  properties:
+    lots:
+      type: array
+      items:
+        $ref: '#/InvestmentTradeCorrectionAvailableLotResponse'

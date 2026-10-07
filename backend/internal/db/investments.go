@@ -1956,7 +1956,7 @@ func (r *InvestmentRepository) CreateTransactionAndDisposeLotsWithDecisionAndPos
 }
 
 func (r *InvestmentRepository) createTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error) (TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
-	return r.writeTransactionAndDisposeLots(ctx, transactionParams, disposalParams, postWrite, false)
+	return r.writeTransactionAndDisposeLots(ctx, transactionParams, disposalParams, postWrite, nil, false)
 }
 
 // SimulateTransactionAndDisposeLots runs the complete sale/write-off writer —
@@ -1964,7 +1964,7 @@ func (r *InvestmentRepository) createTransactionAndDisposeLots(ctx context.Conte
 // then rolls back. Its allocations are exactly what the commit would write;
 // lot event and decision IDs are temporary and cleared (T-117).
 func (r *InvestmentRepository) SimulateTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams) (SimulatedInvestmentWrite, []LotDisposalRecord, DisposalDecisionRecord, error) {
-	transaction, disposals, decision, err := r.writeTransactionAndDisposeLots(ctx, transactionParams, disposalParams, nil, true)
+	transaction, disposals, decision, err := r.writeTransactionAndDisposeLots(ctx, transactionParams, disposalParams, nil, nil, true)
 	if err != nil {
 		return SimulatedInvestmentWrite{}, nil, DisposalDecisionRecord{}, err
 	}
@@ -1976,7 +1976,7 @@ func (r *InvestmentRepository) SimulateTransactionAndDisposeLots(ctx context.Con
 	return simulatedInvestmentWrite(transaction), disposals, decision, nil
 }
 
-func (r *InvestmentRepository) writeTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite func(*sql.Tx, int64) error, preview bool) (TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
+func (r *InvestmentRepository) writeTransactionAndDisposeLots(ctx context.Context, transactionParams CreateTransactionParams, disposalParams DisposeLotsParams, postWrite, domainWrite func(*sql.Tx, int64) error, preview bool) (TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
 	type result struct {
 		disposals []LotDisposalRecord
 		decision  DisposalDecisionRecord
@@ -1986,7 +1986,14 @@ func (r *InvestmentRepository) writeTransactionAndDisposeLots(ctx context.Contex
 		write = previewInvestmentWriteTx[result]
 	}
 	transaction, outcome, err := write(ctx, r.database, transactionParams,
-		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (result, error) {
+		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (out result, err error) {
+			// Domain facts are part of the simulated command, unlike source
+			// acceptance callbacks which previews deliberately never run.
+			defer func() {
+				if err == nil && domainWrite != nil {
+					err = domainWrite(tx, transaction.ID)
+				}
+			}()
 			disposalParams.TransactionID = transaction.ID
 			latest, err := latestPositionRewriteDateTx(ctx, tx, disposalParams.BookID, disposalParams.AccountID, disposalParams.CommodityID)
 			if err != nil {

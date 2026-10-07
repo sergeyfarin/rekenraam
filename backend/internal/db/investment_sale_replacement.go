@@ -22,7 +22,7 @@ func (r *InvestmentRepository) ReplaceSaleWithPostWrite(ctx context.Context, exp
 	inverseParams, replacementParams CreateTransactionParams, disposalParams DisposeLotsParams,
 	postWrite func(*sql.Tx, int64, int64) error,
 ) (TransactionRecord, TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
-	return r.replaceSale(ctx, expected, inverseParams, replacementParams, disposalParams, postWrite, false)
+	return r.replaceSale(ctx, expected, inverseParams, replacementParams, disposalParams, postWrite, nil, false)
 }
 
 // PreviewSaleReplacement runs the complete replacement writer — inverse,
@@ -31,7 +31,7 @@ func (r *InvestmentRepository) ReplaceSaleWithPostWrite(ctx context.Context, exp
 func (r *InvestmentRepository) PreviewSaleReplacement(ctx context.Context, expected SaleOperationRecord,
 	inverseParams, replacementParams CreateTransactionParams, disposalParams DisposeLotsParams,
 ) (SimulatedInvestmentWrite, error) {
-	inverse, replacement, _, _, err := r.replaceSale(ctx, expected, inverseParams, replacementParams, disposalParams, nil, true)
+	inverse, replacement, _, _, err := r.replaceSale(ctx, expected, inverseParams, replacementParams, disposalParams, nil, nil, true)
 	if err != nil {
 		return SimulatedInvestmentWrite{}, err
 	}
@@ -40,7 +40,7 @@ func (r *InvestmentRepository) PreviewSaleReplacement(ctx context.Context, expec
 
 func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOperationRecord,
 	inverseParams, replacementParams CreateTransactionParams, disposalParams DisposeLotsParams,
-	postWrite func(*sql.Tx, int64, int64) error, preview bool,
+	postWrite, domainWrite func(*sql.Tx, int64, int64) error, preview bool,
 ) (TransactionRecord, TransactionRecord, []LotDisposalRecord, DisposalDecisionRecord, error) {
 	var noInverse, noReplacement TransactionRecord
 	var noDecision DisposalDecisionRecord
@@ -134,9 +134,13 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 			sourceIntents = intents
 			sourceDecisionID = intents[saleIndex].DecisionID
 			return nil
-		}, func(tx *sql.Tx, journals []TransactionRecord, auditEventID int64) (saleReplacementEffects, error) {
+		}, func(tx *sql.Tx, journals []TransactionRecord, auditEventID int64) (out saleReplacementEffects, err error) {
+			defer func() {
+				if err == nil && domainWrite != nil {
+					err = domainWrite(tx, operationID, auditEventID)
+				}
+			}()
 			inverse, replacement := journals[0], journals[1]
-			var err error
 			operationID, err = investmentOperationIDTx(ctx, tx, replacementParams.BookID, replacement.ID)
 			if err != nil {
 				return saleReplacementEffects{}, err

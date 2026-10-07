@@ -434,3 +434,29 @@ history. Unknown-basis handling remains T-145; excess is unresolved, not income.
 to the entitlement rule and its insert guard. Its checksum is updated. Reset
 only disposable development databases as documented in developer-workflow;
 no supported installed database exists. Export columns are unchanged.
+
+
+## Cash In Lieu Completion Refinement (2026-10-07, T-150)
+
+Cash-in-lieu reversal and replacement reuse native long-disposal corrections.
+Replacement retains the original split link and its correction-root same-day
+slot; it may change fraction, proceeds, dates and election. The split's holding
+and security follow that fixed link. Explicit attempts to change the split are
+refused. The split correction fence counts effective cash in lieu only, so a
+native reversal releases it while retaining original facts as evidence.
+
+Both entry and replacement previews include the typed split-link fact guard in
+the simulated domain write. They never accept provider source evidence. Exact
+per-lot allocation, disposed basis and signed realized result come from the same
+writer used by commit, with checkpoint invalidation and gain disclosure simulated
+under the same rollback boundary. A composed dated quantity read supplies
+specific-lot choices at a new entry's slot or at the replacement's original root
+slot with its predecessor excluded; today's closed state does not hide historical
+lots. The read is never write authorization, and commits recheck all dependencies.
+
+When a correction changes cost currency, gain review identifies each before/after
+amount in its own currency instead of suggesting a common-currency comparison.
+
+This completes manual known-basis entry/correction in six locales. It adds no
+schema change and does not admit unknown basis or unverified provider mapping;
+those retain their own open acceptance in T-145 and T-130.

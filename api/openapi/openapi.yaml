@@ -305,6 +305,16 @@ paths:
     $ref: "./paths/investments-external-transfer-out-impact.yaml"
   /api/v1/investments/transfers/external/out/preview:
     $ref: "./paths/investments-external-transfer-out-preview.yaml"
+  /api/v1/investments/transactions/{transaction_id}/cash-in-lieu-lots:
+    $ref: "./paths/investments-cash-in-lieu-lots.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-cash-in-lieu:
+    $ref: "./paths/investments-reverse-cash-in-lieu.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-cash-in-lieu/reconciliation-impact:
+    $ref: "./paths/investments-reverse-cash-in-lieu-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu:
+    $ref: "./paths/investments-replace-cash-in-lieu.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu/preview:
+    $ref: "./paths/investments-replace-cash-in-lieu-preview.yaml"
   /api/v1/investments/cash-in-lieu:
     $ref: "./paths/investments-cash-in-lieu.yaml"
   /api/v1/investments/cash-in-lieu/preview:
@@ -1084,6 +1094,10 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentTransferOutReplacementRequest"
     InvestmentTransferOutReplacementResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentTransferOutReplacementResponse"
+    CashInLieuReplacementRequest:
+      $ref: "./components/schemas/investments.yaml#/CashInLieuReplacementRequest"
+    CashInLieuLotsResponse:
+      $ref: "./components/schemas/investments.yaml#/CashInLieuLotsResponse"
     CashInLieuRequest:
       $ref: "./components/schemas/investments.yaml#/CashInLieuRequest"
     CashInLieuPreviewResponse:

@@ -79,6 +79,7 @@ export type InvestmentCorrectionDividendTerms = components['schemas']['Investmen
 export type InvestmentCorrectionReinvestmentTerms = components['schemas']['InvestmentCorrectionReinvestmentTerms'];
 
 export const investmentPositionsQueryKey = ['api', 'investments', 'positions'] as const;
+export const cashInLieuLotsQueryKey = ['api', 'investments', 'cash-in-lieu-lots'] as const;
 export const investmentLotsQueryKey = ['api', 'investments', 'lots'] as const;
 export const investmentInstrumentsQueryKey = ['api', 'investments', 'instruments'] as const;
 export const investmentGainsQueryKey = ['api', 'investments', 'gains'] as const;
@@ -1373,6 +1374,90 @@ export async function replaceCapitalReturn(transactionID: number, input: Capital
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/transactions/{transaction_id}/replace-return-of-capital', {
       params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+
+export type CashInLieuRequest = components['schemas']['CashInLieuRequest'];
+export type CashInLieuPreviewResponse = components['schemas']['CashInLieuPreviewResponse'];
+export type CashInLieuReplacementRequest = components['schemas']['CashInLieuReplacementRequest'];
+
+export async function previewCashInLieu(input: CashInLieuRequest): Promise<CashInLieuPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/cash-in-lieu/preview', { body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordCashInLieu(input: CashInLieuRequest, csrfToken: string): Promise<InvestmentTradeResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/cash-in-lieu', { params: { header: { 'X-CSRF-Token': csrfToken } }, body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewCashInLieuReplacement(transactionID: number, input: CashInLieuReplacementRequest): Promise<CashInLieuPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu/preview', { params: { path: { transaction_id: transactionID } }, body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceCashInLieu(transactionID: number, input: CashInLieuReplacementRequest, csrfToken: string): Promise<InvestmentSaleReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu', { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewCashInLieuReversalReconciliation(transactionID: number, input: InvestmentBuyReversalRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/transactions/{transaction_id}/reverse-cash-in-lieu/reconciliation-impact', { params: { path: { transaction_id: transactionID } }, body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseCashInLieu(transactionID: number, input: InvestmentBuyReversalRequest, csrfToken: string): Promise<InvestmentBuyReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/transactions/{transaction_id}/reverse-cash-in-lieu', { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function getCashInLieuLots(splitTransactionID: number, disposalOn: string, currencyID: number, replacingTransactionID?: number): Promise<components['schemas']['CashInLieuLotsResponse']> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/investments/transactions/{transaction_id}/cash-in-lieu-lots', {
+      params: { path: { transaction_id: splitTransactionID }, query: { currency_id: currencyID, disposal_on: disposalOn, replacing_transaction_id: replacingTransactionID } }
     });
     if (data !== undefined) return data;
     throw toAPIClientError(response, error);

@@ -278,8 +278,7 @@ split's facts, effects, revisions and journals stay immutable; self-check
 includes its inverse journal and expects no effects from a split that is no
 longer effective. Deferred: zero-delta splits (no eligible holdings, refused
 with `INVESTMENT_SPLIT_NO_HOLDINGS` because a journal-free operation path does
-not exist; [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)), verified Trading 212 mapping ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)), and linked
-cash in lieu.
+not exist; [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)), verified Trading 212 mapping ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)). Linked cash in lieu is implemented as described below.
 
 ## Cash in lieu
 
@@ -302,8 +301,27 @@ dated entries of one transaction. `investment_cash_in_lieu_facts` links it to
 the split it settles, written inside the same transaction where a trigger
 rechecks that the split is still effective and matches the holding; a split
 correction is then refused with the cash in lieu named. Replay revises its
-disposed basis like any disposal decision. Correction of a cash in lieu
-itself and entry UI follow (T-150 #165).
+disposed basis like any disposal decision. **Completion (2026-10-07, T-150 #165)** exposes native reversal and replacement
+through transaction detail (`reverse-cash-in-lieu` with reconciliation-impact
+preview; `replace-cash-in-lieu` with full plan preview). Fraction, proceeds,
+disposal/payment dates, cash account/currency and election may change; the split
+and its holding/security stay fixed, and a supplied different split is refused.
+The successor retains the split link and original correction-root slot. Originals
+and reversals remain evidence; the split fence counts only effective cash in
+lieu, so reversal releases it. Both entry and replacement previews run the split
+fact guard as part of their rolled-back domain effects, without accepting provider
+source evidence. Their disposed basis, signed realized result and per-lot
+allocations come from the actual disposal writer, not browser arithmetic.
+
+The six-locale mobile form opens from split detail, pre-fills the holding and
+split date, previews before posting, and confirms checkpoint/gain review.
+Specific-lot choices use a composed dated read (`cash-in-lieu-lots`): historical
+quantities at the new entry slot, or the replacement's original root slot with
+the predecessor excluded. A currently closed position remains correctable.
+Every investment mutation invalidates this dated read along with the existing
+positions/lots/gains/correction reads. Unknown-basis admission remains #160;
+Trading 212 fractional-share mapping stays in review until #145 supplies verified
+evidence.
 
 For the 3-for-2 example above, suppose 0.5 share receives 8.00 EUR. The
 linked cash-in-lieu journal posts security `H −0.5`, `T +0.5` and EUR

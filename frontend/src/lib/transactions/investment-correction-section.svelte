@@ -6,6 +6,7 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import CapitalReturnForm from '#lib/investments/capital-return-form.svelte';
+  import CashInLieuForm from '#lib/investments/cash-in-lieu-form.svelte';
   import BuyForm from '#lib/investments/buy-form.svelte';
   import SellForm from '#lib/investments/sell-form.svelte';
   import SplitForm from '#lib/investments/split-form.svelte';
@@ -36,7 +37,7 @@
     previewTransferReversalReconciliation,
     previewWriteOffReversalReconciliation,
     reverseDividend,
-    reverseCapitalReturn,
+    reverseCapitalReturn, reverseCashInLieu, previewCashInLieuReversalReconciliation,
     previewCapitalReturnReversalReconciliation,
     reverseManualBuy,
     reverseReinvestedDividend,
@@ -69,18 +70,19 @@
     enabled: transactionID > 0
   }));
 
-  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | null>(null);
+  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'cash_in_lieu_entry' | null>(null);
   // Splits pre-fill from the chain's effective_split; only trades need the
   // separate source-facts read.
   const replacementQuery = createQuery(() => ({
     queryKey: [...investmentCorrectionChainQueryKey, 'source', transactionID],
     queryFn: () => getInvestmentTradeCorrectionContext(transactionID),
-    enabled: (replacementKind === 'buy' || replacementKind === 'sell' || replacementKind === 'write_off') && transactionID > 0
+    enabled: (replacementKind === 'buy' || replacementKind === 'sell' || replacementKind === 'write_off' || replacementKind === 'cash_in_lieu') && transactionID > 0
   }));
   const splitCorrectable = $derived(chainQuery.data?.can_correct_split === true &&
     chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_split);
 
   // Dividends and reinvestments pre-fill from the chain's effective terms (T-115).
+  const cashInLieuCorrectable = $derived(chainQuery.data?.can_correct_cash_in_lieu === true && chainQuery.data.effective_transaction_id === transactionID);
   const capitalReturnReversible = $derived(chainQuery.data?.can_reverse_return_of_capital === true &&
     chainQuery.data.effective_transaction_id === transactionID);
   const dividendCorrectable = $derived(chainQuery.data?.can_correct_dividend === true &&
@@ -104,7 +106,7 @@
   );
 
   let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
-  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return'>('sale');
+  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu'>('sale');
   let reason = $state('');
   let pending = $state(false);
   let actionError = $state<unknown>(undefined);
@@ -166,7 +168,9 @@
                 ? await previewTransferReversalReconciliation(transactionID, body)
                 : reversalKind === 'capital_return'
                   ? await previewCapitalReturnReversalReconciliation(transactionID, body)
-                  : await previewSaleReversalReconciliation(transactionID, body);
+                  : reversalKind === 'cash_in_lieu'
+                    ? await previewCashInLieuReversalReconciliation(transactionID, body)
+                    : await previewSaleReversalReconciliation(transactionID, body);
     if (!impactNeedsReview(preview)) return false;
     impacts = preview.affected_checkpoints;
     gainImpact = hasGainChanges(preview.gain_impact) ? preview.gain_impact : null;
@@ -197,6 +201,8 @@
       await reverseTransfer(transactionID, body, csrfToken);
     } else if (reversalKind === 'capital_return') {
       await reverseCapitalReturn(transactionID, body, csrfToken);
+    } else if (reversalKind === 'cash_in_lieu') {
+      await reverseCashInLieu(transactionID, body, csrfToken);
     } else {
       await reverseManualSale(transactionID, body, csrfToken);
     }
@@ -316,6 +322,16 @@
           onclick={() => { replacementKind = 'split'; }}>
           {m.transactions_investment_replace_split_action()}
         </button>
+        <button type="button" disabled={!csrfToken} onclick={() => (replacementKind = 'cash_in_lieu_entry')}
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-60">{m.investments_cash_in_lieu_entry_action()}</button>
+      </div>
+    {/if}
+    {#if cashInLieuCorrectable}
+      <div class="flex flex-wrap gap-2">
+        <button type="button" disabled={!csrfToken || pending} onclick={() => { reversalKind = 'cash_in_lieu'; reason = ''; actionError = undefined; modal = 'reason'; }}
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-60">{m.investments_cash_in_lieu_reverse_action()}</button>
+        <button type="button" disabled={!csrfToken} onclick={() => (replacementKind = 'cash_in_lieu')}
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-60">{m.investments_cash_in_lieu_correct()}</button>
       </div>
     {/if}
     {#if capitalReturnReversible}
@@ -432,7 +448,23 @@
   {/if}
 </section>
 
-{#if replacementKind === 'capital_return' && csrfToken && chainQuery.data?.effective_return_of_capital}
+{#if (replacementKind === 'cash_in_lieu' || replacementKind === 'cash_in_lieu_entry') && csrfToken}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm" role="presentation">
+    <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
+      role="dialog" aria-modal="true" aria-label={replacementKind === 'cash_in_lieu' ? m.investments_cash_in_lieu_correct() : m.investments_cash_in_lieu_title()}>
+      {#if replacementKind === 'cash_in_lieu_entry' && chainQuery.data?.effective_split}
+        <CashInLieuForm {csrfToken} split={{ transactionID, holdingAccountID: chainQuery.data.effective_split.holding_account_id, commodityID: chainQuery.data.effective_split.commodity_id, effectiveOn: chainQuery.data.effective_split.effective_on }} onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+      {:else if replacementQuery.isPending}<p role="status" class="text-sm text-muted">{m.investments_loading()}</p>
+      {:else if replacementQuery.isError}<APIFormError error={replacementQuery.error} />
+      {:else if replacementQuery.data?.operation_kind === 'cash_in_lieu' && !replacementQuery.data.already_corrected}
+        <CashInLieuForm {csrfToken} correction={replacementQuery.data} onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+      {:else}<p class="text-sm text-muted">{m.transactions_investment_replace_unavailable()}</p>{/if}
+      {#if replacementQuery.isError || (replacementQuery.data?.already_corrected && replacementKind === 'cash_in_lieu')}
+        <button type="button" onclick={() => (replacementKind = null)} class="mt-3 rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm text-foreground">{m.investments_form_cancel()}</button>
+      {/if}
+    </div>
+  </div>
+{:else if replacementKind === 'capital_return' && csrfToken && chainQuery.data?.effective_return_of_capital}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm" role="presentation">
     <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
       role="dialog" aria-modal="true" aria-label={m.investments_capital_return_correct()}>
@@ -542,6 +574,7 @@
               : reversalKind === 'write_off' ? m.transactions_investment_reverse_write_off_title()
               : reversalKind === 'transfer' ? m.transactions_investment_reverse_transfer_title()
               : reversalKind === 'capital_return' ? m.transactions_investment_reverse_capital_return_title()
+              : reversalKind === 'cash_in_lieu' ? m.investments_cash_in_lieu_reverse_title()
               : m.transactions_investment_reverse_title()
             : impacts.length > 0 ? m.transactions_reconciliation_warning_title() : m.investments_gain_impact_title()}
         </h3>
@@ -555,6 +588,7 @@
                 : reversalKind === 'write_off' ? m.transactions_investment_reverse_write_off_copy()
                 : reversalKind === 'transfer' ? m.transactions_investment_reverse_transfer_copy()
                 : reversalKind === 'capital_return' ? m.transactions_investment_reverse_capital_return_copy()
+                : reversalKind === 'cash_in_lieu' ? m.investments_cash_in_lieu_reverse_copy()
                 : m.transactions_investment_reverse_copy()
               : m.transactions_reconciliation_warning_copy()}
           </p>

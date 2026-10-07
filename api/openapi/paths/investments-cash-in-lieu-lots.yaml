@@ -1,0 +1,60 @@
+get:
+  summary: Read lots available at a cash-in-lieu disposal slot
+  description: >-
+    Composed dated lot quantities for specific-lot entry. With replacing_transaction_id,
+    exclude that cash in lieu and retain its correction-root slot. This is a read-only
+    rolled-back replay, never an authorization for a later write.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+      description: Split transaction being settled.
+    - in: query
+      name: currency_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: query
+      name: disposal_on
+      required: true
+      schema: { type: string, format: date }
+    - in: query
+      name: replacing_transaction_id
+      schema: { type: integer, format: int64 }
+  responses:
+    "200":
+      description: Dated lots of the holding and cost currency
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CashInLieuLotsResponse"
+    "400":
+      description: Invalid dates or currency
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Replacement not found or does not belong to the split
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Split is unavailable or historical replay is impossible
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Exact value exceeds supported range
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

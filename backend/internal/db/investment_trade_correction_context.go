@@ -11,6 +11,7 @@ import (
 // preparing a full buy or sale replacement. A command always rechecks the
 // source under its write transaction; this read is never an authorization.
 type InvestmentTradeCorrectionContext struct {
+	SplitTransactionID   int64
 	OperationID          int64
 	TransactionID        int64
 	OperationKind        string
@@ -121,7 +122,7 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 		LEFT JOIN investment_lots f ON f.operation_id = o.id AND f.position_side = 'long'
 		LEFT JOIN investment_disposal_decisions d ON d.operation_id = o.id AND d.position_side = 'long'
 		JOIN commodities c ON c.id = COALESCE(f.commodity_id, d.commodity_id)
-		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind IN ('buy', 'sell', 'write_off')
+		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind IN ('buy', 'sell', 'write_off', 'cash_in_lieu')
 			AND (SELECT count(*) FROM investment_lots WHERE operation_id = o.id) <= 1
 			AND (SELECT count(*) FROM investment_disposal_decisions WHERE operation_id = o.id) <= 1
 	`, bookID, transactionID, bookID, bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
@@ -201,7 +202,7 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			return InvestmentTradeCorrectionContext{}, fmt.Errorf("close correction elected lots: %w", err)
 		}
 	}
-	if (record.OperationKind == "sell" || record.OperationKind == "write_off") && (!record.Imported || record.SourceIdentityID > 0) && !record.AlreadyCorrected {
+	if (record.OperationKind == "sell" || record.OperationKind == "write_off" || record.OperationKind == "cash_in_lieu") && (!record.Imported || record.SourceIdentityID > 0) && !record.AlreadyCorrected {
 		intents, err := investmentReplayIntentsQuery(ctx, tx, bookID,
 			record.HoldingAccountID, record.CommodityID, record.CostCommodityID, "long")
 		if err != nil {
@@ -217,7 +218,7 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 		if saleIndex >= 0 {
 			// The write rechecks the source and dependent replay atomically.
 			// Historical lots must not be inferred from today's projection.
-			record.CanReplaceSale = true
+			record.CanReplaceSale = record.OperationKind != "cash_in_lieu"
 			for _, choice := range intents[saleIndex].SpecificLots {
 				record.EffectiveElectedLots = append(record.EffectiveElectedLots, InvestmentTradeCorrectionLotChoice{
 					LotID: choice.LotID, QuantityValue: choice.QuantityValue.String(), QuantityScale: choice.QuantityScale,
@@ -242,6 +243,13 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 					})
 				}
 			}
+		}
+	}
+	if record.OperationKind == "cash_in_lieu" {
+		if err := tx.QueryRowContext(ctx, `SELECT v.transaction_id FROM investment_cash_in_lieu_facts f
+            JOIN investment_operation_journal_links l ON l.operation_id = f.split_operation_id AND l.role = 'primary'
+            JOIN transaction_versions v ON v.id = l.transaction_version_id WHERE f.operation_id = ? AND f.book_id = ?`, record.OperationID, bookID).Scan(&record.SplitTransactionID); err != nil {
+			return InvestmentTradeCorrectionContext{}, err
 		}
 	}
 	if err := tx.Commit(); err != nil {

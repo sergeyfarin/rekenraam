@@ -28,15 +28,18 @@ export function gainImpactRows(
   return changes.map((change) => {
     const before = currency(change.before.cost_commodity_id);
     const after = change.after ? currency(change.after.cost_commodity_id) : before;
+    const currencyChanged = !!change.after && change.before.cost_commodity_id !== change.after.cost_commodity_id;
+    const label = (amount: string | null, code: string): string | null =>
+      currencyChanged && amount !== null ? `${amount} ${code}` : amount;
     return {
       key: `${change.root_operation_id}:${change.decision_seq}`,
       kind: change.change_kind,
       date: change.after?.disposal_date ?? change.before.disposal_date,
-      before: formatGain(change.before, before.standardScale, locale),
-      after: change.after ? formatGain(change.after, after.standardScale, locale) : null,
-      basisBefore: formatBasis(change.before, before.standardScale, locale),
-      basisAfter: change.after ? formatBasis(change.after, after.standardScale, locale) : null,
-      currency: before.code
+      before: label(formatGain(change.before, before.standardScale, locale), before.code),
+      after: change.after ? label(formatGain(change.after, after.standardScale, locale), after.code) : null,
+      basisBefore: label(formatBasis(change.before, before.standardScale, locale), before.code),
+      basisAfter: change.after ? label(formatBasis(change.after, after.standardScale, locale), after.code) : null,
+      currency: currencyChanged ? '' : before.code
     };
   });
 }

@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/svelte-query';
 import { describe, expect, it } from 'vitest';
 import { forecastQueryKey } from '#lib/api/forecast.ts';
 import {
-  investmentCorrectionChainQueryKey, investmentGainsQueryKey, investmentInstrumentsQueryKey,
+  cashInLieuLotsQueryKey, investmentCorrectionChainQueryKey, investmentGainsQueryKey, investmentInstrumentsQueryKey,
   investmentLotsQueryKey, investmentPositionsQueryKey
 } from '#lib/api/investments.ts';
 import { accountRegisterQueryKey, transactionsQueryKey } from '#lib/api/transactions.ts';
@@ -18,7 +18,7 @@ describe('invalidateInvestmentReads', () => {
     await invalidateInvestmentReads(queryClient);
 
     expect(invalidated).toEqual(expect.arrayContaining([
-      investmentGainsQueryKey, investmentPositionsQueryKey, investmentLotsQueryKey,
+      cashInLieuLotsQueryKey, investmentGainsQueryKey, investmentPositionsQueryKey, investmentLotsQueryKey,
       investmentInstrumentsQueryKey, investmentCorrectionChainQueryKey,
       forecastQueryKey, transactionsQueryKey, accountRegisterQueryKey
     ]));

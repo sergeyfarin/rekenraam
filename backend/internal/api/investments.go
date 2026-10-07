@@ -319,6 +319,7 @@ type investmentCorrectionChainResponse struct {
 	CanReverseCapitalReturn bool                               `json:"can_reverse_return_of_capital"`
 	EffectiveDividend       *investmentCorrectionDividendTerms `json:"effective_dividend,omitempty"`
 	CanCorrectReinvested    bool                               `json:"can_correct_reinvested_dividend"`
+	CanCorrectCashInLieu    bool                               `json:"can_correct_cash_in_lieu"`
 	CanCorrectWriteOff      bool                               `json:"can_correct_write_off"`
 	CanReverseTransfer      bool                               `json:"can_reverse_transfer"`
 	CanReplaceTransfer      bool                               `json:"can_replace_transfer"`
@@ -352,6 +353,7 @@ type investmentTradeCorrectionAvailableLotResponse struct {
 }
 
 type investmentTradeCorrectionContextResponse struct {
+	SplitTransactionID   int64                                           `json:"split_transaction_id,omitempty"`
 	OperationID          int64                                           `json:"operation_id"`
 	TransactionID        int64                                           `json:"transaction_id"`
 	OperationKind        string                                          `json:"operation_kind"`
@@ -412,7 +414,7 @@ func toInvestmentTradeCorrectionContextResponse(record db.InvestmentTradeCorrect
 		})
 	}
 	return investmentTradeCorrectionContextResponse{
-		OperationID: record.OperationID, TransactionID: record.TransactionID,
+		OperationID: record.OperationID, TransactionID: record.TransactionID, SplitTransactionID: record.SplitTransactionID,
 		OperationKind: record.OperationKind, EventDate: record.EventDate,
 		HoldingAccountID: record.HoldingAccountID, CommodityID: record.CommodityID,
 		CommodityCode: record.CommodityCode, CostCommodityID: record.CostCommodityID,
@@ -1139,7 +1141,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanCorrectSplit: chain.CanCorrectSplit, EffectiveSplit: toInvestmentCorrectionSplitTerms(chain.EffectiveSplit),
 			CanCorrectDividend: chain.CanCorrectDividend, CanReverseCapitalReturn: chain.CanReverseCapitalReturn, CanReplaceCapitalReturn: chain.CanReplaceCapitalReturn, EffectiveCapitalReturn: toCapitalReturnTerms(chain.EffectiveCapitalReturn), EffectiveDividend: toInvestmentCorrectionDividendTerms(chain.EffectiveDividend),
 			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
-			CanCorrectWriteOff: chain.CanCorrectWriteOff,
+			CanCorrectWriteOff: chain.CanCorrectWriteOff, CanCorrectCashInLieu: chain.CanCorrectCashInLieu,
 			CanReverseTransfer: chain.CanReverseTransfer,
 			CanReplaceTransfer: chain.CanReplaceTransfer,
 			EffectiveTransfer:  toInvestmentCorrectionTransferTerms(chain.EffectiveTransfer),
@@ -1859,6 +1861,10 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED", err.Error())
 	case errors.Is(err, app.ErrGainImpactAcknowledgementStale):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE", err.Error())
+	case errors.Is(err, app.ErrInvestmentCashInLieuNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "cash in lieu operation not found")
+	case errors.Is(err, app.ErrInvestmentCashInLieuAlreadyCorrected), errors.Is(err, app.ErrInvestmentCashInLieuChanged):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", err.Error())
 	case errors.Is(err, app.ErrCashInLieuSplitNotFound):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE", err.Error())
 	case errors.Is(err, app.ErrCashInLieuNotFraction):

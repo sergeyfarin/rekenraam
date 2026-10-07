@@ -14080,6 +14080,454 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/transactions/{transaction_id}/cash-in-lieu-lots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read lots available at a cash-in-lieu disposal slot
+         * @description Composed dated lot quantities for specific-lot entry. With replacing_transaction_id, exclude that cash in lieu and retain its correction-root slot. This is a read-only rolled-back replay, never an authorization for a later write.
+         */
+        get: {
+            parameters: {
+                query: {
+                    currency_id: number;
+                    disposal_on: string;
+                    replacing_transaction_id?: number;
+                };
+                header?: never;
+                path: {
+                    /** @description Split transaction being settled. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Dated lots of the holding and cost currency */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CashInLieuLotsResponse"];
+                    };
+                };
+                /** @description Invalid dates or currency */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Replacement not found or does not belong to the split */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Split is unavailable or historical replay is impossible */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Exact value exceeds supported range */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-cash-in-lieu": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a posted long cash in lieu
+         * @description Posts a balanced inverse transaction, retires the source trade price and dependent prices, and replays the long position in one database transaction. The original cash in lieu remains posted audit history. Imported lineage requires a committed source identity that stays attached to the original fill. Reversal is terminal; an already corrected cash in lieu cannot be reversed again. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written (T-126).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    /** @description Posted cash in lieu transaction ID. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentSaleReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Cash in lieu reversed and dependent position replayed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentSaleReversalResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted long cash in lieu not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, unlinked import, changed, impossible replay, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-cash-in-lieu/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation impact of a cash in lieu reversal
+         * @description Pass reconciliation_override=true to the reversal command after reviewing the listed checkpoints. Runs the command's actual writer and dependent replay in a rolled-back transaction; gain_impact lists committed disposals whose operational basis, proceeds or gain it would change, with the token the command needs as gain_impact_acknowledgement (T-126).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Posted cash in lieu transaction ID. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentSaleReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted long cash in lieu not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Cash in lieu already corrected, unlinked import, or changed */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct a cash in lieu
+         * @description Runs the native disposal replacement, retaining the same split link and correction-root slot. Fraction, proceeds, dates and election may change. Original facts remain evidence. Split linkage, replay, checkpoint impact and gain acknowledgement are validated atomically. The preview rolls back and returns the corrected allocation, disposed basis and realized result.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CashInLieuReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Sale replaced and long position rebuilt */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentSaleReplacementResponse"];
+                    };
+                };
+                /** @description Invalid replacement or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted long sale not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Sale corrected, imported without source identity, changed, dependent operation impossible, or reconciliation override required; or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a cash-in-lieu replacement
+         * @description Runs the native disposal replacement, retaining the same split link and correction-root slot. Fraction, proceeds, dates and election may change. Original facts remain evidence. Split linkage, replay, checkpoint impact and gain acknowledgement are validated atomically. The preview rolls back and returns the corrected allocation, disposed basis and realized result.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CashInLieuReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Plan and impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CashInLieuPreviewResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Cash in lieu not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, unlinked import, changed, no eligible holdings, or later disposal impossible */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Exact value exceeds supported range */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/cash-in-lieu": {
         parameters: {
             query?: never;
@@ -22623,6 +23071,15 @@ export interface components {
             /** Format: int64 */
             corrected_transaction_id: number;
         };
+        CashInLieuReplacementRequest: {
+            reason: string;
+            replacement: components["schemas"]["CashInLieuRequest"];
+            reconciliation_override?: boolean;
+            gain_impact_acknowledgement?: string;
+        };
+        CashInLieuLotsResponse: {
+            lots: components["schemas"]["InvestmentTradeCorrectionAvailableLotResponse"][];
+        };
         CashInLieuRequest: {
             /**
              * Format: int64
@@ -22651,6 +23108,14 @@ export interface components {
             gain_impact_acknowledgement?: string;
         };
         CashInLieuPreviewResponse: {
+            /** @description Total exact basis of the fraction taken by the dated writer. */
+            disposed_basis_value: string;
+            disposed_basis_scale: number;
+            /** @description Signed proceeds minus disposed basis, computed on the server. */
+            realized_gain_value: string;
+            realized_gain_scale: number;
+            /** @enum {string} */
+            cost_basis_method: "fifo" | "lifo" | "average_cost" | "specific_lot";
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
             impact: components["schemas"]["ReconciliationImpactResponse"];
         };
@@ -23067,6 +23532,8 @@ export interface components {
             /** @description Whether the effective posted split can be reversed or replaced (T-129). Dependent replay may still refuse the command. */
             can_correct_split: boolean;
             effective_split?: components["schemas"]["InvestmentCorrectionSplitTerms"];
+            /** @description Effective cash in lieu may attempt native reversal or replacement; dependent replay remains guarded. */
+            can_correct_cash_in_lieu: boolean;
             /** @description Whether the effective posted write-off can be reversed or replaced (T-118). The trade correction context pre-fills the replacement; dependent replay may still refuse the command. */
             can_correct_write_off: boolean;
             /** @description Whether the effective posted internal or external-in transfer can attempt reversal (T-119). A destination disposal or onward transfer of the removed units may still refuse the command. */
@@ -23089,12 +23556,17 @@ export interface components {
         };
         /** @description Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility. */
         InvestmentTradeCorrectionContextResponse: {
+            /**
+             * Format: int64
+             * @description The fixed split link, present for cash-in-lieu correction context.
+             */
+            split_transaction_id?: number;
             /** Format: int64 */
             operation_id: number;
             /** Format: int64 */
             transaction_id: number;
             /** @enum {string} */
-            operation_kind: "buy" | "sell" | "write_off";
+            operation_kind: "buy" | "sell" | "write_off" | "cash_in_lieu";
             /** Format: date */
             event_date: string;
             /** Format: int64 */

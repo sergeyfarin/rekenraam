@@ -33,6 +33,15 @@ describe('gainImpactRows', () => {
       basisBefore: '100.00', basisAfter: '100.00', currency: 'EUR' });
   });
 
+  it('labels each amount with its own currency when a replacement changes cost currency', () => {
+    const before = state('5000');
+    const after = { ...state('8000'), cost_commodity_id: 6 };
+    const [row] = gainImpactRows([change('replaced', before, after)],
+      id => ({ code: id === 5 ? 'EUR' : 'USD', standardScale: 2 }), 'en-US');
+    expect([row.before, row.after, row.basisBefore, row.basisAfter, row.currency])
+      .toEqual(['50.00 EUR', '80.00 USD', '100.00 EUR', '100.00 USD', '']);
+  });
+
   it('drops replay scale padding without rounding a revision away', () => {
     const wide = (gain: string) => ({ ...state(gain), realized_gain_scale: 6 });
     const [row] = gainImpactRows([change('revised', wide('50000000'), wide('50004000'))], () => ({ code: 'EUR', standardScale: 2 }), 'en-US');

@@ -78,3 +78,83 @@ func (r *InvestmentRepository) CashInLieuSplitTransactionID(ctx context.Context,
 	}
 	return splitTransactionID, nil
 }
+
+// Cash-in-lieu previews include the immutable split fact and its transactional
+// guard. No source acceptance runs, and every temporary row is rolled back.
+func (r *InvestmentRepository) SimulateCashInLieu(ctx context.Context, journal CreateTransactionParams, disposal DisposeLotsParams, splitOperationID int64, paymentOn string) (SimulatedInvestmentWrite, []LotDisposalRecord, DisposalDecisionRecord, error) {
+	transaction, allocations, decision, err := r.writeTransactionAndDisposeLots(ctx, journal, disposal, nil, CashInLieuFactWriter(ctx, journal.BookID, splitOperationID, paymentOn), true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, nil, DisposalDecisionRecord{}, err
+	}
+	for index := range allocations {
+		allocations[index].EventID = 0
+	}
+	decision.ID, decision.TransactionID, decision.TransactionVersionID, decision.AuditEventID = 0, 0, 0, 0
+	decision.Allocations = allocations
+	return simulatedInvestmentWrite(transaction), allocations, decision, nil
+}
+
+func (r *InvestmentRepository) SimulateCashInLieuReplacement(ctx context.Context, expected SaleOperationRecord, inverse, replacement CreateTransactionParams, disposal DisposeLotsParams, splitOperationID int64, paymentOn string) (SimulatedInvestmentWrite, []LotDisposalRecord, DisposalDecisionRecord, error) {
+	reversed, corrected, allocations, decision, err := r.replaceSale(ctx, expected, inverse, replacement, disposal, nil, CashInLieuReplacementFactWriter(ctx, inverse.BookID, splitOperationID, paymentOn), true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, nil, DisposalDecisionRecord{}, err
+	}
+	for index := range allocations {
+		allocations[index].EventID = 0
+	}
+	decision.ID, decision.TransactionID, decision.TransactionVersionID, decision.AuditEventID = 0, 0, 0, 0
+	decision.Allocations = allocations
+	return simulatedInvestmentWrite(reversed, corrected), allocations, decision, nil
+}
+
+// CashInLieuAvailableLots returns dated pre-disposal quantities. A replacement
+// removes its predecessor and keeps its original same-day root slot.
+func (r *InvestmentRepository) CashInLieuAvailableLots(ctx context.Context, bookID int64, split SplitOperationRecord, currencyID int64, date string, replacingTransactionID int64) ([]InvestmentTradeCorrectionAvailableLot, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer rollbackTx(ctx, tx)
+	intents, err := investmentReplayIntentsQuery(ctx, tx, bookID, split.AccountID, split.CommodityID, currencyID, "long")
+	if err != nil {
+		return nil, err
+	}
+	orderID := int64(0)
+	var replacingID int64
+	if replacingTransactionID > 0 {
+		if err := tx.QueryRowContext(ctx, `SELECT f.operation_id FROM investment_cash_in_lieu_facts f
+ JOIN investment_operation_journal_links l ON l.operation_id = f.operation_id AND l.role = 'primary'
+ JOIN transaction_versions v ON v.id = l.transaction_version_id
+ JOIN effective_investment_operations o ON o.id = f.operation_id
+ WHERE f.book_id = ? AND v.transaction_id = ? AND f.split_operation_id = ?`, bookID, replacingTransactionID, split.OperationID).Scan(&replacingID); err != nil {
+			return nil, ErrNotFound
+		}
+		orders, err := investmentReplayOrderOperationIDsQuery(ctx, tx, bookID)
+		if err != nil {
+			return nil, err
+		}
+		orderID = orders[replacingID]
+	}
+	before := make([]InvestmentReplayIntent, 0, len(intents))
+	opened := make(map[int64]string)
+	for _, intent := range intents {
+		if intent.OperationID == replacingID || intent.EventDate > date || (orderID > 0 && intent.EventDate == date && intent.OrderOperationID >= orderID) {
+			continue
+		}
+		before = append(before, intent)
+		if intent.Kind == "opening" {
+			opened[intent.LotID] = intent.EventDate
+		}
+	}
+	projection, err := simulateInvestmentReplayTx(ctx, tx, bookID, split.AccountID, split.CommodityID, currencyID, before)
+	if err != nil {
+		return nil, err
+	}
+	lots := make([]InvestmentTradeCorrectionAvailableLot, 0, len(projection.Lots))
+	for _, lot := range projection.Lots {
+		if lot.RemainingQuantityValue.Sign() > 0 && opened[lot.LotID] != "" {
+			lots = append(lots, InvestmentTradeCorrectionAvailableLot{LotID: lot.LotID, OpenedOn: opened[lot.LotID], QuantityValue: lot.RemainingQuantityValue.String(), QuantityScale: lot.RemainingQuantityScale})
+		}
+	}
+	return lots, nil
+}

@@ -1,0 +1,56 @@
+post:
+  summary: Preview a cash-in-lieu replacement
+  description: >-
+    Runs the native disposal replacement, retaining the same split link and
+    correction-root slot. Fraction, proceeds, dates and election may change.
+    Original facts remain evidence. Split linkage, replay, checkpoint impact
+    and gain acknowledgement are validated atomically. The preview rolls back
+    and returns the corrected allocation, disposed basis and realized result.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CashInLieuReplacementRequest"
+  responses:
+    "200":
+      description: Plan and impact computed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CashInLieuPreviewResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Cash in lieu not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected, unlinked import, changed, no eligible holdings, or later disposal impossible
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Exact value exceeds supported range
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
