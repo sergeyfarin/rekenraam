@@ -233,3 +233,29 @@ failures in the manual known-basis commands.
 
 This report records findings and suggestions; it does not change application
 behavior or adopt a new roadmap order.
+
+
+## Resolution follow-up (2026-10-07)
+
+The three findings above are tracked together in
+[T-148 #163](https://github.com/sergeyfarin/rekenraam/issues/163), which was
+reopened to complete the return-of-capital family. Commit `6c232a44` fixes all
+three and completes the missing fixed-quantity entitlement and native correction
+acceptance. The original review snapshot and reproductions remain unchanged.
+
+| Finding | Resolution | Named regression evidence |
+|---|---|---|
+| 1. Input-spelling-dependent allocation (P1) | Allocate at the position's cost-currency precision with int64 backoff, retaining normalized receipt precision and a deterministic remainder. | `TestCapitalReturnScaleIndependence`, `TestCapitalReturnEntitlementAllocationScaleIncludesUnentitledPositionBasis`, `TestCapitalReturnLargeReceiptRetainsExactNormalizedCoefficient` |
+| 2. Reverse-then-record changes the original same-day slot (P2) | Native replacement atomically posts the inverse and corrected receipt and replays the basis action at the correction root's slot, with checkpoint and gain guards. | `TestCapitalReturnReplacementKeepsSameDaySlot`, `TestCapitalReturnReplacementLateFailureRollsBackJournalFactsAndReplay`, `TestCapitalReturnEntitlementCorrectionPreservesUnchangedCashCheckpoint`; mobile closed-position correction in `investments-capital-return.spec.ts` |
+| 3. Historical self-check skips original and superseded effects (P2) | Audit each original and each revision set independently, including missing sets; effective selection remains separate for projection checks. | `TestCapitalReturnOriginalDamageAfterRevision`, `TestCapitalReturnSelfCheckAuditsSupersededAndMissingRevisionEffects` |
+
+The completed slice passed the full backend formatting/vet/race gate, frontend
+checks with 478 unit tests and no type warnings/errors, and the full 90-case
+browser acceptance suite. Both return-of-capital mobile journeys passed again
+after the final position-wide precision fix. A further feature-scoped acceptance
+run was performed before delivery and issue closure.
+
+The baseline change is explicitly declared `BREAKING DEV DATABASE` in the
+commit, ADR 0013 and developer workflow. Unknown-basis handling (#160),
+cash-in-lieu completion (#165), and race-gate headroom work (#164) remain open;
+this resolution does not claim that R16 or the wider project is complete.
