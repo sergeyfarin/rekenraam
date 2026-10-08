@@ -8,9 +8,9 @@ Nullable **remaining** basis alone is insufficient to admit an unknown transfer.
 Immutable openings, lot events, disposal decisions, allocations and their replay
 revisions now carry explicit knowledge and NULL pairs, with faithful exports,
 self-check and gain-impact reads. Sales, average pools and replay propagate
-unknown basis into unresolved gains (boundary 2). Unknown inbound transfers
-and splits are admitted (boundary 3a); outbound and internal transfers of
-unknown basis stay refused until boundary 3b. Known zero remains known.
+unknown basis into unresolved gains (boundary 2). Unknown inbound, outbound
+and internal transfers and splits are admitted (boundary 3). Known zero
+remains known.
 
 ## Evidence prerequisite delivered
 
@@ -101,14 +101,33 @@ Named cases:
 `TestBackdatedUnknownTransferInRefusesLaterWriteOffDependency`,
 `TestSplitConservesUnknownBasisKnowledge`,
 `TestReplacingUnknownTransferInWithKnownBasisResolvesDependentSale`,
-`TestInternalTransferOfUnknownBasisStaysRefused`,
 `TestExternalTransferInAPIRequiresExplicitUnknownBasis`, and the browser case
 `investments-unknown-basis.spec.ts` (390 px).
 
-Boundary 3b remains: outbound and internal transfers of unknown basis
-(security legs only, no bridge while any link is unknown), pooled lineage, and
-transfer-link revisions with paired knowledge that may not change knowledge
-until boundary 4. Boundaries 4–5 remain open.
+Boundary 3b is implemented: outbound and internal transfers of unknown
+basis. Transfer depletions admit unknown basis. A link records its depletion's
+knowledge, and an internal destination lot opens with it. An average-cost pool
+holding unknown basis moves out unknown in either lineage. An outbound with
+any unknown link posts security legs only, with no partial bridge; the
+complete bridge waits for boundary 4. Transfer-link revisions and their
+pooled depletions carry paired NULL knowledge, and a database guard refuses a
+revision that changes its link's knowledge. Replay names a transfer whose
+knowledge history would change, in either direction. The effective-link view
+and replay intents read revision knowledge and amounts as one tuple, never
+filling a NULL from the original link. Self-check matches link, event and
+destination knowledge NULL-safely and requires no bridge on an unknown
+outbound. Pooled sets must agree on knowledge, and exports append
+`basis_knowledge` to link revisions and their depletions. Outbound and internal
+forms list unknown lots and preview "unknown" basis with no bridge, in six
+locales. Named cases:
+`TestInternalTransferCarriesUnknownBasisToDestination`,
+`TestPooledTransferOfUnknownPoolCarriesUnknownInEitherLineage`,
+`TestOutboundTransferOfUnknownBasisPostsNoBridge`,
+`TestReplayRefusesToChangeAKnownOutboundToUnknown`,
+`TestReversingUnknownInternalTransferRestoresUnknownSource`,
+`TestUnknownTransferLinkRevisesLineageWithoutChangingKnowledge`, and the
+browser case `investments-unknown-basis.spec.ts` (outbound preview, 390 px).
+Boundary 3 is complete; boundaries 4–5 remain open.
 
 1. **Immutable knowledge.** Add explicit knowledge with paired nullable basis
    fields to opening facts, lot events, disposal decisions and allocations,

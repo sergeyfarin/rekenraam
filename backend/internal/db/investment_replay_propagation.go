@@ -111,7 +111,8 @@ func recordTransferRevisionsTx(ctx context.Context, tx *sql.Tx, bookID, causedBy
 	deltas := make(map[bridgeKey]*exact.ScaledInt)
 	var order []bridgeKey
 	for _, revision := range revisions {
-		if revision.ExternalOut {
+		if revision.ExternalOut && normalizedBasisKnowledge(revision.BasisKnowledge) == InvestmentBasisKnown {
+			// An unknown outbound has no bridge to adjust; only its lineage moves.
 			var prior exact.Coefficient
 			var priorScale int
 			var costID int64
@@ -220,7 +221,12 @@ func runInvestmentReplayClosureTx(ctx context.Context, tx *sql.Tx, bookID, cause
 		intent, projection := item.intent, projections[item.key]
 		if intent.Kind == "opening" {
 			if revision, revised := carried[intent.LotID]; revised {
+				// The revised link's knowledge and amount open the lot as one tuple.
+				intent.BasisKnowledge = normalizedBasisKnowledge(revision.BasisKnowledge)
 				intent.AmountValue, intent.AmountScale = exact.New(revision.CostBasisValue), revision.CostBasisScale
+				if intent.BasisKnowledge == InvestmentBasisUnknown {
+					intent.AmountValue, intent.AmountScale = exact.New(0), 0
+				}
 			}
 			opened[intent.LotID] = true
 		}
@@ -302,11 +308,12 @@ func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, cause
 	result, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_link_revisions (
 		book_id, operation_id, link_seq, revision_seq, caused_by_operation_id, supersedes_revision_id,
 		source_lot_id, carried_basis_value, carried_basis_scale, original_date_knowledge, original_acquired_on,
-		created_at, created_audit_event_id
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		created_at, created_audit_event_id, basis_knowledge
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		bookID, revision.OperationID, revision.LinkSeq, priorSeq+1, causedByOperationID, priorID,
-		nullablePositiveInt64(revision.SourceLotID), exact.New(revision.CostBasisValue), revision.CostBasisScale,
-		originalKnowledge, originalDate, createdAt, auditEventID)
+		nullablePositiveInt64(revision.SourceLotID), nullableBasisValue(revision.CostBasisValue, revision.BasisKnowledge),
+		nullableBasisScale(revision.CostBasisScale, revision.BasisKnowledge),
+		originalKnowledge, originalDate, createdAt, auditEventID, normalizedBasisKnowledge(revision.BasisKnowledge))
 	if err != nil {
 		return investmentReplayPositionKey{}, 0, fmt.Errorf("append transfer link revision: %w", err)
 	}
@@ -317,11 +324,20 @@ func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, cause
 	for index, depletion := range revision.Depletions {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_link_revision_depletions (
 			revision_id, depletion_seq, book_id, source_lot_id, quantity_value, quantity_scale,
-			cost_basis_value, cost_basis_scale
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, revisionID, index+1, bookID, depletion.LotID,
-			depletion.QuantityValue, depletion.QuantityScale, depletion.CostBasisValue, depletion.CostBasisScale); err != nil {
+			cost_basis_value, cost_basis_scale, basis_knowledge
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, revisionID, index+1, bookID, depletion.LotID,
+			depletion.QuantityValue, depletion.QuantityScale, transferRevisionAmount(depletion.CostBasisValue, depletion.BasisKnowledge),
+			nullableBasisScale(depletion.CostBasisScale, depletion.BasisKnowledge), normalizedBasisKnowledge(depletion.BasisKnowledge)); err != nil {
 			return investmentReplayPositionKey{}, 0, fmt.Errorf("append transfer revision depletion: %w", err)
 		}
 	}
 	return destination, destinationLotID, nil
+}
+
+// transferRevisionAmount is a revision depletion's amount, NULL when unknown.
+func transferRevisionAmount(value exact.Coefficient, knowledge string) any {
+	if knowledge == InvestmentBasisUnknown {
+		return nil
+	}
+	return value
 }

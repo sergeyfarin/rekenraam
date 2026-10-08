@@ -1641,7 +1641,7 @@ WHEN NOT EXISTS (
       -- A pooled-lot transfer has exactly one link, from the pool: its source
       -- depletions are the operation's transfer_out lot effects.
       OR (f.transfer_kind = 'internal' AND f.destination_lineage = 'pooled_lot' AND NEW.link_seq = 1
-        AND NEW.source_lot_id IS NULL AND NEW.destination_lot_id IS NOT NULL AND NEW.basis_knowledge = 'known'))
+        AND NEW.source_lot_id IS NULL AND NEW.destination_lot_id IS NOT NULL))
 )
 BEGIN SELECT RAISE(ABORT, 'investment transfer lot link is outside its transfer'); END;
 -- +goose StatementEnd
@@ -1687,10 +1687,16 @@ CREATE TABLE IF NOT EXISTS investment_transfer_link_revisions (
   caused_by_operation_id INTEGER NOT NULL REFERENCES investment_operations(id) ON DELETE RESTRICT,
   supersedes_revision_id INTEGER REFERENCES investment_transfer_link_revisions(id) ON DELETE RESTRICT,
   source_lot_id INTEGER REFERENCES investment_lots(id) ON DELETE RESTRICT,
-  carried_basis_value TEXT NOT NULL CHECK (length(carried_basis_value) BETWEEN 1 AND 38
+  carried_basis_value TEXT CHECK (length(carried_basis_value) BETWEEN 1 AND 38
     AND carried_basis_value NOT GLOB '*[^0-9]*'
     AND (carried_basis_value = '0' OR substr(carried_basis_value, 1, 1) BETWEEN '1' AND '9')),
-  carried_basis_scale INTEGER NOT NULL CHECK (carried_basis_scale BETWEEN 0 AND 12),
+  carried_basis_scale INTEGER CHECK (carried_basis_scale BETWEEN 0 AND 12),
+  -- A revision restates the link's knowledge with its amounts as one tuple.
+  -- It may not change the link's knowledge (T-145): unknown-to-known needs a
+  -- sourced resolution, and known-to-unknown is refused.
+  basis_knowledge TEXT NOT NULL DEFAULT 'known' CHECK (basis_knowledge IN ('known', 'unknown'))
+    CHECK ((basis_knowledge = 'known' AND carried_basis_value IS NOT NULL AND carried_basis_scale IS NOT NULL)
+      OR (basis_knowledge = 'unknown' AND carried_basis_value IS NULL AND carried_basis_scale IS NULL)),
   -- pooled_lot only: the revised latest original acquisition date, or unknown.
   original_date_knowledge TEXT CHECK (original_date_knowledge IS NULL OR original_date_knowledge IN ('known', 'unknown')),
   original_acquired_on TEXT CHECK (original_acquired_on IS NULL OR original_acquired_on GLOB '????-??-??'),
@@ -1712,7 +1718,8 @@ WHEN NOT EXISTS (
   JOIN investment_operations o ON o.id = NEW.caused_by_operation_id
   JOIN audit_events a ON a.id = NEW.created_audit_event_id
   WHERE x.operation_id = NEW.operation_id AND x.link_seq = NEW.link_seq
-    AND f.book_id = NEW.book_id AND f.transfer_kind IN ('internal', 'external_out') AND x.basis_knowledge = 'known'
+    AND f.book_id = NEW.book_id AND f.transfer_kind IN ('internal', 'external_out')
+    AND x.basis_knowledge = NEW.basis_knowledge
     -- A source-lot link (internal source_lots, or outbound, T-143) may move
     -- to the corrected successor of its source acquisition, same date.
     AND (((f.destination_lineage = 'source_lots' OR f.transfer_kind = 'external_out') AND EXISTS (
@@ -1745,10 +1752,13 @@ CREATE TABLE IF NOT EXISTS investment_transfer_link_revision_depletions (
   quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38
     AND quantity_value NOT GLOB '*[^0-9]*' AND substr(quantity_value, 1, 1) BETWEEN '1' AND '9'),
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
-  cost_basis_value TEXT NOT NULL CHECK (length(cost_basis_value) BETWEEN 1 AND 38
+  cost_basis_value TEXT CHECK (length(cost_basis_value) BETWEEN 1 AND 38
     AND cost_basis_value NOT GLOB '*[^0-9]*'
     AND (cost_basis_value = '0' OR substr(cost_basis_value, 1, 1) BETWEEN '1' AND '9')),
-  cost_basis_scale INTEGER NOT NULL CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  cost_basis_scale INTEGER CHECK (cost_basis_scale BETWEEN 0 AND 12),
+  basis_knowledge TEXT NOT NULL DEFAULT 'known' CHECK (basis_knowledge IN ('known', 'unknown')),
+  CHECK ((basis_knowledge = 'known' AND cost_basis_value IS NOT NULL AND cost_basis_scale IS NOT NULL)
+    OR (basis_knowledge = 'unknown' AND cost_basis_value IS NULL AND cost_basis_scale IS NULL)),
   PRIMARY KEY (revision_id, depletion_seq),
   UNIQUE (revision_id, source_lot_id)
 );
@@ -1765,8 +1775,9 @@ WHEN NOT EXISTS (
     AND source.book_id = NEW.book_id AND source.account_id = f.source_account_id
     AND source.commodity_id = f.commodity_id AND source.cost_commodity_id = x.cost_commodity_id
     AND source.position_side = 'long' AND source.opened_on <= f.effective_on
+    AND (NEW.basis_knowledge = 'known' OR r.basis_knowledge = 'unknown')
 )
-BEGIN SELECT RAISE(ABORT, 'investment transfer revision depletion is outside its pooled transfer'); END;
+BEGIN SELECT RAISE(ABORT, 'investment transfer revision depletion is outside its pooled transfer or knowledge'); END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
@@ -1914,10 +1925,11 @@ WHERE NOT EXISTS (SELECT 1 FROM investment_transfer_link_revisions later
 -- date go through this view (T-132, T-135).
 CREATE VIEW effective_investment_transfer_links AS
 SELECT x.operation_id, x.link_seq, x.destination_lot_id, x.quantity_value, x.quantity_scale,
-  x.basis_knowledge, x.cost_commodity_id, x.source_lot_id AS committed_source_lot_id,
+  CASE WHEN revision.id IS NULL THEN x.basis_knowledge ELSE revision.basis_knowledge END AS basis_knowledge,
+  x.cost_commodity_id, x.source_lot_id AS committed_source_lot_id,
   CASE WHEN revision.id IS NULL THEN x.source_lot_id ELSE revision.source_lot_id END AS source_lot_id,
-  COALESCE(revision.carried_basis_value, x.carried_basis_value) AS carried_basis_value,
-  COALESCE(revision.carried_basis_scale, x.carried_basis_scale) AS carried_basis_scale,
+  CASE WHEN revision.id IS NULL THEN x.carried_basis_value ELSE revision.carried_basis_value END AS carried_basis_value,
+  CASE WHEN revision.id IS NULL THEN x.carried_basis_scale ELSE revision.carried_basis_scale END AS carried_basis_scale,
   COALESCE(revision.original_date_knowledge, x.original_date_knowledge) AS original_date_knowledge,
   CASE WHEN revision.original_date_knowledge IS NULL THEN x.original_acquired_on
     ELSE revision.original_acquired_on END AS original_acquired_on,

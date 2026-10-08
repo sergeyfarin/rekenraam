@@ -64,6 +64,7 @@ type InternalTransferLink struct {
 	QuantityScale         int
 	CarriedBasisValue     int64
 	CarriedBasisScale     int
+	BasisKnowledge        string // unknown leaves CarriedBasis unused
 	OriginalDateKnowledge string
 	OriginalAcquiredOn    string
 }
@@ -208,7 +209,9 @@ func (r *InvestmentRepository) createInternalTransfer(ctx context.Context, journ
 				CommodityID: transfer.CommodityID, CostCommodityID: transfer.CostCommodityID,
 				TransactionID: transaction.ID, EventDate: transfer.EffectiveOn,
 				EventKind: "transfer_out", MetadataJSON: transfer.SourceEvidenceJSON,
-				CreatedAt: journal.CreatedAt, ActorUserID: journal.ActorUserID}
+				CreatedAt: journal.CreatedAt, ActorUserID: journal.ActorUserID,
+				// Unknown basis moves as unknown: the destination inherits it.
+				AdmitUnknownBasis: true}
 			var moved []LotDisposalRecord
 			if policy.allocation == InternalTransferAverageCostPool {
 				params.QuantityValue, params.QuantityScale = transfer.PooledQuantityValue, transfer.PooledQuantityScale
@@ -306,8 +309,8 @@ func selectedLotsTransferOutTx(ctx context.Context, tx *sql.Tx, params DisposeLo
 		}
 		moved = append(moved, depletion)
 	}
-	if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID,
-		params.CommodityID, params.CostCommodityID); err != nil {
+	if err := requirePositionBasisRangeQueryTx(ctx, tx, params.BookID, params.AccountID,
+		params.CommodityID, params.CostCommodityID, params.AdmitUnknownBasis); err != nil {
 		return nil, err
 	}
 	return moved, nil
@@ -333,8 +336,8 @@ func pooledTransferOutTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 	if err != nil {
 		return nil, err
 	}
-	if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID,
-		params.CommodityID, params.CostCommodityID); err != nil {
+	if err := requirePositionBasisRangeQueryTx(ctx, tx, params.BookID, params.AccountID,
+		params.CommodityID, params.CostCommodityID, params.AdmitUnknownBasis); err != nil {
 		return nil, err
 	}
 	if err := updatePositionMethodFamilyTx(ctx, tx, params, params.CostBasisMethod, auditEventID); err != nil {
@@ -363,13 +366,19 @@ func openInternalTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer
 	if err := linkLotEffectTx(ctx, tx, operationID, depletion.EventID); err != nil {
 		return InternalTransferLink{}, err
 	}
+	// An unknown depletion carries no amount into the destination opening.
+	carriedValue, carriedScale := depletion.CostBasisValue, depletion.CostBasisScale
+	if normalizedBasisKnowledge(depletion.BasisKnowledge) == InvestmentBasisUnknown {
+		carriedValue, carriedScale = 0, 0
+	}
 	destination, err := createLotWithAuditTx(ctx, tx, CreateInvestmentLotParams{
 		BookID: transfer.BookID, AccountID: transfer.DestinationAccountID,
 		CommodityID: transfer.CommodityID, OpenedOn: transfer.EffectiveOn,
 		SourceTransactionID: transaction.ID, QuantityValue: depletion.QuantityValue,
-		QuantityScale: depletion.QuantityScale, CostBasisValue: depletion.CostBasisValue,
-		CostBasisScale: depletion.CostBasisScale, CostCommodityID: transfer.CostCommodityID,
-		MetadataJSON: `{"source":"internal_transfer"}`, EventKind: "transfer_in",
+		QuantityScale: depletion.QuantityScale, CostBasisValue: carriedValue,
+		CostBasisScale: carriedScale, CostCommodityID: transfer.CostCommodityID,
+		OpeningBasisKnowledge: normalizedBasisKnowledge(depletion.BasisKnowledge),
+		MetadataJSON:          `{"source":"internal_transfer"}`, EventKind: "transfer_in",
 		CreatedAt: journal.CreatedAt, CreatedByUserID: journal.ActorUserID,
 	}, auditEventID, replayAdmission)
 	if err != nil {
@@ -379,16 +388,18 @@ func openInternalTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer
 		(operation_id, link_seq, source_lot_id, destination_lot_id, quantity_value, quantity_scale,
 		 basis_knowledge, carried_basis_value, carried_basis_scale, cost_commodity_id,
 		 original_date_knowledge, original_acquired_on, source_evidence_json)
-		VALUES (?, ?, ?, ?, ?, ?, 'known', ?, ?, ?, ?, NULLIF(?, ''), ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)`,
 		operationID, linkSeq, depletion.LotID, destination.ID,
-		depletion.QuantityValue, depletion.QuantityScale, exact.New(depletion.CostBasisValue),
-		depletion.CostBasisScale, transfer.CostCommodityID, originalKnowledge, originalDate,
+		depletion.QuantityValue, depletion.QuantityScale, normalizedBasisKnowledge(depletion.BasisKnowledge),
+		nullableBasisValue(depletion.CostBasisValue, depletion.BasisKnowledge),
+		nullableBasisScale(depletion.CostBasisScale, depletion.BasisKnowledge), transfer.CostCommodityID, originalKnowledge, originalDate,
 		transfer.SourceEvidenceJSON); err != nil {
 		return InternalTransferLink{}, fmt.Errorf("link internal transfer lots: %w", err)
 	}
 	return InternalTransferLink{SourceLotID: depletion.LotID, DestinationLotID: destination.ID,
 		QuantityValue: depletion.QuantityValue, QuantityScale: depletion.QuantityScale,
 		CarriedBasisValue: depletion.CostBasisValue, CarriedBasisScale: depletion.CostBasisScale,
+		BasisKnowledge:        normalizedBasisKnowledge(depletion.BasisKnowledge),
 		OriginalDateKnowledge: originalKnowledge, OriginalAcquiredOn: originalDate}, nil
 }
 
@@ -418,7 +429,8 @@ func openPooledTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer C
 		SourceTransactionID: transaction.ID, QuantityValue: pooled.quantityValue,
 		QuantityScale: pooled.quantityScale, CostBasisValue: pooled.basisValue,
 		CostBasisScale: pooled.basisScale, CostCommodityID: transfer.CostCommodityID,
-		MetadataJSON: `{"source":"internal_transfer"}`, EventKind: "transfer_in",
+		OpeningBasisKnowledge: pooled.knowledge,
+		MetadataJSON:          `{"source":"internal_transfer"}`, EventKind: "transfer_in",
 		CreatedAt: journal.CreatedAt, CreatedByUserID: journal.ActorUserID,
 	}, auditEventID, replayAdmission)
 	if err != nil {
@@ -428,15 +440,15 @@ func openPooledTransferDestinationTx(ctx context.Context, tx *sql.Tx, transfer C
 		(operation_id, link_seq, source_lot_id, destination_lot_id, quantity_value, quantity_scale,
 		 basis_knowledge, carried_basis_value, carried_basis_scale, cost_commodity_id,
 		 original_date_knowledge, original_acquired_on, source_evidence_json)
-		VALUES (?, 1, NULL, ?, ?, ?, 'known', ?, ?, ?, ?, NULLIF(?, ''), ?)`,
-		operationID, destination.ID, pooled.quantityValue, pooled.quantityScale,
-		exact.New(pooled.basisValue), pooled.basisScale, transfer.CostCommodityID,
+		VALUES (?, 1, NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)`,
+		operationID, destination.ID, pooled.quantityValue, pooled.quantityScale, pooled.knowledge,
+		nullableBasisValue(pooled.basisValue, pooled.knowledge), nullableBasisScale(pooled.basisScale, pooled.knowledge), transfer.CostCommodityID,
 		pooled.originalKnowledge, pooled.originalDate, transfer.SourceEvidenceJSON); err != nil {
 		return InternalTransferLink{}, fmt.Errorf("link pooled internal transfer lot: %w", err)
 	}
 	return InternalTransferLink{DestinationLotID: destination.ID,
 		QuantityValue: pooled.quantityValue, QuantityScale: pooled.quantityScale,
-		CarriedBasisValue: pooled.basisValue, CarriedBasisScale: pooled.basisScale,
+		CarriedBasisValue: pooled.basisValue, CarriedBasisScale: pooled.basisScale, BasisKnowledge: pooled.knowledge,
 		OriginalDateKnowledge: pooled.originalKnowledge, OriginalAcquiredOn: pooled.originalDate}, nil
 }
 
@@ -446,6 +458,7 @@ type pooledTransferTotals struct {
 	quantityScale     int
 	basisValue        int64
 	basisScale        int
+	knowledge         string // unknown when any depletion is unknown
 	originalKnowledge string
 	originalDate      string
 }
@@ -455,10 +468,14 @@ type pooledTransferTotals struct {
 // date makes the latest unknown. Commit and replay share it.
 func pooledTransferTotalsTx(ctx context.Context, tx *sql.Tx, bookID int64, moved []LotDisposalRecord) (pooledTransferTotals, error) {
 	quantity, basis := exact.NewScaledInt(), exact.NewScaledInt()
-	totals := pooledTransferTotals{originalKnowledge: "known"}
+	totals := pooledTransferTotals{originalKnowledge: "known", knowledge: InvestmentBasisKnown}
 	for _, depletion := range moved {
 		quantity.AddCoefficient(depletion.QuantityValue, depletion.QuantityScale)
-		basis.AddInt64(depletion.CostBasisValue, depletion.CostBasisScale)
+		if normalizedBasisKnowledge(depletion.BasisKnowledge) == InvestmentBasisUnknown {
+			totals.knowledge = InvestmentBasisUnknown
+		} else {
+			basis.AddInt64(depletion.CostBasisValue, depletion.CostBasisScale)
+		}
 		source, err := investmentLotByIDTx(ctx, tx, bookID, depletion.LotID)
 		if err != nil {
 			return pooledTransferTotals{}, err
@@ -481,6 +498,9 @@ func pooledTransferTotalsTx(ctx context.Context, tx *sql.Tx, bookID int64, moved
 		return pooledTransferTotals{}, err
 	}
 	totals.quantityScale = quantity.Scale()
+	if totals.knowledge == InvestmentBasisUnknown {
+		return totals, nil // a partial sum is not the carried basis
+	}
 	if totals.basisValue, err = basis.Int64(); err != nil {
 		return pooledTransferTotals{}, ErrInvestmentBasisRange
 	}

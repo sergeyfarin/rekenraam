@@ -374,10 +374,10 @@ type DisposeLotsParams struct {
 	// EventKind is transfer_out only for an explicit in-kind movement. Empty
 	// preserves the ordinary disposal event used by trades and replay.
 	EventKind string
-	// AdmitUnknownBasis lets a sale consume lots whose remaining basis is
-	// unknown: quantity is still exact, while the consumed basis and the
-	// decision's gain stay unresolved (T-145). Other depletions — write-off,
-	// cash in lieu, transfers — refuse unknown basis until their own
+	// AdmitUnknownBasis lets a sale or an in-kind transfer consume lots whose
+	// remaining basis is unknown: quantity is still exact, while the consumed
+	// basis, a sale's gain and a transfer's carried basis stay unresolved
+	// (T-145). Write-off and cash in lieu refuse unknown basis until their own
 	// unresolved-result contracts exist.
 	AdmitUnknownBasis bool
 	DecisionSource    DisposalDecisionSource
@@ -1738,7 +1738,7 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 	if len(lots) == 0 {
 		return nil, ErrInsufficientLots
 	}
-	if unknownPool && (!params.AdmitUnknownBasis || eventKind != "disposal") {
+	if unknownPool && !params.AdmitUnknownBasis {
 		return nil, ErrUnknownInvestmentBasis
 	}
 
@@ -3123,7 +3123,7 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		return LotDisposalRecord{}, ErrNotFound
 	}
 	unknown := lot.BasisKnowledge == InvestmentBasisUnknown
-	if lot.BasisKnowledge != InvestmentBasisKnown && (!unknown || !params.AdmitUnknownBasis || eventKind != "disposal") {
+	if lot.BasisKnowledge != InvestmentBasisKnown && (!unknown || !params.AdmitUnknownBasis) {
 		return LotDisposalRecord{}, ErrUnknownInvestmentBasis
 	}
 	// Temporal eligibility (T-95). A disposal may only consume shares that were

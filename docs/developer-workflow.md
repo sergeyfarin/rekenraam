@@ -435,6 +435,14 @@ The candidate checksum changed; stop the app and reset the disposable
 development database using the reset procedure above. The known-basis frozen
 seed remains valid without changes to its data or column layout.
 
+**BREAKING DEV DATABASE, unknown transfer links (T-145, 2026-10-09):**
+`0001` gives transfer-link revisions and their pooled depletions
+`basis_knowledge` with paired nullable amounts. It refuses a revision that
+changes its link's knowledge, admits an unknown pooled-lot link, and makes the
+effective-link view read revision knowledge and amounts as one tuple. The
+checksum changes and bundle schema 9 appends the columns. Stop the app and
+reset the disposable database and its sidecars using the procedure above.
+
 **BREAKING DEV DATABASE, immutable disposal knowledge (T-145, 2026-10-07):**
 `0001` adds `basis_knowledge` with paired nullable basis amounts to disposal
 decisions, allocations, replay revisions and revision allocations, plus an

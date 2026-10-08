@@ -763,8 +763,12 @@ InternalTransferRequest:
 
 InternalTransferLink:
   type: object
-  required: [source_lot_id, destination_lot_id, quantity_value, quantity_scale, carried_basis_value, carried_basis_scale, original_date_knowledge, original_acquired_on]
+  required: [source_lot_id, destination_lot_id, quantity_value, quantity_scale, carried_basis_value, carried_basis_scale, basis_knowledge, original_date_knowledge, original_acquired_on]
   properties:
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: Unknown when the moved units carry unknown basis; the carried amount is then null.
     source_lot_id:
       type: [integer, "null"]
       format: int64
@@ -778,10 +782,10 @@ InternalTransferLink:
     quantity_scale:
       type: integer
     carried_basis_value:
-      type: string
-      description: Basis carried from the source lot, or the pool for a pooled lot; pool rate for an average-cost source, exact remainder on the final touched lot.
+      type: [string, "null"]
+      description: Basis carried from the source lot, or the pool for a pooled lot; pool rate for an average-cost source, exact remainder on the final touched lot. Null when unknown.
     carried_basis_scale:
-      type: integer
+      type: [integer, "null"]
     original_date_knowledge:
       type: string
       enum: [known, unknown]
@@ -886,8 +890,12 @@ ExternalTransferOutRequest:
 
 ExternalTransferOutLink:
   type: object
-  required: [source_lot_id, quantity_value, quantity_scale, carried_basis_value, carried_basis_scale, original_date_knowledge, original_acquired_on]
+  required: [source_lot_id, quantity_value, quantity_scale, carried_basis_value, carried_basis_scale, basis_knowledge, original_date_knowledge, original_acquired_on]
   properties:
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: Unknown when the moved units carry unknown basis; the carried amount is then null.
     source_lot_id:
       type: integer
       format: int64
@@ -896,10 +904,10 @@ ExternalTransferOutLink:
     quantity_scale:
       type: integer
     carried_basis_value:
-      type: string
-      description: Basis taken from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot.
+      type: [string, "null"]
+      description: Basis taken from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot. Null when unknown.
     carried_basis_scale:
-      type: integer
+      type: [integer, "null"]
     original_date_knowledge:
       type: string
       enum: [known, unknown]
@@ -909,7 +917,7 @@ ExternalTransferOutLink:
 
 ExternalTransferOutPlan:
   type: object
-  required: [basis_allocation, cost_basis_method, resolution_tier, links, basis_value, basis_scale]
+  required: [basis_allocation, cost_basis_method, resolution_tier, links, basis_value, basis_scale, basis_knowledge]
   properties:
     basis_allocation:
       type: string
@@ -925,10 +933,15 @@ ExternalTransferOutPlan:
       items:
         $ref: "../schemas/investments.yaml#/ExternalTransferOutLink"
     basis_value:
-      type: string
-      description: Exact total basis carried out of the book; the bridge journal's amount. Zero posts no bridge.
+      type: [string, "null"]
+      description: >-
+        Exact total basis carried out of the book; the bridge journal's amount. Zero posts no bridge.
+        Null when any link is unknown: no bridge posts until the basis is resolved.
     basis_scale:
-      type: integer
+      type: [integer, "null"]
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
 
 ExternalTransferOutPreviewResponse:
   type: object

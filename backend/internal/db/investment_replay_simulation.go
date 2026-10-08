@@ -45,6 +45,9 @@ type InvestmentReplayTransferRevision struct {
 	SourceLotID    int64
 	CostBasisValue int64
 	CostBasisScale int
+	// BasisKnowledge is the link's knowledge, which a revision never changes
+	// (T-145); unknown leaves CostBasis unused.
+	BasisKnowledge string
 	PooledLot      bool
 	// ExternalOut marks an outbound transfer's link: it has no destination to
 	// replay; its basis change posts a dated bridge adjustment (T-143).
@@ -252,7 +255,7 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
 			CommodityID: commodityID, CostCommodityID: costCommodityID,
 			TransactionID: intent.TransactionID, EventDate: intent.EventDate,
-			EventKind: "transfer_out", MetadataJSON: "{}",
+			EventKind: "transfer_out", MetadataJSON: "{}", AdmitUnknownBasis: true,
 			CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID}
 		allocationScale, err := positionBasisAllocationScaleTx(ctx, tx, params)
 		if err != nil {
@@ -273,19 +276,25 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 			return nil
 		}
 		// The quantity is fixed by the transfer; the basis it carries, and
-		// the successor lot of a corrected acquisition, follow history.
-		if moved.LotID != intent.RecordedLotID || exact.ScaledIntFromInt64(moved.CostBasisValue, moved.CostBasisScale).Cmp(
-			exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale)) != 0 {
+		// the successor lot of a corrected acquisition, follow history. Its
+		// knowledge does not: that changes only by sourced resolution.
+		knowledge, err := sameTransferBasisKnowledge(intent.BasisKnowledge, moved.BasisKnowledge)
+		if err != nil {
+			return replayTransferError(intent, err)
+		}
+		if moved.LotID != intent.RecordedLotID || knowledge == InvestmentBasisKnown &&
+			exact.ScaledIntFromInt64(moved.CostBasisValue, moved.CostBasisScale).Cmp(
+				exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale)) != 0 {
 			projection.TransferRevisions = append(projection.TransferRevisions, InvestmentReplayTransferRevision{
 				OperationID: intent.OperationID, LinkSeq: intent.LinkSeq, SourceLotID: moved.LotID,
 				CostBasisValue: moved.CostBasisValue, CostBasisScale: moved.CostBasisScale,
-				ExternalOut: intent.ExternalOut})
+				BasisKnowledge: knowledge, ExternalOut: intent.ExternalOut})
 		}
 	case "pooled_transfer_out":
 		params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
 			CommodityID: commodityID, CostCommodityID: costCommodityID,
 			TransactionID: intent.TransactionID, EventDate: intent.EventDate,
-			QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
+			QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale, AdmitUnknownBasis: true,
 			MetadataJSON: "{}", CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID}
 		moved, err := pooledTransferOutTx(ctx, tx, params, intent.AuditEventID)
 		if err == nil && intent.TransferIsSubject {
@@ -309,19 +318,24 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		}
 		for index, link := range intent.PooledLinks {
 			depletion := moved[index]
-			if depletion.LotID != link.RecordedLotID || exact.ScaledIntFromInt64(depletion.CostBasisValue, depletion.CostBasisScale).Cmp(
-				exact.ScaledIntFromCoefficient(link.CostBasisValue, link.CostBasisScale)) != 0 {
+			knowledge, err := sameTransferBasisKnowledge(link.BasisKnowledge, depletion.BasisKnowledge)
+			if err != nil {
+				return replayTransferError(intent, err)
+			}
+			if depletion.LotID != link.RecordedLotID || knowledge == InvestmentBasisKnown &&
+				exact.ScaledIntFromInt64(depletion.CostBasisValue, depletion.CostBasisScale).Cmp(
+					exact.ScaledIntFromCoefficient(link.CostBasisValue, link.CostBasisScale)) != 0 {
 				projection.TransferRevisions = append(projection.TransferRevisions, InvestmentReplayTransferRevision{
 					OperationID: intent.OperationID, LinkSeq: link.LinkSeq, SourceLotID: depletion.LotID,
 					CostBasisValue: depletion.CostBasisValue, CostBasisScale: depletion.CostBasisScale,
-					ExternalOut: intent.ExternalOut})
+					BasisKnowledge: knowledge, ExternalOut: intent.ExternalOut})
 			}
 		}
 	case "pooled_lot_transfer_out":
 		params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
 			CommodityID: commodityID, CostCommodityID: costCommodityID,
 			TransactionID: intent.TransactionID, EventDate: intent.EventDate,
-			QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
+			QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale, AdmitUnknownBasis: true,
 			MetadataJSON: "{}", CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID}
 		moved, err := pooledTransferOutTx(ctx, tx, params, intent.AuditEventID)
 		if err == nil && intent.TransferIsSubject {
@@ -335,6 +349,9 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		if err == nil && exact.ScaledIntFromCoefficient(totals.quantityValue, totals.quantityScale).Cmp(
 			exact.ScaledIntFromCoefficient(intent.QuantityValue, intent.QuantityScale)) != 0 {
 			err = errors.New("pooled transfer quantity changed")
+		}
+		if err == nil {
+			_, err = sameTransferBasisKnowledge(intent.BasisKnowledge, totals.knowledge)
 		}
 		if err != nil {
 			return replayTransferError(intent, err)
@@ -450,25 +467,28 @@ func replayTransferError(intent InvestmentReplayIntent, err error) error {
 // transfer's effective one and returns the revision to append when anything
 // differs: a source lot, a quantity, a basis or the original date.
 func pooledLotTransferRevision(intent InvestmentReplayIntent, moved []LotDisposalRecord, totals pooledTransferTotals) (InvestmentReplayTransferRevision, bool) {
+	known := totals.knowledge == InvestmentBasisKnown
 	revision := InvestmentReplayTransferRevision{OperationID: intent.OperationID, LinkSeq: intent.LinkSeq,
-		CostBasisValue: totals.basisValue, CostBasisScale: totals.basisScale, PooledLot: true,
+		CostBasisValue: totals.basisValue, CostBasisScale: totals.basisScale, BasisKnowledge: totals.knowledge, PooledLot: true,
 		OriginalDateKnowledge: totals.originalKnowledge, OriginalAcquiredOn: totals.originalDate}
 	changed := len(moved) != len(intent.PooledDepletions) ||
 		totals.originalKnowledge != intent.OriginalDateKnowledge || totals.originalDate != intent.OriginalAcquiredOn ||
-		exact.ScaledIntFromInt64(totals.basisValue, totals.basisScale).Cmp(
+		known && exact.ScaledIntFromInt64(totals.basisValue, totals.basisScale).Cmp(
 			exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale)) != 0
 	for index, depletion := range moved {
+		knowledge := normalizedBasisKnowledge(depletion.BasisKnowledge)
 		revision.Depletions = append(revision.Depletions, InvestmentReplayTransferLink{
 			LotID: depletion.LotID, QuantityValue: depletion.QuantityValue, QuantityScale: depletion.QuantityScale,
-			CostBasisValue: exact.New(depletion.CostBasisValue), CostBasisScale: depletion.CostBasisScale})
+			CostBasisValue: exact.New(depletion.CostBasisValue), CostBasisScale: depletion.CostBasisScale,
+			BasisKnowledge: knowledge})
 		if changed {
 			continue
 		}
 		effective := intent.PooledDepletions[index]
-		changed = depletion.LotID != effective.LotID ||
+		changed = depletion.LotID != effective.LotID || knowledge != normalizedBasisKnowledge(effective.BasisKnowledge) ||
 			exact.ScaledIntFromCoefficient(depletion.QuantityValue, depletion.QuantityScale).Cmp(
 				exact.ScaledIntFromCoefficient(effective.QuantityValue, effective.QuantityScale)) != 0 ||
-			exact.ScaledIntFromInt64(depletion.CostBasisValue, depletion.CostBasisScale).Cmp(
+			knowledge == InvestmentBasisKnown && exact.ScaledIntFromInt64(depletion.CostBasisValue, depletion.CostBasisScale).Cmp(
 				exact.ScaledIntFromCoefficient(effective.CostBasisValue, effective.CostBasisScale)) != 0
 	}
 	return revision, changed
@@ -490,4 +510,17 @@ func pooledTransferLineageReproduced(moved []LotDisposalRecord, links []Investme
 		}
 	}
 	return true
+}
+
+// ErrTransferBasisKnowledgeChanged refuses a history change that would turn a
+// transfer's recorded basis knowledge known or unknown. Unknown becomes known
+// only by sourced resolution; known never becomes unknown (T-145).
+var ErrTransferBasisKnowledgeChanged = errors.New("a transfer's basis would change between known and unknown")
+
+func sameTransferBasisKnowledge(recorded, replayed string) (string, error) {
+	recorded, replayed = normalizedBasisKnowledge(recorded), normalizedBasisKnowledge(replayed)
+	if recorded != replayed {
+		return "", ErrTransferBasisKnowledgeChanged
+	}
+	return recorded, nil
 }

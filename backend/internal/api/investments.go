@@ -220,8 +220,9 @@ type internalTransferLinkResponse struct {
 	DestinationLotID      *int64            `json:"destination_lot_id"`
 	QuantityValue         exact.Coefficient `json:"quantity_value"`
 	QuantityScale         int               `json:"quantity_scale"`
-	CarriedBasisValue     moneyCoefficient  `json:"carried_basis_value"`
-	CarriedBasisScale     int               `json:"carried_basis_scale"`
+	CarriedBasisValue     *moneyCoefficient `json:"carried_basis_value"`
+	CarriedBasisScale     *int              `json:"carried_basis_scale"`
+	BasisKnowledge        string            `json:"basis_knowledge"`
 	OriginalDateKnowledge string            `json:"original_date_knowledge"`
 	OriginalAcquiredOn    *string           `json:"original_acquired_on"`
 }
@@ -1032,8 +1033,9 @@ func toInternalTransferPlanResponse(plan app.InternalTransferPlan) internalTrans
 	for _, link := range plan.Links {
 		response := internalTransferLinkResponse{
 			QuantityValue: link.QuantityValue, QuantityScale: link.QuantityScale,
-			CarriedBasisValue: moneyCoefficient(link.CarriedBasisValue), CarriedBasisScale: link.CarriedBasisScale,
-			OriginalDateKnowledge: link.OriginalDateKnowledge}
+			CarriedBasisValue: projectedBasisValue(link.CarriedBasisValue, link.BasisKnowledge),
+			CarriedBasisScale: projectedBasisScale(link.CarriedBasisScale, link.BasisKnowledge),
+			BasisKnowledge:    responseKnowledge(link.BasisKnowledge), OriginalDateKnowledge: link.OriginalDateKnowledge}
 		if link.DestinationLotID > 0 {
 			id := link.DestinationLotID
 			response.DestinationLotID = &id

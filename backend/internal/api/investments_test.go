@@ -252,8 +252,8 @@ func TestPooledInternalTransferAPIPreviewMatchesCommit(t *testing.T) {
 	// The pool after an average-cost sale is 150.00 for one share.
 	assert.Equal(t, preview.Plan.Links[0].CarriedBasisValue, committed.Plan.Links[0].CarriedBasisValue)
 	assert.Equal(t, preview.Plan.Links[0].CarriedBasisScale, committed.Plan.Links[0].CarriedBasisScale)
-	assert.Zero(t, exact.ScaledIntFromInt64(int64(committed.Plan.Links[0].CarriedBasisValue),
-		committed.Plan.Links[0].CarriedBasisScale).Cmp(exact.ScaledIntFromInt64(15000, 2)))
+	assert.Zero(t, exact.ScaledIntFromInt64(int64(*committed.Plan.Links[0].CarriedBasisValue),
+		*committed.Plan.Links[0].CarriedBasisScale).Cmp(exact.ScaledIntFromInt64(15000, 2)))
 	// A pooled lot needs a pooled quantity.
 	request.DestinationLineage = "pooled_lot"
 	// The destination has no average-cost lock or default, so its moved lot

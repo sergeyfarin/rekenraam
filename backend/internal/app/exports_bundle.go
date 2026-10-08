@@ -211,10 +211,10 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-lot-links", []string{"operation_id", "link_seq", "source_lot_id", "destination_lot_id", "quantity_value", "quantity_scale", "basis_knowledge", "carried_basis_value", "carried_basis_scale", "cost_commodity_id", "original_date_knowledge", "original_acquired_on", "source_evidence_json"})
 		}},
 		{"investment-transfer-link-revisions.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-link-revisions", []string{"revision_id", "operation_id", "link_seq", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "source_lot_id", "carried_basis_value", "carried_basis_scale", "created_at", "audit_event_id", "original_date_knowledge", "original_acquired_on"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-link-revisions", []string{"revision_id", "operation_id", "link_seq", "revision_seq", "caused_by_operation_id", "supersedes_revision_id", "source_lot_id", "carried_basis_value", "carried_basis_scale", "created_at", "audit_event_id", "original_date_knowledge", "original_acquired_on", "basis_knowledge"})
 		}},
 		{"investment-transfer-link-revision-depletions.csv", func(w io.Writer) (int64, error) {
-			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-link-revision-depletions", []string{"revision_id", "depletion_seq", "source_lot_id", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale"})
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-link-revision-depletions", []string{"revision_id", "depletion_seq", "source_lot_id", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "basis_knowledge"})
 		}},
 		{"investment-split-facts.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "split-facts", []string{"operation_id", "account_id", "commodity_id", "effective_on", "ratio_numerator", "ratio_denominator", "source_evidence_json", "audit_event_id"})
@@ -997,7 +997,9 @@ opening facts, and basis_knowledge to lot events. Original unknown amounts are
 blank independently of the remaining projection's knowledge. Disposal
 decisions, allocations and their replay revisions append basis_knowledge; an
 unknown allocation leaves its basis blank and makes its decision or revision
-total blank, while quantity and proceeds stay populated.
+total blank, while quantity and proceeds stay populated. Transfer-link
+revisions and their pooled depletions append basis_knowledge; a revision never
+changes its link's knowledge, and unknown amounts are blank.
 The investment-operation, lot-fact, and lot-event files preserve the source
 and projection evidence separately. A net-only trade explicitly marks gross
 unknown. A trade-implied price derived from net cash remains usable for

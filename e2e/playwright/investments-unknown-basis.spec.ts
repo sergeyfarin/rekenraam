@@ -60,3 +60,45 @@ test('an unknown-basis transfer in leaves a later sale gain unresolved', async (
   await expect(realized.filter({ hasText: 'Unresolved — cost basis unknown' })).toHaveCount(1);
   await expect(page.getByText(/Unresolved: 1 with unknown cost basis/)).toBeVisible();
 });
+
+test('an unknown-basis holding transfers out without a cost basis entry', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const currencies = await apiJSON<{ currencies: Array<{ id: number; code: string }> }>(page, 'GET', '/api/v1/currencies');
+  const currencyCode = currencies.currencies.find((currency) => currency.id === currencyID)?.code ?? '';
+  const suffix = `uout${Date.now()}`;
+  const openedOn = daysFromTodayISO(-60);
+  const name = `Unknown Out Co ${suffix}`;
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: suffix.toUpperCase(), instrument_type: 'stock', display_name: name, symbol: suffix.toUpperCase(),
+    quote_commodity_id: currencyID, trading_commodity_id: currencyID, quantity_scale: 3, price_scale: 2, effective_from: openedOn
+  });
+  const holdingName = `Unknown out holding ${suffix}`;
+  const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: holdingName, opened_on: openedOn, effective_from: openedOn
+  });
+  await apiJSON(page, 'POST', '/api/v1/investments/transfers/external/in', csrfToken, {
+    effective_on: daysFromTodayISO(-30), holding_account_id: holding.id, commodity_id: instrument.commodity_id,
+    quantity_value: '3', quantity_scale: 0, basis_knowledge: 'unknown', cost_commodity_id: currencyID
+  });
+
+  await page.goto('/app/investments');
+  await page.getByRole('button', { name: 'Transfer out investments' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Transfer investments out' });
+  await dialog.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-10));
+  await dialog.getByLabel('Source position').selectOption({ label: `${holdingName} · ${name} · ${currencyCode}` });
+  await dialog.getByRole('textbox', { name: /Quantity to move/ }).fill('2');
+  await dialog.getByRole('button', { name: 'Preview transfer' }).click();
+
+  const preview = dialog.getByRole('region', { name: 'What leaves the book' });
+  await expect(preview).toContainText('Cost basis transferred out: unknown');
+  await expect(preview).toContainText('No cost basis entry is recorded until the basis is resolved.');
+  await expect(preview).toContainText('basis unknown');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await dialog.getByRole('button', { name: 'Record transfer' }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(async () => {
+    const positions = await apiJSON<{ positions: Array<{ commodity_id: number; quantity_value: string }> }>(
+      page, 'GET', '/api/v1/investments/positions');
+    return positions.positions.find((position) => position.commodity_id === instrument.commodity_id)?.quantity_value;
+  }).toBe('1');
+});

@@ -22950,13 +22950,18 @@ export interface components {
             gain_impact_acknowledgement?: string;
         };
         ExternalTransferOutLink: {
+            /**
+             * @description Unknown when the moved units carry unknown basis; the carried amount is then null.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
             /** Format: int64 */
             source_lot_id: number;
             quantity_value: string;
             quantity_scale: number;
-            /** @description Basis taken from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot. */
-            carried_basis_value: string;
-            carried_basis_scale: number;
+            /** @description Basis taken from the source lot; pool rate for an average-cost source, exact remainder on the final touched lot. Null when unknown. */
+            carried_basis_value: string | null;
+            carried_basis_scale: number | null;
             /** @enum {string} */
             original_date_knowledge: "known" | "unknown";
             /** Format: date */
@@ -22970,9 +22975,11 @@ export interface components {
             /** @enum {string} */
             resolution_tier: "account" | "global" | "fallback" | "position_lock";
             links: components["schemas"]["ExternalTransferOutLink"][];
-            /** @description Exact total basis carried out of the book; the bridge journal's amount. Zero posts no bridge. */
-            basis_value: string;
-            basis_scale: number;
+            /** @description Exact total basis carried out of the book; the bridge journal's amount. Zero posts no bridge. Null when any link is unknown: no bridge posts until the basis is resolved. */
+            basis_value: string | null;
+            basis_scale: number | null;
+            /** @enum {string} */
+            basis_knowledge: "known" | "unknown";
         };
         ExternalTransferOutPreviewResponse: {
             plan: components["schemas"]["ExternalTransferOutPlan"];
@@ -23025,6 +23032,11 @@ export interface components {
         };
         InternalTransferLink: {
             /**
+             * @description Unknown when the moved units carry unknown basis; the carried amount is then null.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
+            /**
              * Format: int64
              * @description Null for a pooled destination lot, which is carried from the whole pool.
              */
@@ -23036,9 +23048,9 @@ export interface components {
             destination_lot_id: number | null;
             quantity_value: string;
             quantity_scale: number;
-            /** @description Basis carried from the source lot, or the pool for a pooled lot; pool rate for an average-cost source, exact remainder on the final touched lot. */
-            carried_basis_value: string;
-            carried_basis_scale: number;
+            /** @description Basis carried from the source lot, or the pool for a pooled lot; pool rate for an average-cost source, exact remainder on the final touched lot. Null when unknown. */
+            carried_basis_value: string | null;
+            carried_basis_scale: number | null;
             /** @enum {string} */
             original_date_knowledge: "known" | "unknown";
             /**

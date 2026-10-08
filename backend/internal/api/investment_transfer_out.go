@@ -30,8 +30,9 @@ type externalTransferOutLinkResponse struct {
 	SourceLotID           int64             `json:"source_lot_id"`
 	QuantityValue         exact.Coefficient `json:"quantity_value"`
 	QuantityScale         int               `json:"quantity_scale"`
-	CarriedBasisValue     moneyCoefficient  `json:"carried_basis_value"`
-	CarriedBasisScale     int               `json:"carried_basis_scale"`
+	CarriedBasisValue     *moneyCoefficient `json:"carried_basis_value"`
+	CarriedBasisScale     *int              `json:"carried_basis_scale"`
+	BasisKnowledge        string            `json:"basis_knowledge"`
 	OriginalDateKnowledge string            `json:"original_date_knowledge"`
 	OriginalAcquiredOn    *string           `json:"original_acquired_on"`
 }
@@ -41,8 +42,9 @@ type externalTransferOutPlanResponse struct {
 	CostBasisMethod string                            `json:"cost_basis_method"`
 	ResolutionTier  string                            `json:"resolution_tier"`
 	Links           []externalTransferOutLinkResponse `json:"links"`
-	BasisValue      moneyCoefficient                  `json:"basis_value"`
-	BasisScale      int                               `json:"basis_scale"`
+	BasisValue      *moneyCoefficient                 `json:"basis_value"`
+	BasisScale      *int                              `json:"basis_scale"`
+	BasisKnowledge  string                            `json:"basis_knowledge"`
 }
 
 type externalTransferOutResponse struct {
@@ -81,13 +83,15 @@ func externalTransferOutInput(owner app.Owner, r *http.Request, request external
 
 func toExternalTransferOutPlanResponse(plan app.ExternalTransferOutPlan) externalTransferOutPlanResponse {
 	out := externalTransferOutPlanResponse{BasisAllocation: plan.BasisAllocation, CostBasisMethod: plan.CostBasisMethod,
-		ResolutionTier: plan.ResolutionTier, BasisValue: moneyCoefficient(plan.BasisValue), BasisScale: plan.BasisScale,
+		ResolutionTier: plan.ResolutionTier, BasisValue: projectedBasisValue(plan.BasisValue, plan.BasisKnowledge),
+		BasisScale: projectedBasisScale(plan.BasisScale, plan.BasisKnowledge), BasisKnowledge: responseKnowledge(plan.BasisKnowledge),
 		Links: make([]externalTransferOutLinkResponse, 0, len(plan.Links))}
 	for _, link := range plan.Links {
 		response := externalTransferOutLinkResponse{SourceLotID: link.SourceLotID,
 			QuantityValue: link.QuantityValue, QuantityScale: link.QuantityScale,
-			CarriedBasisValue: moneyCoefficient(link.CarriedBasisValue), CarriedBasisScale: link.CarriedBasisScale,
-			OriginalDateKnowledge: link.OriginalDateKnowledge}
+			CarriedBasisValue: projectedBasisValue(link.CarriedBasisValue, link.BasisKnowledge),
+			CarriedBasisScale: projectedBasisScale(link.CarriedBasisScale, link.BasisKnowledge),
+			BasisKnowledge:    responseKnowledge(link.BasisKnowledge), OriginalDateKnowledge: link.OriginalDateKnowledge}
 		if link.OriginalAcquiredOn != "" {
 			date := link.OriginalAcquiredOn
 			response.OriginalAcquiredOn = &date

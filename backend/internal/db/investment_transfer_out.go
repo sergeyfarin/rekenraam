@@ -47,6 +47,7 @@ type ExternalTransferOutLink struct {
 	QuantityScale         int
 	CarriedBasisValue     int64
 	CarriedBasisScale     int
+	BasisKnowledge        string // unknown leaves CarriedBasis unused
 	OriginalDateKnowledge string
 	OriginalAcquiredOn    string
 }
@@ -56,9 +57,11 @@ type ExternalTransferOutResult struct {
 	CostBasisMethod string
 	ResolutionTier  string
 	Links           []ExternalTransferOutLink
-	// Basis is the exact total carried out, the bridge amount.
-	BasisValue int64
-	BasisScale int
+	// Basis is the exact total carried out, the bridge amount. It is unknown
+	// when any link is unknown: then no bridge posts until resolution.
+	BasisValue     int64
+	BasisScale     int
+	BasisKnowledge string
 }
 
 func (r *InvestmentRepository) CreateExternalTransferOut(ctx context.Context, journal CreateTransactionParams, transfer CreateExternalTransferOutParams) (TransactionRecord, ExternalTransferOutResult, error) {
@@ -140,7 +143,9 @@ func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateT
 		CommodityID: transfer.CommodityID, CostCommodityID: transfer.CostCommodityID,
 		TransactionID: transaction.ID, EventDate: transfer.EffectiveOn,
 		EventKind: "transfer_out", MetadataJSON: transfer.SourceEvidenceJSON,
-		CreatedAt: journal.CreatedAt, ActorUserID: journal.ActorUserID}
+		CreatedAt: journal.CreatedAt, ActorUserID: journal.ActorUserID,
+		// Unknown basis leaves as unknown: no bridge until it is resolved.
+		AdmitUnknownBasis: true}
 	var moved []LotDisposalRecord
 	if backdated {
 		slot := operationID
@@ -173,21 +178,34 @@ func writeExternalTransferOutTx(ctx context.Context, tx *sql.Tx, journal CreateT
 		if err != nil {
 			return ExternalTransferOutResult{}, err
 		}
+		knowledge := normalizedBasisKnowledge(depletion.BasisKnowledge)
 		if _, err := tx.ExecContext(ctx, `INSERT INTO investment_transfer_lot_links
 			(operation_id, link_seq, source_lot_id, quantity_value, quantity_scale,
 			 basis_knowledge, carried_basis_value, carried_basis_scale, cost_commodity_id,
 			 original_date_knowledge, original_acquired_on, source_evidence_json)
-			VALUES (?, ?, ?, ?, ?, 'known', ?, ?, ?, ?, NULLIF(?, ''), ?)`,
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?)`,
 			operationID, index+1, depletion.LotID, depletion.QuantityValue, depletion.QuantityScale,
-			exact.New(depletion.CostBasisValue), depletion.CostBasisScale, transfer.CostCommodityID,
+			knowledge, nullableBasisValue(depletion.CostBasisValue, knowledge),
+			nullableBasisScale(depletion.CostBasisScale, knowledge), transfer.CostCommodityID,
 			originalKnowledge, originalDate, transfer.SourceEvidenceJSON); err != nil {
 			return ExternalTransferOutResult{}, fmt.Errorf("link outbound transfer lot: %w", err)
 		}
-		basis.AddInt64(depletion.CostBasisValue, depletion.CostBasisScale)
+		if knowledge == InvestmentBasisUnknown {
+			result.BasisKnowledge = InvestmentBasisUnknown
+		} else {
+			basis.AddInt64(depletion.CostBasisValue, depletion.CostBasisScale)
+		}
 		result.Links = append(result.Links, ExternalTransferOutLink{SourceLotID: depletion.LotID,
 			QuantityValue: depletion.QuantityValue, QuantityScale: depletion.QuantityScale,
 			CarriedBasisValue: depletion.CostBasisValue, CarriedBasisScale: depletion.CostBasisScale,
-			OriginalDateKnowledge: originalKnowledge, OriginalAcquiredOn: originalDate})
+			BasisKnowledge: knowledge, OriginalDateKnowledge: originalKnowledge, OriginalAcquiredOn: originalDate})
+	}
+	if result.BasisKnowledge == InvestmentBasisUnknown {
+		// Security legs only: the complete omitted bridge posts when the
+		// basis is resolved, never a partial bridge of the known links.
+		basis = exact.NewScaledInt()
+	} else {
+		result.BasisKnowledge = InvestmentBasisKnown
 	}
 	if result.BasisValue, err = basis.Int64(); err != nil {
 		return ExternalTransferOutResult{}, ErrInvestmentBasisRange

@@ -180,18 +180,3 @@ func TestReplacingUnknownTransferInWithKnownBasisResolvesDependentSale(t *testin
 	require.Equal(t, db.InvestmentBasisKnown, resolved.knowledge)
 	requireHealthyUnresolvedBook(t, f)
 }
-
-// Internal transfers of unknown basis wait for lineage support (boundary 3b).
-func TestInternalTransferOfUnknownBasisStaysRefused(t *testing.T) {
-	t.Parallel()
-	f := newInvestmentsTestFixture(t)
-	ctx := context.Background()
-	seedExternalTransferEquity(t, f.database)
-	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
-	transfer, err := f.investmentService.ExternalTransferIn(ctx, unknownTransferInInput(f, "2026-05-01", ""))
-	require.NoError(t, err)
-	before := buyReplacementPreviewSnapshot(t, f.database)
-	_, err = f.investmentService.InternalTransfer(ctx, internalTransferFromLot(f, destinationID, *transfer.LotID, exact.New(1), 0))
-	require.ErrorContains(t, err, "unresolved basis cannot be moved yet")
-	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
-}

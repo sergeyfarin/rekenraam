@@ -328,10 +328,9 @@
               <div class="grid gap-2 border-t border-border pt-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
                 <label for={`internal-transfer-lot-${lot.id}`} class="text-sm text-foreground">
                   <span class="font-medium">{m.investments_transfer_internal_lot_quantity()}</span>
-                  <span class="block text-xs text-muted">#{lot.id} · {dateFormatter.format(parseISO(lot.opened_on))} · {m.investments_transfer_internal_available()} {formatQuantity(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)} · {m.investments_col_cost_basis()} {lot.remaining_cost_basis_value !== null && lot.remaining_cost_basis_scale !== null ? formatQuantity(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale) : m.investments_basis_unknown()} {basisCurrency?.code ?? ''}</span>
+                  <span class="block text-xs text-muted">#{lot.id} · {dateFormatter.format(parseISO(lot.opened_on))} · {m.investments_transfer_internal_available()} {formatQuantity(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)} · {#if lot.remaining_cost_basis_value !== null && lot.remaining_cost_basis_scale !== null}{m.investments_col_cost_basis()} {formatQuantity(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale)} {basisCurrency?.code ?? ''}{:else}{m.investments_basis_unknown()}{/if}</span>
                 </label>
                 <input id={`internal-transfer-lot-${lot.id}`} type="text" inputmode="decimal"
-                  disabled={lot.basis_knowledge === 'unknown'}
                   value={quantities[String(lot.id)] ?? ''}
                   oninput={(event) => { quantities[String(lot.id)] = event.currentTarget.value; discardPreview(); }}
                   class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
@@ -359,8 +358,10 @@
             {@const values = {
               lot: String(link.source_lot_id ?? ''),
               quantity: formatQuantity(link.quantity_value, link.quantity_scale, locale),
-              basis: formatBasis(link.carried_basis_value, link.carried_basis_scale),
-              currency: basisCurrency?.code ?? ''
+              // Unknown basis has no amount: the word takes the currency slot.
+              basis: link.carried_basis_value !== null && link.carried_basis_scale !== null
+                ? formatBasis(link.carried_basis_value, link.carried_basis_scale) : '',
+              currency: link.carried_basis_value !== null ? basisCurrency?.code ?? '' : m.investments_transfer_basis_word_unknown()
             }}
             {@const date = link.original_acquired_on ? dateFormatter.format(parseISO(link.original_acquired_on)) : null}
             <li class="break-words">{link.source_lot_id === null

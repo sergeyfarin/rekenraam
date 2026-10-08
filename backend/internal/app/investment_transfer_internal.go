@@ -44,6 +44,7 @@ type InternalTransferLink struct {
 	QuantityScale         int
 	CarriedBasisValue     int64
 	CarriedBasisScale     int
+	BasisKnowledge        string // unknown leaves CarriedBasis unused
 	OriginalDateKnowledge string
 	OriginalAcquiredOn    string
 }

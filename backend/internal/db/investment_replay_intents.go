@@ -15,7 +15,9 @@ import (
 // excluded from current replay. A disposal carries its elected method and any
 // explicit specific-lot choice, never the lots selected by FIFO/LIFO/average.
 type InvestmentReplayIntent struct {
-	BasisKnowledge string // Opening consideration; empty means known for legacy callers.
+	// BasisKnowledge is an opening's consideration or a transfer link's
+	// recorded carried basis; empty means known for legacy callers.
+	BasisKnowledge string
 	OperationID    int64
 	// OrderOperationID is the root operation's original same-day slot. A
 	// replacement inherits that slot so a later same-day sale still follows
@@ -102,6 +104,21 @@ type InvestmentReplayTransferLink struct {
 	QuantityScale  int
 	CostBasisValue exact.Coefficient
 	CostBasisScale int
+	BasisKnowledge string // unknown leaves CostBasis unused
+}
+
+// replayTransferBasis reads a recorded transfer basis tuple. Unknown has no
+// amount; a partial pair is invalid evidence, never a zero.
+func replayTransferBasis(value sql.NullString, scale sql.NullInt64, knowledge string) (exact.Coefficient, int, string, error) {
+	switch {
+	case knowledge == InvestmentBasisUnknown && !value.Valid && !scale.Valid:
+		return exact.New(0), 0, InvestmentBasisUnknown, nil
+	case knowledge == InvestmentBasisKnown && value.Valid && scale.Valid:
+		parsed, err := exact.Parse(value.String)
+		return parsed, int(scale.Int64), InvestmentBasisKnown, err
+	default:
+		return "", 0, "", fmt.Errorf("%w: transfer basis knowledge/amount pair is invalid", ErrInvalidDisposalParams)
+	}
 }
 
 func (r *InvestmentRepository) ListInvestmentReplayIntents(ctx context.Context, bookID, accountID, commodityID, costCommodityID int64, side string) ([]InvestmentReplayIntent, error) {
@@ -239,8 +256,9 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		SELECT f.operation_id, o.operation_kind, f.effective_on, x.link_seq, x.source_lot_id,
 			COALESCE(revision.source_lot_id, x.source_lot_id), src.operation_id, src.opened_on,
 			x.quantity_value, x.quantity_scale,
-			COALESCE(revision.carried_basis_value, x.carried_basis_value),
-			COALESCE(revision.carried_basis_scale, x.carried_basis_scale),
+			CASE WHEN revision.id IS NULL THEN x.carried_basis_value ELSE revision.carried_basis_value END,
+			CASE WHEN revision.id IS NULL THEN x.carried_basis_scale ELSE revision.carried_basis_scale END,
+			CASE WHEN revision.id IS NULL THEN x.basis_knowledge ELSE revision.basis_knowledge END,
 			e.transaction_id, e.created_audit_event_id, e.created_by_user_id, e.created_at,
 			effect.effect_seq, f.basis_allocation, f.transfer_kind = 'external_out'
 		FROM investment_transfer_facts f
@@ -268,22 +286,23 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		var intent InvestmentReplayIntent
 		var basis sql.NullString
 		var basisScale sql.NullInt64
+		var knowledge string
 		var allocation sql.NullString
 		var sourceOperationID sql.NullInt64
 		if err := transfers.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
 			&intent.LinkSeq, &intent.transferSource.lotID, &intent.RecordedLotID, &sourceOperationID,
-			&intent.transferSource.openedOn, &intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale,
+			&intent.transferSource.openedOn, &intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale, &knowledge,
 			&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID,
 			&intent.CreatedAt, &intent.EffectSeq, &allocation, &intent.ExternalOut); err != nil {
 			transfers.Close()
 			return nil, fmt.Errorf("scan replay transfer depletion: %w", err)
 		}
-		if !basis.Valid || !basisScale.Valid || intent.EffectSeq <= 0 {
+		var err error
+		intent.AmountValue, intent.AmountScale, intent.BasisKnowledge, err = replayTransferBasis(basis, basisScale, knowledge)
+		if err != nil || intent.EffectSeq <= 0 {
 			transfers.Close()
-			return nil, fmt.Errorf("%w: transfer operation %d lacks known basis or an effect", ErrInvalidDisposalParams, intent.OperationID)
+			return nil, fmt.Errorf("%w: transfer operation %d lacks a valid basis or an effect", ErrInvalidDisposalParams, intent.OperationID)
 		}
-		intent.AmountValue = exact.Coefficient(basis.String)
-		intent.AmountScale = int(basisScale.Int64)
 		intent.Kind = "transfer_out"
 		intent.transferSource.operationID = sourceOperationID.Int64
 		intent.LotID = intent.transferSource.lotID
@@ -293,13 +312,14 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 		}
 		link := InvestmentReplayTransferLink{LinkSeq: intent.LinkSeq, LotID: intent.LotID,
 			RecordedLotID: intent.RecordedLotID, transferSource: intent.transferSource, QuantityValue: intent.QuantityValue,
-			QuantityScale: intent.QuantityScale, CostBasisValue: intent.AmountValue, CostBasisScale: intent.AmountScale}
+			QuantityScale: intent.QuantityScale, CostBasisValue: intent.AmountValue, CostBasisScale: intent.AmountScale,
+			BasisKnowledge: intent.BasisKnowledge}
 		index, exists := pooled[intent.OperationID]
 		if !exists {
 			intent.Kind = "pooled_transfer_out"
 			intent.LotID, intent.LinkSeq, intent.RecordedLotID = 0, 0, 0
 			intent.transferSource = transferSourceOpening{}
-			intent.AmountValue, intent.AmountScale = "", 0
+			intent.AmountValue, intent.AmountScale, intent.BasisKnowledge = "", 0, ""
 			pooled[intent.OperationID] = len(intents)
 			intents = append(intents, intent)
 			index = len(intents) - 1
@@ -501,7 +521,7 @@ type transferSourceOpening struct {
 func investmentReplayPooledLotIntentsQuery(ctx context.Context, reader queryer, bookID, accountID, commodityID, costCommodityID int64) ([]InvestmentReplayIntent, error) {
 	rows, err := reader.QueryContext(ctx, `
 		SELECT f.operation_id, o.operation_kind, f.effective_on, x.link_seq,
-			x.quantity_value, x.quantity_scale, x.carried_basis_value, x.carried_basis_scale,
+			x.quantity_value, x.quantity_scale, x.carried_basis_value, x.carried_basis_scale, x.basis_knowledge,
 			x.original_date_knowledge, COALESCE(x.original_acquired_on, ''), COALESCE(x.revision_id, 0)
 		FROM investment_transfer_facts f
 		JOIN effective_investment_operations o ON o.id = f.operation_id
@@ -519,18 +539,19 @@ func investmentReplayPooledLotIntentsQuery(ctx context.Context, reader queryer, 
 		intent := InvestmentReplayIntent{Kind: "pooled_lot_transfer_out"}
 		var basis sql.NullString
 		var basisScale sql.NullInt64
+		var knowledge string
 		var revisionID int64
 		if err := rows.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate, &intent.LinkSeq,
-			&intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale,
+			&intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale, &knowledge,
 			&intent.OriginalDateKnowledge, &intent.OriginalAcquiredOn, &revisionID); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan replay pooled-lot transfer: %w", err)
 		}
-		if !basis.Valid || !basisScale.Valid {
+		var err error
+		if intent.AmountValue, intent.AmountScale, intent.BasisKnowledge, err = replayTransferBasis(basis, basisScale, knowledge); err != nil {
 			rows.Close()
-			return nil, fmt.Errorf("%w: transfer operation %d lacks known basis", ErrInvalidDisposalParams, intent.OperationID)
+			return nil, fmt.Errorf("transfer operation %d: %w", intent.OperationID, err)
 		}
-		intent.AmountValue, intent.AmountScale = exact.Coefficient(basis.String), int(basisScale.Int64)
 		intents = append(intents, intent)
 		revisions = append(revisions, revisionID)
 	}
@@ -547,7 +568,7 @@ func investmentReplayPooledLotIntentsQuery(ctx context.Context, reader queryer, 
 		// even after a revision replaced their amounts.
 		events, err := reader.QueryContext(ctx, `
 			SELECT effect.effect_seq, e.lot_id, e.quantity_value, e.quantity_scale,
-				e.cost_basis_value, e.cost_basis_scale, e.transaction_id, e.created_audit_event_id,
+				e.cost_basis_value, e.cost_basis_scale, e.basis_knowledge, e.transaction_id, e.created_audit_event_id,
 				e.created_by_user_id, e.created_at
 			FROM investment_operation_lot_effects effect
 			JOIN investment_lot_events e ON e.id = effect.lot_event_id AND e.event_kind = 'transfer_out'
@@ -561,19 +582,21 @@ func investmentReplayPooledLotIntentsQuery(ctx context.Context, reader queryer, 
 			var seq int
 			var basis sql.NullString
 			var basisScale sql.NullInt64
+			var knowledge string
 			var transactionID, auditEventID, userID int64
 			var createdAt string
 			if err := events.Scan(&seq, &depletion.LotID, &depletion.QuantityValue, &depletion.QuantityScale,
-				&basis, &basisScale, &transactionID, &auditEventID, &userID, &createdAt); err != nil {
+				&basis, &basisScale, &knowledge, &transactionID, &auditEventID, &userID, &createdAt); err != nil {
 				events.Close()
 				return nil, fmt.Errorf("scan replay pooled-lot depletion: %w", err)
 			}
-			if !basis.Valid || !basisScale.Valid {
+			var value exact.Coefficient
+			if value, depletion.CostBasisScale, depletion.BasisKnowledge, err = replayTransferBasis(basis, basisScale, knowledge); err != nil {
 				events.Close()
-				return nil, fmt.Errorf("%w: transfer operation %d depletion lacks known basis", ErrInvalidDisposalParams, intent.OperationID)
+				return nil, fmt.Errorf("transfer operation %d depletion: %w", intent.OperationID, err)
 			}
 			depletion.QuantityValue = depletion.QuantityValue.Negated()
-			depletion.CostBasisValue, depletion.CostBasisScale = exact.Coefficient(basis.String).Negated(), int(basisScale.Int64)
+			depletion.CostBasisValue = value.Negated()
 			if intent.EffectSeq == 0 {
 				intent.EffectSeq, intent.TransactionID, intent.AuditEventID = seq, transactionID, auditEventID
 				intent.CreatedByUserID, intent.CreatedAt = userID, createdAt
@@ -603,7 +626,7 @@ func investmentReplayPooledLotIntentsQuery(ctx context.Context, reader queryer, 
 // depletions in order.
 func transferRevisionDepletionsQuery(ctx context.Context, reader queryer, revisionID int64) ([]InvestmentReplayTransferLink, error) {
 	rows, err := reader.QueryContext(ctx, `SELECT source_lot_id, quantity_value, quantity_scale,
-		cost_basis_value, cost_basis_scale FROM investment_transfer_link_revision_depletions
+		cost_basis_value, cost_basis_scale, basis_knowledge FROM investment_transfer_link_revision_depletions
 		WHERE revision_id = ? ORDER BY depletion_seq`, revisionID)
 	if err != nil {
 		return nil, fmt.Errorf("read transfer revision depletions: %w", err)
@@ -611,10 +634,18 @@ func transferRevisionDepletionsQuery(ctx context.Context, reader queryer, revisi
 	var depletions []InvestmentReplayTransferLink
 	for rows.Next() {
 		var depletion InvestmentReplayTransferLink
+		var basis sql.NullString
+		var basisScale sql.NullInt64
+		var knowledge string
 		if err := rows.Scan(&depletion.LotID, &depletion.QuantityValue, &depletion.QuantityScale,
-			&depletion.CostBasisValue, &depletion.CostBasisScale); err != nil {
+			&basis, &basisScale, &knowledge); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan transfer revision depletion: %w", err)
+		}
+		var err error
+		if depletion.CostBasisValue, depletion.CostBasisScale, depletion.BasisKnowledge, err = replayTransferBasis(basis, basisScale, knowledge); err != nil {
+			rows.Close()
+			return nil, err
 		}
 		depletions = append(depletions, depletion)
 	}

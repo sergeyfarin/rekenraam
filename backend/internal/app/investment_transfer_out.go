@@ -40,6 +40,9 @@ type ExternalTransferOutPlan struct {
 	Links           []ExternalTransferOutLink
 	BasisValue      int64
 	BasisScale      int
+	// BasisKnowledge is unknown when any link is unknown; then nothing was
+	// bridged and BasisValue/Scale are unused.
+	BasisKnowledge string
 }
 
 type ExternalTransferOutLink struct {
@@ -48,6 +51,7 @@ type ExternalTransferOutLink struct {
 	QuantityScale         int
 	CarriedBasisValue     int64
 	CarriedBasisScale     int
+	BasisKnowledge        string // unknown leaves CarriedBasis unused
 	OriginalDateKnowledge string
 	OriginalAcquiredOn    string
 }
@@ -222,7 +226,8 @@ func mapExternalTransferOutError(err error) error {
 func toExternalTransferOutPlan(result db.ExternalTransferOutResult) ExternalTransferOutPlan {
 	plan := ExternalTransferOutPlan{BasisAllocation: result.BasisAllocation, CostBasisMethod: result.CostBasisMethod,
 		ResolutionTier: result.ResolutionTier, BasisValue: result.BasisValue, BasisScale: result.BasisScale,
-		Links: make([]ExternalTransferOutLink, 0, len(result.Links))}
+		BasisKnowledge: normalizedKnowledge(result.BasisKnowledge),
+		Links:          make([]ExternalTransferOutLink, 0, len(result.Links))}
 	for _, link := range result.Links {
 		plan.Links = append(plan.Links, ExternalTransferOutLink(link))
 	}

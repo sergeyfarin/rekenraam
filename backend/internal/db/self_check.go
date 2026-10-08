@@ -555,7 +555,8 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		SELECT revision.source_lot_id, source.account_id, source.commodity_id, source.cost_commodity_id,
 			COALESCE(link.destination_lot_id, 0), COALESCE(destination.account_id, 0),
 			COALESCE(destination.commodity_id, 0), COALESCE(destination.cost_commodity_id, 0),
-			link.quantity_value, link.quantity_scale, revision.carried_basis_value, revision.carried_basis_scale
+			link.quantity_value, link.quantity_scale, revision.carried_basis_value, revision.carried_basis_scale,
+			revision.basis_knowledge
 		FROM latest_investment_transfer_link_revisions revision
 		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
 		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
@@ -572,21 +573,23 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		var out, in SelfCheckLotEventRecord
 		var quantity exact.Coefficient
 		var scale int
-		var basis exact.Coefficient
-		var basisScale int
+		var basis sql.NullString
+		var basisScale sql.NullInt64
+		var knowledge string
 		if err := transfers.Scan(&out.LotID, &out.AccountID, &out.CommodityID, &out.CostCommodityID,
 			&in.LotID, &in.AccountID, &in.CommodityID, &in.CostCommodityID,
-			&quantity, &scale, &basis, &basisScale); err != nil {
+			&quantity, &scale, &basis, &basisScale, &knowledge); err != nil {
 			transfers.Close()
 			return nil, fmt.Errorf("scan effective self-check transfer revision: %w", err)
 		}
-		value, err := exact.ScaledIntFromCoefficient(basis, basisScale).Int64()
+		value, valueScale, err := selfCheckRevisionBasis(basis, basisScale, knowledge)
 		if err != nil || value < 0 || quantity.Sign() <= 0 {
 			transfers.Close()
 			return nil, fmt.Errorf("invalid effective self-check transfer revision for lot %d", in.LotID)
 		}
-		in.QuantityValue, in.QuantityScale, in.CostBasisValue, in.CostBasisScale = quantity, scale, value, basisScale
-		out.QuantityValue, out.QuantityScale, out.CostBasisValue, out.CostBasisScale = quantity.Negated(), scale, -value, basisScale
+		in.QuantityValue, in.QuantityScale, in.CostBasisValue, in.CostBasisScale = quantity, scale, value, valueScale
+		out.QuantityValue, out.QuantityScale, out.CostBasisValue, out.CostBasisScale = quantity.Negated(), scale, -value, valueScale
+		in.BasisKnowledge, out.BasisKnowledge = knowledge, knowledge
 		events = append(events, out)
 		if in.LotID > 0 {
 			events = append(events, in)
@@ -604,7 +607,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	pooled, err := transaction.QueryContext(ctx, `
 		SELECT depletion.source_lot_id, source.account_id, source.commodity_id, source.cost_commodity_id,
 			depletion.quantity_value, depletion.quantity_scale, depletion.cost_basis_value, depletion.cost_basis_scale,
-			0
+			depletion.basis_knowledge, 0
 		FROM latest_investment_transfer_link_revisions revision
 		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
 		JOIN investment_transfer_link_revision_depletions depletion ON depletion.revision_id = revision.id
@@ -613,7 +616,7 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		UNION ALL
 		SELECT link.destination_lot_id, destination.account_id, destination.commodity_id, destination.cost_commodity_id,
 			link.quantity_value, link.quantity_scale, revision.carried_basis_value, revision.carried_basis_scale,
-			1
+			revision.basis_knowledge, 1
 		FROM latest_investment_transfer_link_revisions revision
 		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
 		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
@@ -625,14 +628,17 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	}
 	for pooled.Next() {
 		var event SelfCheckLotEventRecord
-		var quantity, basis exact.Coefficient
+		var quantity exact.Coefficient
+		var basis sql.NullString
+		var basisScale sql.NullInt64
 		var incoming bool
 		if err := pooled.Scan(&event.LotID, &event.AccountID, &event.CommodityID, &event.CostCommodityID,
-			&quantity, &event.QuantityScale, &basis, &event.CostBasisScale, &incoming); err != nil {
+			&quantity, &event.QuantityScale, &basis, &basisScale, &event.BasisKnowledge, &incoming); err != nil {
 			pooled.Close()
 			return nil, fmt.Errorf("scan effective self-check pooled transfer revision: %w", err)
 		}
-		value, err := exact.ScaledIntFromCoefficient(basis, event.CostBasisScale).Int64()
+		value, valueScale, err := selfCheckRevisionBasis(basis, basisScale, event.BasisKnowledge)
+		event.CostBasisScale = valueScale
 		if err != nil || value < 0 || quantity.Sign() <= 0 {
 			pooled.Close()
 			return nil, fmt.Errorf("invalid effective self-check pooled transfer revision for lot %d", event.LotID)
@@ -1172,6 +1178,10 @@ type SelfCheckPooledTransferSet struct {
 	DepletedQuantity *exact.ScaledInt
 	DepletedBasis    *exact.ScaledInt
 	Depletions       int
+	// LinkUnknown and UnknownDepletions carry knowledge: an unknown link must
+	// have at least one unknown depletion, and a known link none (T-145).
+	LinkUnknown       bool
+	UnknownDepletions int
 }
 
 // SelfCheckPooledTransferSets audits every committed and revised depletion
@@ -1179,8 +1189,8 @@ type SelfCheckPooledTransferSet struct {
 func (r *SelfCheckRepository) SelfCheckPooledTransferSets(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckPooledTransferSet, error) {
 	rows, err := transaction.QueryContext(ctx, `
 		SELECT link.operation_id, 0, link.quantity_value, link.quantity_scale,
-			link.carried_basis_value, link.carried_basis_scale,
-			e.quantity_value, e.quantity_scale, e.cost_basis_value, e.cost_basis_scale
+			link.carried_basis_value, link.carried_basis_scale, link.basis_knowledge,
+			e.quantity_value, e.quantity_scale, e.cost_basis_value, e.cost_basis_scale, e.basis_knowledge
 		FROM investment_transfer_facts f
 		JOIN investment_transfer_lot_links link ON link.operation_id = f.operation_id
 		LEFT JOIN investment_operation_lot_effects effect ON effect.operation_id = f.operation_id
@@ -1189,10 +1199,10 @@ func (r *SelfCheckRepository) SelfCheckPooledTransferSets(ctx context.Context, t
 			AND (effect.operation_id IS NULL OR e.id IS NOT NULL)
 		UNION ALL
 		SELECT revision.operation_id, revision.id, link.quantity_value, link.quantity_scale,
-			revision.carried_basis_value, revision.carried_basis_scale,
+			revision.carried_basis_value, revision.carried_basis_scale, revision.basis_knowledge,
 			'-' || depletion.quantity_value, depletion.quantity_scale,
 			CASE depletion.cost_basis_value WHEN '0' THEN '0' ELSE '-' || depletion.cost_basis_value END,
-			depletion.cost_basis_scale
+			depletion.cost_basis_scale, depletion.basis_knowledge
 		FROM investment_transfer_link_revisions revision
 		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
 			AND link.link_seq = revision.link_seq
@@ -1212,14 +1222,17 @@ func (r *SelfCheckRepository) SelfCheckPooledTransferSets(ctx context.Context, t
 		var linkBasisScale sql.NullInt64
 		var quantity, basis sql.NullString
 		var quantityScale, basisScale sql.NullInt64
+		var linkKnowledge string
+		var depletionKnowledge sql.NullString
 		if err := rows.Scan(&operationID, &revisionID, &linkQuantity, &linkQuantityScale, &linkBasis, &linkBasisScale,
-			&quantity, &quantityScale, &basis, &basisScale); err != nil {
+			&linkKnowledge, &quantity, &quantityScale, &basis, &basisScale, &depletionKnowledge); err != nil {
 			return nil, fmt.Errorf("scan self-check pooled transfer set: %w", err)
 		}
 		if len(sets) == 0 || sets[len(sets)-1].OperationID != operationID || sets[len(sets)-1].RevisionID != revisionID {
 			set := SelfCheckPooledTransferSet{OperationID: operationID, RevisionID: revisionID,
 				LinkQuantity: exact.ScaledIntFromCoefficient(linkQuantity, linkQuantityScale),
-				LinkBasis:    exact.NewScaledInt(), DepletedQuantity: exact.NewScaledInt(), DepletedBasis: exact.NewScaledInt()}
+				LinkBasis:    exact.NewScaledInt(), DepletedQuantity: exact.NewScaledInt(), DepletedBasis: exact.NewScaledInt(),
+				LinkUnknown: linkKnowledge == InvestmentBasisUnknown}
 			if linkBasis.Valid {
 				set.LinkBasis.AddCoefficient(exact.Coefficient(linkBasis.String), int(linkBasisScale.Int64))
 			}
@@ -1231,6 +1244,9 @@ func (r *SelfCheckRepository) SelfCheckPooledTransferSets(ctx context.Context, t
 		// Depletions leave the source, so their signed amounts are negative.
 		set := &sets[len(sets)-1]
 		set.Depletions++
+		if depletionKnowledge.String == InvestmentBasisUnknown {
+			set.UnknownDepletions++
+		}
 		set.DepletedQuantity.SubScaled(exact.ScaledIntFromCoefficient(exact.Coefficient(quantity.String), int(quantityScale.Int64)))
 		if basis.Valid {
 			set.DepletedBasis.SubScaled(exact.ScaledIntFromCoefficient(exact.Coefficient(basis.String), int(basisScale.Int64)))
@@ -1251,18 +1267,22 @@ type SelfCheckTransferBridge struct {
 	CostCommodityID int64
 	Carried         *exact.ScaledInt
 	Bridged         *exact.ScaledInt
+	// Unknown means a link carries unknown basis: no bridge may post until
+	// the basis is resolved, so Bridged must be zero.
+	Unknown bool
 }
 
 // SelfCheckTransferBridges folds every outbound transfer's link basis and
 // bridge postings per cost currency. Coefficients are summed in Go.
 func (r *SelfCheckRepository) SelfCheckTransferBridges(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckTransferBridge, error) {
 	rows, err := transaction.QueryContext(ctx, `
-		SELECT f.operation_id, x.cost_commodity_id, 0, x.carried_basis_value, x.carried_basis_scale
+		SELECT f.operation_id, x.cost_commodity_id, 0, x.carried_basis_value, x.carried_basis_scale,
+			x.basis_knowledge = 'unknown'
 		FROM investment_transfer_facts f
 		JOIN effective_investment_transfer_links x ON x.operation_id = f.operation_id
 		WHERE f.book_id = ? AND f.transfer_kind = 'external_out'
 		UNION ALL
-		SELECT link.operation_id, pv.commodity_id, 1, pv.quantity_value, pv.quantity_scale
+		SELECT link.operation_id, pv.commodity_id, 1, pv.quantity_value, pv.quantity_scale, 0
 		FROM investment_operation_journal_links link
 		JOIN posting_versions pv ON pv.transaction_version_id = link.transaction_version_id
 		JOIN accounts equity ON equity.id = pv.account_id
@@ -1275,10 +1295,10 @@ func (r *SelfCheckRepository) SelfCheckTransferBridges(ctx context.Context, tran
 	var bridges []SelfCheckTransferBridge
 	for rows.Next() {
 		var operationID, costID int64
-		var bridged bool
+		var bridged, unknown bool
 		var value sql.NullString
 		var scale sql.NullInt64
-		if err := rows.Scan(&operationID, &costID, &bridged, &value, &scale); err != nil {
+		if err := rows.Scan(&operationID, &costID, &bridged, &value, &scale, &unknown); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan self-check transfer bridge: %w", err)
 		}
@@ -1286,6 +1306,9 @@ func (r *SelfCheckRepository) SelfCheckTransferBridges(ctx context.Context, tran
 			bridges[len(bridges)-1].CostCommodityID != costID {
 			bridges = append(bridges, SelfCheckTransferBridge{OperationID: operationID, CostCommodityID: costID,
 				Carried: exact.NewScaledInt(), Bridged: exact.NewScaledInt()})
+		}
+		if unknown {
+			bridges[len(bridges)-1].Unknown = true
 		}
 		if !value.Valid {
 			continue
@@ -1371,4 +1394,21 @@ func (r *SelfCheckRepository) SelfCheckCapitalReturns(ctx context.Context, trans
 		return nil, fmt.Errorf("iterate self-check returns of capital: %w", err)
 	}
 	return returns, nil
+}
+
+// selfCheckRevisionBasis reads a revision's basis tuple: unknown has no
+// amount, known must fit the event projection's int64.
+func selfCheckRevisionBasis(value sql.NullString, scale sql.NullInt64, knowledge string) (int64, int, error) {
+	if knowledge == InvestmentBasisUnknown && !value.Valid && !scale.Valid {
+		return 0, 0, nil
+	}
+	if knowledge != InvestmentBasisKnown || !value.Valid || !scale.Valid {
+		return 0, 0, fmt.Errorf("invalid revision basis knowledge/amount pair")
+	}
+	parsed, err := exact.Parse(value.String)
+	if err != nil {
+		return 0, 0, err
+	}
+	amount, err := exact.ScaledIntFromCoefficient(parsed, int(scale.Int64)).Int64()
+	return amount, int(scale.Int64), err
 }

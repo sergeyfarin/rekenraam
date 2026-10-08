@@ -412,13 +412,14 @@ func subjectTransferDepletionTx(ctx context.Context, tx *sql.Tx, slotOperationID
 		result, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_events (
 			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 			cost_basis_value, cost_basis_scale, cost_basis_method, metadata_json,
-			created_at, created_by_user_id, created_audit_event_id
-		) VALUES (?, ?, 'transfer_out', ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?)`,
+			created_at, created_by_user_id, created_audit_event_id, basis_knowledge
+		) VALUES (?, ?, 'transfer_out', ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?)`,
 			transfer.BookID, depletion.LotID, replacement.ID, transfer.EffectiveOn,
 			depletion.QuantityValue.Negated(), depletion.QuantityScale,
-			exact.New(-depletion.CostBasisValue), depletion.CostBasisScale,
+			nullableBasisValue(-depletion.CostBasisValue, depletion.BasisKnowledge),
+			nullableBasisScale(depletion.CostBasisScale, depletion.BasisKnowledge),
 			projection.SubjectTransferMethod, transfer.SourceEvidenceJSON,
-			journal.CreatedAt, journal.ActorUserID, auditEventID)
+			journal.CreatedAt, journal.ActorUserID, auditEventID, normalizedBasisKnowledge(depletion.BasisKnowledge))
 		if err != nil {
 			return nil, fmt.Errorf("record replacement transfer depletion: %w", err)
 		}

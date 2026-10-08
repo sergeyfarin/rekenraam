@@ -53,11 +53,11 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 		"transfer-link-revisions": `SELECT r.id, r.operation_id, r.link_seq, r.revision_seq,
 			r.caused_by_operation_id, r.supersedes_revision_id, r.source_lot_id, r.carried_basis_value,
 			r.carried_basis_scale, r.created_at, r.created_audit_event_id,
-			r.original_date_knowledge, r.original_acquired_on
+			r.original_date_knowledge, r.original_acquired_on, r.basis_knowledge
 			FROM investment_transfer_link_revisions r WHERE r.book_id = ?
 			ORDER BY r.operation_id, r.link_seq, r.revision_seq`,
 		"transfer-link-revision-depletions": `SELECT d.revision_id, d.depletion_seq, d.source_lot_id,
-			d.quantity_value, d.quantity_scale, d.cost_basis_value, d.cost_basis_scale
+			d.quantity_value, d.quantity_scale, d.cost_basis_value, d.cost_basis_scale, d.basis_knowledge
 			FROM investment_transfer_link_revision_depletions d WHERE d.book_id = ?
 			ORDER BY d.revision_id, d.depletion_seq`,
 		"split-facts": `SELECT f.operation_id, f.account_id, f.commodity_id, f.effective_on,

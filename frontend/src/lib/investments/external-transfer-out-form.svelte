@@ -304,10 +304,9 @@
               <div class="grid gap-2 border-t border-border pt-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
                 <label for={`external-transfer-out-lot-${lot.id}`} class="text-sm text-foreground">
                   <span class="font-medium">{m.investments_transfer_internal_lot_quantity()}</span>
-                  <span class="block text-xs text-muted">#{lot.id} · {dateFormatter.format(parseISO(lot.opened_on))} · {m.investments_transfer_internal_available()} {formatQuantity(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)} · {m.investments_col_cost_basis()} {lot.remaining_cost_basis_value !== null && lot.remaining_cost_basis_scale !== null ? formatQuantity(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale) : m.investments_basis_unknown()} {basisCurrency?.code ?? ''}</span>
+                  <span class="block text-xs text-muted">#{lot.id} · {dateFormatter.format(parseISO(lot.opened_on))} · {m.investments_transfer_internal_available()} {formatQuantity(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)} · {#if lot.remaining_cost_basis_value !== null && lot.remaining_cost_basis_scale !== null}{m.investments_col_cost_basis()} {formatQuantity(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale)} {basisCurrency?.code ?? ''}{:else}{m.investments_basis_unknown()}{/if}</span>
                 </label>
                 <input id={`external-transfer-out-lot-${lot.id}`} type="text" inputmode="decimal"
-                  disabled={lot.basis_knowledge === 'unknown'}
                   value={quantities[String(lot.id)] ?? ''}
                   oninput={(event) => { quantities[String(lot.id)] = event.currentTarget.value; discardPreview(); }}
                   class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
@@ -342,19 +341,26 @@
             {@const values = {
               lot: String(link.source_lot_id),
               quantity: formatQuantity(link.quantity_value, link.quantity_scale, locale),
-              basis: formatBasis(link.carried_basis_value, link.carried_basis_scale),
-              currency: basisCurrency?.code ?? ''
+              // Unknown basis has no amount: the word takes the currency slot.
+              basis: link.carried_basis_value !== null && link.carried_basis_scale !== null
+                ? formatBasis(link.carried_basis_value, link.carried_basis_scale) : '',
+              currency: link.carried_basis_value !== null ? basisCurrency?.code ?? '' : m.investments_transfer_basis_word_unknown()
             }}
             <li class="break-words">{link.original_acquired_on
               ? m.investments_transfer_internal_link({ ...values, date: dateFormatter.format(parseISO(link.original_acquired_on)) })
               : m.investments_transfer_internal_link_date_unknown(values)}</li>
           {/each}
         </ul>
-        <p class="text-sm font-semibold text-foreground">{m.investments_transfer_out_total({
-          basis: formatBasis(preview.plan.basis_value, preview.plan.basis_scale), currency: basisCurrency?.code ?? '' })}</p>
-        <p class="text-xs text-muted" role="note">{coefficientSign(preview.plan.basis_value) === 0
-          ? m.investments_transfer_out_zero_note()
-          : m.investments_transfer_out_bridge_note()}</p>
+        {#if preview.plan.basis_value !== null && preview.plan.basis_scale !== null}
+          <p class="text-sm font-semibold text-foreground">{m.investments_transfer_out_total({
+            basis: formatBasis(preview.plan.basis_value, preview.plan.basis_scale), currency: basisCurrency?.code ?? '' })}</p>
+          <p class="text-xs text-muted" role="note">{coefficientSign(preview.plan.basis_value) === 0
+            ? m.investments_transfer_out_zero_note()
+            : m.investments_transfer_out_bridge_note()}</p>
+        {:else}
+          <p class="text-sm font-semibold text-foreground">{m.investments_transfer_out_total_unknown()}</p>
+          <p class="text-xs text-muted" role="note">{m.investments_transfer_out_unknown_note()}</p>
+        {/if}
         {#if preview.plan.basis_allocation === 'average_cost_pool'}
           <p class="text-xs text-muted" role="note">{m.investments_transfer_internal_pooled_note()}</p>
         {/if}

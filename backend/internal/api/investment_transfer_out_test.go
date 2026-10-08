@@ -35,7 +35,7 @@ func TestExternalTransferOutAPIPreviewMatchesCommitAndLabelsBridge(t *testing.T)
 	var preview externalTransferOutPreviewResponse
 	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
 	assert.Equal(t, "selected_lots", preview.Plan.BasisAllocation)
-	assert.Zero(t, exact.ScaledIntFromInt64(int64(preview.Plan.BasisValue), preview.Plan.BasisScale).Cmp(
+	assert.Zero(t, exact.ScaledIntFromInt64(int64(*preview.Plan.BasisValue), *preview.Plan.BasisScale).Cmp(
 		exact.ScaledIntFromInt64(10000, 2)), "half the lot's 200.00, not the broker's figure")
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path, request, http.StatusForbidden)

@@ -525,25 +525,3 @@ func TestPooledTransferLateReconciliationRefusalRollsBackEverything(t *testing.T
 	require.NoError(t, err)
 	assert.Equal(t, SelfCheckPassed, resultFor(t, mustRunInvestmentSelfCheck(t, f), CheckInvestmentFoundation).Status)
 }
-
-func TestPooledTransferRefusesUnknownBasisWithoutWriting(t *testing.T) {
-	t.Parallel()
-	f := newInvestmentsTestFixture(t)
-	ctx := context.Background()
-	destinationID := seedTestAccountWithClass(t, f.database, "active", true, "asset", "security_holding")
-	setHoldingCostBasisMethod(t, f, "average_cost")
-	buyOn(t, f, "2026-01-01", 1, 1000)
-	unknown := buyOn(t, f, "2026-01-02", 1, 1000)
-	// Unknown basis has no transfer contract yet; it is never pooled as zero.
-	_, err := f.database.Exec(`UPDATE investment_lot_state SET basis_knowledge = 'unknown',
-		remaining_cost_basis_value = NULL, remaining_cost_basis_scale = NULL WHERE lot_id = ?`, *unknown.LotID)
-	require.NoError(t, err)
-	before := buyReplacementPreviewSnapshot(t, f.database)
-	input := pooledTransferInput(f, destinationID, "2026-02-01", exact.New(1), 0)
-	_, err = f.investmentService.PreviewInternalTransfer(ctx, input)
-	var validation ValidationError
-	require.ErrorAs(t, err, &validation)
-	_, err = f.investmentService.InternalTransfer(ctx, input)
-	require.ErrorAs(t, err, &validation)
-	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
-}

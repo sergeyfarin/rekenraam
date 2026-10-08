@@ -543,3 +543,20 @@ known basis posts the complete bridge in the replacement journal and leaves
 the original link as unknown evidence. A split conserves knowledge because it
 moves no basis. Outbound and internal transfers of unknown basis stay refused
 until transfer-link revisions carry knowledge.
+
+## Unknown transfer refinement (T-145, 2026-10-09)
+
+Outbound and internal transfers may move unknown basis. Each link records its
+depletion's knowledge, and an internal destination lot opens with that
+knowledge. An average-cost pool holding unknown basis moves out unknown in
+either lineage. An outbound transfer with any unknown link posts its security
+legs only, with no partial bridge of its known links; the complete bridge is
+posted by sourced resolution.
+
+Transfer-link revisions and their pooled depletions now carry knowledge with
+paired NULL amounts. A revision may change lineage, or a known amount, but
+never its link's knowledge; the database refuses it. Replay names the
+transfer as a dependency instead of turning recorded knowledge known or
+unknown. Effective reads take a revision's knowledge and amounts as one tuple.
+Self-check requires an unknown outbound to have no bridge, and requires a
+pooled set's link knowledge to agree with its depletions.
