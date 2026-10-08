@@ -466,8 +466,11 @@ type TransferTerms struct {
 	QuantityScale        int
 	CarriedBasisValue    exact.Coefficient
 	CarriedBasisScale    int
-	OriginalAcquiredOn   string
-	SourceEvidenceJSON   string
+	// BasisKnowledge is unknown when any committed link carries unknown basis;
+	// the carried amount is then unused, never a known zero.
+	BasisKnowledge     string
+	OriginalAcquiredOn string
+	SourceEvidenceJSON string
 }
 
 func (r *InvestmentRepository) TransferTerms(ctx context.Context, bookID, operationID int64) (TransferTerms, error) {
@@ -491,21 +494,27 @@ func (r *InvestmentRepository) TransferTerms(ctx context.Context, bookID, operat
 	// quantity, a pool's lots (whose quantities sum to the move), or the one
 	// external lot with its carried basis and original date.
 	rows, err := r.database.QueryContext(ctx, `SELECT x.source_lot_id, x.quantity_value, x.quantity_scale,
-		x.cost_commodity_id, x.carried_basis_value, x.carried_basis_scale, COALESCE(x.original_acquired_on, '')
+		x.cost_commodity_id, x.carried_basis_value, x.carried_basis_scale, COALESCE(x.original_acquired_on, ''),
+		x.basis_knowledge
 		FROM investment_transfer_lot_links x WHERE x.operation_id = ? ORDER BY x.link_seq`, operationID)
 	if err != nil {
 		return TransferTerms{}, fmt.Errorf("read transfer links: %w", err)
 	}
 	defer rows.Close()
 	total, basis := exact.NewScaledInt(), exact.NewScaledInt()
+	terms.BasisKnowledge = InvestmentBasisKnown
 	for rows.Next() {
 		var sourceLot sql.NullInt64
 		var link LotAllocation
 		var carried sql.NullString
 		var carriedScale sql.NullInt64
+		var knowledge string
 		if err := rows.Scan(&sourceLot, &link.QuantityValue, &link.QuantityScale, &terms.CostCommodityID,
-			&carried, &carriedScale, &terms.OriginalAcquiredOn); err != nil {
+			&carried, &carriedScale, &terms.OriginalAcquiredOn, &knowledge); err != nil {
 			return TransferTerms{}, fmt.Errorf("scan transfer link: %w", err)
+		}
+		if knowledge == InvestmentBasisUnknown {
+			terms.BasisKnowledge = InvestmentBasisUnknown
 		}
 		total.AddCoefficient(link.QuantityValue, link.QuantityScale)
 		if carried.Valid {

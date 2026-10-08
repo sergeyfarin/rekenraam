@@ -168,8 +168,10 @@ func splitEffectsForPositionTx(ctx context.Context, tx *sql.Tx, bookID, accountI
 		if effect.BeforeValue.Sign() == 0 {
 			continue
 		}
-		if knowledge != InvestmentBasisKnown {
-			return nil, ErrUnknownInvestmentBasis
+		// A split moves no basis, so it conserves either knowledge: an unknown
+		// lot keeps its unknown basis across the new quantity (T-145).
+		if knowledge != InvestmentBasisKnown && knowledge != InvestmentBasisUnknown {
+			return nil, fmt.Errorf("%w: lot %d has invalid basis knowledge", ErrInvalidDisposalParams, effect.LotID)
 		}
 		effect.AfterValue, effect.AfterScale, err = splitLotQuantity(effect.BeforeValue, effect.BeforeScale, numerator, denominator, ceiling)
 		if err != nil {

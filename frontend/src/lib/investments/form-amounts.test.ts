@@ -18,6 +18,18 @@ describe('parseTransferInAmounts', () => {
     });
   });
 
+  it('takes no amount for an explicitly unknown basis, never zero', () => {
+    expect(parseTransferInAmounts({ quantityStr: '2', carriedBasisStr: '', basisUnknown: true })).toEqual({
+      ok: true, values: { quantity: { value: '2', scale: 0 }, carriedBasis: null }
+    });
+    expect(parseTransferInAmounts({ quantityStr: '2', carriedBasisStr: '0', basisUnknown: true })).toEqual({
+      ok: false, field: 'carried_basis', reason: 'invalid'
+    });
+    expect(parseTransferInAmounts({ quantityStr: '0', carriedBasisStr: '', basisUnknown: true })).toEqual({
+      ok: false, field: 'quantity', reason: 'invalid'
+    });
+  });
+
   it('rejects a zero or over-precise quantity', () => {
     expect(parseTransferInAmounts({ quantityStr: '0', carriedBasisStr: '1' })).toEqual({
       ok: false, field: 'quantity', reason: 'invalid'

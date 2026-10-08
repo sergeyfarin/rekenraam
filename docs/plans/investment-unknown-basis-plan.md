@@ -8,8 +8,9 @@ Nullable **remaining** basis alone is insufficient to admit an unknown transfer.
 Immutable openings, lot events, disposal decisions, allocations and their replay
 revisions now carry explicit knowledge and NULL pairs, with faithful exports,
 self-check and gain-impact reads. Sales, average pools and replay propagate
-unknown basis into unresolved gains (boundary 2). Public admission of unknown
-transfers stays closed until boundary 3. Known zero remains known.
+unknown basis into unresolved gains (boundary 2). Unknown inbound transfers
+and splits are admitted (boundary 3a); outbound and internal transfers of
+unknown basis stay refused until boundary 3b. Known zero remains known.
 
 ## Evidence prerequisite delivered
 
@@ -80,7 +81,34 @@ change, and the original decision stays unknown evidence. Named cases:
 `TestUnknownImmutableOpeningKeepsNonSaleDepletionsGated`,
 `TestUnresolvedSaleReportsNullBasisGainAndTotal`.
 Unknown transfer depletions and their dependent links belong to boundary 3.
-Boundaries 3–5 remain open.
+
+Boundary 3a is implemented: public unknown inbound and splits. The inbound
+command and API take an explicit `basis_knowledge: unknown` with no amount; an
+omitted amount, or unknown with an amount, is refused. Unknown inbound posts
+security legs only and opens an unknown lot and link. Backdated, it replays
+later decisions: a later sale it now feeds becomes a disclosed unresolved gain
+change, and a later write-off or outbound transfer it would feed is refused,
+naming that operation. Its replacement may change the knowledge. Replacing it
+with sourced known basis posts the full bridge and resolves dependent sales
+through replay with acknowledgement; the original link stays unknown evidence.
+Correction terms report `basis_knowledge` and never prefill a known zero.
+Splits conserve knowledge, since they move no basis. The transfer-in and its
+correction form offer an explicit "cost basis unknown" option in six locales.
+Named cases:
+`TestExternalTransferInWithUnknownBasisPostsSecurityLegsOnly`,
+`TestExternalTransferInRefusesAmountWithUnknownBasis`,
+`TestBackdatedUnknownTransferInLeavesLaterSaleUnresolvedWithDisclosure`,
+`TestBackdatedUnknownTransferInRefusesLaterWriteOffDependency`,
+`TestSplitConservesUnknownBasisKnowledge`,
+`TestReplacingUnknownTransferInWithKnownBasisResolvesDependentSale`,
+`TestInternalTransferOfUnknownBasisStaysRefused`,
+`TestExternalTransferInAPIRequiresExplicitUnknownBasis`, and the browser case
+`investments-unknown-basis.spec.ts` (390 px).
+
+Boundary 3b remains: outbound and internal transfers of unknown basis
+(security legs only, no bridge while any link is unknown), pooled lineage, and
+transfer-link revisions with paired knowledge that may not change knowledge
+until boundary 4. Boundaries 4–5 remain open.
 
 1. **Immutable knowledge.** Add explicit knowledge with paired nullable basis
    fields to opening facts, lot events, disposal decisions and allocations,

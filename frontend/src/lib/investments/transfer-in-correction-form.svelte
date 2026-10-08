@@ -59,6 +59,8 @@
     ? formatLedgerAmount(source.quantity_value, source.quantity_scale) : '');
   let carriedBasisStr = $state(source.carried_basis_value !== null && source.carried_basis_scale !== null
     ? formatLedgerAmount(source.carried_basis_value, source.carried_basis_scale) : '');
+  // Prefilled from the committed link; unknown is never shown as a zero.
+  let basisUnknown = $state(source.basis_knowledge === 'unknown');
   let originalAcquiredOn = $state(source.original_acquired_on ?? '');
   let memo = $state(source.memo);
   let pending = $state(false);
@@ -85,10 +87,10 @@
   const gainRows = $derived(review?.gainImpact
     ? gainImpactRows(review.gainImpact.changes, gainImpactCurrency(currenciesByID), locale) : []);
   const canSubmit = $derived(!!reason.trim() && effectiveOn !== '' && holdingAccountID !== '' &&
-    !!quantityStr.trim() && !!carriedBasisStr.trim());
+    !!quantityStr.trim() && (basisUnknown || !!carriedBasisStr.trim()));
 
   function buildPayload(): ExternalTransferInRequest | null {
-    const amounts = parseTransferInAmounts({ quantityStr, carriedBasisStr });
+    const amounts = parseTransferInAmounts({ quantityStr, carriedBasisStr: basisUnknown ? '' : carriedBasisStr, basisUnknown });
     if (!amounts.ok) {
       formError = new TranslatedFormError(amounts.reason === 'too_large'
         ? m.investments_form_amount_too_large()
@@ -104,7 +106,9 @@
     return {
       effective_on: effectiveOn, holding_account_id: Number(holdingAccountID), commodity_id: source.commodity_id,
       quantity_value: amounts.values.quantity.value, quantity_scale: amounts.values.quantity.scale,
-      carried_basis_value: amounts.values.carriedBasis.value, carried_basis_scale: amounts.values.carriedBasis.scale,
+      ...(amounts.values.carriedBasis
+        ? { carried_basis_value: amounts.values.carriedBasis.value, carried_basis_scale: amounts.values.carriedBasis.scale }
+        : { basis_knowledge: 'unknown' as const }),
       cost_commodity_id: source.cost_commodity_id, original_acquired_on: originalAcquiredOn || undefined,
       source_evidence: source.source_evidence, memo: memo.trim() || undefined
     };
@@ -222,10 +226,16 @@
       <label for="transfer-in-correction-basis" class="mb-1 block text-sm font-medium text-foreground">
         {m.investments_transfer_carried_basis()} {basisCurrency?.code ?? ''}
       </label>
-      <input id="transfer-in-correction-basis" type="text" inputmode="decimal" bind:value={carriedBasisStr} required
-        aria-describedby="transfer-in-correction-basis-help"
-        class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 font-mono text-sm text-foreground" />
-      <p id="transfer-in-correction-basis-help" class="mt-1 text-xs text-muted">{m.investments_transfer_basis_help()}</p>
+      <input id="transfer-in-correction-basis" type="text" inputmode="decimal" bind:value={carriedBasisStr} required={!basisUnknown}
+        disabled={basisUnknown} aria-describedby="transfer-in-correction-basis-help"
+        class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 font-mono text-sm text-foreground disabled:opacity-60" />
+      <label class="mt-2 flex items-start gap-2 text-sm text-foreground">
+        <input type="checkbox" bind:checked={basisUnknown} aria-describedby="transfer-in-correction-basis-help" class="mt-0.5" />
+        <span>{m.investments_transfer_basis_unknown()}</span>
+      </label>
+      <p id="transfer-in-correction-basis-help" class="mt-1 text-xs text-muted">
+        {basisUnknown ? m.investments_transfer_basis_unknown_help() : m.investments_transfer_basis_help()}
+      </p>
     </div>
   </div>
 

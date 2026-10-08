@@ -177,6 +177,7 @@ type externalTransferInRequest struct {
 	QuantityScale             int               `json:"quantity_scale"`
 	CarriedBasisValue         *moneyCoefficient `json:"carried_basis_value"`
 	CarriedBasisScale         int               `json:"carried_basis_scale"`
+	BasisKnowledge            string            `json:"basis_knowledge,omitempty"`
 	CostCommodityID           int64             `json:"cost_commodity_id"`
 	OriginalAcquiredOn        string            `json:"original_acquired_on"`
 	SourceEvidence            json.RawMessage   `json:"source_evidence,omitempty"`
@@ -922,8 +923,17 @@ func sellInvestment(logger *slog.Logger, authService *app.AuthService, investmen
 }
 
 func externalTransferInInput(owner app.Owner, r *http.Request, request externalTransferInRequest) (app.ExternalTransferInInput, error) {
-	if request.CarriedBasisValue == nil {
+	// Omitted basis is refused: unknown must be stated, never inferred.
+	var carried int64
+	switch {
+	case request.BasisKnowledge == "unknown":
+		if request.CarriedBasisValue != nil || request.CarriedBasisScale != 0 {
+			return app.ExternalTransferInInput{}, app.ValidationError{Message: "unknown carried basis cannot have an amount"}
+		}
+	case request.CarriedBasisValue == nil:
 		return app.ExternalTransferInInput{}, app.ValidationError{Message: "known carried basis is required"}
+	default:
+		carried = int64(*request.CarriedBasisValue)
 	}
 	evidence := rawJSONText(request.SourceEvidence)
 	if evidence == "null" {
@@ -933,7 +943,7 @@ func externalTransferInInput(owner app.Owner, r *http.Request, request externalT
 		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
 		EffectiveOn: request.EffectiveOn, HoldingAccountID: request.HoldingAccountID,
 		CommodityID: request.CommodityID, QuantityValue: request.QuantityValue, QuantityScale: request.QuantityScale,
-		CarriedBasisValue: int64(*request.CarriedBasisValue), CarriedBasisScale: request.CarriedBasisScale,
+		CarriedBasisValue: carried, CarriedBasisScale: request.CarriedBasisScale, BasisKnowledge: request.BasisKnowledge,
 		CostCommodityID: request.CostCommodityID, OriginalAcquiredOn: request.OriginalAcquiredOn,
 		SourceEvidenceJSON: evidence, Memo: request.Memo,
 		ChangeReason: request.ChangeReason, ReconciliationOverride: request.ReconciliationOverride,
@@ -2651,6 +2661,7 @@ type investmentCorrectionTransferTerms struct {
 	QuantityScale        *int                             `json:"quantity_scale"`
 	CarriedBasisValue    *exact.Coefficient               `json:"carried_basis_value"`
 	CarriedBasisScale    *int                             `json:"carried_basis_scale"`
+	BasisKnowledge       string                           `json:"basis_knowledge"`
 	OriginalAcquiredOn   *string                          `json:"original_acquired_on"`
 	SourceEvidence       json.RawMessage                  `json:"source_evidence"`
 	Memo                 string                           `json:"memo"`
@@ -2682,9 +2693,12 @@ func toInvestmentCorrectionTransferTerms(terms *app.InvestmentCorrectionTransfer
 		id := terms.DestinationAccountID
 		out.DestinationAccountID = &id
 	}
+	out.BasisKnowledge = responseKnowledge(terms.BasisKnowledge)
 	if terms.TransferKind == "external_in" {
-		value, scale := terms.CarriedBasisValue, terms.CarriedBasisScale
-		out.CarriedBasisValue, out.CarriedBasisScale = &value, &scale
+		if terms.BasisKnowledge != "unknown" {
+			value, scale := terms.CarriedBasisValue, terms.CarriedBasisScale
+			out.CarriedBasisValue, out.CarriedBasisScale = &value, &scale
+		}
 		if terms.OriginalAcquiredOn != "" {
 			date := terms.OriginalAcquiredOn
 			out.OriginalAcquiredOn = &date

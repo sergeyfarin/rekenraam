@@ -12,19 +12,23 @@ import (
 )
 
 // ExternalTransferInInput records an asset arriving from outside this book.
-// Carried basis is a sourced, known amount; unresolved basis needs the later
-// nullable lot projection before it can safely be admitted.
+// Carried basis is a sourced, known amount (zero included), or explicitly
+// unknown: then only the security legs post, and the lot opens with unknown
+// basis until a sourced resolution (T-145).
 type ExternalTransferInInput struct {
-	OwnerUserID            int64
-	AuthSessionID          int64
-	RequestID              string
-	EffectiveOn            string
-	HoldingAccountID       int64
-	CommodityID            int64
-	QuantityValue          exact.Coefficient
-	QuantityScale          int
-	CarriedBasisValue      int64
-	CarriedBasisScale      int
+	OwnerUserID       int64
+	AuthSessionID     int64
+	RequestID         string
+	EffectiveOn       string
+	HoldingAccountID  int64
+	CommodityID       int64
+	QuantityValue     exact.Coefficient
+	QuantityScale     int
+	CarriedBasisValue int64
+	CarriedBasisScale int
+	// BasisKnowledge is known (the default) or unknown. Unknown basis takes
+	// no amount; it never stands for zero.
+	BasisKnowledge         string
 	CostCommodityID        int64
 	OriginalAcquiredOn     string
 	SourceEvidenceJSON     string
@@ -54,7 +58,13 @@ func (s *InvestmentService) externalTransferInPlan(ctx context.Context, input Ex
 	if input.QuantityValue.Sign() <= 0 || input.QuantityScale < 0 || input.QuantityScale > exact.MaxCryptoScale {
 		return investmentTransactionPlan{}, ValidationError{Message: "transfer quantity must be positive at a valid scale"}
 	}
-	if input.CarriedBasisValue < 0 || input.CarriedBasisScale < 0 || input.CarriedBasisScale > 12 {
+	knowledge := normalizedKnowledge(input.BasisKnowledge)
+	switch {
+	case knowledge != db.InvestmentBasisKnown && knowledge != db.InvestmentBasisUnknown:
+		return investmentTransactionPlan{}, ValidationError{Message: "basis knowledge must be known or unknown"}
+	case knowledge == db.InvestmentBasisUnknown && (input.CarriedBasisValue != 0 || input.CarriedBasisScale != 0):
+		return investmentTransactionPlan{}, ValidationError{Message: "unknown carried basis cannot have an amount"}
+	case input.CarriedBasisValue < 0 || input.CarriedBasisScale < 0 || input.CarriedBasisScale > 12:
 		return investmentTransactionPlan{}, ValidationError{Message: "known carried basis must be nonnegative at a valid money scale"}
 	}
 	if input.CostCommodityID <= 0 {
@@ -96,7 +106,8 @@ func (s *InvestmentService) externalTransferInPlan(ctx context.Context, input Ex
 		{AccountID: input.HoldingAccountID, CommodityID: input.CommodityID, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale, Memo: memo},
 		{AccountID: tradingID, CommodityID: input.CommodityID, QuantityValue: input.QuantityValue.Negated(), QuantityScale: input.QuantityScale, Memo: memo},
 	}
-	if input.CarriedBasisValue > 0 {
+	// Unknown basis posts no bridge; a known zero posts none either.
+	if knowledge == db.InvestmentBasisKnown && input.CarriedBasisValue > 0 {
 		postings = append(postings,
 			PostingInput{AccountID: tradingID, CommodityID: input.CostCommodityID, QuantityValue: exact.New(input.CarriedBasisValue), QuantityScale: input.CarriedBasisScale, Memo: memo},
 			PostingInput{AccountID: equityID, CommodityID: input.CostCommodityID, QuantityValue: exact.New(-input.CarriedBasisValue), QuantityScale: input.CarriedBasisScale, Memo: memo},
@@ -134,7 +145,8 @@ func (s *InvestmentService) externalTransferInWrite(ctx context.Context, input E
 			BookID: BookID, AccountID: input.HoldingAccountID, CommodityID: input.CommodityID,
 			OpenedOn: plan.Date, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale,
 			CostBasisValue: input.CarriedBasisValue, CostBasisScale: input.CarriedBasisScale,
-			CostCommodityID: input.CostCommodityID, MetadataJSON: `{"source":"external_transfer_in"}`,
+			OpeningBasisKnowledge: normalizedKnowledge(input.BasisKnowledge),
+			CostCommodityID:       input.CostCommodityID, MetadataJSON: `{"source":"external_transfer_in"}`,
 			CreatedAt: s.now().UTC().Format(time.RFC3339), CreatedByUserID: input.OwnerUserID,
 		},
 		OriginalAcquiredOn: strings.TrimSpace(input.OriginalAcquiredOn), SourceEvidenceJSON: plan.MetadataJSON,
@@ -157,7 +169,8 @@ func (s *InvestmentService) PreviewExternalTransferInReconciliationImpact(ctx co
 	return s.simulatedReconciliationImpact(ctx, simulated)
 }
 
-// ExternalTransferIn records a known-basis inbound transfer. One dated behind
+// ExternalTransferIn records an inbound transfer with known or explicitly
+// unknown basis. One dated behind
 // later disposals replays them and needs the preview's gain acknowledgement
 // when a committed gain changes (T-117).
 func (s *InvestmentService) ExternalTransferIn(ctx context.Context, input ExternalTransferInInput) (InvestmentTradeResult, error) {

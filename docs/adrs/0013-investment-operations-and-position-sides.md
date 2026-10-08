@@ -529,3 +529,17 @@ Sale previews and results, realized gains and per-currency realized totals
 expose NULL basis and gain with `basis_knowledge`. A currency total with any
 unresolved entry is NULL and reports `unresolved_count`, because a sum of the
 known entries is not the total. No schema change accompanies this refinement.
+
+## Unknown inbound and split refinement (T-145, 2026-10-08)
+
+An external transfer in may state its basis unknown explicitly. It then posts
+security legs only and opens a lot and link with unknown basis; an omitted
+amount is still refused, and unknown never accepts an amount. Backdated
+admission replays the holding as for any opening, so a later sale may become
+unresolved (a disclosed gain change), while a later write-off or transfer that
+would consume the unknown units is refused with that operation named. A
+replacement may change the stated knowledge. Moving from unknown to sourced
+known basis posts the complete bridge in the replacement journal and leaves
+the original link as unknown evidence. A split conserves knowledge because it
+moves no basis. Outbound and internal transfers of unknown basis stay refused
+until transfer-link revisions carry knowledge.

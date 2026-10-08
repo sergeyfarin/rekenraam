@@ -38,6 +38,8 @@
   let holdingAccountID = $state('');
   let quantityStr = $state('');
   let carriedBasisStr = $state('');
+  // Unknown basis is stated explicitly; an empty amount is never unknown.
+  let basisUnknown = $state(false);
   let costCommodityID = $state('');
   let originalAcquiredOn = $state('');
   let sourceReference = $state('');
@@ -70,7 +72,7 @@
   const loadError = $derived(accountsQuery.isError || instrumentsQuery.isError || currenciesQuery.isError);
   const canSubmit = $derived(
     !loading && !loadError && !!csrfToken && !!effectiveOn && !!selectedInstrument &&
-    !!holdingAccountID && !!quantityStr.trim() && !!carriedBasisStr.trim() && !!costCommodityID
+    !!holdingAccountID && !!quantityStr.trim() && (basisUnknown || !!carriedBasisStr.trim()) && !!costCommodityID
   );
 
   $effect(() => {
@@ -90,7 +92,8 @@
     event.preventDefault();
     if (!canSubmit || !selectedInstrument) return;
     const amounts = parseTransferInAmounts({
-      quantityStr, carriedBasisStr, quantityMaxScale: selectedInstrument.quantity_scale
+      quantityStr, carriedBasisStr: basisUnknown ? '' : carriedBasisStr,
+      quantityMaxScale: selectedInstrument.quantity_scale, basisUnknown
     });
     if (!amounts.ok) {
       formError = new TranslatedFormError(amounts.reason === 'too_large'
@@ -110,8 +113,9 @@
       commodity_id: selectedInstrument.commodity_id,
       quantity_value: amounts.values.quantity.value,
       quantity_scale: amounts.values.quantity.scale,
-      carried_basis_value: amounts.values.carriedBasis.value,
-      carried_basis_scale: amounts.values.carriedBasis.scale,
+      ...(amounts.values.carriedBasis
+        ? { carried_basis_value: amounts.values.carriedBasis.value, carried_basis_scale: amounts.values.carriedBasis.scale }
+        : { basis_knowledge: 'unknown' as const }),
       cost_commodity_id: Number(costCommodityID),
       original_acquired_on: originalAcquiredOn || undefined,
       source_evidence: sourceReference.trim() ? { reference: sourceReference.trim() } : undefined,
@@ -218,10 +222,16 @@
     </div>
     <div>
       <label for="transfer-in-basis" class="mb-1 block text-sm font-medium text-foreground">{m.investments_transfer_carried_basis()}</label>
-      <input id="transfer-in-basis" type="text" inputmode="decimal" bind:value={carriedBasisStr} required
-        aria-describedby="transfer-in-basis-help"
-        class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground" />
-      <p id="transfer-in-basis-help" class="mt-1 text-xs text-muted">{m.investments_transfer_basis_help()}</p>
+      <input id="transfer-in-basis" type="text" inputmode="decimal" bind:value={carriedBasisStr} required={!basisUnknown}
+        disabled={basisUnknown} aria-describedby="transfer-in-basis-help"
+        class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-mono text-foreground disabled:opacity-60" />
+      <label class="mt-2 flex items-start gap-2 text-sm text-foreground">
+        <input type="checkbox" bind:checked={basisUnknown} aria-describedby="transfer-in-basis-help" class="mt-0.5" />
+        <span>{m.investments_transfer_basis_unknown()}</span>
+      </label>
+      <p id="transfer-in-basis-help" class="mt-1 text-xs text-muted">
+        {basisUnknown ? m.investments_transfer_basis_unknown_help() : m.investments_transfer_basis_help()}
+      </p>
     </div>
     <div>
       <label for="transfer-in-currency" class="mb-1 block text-sm font-medium text-foreground">{m.investments_transfer_basis_currency()}</label>

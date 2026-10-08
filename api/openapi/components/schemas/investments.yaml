@@ -629,8 +629,6 @@ ExternalTransferInRequest:
     - commodity_id
     - quantity_value
     - quantity_scale
-    - carried_basis_value
-    - carried_basis_scale
     - cost_commodity_id
   properties:
     effective_on:
@@ -653,11 +651,20 @@ ExternalTransferInRequest:
     carried_basis_value:
       type: string
       pattern: '^(0|[1-9][0-9]{0,18})$'
-      description: Known carried basis; zero is an explicit known-zero basis. Unknown basis is not yet accepted.
+      description: >-
+        Known carried basis; zero is an explicit known-zero basis. Required
+        unless basis_knowledge is unknown, when it must be omitted.
     carried_basis_scale:
       type: integer
       minimum: 0
       maximum: 12
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: >-
+        Defaults to known. Unknown records the transfer with security legs
+        only; its lot's basis and later gains stay unresolved. An omitted
+        basis is refused rather than read as unknown.
     cost_commodity_id:
       type: integer
       format: int64
@@ -1396,8 +1403,12 @@ InvestmentCorrectionTransferTerms:
     An external transfer in has no source account or lineage and gives its carried basis and original date.
   required: [transfer_kind, effective_on, source_account_id, destination_account_id, commodity_id, cost_commodity_id,
     basis_allocation, destination_lineage, lot_allocations, quantity_value, quantity_scale,
-    carried_basis_value, carried_basis_scale, original_acquired_on, source_evidence, memo]
+    carried_basis_value, carried_basis_scale, basis_knowledge, original_acquired_on, source_evidence, memo]
   properties:
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: Unknown when a committed link carries unknown basis; carried_basis_value is then null.
     transfer_kind:
       type: string
       enum: [internal, external_in, external_out]
@@ -1437,7 +1448,7 @@ InvestmentCorrectionTransferTerms:
     carried_basis_value:
       type: [string, "null"]
       pattern: "^-?[0-9]+$"
-      description: External transfer in only.
+      description: External transfer in with known basis only.
     carried_basis_scale:
       type: [integer, "null"]
     original_acquired_on:

@@ -243,6 +243,9 @@ When a feature introduces a durable new rule, update one of those documents in t
   An average pool holding unknown basis has no rate, so every disposal from it
   is unresolved. Every other depletion refuses unknown basis until it has its
   own unresolved-result contract.
+- Unknown inbound basis is stated, never inferred: `basis_knowledge: unknown`
+  with no amount posts security legs only. A form or prefill must show unknown,
+  never a known zero.
 - Projected investment basis has explicit `known`/`unknown` knowledge. Unknown
   coefficient and scale are NULL in storage and on the API, and empty in CSV;
   known zero remains numeric. Numeric read-model fields are usable only when

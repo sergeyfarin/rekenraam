@@ -3,9 +3,12 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/exact"
 )
 
 // A sale over unknown basis reports NULL basis and gain with explicit
@@ -55,4 +58,35 @@ func TestUnresolvedSaleReportsNullBasisGainAndTotal(t *testing.T) {
 	require.Equal(t, "unknown", total["basis_knowledge"])
 	require.Nil(t, total["total_gain_value"])
 	require.Equal(t, float64(1), total["unresolved_count"])
+}
+
+// Unknown inbound basis must be stated: basis_knowledge unknown with no
+// amount. An omitted amount is still refused, and unknown with an amount too.
+func TestExternalTransferInAPIRequiresExplicitUnknownBasis(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "UNKIN")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	request := externalTransferInRequest{EffectiveOn: "2026-02-01", HoldingAccountID: holding.ID,
+		CommodityID: instrument.CommodityID, QuantityValue: exact.New(2), CostCommodityID: f.commodityID}
+	path := "/api/v1/investments/transfers/external/in"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusBadRequest)
+	amount := moneyCoefficient(100)
+	withAmount := request
+	withAmount.BasisKnowledge, withAmount.CarriedBasisValue, withAmount.CarriedBasisScale = "unknown", &amount, 2
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, withAmount, http.StatusBadRequest)
+
+	request.BasisKnowledge = "unknown"
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, path, request, http.StatusCreated)
+	var in externalTransferInResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &in))
+	require.Len(t, in.Transaction.JournalEntries[0].Postings, 2, "security legs only")
+	chain := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,
+		"/api/v1/investments/transactions/"+strconv.FormatInt(in.Transaction.ID, 10)+"/correction-chain", nil, http.StatusOK)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(chain.Body.Bytes(), &body))
+	terms := body["effective_transfer"].(map[string]any)
+	require.Equal(t, "unknown", terms["basis_knowledge"])
+	require.Nil(t, terms["carried_basis_value"], "never prefilled as zero")
 }

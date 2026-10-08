@@ -111,15 +111,24 @@ export function parseTradeAmounts(input: {
   return { ok: true, values: { quantity: quantity.field, cashAmount: cashAmount.field } };
 }
 
-/** A transfer needs a positive quantity and an explicitly entered, known basis. */
+/**
+ * A transfer needs a positive quantity and an explicitly stated basis: a
+ * known amount (a sourced zero included), or `basisUnknown`, which takes no
+ * amount at all — unknown never stands for zero.
+ */
 export function parseTransferInAmounts(input: {
   quantityStr: string;
   carriedBasisStr: string;
   quantityMaxScale?: number;
-}): FormResult<TransferInField, { quantity: ScaledAmount; carriedBasis: MoneyField }> {
+  basisUnknown?: boolean;
+}): FormResult<TransferInField, { quantity: ScaledAmount; carriedBasis: MoneyField | null }> {
   const quantity = parseMagnitude(input.quantityStr, { maxScale: input.quantityMaxScale });
   if (!quantity.ok) return { ok: false, field: 'quantity', reason: quantity.reason };
   if (quantity.field.value === '0') return { ok: false, field: 'quantity', reason: 'invalid' };
+  if (input.basisUnknown) {
+    if (input.carriedBasisStr.trim()) return { ok: false, field: 'carried_basis', reason: 'invalid' };
+    return { ok: true, values: { quantity: quantity.field, carriedBasis: null } };
+  }
   const carriedBasis = parseMoneyMagnitude(input.carriedBasisStr, { maxScale: 12 });
   if (!carriedBasis.ok) return { ok: false, field: 'carried_basis', reason: carriedBasis.reason };
   return { ok: true, values: { quantity: quantity.field, carriedBasis: carriedBasis.field } };

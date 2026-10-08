@@ -22892,9 +22892,14 @@ export interface components {
             commodity_id: number;
             quantity_value: string;
             quantity_scale: number;
-            /** @description Known carried basis; zero is an explicit known-zero basis. Unknown basis is not yet accepted. */
-            carried_basis_value: string;
-            carried_basis_scale: number;
+            /** @description Known carried basis; zero is an explicit known-zero basis. Required unless basis_knowledge is unknown, when it must be omitted. */
+            carried_basis_value?: string;
+            carried_basis_scale?: number;
+            /**
+             * @description Defaults to known. Unknown records the transfer with security legs only; its lot's basis and later gains stay unresolved. An omitted basis is refused rather than read as unknown.
+             * @enum {string}
+             */
+            basis_knowledge?: "known" | "unknown";
             /** Format: int64 */
             cost_commodity_id: number;
             /**
@@ -23319,6 +23324,11 @@ export interface components {
         };
         /** @description The effective transfer's committed terms, for pre-filling a replacement (T-119, outbound T-144). Selected-lot transfers list lot_allocations; pool transfers and external transfers in give quantity_value/scale. An outbound transfer has no destination account or lineage. An external transfer in has no source account or lineage and gives its carried basis and original date. */
         InvestmentCorrectionTransferTerms: {
+            /**
+             * @description Unknown when a committed link carries unknown basis; carried_basis_value is then null.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
             /** @enum {string} */
             transfer_kind: "internal" | "external_in" | "external_out";
             /** Format: date */
@@ -23347,7 +23357,7 @@ export interface components {
             lot_allocations: components["schemas"]["InvestmentLotAllocationRequest"][];
             quantity_value: string | null;
             quantity_scale: number | null;
-            /** @description External transfer in only. */
+            /** @description External transfer in with known basis only. */
             carried_basis_value: string | null;
             carried_basis_scale: number | null;
             /**

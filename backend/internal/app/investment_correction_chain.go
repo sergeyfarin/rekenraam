@@ -108,6 +108,7 @@ type InvestmentCorrectionTransferTerms struct {
 	QuantityScale        int
 	CarriedBasisValue    exact.Coefficient
 	CarriedBasisScale    int
+	BasisKnowledge       string // unknown leaves CarriedBasis unused
 	OriginalAcquiredOn   string
 	SourceEvidenceJSON   string
 	Memo                 string
@@ -320,6 +321,7 @@ func (s *InvestmentService) transferCorrectionTerms(ctx context.Context, operati
 	out := InvestmentCorrectionTransferTerms{
 		TransferKind: terms.TransferKind, EffectiveOn: terms.EffectiveOn,
 		CarriedBasisValue: terms.CarriedBasisValue, CarriedBasisScale: terms.CarriedBasisScale,
+		BasisKnowledge:     normalizedKnowledge(terms.BasisKnowledge),
 		OriginalAcquiredOn: terms.OriginalAcquiredOn, SourceAccountID: terms.SourceAccountID,
 		DestinationAccountID: terms.DestinationAccountID, CommodityID: terms.CommodityID,
 		CostCommodityID: terms.CostCommodityID, BasisAllocation: terms.BasisAllocation,
