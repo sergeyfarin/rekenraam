@@ -279,12 +279,16 @@ func TestUnknownDisposalRevisionExportsBlankAmountsAndKnowledge(t *testing.T) {
 	require.Equal(t, "2400", column("disposal-revision-allocations.csv", 2, "cost_basis_value"))
 }
 
-func TestRealizedGainsRefuseUnknownEffectiveDisposalInsteadOfReadingZero(t *testing.T) {
+func TestRealizedGainsReportUnknownEffectiveRevisionAsUnresolved(t *testing.T) {
 	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	sale := seedKnownTwoLotSale(t, f)
 	appendDisposalRevision(t, f.database, sale, "unknown", nil, mixedUnknownRevision(sale))
-	_, err := f.investmentService.ListRealizedGains(context.Background(), GainsReportParams{})
-	require.ErrorIs(t, err, db.ErrUnknownInvestmentBasis,
-		"the known-only gains read model must not report an unresolved disposal as a definitive gain")
+	gains, err := f.investmentService.ListRealizedGains(context.Background(), GainsReportParams{})
+	require.NoError(t, err)
+	require.Len(t, gains, 1)
+	require.Equal(t, db.InvestmentBasisUnknown, gains[0].BasisKnowledge,
+		"one unknown allocation leaves the disposal unresolved, never a gain against its known part")
+	require.Equal(t, "12", gains[0].QuantityValue.String())
+	require.Equal(t, int64(10000), gains[0].ProceedsValue)
 }

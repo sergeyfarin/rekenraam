@@ -120,8 +120,8 @@ below is execution order, not a chain of hard dependencies.
    Current: unknown basis [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160) last: it reaches every disposal,
    pooling, replay and read path, while the actions above ship known-basis first and leave an
    unknown-basis lot unresolved, as the contract allows.
-   Immutable opening, event and disposal knowledge and opening-only replay are implemented;
-   continue with disposal/pool propagation and general replay, then transfer admission,
+   Immutable opening, event and disposal knowledge and unresolved sales (FIFO/LIFO/specific,
+   average pools, replay, gains) are implemented; continue with transfer admission,
    sourced resolution and the UI; the [#160 implementation contract](plans/investment-unknown-basis-plan.md)
    records the boundaries and acceptance cases.
 

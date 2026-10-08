@@ -22855,13 +22855,18 @@ export interface components {
             gain_impact_acknowledgement?: string;
         };
         InvestmentLotDisposalResponse: {
+            /**
+             * @description Unknown when the disposal consumed basis that is not yet resolved. Basis and gain amounts are then null; quantity and proceeds stay exact.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
             /** Format: int64 */
             lot_id: number;
             /** @description Lossless exact integer coefficient normalized to quantity_scale. */
             quantity_value: string;
             quantity_scale: number;
-            cost_basis_value: string;
-            cost_basis_scale: number;
+            cost_basis_value: string | null;
+            cost_basis_scale: number | null;
             proceeds_value: string;
             proceeds_scale: number;
         };
@@ -23662,6 +23667,11 @@ export interface components {
             effective: boolean;
         };
         DisposalDecisionResponse: {
+            /**
+             * @description Unknown when the disposal consumed basis that is not yet resolved. Basis and gain amounts are then null; quantity and proceeds stay exact.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
             /** Format: int64 */
             id?: number;
             /** Format: int64 */
@@ -23683,8 +23693,8 @@ export interface components {
             source_recorded_at?: string;
             quantity_value: string;
             quantity_scale: number;
-            disposed_basis_value: string;
-            disposed_basis_scale: number;
+            disposed_basis_value: string | null;
+            disposed_basis_scale: number | null;
             proceeds_value: string;
             proceeds_scale: number;
             /** Format: int64 */
@@ -23694,13 +23704,18 @@ export interface components {
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
         };
         SellPreviewResponse: {
+            /**
+             * @description Unknown when the disposal consumed basis that is not yet resolved. Basis and gain amounts are then null; quantity and proceeds stay exact.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
             cost_basis_method: components["schemas"]["CostBasisMethod"];
             disposal_decision: components["schemas"]["DisposalDecisionResponse"];
             allocations: components["schemas"]["InvestmentLotDisposalResponse"][];
             /** @description Realized gain coefficient in the cost commodity (cash proceeds minus disposed cost basis), at realized_gain_scale. */
-            realized_gain: string;
+            realized_gain: string | null;
             /** @description Decimal scale for realized_gain. May differ from cash_amount_scale when disposed lots carry a finer cost-basis scale. */
-            realized_gain_scale: number;
+            realized_gain_scale: number | null;
             cash_amount_value: string;
             cash_amount_scale: number;
             gross_amount_value?: string;
@@ -23947,6 +23962,11 @@ export interface components {
             change_reason?: string;
         };
         RealizedGainEntry: {
+            /**
+             * @description Unknown when the disposal consumed basis that is not yet resolved. Basis and gain amounts are then null; quantity and proceeds stay exact.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
             /** Format: int64 */
             account_id: number;
             /** Format: int64 */
@@ -23964,15 +23984,15 @@ export interface components {
             quantity_value: string;
             quantity_scale: number;
             /** @description Disposed cost basis in minor units at disposed_basis_scale. */
-            disposed_basis_value: string;
-            disposed_basis_scale: number;
+            disposed_basis_value: string | null;
+            disposed_basis_scale: number | null;
             /** @description Cash proceeds in minor units at proceeds_scale. */
             proceeds_value: string;
             proceeds_scale: number;
             /** @description proceeds_value − disposed_basis, in minor units at realized_gain_scale. Format it with realized_gain_scale, never with proceeds_scale. */
-            realized_gain_value: string;
+            realized_gain_value: string | null;
             /** @description Scale of realized_gain_value: the deeper of proceeds_scale and disposed_basis_scale, so the difference is exact. It is not always proceeds_scale — 11 EUR of proceeds entered at scale 0 against a 10.99 EUR basis is a 0.01 EUR gain at scale 2. */
-            realized_gain_scale: number;
+            realized_gain_scale: number | null;
         };
         UnrealizedGainEntry: {
             /** Format: int64 */
@@ -24023,11 +24043,18 @@ export interface components {
             gain_unavailable?: "unknown_basis";
         };
         RealizedGainTotal: {
+            /**
+             * @description Unknown when any entry in this currency is unresolved. The total is then null: a sum of only the known entries is not the total.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
+            /** @description Number of entries in this currency whose gain is unresolved. */
+            unresolved_count: number;
             /** Format: int64 */
             cost_commodity_id: number;
             /** @description Exact sum of realized_gain_value for every entry with this cost_commodity_id. One row per cost commodity: entries are summed across differing realized_gain_scale values, and total_gain_scale is the scale the sum needs. */
-            total_gain_value: string;
-            total_gain_scale: number;
+            total_gain_value: string | null;
+            total_gain_scale: number | null;
         };
         InvestmentGainsResponse: {
             /** @description Currency labels and standard display scales; calculations retain their recorded precision. */

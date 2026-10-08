@@ -7,9 +7,9 @@ govern; `roadmap.md` alone defines execution order. This work is in progress.
 Nullable **remaining** basis alone is insufficient to admit an unknown transfer.
 Immutable openings, lot events, disposal decisions, allocations and their replay
 revisions now carry explicit knowledge and NULL pairs, with faithful exports,
-self-check and gain-impact reads. Disposal and pool *writers* and replay still
-produce known basis only. Public admission stays closed until those paths
-carry knowledge end to end. Known zero remains known.
+self-check and gain-impact reads. Sales, average pools and replay propagate
+unknown basis into unresolved gains (boundary 2). Public admission of unknown
+transfers stays closed until boundary 3. Known zero remains known.
 
 ## Evidence prerequisite delivered
 
@@ -41,15 +41,46 @@ the decision and revision writers derive an unknown total from any unknown
 allocation; exports leave unknown amounts blank; the gain-impact snapshot reads
 revision knowledge as one tuple; self-check conserves quantity and proceeds
 regardless of knowledge and replay equivalence compares allocation knowledge.
-The realized-gains read refuses unknown evidence with `ErrUnknownInvestmentBasis`
-until boundary 5 exposes unresolved gains. Named cases:
+At boundary 1 the realized-gains read refused unknown evidence; boundary 2
+replaced that with unresolved entries. Named cases:
 `TestDisposalBasisKnowledgeRequiresCompleteAmountPair`,
 `TestUnknownDisposalAllocationRequiresUnknownTotalAndMatchingLotEvent`,
 `TestUnknownDisposalRevisionKeepsAllocationSetsHealthyAndDamageVisible`,
 `TestUnknownDisposalRevisionExportsBlankAmountsAndKnowledge`,
-`TestRealizedGainsRefuseUnknownEffectiveDisposalInsteadOfReadingZero`,
+`TestRealizedGainsReportUnknownEffectiveRevisionAsUnresolved`,
 `TestInvestmentGainSnapshotReadsRevisionKnowledgeAsOneTuple`.
-Boundary 1 is complete; boundaries 2–5 remain open.
+Boundary 1 is complete.
+
+Boundary 2 is implemented for sales. Only a sale admits unknown basis
+(`DisposeLotsParams.AdmitUnknownBasis`; replay admits committed `sell`
+operations and a proposed backdated sale). FIFO, LIFO and specific-lot
+selection take the exact elected quantities; each allocation keeps its lot's
+knowledge, and one unknown allocation makes the decision unknown with a NULL
+total. An unknown lot loses quantity while its remaining basis stays NULL,
+including when it closes. An average pool holding any unknown lot has no
+rate. Every allocation from it is unknown, and every lot in the pool keeps an
+unknown remainder until the pool is exhausted. A new known acquisition after
+that opens a known pool. Write-off, cash in lieu, return of capital, splits and
+transfers still refuse unknown basis atomically. The allocation scale and range
+guard of an admitting sale use the known subtotal. Sale preview and commit
+results, realized gains and per-currency totals expose NULL basis and gain
+with `basis_knowledge`; a total with any unresolved entry is NULL with
+`unresolved_count`. The sell preview, gains report and cash-in-lieu allocation
+list render unresolved labels in six locales. A backdated known purchase that
+resolves an unknown sale through replay is a disclosed, acknowledged gain
+change, and the original decision stays unknown evidence. Named cases:
+`TestSaleOfMixedKnownAndUnknownLotsLeavesGainUnresolvedInEitherOrder`,
+`TestSaleOfOnlyKnownLotsStaysKnownBesideAnUnknownLot`,
+`TestClosingUnknownQuantityDoesNotManufactureKnownGain`,
+`TestAverageCostPoolWithUnknownBasisStaysUnresolvedUntilExhausted`,
+`TestBackdatedKnownBuyResolvingAnUnknownSaleIsDisclosed`,
+`TestBackdatedSaleThroughReplayAdmitsUnknownBasis`,
+`TestReversingAnUnresolvedSaleRestoresQuantityAndKeepsBasisUnknown`,
+`TestWriteOffRefusesUnknownProjectionAtomically`,
+`TestUnknownImmutableOpeningKeepsNonSaleDepletionsGated`,
+`TestUnresolvedSaleReportsNullBasisGainAndTotal`.
+Unknown transfer depletions and their dependent links belong to boundary 3.
+Boundaries 3–5 remain open.
 
 1. **Immutable knowledge.** Add explicit knowledge with paired nullable basis
    fields to opening facts, lot events, disposal decisions and allocations,
@@ -133,5 +164,5 @@ Boundary 1 is complete; boundaries 2–5 remain open.
 | `backend/internal/db/investment_replay_propagation.go` | Propagate knowledge across the dependency closure and distinguish the first omitted bridge from a later numeric bridge adjustment. |
 | `backend/internal/db/investment_gain_impact.go` | Implemented: the snapshot reads original/revised knowledge as one tuple, keeps NULL totals and binds unknown-to-known transitions into the token. Remaining: exercise it through real resolution commands. |
 | `backend/internal/db/self_check.go`, `self_check_replay.go`; `backend/internal/app/self_check.go` | Opening/event scans and replay equivalence now retain quantity and knowledge checks. Extend conservation auditing to unknown original/revised disposal sets while preserving every historical snapshot. |
-| `backend/internal/app/investment_cash_in_lieu.go`, `app/investments.go` sale results, `api/investment_cash_in_lieu.go` | `DisposalDecisionRecord` now carries `BasisKnowledge`; command results still compute gain from `DisposedBasisValue`. Before any writer can produce an unknown decision, these results must return NULL basis/gain for unknown instead of reading an empty amount. |
+| `backend/internal/app/investment_cash_in_lieu.go`, `api/investment_cash_in_lieu.go` | Sale results and previews return NULL basis/gain with knowledge (boundary 2). Cash in lieu still refuses unknown basis, so its result keeps numeric fields; give it nullable fields with its unresolved-result contract. |
 | `backend/internal/api/investments.go`, OpenAPI, export bundle writers and investment forms | Original fields are nullable with immutable knowledge (bundle schema 9). Disposed basis/gain contracts and six-locale entry/resolution flows still need nullable results and explicit unresolved labels. |

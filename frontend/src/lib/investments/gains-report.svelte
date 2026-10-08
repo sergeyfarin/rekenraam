@@ -202,12 +202,20 @@
                     {formatGain(entry.proceeds_value, entry.proceeds_scale, entry.cost_commodity_id)}
                   </td>
                   <td class="px-3 py-3 text-right font-mono text-muted">
-                    {formatGain(negateCoefficient(entry.disposed_basis_value), entry.disposed_basis_scale, entry.cost_commodity_id)}
+                    {#if entry.disposed_basis_value !== null && entry.disposed_basis_scale !== null}
+                      {formatGain(negateCoefficient(entry.disposed_basis_value), entry.disposed_basis_scale, entry.cost_commodity_id)}
+                    {:else}
+                      {m.investments_basis_unknown()}
+                    {/if}
                   </td>
                   <td class="py-3 pl-3 pr-5 text-right font-mono">
-                    <span class={gainClass(entry.realized_gain_value)}>
-                      {formatGain(entry.realized_gain_value, entry.realized_gain_scale, entry.cost_commodity_id)}
-                    </span>
+                    {#if entry.realized_gain_value !== null && entry.realized_gain_scale !== null}
+                      <span class={gainClass(entry.realized_gain_value)}>
+                        {formatGain(entry.realized_gain_value, entry.realized_gain_scale, entry.cost_commodity_id)}
+                      </span>
+                    {:else}
+                      <span class="text-muted">{m.investments_gain_unresolved()}</span>
+                    {/if}
                   </td>
                 </tr>
               {/each}
@@ -219,9 +227,13 @@
                     {m.investments_gains_realized_total()}
                   </td>
                   <td class="py-3 pl-3 pr-5 text-right font-mono font-semibold">
-                    <span class={gainClass(tot.total_gain_value)}>
-                      {formatGain(tot.total_gain_value, tot.total_gain_scale, tot.cost_commodity_id)}
-                    </span>
+                    {#if tot.total_gain_value !== null && tot.total_gain_scale !== null}
+                      <span class={gainClass(tot.total_gain_value)}>
+                        {formatGain(tot.total_gain_value, tot.total_gain_scale, tot.cost_commodity_id)}
+                      </span>
+                    {:else}
+                      <span class="text-muted">{m.investments_gains_total_unresolved({ count: tot.unresolved_count })}</span>
+                    {/if}
                   </td>
                 </tr>
               {/each}

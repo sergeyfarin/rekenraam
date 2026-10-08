@@ -470,8 +470,9 @@ type sellPreviewResponse struct {
 	CostBasisMethod    string                          `json:"cost_basis_method"`
 	DisposalDecision   disposalDecisionResponse        `json:"disposal_decision"`
 	Allocations        []investmentLotDisposalResponse `json:"allocations"`
-	RealizedGain       moneyCoefficient                `json:"realized_gain"`
-	RealizedGainScale  int                             `json:"realized_gain_scale"`
+	RealizedGain       *moneyCoefficient               `json:"realized_gain"`
+	RealizedGainScale  *int                            `json:"realized_gain_scale"`
+	BasisKnowledge     string                          `json:"basis_knowledge"`
 	CashAmountValue    moneyCoefficient                `json:"cash_amount_value"`
 	CashAmountScale    int                             `json:"cash_amount_scale"`
 	GrossAmountValue   *moneyCoefficient               `json:"gross_amount_value,omitempty"`
@@ -508,8 +509,9 @@ type disposalDecisionResponse struct {
 	SourceRecordedAt     string                          `json:"source_recorded_at,omitempty"`
 	QuantityValue        exact.Coefficient               `json:"quantity_value"`
 	QuantityScale        int                             `json:"quantity_scale"`
-	DisposedBasisValue   exact.Coefficient               `json:"disposed_basis_value"`
-	DisposedBasisScale   int                             `json:"disposed_basis_scale"`
+	DisposedBasisValue   *exact.Coefficient              `json:"disposed_basis_value"`
+	DisposedBasisScale   *int                            `json:"disposed_basis_scale"`
+	BasisKnowledge       string                          `json:"basis_knowledge"`
 	ProceedsValue        moneyCoefficient                `json:"proceeds_value"`
 	ProceedsScale        int                             `json:"proceeds_scale"`
 	CostCommodityID      int64                           `json:"cost_commodity_id"`
@@ -521,8 +523,9 @@ type investmentLotDisposalResponse struct {
 	LotID          int64             `json:"lot_id"`
 	QuantityValue  exact.Coefficient `json:"quantity_value"`
 	QuantityScale  int               `json:"quantity_scale"`
-	CostBasisValue moneyCoefficient  `json:"cost_basis_value"`
-	CostBasisScale int               `json:"cost_basis_scale"`
+	CostBasisValue *moneyCoefficient `json:"cost_basis_value"`
+	CostBasisScale *int              `json:"cost_basis_scale"`
+	BasisKnowledge string            `json:"basis_knowledge"`
 	ProceedsValue  moneyCoefficient  `json:"proceeds_value"`
 	ProceedsScale  int               `json:"proceeds_scale"`
 }
@@ -1421,8 +1424,9 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 			CostBasisMethod:   preview.CostBasisMethod,
 			DisposalDecision:  toDisposalDecisionResponse(preview.DisposalDecision),
 			Allocations:       toInvestmentLotDisposalResponses(preview.Allocations),
-			RealizedGain:      moneyCoefficient(preview.RealizedGain),
-			RealizedGainScale: preview.RealizedGainScale,
+			RealizedGain:      projectedBasisValue(preview.RealizedGain, preview.BasisKnowledge),
+			RealizedGainScale: projectedBasisScale(preview.RealizedGainScale, preview.BasisKnowledge),
+			BasisKnowledge:    responseKnowledge(preview.BasisKnowledge),
 			CashAmountValue:   moneyCoefficient(preview.CashAmountValue),
 			CashAmountScale:   preview.CashAmountScale,
 			GrossAmountValue:  moneyCoefficientPointer(preview.GrossAmountValue), GrossAmountScale: preview.GrossAmountScale,
@@ -1496,8 +1500,9 @@ func writeOffPreviewInvestment(logger *slog.Logger, authService *app.AuthService
 			CostBasisMethod:   preview.CostBasisMethod,
 			DisposalDecision:  toDisposalDecisionResponse(preview.DisposalDecision),
 			Allocations:       toInvestmentLotDisposalResponses(preview.Allocations),
-			RealizedGain:      moneyCoefficient(preview.RealizedGain),
-			RealizedGainScale: preview.RealizedGainScale,
+			RealizedGain:      projectedBasisValue(preview.RealizedGain, preview.BasisKnowledge),
+			RealizedGainScale: projectedBasisScale(preview.RealizedGainScale, preview.BasisKnowledge),
+			BasisKnowledge:    responseKnowledge(preview.BasisKnowledge),
 			CashAmountValue:   moneyCoefficient(preview.CashAmountValue),
 			CashAmountScale:   preview.CashAmountScale,
 		})
@@ -2071,17 +2076,37 @@ func toDisposalDecisionResponse(decision app.DisposalDecision) disposalDecisionR
 		AccountVersionID: decision.AccountVersionID, ProfileID: decision.ProfileID, ProfileVersionID: decision.ProfileVersionID,
 		SourceEffectiveFrom: decision.SourceEffectiveFrom, SourceRecordedAt: decision.SourceRecordedAt,
 		QuantityValue: decision.QuantityValue, QuantityScale: decision.QuantityScale,
-		DisposedBasisValue: decision.DisposedBasisValue, DisposedBasisScale: decision.DisposedBasisScale,
-		ProceedsValue: moneyCoefficient(decision.ProceedsValue), ProceedsScale: decision.ProceedsScale,
+		DisposedBasisValue: knownCoefficient(decision.DisposedBasisValue, decision.BasisKnowledge),
+		DisposedBasisScale: projectedBasisScale(decision.DisposedBasisScale, decision.BasisKnowledge),
+		BasisKnowledge:     responseKnowledge(decision.BasisKnowledge),
+		ProceedsValue:      moneyCoefficient(decision.ProceedsValue), ProceedsScale: decision.ProceedsScale,
 		CostCommodityID: decision.CostCommodityID, AuditEventID: decision.AuditEventID,
 		Allocations: toInvestmentLotDisposalResponses(decision.Allocations),
 	}
 }
 
+// knownCoefficient exposes an exact amount only when its basis is known;
+// unknown is NULL on the wire, never zero.
+func knownCoefficient(value exact.Coefficient, knowledge string) *exact.Coefficient {
+	if knowledge == "unknown" {
+		return nil
+	}
+	return &value
+}
+
+func responseKnowledge(knowledge string) string {
+	if knowledge == "" {
+		return "known"
+	}
+	return knowledge
+}
+
 func toInvestmentLotDisposalResponses(disposals []app.InvestmentLotDisposal) []investmentLotDisposalResponse {
 	responses := make([]investmentLotDisposalResponse, 0, len(disposals))
 	for _, disposal := range disposals {
-		responses = append(responses, investmentLotDisposalResponse{LotID: disposal.LotID, QuantityValue: disposal.QuantityValue, QuantityScale: disposal.QuantityScale, CostBasisValue: moneyCoefficient(disposal.CostBasisValue), CostBasisScale: disposal.CostBasisScale, ProceedsValue: moneyCoefficient(disposal.ProceedsValue), ProceedsScale: disposal.ProceedsScale})
+		responses = append(responses, investmentLotDisposalResponse{LotID: disposal.LotID, QuantityValue: disposal.QuantityValue, QuantityScale: disposal.QuantityScale,
+			CostBasisValue: projectedBasisValue(disposal.CostBasisValue, disposal.BasisKnowledge), CostBasisScale: projectedBasisScale(disposal.CostBasisScale, disposal.BasisKnowledge),
+			BasisKnowledge: responseKnowledge(disposal.BasisKnowledge), ProceedsValue: moneyCoefficient(disposal.ProceedsValue), ProceedsScale: disposal.ProceedsScale})
 	}
 	return responses
 }
@@ -2163,12 +2188,13 @@ type realizedGainResponse struct {
 	TransactionID      *int64            `json:"transaction_id,omitempty"`
 	QuantityValue      exact.Coefficient `json:"quantity_value"`
 	QuantityScale      int               `json:"quantity_scale"`
-	DisposedBasisValue moneyCoefficient  `json:"disposed_basis_value"`
-	DisposedBasisScale int               `json:"disposed_basis_scale"`
+	DisposedBasisValue *moneyCoefficient `json:"disposed_basis_value"`
+	DisposedBasisScale *int              `json:"disposed_basis_scale"`
 	ProceedsValue      moneyCoefficient  `json:"proceeds_value"`
 	ProceedsScale      int               `json:"proceeds_scale"`
-	RealizedGainValue  moneyCoefficient  `json:"realized_gain_value"`
-	RealizedGainScale  int               `json:"realized_gain_scale"`
+	RealizedGainValue  *moneyCoefficient `json:"realized_gain_value"`
+	RealizedGainScale  *int              `json:"realized_gain_scale"`
+	BasisKnowledge     string            `json:"basis_knowledge"`
 }
 
 type unrealizedGainResponse struct {
@@ -2192,10 +2218,14 @@ type unrealizedGainResponse struct {
 	GainUnavailable         string            `json:"gain_unavailable,omitempty"`
 }
 
+// realizedGainTotalResponse is NULL with unknown knowledge when any entry in
+// its currency is unresolved: a sum of the known entries is not the total.
 type realizedGainTotalResponse struct {
-	CostCommodityID int64            `json:"cost_commodity_id"`
-	TotalGainValue  moneyCoefficient `json:"total_gain_value"`
-	TotalGainScale  int              `json:"total_gain_scale"`
+	CostCommodityID int64             `json:"cost_commodity_id"`
+	TotalGainValue  *moneyCoefficient `json:"total_gain_value"`
+	TotalGainScale  *int              `json:"total_gain_scale"`
+	BasisKnowledge  string            `json:"basis_knowledge"`
+	UnresolvedCount int               `json:"unresolved_count"`
 }
 
 type investmentGainsResponse struct {
@@ -2239,12 +2269,13 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				TransactionID:      e.TransactionID,
 				QuantityValue:      e.QuantityValue,
 				QuantityScale:      e.QuantityScale,
-				DisposedBasisValue: moneyCoefficient(e.DisposedBasisValue),
-				DisposedBasisScale: e.DisposedBasisScale,
+				DisposedBasisValue: projectedBasisValue(e.DisposedBasisValue, e.BasisKnowledge),
+				DisposedBasisScale: projectedBasisScale(e.DisposedBasisScale, e.BasisKnowledge),
 				ProceedsValue:      moneyCoefficient(e.ProceedsValue),
 				ProceedsScale:      e.ProceedsScale,
-				RealizedGainValue:  moneyCoefficient(e.RealizedGainValue),
-				RealizedGainScale:  e.RealizedGainScale,
+				RealizedGainValue:  projectedBasisValue(e.RealizedGainValue, e.BasisKnowledge),
+				RealizedGainScale:  projectedBasisScale(e.RealizedGainScale, e.BasisKnowledge),
+				BasisKnowledge:     responseKnowledge(e.BasisKnowledge),
 			})
 		}
 		unrealizedResponses := make([]unrealizedGainResponse, 0, len(unrealized))
@@ -2279,11 +2310,16 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 		// exact.ScaledInt deepens as it adds, so one row per currency holds the
 		// sum without rounding.
 		totalsMap := map[int64]*exact.ScaledInt{}
+		unresolved := map[int64]int{}
 		var totalsOrder []int64
 		for _, e := range realized {
 			if totalsMap[e.CostCommodityID] == nil {
 				totalsMap[e.CostCommodityID] = exact.NewScaledInt()
 				totalsOrder = append(totalsOrder, e.CostCommodityID)
+			}
+			if e.BasisKnowledge == "unknown" {
+				unresolved[e.CostCommodityID]++
+				continue
 			}
 			totalsMap[e.CostCommodityID].AddInt64(e.RealizedGainValue, e.RealizedGainScale)
 		}
@@ -2295,10 +2331,16 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				writeServiceInternalError(w, r, logger, "sum realized gains", err)
 				return
 			}
+			knowledge := "known"
+			if unresolved[commodityID] > 0 {
+				knowledge = "unknown"
+			}
 			realizedTotals = append(realizedTotals, realizedGainTotalResponse{
 				CostCommodityID: commodityID,
-				TotalGainValue:  moneyCoefficient(totalValue),
-				TotalGainScale:  total.Scale(),
+				TotalGainValue:  projectedBasisValue(totalValue, knowledge),
+				TotalGainScale:  projectedBasisScale(total.Scale(), knowledge),
+				BasisKnowledge:  knowledge,
+				UnresolvedCount: unresolved[commodityID],
 			})
 		}
 		writeJSON(w, http.StatusOK, investmentGainsResponse{

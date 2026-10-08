@@ -60,8 +60,9 @@ func disposeBehindLaterRewriteTx(ctx context.Context, tx *sql.Tx, transaction Tr
 		QuantityValue: params.QuantityValue, QuantityScale: params.QuantityScale,
 		AmountValue: exact.New(params.ProceedsValue), AmountScale: params.ProceedsScale,
 		CostBasisMethod: params.CostBasisMethod, DecisionSource: params.DecisionSource,
-		SpecificLots: slices.Clone(params.Allocations), TransactionID: transaction.ID,
-		AuditEventID: auditEventID, CreatedByUserID: params.ActorUserID, CreatedAt: params.CreatedAt,
+		SpecificLots: slices.Clone(params.Allocations), AdmitUnknownBasis: params.AdmitUnknownBasis,
+		TransactionID: transaction.ID,
+		AuditEventID:  auditEventID, CreatedByUserID: params.ActorUserID, CreatedAt: params.CreatedAt,
 	})
 	simulated, err := simulateInvestmentReplayTx(ctx, tx, params.BookID, params.AccountID,
 		params.CommodityID, params.CostCommodityID, proposed)

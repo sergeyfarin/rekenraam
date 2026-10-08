@@ -161,7 +161,7 @@
         <section aria-labelledby="cil-preview-title" aria-live="polite" class="space-y-2 rounded-(--radius-control) border border-border p-3">
           <h3 id="cil-preview-title" class="text-sm font-semibold text-foreground">{m.investments_cash_in_lieu_preview_title()}</h3>
           <p class="text-sm text-foreground">{m.investments_cash_in_lieu_result({basis:money(preview.result.disposed_basis_value,preview.result.disposed_basis_scale),gain:money(preview.result.realized_gain_value,preview.result.realized_gain_scale),currency:currency?.code ?? '',method:costBasisMethodLabel(preview.result.cost_basis_method)})}</p>
-          <ul class="space-y-1 text-sm text-foreground">{#each preview.result.allocations as a(a.lot_id)}<li>{m.investments_cash_in_lieu_allocation({lot:String(a.lot_id),quantity:formatQuantity(a.quantity_value,a.quantity_scale,locale),basis:money(a.cost_basis_value,a.cost_basis_scale),currency:currency?.code ?? ''})}</li>{/each}</ul>
+          <ul class="space-y-1 text-sm text-foreground">{#each preview.result.allocations as a(a.lot_id)}<li>{m.investments_cash_in_lieu_allocation({lot:String(a.lot_id),quantity:formatQuantity(a.quantity_value,a.quantity_scale,locale),basis:a.cost_basis_value !== null && a.cost_basis_scale !== null ? money(a.cost_basis_value,a.cost_basis_scale) : m.investments_basis_unknown(),currency:currency?.code ?? ''})}</li>{/each}</ul>
         </section>
       {/if}
     </fieldset>

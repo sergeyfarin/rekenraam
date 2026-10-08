@@ -46,14 +46,14 @@ func TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency(t *testing.T
 			require.Len(t, result.RealizedTotals, 1)
 			total := result.RealizedTotals[0]
 			require.Equal(t, f.commodityID, total.CostCommodityID)
-			got, ok := new(big.Rat).SetString(fmt.Sprintf("%de-%d", total.TotalGainValue, total.TotalGainScale))
+			got, ok := new(big.Rat).SetString(fmt.Sprintf("%de-%d", *total.TotalGainValue, *total.TotalGainScale))
 			require.True(t, ok)
 			want, ok := new(big.Rat).SetString(tc.total)
 			require.True(t, ok)
 			require.Zero(t, got.Cmp(want))
 			expected := map[string]string{"2026-02-02": "0.01", "2026-02-04": "20", "2026-02-06": "-0.02"}
 			for _, e := range result.Realized {
-				got, ok := new(big.Rat).SetString(fmt.Sprintf("%de-%d", e.RealizedGainValue, e.RealizedGainScale))
+				got, ok := new(big.Rat).SetString(fmt.Sprintf("%de-%d", *e.RealizedGainValue, *e.RealizedGainScale))
 				require.True(t, ok)
 				want, ok := new(big.Rat).SetString(expected[e.DisposalDate])
 				require.True(t, ok)
@@ -97,7 +97,7 @@ func TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency(t *testing.T
 	for _, total := range result.RealizedTotals {
 		want, exists := wantByCurrency[total.CostCommodityID]
 		require.True(t, exists, "unknown or duplicated currency total")
-		got, ok := new(big.Rat).SetString(fmt.Sprintf("%de-%d", total.TotalGainValue, total.TotalGainScale))
+		got, ok := new(big.Rat).SetString(fmt.Sprintf("%de-%d", *total.TotalGainValue, *total.TotalGainScale))
 		require.True(t, ok)
 		require.Zero(t, got.Cmp(want))
 		delete(wantByCurrency, total.CostCommodityID)

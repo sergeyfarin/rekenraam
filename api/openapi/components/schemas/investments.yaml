@@ -566,6 +566,7 @@ InvestmentWriteOffRequest:
 InvestmentLotDisposalResponse:
   type: object
   required:
+    - basis_knowledge
     - lot_id
     - quantity_value
     - quantity_scale
@@ -574,6 +575,12 @@ InvestmentLotDisposalResponse:
     - proceeds_value
     - proceeds_scale
   properties:
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: >-
+        Unknown when the disposal consumed basis that is not yet resolved.
+        Basis and gain amounts are then null; quantity and proceeds stay exact.
     lot_id:
       type: integer
       format: int64
@@ -584,10 +591,10 @@ InvestmentLotDisposalResponse:
     quantity_scale:
       type: integer
     cost_basis_value:
-      type: string
+      type: [string, 'null']
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
     cost_basis_scale:
-      type: integer
+      type: [integer, 'null']
     proceeds_value:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
@@ -1944,6 +1951,7 @@ InvestmentCorrectionNodeResponse:
 DisposalDecisionResponse:
   type: object
   required:
+    - basis_knowledge
     - cost_basis_method
     - resolution_tier
     - quantity_value
@@ -1955,6 +1963,12 @@ DisposalDecisionResponse:
     - cost_commodity_id
     - allocations
   properties:
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: >-
+        Unknown when the disposal consumed basis that is not yet resolved.
+        Basis and gain amounts are then null; quantity and proceeds stay exact.
     id:
       type: integer
       format: int64
@@ -1990,10 +2004,10 @@ DisposalDecisionResponse:
     quantity_scale:
       type: integer
     disposed_basis_value:
-      type: string
+      type: [string, 'null']
       pattern: '^-?(0|[1-9][0-9]{0,37})$'
     disposed_basis_scale:
-      type: integer
+      type: [integer, 'null']
     proceeds_value:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
@@ -2013,6 +2027,7 @@ DisposalDecisionResponse:
 SellPreviewResponse:
   type: object
   required:
+    - basis_knowledge
     - cost_basis_method
     - disposal_decision
     - allocations
@@ -2026,6 +2041,12 @@ SellPreviewResponse:
     - settlement_date
     - charges
   properties:
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: >-
+        Unknown when the disposal consumed basis that is not yet resolved.
+        Basis and gain amounts are then null; quantity and proceeds stay exact.
     cost_basis_method:
       $ref: "#/CostBasisMethod"
     disposal_decision:
@@ -2035,11 +2056,11 @@ SellPreviewResponse:
       items:
         $ref: "#/InvestmentLotDisposalResponse"
     realized_gain:
-      type: string
+      type: [string, 'null']
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: Realized gain coefficient in the cost commodity (cash proceeds minus disposed cost basis), at realized_gain_scale.
     realized_gain_scale:
-      type: integer
+      type: [integer, 'null']
       description: Decimal scale for realized_gain. May differ from cash_amount_scale when disposed lots carry a finer cost-basis scale.
     cash_amount_value:
       type: string
@@ -2560,6 +2581,7 @@ InvestmentAutomationRulesRequest:
 RealizedGainEntry:
   type: object
   required:
+    - basis_knowledge
     - account_id
     - commodity_id
     - cost_commodity_id
@@ -2573,6 +2595,12 @@ RealizedGainEntry:
     - realized_gain_value
     - realized_gain_scale
   properties:
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: >-
+        Unknown when the disposal consumed basis that is not yet resolved.
+        Basis and gain amounts are then null; quantity and proceeds stay exact.
     account_id:
       type: integer
       format: int64
@@ -2595,11 +2623,11 @@ RealizedGainEntry:
     quantity_scale:
       type: integer
     disposed_basis_value:
-      type: string
+      type: [string, 'null']
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: Disposed cost basis in minor units at disposed_basis_scale.
     disposed_basis_scale:
-      type: integer
+      type: [integer, 'null']
     proceeds_value:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
@@ -2607,13 +2635,13 @@ RealizedGainEntry:
     proceeds_scale:
       type: integer
     realized_gain_value:
-      type: string
+      type: [string, 'null']
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: >-
         proceeds_value − disposed_basis, in minor units at realized_gain_scale.
         Format it with realized_gain_scale, never with proceeds_scale.
     realized_gain_scale:
-      type: integer
+      type: [integer, 'null']
       description: >-
         Scale of realized_gain_value: the deeper of proceeds_scale and
         disposed_basis_scale, so the difference is exact. It is not always
@@ -2706,15 +2734,26 @@ UnrealizedGainEntry:
 RealizedGainTotal:
   type: object
   required:
+    - basis_knowledge
+    - unresolved_count
     - cost_commodity_id
     - total_gain_value
     - total_gain_scale
   properties:
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: >-
+        Unknown when any entry in this currency is unresolved. The total is
+        then null: a sum of only the known entries is not the total.
+    unresolved_count:
+      type: integer
+      description: Number of entries in this currency whose gain is unresolved.
     cost_commodity_id:
       type: integer
       format: int64
     total_gain_value:
-      type: string
+      type: [string, 'null']
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: >-
         Exact sum of realized_gain_value for every entry with this
@@ -2722,7 +2761,7 @@ RealizedGainTotal:
         across differing realized_gain_scale values, and total_gain_scale is
         the scale the sum needs.
     total_gain_scale:
-      type: integer
+      type: [integer, 'null']
 
 InvestmentGainsResponse:
   type: object

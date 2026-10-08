@@ -712,10 +712,14 @@
           {#if cashCurrencyCode}<span class="ml-1 text-muted">{cashCurrencyCode}</span>{/if}
         </span>
         <span class="text-muted">{m.investments_sell_preview_gain()}</span>
-        <span class="text-right font-mono {coefficientSign(preview.realized_gain) >= 0 ? 'text-foreground' : 'text-destructive'}">
-          {coefficientSign(preview.realized_gain) >= 0 ? '+' : ''}{formatGain(preview.realized_gain, preview.realized_gain_scale)}
-          {#if cashCurrencyCode}<span class="ml-1 text-muted">{cashCurrencyCode}</span>{/if}
-        </span>
+        {#if preview.realized_gain !== null && preview.realized_gain_scale !== null}
+          <span class="text-right font-mono {coefficientSign(preview.realized_gain) >= 0 ? 'text-foreground' : 'text-destructive'}">
+            {coefficientSign(preview.realized_gain) >= 0 ? '+' : ''}{formatGain(preview.realized_gain, preview.realized_gain_scale)}
+            {#if cashCurrencyCode}<span class="ml-1 text-muted">{cashCurrencyCode}</span>{/if}
+          </span>
+        {:else}
+          <span class="text-right text-muted" data-testid="sell-preview-gain-unresolved">{m.investments_gain_unresolved()}</span>
+        {/if}
       </div>
       {#if preview.allocations.length > 0}
         <details class="mt-1">
@@ -730,7 +734,11 @@
                   {formatScaledValue(alloc.quantity_value, alloc.quantity_scale, locale)}
                 </span>
                 <span class="text-right font-mono text-muted">
-                  {m.investments_sell_preview_basis()} {formatScaledValue(alloc.cost_basis_value, alloc.cost_basis_scale, locale)}
+                  {#if alloc.cost_basis_value !== null && alloc.cost_basis_scale !== null}
+                    {m.investments_sell_preview_basis()} {formatScaledValue(alloc.cost_basis_value, alloc.cost_basis_scale, locale)}
+                  {:else}
+                    {m.investments_basis_unknown()}
+                  {/if}
                 </span>
               </li>
             {/each}

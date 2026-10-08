@@ -502,3 +502,30 @@ read model stays known-only and refuses unknown evidence until it can expose
 unresolved gains. Writers still produce known allocations only: pool
 propagation, unknown-input replay, transfer admission and sourced resolution
 remain open in #160.
+
+## Unresolved sale refinement (T-145, 2026-10-08)
+
+A sale may consume lots whose remaining basis is unknown; no other depletion
+may yet. FIFO, LIFO and specific-lot elections take exact quantities. Each
+allocation keeps its lot's knowledge, and one unknown allocation leaves the
+decision's total basis and gain unresolved. An unknown lot loses quantity
+while its remaining basis stays NULL, including when it closes, so closing
+unknown quantity never manufactures a known gain or zero.
+
+An average-cost pool holding any unknown lot has no definitive rate. Every
+allocation from it is unknown, and pooled redistribution leaves every lot of
+that pool with an unknown remainder; immutable opening evidence is unchanged.
+After the pool is exhausted, a new known acquisition forms a known pool;
+earlier unresolved decisions are not relabeled.
+
+Replay admits committed `sell` operations, and a proposed backdated sale by
+its explicit flag, through the same writer. A history change that turns an
+unknown sale known, or the reverse, is a gain-impact change requiring
+acknowledgement. The original decision remains unknown evidence. Write-off,
+cash in lieu, return of capital, splits and transfers keep refusing unknown
+basis atomically until their own unresolved-result contracts exist.
+
+Sale previews and results, realized gains and per-currency realized totals
+expose NULL basis and gain with `basis_knowledge`. A currency total with any
+unresolved entry is NULL and reports `unresolved_count`, because a sum of the
+known entries is not the total. No schema change accompanies this refinement.

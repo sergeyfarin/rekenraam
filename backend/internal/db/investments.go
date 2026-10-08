@@ -373,16 +373,22 @@ type DisposeLotsParams struct {
 	CostBasisMethod string
 	// EventKind is transfer_out only for an explicit in-kind movement. Empty
 	// preserves the ordinary disposal event used by trades and replay.
-	EventKind      string
-	DecisionSource DisposalDecisionSource
-	CreatedAt      string
-	ActorUserID    int64
-	AuthSessionID  int64
-	RequestID      string
-	OriginType     string
-	Operation      string
-	ChangeReason   string
-	MetadataJSON   string
+	EventKind string
+	// AdmitUnknownBasis lets a sale consume lots whose remaining basis is
+	// unknown: quantity is still exact, while the consumed basis and the
+	// decision's gain stay unresolved (T-145). Other depletions — write-off,
+	// cash in lieu, transfers — refuse unknown basis until their own
+	// unresolved-result contracts exist.
+	AdmitUnknownBasis bool
+	DecisionSource    DisposalDecisionSource
+	CreatedAt         string
+	ActorUserID       int64
+	AuthSessionID     int64
+	RequestID         string
+	OriginType        string
+	Operation         string
+	ChangeReason      string
+	MetadataJSON      string
 }
 
 type InvestmentPositionRecord struct {
@@ -1455,8 +1461,10 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 		return nil, err
 	}
 	// Include future acquisitions too: widening an eligible lot must not make
-	// the current all-lots position unreadable (T-104).
-	if err := requirePositionBasisRangeTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
+	// the current all-lots position unreadable (T-104). A sale admitting
+	// unknown basis can only check the representable known subtotal.
+	if err := requirePositionBasisRangeQueryTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
+		params.CostCommodityID, params.AdmitUnknownBasis); err != nil {
 		return nil, err
 	}
 	if err := updatePositionMethodFamilyTx(ctx, tx, params, method, auditEventID); err != nil {
@@ -1680,6 +1688,7 @@ type avgCostLotRef struct {
 	quantityScale  int
 	costBasisValue int64
 	costBasisScale int
+	unknownBasis   bool
 }
 
 func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, auditEventID int64, allocationScale int) ([]LotDisposalRecord, error) {
@@ -1694,7 +1703,7 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 	}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, remaining_quantity_value, remaining_quantity_scale,
-		       remaining_cost_basis_value, remaining_cost_basis_scale
+		       remaining_cost_basis_value, remaining_cost_basis_scale, basis_knowledge
 		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND status = 'open'
 			AND opened_on <= ?
@@ -1704,12 +1713,23 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		return nil, fmt.Errorf("read average-cost lots: %w", err)
 	}
 	var lots []avgCostLotRef
+	// One unknown lot leaves the pool without a definitive rate (T-145).
+	unknownPool := false
 	for rows.Next() {
 		var lot avgCostLotRef
-		if err := rows.Scan(&lot.id, &lot.quantityValue, &lot.quantityScale, (*knownInvestmentBasis)(&lot.costBasisValue), &lot.costBasisScale); err != nil {
+		var basis, basisScale sql.NullInt64
+		var knowledge string
+		if err := rows.Scan(&lot.id, &lot.quantityValue, &lot.quantityScale, &basis, &basisScale, &knowledge); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan average-cost lot: %w", err)
 		}
+		lot.costBasisValue, lot.costBasisScale, err = projectedBasis(basis, basisScale, knowledge)
+		if err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan average-cost lot %d basis: %w", lot.id, err)
+		}
+		lot.unknownBasis = knowledge == InvestmentBasisUnknown
+		unknownPool = unknownPool || lot.unknownBasis
 		lots = append(lots, lot)
 	}
 	if err := rows.Close(); err != nil {
@@ -1717,6 +1737,9 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 	}
 	if len(lots) == 0 {
 		return nil, ErrInsufficientLots
+	}
+	if unknownPool && (!params.AdmitUnknownBasis || eventKind != "disposal") {
+		return nil, ErrUnknownInvestmentBasis
 	}
 
 	// The pool math below treats every lot's quantity and basis as plain
@@ -1746,6 +1769,12 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 			return nil, err
 		}
 		lots[i].quantityValue, lots[i].quantityScale = quantity, commonScale
+		if unknownPool {
+			// No pool rate: only quantities are split below, and no basis
+			// amount takes part in the arithmetic.
+			lots[i].costBasisValue, lots[i].costBasisScale = 0, commonCostScale
+			continue
+		}
 
 		basis, err := exact.ScaledIntFromInt64(lots[i].costBasisValue, lots[i].costBasisScale).TruncatedTo(commonCostScale).Int64()
 		if err != nil {
@@ -1808,7 +1837,10 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 			continue
 		}
 		reported := new(big.Int)
-		if i == lastTouched {
+		knowledge := InvestmentBasisKnown
+		if unknownPool {
+			knowledge = InvestmentBasisUnknown
+		} else if i == lastTouched {
 			reported.Set(disposedBasisRemaining)
 		} else {
 			reported.Mul(pooledBasis, takes[i])
@@ -1826,11 +1858,12 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 			INSERT INTO investment_lot_events (
 				book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 				cost_basis_value, cost_basis_scale, cost_basis_method, metadata_json,
-				created_at, created_by_user_id, created_audit_event_id
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'average_cost', ?, ?, ?, ?)
+				created_at, created_by_user_id, created_audit_event_id, basis_knowledge
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'average_cost', ?, ?, ?, ?, ?)
 		`, params.BookID, lot.id, eventKind, nullablePositiveInt64(params.TransactionID), params.EventDate,
-			takeCoeff.Negated(), lot.quantityScale, -reportedValue, commonCostScale,
-			params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
+			takeCoeff.Negated(), lot.quantityScale, nullableBasisValue(-reportedValue, knowledge),
+			nullableBasisScale(commonCostScale, knowledge),
+			params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID, knowledge)
 		if err != nil {
 			return nil, fmt.Errorf("insert average-cost disposal lot event: %w", err)
 		}
@@ -1840,7 +1873,7 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		}
 		disposals = append(disposals, LotDisposalRecord{EventID: eventID, LotID: lot.id, QuantityValue: takeCoeff,
 			QuantityScale: lot.quantityScale, CostBasisValue: reportedValue, CostBasisScale: commonCostScale,
-			CostCommodityID: params.CostCommodityID})
+			CostCommodityID: params.CostCommodityID, BasisKnowledge: knowledge})
 		disposedBasisRemaining.Sub(disposedBasisRemaining, reported)
 	}
 
@@ -1875,13 +1908,20 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		if err != nil {
 			return nil, err
 		}
+		// Pooled basis is redistributed to every lot, so an unknown pool
+		// leaves every lot it held without a known remaining basis.
+		knowledge := InvestmentBasisKnown
+		if unknownPool {
+			knowledge = InvestmentBasisUnknown
+		}
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE investment_lot_state
 			SET remaining_quantity_value = ?, remaining_quantity_scale = ?,
-				remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?, status = ?,
+				remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?, status = ?, basis_knowledge = ?,
 				updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
-			WHERE lot_id IN (SELECT id FROM investment_lots WHERE book_id = ? AND id = ?)`, nextQty, commonScale, nextBasisValue, commonCostScale, status, params.CreatedAt, params.ActorUserID, auditEventID,
-			params.BookID, lot.id); err != nil {
+			WHERE lot_id IN (SELECT id FROM investment_lots WHERE book_id = ? AND id = ?)`, nextQty, commonScale,
+			nullableBasisValue(nextBasisValue, knowledge), nullableBasisScale(commonCostScale, knowledge), status, knowledge,
+			params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lot.id); err != nil {
 			return nil, fmt.Errorf("update average-cost lot projection: %w", err)
 		}
 	}
@@ -3040,12 +3080,14 @@ func basisFitsInt64At(recorded []recordedBasis, scale int) bool {
 // and put a single position's projection rows back at mixed scales, which is
 // the state T-97 removed.
 func positionBasisAllocationScaleTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams) (int, error) {
+	// Unknown basis has no amount to split. A sale admitting it resolves the
+	// scale over the known lots; every other path still refuses on scan.
 	rows, err := tx.QueryContext(ctx, `
 		SELECT remaining_cost_basis_value, remaining_cost_basis_scale
 		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
-			AND status = 'open' AND opened_on <= ?
-	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate)
+			AND status = 'open' AND opened_on <= ? AND (? = 0 OR basis_knowledge = 'known')
+	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate, params.AdmitUnknownBasis)
 	if err != nil {
 		return 0, fmt.Errorf("read position basis for allocation scale: %w", err)
 	}
@@ -3080,7 +3122,8 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		lot.CostCommodityID != params.CostCommodityID || lot.Status != "open" {
 		return LotDisposalRecord{}, ErrNotFound
 	}
-	if lot.BasisKnowledge != InvestmentBasisKnown {
+	unknown := lot.BasisKnowledge == InvestmentBasisUnknown
+	if lot.BasisKnowledge != InvestmentBasisKnown && (!unknown || !params.AdmitUnknownBasis || eventKind != "disposal") {
 		return LotDisposalRecord{}, ErrUnknownInvestmentBasis
 	}
 	// Temporal eligibility (T-95). A disposal may only consume shares that were
@@ -3116,19 +3159,26 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		return LotDisposalRecord{}, ErrInsufficientLots
 	}
 	// The basis is split at the position's allocation scale, not at whichever
-	// scale this purchase was typed at (T-103).
-	remainingCost, err := exact.ScaledIntFromInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale).TruncatedTo(allocationScale).Int64()
-	if err != nil {
-		return LotDisposalRecord{}, fmt.Errorf("restate lot %d cost basis to scale %d: %w", lotID, allocationScale, err)
+	// scale this purchase was typed at (T-103). Unknown basis is not split:
+	// the exact quantity leaves the lot and the remainder stays unknown.
+	var costBasisValue, nextRemainingCost int64
+	knowledge := InvestmentBasisKnown
+	if unknown {
+		knowledge = InvestmentBasisUnknown
+	} else {
+		remainingCost, err := exact.ScaledIntFromInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale).TruncatedTo(allocationScale).Int64()
+		if err != nil {
+			return LotDisposalRecord{}, fmt.Errorf("restate lot %d cost basis to scale %d: %w", lotID, allocationScale, err)
+		}
+		// Both quantities are at commonScale, so the ratio is unaffected by
+		// which scale that is.
+		costBasisValue = proratedCostBasis(remainingCost, disposedAtCommon, remainingAtCommon)
+		nextRemainingCost = remainingCost - costBasisValue
 	}
-	// Both quantities are at commonScale, so the ratio is unaffected by which
-	// scale that is.
-	costBasisValue := proratedCostBasis(remainingCost, disposedAtCommon, remainingAtCommon)
 	nextRemainingQuantity, err := exact.FromBig(new(big.Int).Sub(remainingAtCommon.BigInt(), disposedAtCommon.BigInt()))
 	if err != nil {
 		return LotDisposalRecord{}, err
 	}
-	nextRemainingCost := remainingCost - costBasisValue
 	status := "open"
 	if nextRemainingQuantity.Sign() == 0 {
 		status = "closed"
@@ -3138,19 +3188,21 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		SET remaining_quantity_value = ?, remaining_quantity_scale = ?,
 			remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?, status = ?,
 			updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
-		WHERE lot_id IN (SELECT id FROM investment_lots WHERE book_id = ? AND id = ?)`, nextRemainingQuantity, commonScale, nextRemainingCost, allocationScale, status, params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
+		WHERE lot_id IN (SELECT id FROM investment_lots WHERE book_id = ? AND id = ?)`, nextRemainingQuantity, commonScale,
+		nullableBasisValue(nextRemainingCost, knowledge), nullableBasisScale(allocationScale, knowledge), status,
+		params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("update disposed investment lot: %w", err)
 	}
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO investment_lot_events (
 			book_id, lot_id, event_kind, transaction_id, event_date, quantity_value, quantity_scale,
 			cost_basis_value, cost_basis_scale, cost_basis_method, metadata_json,
-			created_at, created_by_user_id, created_audit_event_id
+			created_at, created_by_user_id, created_audit_event_id, basis_knowledge
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?)
 	`, params.BookID, lotID, eventKind, nullablePositiveInt64(params.TransactionID), params.EventDate,
-		quantityValue.Negated(), quantityScale, -costBasisValue, allocationScale,
-		params.CostBasisMethod, params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID)
+		quantityValue.Negated(), quantityScale, nullableBasisValue(-costBasisValue, knowledge), nullableBasisScale(allocationScale, knowledge),
+		params.CostBasisMethod, params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID, knowledge)
 	if err != nil {
 		return LotDisposalRecord{}, fmt.Errorf("insert disposal lot event: %w", err)
 	}
@@ -3159,13 +3211,16 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		return LotDisposalRecord{}, fmt.Errorf("read disposal lot event id: %w", err)
 	}
 	return LotDisposalRecord{
-		EventID:         eventID,
-		LotID:           lotID,
-		QuantityValue:   quantityValue,
-		QuantityScale:   quantityScale,
-		CostBasisValue:  costBasisValue,
+		EventID:        eventID,
+		LotID:          lotID,
+		QuantityValue:  quantityValue,
+		QuantityScale:  quantityScale,
+		CostBasisValue: costBasisValue,
+		// An unknown allocation keeps the position's allocation scale only so
+		// its proceeds split identically once the basis is resolved.
 		CostBasisScale:  allocationScale,
 		CostCommodityID: lot.CostCommodityID,
+		BasisKnowledge:  knowledge,
 	}, nil
 }
 
@@ -3234,6 +3289,10 @@ type RealizedGainRecord struct {
 	// 11 EUR of proceeds entered at scale 0 against a 10.99 EUR basis yields
 	// 0.01 EUR, a figure scale 0 cannot hold (T-101).
 	RealizedGainScale int
+	// BasisKnowledge is unknown when any of the group's disposal events
+	// consumed unknown basis. DisposedBasis and RealizedGain are then unused:
+	// an unresolved disposal never reports a gain against a partial basis.
+	BasisKnowledge string
 }
 
 type realizedGainEventRow struct {
@@ -3247,6 +3306,18 @@ type realizedGainEventRow struct {
 	quantityScale   int
 	costBasisValue  int64
 	costBasisScale  int
+	unknownBasis    bool
+}
+
+// scanRealizedGainBasis reads one disposal's basis knowledge/amount tuple.
+func scanRealizedGainBasis(e *realizedGainEventRow, value, scale sql.NullInt64, knowledge string) error {
+	basis, basisScale, err := projectedBasis(value, scale, knowledge)
+	if err != nil {
+		return fmt.Errorf("realized gain disposal %d: %w", e.id, err)
+	}
+	e.costBasisValue, e.costBasisScale = basis, basisScale
+	e.unknownBasis = knowledge == InvestmentBasisUnknown
+	return nil
 }
 
 // ListRealizedGains returns one row per disposal event group (investment_lot_events
@@ -3290,7 +3361,8 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			le.quantity_value,
 			le.quantity_scale,
 			le.cost_basis_value,
-			le.cost_basis_scale
+			le.cost_basis_scale,
+			le.basis_knowledge
 		FROM effective_investment_lot_events le
 		JOIN current_investment_lots lot ON lot.id = le.lot_id
 		WHERE lot.book_id = ?
@@ -3303,14 +3375,16 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	var events []realizedGainEventRow
 	for rows.Next() {
 		var e realizedGainEventRow
-		// The realized-gain read model is known-only until it exposes
-		// unresolved gains (T-145); unknown basis refuses, never reads as zero.
-		var basis knownInvestmentBasis
-		if err := rows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID, &e.commodityID, &e.costCommodityID, &e.quantityValue, &e.quantityScale, &basis, &e.costBasisScale); err != nil {
+		var basis, basisScale sql.NullInt64
+		var knowledge string
+		if err := rows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID, &e.commodityID, &e.costCommodityID, &e.quantityValue, &e.quantityScale, &basis, &basisScale, &knowledge); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan realized gain event: %w", err)
 		}
-		e.costBasisValue = int64(basis)
+		if err := scanRealizedGainBasis(&e, basis, basisScale, knowledge); err != nil {
+			rows.Close()
+			return nil, err
+		}
 		events = append(events, e)
 	}
 	if err := rows.Close(); err != nil {
@@ -3326,7 +3400,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 				WHERE original.decision_id = d.id),
 			d.transaction_id, d.event_date, d.account_id, d.commodity_id,
 			d.cost_commodity_id, allocation.quantity_value, allocation.quantity_scale,
-			allocation.cost_basis_value, allocation.cost_basis_scale
+			allocation.cost_basis_value, allocation.cost_basis_scale, allocation.basis_knowledge
 		FROM investment_disposal_decisions d
 		JOIN effective_investment_operations operation ON operation.id = d.operation_id
 		JOIN latest_investment_disposal_revisions revision ON revision.decision_id = d.id
@@ -3341,15 +3415,20 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	for revisedRows.Next() {
 		var e realizedGainEventRow
 		var quantity exact.Coefficient
-		var basis knownInvestmentBasis
+		var basis, basisScale sql.NullInt64
+		var knowledge string
 		if err := revisedRows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID,
 			&e.commodityID, &e.costCommodityID, &quantity, &e.quantityScale,
-			&basis, &e.costBasisScale); err != nil {
+			&basis, &basisScale, &knowledge); err != nil {
 			revisedRows.Close()
 			return nil, fmt.Errorf("scan effective realized gain allocation: %w", err)
 		}
+		if err := scanRealizedGainBasis(&e, basis, basisScale, knowledge); err != nil {
+			revisedRows.Close()
+			return nil, err
+		}
 		e.quantityValue = quantity.Negated()
-		e.costBasisValue = -int64(basis)
+		e.costBasisValue = -e.costBasisValue
 		events = append(events, e)
 	}
 	if err := revisedRows.Err(); err != nil {
@@ -3407,6 +3486,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		minEventID    int64
 		quantity      *exact.ScaledInt
 		costBasis     *exact.ScaledInt
+		unknownBasis  bool
 	}
 	groups := map[groupKey]*group{}
 	var order []groupKey
@@ -3427,7 +3507,11 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			g.minEventID = e.id
 		}
 		g.quantity.Add(e.quantityValue.BigInt(), e.quantityScale)
-		g.costBasis.Add(big.NewInt(e.costBasisValue), e.costBasisScale)
+		if e.unknownBasis {
+			g.unknownBasis = true
+		} else {
+			g.costBasis.Add(big.NewInt(e.costBasisValue), e.costBasisScale)
+		}
 	}
 
 	// Replicate ORDER BY le.event_date DESC, MIN(le.id) DESC.
@@ -3448,6 +3532,9 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		if err != nil {
 			return nil, err
 		}
+		if g.unknownBasis {
+			g.costBasis = exact.NewScaledInt() // the known part is not the disposal's basis
+		}
 		disposedBasis, err := g.costBasis.Int64()
 		if err != nil {
 			return nil, fmt.Errorf("realized gain disposed basis: %w", err)
@@ -3462,6 +3549,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			QuantityScale:      g.quantity.Scale(),
 			DisposedBasisValue: disposedBasis,
 			DisposedBasisScale: g.costBasis.Scale(),
+			BasisKnowledge:     InvestmentBasisKnown,
 		}
 
 		var matchedProceeds *exact.ScaledInt
@@ -3491,6 +3579,12 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		// a one-euro one, and could as easily hide a loss (T-101). Add
 		// deepens the accumulator on its own, so the result carries the exact
 		// difference and reports the scale it needs.
+		if g.unknownBasis {
+			// Quantity and proceeds stay reported; the gain is unresolved.
+			record.BasisKnowledge = InvestmentBasisUnknown
+			records = append(records, record)
+			continue
+		}
 		gain := exact.ScaledIntFromInt64(record.ProceedsValue, record.ProceedsScale)
 		gain.AddScaled(g.costBasis)
 		gainValue, err := gain.Int64()

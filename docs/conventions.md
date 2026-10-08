@@ -237,6 +237,12 @@ When a feature introduces a durable new rule, update one of those documents in t
   read as one tuple and never filled from the original snapshot. Read models
   that cannot yet present an unresolved result refuse with
   `ErrUnknownInvestmentBasis`; they never read unknown as zero.
+- Only a sale may consume unknown basis (`AdmitUnknownBasis`). Its gain is
+  unresolved: NULL basis and gain with `basis_knowledge` on every result, and
+  a currency's realized total is NULL while any entry in it is unresolved.
+  An average pool holding unknown basis has no rate, so every disposal from it
+  is unresolved. Every other depletion refuses unknown basis until it has its
+  own unresolved-result contract.
 - Projected investment basis has explicit `known`/`unknown` knowledge. Unknown
   coefficient and scale are NULL in storage and on the API, and empty in CSV;
   known zero remains numeric. Numeric read-model fields are usable only when

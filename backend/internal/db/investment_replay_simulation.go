@@ -226,7 +226,8 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 			QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
 			CostBasisMethod: intent.CostBasisMethod, Allocations: intent.SpecificLots,
 			CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID,
-			MetadataJSON: "{}"}
+			MetadataJSON:      "{}",
+			AdmitUnknownBasis: intent.AdmitUnknownBasis || intent.OperationKind == "sell"}
 		if !intent.AmountValue.BigInt().IsInt64() {
 			return ErrInvestmentBasisRange
 		}
@@ -243,7 +244,7 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 				LotID: allocation.LotID, QuantityValue: allocation.QuantityValue,
 				QuantityScale: allocation.QuantityScale, CostBasisValue: allocation.CostBasisValue,
 				CostBasisScale: allocation.CostBasisScale, ProceedsValue: allocation.ProceedsValue,
-				ProceedsScale: allocation.ProceedsScale,
+				ProceedsScale: allocation.ProceedsScale, BasisKnowledge: allocation.BasisKnowledge,
 			})
 		}
 		projection.Disposals = append(projection.Disposals, disposal)

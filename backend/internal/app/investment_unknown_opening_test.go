@@ -232,16 +232,21 @@ func TestUnknownOpeningWriterRefusesInventedAmountAndCurrencyJournalAtomically(t
 	}
 }
 
-func TestUnknownImmutableOpeningKeepsDisposalAdmissionGated(t *testing.T) {
+// A sale may consume an unknown opening (T-145); depletions without an
+// unresolved-result contract — write-off, outbound transfer — stay gated.
+func TestUnknownImmutableOpeningKeepsNonSaleDepletionsGated(t *testing.T) {
 	t.Parallel()
 	f := newInvestmentsTestFixture(t)
-	seedUnknownTransferOpening(t, f)
+	lotID := seedUnknownTransferOpening(t, f)
 	before := buyReplacementPreviewSnapshot(t, f.database)
-	input := sellInput(f, "2026-07-01", 1)
-	_, err := f.investmentService.PreviewSell(context.Background(), input)
+	_, err := f.investmentService.ExternalTransferOut(context.Background(), transferOutOfLot(f, "2026-07-01", lotID, 1))
+	require.Error(t, err, "unknown outbound basis waits for transfer admission")
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+	writeOff := backdatedWriteOff(f, "2026-07-01", 1)
+	_, err = f.investmentService.PreviewWriteOff(context.Background(), writeOff)
 	require.ErrorContains(t, err, "basis is unknown")
 	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
-	_, err = f.investmentService.Sell(context.Background(), input)
+	_, err = f.investmentService.WriteOff(context.Background(), writeOff)
 	require.ErrorContains(t, err, "basis is unknown")
 	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
 }

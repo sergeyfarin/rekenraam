@@ -258,16 +258,20 @@ func insertHistoricalSaleDisposalsTx(ctx context.Context, tx *sql.Tx, params Dis
 			allocation.CostBasisValue < 0 {
 			return nil, fmt.Errorf("%w: historical sale allocation is invalid", ErrInvalidDisposalParams)
 		}
+		knowledge := normalizedBasisKnowledge(allocation.BasisKnowledge)
+		if knowledge == InvestmentBasisUnknown && !params.AdmitUnknownBasis {
+			return nil, ErrUnknownInvestmentBasis
+		}
 		result, err := tx.ExecContext(ctx, `INSERT INTO investment_lot_events
 			(book_id, lot_id, event_kind, transaction_id, event_date, quantity_value,
 			 quantity_scale, cost_basis_value, cost_basis_scale, cost_basis_method,
-			 metadata_json, created_at, created_by_user_id, created_audit_event_id)
-			VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 metadata_json, created_at, created_by_user_id, created_audit_event_id, basis_knowledge)
+			VALUES (?, ?, 'disposal', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			params.BookID, allocation.LotID, params.TransactionID, params.EventDate,
 			allocation.QuantityValue.Negated(), allocation.QuantityScale,
-			-allocation.CostBasisValue, allocation.CostBasisScale,
+			nullableBasisValue(-allocation.CostBasisValue, knowledge), nullableBasisScale(allocation.CostBasisScale, knowledge),
 			params.CostBasisMethod, params.MetadataJSON, params.CreatedAt,
-			params.ActorUserID, auditEventID)
+			params.ActorUserID, auditEventID, knowledge)
 		if err != nil {
 			return nil, fmt.Errorf("insert historical sale lot event: %w", err)
 		}
@@ -280,7 +284,7 @@ func insertHistoricalSaleDisposalsTx(ctx context.Context, tx *sql.Tx, params Dis
 			QuantityValue: allocation.QuantityValue, QuantityScale: allocation.QuantityScale,
 			CostBasisValue: allocation.CostBasisValue, CostBasisScale: allocation.CostBasisScale,
 			ProceedsValue: allocation.ProceedsValue, ProceedsScale: allocation.ProceedsScale,
-			CostCommodityID: params.CostCommodityID,
+			CostCommodityID: params.CostCommodityID, BasisKnowledge: knowledge,
 		})
 	}
 	return disposals, nil

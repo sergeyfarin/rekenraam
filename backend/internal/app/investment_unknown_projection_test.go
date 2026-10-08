@@ -112,7 +112,9 @@ func TestUnknownProjectionRetainsQuantitySelfCheck(t *testing.T) {
 	}
 }
 
-func TestKnownBasisDisposalRefusesUnknownProjectionAtomically(t *testing.T) {
+// Only a sale may leave its gain unresolved (T-145). A write-off over unknown
+// basis would report a loss it cannot know, so it stays refused, atomically.
+func TestWriteOffRefusesUnknownProjectionAtomically(t *testing.T) {
 	t.Parallel()
 	for _, method := range []string{"fifo", "lifo", "average_cost", "specific_lot"} {
 		t.Run(method, func(t *testing.T) {
@@ -123,12 +125,12 @@ func TestKnownBasisDisposalRefusesUnknownProjectionAtomically(t *testing.T) {
 			require.NoError(t, err)
 			var before int
 			require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&before))
-			input := sellInput(f, "2026-02-01", 1)
+			input := backdatedWriteOff(f, "2026-02-01", 1)
 			input.CostBasisMethod = method
 			if method == "specific_lot" {
 				input.LotAllocations = []InvestmentLotAllocationInput{{LotID: *bought.LotID, QuantityValue: exact.New(1)}}
 			}
-			_, err = f.investmentService.Sell(context.Background(), input)
+			_, err = f.investmentService.WriteOff(context.Background(), input)
 			require.ErrorContains(t, err, "basis is unknown")
 			var after, decisions int
 			require.NoError(t, f.database.QueryRow(`SELECT count(*) FROM audit_events`).Scan(&after))

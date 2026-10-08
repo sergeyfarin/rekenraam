@@ -399,11 +399,14 @@ func validateWriteOffInput(input InvestmentWriteOffInput) (string, error) {
 }
 
 type SellPreviewResult struct {
-	CostBasisMethod    string
-	DisposalDecision   DisposalDecision
-	Allocations        []InvestmentLotDisposal
-	RealizedGain       int64
-	RealizedGainScale  int
+	CostBasisMethod   string
+	DisposalDecision  DisposalDecision
+	Allocations       []InvestmentLotDisposal
+	RealizedGain      int64
+	RealizedGainScale int
+	// BasisKnowledge is unknown when the sale consumes unknown basis; the
+	// disposed basis and RealizedGain are then unresolved (T-145).
+	BasisKnowledge     string
 	CashAmountValue    int64
 	CashAmountScale    int
 	GrossAmountValue   *int64
@@ -442,11 +445,14 @@ type DisposalDecision struct {
 	QuantityScale        int
 	DisposedBasisValue   exact.Coefficient
 	DisposedBasisScale   int
-	ProceedsValue        int64
-	ProceedsScale        int
-	CostCommodityID      int64
-	AuditEventID         *int64
-	Allocations          []InvestmentLotDisposal
+	// BasisKnowledge is unknown when any allocation is unknown; the disposed
+	// basis is then unused and the decision's gain is unresolved.
+	BasisKnowledge  string
+	ProceedsValue   int64
+	ProceedsScale   int
+	CostCommodityID int64
+	AuditEventID    *int64
+	Allocations     []InvestmentLotDisposal
 }
 
 type InvestmentLotDisposal struct {
@@ -455,14 +461,35 @@ type InvestmentLotDisposal struct {
 	QuantityScale  int
 	CostBasisValue int64
 	CostBasisScale int
+	BasisKnowledge string // unknown leaves CostBasisValue/Scale unused
 	ProceedsValue  int64
 	ProceedsScale  int
 }
 
-func previewDisposalDecision(input InvestmentTradeInput, method string, source db.DisposalDecisionSource, disposals []db.LotDisposalRecord) (DisposalDecision, error) {
+// knownDisposedBasis totals the consumed basis, or reports false when any
+// allocation consumed unknown basis: that total is never a partial sum.
+func knownDisposedBasis(disposals []db.LotDisposalRecord) (*exact.ScaledInt, bool) {
 	basis := exact.NewScaledInt()
 	for _, disposal := range disposals {
+		if disposal.BasisKnowledge == db.InvestmentBasisUnknown {
+			return nil, false
+		}
 		basis.AddInt64(disposal.CostBasisValue, disposal.CostBasisScale)
+	}
+	return basis, true
+}
+
+func basisKnowledgeCode(known bool) string {
+	if known {
+		return db.InvestmentBasisKnown
+	}
+	return db.InvestmentBasisUnknown
+}
+
+func previewDisposalDecision(input InvestmentTradeInput, method string, source db.DisposalDecisionSource, disposals []db.LotDisposalRecord) (DisposalDecision, error) {
+	basis, known := knownDisposedBasis(disposals)
+	if !known {
+		basis = exact.NewScaledInt()
 	}
 	basisValue, err := basis.Coefficient()
 	if err != nil {
@@ -477,8 +504,8 @@ func previewDisposalDecision(input InvestmentTradeInput, method string, source d
 		AccountVersionID: optionalPositiveID(source.AccountVersionID), ProfileID: optionalPositiveID(source.ProfileID),
 		ProfileVersionID: optionalPositiveID(source.ProfileVersionID), SourceEffectiveFrom: source.SourceEffectiveFrom,
 		SourceRecordedAt: source.SourceRecordedAt, QuantityValue: input.QuantityValue, QuantityScale: input.QuantityScale,
-		DisposedBasisValue: basisValue, DisposedBasisScale: basis.Scale(), CostCommodityID: costCommodityID,
-		Allocations: toInvestmentLotDisposals(disposals),
+		DisposedBasisValue: basisValue, DisposedBasisScale: basis.Scale(), BasisKnowledge: basisKnowledgeCode(known),
+		CostCommodityID: costCommodityID, Allocations: toInvestmentLotDisposals(disposals),
 	}, nil
 }
 
@@ -491,7 +518,8 @@ func toDisposalDecision(record db.DisposalDecisionRecord) DisposalDecision {
 		SourceEffectiveFrom: record.SourceEffectiveFrom, SourceRecordedAt: record.SourceRecordedAt,
 		QuantityValue: record.QuantityValue, QuantityScale: record.QuantityScale,
 		DisposedBasisValue: record.DisposedBasisValue, DisposedBasisScale: record.DisposedBasisScale,
-		ProceedsValue: record.ProceedsValue, ProceedsScale: record.ProceedsScale,
+		BasisKnowledge: normalizedKnowledge(record.BasisKnowledge),
+		ProceedsValue:  record.ProceedsValue, ProceedsScale: record.ProceedsScale,
 		CostCommodityID: record.CostCommodityID, AuditEventID: optionalPositiveID(record.AuditEventID),
 		Allocations: toInvestmentLotDisposals(record.Allocations),
 	}
@@ -1306,19 +1334,18 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 	// Disposals can carry different CostBasisScales (lots opened at different
 	// cash scales, e.g. via import); accumulate through exact.ScaledInt rather
 	// than summing raw int64s at mismatched scales (same defect class as F5,
-	// ListRealizedGains).
-	disposedBasis := exact.NewScaledInt()
-	for _, d := range disposals {
-		disposedBasis.AddInt64(d.CostBasisValue, d.CostBasisScale)
-	}
-	cashProceeds := exact.ScaledIntFromInt64(economics.ClearingValue, economics.ClearingScale)
-
+	// ListRealizedGains). Unknown basis leaves the gain unresolved, never a
+	// gain against a partial or zero basis.
+	disposedBasis, known := knownDisposedBasis(disposals)
+	var gainValue int64
 	gain := exact.NewScaledInt()
-	gain.AddScaled(cashProceeds)
-	gain.SubScaled(disposedBasis)
-	gainValue, err := gain.Int64()
-	if err != nil {
-		return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
+	if known {
+		gain.AddScaled(exact.ScaledIntFromInt64(economics.ClearingValue, economics.ClearingScale))
+		gain.SubScaled(disposedBasis)
+		gainValue, err = gain.Int64()
+		if err != nil {
+			return SellPreviewResult{}, LedgerOverflowError{CommodityID: input.CashCommodityID}
+		}
 	}
 	decision, err := previewDisposalDecision(input, method, source, disposals)
 	if err != nil {
@@ -1332,6 +1359,7 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 		Allocations:        toInvestmentLotDisposals(disposals),
 		RealizedGain:       gainValue,
 		RealizedGainScale:  gain.Scale(),
+		BasisKnowledge:     basisKnowledgeCode(known),
 		CashAmountValue:    input.CashAmountValue,
 		CashAmountScale:    input.CashAmountScale,
 		GrossAmountValue:   input.GrossAmountValue,
@@ -1602,14 +1630,17 @@ func (s *InvestmentService) prepareSellWrite(ctx context.Context, input Investme
 		Allocations:     allocations,
 		CostBasisMethod: method,
 		DecisionSource:  source,
-		CreatedAt:       s.now().UTC().Format(time.RFC3339),
-		ActorUserID:     input.OwnerUserID,
-		AuthSessionID:   input.AuthSessionID,
-		RequestID:       input.RequestID,
-		OriginType:      defaultString(input.OriginType, "browser_api"),
-		Operation:       "investment.lot.dispose",
-		ChangeReason:    disposalChangeReason(input.WriteOff),
-		MetadataJSON:    metadataJSON,
+		// Only a sale may leave its gain unresolved; a write-off or cash in
+		// lieu over unknown basis is refused until its own contract (T-145).
+		AdmitUnknownBasis: !input.WriteOff && !input.CashInLieu,
+		CreatedAt:         s.now().UTC().Format(time.RFC3339),
+		ActorUserID:       input.OwnerUserID,
+		AuthSessionID:     input.AuthSessionID,
+		RequestID:         input.RequestID,
+		OriginType:        defaultString(input.OriginType, "browser_api"),
+		Operation:         "investment.lot.dispose",
+		ChangeReason:      disposalChangeReason(input.WriteOff),
+		MetadataJSON:      metadataJSON,
 	}
 	if plan.TradeEconomics != nil {
 		disposalParams.ProceedsValue = plan.TradeEconomics.ClearingValue
@@ -2668,7 +2699,7 @@ func toInvestmentPositions(records []db.InvestmentPositionRecord) []InvestmentPo
 func toInvestmentLotDisposals(records []db.LotDisposalRecord) []InvestmentLotDisposal {
 	disposals := make([]InvestmentLotDisposal, 0, len(records))
 	for _, record := range records {
-		disposals = append(disposals, InvestmentLotDisposal{LotID: record.LotID, QuantityValue: record.QuantityValue, QuantityScale: record.QuantityScale, CostBasisValue: record.CostBasisValue, CostBasisScale: record.CostBasisScale, ProceedsValue: record.ProceedsValue, ProceedsScale: record.ProceedsScale})
+		disposals = append(disposals, InvestmentLotDisposal{LotID: record.LotID, QuantityValue: record.QuantityValue, QuantityScale: record.QuantityScale, CostBasisValue: record.CostBasisValue, CostBasisScale: record.CostBasisScale, BasisKnowledge: normalizedKnowledge(record.BasisKnowledge), ProceedsValue: record.ProceedsValue, ProceedsScale: record.ProceedsScale})
 	}
 	return disposals
 }
@@ -2800,6 +2831,9 @@ type RealizedGainEntry struct {
 	// RealizedGainScale is the gain's own scale — the deeper of proceeds and
 	// disposed basis, which is not always the proceeds scale (T-101).
 	RealizedGainScale int
+	// BasisKnowledge is unknown when the disposal consumed unknown basis;
+	// disposed basis and gain are then unresolved and unused.
+	BasisKnowledge string
 }
 
 // UnrealizedGainEntry is an open position with unrealized gain when a price is available.
@@ -2845,6 +2879,7 @@ func (s *InvestmentService) ListRealizedGains(ctx context.Context, params GainsR
 			ProceedsScale:      r.ProceedsScale,
 			RealizedGainValue:  r.RealizedGainValue,
 			RealizedGainScale:  r.RealizedGainScale,
+			BasisKnowledge:     normalizedKnowledge(r.BasisKnowledge),
 		})
 	}
 	return entries, nil
@@ -2985,4 +3020,13 @@ func disposalOperationKind(input InvestmentTradeInput) string {
 	default:
 		return "sell"
 	}
+}
+
+// normalizedKnowledge gives every outgoing result explicit knowledge; an
+// empty code comes from a known-only internal caller.
+func normalizedKnowledge(knowledge string) string {
+	if knowledge == "" {
+		return db.InvestmentBasisKnown
+	}
+	return knowledge
 }

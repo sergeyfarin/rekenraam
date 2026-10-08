@@ -195,7 +195,7 @@ func (f trading212APIFixture) realizedGains(t *testing.T) []string {
 	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &gains))
 	out := make([]string, 0, len(gains.Realized))
 	for _, gain := range gains.Realized {
-		value := new(big.Rat).SetFrac(big.NewInt(int64(gain.RealizedGainValue)), new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(gain.RealizedGainScale)), nil))
+		value := new(big.Rat).SetFrac(big.NewInt(int64(*gain.RealizedGainValue)), new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(*gain.RealizedGainScale)), nil))
 		out = append(out, gain.DisposalDate+" "+value.FloatString(2))
 	}
 	slices.Sort(out)

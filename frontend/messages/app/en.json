@@ -642,6 +642,8 @@
   "import_preview_correct_buy_no_impact": "No reconciliation checkpoints are affected.",
   "import_preview_correct_buy_preview_pending": "Checking reconciliation…",
   "investments_basis_unknown": "Cost basis unknown",
+  "investments_gain_unresolved": "Unresolved — cost basis unknown",
+  "investments_gains_total_unresolved": "Unresolved: {count} with unknown cost basis",
   "import_preview_correct_sale": "Correct sale from source",
   "import_preview_correct_sale_scope": "Applies the provider's revised quantity and positive net amount, keeping the recorded basis method. Date, instrument, account, and currency changes need another correction workflow. Quantity changes for explicitly selected lots need a manual correction.",
   "import_preview_source_corrected": "Source trade corrected",
