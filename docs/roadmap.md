@@ -109,8 +109,9 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Short sale/cover
-   [#103](https://github.com/sergeyfarin/rekenraam/issues/103).
+1. Short sale/cover [#103](https://github.com/sergeyfarin/rekenraam/issues/103), in its child order: core
+   commands, lots and gains [#173](https://github.com/sergeyfarin/rekenraam/issues/173), then read models and mobile
+   entry [#174](https://github.com/sergeyfarin/rekenraam/issues/174) and correction/backdating [#175](https://github.com/sergeyfarin/rekenraam/issues/175).
 
 **Next, in order**
 
@@ -172,7 +173,7 @@ R16 is complete when these issues are closed: historical-entry selection
 [#166](https://github.com/sergeyfarin/rekenraam/issues/166), backdated
 internal transfer admission [#167](https://github.com/sergeyfarin/rekenraam/issues/167),
 sourced resolution recovery [#168](https://github.com/sergeyfarin/rekenraam/issues/168),
-short sale/cover [#103](https://github.com/sergeyfarin/rekenraam/issues/103),
+short sale/cover [#103](https://github.com/sergeyfarin/rekenraam/issues/103) (children #173–#175),
 compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115),
 zero-delta splits [#146](https://github.com/sergeyfarin/rekenraam/issues/146)
 and Refresh reach for revised fills
@@ -181,8 +182,8 @@ bar: the lot-opening `NOT NULL` constraint
 [#148](https://github.com/sergeyfarin/rekenraam/issues/148) is a v0.1.0
 release gate, not an R16 one; the evidence-blocked provider mappings
 [#145](https://github.com/sergeyfarin/rekenraam/issues/145) and
-[#136](https://github.com/sergeyfarin/rekenraam/issues/136) wait on
-provider evidence and do not hold R16 open; write-off entry UI (#172),
+[#136](https://github.com/sergeyfarin/rekenraam/issues/136), and verified provider short/cover import
+[#176](https://github.com/sergeyfarin/rekenraam/issues/176), wait on provider evidence and do not hold R16 open; write-off entry UI (#172),
 unresolved non-sale results (#169), provenance declarations (#170), excess
 visibility (#171), and provider return-of-capital/cash-in-lieu suggestions
 remain follow-ups. #114's delivered transfer/basis-action family is closed
