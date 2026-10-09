@@ -102,3 +102,52 @@ test('an unknown-basis holding transfers out without a cost basis entry', async 
     return positions.positions.find((position) => position.commodity_id === instrument.commodity_id)?.quantity_value;
   }).toBe('1');
 });
+
+test('a sourced statement resolves an unknown basis and its sale gain on mobile', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = `res${Date.now()}`;
+  const openedOn = daysFromTodayISO(-60);
+  const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name: `Resolve cash ${suffix}`, account_class: 'asset', account_kind: 'brokerage_cash',
+    default_commodity_id: currencyID, allows_postings: true, opened_on: openedOn, effective_from: openedOn
+  });
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: suffix.toUpperCase(), instrument_type: 'stock', display_name: `Resolve Co ${suffix}`, symbol: suffix.toUpperCase(),
+    quote_commodity_id: currencyID, trading_commodity_id: currencyID, quantity_scale: 3, price_scale: 2, effective_from: openedOn
+  });
+  const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: `Resolve holding ${suffix}`, opened_on: openedOn, effective_from: openedOn
+  });
+  const arrived = await apiJSON<{ transaction: { id: number } }>(page, 'POST', '/api/v1/investments/transfers/external/in', csrfToken, {
+    effective_on: daysFromTodayISO(-30), holding_account_id: holding.id, commodity_id: instrument.commodity_id,
+    quantity_value: '2', quantity_scale: 0, basis_knowledge: 'unknown', cost_commodity_id: currencyID
+  });
+  await apiJSON(page, 'POST', '/api/v1/investments/sell', csrfToken, {
+    transaction_date: daysFromTodayISO(-10), commodity_id: instrument.commodity_id, holding_account_id: holding.id,
+    cash_account_id: cash.id, quantity_value: '1', quantity_scale: 0, cash_amount_value: '5000',
+    cash_amount_scale: 2, cash_commodity_id: currencyID, cost_basis_method: 'fifo'
+  });
+
+  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.getByRole('button', { name: 'Resolve cost basis…' }).click();
+  const form = page.getByRole('dialog', { name: 'Resolve cost basis' });
+  await form.getByLabel(/^Total cost basis/).fill('80.00');
+  await form.getByLabel('Broker or statement reference (optional)').fill('2020 statement');
+  await form.getByLabel('Reason').fill('old broker statement found');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await form.getByRole('button', { name: 'Review and resolve' }).click();
+
+  // The sale gain moves from unresolved to known: 50.00 − 40.00.
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog).toContainText('40.00');
+  await dialog.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(form).toBeHidden();
+  await expect.poll(async () => {
+    const gains = await apiJSON<{ realized: Array<{ commodity_id: number; basis_knowledge: string; realized_gain_value: string | null; realized_gain_scale: number | null }> }>(
+      page, 'GET', '/api/v1/investments/gains');
+    const gain = gains.realized.find((entry) => entry.commodity_id === instrument.commodity_id);
+    if (!gain || gain.realized_gain_value === null || gain.realized_gain_scale === null) return gain?.basis_knowledge;
+    return ((BigInt(gain.realized_gain_value) * 100n) / 10n ** BigInt(gain.realized_gain_scale)).toString();
+  }).toBe('1000');
+  await expect(page.getByRole('button', { name: 'Resolve cost basis…' })).toHaveCount(0);
+});

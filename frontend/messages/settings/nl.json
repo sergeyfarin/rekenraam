@@ -1268,5 +1268,14 @@
   "investments_cash_in_lieu_entry_action": "Fractievergoeding vastleggen…",
   "investments_cash_in_lieu_reverse_action": "Fractievergoeding terugdraaien…",
   "investments_cash_in_lieu_reverse_title": "Fractievergoeding terugdraaien",
-  "investments_cash_in_lieu_reverse_copy": "Boekt de exacte tegenboeking van geld en effecten en herstelt de fractie via herberekening. Latere resultaten en afgestemde saldi vereisen controle. Het origineel en de splitsingskoppeling blijven in de audithistorie."
+  "investments_cash_in_lieu_reverse_copy": "Boekt de exacte tegenboeking van geld en effecten en herstelt de fractie via herberekening. Latere resultaten en afgestemde saldi vereisen controle. Het origineel en de splitsingskoppeling blijven in de audithistorie.",
+  "transactions_investment_resolve_basis_action": "Kostprijs vastleggen…",
+  "investments_basis_resolution_title": "Kostprijs vastleggen",
+  "investments_basis_resolution_copy": "Vul de totale kostprijs in die je bron voor deze aandelen vermeldt. Die wordt op de overboekingsdatum vastgelegd en elke verkoop en overboeking van deze aandelen wordt herberekend.",
+  "investments_basis_resolution_amount": "Totale kostprijs ({currency})",
+  "investments_basis_resolution_amount_help": "Voor alle ontvangen aandelen, ook die al verkocht of verplaatst zijn, in de eigen valuta van de overboeking. Dit kan nog niet ongedaan worden gemaakt.",
+  "investments_basis_resolution_reason": "Reden",
+  "investments_basis_resolution_submit": "Controleren en vastleggen",
+  "investments_basis_resolution_pending": "Vastleggen…",
+  "investments_basis_resolution_zero_error": "Een kostprijs van nul leg je vast door de overboeking te corrigeren."
 }

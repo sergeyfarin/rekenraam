@@ -1296,5 +1296,14 @@
   "investments_cash_in_lieu_entry_action": "Record cash in lieu…",
   "investments_cash_in_lieu_reverse_action": "Reverse cash in lieu…",
   "investments_cash_in_lieu_reverse_title": "Reverse cash in lieu",
-  "investments_cash_in_lieu_reverse_copy": "Posts the exact inverse cash and security journal and restores the fraction through replay. Later gains and reconciled balances require review. The original and its split link remain in the audit history."
+  "investments_cash_in_lieu_reverse_copy": "Posts the exact inverse cash and security journal and restores the fraction through replay. Later gains and reconciled balances require review. The original and its split link remain in the audit history.",
+  "transactions_investment_resolve_basis_action": "Resolve cost basis…",
+  "investments_basis_resolution_title": "Resolve cost basis",
+  "investments_basis_resolution_copy": "Enter the total cost basis your source states for these shares. It is recorded on the transfer date, and every sale and transfer of these shares is recalculated.",
+  "investments_basis_resolution_amount": "Total cost basis ({currency})",
+  "investments_basis_resolution_amount_help": "For all shares received, including any already sold or moved, in the transfer's own currency. A resolution cannot be undone yet.",
+  "investments_basis_resolution_reason": "Reason",
+  "investments_basis_resolution_submit": "Review and resolve",
+  "investments_basis_resolution_pending": "Resolving…",
+  "investments_basis_resolution_zero_error": "A zero cost basis is recorded by correcting the transfer."
 }

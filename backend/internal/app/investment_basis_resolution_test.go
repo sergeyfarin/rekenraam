@@ -267,3 +267,65 @@ func TestSelfCheckDetectsResolutionBridgeDamage(t *testing.T) {
 	require.Equal(t, SelfCheckFailed, foundation.Status)
 	require.Contains(t, foundation.Summary, "basis resolution disagrees with its bridge or pinned transfer")
 }
+
+// A resolution that fails after its writes (a stale acknowledgement, checked
+// once replay has run) leaves nothing behind: no fact, journal, revision or
+// projection change. The same holds for a basis that overflows the position.
+func TestTransferBasisResolutionLateRefusalsRollBackEverything(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	seedExternalTransferEquity(t, f.database)
+	buyOn(t, f, "2026-01-01", 1, 100)
+	transfer, err := f.investmentService.ExternalTransferIn(ctx, unknownTransferInInput(f, "2026-06-01", "2020-03-01"))
+	require.NoError(t, err)
+	_, err = f.investmentService.Sell(ctx, sellInput(f, "2026-07-01", 1))
+	require.NoError(t, err)
+	before := buyReplacementPreviewSnapshot(t, f.database)
+
+	stale := resolveInput(f, transfer.Transaction.ID, 8000)
+	impact, err := f.investmentService.ResolveTransferBasisImpact(ctx, stale)
+	require.NoError(t, err)
+	stale.BasisValue = 9000 // a different change set than the one acknowledged
+	stale.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	_, err = f.investmentService.ResolveTransferBasis(ctx, stale)
+	require.ErrorIs(t, err, ErrGainImpactAcknowledgementStale)
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+
+	overflow := resolveInput(f, transfer.Transaction.ID, 9223372036854775807)
+	overflow.BasisScale = 0
+	_, err = f.investmentService.ResolveTransferBasisImpact(ctx, overflow)
+	var validation ValidationError
+	require.ErrorAs(t, err, &validation, "a basis the position cannot represent is refused as invalid, never a 500")
+	require.Contains(t, validation.Message, "exceeds supported exact range")
+	_, err = f.investmentService.ResolveTransferBasis(ctx, overflow)
+	require.Error(t, err)
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+}
+
+// A resolution stays in its transfer's cost currency: a USD-cost inbound in a
+// holding that also holds EUR-cost lots is resolved and bridged in USD, and
+// the EUR position is untouched; nothing is converted.
+func TestResolutionKeepsItsTransferCostCurrencyWithoutFX(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	seedExternalTransferEquity(t, f.database)
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	eurLot := buyOn(t, f, "2026-01-01", 1, 1000)
+	input := unknownTransferInInput(f, "2026-06-01", "")
+	input.CostCommodityID = usd
+	transfer, err := f.investmentService.ExternalTransferIn(ctx, input)
+	require.NoError(t, err)
+	resolved := resolveAcknowledged(t, f, resolveInput(f, transfer.Transaction.ID, 7000))
+	for _, posting := range resolved.JournalEntries[0].Postings {
+		require.Equal(t, usd, posting.CommodityID, "the bridge is in the transfer's own currency")
+	}
+	var cost int64
+	require.NoError(t, f.database.QueryRow(`SELECT cost_commodity_id FROM investment_basis_resolutions`).Scan(&cost))
+	require.Equal(t, usd, cost)
+	_, basis, knowledge := lotStateByID(t, f, *eurLot.LotID)
+	require.Equal(t, db.InvestmentBasisKnown, knowledge)
+	require.Equal(t, "1000", basis.String, "the EUR-cost lot is not revised")
+	requireHealthyUnresolvedBook(t, f)
+}

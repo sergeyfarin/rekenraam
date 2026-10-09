@@ -109,27 +109,20 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Remaining [#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions. Shipped 2026-10-05: the
-   outbound transfer with entry, bridge adjustments, backdating and correction (T-142–T-144), and the
-   first return-of-capital and cash-in-lieu commands (T-146, T-147).
-   Return-of-capital completion [T-148 #163](https://github.com/sergeyfarin/rekenraam/issues/163)
-   is delivered 2026-10-07: native correction, fixed lot/quantity entitlement,
-   input-independent allocation and complete historical effect self-checks.
-   Cash-in-lieu correction and mobile entry [T-150 #165](https://github.com/sergeyfarin/rekenraam/issues/165)
-   is delivered 2026-10-07.
-   Current: unknown basis [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160) last: it reaches every disposal,
-   pooling, replay and read path, while the actions above ship known-basis first and leave an
-   unknown-basis lot unresolved, as the contract allows.
-   Immutable opening, event and disposal knowledge and unresolved sales (FIFO/LIFO/specific,
-   average pools, replay, gains), unknown transfers in, out and between holdings, splits and
-   sourced resolution (API) are implemented; continue with
-   sourced resolution and the UI; the [#160 implementation contract](plans/investment-unknown-basis-plan.md)
-   records the boundaries and acceptance cases.
+1. Short sale/cover
+   [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103).
 
 **Next, in order**
 
-2. Short sale/cover
-   [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103), then compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
+2. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
+
+**Delivered from [#114](https://github.com/sergeyfarin/rekenraam/issues/114):**
+- Outbound transfers with entry, bridge adjustments, backdating and correction (T-142–T-144, 2026-10-05).
+- Return of capital, completed 2026-10-07 (T-146, [T-148 #163](https://github.com/sergeyfarin/rekenraam/issues/163)).
+- Cash in lieu, completed 2026-10-07 (T-147, [T-150 #165](https://github.com/sergeyfarin/rekenraam/issues/165)).
+- Unknown basis [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160), completed 2026-10-09. It covers immutable knowledge, unresolved sales and average pools, unknown transfers in, out and between holdings, splits, and sourced resolution with mobile entry; see the [#160 implementation contract](plans/investment-unknown-basis-plan.md).
+
+Every #114 child is delivered.
 
 **Placed, not sequenced:** race-gate headroom for the backend app package
 [T-149 #164](https://github.com/sergeyfarin/rekenraam/issues/164); zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146);

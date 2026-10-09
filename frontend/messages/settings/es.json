@@ -1268,5 +1268,14 @@
   "investments_cash_in_lieu_entry_action": "Registrar efectivo por fracción…",
   "investments_cash_in_lieu_reverse_action": "Revertir efectivo por fracción…",
   "investments_cash_in_lieu_reverse_title": "Revertir efectivo por fracción",
-  "investments_cash_in_lieu_reverse_copy": "Contabiliza la inversa exacta del efectivo y los valores y restaura la fracción mediante recálculo. Los resultados posteriores y saldos conciliados requieren revisión. El original y su vínculo al desdoblamiento permanecen en el historial de auditoría."
+  "investments_cash_in_lieu_reverse_copy": "Contabiliza la inversa exacta del efectivo y los valores y restaura la fracción mediante recálculo. Los resultados posteriores y saldos conciliados requieren revisión. El original y su vínculo al desdoblamiento permanecen en el historial de auditoría.",
+  "transactions_investment_resolve_basis_action": "Registrar coste de adquisición…",
+  "investments_basis_resolution_title": "Registrar coste de adquisición",
+  "investments_basis_resolution_copy": "Introduce el coste total que indica tu fuente para estas acciones. Se registra en la fecha del traspaso y se recalcula cada venta y traspaso de estas acciones.",
+  "investments_basis_resolution_amount": "Coste total ({currency})",
+  "investments_basis_resolution_amount_help": "Para todas las acciones recibidas, incluidas las ya vendidas o traspasadas, en la moneda del traspaso. Aún no se puede deshacer.",
+  "investments_basis_resolution_reason": "Motivo",
+  "investments_basis_resolution_submit": "Revisar y registrar",
+  "investments_basis_resolution_pending": "Registrando…",
+  "investments_basis_resolution_zero_error": "Un coste cero se registra corrigiendo el traspaso."
 }

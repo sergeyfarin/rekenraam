@@ -69,6 +69,8 @@ export type InvestmentWriteOffReplacementRequest = components['schemas']['Invest
 export type InvestmentTransferReplacementRequest = components['schemas']['InvestmentTransferReplacementRequest'];
 export type InvestmentTransferInReplacementRequest = components['schemas']['InvestmentTransferInReplacementRequest'];
 export type InvestmentTransferInReplacementResponse = components['schemas']['InvestmentTransferInReplacementResponse'];
+export type InvestmentBasisResolutionRequest = components['schemas']['InvestmentBasisResolutionRequest'];
+export type InvestmentBasisResolutionResponse = components['schemas']['InvestmentBasisResolutionResponse'];
 export type InvestmentTransferReplacementResponse = components['schemas']['InvestmentTransferReplacementResponse'];
 export type InvestmentCorrectionTransferTerms = components['schemas']['InvestmentCorrectionTransferTerms'];
 export type InvestmentSaleReplacementResponse = components['schemas']['InvestmentSaleReplacementResponse'];
@@ -1459,6 +1461,36 @@ export async function getCashInLieuLots(splitTransactionID: number, disposalOn: 
     const { data, error, response } = await apiClient.GET('/api/v1/investments/transactions/{transaction_id}/cash-in-lieu-lots', {
       params: { path: { transaction_id: splitTransactionID }, query: { currency_id: currencyID, disposal_on: disposalOn, replacing_transaction_id: replacingTransactionID } }
     });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+/** Preview a sourced resolution of an unknown inbound basis (T-145) through its actual writer. */
+export async function previewTransferBasisResolution(transactionID: number, input: InvestmentBasisResolutionRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/resolve-basis/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+/** Record a sourced resolution of an unknown inbound basis (T-145). */
+export async function resolveTransferBasis(transactionID: number, input: InvestmentBasisResolutionRequest, csrfToken: string): Promise<InvestmentBasisResolutionResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/resolve-basis',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
     if (data !== undefined) return data;
     throw toAPIClientError(response, error);
   } catch (error) {

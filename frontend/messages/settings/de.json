@@ -1268,5 +1268,14 @@
   "investments_cash_in_lieu_entry_action": "Barausgleich erfassen…",
   "investments_cash_in_lieu_reverse_action": "Barausgleich stornieren…",
   "investments_cash_in_lieu_reverse_title": "Barausgleich stornieren",
-  "investments_cash_in_lieu_reverse_copy": "Bucht die genaue Gegenbuchung von Geld und Wertpapieren und stellt den Bruchteil durch Neuberechnung wieder her. Spätere Gewinne und abgestimmte Salden erfordern eine Prüfung. Original und Split-Verknüpfung bleiben im Prüfverlauf."
+  "investments_cash_in_lieu_reverse_copy": "Bucht die genaue Gegenbuchung von Geld und Wertpapieren und stellt den Bruchteil durch Neuberechnung wieder her. Spätere Gewinne und abgestimmte Salden erfordern eine Prüfung. Original und Split-Verknüpfung bleiben im Prüfverlauf.",
+  "transactions_investment_resolve_basis_action": "Anschaffungskosten erfassen…",
+  "investments_basis_resolution_title": "Anschaffungskosten erfassen",
+  "investments_basis_resolution_copy": "Geben Sie die gesamten Anschaffungskosten laut Ihrer Quelle für diese Anteile ein. Sie werden zum Übertragungsdatum gebucht, und jeder Verkauf und jede Übertragung dieser Anteile wird neu berechnet.",
+  "investments_basis_resolution_amount": "Gesamte Anschaffungskosten ({currency})",
+  "investments_basis_resolution_amount_help": "Für alle erhaltenen Anteile, auch bereits verkaufte oder übertragene, in der Währung der Übertragung. Dies kann noch nicht rückgängig gemacht werden.",
+  "investments_basis_resolution_reason": "Grund",
+  "investments_basis_resolution_submit": "Prüfen und erfassen",
+  "investments_basis_resolution_pending": "Wird erfasst…",
+  "investments_basis_resolution_zero_error": "Anschaffungskosten von null erfassen Sie, indem Sie die Übertragung korrigieren."
 }

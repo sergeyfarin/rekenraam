@@ -2,7 +2,8 @@
 
 Implementation contract for [#160](https://github.com/sergeyfarin/rekenraam/issues/160).
 ADR 0013 and the [slice 5 contract](investment-operation-slice-5-contract.md)
-govern; `roadmap.md` alone defines execution order. This work is in progress.
+govern; `roadmap.md` alone defines execution order. This work is complete
+(2026-10-09); the boundaries below record what shipped and its named cases.
 
 Nullable **remaining** basis alone is insufficient to admit an unknown transfer.
 Immutable openings, lot events, disposal decisions, allocations and their replay
@@ -163,7 +164,34 @@ Named cases:
 `TestResolvingUnknownSourcePostsOmittedOutboundBridge`,
 `TestResolvingUnknownLotResolvesAveragePoolDisposals`,
 `TestTransferBasisResolutionRefusals`, `TestSelfCheckDetectsResolutionBridgeDamage`,
-`TestResolveTransferBasisAPI`. Boundaries 1–4 are complete; boundary 5 remains.
+`TestResolveTransferBasisAPI`. Boundaries 1–4 are complete.
+
+Boundary 5 is implemented, the operator surface and remaining diagnostics:
+- **API.** Original and effective basis are exposed separately, unknown amounts
+  are null with `basis_knowledge`, and unresolved gains and totals are null
+  with `unresolved_count`.
+- **UI.** Transfer-in, its correction, outbound and internal forms state or
+  preview unknown basis. The transaction detail of an unknown transfer in
+  offers "Resolve cost basis…": the sourced total in the transfer's own
+  currency, a reference and a reason, previewed through the actual writer.
+  Gain changes go to the shared confirmation, which binds the acknowledgement,
+  and checkpoints are guarded. All of this is in six locales.
+- **Exports and self-check.** Exports carry every knowledge column and the
+  resolution facts. Self-check keeps quantity and provenance checks
+  independent of basis availability.
+- **Further named cases.**
+  `TestTransferBasisResolutionLateRefusalsRollBackEverything` covers a stale
+  acknowledgement and range overflow, both atomic.
+  `TestResolutionKeepsItsTransferCostCurrencyWithoutFX` covers currencies.
+  The browser case "a sourced statement resolves an unknown basis and its sale
+  gain on mobile" runs in `investments-unknown-basis.spec.ts` (390 px).
+
+**Deliberately later.** These are not #160 acceptance; each needs its own
+contract:
+- correction or reversal of a resolution fact;
+- unresolved write-off, cash-in-lieu and return-of-capital results;
+- a known-zero resolution, which today is recorded by correcting the transfer.
+
 
 1. **Immutable knowledge.** Add explicit knowledge with paired nullable basis
    fields to opening facts, lot events, disposal decisions and allocations,

@@ -1268,5 +1268,14 @@
   "investments_cash_in_lieu_entry_action": "Enregistrer une soulte…",
   "investments_cash_in_lieu_reverse_action": "Annuler la soulte…",
   "investments_cash_in_lieu_reverse_title": "Annuler la soulte",
-  "investments_cash_in_lieu_reverse_copy": "Comptabilise l’inverse exact des écritures de trésorerie et de titres, puis restaure la fraction par recalcul. Les résultats ultérieurs et soldes rapprochés nécessitent une vérification. L’original et son lien à la division restent dans l’historique d’audit."
+  "investments_cash_in_lieu_reverse_copy": "Comptabilise l’inverse exact des écritures de trésorerie et de titres, puis restaure la fraction par recalcul. Les résultats ultérieurs et soldes rapprochés nécessitent une vérification. L’original et son lien à la division restent dans l’historique d’audit.",
+  "transactions_investment_resolve_basis_action": "Renseigner le prix de revient…",
+  "investments_basis_resolution_title": "Renseigner le prix de revient",
+  "investments_basis_resolution_copy": "Saisissez le prix de revient total indiqué par votre source pour ces titres. Il est enregistré à la date du transfert, et chaque vente et transfert de ces titres est recalculé.",
+  "investments_basis_resolution_amount": "Prix de revient total ({currency})",
+  "investments_basis_resolution_amount_help": "Pour tous les titres reçus, y compris ceux déjà vendus ou transférés, dans la devise du transfert. Cette opération ne peut pas encore être annulée.",
+  "investments_basis_resolution_reason": "Motif",
+  "investments_basis_resolution_submit": "Vérifier et enregistrer",
+  "investments_basis_resolution_pending": "Enregistrement…",
+  "investments_basis_resolution_zero_error": "Un prix de revient nul s’enregistre en corrigeant le transfert."
 }

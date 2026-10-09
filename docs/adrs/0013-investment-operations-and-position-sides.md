@@ -579,3 +579,8 @@ transfer date once all are known, and posts adjustments for later known
 changes. Until correction rules for resolutions are defined, a resolution has
 no correction command, and the inbound transfer it pins can no longer be
 reversed or replaced. A known zero is recorded by correcting the transfer.
+
+The transaction detail of an unknown external transfer in offers the
+resolution as a mobile form in six locales. It previews through the actual
+writer and confirms gain changes and checkpoints like other corrections. This
+completes T-145 (#160).

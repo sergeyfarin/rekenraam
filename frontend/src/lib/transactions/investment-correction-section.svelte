@@ -14,6 +14,7 @@
   import WriteOffCorrectionForm from '#lib/investments/write-off-correction-form.svelte';
   import TransferCorrectionForm from '#lib/investments/transfer-correction-form.svelte';
   import TransferInCorrectionForm from '#lib/investments/transfer-in-correction-form.svelte';
+  import BasisResolutionForm from '#lib/investments/basis-resolution-form.svelte';
   import GainImpactList from '#lib/investments/gain-impact-list.svelte';
   import { invalidateInvestmentReads } from '#lib/investments/invalidate.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
@@ -70,7 +71,7 @@
     enabled: transactionID > 0
   }));
 
-  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'cash_in_lieu_entry' | null>(null);
+  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'cash_in_lieu_entry' | 'resolve_basis' | null>(null);
   // Splits pre-fill from the chain's effective_split; only trades need the
   // separate source-facts read.
   const replacementQuery = createQuery(() => ({
@@ -99,6 +100,10 @@
   const transferReversible = $derived(chainQuery.data?.can_reverse_transfer === true &&
     chainQuery.data.effective_transaction_id === transactionID);
   const transferReplaceable = $derived(chainQuery.data?.can_replace_transfer === true &&
+    chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_transfer);
+  // An external transfer in recorded with unknown basis can be resolved from
+  // a sourced statement (T-145).
+  const basisResolvable = $derived(chainQuery.data?.can_resolve_basis === true &&
     chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_transfer);
 
   const sourceLinkedEffectiveBuy = $derived(
@@ -405,6 +410,14 @@
         {m.transactions_investment_replace_transfer_action()}
       </button>
     {/if}
+    {#if basisResolvable}
+      <button type="button"
+        class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+        disabled={!csrfToken}
+        onclick={() => { replacementKind = 'resolve_basis'; }}>
+        {m.transactions_investment_resolve_basis_action()}
+      </button>
+    {/if}
     {#if chainQuery.data.can_reverse_sale && chainQuery.data.effective_transaction_id === transactionID}
       <button
         type="button"
@@ -504,6 +517,15 @@
         <TransferCorrectionForm {csrfToken} {transactionID} transfer={chainQuery.data.effective_transfer}
           onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
       {/if}
+    </div>
+  </div>
+{:else if replacementKind === 'resolve_basis' && csrfToken && chainQuery.data?.effective_transfer}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
+    role="presentation">
+    <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
+      role="dialog" aria-modal="true" aria-label={m.investments_basis_resolution_title()}>
+      <BasisResolutionForm {csrfToken} {transactionID} transfer={chainQuery.data.effective_transfer}
+        onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
     </div>
   </div>
 {:else if replacementKind === 'write_off' && csrfToken}
