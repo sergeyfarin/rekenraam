@@ -1,6 +1,6 @@
 # Investment operation and subledger refactor plan
 
-Status: active design contract, reviewed 2026-10-03.
+Status: active design contract, reviewed 2026-10-09.
 ADR 0012 and ADR 0013 govern. R16 owns long-position lifecycle work; #103
 owns shorts. Planned behavior is not shipped behavior.
 

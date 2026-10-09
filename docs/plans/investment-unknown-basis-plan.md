@@ -193,12 +193,12 @@ Boundary 5 is implemented, the operator surface and remaining diagnostics:
 
 **Deliberately later.** These are not #160 acceptance; each needs its own
 contract:
-- correction or reversal of a resolution fact ([T-153 #168](https://github.com/sergeyfarin/rekenraam/issues/168));
-- unresolved write-off, cash-in-lieu and return-of-capital results ([T-154 #169](https://github.com/sergeyfarin/rekenraam/issues/169));
+- correction or reversal of a resolution fact ([#168](https://github.com/sergeyfarin/rekenraam/issues/168));
+- unresolved write-off, cash-in-lieu and return-of-capital results ([#169](https://github.com/sergeyfarin/rekenraam/issues/169));
 - a known-zero resolution, which today is recorded by correcting the transfer
   (#168);
 - mandatory provenance declarations: the current API/UI source reference is
-  optional; [T-155 #170](https://github.com/sergeyfarin/rekenraam/issues/170)
+  optional; [#170](https://github.com/sergeyfarin/rekenraam/issues/170)
   defines the statement or explicit owner-assertion contract.
 
 

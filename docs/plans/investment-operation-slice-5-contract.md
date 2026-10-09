@@ -49,7 +49,7 @@ named dependency before posting; it must never leave the journal and lot
 projection at different historical states. Unknown-basis sales, transfers,
 splits and sourced positive resolution now ship under #160. Write-off, cash
 in lieu and return of capital still refuse unresolved inputs until
-[T-154 #169](https://github.com/sergeyfarin/rekenraam/issues/169) specifies each
+[#169](https://github.com/sergeyfarin/rekenraam/issues/169) specifies each
 family; unsupported imported rows remain in review.
 
 ## In-kind transfers
@@ -94,7 +94,7 @@ a later sale cannot switch the still-open source position to average cost.
 Closing the source position releases the lock. A source with an average-cost
 policy or lock must use the shipped pooled-quantity command rather than the
 selected-lot shape. New internal transfers still refuse backdating before
-source or destination depletions; [T-152 #167](https://github.com/sergeyfarin/rekenraam/issues/167)
+source or destination depletions; [#167](https://github.com/sergeyfarin/rekenraam/issues/167)
 owns that separate admission contract.
 
 External inbound basis is a sourced fact: accept a known nonnegative value
@@ -150,7 +150,7 @@ positive resolution. Unknown amounts keep NULL coefficient and scale together;
 public transfers may carry unknown basis, and an outbound posts its complete
 omitted bridge when resolution makes every effective link known.
 Resolution recovery and journal-free known-zero resolution are tracked in
-[T-153 #168](https://github.com/sergeyfarin/rekenraam/issues/168).
+[#168](https://github.com/sergeyfarin/rekenraam/issues/168).
 
 Example: transfer 2 shares carrying 80.00 EUR into the book. Post security
 `H +2`, `T −2` and EUR `T +80.00`, `E −80.00`. A later full sale for 100.00
@@ -337,7 +337,7 @@ quantities at the new entry slot, or the replacement's original root slot with
 the predecessor excluded. A currently closed position remains correctable.
 Every investment mutation invalidates this dated read along with the existing
 positions/lots/gains/correction reads. Cash-in-lieu unknown-basis admission
-remains refused pending [T-154 #169](https://github.com/sergeyfarin/rekenraam/issues/169);
+remains refused pending [#169](https://github.com/sergeyfarin/rekenraam/issues/169);
 Trading 212 fractional-share mapping stays in review until #145 supplies verified
 evidence.
 
