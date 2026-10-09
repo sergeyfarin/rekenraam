@@ -6,6 +6,11 @@ seven roadmap slices are [#113–#119](https://github.com/sergeyfarin/rekenraam/
 and [#120](https://github.com/sergeyfarin/rekenraam/issues/120) is the roadmap
 index. `docs/backlog.md` now keeps only the ID-to-issue links.
 
+**Index disposition, 2026-10-09:** #120 was retired as a duplicate navigation
+pointer with no delivery acceptance. Its progress comments remain historical;
+the [documentation map](../README.md) provides navigation and the
+[roadmap](../roadmap.md) remains the only source of order and current focus.
+
 This dated snapshot records the triage before moving live work from
 `docs/backlog.md` to GitHub Issues. The repository had no GitHub issues when
 checked. Keep the local live tracker until issue publication and link

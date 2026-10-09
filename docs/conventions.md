@@ -605,6 +605,11 @@ has actual installations, its migration files are immutable.
   debt belong in GitHub Issues. `docs/backlog.md` maps local IDs to issues but
   does not duplicate status or priority. Completed plans and dated reviews are
   historical references, not competing trackers.
+- Navigation belongs in `docs/README.md` and the repository README. Retired
+  index issues stay closed as historical references; progress updates belong
+  on the relevant feature issue. Update the current-state documents in the
+  same delivery or sequencing change rather than maintaining another overall
+  queue in issue comments.
 - When roadmap priorities change, cross-check `docs/competitor-comparison.md` and
   record intentional parity gaps or gains in the roadmap's parity section.
 - **An acceptance decision is recorded in the plan it governs, in the same

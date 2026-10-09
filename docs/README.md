@@ -8,7 +8,7 @@ does a new document go?"** The current-state files and GitHub Issues answer
 
 | File | Answers | Update discipline |
 |---|---|---|
-| [roadmap.md](roadmap.md) | What are we building next, in what order, and what is the current focus? | The **only** place order lives. Remove focus items when they ship; governed by `product-requirements.md` |
+| [roadmap.md](roadmap.md) | What are we building next, in what order, and what is the current focus? | The **only** place order lives. Update when scope, order or focus changes; remove focus items when they ship; governed by `product-requirements.md` |
 | [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues) | What does each ticket require, and is it open? | Acceptance, state, priority, discussion and PR links. Issues never restate the overall order |
 | [backlog.md](backlog.md) | Which GitHub issue owns a local ID? | ID-to-issue table only; no status, priority or order |
 | [implemented.md](implemented.md) | What ships today, backend vs UI? | Reconcile with the codebase when a slice lands |
@@ -17,8 +17,11 @@ The boundary between them: **roadmap** holds order and current focus,
 **GitHub Issues** holds each ticket's acceptance and state, **backlog** maps
 local IDs to issues, and **implemented** is the capability ledger. Feature
 plans hold design only. Each fact has exactly one home; elsewhere, link to it.
-GitHub issue [#120](https://github.com/sergeyfarin/rekenraam/issues/120) only
-points to the roadmap.
+GitHub issue [#120](https://github.com/sergeyfarin/rekenraam/issues/120) was
+retired on 2026-10-09. Its older progress comments remain history; use this
+map and the roadmap for current navigation. Post progress on the relevant
+feature issue and update the current-state documents in the same delivery
+or sequencing change.
 
 ## Governance (root)
 
