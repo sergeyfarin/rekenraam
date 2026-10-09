@@ -71,7 +71,9 @@
   const cashAccounts = $derived(accounts.filter((account: AccountResponse) =>
     account.account_class === 'asset' && account.status === 'active' && account.allows_postings &&
     account.account_kind !== 'security_holding' && account.account_kind !== 'fund_holding'));
+  // Long holdings only: a return of capital does not apply to owed units (#173).
   const positions = $derived((positionsQuery.data?.positions ?? []).filter((position) =>
+    position.position_side === 'long' &&
     coefficientSign(position.quantity_value) > 0 && holdingIDs.has(position.account_id)));
   const selectedPosition = $derived(positions.find((item) =>
     `${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}` === positionKey));

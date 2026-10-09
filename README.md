@@ -8,8 +8,8 @@ Docker Compose runs the same app shape.
 
 The app is still a pre-release candidate. Investment buy, sell, dividend,
 reinvestment, and write-off workflows exist. Investment-native correction,
-in-kind transfers, basis actions, and named short sales (commands shipped,
-reads and correction in progress) are still being built;
+in-kind transfers, basis actions, and named short sales (entry and reads shipped,
+correction in progress) are still being built;
 see the [R16 plan](docs/plans/investment-operation-refactor-plan.md) and the
 [feature ledger](docs/implemented.md) for the exact boundary.
 

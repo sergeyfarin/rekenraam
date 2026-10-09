@@ -24420,6 +24420,11 @@ export interface components {
             gain_impact_acknowledgement?: string;
         };
         InvestmentLotResponse: {
+            /**
+             * @description Short for a lot of borrowed units (#173): its quantities stay positive and its basis amounts are the opening proceeds.
+             * @enum {string}
+             */
+            position_side: "long" | "short";
             /** Format: int64 */
             id: number;
             /** Format: int64 */
@@ -24469,6 +24474,11 @@ export interface components {
             lots: components["schemas"]["InvestmentLotResponse"][];
         };
         InvestmentPositionResponse: {
+            /**
+             * @description Short for owed units: quantity stays positive and the basis amounts are remaining opening proceeds. Each account, instrument, cost currency and side is its own row.
+             * @enum {string}
+             */
+            position_side: "long" | "short";
             /**
              * @description How an internal transfer from this position allocates basis: the open position's method lock, else its resolved default method (T-123).
              * @enum {string}
@@ -24642,6 +24652,11 @@ export interface components {
             realized_gain_scale: number | null;
         };
         UnrealizedGainEntry: {
+            /**
+             * @description Short for owed units: market_value is the signed (negative) exposure and unrealized gain is remaining opening proceeds less the cost to cover.
+             * @enum {string}
+             */
+            position_side: "long" | "short";
             /** Format: int64 */
             account_id: number;
             /** Format: int64 */
@@ -24670,11 +24685,11 @@ export interface components {
             latest_price_date?: string;
             /** @description True when the selected valuation quote was estimated from net-only trade cash. */
             latest_price_approximate: boolean;
-            /** @description quantity × latest_price. Omitted when valuation_unavailable is present. */
+            /** @description quantity × latest_price, negated for a short position. Omitted when valuation_unavailable is present. */
             market_value_value?: string;
             /** @description Scale of market_value_value. Reduced below the computed precision only when redundant trailing zeros would otherwise overflow int64. */
             market_value_scale?: number;
-            /** @description market_value − remaining_cost_basis. Omitted when valuation_unavailable is present. */
+            /** @description market_value − remaining_cost_basis for a long position; remaining opening proceeds + market_value (the cost to cover is negative) for a short. Omitted when valuation_unavailable is present. */
             unrealized_gain_value?: string;
             /** @description Omitted when valuation_unavailable is present. */
             unrealized_gain_scale?: number;

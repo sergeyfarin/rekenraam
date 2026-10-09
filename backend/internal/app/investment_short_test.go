@@ -101,13 +101,11 @@ func TestShortSaleOpensShortLotWithExactOpeningProceeds(t *testing.T) {
 		Scan(&side, &quantity, &basis, &basisScale, &knowledge, &kind))
 	assert.Equal(t, []any{"short", "10", "10000", 2, "known", "short_sale"}, []any{side, quantity, basis, basisScale, knowledge, kind})
 
-	// Long reads stay long-only until #174 makes them side-aware.
+	// Reads carry the side (#174); see investment_short_reads_test.go.
 	positions, err := f.investmentService.Positions(context.Background())
 	require.NoError(t, err)
-	assert.Empty(t, positions)
-	lots, err := f.investmentService.ListLots(context.Background(), f.holdingAccountID, f.stockCommodityID)
-	require.NoError(t, err)
-	assert.Empty(t, lots)
+	require.Len(t, positions, 1)
+	assert.Equal(t, "short", positions[0].PositionSide)
 	shortSelfCheckPasses(t, f)
 }
 

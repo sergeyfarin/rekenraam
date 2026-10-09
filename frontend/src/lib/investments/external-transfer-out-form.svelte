@@ -64,8 +64,9 @@
   const accounts = $derived((accountsQuery.data?.accounts ?? []).filter((account) =>
     account.status === 'active' && account.allows_postings &&
     (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')));
+  // Long holdings only: transferring a short obligation is not modeled (#173).
   const positions = $derived((positionsQuery.data?.positions ?? []).filter((position) =>
-    coefficientSign(position.quantity_value) > 0 &&
+    position.position_side === 'long' && coefficientSign(position.quantity_value) > 0 &&
     accounts.some((account) => account.id === position.account_id)));
   const sourcePosition = $derived(positions.find((position) =>
     `${position.account_id}:${position.commodity_id}:${position.cost_commodity_id}` === sourceKey));
@@ -77,7 +78,7 @@
     enabled: !!sourcePosition && !pooled
   }));
   const lots = $derived((lotsQuery.data?.lots ?? []).filter((lot) =>
-    lot.status === 'open' && lot.cost_commodity_id === sourcePosition?.cost_commodity_id &&
+    lot.status === 'open' && lot.position_side === 'long' && lot.cost_commodity_id === sourcePosition?.cost_commodity_id &&
     coefficientSign(lot.remaining_quantity_value) > 0));
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(
     (currenciesQuery.data?.currencies ?? []).map((currency) => [currency.id, currency])));

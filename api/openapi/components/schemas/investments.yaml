@@ -2248,7 +2248,14 @@ InvestmentLotResponse:
     - metadata
     - created_at
     - updated_at
+    - position_side
   properties:
+    position_side:
+      type: string
+      enum: [long, short]
+      description: >-
+        Short for a lot of borrowed units (#173): its quantities stay positive
+        and its basis amounts are the opening proceeds.
     id:
       type: integer
       format: int64
@@ -2337,7 +2344,15 @@ InvestmentPositionResponse:
     - cost_commodity_id
     - latest_price_approximate
     - transfer_basis_allocation
+    - position_side
   properties:
+    position_side:
+      type: string
+      enum: [long, short]
+      description: >-
+        Short for owed units: quantity stays positive and the basis amounts
+        are remaining opening proceeds. Each account, instrument, cost
+        currency and side is its own row.
     transfer_basis_allocation:
       type: string
       enum: [selected_lots, average_cost_pool]
@@ -2700,7 +2715,14 @@ UnrealizedGainEntry:
     - remaining_cost_basis_scale
     - basis_knowledge
     - latest_price_approximate
+    - position_side
   properties:
+    position_side:
+      type: string
+      enum: [long, short]
+      description: >-
+        Short for owed units: market_value is the signed (negative) exposure
+        and unrealized gain is remaining opening proceeds less the cost to cover.
     account_id:
       type: integer
       format: int64
@@ -2743,7 +2765,8 @@ UnrealizedGainEntry:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: >-
-        quantity × latest_price. Omitted when valuation_unavailable is present.
+        quantity × latest_price, negated for a short position. Omitted when
+        valuation_unavailable is present.
     market_value_scale:
       type: integer
       description: >-
@@ -2753,8 +2776,9 @@ UnrealizedGainEntry:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: >-
-        market_value − remaining_cost_basis. Omitted when valuation_unavailable
-        is present.
+        market_value − remaining_cost_basis for a long position; remaining
+        opening proceeds + market_value (the cost to cover is negative) for a
+        short. Omitted when valuation_unavailable is present.
     unrealized_gain_scale:
       type: integer
       description: Omitted when valuation_unavailable is present.

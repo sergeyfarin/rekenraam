@@ -592,6 +592,7 @@ type investmentLotResponse struct {
 	Metadata                json.RawMessage   `json:"metadata"`
 	CreatedAt               string            `json:"created_at"`
 	UpdatedAt               string            `json:"updated_at"`
+	PositionSide            string            `json:"position_side"`
 }
 
 type investmentLotsResponse struct {
@@ -612,6 +613,7 @@ type investmentPositionResponse struct {
 	LatestPriceDate         string            `json:"latest_price_date,omitempty"`
 	LatestPriceApproximate  bool              `json:"latest_price_approximate"`
 	TransferBasisAllocation string            `json:"transfer_basis_allocation"`
+	PositionSide            string            `json:"position_side"`
 }
 
 type investmentPositionsResponse struct {
@@ -2156,7 +2158,7 @@ func toInvestmentLotResponse(lot app.InvestmentLot) investmentLotResponse {
 	if lot.OpeningBasisKnowledge == "" {
 		lot.OpeningBasisKnowledge = "known"
 	}
-	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: projectedBasisValue(lot.CostBasisValue, lot.OpeningBasisKnowledge), CostBasisScale: projectedBasisScale(lot.CostBasisScale, lot.OpeningBasisKnowledge), OpeningBasisKnowledge: lot.OpeningBasisKnowledge, RemainingCostBasisValue: projectedBasisValue(lot.RemainingCostBasisValue, lot.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(lot.RemainingCostBasisScale, lot.BasisKnowledge), BasisKnowledge: lot.BasisKnowledge, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt}
+	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: projectedBasisValue(lot.CostBasisValue, lot.OpeningBasisKnowledge), CostBasisScale: projectedBasisScale(lot.CostBasisScale, lot.OpeningBasisKnowledge), OpeningBasisKnowledge: lot.OpeningBasisKnowledge, RemainingCostBasisValue: projectedBasisValue(lot.RemainingCostBasisValue, lot.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(lot.RemainingCostBasisScale, lot.BasisKnowledge), BasisKnowledge: lot.BasisKnowledge, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt, PositionSide: lot.PositionSide}
 }
 
 func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse {
@@ -2170,7 +2172,7 @@ func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse 
 func toInvestmentPositionResponses(positions []app.InvestmentPosition) []investmentPositionResponse {
 	responses := make([]investmentPositionResponse, 0, len(positions))
 	for _, position := range positions {
-		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: projectedBasisValue(position.RemainingCostBasisValue, position.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(position.RemainingCostBasisScale, position.BasisKnowledge), BasisKnowledge: position.BasisKnowledge, CostCommodityID: position.CostCommodityID, LatestPriceValue: moneyCoefficientPointer(position.LatestPriceValue), LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate, LatestPriceApproximate: position.LatestPriceApproximate, TransferBasisAllocation: position.TransferBasisAllocation})
+		responses = append(responses, investmentPositionResponse{AccountID: position.AccountID, CommodityID: position.CommodityID, QuantityValue: position.QuantityValue, QuantityScale: position.QuantityScale, RemainingCostBasisValue: projectedBasisValue(position.RemainingCostBasisValue, position.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(position.RemainingCostBasisScale, position.BasisKnowledge), BasisKnowledge: position.BasisKnowledge, CostCommodityID: position.CostCommodityID, LatestPriceValue: moneyCoefficientPointer(position.LatestPriceValue), LatestPriceScale: position.LatestPriceScale, LatestPriceDate: position.LatestPriceDate, LatestPriceApproximate: position.LatestPriceApproximate, TransferBasisAllocation: position.TransferBasisAllocation, PositionSide: position.PositionSide})
 	}
 	return responses
 }
@@ -2258,6 +2260,7 @@ type unrealizedGainResponse struct {
 	UnrealizedGainScale     *int              `json:"unrealized_gain_scale,omitempty"`
 	ValuationUnavailable    string            `json:"valuation_unavailable,omitempty"`
 	GainUnavailable         string            `json:"gain_unavailable,omitempty"`
+	PositionSide            string            `json:"position_side"`
 }
 
 // realizedGainTotalResponse is NULL with unknown knowledge when any entry in
@@ -2341,6 +2344,7 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				UnrealizedGainScale:    e.UnrealizedGainScale,
 				ValuationUnavailable:   e.ValuationUnavailable,
 				GainUnavailable:        e.GainUnavailable,
+				PositionSide:           e.PositionSide,
 			})
 		}
 

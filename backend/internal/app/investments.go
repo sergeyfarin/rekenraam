@@ -606,6 +606,9 @@ type InvestmentLot struct {
 	CreatedAt               string
 	UpdatedAt               string
 	BasisKnowledge          string
+	// PositionSide is short for a lot of borrowed units, whose basis amounts
+	// are its opening proceeds (#173).
+	PositionSide string
 }
 
 type InvestmentPosition struct {
@@ -624,6 +627,9 @@ type InvestmentPosition struct {
 	// TransferBasisAllocation is how an internal transfer from this position
 	// allocates basis: the position's method lock, else its resolved default.
 	TransferBasisAllocation string
+	// PositionSide is short for owed units; QuantityValue stays positive and
+	// the basis amounts are remaining opening proceeds.
+	PositionSide string
 }
 
 type InvestmentProviderEvent struct {
@@ -1942,15 +1948,7 @@ func (s *InvestmentService) ListLots(ctx context.Context, accountID int64, commo
 	if err != nil {
 		return nil, fmt.Errorf("list investment lots: %w", err)
 	}
-	// The lot read model is long-only until it carries the side (#174): a
-	// short lot listed as an ordinary holding would invite a long sale of it.
-	long := records[:0]
-	for _, record := range records {
-		if record.PositionSide != db.PositionSideShort {
-			long = append(long, record)
-		}
-	}
-	return toInvestmentLots(long), nil
+	return toInvestmentLots(records), nil
 }
 
 func (s *InvestmentService) Positions(ctx context.Context) ([]InvestmentPosition, error) {
@@ -2667,6 +2665,7 @@ func toInvestmentLot(record db.InvestmentLotRecord) InvestmentLot {
 		MetadataJSON:            record.MetadataJSON,
 		CreatedAt:               record.CreatedAt,
 		UpdatedAt:               record.UpdatedAt,
+		PositionSide:            record.PositionSide,
 	}
 }
 
@@ -2699,6 +2698,7 @@ func toInvestmentPositions(records []db.InvestmentPositionRecord) []InvestmentPo
 			LatestPriceScale:        priceScale,
 			LatestPriceDate:         nullableString(record.LatestPriceDate),
 			LatestPriceApproximate:  record.LatestPriceApproximate.Valid && record.LatestPriceApproximate.Int64 == 1,
+			PositionSide:            record.PositionSide,
 		})
 	}
 	return positions
@@ -2867,6 +2867,10 @@ type UnrealizedGainEntry struct {
 	ValuationUnavailable    string
 	BasisKnowledge          string
 	GainUnavailable         string
+	// PositionSide is short for owed units: MarketValue is the signed
+	// (negative) exposure and the gain is remaining opening proceeds less the
+	// cost to cover.
+	PositionSide string
 }
 
 func (s *InvestmentService) ListRealizedGains(ctx context.Context, params GainsReportParams) ([]RealizedGainEntry, error) {
@@ -2928,6 +2932,7 @@ func (s *InvestmentService) ListUnrealizedGains(ctx context.Context) ([]Unrealiz
 			UnrealizedGainScale:     r.UnrealizedGainScale,
 			ValuationUnavailable:    r.ValuationUnavailable,
 			GainUnavailable:         r.GainUnavailable,
+			PositionSide:            r.PositionSide,
 		})
 	}
 	return entries, nil

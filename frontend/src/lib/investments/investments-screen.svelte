@@ -21,11 +21,13 @@
   import ExternalTransferOutForm from '#lib/investments/external-transfer-out-form.svelte';
   import CapitalReturnForm from '#lib/investments/capital-return-form.svelte';
   import SplitForm from '#lib/investments/split-form.svelte';
+  import ShortTradeForm from '#lib/investments/short-trade-form.svelte';
+  import PositionSideBadge from '#lib/investments/position-side-badge.svelte';
   import GainsReport from '#lib/investments/gains-report.svelte';
   import EventSuggestions from '#lib/investments/event-suggestions.svelte';
   import { parseISO } from 'date-fns';
   import { formatScaledValue } from './investment-labels';
-  import { coefficientSign } from '#lib/money/amount.ts';
+  import { coefficientSign, negateCoefficient } from '#lib/money/amount.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
 
@@ -90,11 +92,20 @@
   const positions = $derived(positionsQuery.data?.positions ?? []);
   const openPositions = $derived(positions.filter((p) => coefficientSign(p.quantity_value) !== 0));
   const selectedLots = $derived(
-    (lotsQuery.data?.lots ?? []).filter((lot) => lot.cost_commodity_id === selectedPosition?.cost_commodity_id)
+    (lotsQuery.data?.lots ?? []).filter((lot) => lot.cost_commodity_id === selectedPosition?.cost_commodity_id &&
+      lot.position_side === selectedPosition?.position_side)
   );
+  // Position identity includes cost currency and side (validate-and-ship #29/#30).
+  function positionKey(pos: InvestmentPositionResponse): string {
+    return `${pos.account_id}_${pos.commodity_id}_${pos.cost_commodity_id}_${pos.position_side}`;
+  }
+  // A short holding owes its units: show the signed exposure.
+  function signedQuantity(pos: InvestmentPositionResponse): string {
+    return pos.position_side === 'short' ? negateCoefficient(pos.quantity_value) : pos.quantity_value;
+  }
 
   // Trade form modal
-  type TradeModal = 'buy' | 'sell' | 'dividend' | 'reinvested' | 'external-transfer-in' | 'external-transfer-out' | 'internal-transfer' | 'split' | 'capital-return' | null;
+  type TradeModal = 'buy' | 'sell' | 'short-open' | 'short-cover' | 'dividend' | 'reinvested' | 'external-transfer-in' | 'external-transfer-out' | 'internal-transfer' | 'split' | 'capital-return' | null;
   let activeModal = $state<TradeModal>(null);
 
   function openModal(modal: TradeModal) {
@@ -168,6 +179,20 @@
         class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       >
         {m.investments_record_sell()}
+      </button>
+      <button
+        type="button"
+        onclick={() => openModal('short-open')}
+        class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      >
+        {m.investments_record_short_sale()}
+      </button>
+      <button
+        type="button"
+        onclick={() => openModal('short-cover')}
+        class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      >
+        {m.investments_record_short_cover()}
       </button>
       <button
         type="button"
@@ -250,9 +275,9 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
-                  {#each openPositions as pos (pos.account_id + '_' + pos.commodity_id + '_' + pos.cost_commodity_id)}
+                  {#each openPositions as pos (positionKey(pos))}
                     <tr
-                      class={`cursor-pointer transition hover:bg-surface-strong/30 ${selectedPosition?.account_id === pos.account_id && selectedPosition?.commodity_id === pos.commodity_id && selectedPosition?.cost_commodity_id === pos.cost_commodity_id ? 'bg-surface-strong/50' : ''}`}
+                      class={`cursor-pointer transition hover:bg-surface-strong/30 ${selectedPosition && positionKey(selectedPosition) === positionKey(pos) ? 'bg-surface-strong/50' : ''}`}
                       onclick={() => selectPosition(pos)}
                       role="button"
                       tabindex="0"
@@ -263,10 +288,11 @@
                         <div class="flex items-center gap-2">
                           <TrendingUp size={14} class="shrink-0 text-muted" aria-hidden="true" />
                           <span class="font-medium text-foreground">{instrumentName(pos.commodity_id)}</span>
+                          <PositionSideBadge side={pos.position_side} />
                         </div>
                       </td>
                       <td class="px-3 py-3 text-right font-mono text-foreground">
-                        {formatScaledValue(pos.quantity_value, pos.quantity_scale, locale)}
+                        {formatScaledValue(signedQuantity(pos), pos.quantity_scale, locale)}
                       </td>
                       <td class="px-3 py-3 text-right font-mono text-muted">
                         {pos.remaining_cost_basis_value !== null && pos.remaining_cost_basis_scale !== null ? formatScaledValue(pos.remaining_cost_basis_value, pos.remaining_cost_basis_scale, locale) : m.investments_basis_unknown()}
@@ -345,7 +371,7 @@
                           <span class="text-right font-mono text-foreground">
                             {formatScaledValue(lot.remaining_quantity_value, lot.remaining_quantity_scale, locale)}
                           </span>
-                          <span class="text-muted">{m.investments_lot_cost_basis()}</span>
+                          <span class="text-muted">{selectedPosition.position_side === 'short' ? m.investments_short_opening_proceeds() : m.investments_lot_cost_basis()}</span>
                           <span class="text-right font-mono text-foreground">
                             {lot.remaining_cost_basis_value !== null && lot.remaining_cost_basis_scale !== null ? formatScaledValue(lot.remaining_cost_basis_value, lot.remaining_cost_basis_scale, locale) : m.investments_basis_unknown()}
                           </span>
@@ -392,13 +418,17 @@
     class="fixed inset-x-4 bottom-0 z-50 max-h-[90vh] overflow-y-auto rounded-t-(--radius-panel) border border-border bg-surface shadow-(--shadow-panel) sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-(--radius-panel)"
     role="dialog"
     aria-modal="true"
-    aria-labelledby={activeModal === 'external-transfer-in' ? 'external-transfer-in-title' : activeModal === 'internal-transfer' ? 'internal-transfer-title' : activeModal === 'external-transfer-out' ? 'external-transfer-out-title' : activeModal === 'split' ? 'split-title' : activeModal === 'capital-return' ? 'capital-return-title' : undefined}
+    aria-labelledby={activeModal === 'short-open' ? 'short-open-title' : activeModal === 'short-cover' ? 'short-cover-title' : activeModal === 'external-transfer-in' ? 'external-transfer-in-title' : activeModal === 'internal-transfer' ? 'internal-transfer-title' : activeModal === 'external-transfer-out' ? 'external-transfer-out-title' : activeModal === 'split' ? 'split-title' : activeModal === 'capital-return' ? 'capital-return-title' : undefined}
   >
     <div class="p-6">
       {#if activeModal === 'buy'}
         <BuyForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {:else if activeModal === 'sell'}
         <SellForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
+      {:else if activeModal === 'short-open'}
+        <ShortTradeForm mode="open" {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
+      {:else if activeModal === 'short-cover'}
+        <ShortTradeForm mode="cover" {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {:else if activeModal === 'dividend'}
         <DividendForm mode="cash" {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {:else if activeModal === 'reinvested'}

@@ -415,6 +415,9 @@ type InvestmentPositionRecord struct {
 	LatestPriceBaseQuantityValue sql.NullInt64
 	LatestPriceBaseQuantityScale sql.NullInt64
 	BasisKnowledge               string
+	// PositionSide is short for borrowed units: QuantityValue is then the
+	// positive owed quantity and the basis amounts are opening proceeds.
+	PositionSide string
 	// MethodFamily is the open position's basis-method lock, or empty before
 	// its first depletion.
 	MethodFamily string
@@ -2274,11 +2277,10 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 				SELECT state.method_family FROM investment_position_basis_state state
 				WHERE state.book_id = lot.book_id AND state.account_id = lot.account_id
 					AND state.commodity_id = lot.commodity_id
-					AND state.cost_commodity_id = lot.cost_commodity_id AND state.position_side = 'long'
-			), '') AS method_family
+					AND state.cost_commodity_id = lot.cost_commodity_id AND state.position_side = lot.position_side
+			), '') AS method_family, lot.position_side
 		FROM current_investment_lots lot
 		WHERE lot.book_id = ?
-			AND lot.position_side = 'long'
 			AND lot.status = 'open'
 			AND lot.remaining_quantity_value <> '0'
 		ORDER BY lot.account_id, lot.commodity_id, lot.id
@@ -2289,6 +2291,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 	defer rows.Close()
 	type positionKey struct {
 		accountID, commodityID, costCommodityID int64
+		side                                    string
 	}
 	type accumulatedPosition struct {
 		record   InvestmentPositionRecord
@@ -2302,14 +2305,14 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 		var quantity exact.Coefficient
 		var quantityScale int
 		var costValue, costScale sql.NullInt64
-		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate, &record.LatestPriceApproximate, &record.LatestPriceBaseQuantityValue, &record.LatestPriceBaseQuantityScale, &record.BasisKnowledge, &record.MethodFamily); err != nil {
+		if err := rows.Scan(&record.AccountID, &record.CommodityID, &quantity, &quantityScale, &costValue, &costScale, &record.CostCommodityID, &record.LatestPriceValue, &record.LatestPriceScale, &record.LatestPriceDate, &record.LatestPriceApproximate, &record.LatestPriceBaseQuantityValue, &record.LatestPriceBaseQuantityScale, &record.BasisKnowledge, &record.MethodFamily, &record.PositionSide); err != nil {
 			return nil, fmt.Errorf("scan investment position: %w", err)
 		}
 		value, scale, err := projectedBasis(costValue, costScale, record.BasisKnowledge)
 		if err != nil {
 			return nil, err
 		}
-		key := positionKey{record.AccountID, record.CommodityID, record.CostCommodityID}
+		key := positionKey{record.AccountID, record.CommodityID, record.CostCommodityID, record.PositionSide}
 		position := positions[key]
 		if position == nil {
 			position = &accumulatedPosition{record: record, quantity: exact.NewScaledInt(), cost: exact.NewScaledInt()}
@@ -3660,6 +3663,10 @@ type UnrealizedGainRecord struct {
 	ValuationUnavailable    string
 	GainUnavailable         string
 	BasisKnowledge          string
+	// PositionSide is short for borrowed units. Its MarketValue is the signed
+	// (negative) exposure and its gain is remaining opening proceeds less the
+	// current cost to cover.
+	PositionSide string
 }
 
 // Valuation unavailability reasons reported by PositionsWithGains when market
@@ -3715,6 +3722,7 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 			LatestPriceScale:        pos.LatestPriceScale,
 			LatestPriceDate:         pos.LatestPriceDate,
 			LatestPriceApproximate:  pos.LatestPriceApproximate,
+			PositionSide:            pos.PositionSide,
 		}
 		if pos.BasisKnowledge == InvestmentBasisUnknown {
 			record.GainUnavailable = "unknown_basis"
@@ -3760,6 +3768,11 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 			}
 
 			market := exact.ScaledIntFromBig(marketBig, gainScale)
+			short := pos.PositionSide == PositionSideShort
+			if short {
+				// Owed units are a liability at the current price.
+				market = market.Negated()
+			}
 			if pos.BasisKnowledge == InvestmentBasisUnknown {
 				marketValue, marketValueScale, marketFits := int64AtUsableScale(market)
 				if marketFits {
@@ -3770,9 +3783,16 @@ func (r *InvestmentRepository) PositionsWithGains(ctx context.Context, bookID in
 				records = append(records, record)
 				continue
 			}
+			// Long: value less cost. Short: opening proceeds still held less
+			// what covering now costs, which is the same sum with the signed
+			// exposure.
 			cost := exact.ScaledIntFromInt64(pos.RemainingCostBasisValue, pos.RemainingCostBasisScale)
-			gain := exact.ScaledIntFromBig(marketBig, gainScale)
-			gain.SubScaled(cost)
+			gain := exact.ScaledIntFromBig(market.BigInt(), market.Scale())
+			if short {
+				gain.AddScaled(cost)
+			} else {
+				gain.SubScaled(cost)
+			}
 
 			marketValue, marketValueScale, marketFits := int64AtUsableScale(market)
 			gainValue, gainValueScale, gainFits := int64AtUsableScale(gain)

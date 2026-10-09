@@ -416,6 +416,89 @@ export async function recordSell(
   }
 }
 
+// Named short sale and cover (#173). An opening receives like a sale and opens
+// a short lot; a cover pays like a buy and consumes short lots only.
+export async function recordShortSale(
+  input: InvestmentTradeRequest,
+  csrfToken: string
+): Promise<InvestmentTradeResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/short-sale', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function shortSaleReconciliationImpact(
+  input: InvestmentTradeRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/short-sale/reconciliation-impact',
+      { body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordShortCover(
+  input: InvestmentTradeRequest,
+  csrfToken: string
+): Promise<InvestmentTradeResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/short-cover', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewShortCover(
+  input: InvestmentTradeRequest
+): Promise<SellPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/short-cover/preview', {
+      body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function shortCoverReconciliationImpact(
+  input: InvestmentTradeRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/short-cover/reconciliation-impact',
+      { body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
 export async function getInvestmentCorrectionChain(transactionID: number): Promise<InvestmentCorrectionChainResponse> {
   try {
     const { data, error, response } = await apiClient.GET(

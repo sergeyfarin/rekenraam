@@ -9,6 +9,7 @@
   import { formatMoney, joinCommodityAmount } from '#lib/money/format.ts';
   import { coefficientSign, negateCoefficient } from '#lib/money/amount.ts';
   import { formatScaledValue } from './investment-labels';
+  import PositionSideBadge from './position-side-badge.svelte';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
 
@@ -101,9 +102,9 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-border">
-              {#each unrealized as pos (pos.account_id + '_' + pos.commodity_id + '_' + pos.cost_commodity_id)}
+              {#each unrealized as pos (pos.account_id + '_' + pos.commodity_id + '_' + pos.cost_commodity_id + '_' + pos.position_side)}
                 <tr class="hover:bg-surface-strong/20">
-                  <td class="py-3 pl-5 pr-3 font-medium text-foreground">{instrumentName(pos.commodity_id)}</td>
+                  <td class="py-3 pl-5 pr-3 font-medium text-foreground">{instrumentName(pos.commodity_id)}<PositionSideBadge side={pos.position_side} /></td>
                   <td class="px-3 py-3 text-right font-mono text-foreground">
                     {formatScaledValue(pos.quantity_value, pos.quantity_scale, locale)}
                   </td>
@@ -194,20 +195,31 @@
               {#each realized as entry}
                 <tr class="hover:bg-surface-strong/20">
                   <td class="py-3 pl-5 pr-3 font-mono text-xs text-muted">{entry.disposal_date}</td>
-                  <td class="px-3 py-3 text-foreground">{instrumentName(entry.commodity_id)}</td>
+                  <td class="px-3 py-3 text-foreground">{instrumentName(entry.commodity_id)}<PositionSideBadge side={entry.position_side} /></td>
                   <td class="px-3 py-3 text-right font-mono text-foreground">
                     {formatScaledValue(entry.quantity_value, entry.quantity_scale, locale)}
                   </td>
-                  <td class="px-3 py-3 text-right font-mono text-foreground">
-                    {formatGain(entry.proceeds_value, entry.proceeds_scale, entry.cost_commodity_id)}
-                  </td>
-                  <td class="px-3 py-3 text-right font-mono text-muted">
-                    {#if entry.disposed_basis_value !== null && entry.disposed_basis_scale !== null}
-                      {formatGain(negateCoefficient(entry.disposed_basis_value), entry.disposed_basis_scale, entry.cost_commodity_id)}
-                    {:else}
-                      {m.investments_basis_unknown()}
-                    {/if}
-                  </td>
+                  {#if entry.position_side === 'short' && entry.disposed_basis_value !== null && entry.disposed_basis_scale !== null}
+                    <!-- A cover's proceeds are what the short received when it
+                         opened; its cost is what covering paid (#173). -->
+                    <td class="px-3 py-3 text-right font-mono text-foreground">
+                      {formatGain(entry.disposed_basis_value, entry.disposed_basis_scale, entry.cost_commodity_id)}
+                    </td>
+                    <td class="px-3 py-3 text-right font-mono text-muted">
+                      {formatGain(negateCoefficient(entry.proceeds_value), entry.proceeds_scale, entry.cost_commodity_id)}
+                    </td>
+                  {:else}
+                    <td class="px-3 py-3 text-right font-mono text-foreground">
+                      {formatGain(entry.proceeds_value, entry.proceeds_scale, entry.cost_commodity_id)}
+                    </td>
+                    <td class="px-3 py-3 text-right font-mono text-muted">
+                      {#if entry.disposed_basis_value !== null && entry.disposed_basis_scale !== null}
+                        {formatGain(negateCoefficient(entry.disposed_basis_value), entry.disposed_basis_scale, entry.cost_commodity_id)}
+                      {:else}
+                        {m.investments_basis_unknown()}
+                      {/if}
+                    </td>
+                  {/if}
                   <td class="py-3 pl-3 pr-5 text-right font-mono">
                     {#if entry.realized_gain_value !== null && entry.realized_gain_scale !== null}
                       <span class={gainClass(entry.realized_gain_value)}>

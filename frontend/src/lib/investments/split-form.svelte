@@ -70,7 +70,8 @@
   const holdings = $derived.by(() => {
     const seen = new Map<string, { accountID: number; commodityID: number }>();
     for (const position of positionsQuery.data?.positions ?? []) {
-      if (coefficientSign(position.quantity_value) <= 0) continue;
+      // Splits adjust long lots only; a short-only holding has none (#173).
+      if (position.position_side !== 'long' || coefficientSign(position.quantity_value) <= 0) continue;
       if (!accounts.some((account) => account.id === position.account_id)) continue;
       const key = `${position.account_id}:${position.commodity_id}`;
       if (!seen.has(key)) seen.set(key, { accountID: position.account_id, commodityID: position.commodity_id });

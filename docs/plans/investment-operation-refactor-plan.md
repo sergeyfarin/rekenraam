@@ -559,10 +559,12 @@ correction, reversal and backdating; #176 provider import.
   balance as a named short only up to the quantity of short lots open on that
   date in that account; any further negative quantity remains an
   unclassified short.
-- **Reads before #174.** Positions, lots and unrealized gains remain
-  long-only until #174 makes them side-aware; the realized-gains report
-  includes covers with their side-correct result. Correction chains show
-  short operations as not correctable until #175.
+- **Reads (#174).** Positions, lots and unrealized gains carry the side,
+  one row per account, instrument, cost currency and side. A short keeps a
+  positive owed quantity; its market value is the negative exposure and its
+  unrealized result is remaining opening proceeds less the cost to cover.
+  Realized gains report a cover with its side-correct result. Correction
+  chains show short operations as not correctable until #175.
 
 ### Required acceptance cases across slices
 
