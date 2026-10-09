@@ -336,8 +336,9 @@ Goal: add power-user workflows after the core ledger is stable.
   countable commodity. Preserve the entry and flag the position in historical
   self-checks and net-worth reports until it is corrected. A genuine short sale
   must be named explicitly as a short sale and represented as a short position;
-  an ordinary negative holding must not silently acquire that meaning. The
-  explicit short-sale workflow is future scope.
+  an ordinary negative holding must not silently acquire that meaning. Named
+  short sale and cover commands exist (#173); side-aware reads, correction
+  and provider import follow under #174–#176.
 - Investment monetary coefficients cross the JSON API as canonical decimal
   strings, including requests, lot basis, proceeds, and gains. The current
   backend int64 range remains an admission limit; browser Number conversion

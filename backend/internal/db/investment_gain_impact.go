@@ -110,7 +110,7 @@ func investmentGainSnapshotTx(ctx context.Context, tx *sql.Tx, bookID int64) (ma
 			d.commodity_id, d.cost_commodity_id, d.event_date, d.cost_basis_method,
 			d.quantity_value, d.quantity_scale, d.disposed_basis_value, d.disposed_basis_scale,
 			d.basis_knowledge, d.proceeds_value, d.proceeds_scale, r.id,
-			r.disposed_basis_value, r.disposed_basis_scale, r.basis_knowledge
+			r.disposed_basis_value, r.disposed_basis_scale, r.basis_knowledge, d.position_side
 		FROM investment_disposal_decisions d
 		JOIN effective_investment_operations o ON o.id = d.operation_id
 		LEFT JOIN latest_investment_disposal_revisions r ON r.decision_id = d.id
@@ -128,11 +128,12 @@ func investmentGainSnapshotTx(ctx context.Context, tx *sql.Tx, bookID int64) (ma
 		var basisScale, revisionID, revisedScale sql.NullInt64
 		var knowledge string
 		var revisedKnowledge sql.NullString
+		var side string
 		if err := rows.Scan(&entry.decisionID, &entry.operationID, &seq, &entry.transactionID,
 			&entry.state.AccountID, &entry.state.CommodityID, &entry.state.CostCommodityID,
 			&entry.state.DisposalDate, &entry.state.CostBasisMethod, &quantity, &quantityScale,
 			&basis, &basisScale, &knowledge, &proceeds, &proceedsScale, &revisionID,
-			&revisedBasis, &revisedScale, &revisedKnowledge); err != nil {
+			&revisedBasis, &revisedScale, &revisedKnowledge, &side); err != nil {
 			return nil, fmt.Errorf("scan effective disposal for gain impact: %w", err)
 		}
 		// The latest revision's knowledge and amounts replace the snapshot's
@@ -155,6 +156,11 @@ func investmentGainSnapshotTx(ctx context.Context, tx *sql.Tx, bookID int64) (ma
 			entry.state.BasisKnowledge = InvestmentBasisKnown
 			entry.state.DisposedBasis = exact.ScaledIntFromCoefficient(exact.Coefficient(basis.String), int(basisScale.Int64))
 			entry.state.Gain = investmentGainValue(entry.state.Proceeds, entry.state.DisposedBasis)
+			if side == PositionSideShort {
+				// A cover's disposed amount is opening proceeds received.
+				entry.state.Gain = exact.ScaledIntFromBig(entry.state.Proceeds.BigInt(), entry.state.Proceeds.Scale())
+				entry.state.Gain.AddScaled(entry.state.DisposedBasis)
+			}
 		default:
 			return nil, fmt.Errorf("disposal decision %d has an invalid effective basis knowledge/amount pair", entry.decisionID)
 		}

@@ -141,6 +141,7 @@
   "api_error_ledger_overflow": "Dit saldo is te groot om veilig weer te geven. Verklein de schaal van de boekingsregel of splits de rekening.",
   "api_error_investment_workflow_required": "Deze belegging kan nog niet via de gewone transactieworkflow worden gewijzigd.",
   "api_error_investment_event_out_of_order": "Deze boeking kan niet vóór een latere verkoop of overboeking van dezelfde positie worden gedateerd. Corrigeer eerst de latere handeling.",
+  "api_error_investment_position_side_conflict": "Deze positie kan niet tegelijk long en short in hetzelfde instrument zijn. Sluit eerst de andere kant; omdraaien is een verkoop en een shortverkoop (of een dekking en een aankoop), ingevoerd als twee handelingen.",
   "api_error_investment_transfer_pool_required": "Deze positie gebruikt gemiddelde kostprijs, dus er wordt een aantal uit de gepoolde kostprijs overgeboekt in plaats van geselecteerde partijen.",
   "api_error_investment_transfer_pool_unavailable": "Een gepoolde overboeking vereist een positie met gemiddelde kostprijs; kies in plaats daarvan de partijen.",
   "api_error_investment_sale_already_corrected": "Deze verkoop is al gecorrigeerd. Open de correctiegeschiedenis om de laatste boeking te zien.",

@@ -141,6 +141,7 @@
   "api_error_ledger_overflow": "Este saldo es demasiado grande para representarlo con seguridad. Reduzca la escala del apunte o divida la cuenta.",
   "api_error_investment_workflow_required": "Esta inversión aún no puede modificarse mediante el flujo de transacciones ordinario.",
   "api_error_investment_event_out_of_order": "Esta operación no puede fecharse antes de una venta o transferencia posterior de la misma posición. Corrija primero la operación posterior.",
+  "api_error_investment_position_side_conflict": "Esta posición no puede estar a la vez larga y corta en el mismo instrumento. Cierre primero el otro lado; un cambio de lado se registra como dos operaciones: una venta y una venta en corto (o una recompra y una compra).",
   "api_error_investment_transfer_pool_required": "Esta posición usa coste medio, así que se traslada una cantidad del coste agrupado en lugar de lotes elegidos.",
   "api_error_investment_transfer_pool_unavailable": "El traslado agrupado requiere una posición con coste medio; elige los lotes que quieres trasladar.",
   "api_error_investment_sale_already_corrected": "Esta venta ya se ha corregido. Abra el historial de correcciones para ver el último asiento.",

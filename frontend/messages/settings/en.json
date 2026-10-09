@@ -141,6 +141,7 @@
   "api_error_ledger_overflow": "This balance is too large to represent safely. Reduce the posting scale or split the account.",
   "api_error_investment_workflow_required": "This investment cannot be changed through the ordinary transaction workflow yet.",
   "api_error_investment_event_out_of_order": "This entry cannot be dated before a later sale or transfer from the same position. Correct the later operation first.",
+  "api_error_investment_position_side_conflict": "This holding cannot be long and short of the same instrument at the same time. Close the other side first; a reversal is a sale and a short sale (or a cover and a buy), entered as two operations.",
   "api_error_investment_transfer_pool_required": "This position uses average cost, so it moves a quantity from the pooled basis rather than selected lots.",
   "api_error_investment_transfer_pool_unavailable": "Pooled transfer needs an average-cost position; choose the lots to move instead.",
   "api_error_investment_sale_already_corrected": "This sale has already been corrected. Open its correction history to see the latest entry.",

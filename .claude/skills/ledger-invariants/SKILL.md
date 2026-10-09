@@ -165,6 +165,13 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   resolved only by an appended sourced resolution (complete omitted bridge at
   the transfer date); revisions may go unknown→known, never known→unknown.
   Other depletions refuse unknown basis until they have their own contract.
+- Named shorts (#173): a short lot holds owed units at a positive quantity
+  and its exact opening proceeds in the basis columns; a cover's decision is
+  `position_side = 'short'` with signed (negative) proceeds, so its result is
+  disposed opening proceeds + proceeds. One holding is never long and short
+  of an instrument over overlapping dates (`ErrPositionSideConflict`); every
+  lot query keys by side. Short entry is in date order until #175 adds
+  replay. See the operation plan's *Short positions (#103)* section.
 - Effective reads use the views `effective_investment_operations`,
   `latest_investment_disposal_revisions`, `latest_investment_split_revisions`,
   `effective_investment_lot_events` and `effective_investment_transfer_links`;

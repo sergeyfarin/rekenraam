@@ -1942,7 +1942,15 @@ func (s *InvestmentService) ListLots(ctx context.Context, accountID int64, commo
 	if err != nil {
 		return nil, fmt.Errorf("list investment lots: %w", err)
 	}
-	return toInvestmentLots(records), nil
+	// The lot read model is long-only until it carries the side (#174): a
+	// short lot listed as an ordinary holding would invite a long sale of it.
+	long := records[:0]
+	for _, record := range records {
+		if record.PositionSide != db.PositionSideShort {
+			long = append(long, record)
+		}
+	}
+	return toInvestmentLots(long), nil
 }
 
 func (s *InvestmentService) Positions(ctx context.Context) ([]InvestmentPosition, error) {
@@ -2834,6 +2842,9 @@ type RealizedGainEntry struct {
 	// BasisKnowledge is unknown when the disposal consumed unknown basis;
 	// disposed basis and gain are then unresolved and unused.
 	BasisKnowledge string
+	// PositionSide is short for a cover: DisposedBasis is then the positive
+	// allocated opening proceeds, and the gain is still proceeds + basis.
+	PositionSide string
 }
 
 // UnrealizedGainEntry is an open position with unrealized gain when a price is available.
@@ -2880,6 +2891,7 @@ func (s *InvestmentService) ListRealizedGains(ctx context.Context, params GainsR
 			RealizedGainValue:  r.RealizedGainValue,
 			RealizedGainScale:  r.RealizedGainScale,
 			BasisKnowledge:     normalizedKnowledge(r.BasisKnowledge),
+			PositionSide:       r.PositionSide,
 		})
 	}
 	return entries, nil
@@ -2932,6 +2944,8 @@ const (
 	InvestmentImpactWriteOff           InvestmentImpactKind = "write_off"
 	InvestmentImpactDividend           InvestmentImpactKind = "dividend"
 	InvestmentImpactReinvestedDividend InvestmentImpactKind = "reinvested_dividend"
+	InvestmentImpactShortSale          InvestmentImpactKind = "short_sale"
+	InvestmentImpactShortCover         InvestmentImpactKind = "short_cover"
 )
 
 // TradeReconciliationImpact returns the active checkpoints a buy, sell, or
@@ -2954,6 +2968,10 @@ func (s *InvestmentService) TradeReconciliationImpact(ctx context.Context, kind 
 			return ReconciliationImpact{}, err
 		}
 		return s.simulatedReconciliationImpact(ctx, simulated)
+	case InvestmentImpactShortSale:
+		return s.shortSaleReconciliationImpact(ctx, input)
+	case InvestmentImpactShortCover:
+		return s.shortCoverReconciliationImpact(ctx, input)
 	default:
 		return ReconciliationImpact{}, ValidationError{Message: "investment impact kind is invalid"}
 	}

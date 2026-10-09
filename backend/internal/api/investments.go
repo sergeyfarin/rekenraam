@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -1417,6 +1418,23 @@ func replaceInvestmentBuyReconciliationImpact(logger *slog.Logger, authService *
 }
 
 func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return disposalPreview(logger, authService, "preview sell", investmentService.PreviewSell)
+}
+
+func shortCoverPreview(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return disposalPreview(logger, authService, "preview short cover", investmentService.PreviewShortCover)
+}
+
+func shortSaleInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return investmentTradeMutation(logger, authService, investmentService, options, "short sale")
+}
+
+func shortCoverInvestment(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return investmentTradeMutation(logger, authService, investmentService, options, "short cover")
+}
+
+func disposalPreview(logger *slog.Logger, authService *app.AuthService, action string,
+	preview func(context.Context, app.InvestmentTradeInput) (app.SellPreviewResult, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		owner, ok := authenticatedOwner(w, r, logger, authService)
 		if !ok {
@@ -1428,9 +1446,9 @@ func sellPreviewInvestment(logger *slog.Logger, authService *app.AuthService, in
 			return
 		}
 		input := toInvestmentTradeInput(owner, r, request)
-		preview, err := investmentService.PreviewSell(r.Context(), input)
+		preview, err := preview(r.Context(), input)
 		if err != nil {
-			writeInvestmentServiceError(w, r, logger, "preview sell", err)
+			writeInvestmentServiceError(w, r, logger, action, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, sellPreviewResponse{
@@ -1603,6 +1621,10 @@ func investmentTradeMutation(logger *slog.Logger, authService *app.AuthService, 
 		switch action {
 		case "buy":
 			result, err = investmentService.Buy(r.Context(), input)
+		case "short sale":
+			result, err = investmentService.ShortSale(r.Context(), input)
+		case "short cover":
+			result, err = investmentService.ShortCover(r.Context(), input)
 		default:
 			result, err = investmentService.Sell(r.Context(), input)
 		}
@@ -1922,6 +1944,8 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
+	case errors.Is(err, app.ErrInvestmentPositionSideConflict):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_POSITION_SIDE_CONFLICT", err.Error())
 	// Every investment trade goes through the transaction write guard, so a
 	// backdated trade into a reconciled period raises this. It was unmapped and
 	// surfaced as a 500 "internal server error", which told the user nothing and
@@ -2212,6 +2236,7 @@ type realizedGainResponse struct {
 	RealizedGainValue  *moneyCoefficient `json:"realized_gain_value"`
 	RealizedGainScale  *int              `json:"realized_gain_scale"`
 	BasisKnowledge     string            `json:"basis_knowledge"`
+	PositionSide       string            `json:"position_side"`
 }
 
 type unrealizedGainResponse struct {
@@ -2293,6 +2318,7 @@ func listInvestmentGains(logger *slog.Logger, authService *app.AuthService, inve
 				RealizedGainValue:  projectedBasisValue(e.RealizedGainValue, e.BasisKnowledge),
 				RealizedGainScale:  projectedBasisScale(e.RealizedGainScale, e.BasisKnowledge),
 				BasisKnowledge:     responseKnowledge(e.BasisKnowledge),
+				PositionSide:       e.PositionSide,
 			})
 		}
 		unrealizedResponses := make([]unrealizedGainResponse, 0, len(unrealized))

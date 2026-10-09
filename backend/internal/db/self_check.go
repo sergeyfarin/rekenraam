@@ -362,6 +362,8 @@ func (r *SelfCheckRepository) StreamPostedNonCurrencyPostings(ctx context.Contex
 
 // SelfCheckLotRecord is one investment lot's current standing.
 type SelfCheckLotRecord struct {
+	// PositionSide is short for borrowed units, which the holding owes (#173).
+	PositionSide            string
 	OpeningBasisKnowledge   string
 	InvalidBasisProjection  bool
 	BasisKnowledge          string
@@ -386,7 +388,8 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 		SELECT lot.id, lot.account_id, lot.commodity_id, COALESCE(state.status, ''),
 		lot.quantity_value, lot.quantity_scale, COALESCE(state.remaining_quantity_value, '0'), COALESCE(state.remaining_quantity_scale, 0),
 		lot.cost_basis_value, lot.cost_basis_scale, state.remaining_cost_basis_value,
-		state.remaining_cost_basis_scale, lot.cost_commodity_id, state.lot_id IS NULL, COALESCE(state.basis_knowledge, ''), lot.opening_basis_knowledge
+		state.remaining_cost_basis_scale, lot.cost_commodity_id, state.lot_id IS NULL, COALESCE(state.basis_knowledge, ''), lot.opening_basis_knowledge,
+		lot.position_side
 		FROM investment_lots lot LEFT JOIN investment_lot_state state ON state.lot_id = lot.id AND state.book_id = lot.book_id
 		WHERE lot.book_id = ? ORDER BY lot.account_id, lot.commodity_id, lot.id
 	`, bookID)
@@ -403,7 +406,7 @@ func (r *SelfCheckRepository) SelfCheckLots(ctx context.Context, transaction *sq
 			&lot.QuantityValue, &lot.QuantityScale,
 			&lot.RemainingQuantityValue, &lot.RemainingQuantityScale,
 			&openingValue, &openingScale,
-			&basisValue, &basisScale, &lot.CostCommodityID, &lot.MissingProjection, &lot.BasisKnowledge, &lot.OpeningBasisKnowledge); err != nil {
+			&basisValue, &basisScale, &lot.CostCommodityID, &lot.MissingProjection, &lot.BasisKnowledge, &lot.OpeningBasisKnowledge, &lot.PositionSide); err != nil {
 			return nil, fmt.Errorf("scan self-check lot: %w", err)
 		}
 		lot.CostBasisValue, lot.CostBasisScale, err = projectedBasis(openingValue, openingScale, lot.OpeningBasisKnowledge)

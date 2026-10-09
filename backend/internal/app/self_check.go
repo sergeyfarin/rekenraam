@@ -118,7 +118,7 @@ var checkNarratives = map[string]checkNarrative{
 		nextStep:    "Inspect the named disposal snapshot when allocation totals disagree; self-check does not repair its evidence. For a position mismatch, compare the named account's holdings with its lots. For unknown or inconsistent projected basis, preserve the named lot's source evidence before investigating its projection.",
 	},
 	CheckCommodityPositionSign: {
-		explanation: "A negative number of countable units needs an explicit explanation: it may be an out-of-order entry, an error, or a short position. This app has no named short-sale workflow yet, so ordinary negative coin and share positions are unclassified and need review. Negative money is normal. The commodity-trading clearing account is excluded because it carries the other half of each movement.",
+		explanation: "A negative number of countable units needs an explicit explanation: it may be an out-of-order entry, an error, or a short position. Open named short lots explain a holding's negative quantity up to the units they owe on each date; any further negative coin or share quantity is unclassified and needs review. Negative money is normal. The commodity-trading clearing account is excluded because it carries the other half of each movement.",
 		nextStep:    "Look at the named accounts' dated registers for that commodity. A later acquisition can restore today's balance without correcting an earlier negative position. Usually a disposal was entered before the acquisition that covers it, or one was entered twice.",
 	},
 	CheckCheckpointIntegrity: {
@@ -679,10 +679,35 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 			WHERE o.book_id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')
 			AND NOT EXISTS (SELECT 1 FROM investment_disposal_decisions d
 				WHERE d.operation_id = o.id AND d.position_side = 'long')`},
+		{"short sale missing its short lot", `
+			SELECT o.id FROM investment_operations o
+			WHERE o.book_id = ? AND o.operation_kind = 'short_sale'
+			AND (NOT EXISTS (SELECT 1 FROM investment_lots l
+				WHERE l.operation_id = o.id AND l.position_side = 'short' AND l.opened_on = o.event_date)
+			OR EXISTS (SELECT 1 FROM investment_lots l WHERE l.operation_id = o.id AND l.position_side <> 'short'))`},
+		{"short cover missing its short decision", `
+			SELECT o.id FROM investment_operations o
+			WHERE o.book_id = ? AND o.operation_kind = 'short_cover'
+			AND (NOT EXISTS (SELECT 1 FROM investment_disposal_decisions d
+				WHERE d.operation_id = o.id AND d.position_side = 'short')
+			OR EXISTS (SELECT 1 FROM investment_disposal_decisions d
+				WHERE d.operation_id = o.id AND d.position_side <> 'short'))`},
+		{"short lot or decision outside a short operation", `
+			SELECT o.id FROM investment_operations o
+			WHERE o.book_id = ? AND (
+				(o.operation_kind <> 'short_sale' AND EXISTS (SELECT 1 FROM investment_lots l
+					WHERE l.operation_id = o.id AND l.position_side = 'short'))
+				OR (o.operation_kind <> 'short_cover' AND EXISTS (SELECT 1 FROM investment_disposal_decisions d
+					WHERE d.operation_id = o.id AND d.position_side = 'short')))`},
+		{"disposal allocation consumes a lot of the other side", `
+			SELECT d.operation_id FROM investment_disposal_decisions d
+			JOIN investment_disposal_allocations a ON a.decision_id = d.id
+			JOIN investment_lots l ON l.id = a.lot_id
+			WHERE d.book_id = ? AND l.position_side <> d.position_side`},
 		{"disposal decision has no matching operation journal link", `
 			SELECT d.id FROM investment_disposal_decisions d
 			JOIN investment_operations o ON o.id = d.operation_id
-			WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')
+			WHERE d.book_id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu', 'short_cover')
 			AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links l
 				WHERE l.operation_id = d.operation_id AND l.book_id = d.book_id
 				AND l.transaction_version_id = d.transaction_version_id AND l.role <> 'reversal')`},
@@ -1173,10 +1198,13 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 		accountID   int64
 		commodityID int64
 	}
+	// Long basis and short opening proceeds are separate amounts; a holding
+	// that was short and later long must not net one against the other.
 	type basisPosition struct {
 		accountID       int64
 		commodityID     int64
 		costCommodityID int64
+		positionSide    string
 	}
 
 	remaining := map[position]*exact.ScaledInt{}
@@ -1222,8 +1250,14 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 		if remaining[key] == nil {
 			remaining[key] = exact.NewScaledInt()
 		}
-		remaining[key].AddScaled(remainingValue)
-		basisKey := basisPosition{accountID: lot.AccountID, commodityID: lot.CommodityID, costCommodityID: lot.CostCommodityID}
+		// A short lot's remaining units are owed, so the holding carries them
+		// as a negative balance.
+		if lot.PositionSide == db.PositionSideShort {
+			remaining[key].SubScaled(remainingValue)
+		} else {
+			remaining[key].AddScaled(remainingValue)
+		}
+		basisKey := basisPosition{accountID: lot.AccountID, commodityID: lot.CommodityID, costCommodityID: lot.CostCommodityID, positionSide: lot.PositionSide}
 		if lot.InvalidBasisProjection {
 			invalidBasis++
 			unknownBasis[basisKey] = true
@@ -1241,12 +1275,16 @@ func (s *SelfCheckService) lotReconciliationCheck(ctx context.Context, snapshot 
 		}
 		remainingBasis[basisKey].AddInt64(lot.RemainingCostBasisValue, lot.RemainingCostBasisScale)
 	}
+	lotSide := make(map[int64]string, len(lots))
+	for _, lot := range lots {
+		lotSide[lot.LotID] = lot.PositionSide
+	}
 	for _, event := range events {
 		if eventQuantity[event.LotID] == nil {
 			eventQuantity[event.LotID] = exact.NewScaledInt()
 		}
 		eventQuantity[event.LotID].AddCoefficient(event.QuantityValue, event.QuantityScale)
-		key := basisPosition{accountID: event.AccountID, commodityID: event.CommodityID, costCommodityID: event.CostCommodityID}
+		key := basisPosition{accountID: event.AccountID, commodityID: event.CommodityID, costCommodityID: event.CostCommodityID, positionSide: lotSide[event.LotID]}
 		if event.BasisKnowledge == db.InvestmentBasisUnknown {
 			unknownBasis[key] = true
 			continue
@@ -1549,10 +1587,31 @@ func (s *SelfCheckService) commodityPositionSignCheck(ctx context.Context, snaps
 	balances := map[position]*exact.ScaledInt{}
 	negative := map[position]bool{}
 	touched := map[position]bool{}
+	// Named short lots explain a negative balance up to the units they owe
+	// on that date (#173); only the excess stays unclassified.
+	shortEvents, err := s.repository.SelfCheckShortLotQuantityEvents(ctx, snapshot, BookID)
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	owed := map[position]*exact.ScaledInt{}
+	nextShort := 0
 	date := ""
 	checkDate := func() {
+		for nextShort < len(shortEvents) && shortEvents[nextShort].EventDate <= date {
+			event := shortEvents[nextShort]
+			key := position{accountID: event.AccountID, commodityID: event.CommodityID}
+			if owed[key] == nil {
+				owed[key] = exact.NewScaledInt()
+			}
+			owed[key].AddCoefficient(event.QuantityValue, event.QuantityScale)
+			nextShort++
+		}
 		for key := range touched {
-			if balances[key].Sign() < 0 {
+			explained := exact.NewScaledInt()
+			if owed[key] != nil {
+				explained = owed[key].Negated()
+			}
+			if balances[key].Cmp(explained) < 0 {
 				negative[key] = true
 			}
 			delete(touched, key)

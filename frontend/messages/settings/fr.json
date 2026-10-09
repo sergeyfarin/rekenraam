@@ -141,6 +141,7 @@
   "api_error_ledger_overflow": "Ce solde est trop grand pour être représenté de façon sûre. Réduisez l'échelle de l'écriture ou scindez le compte.",
   "api_error_investment_workflow_required": "Cet investissement ne peut pas encore être modifié via le processus de transaction ordinaire.",
   "api_error_investment_event_out_of_order": "Cette opération ne peut pas être datée avant une vente ou un transfert ultérieur de la même position. Corrigez d'abord cette opération ultérieure.",
+  "api_error_investment_position_side_conflict": "Cette position ne peut pas être à la fois acheteuse et vendeuse à découvert sur le même instrument. Clôturez d'abord l'autre côté ; un retournement se saisit en deux opérations : une vente puis une vente à découvert (ou un rachat puis un achat).",
   "api_error_investment_transfer_pool_required": "Cette position utilise le coût moyen : elle transfère une quantité du coût de revient commun plutôt que des lots choisis.",
   "api_error_investment_transfer_pool_unavailable": "Le transfert groupé exige une position au coût moyen ; choisissez plutôt les lots à transférer.",
   "api_error_investment_sale_already_corrected": "Cette vente a déjà été corrigée. Ouvrez l’historique des corrections pour voir la dernière écriture.",

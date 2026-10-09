@@ -282,6 +282,16 @@ non-trivial diff (yours or reviewed):
     `investments-cash-in-lieu.spec.ts` visits the overview afterward and opens
     both positions, checking that each shows only its own lots.
 
+30. **Position identity dropping side** — `investment_lots`, decisions and the
+    method-family lock carry `position_side`. Before #173 every lot was long,
+    so the disposal engine selected lots by account, instrument and currency
+    only; once short lots exist, any such query lets a long sale consume a
+    short lot (or a cover a long one). Every lot selection, method-family
+    lock, basis-range guard and current-position read filters or keys by
+    side; synthetic self-check events take the side of their lot. Named
+    regressions: `TestShortCoverRefusesOverCoverAndOtherSideLots`,
+    `TestPositionSideConflictRefusesOverlappingSides`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

@@ -216,6 +216,7 @@ type InvestmentLotRecord struct {
 	CreatedAt               string
 	UpdatedAt               string
 	BasisKnowledge          string
+	PositionSide            string
 }
 
 type CreateInvestmentLotParams struct {
@@ -239,6 +240,9 @@ type CreateInvestmentLotParams struct {
 	Operation             string
 	ChangeReason          string
 	EventKind             string
+	// PositionSide is long when empty. A short lot's basis is its opening
+	// proceeds (#173).
+	PositionSide string
 }
 
 type LotAllocation struct {
@@ -389,6 +393,9 @@ type DisposeLotsParams struct {
 	Operation         string
 	ChangeReason      string
 	MetadataJSON      string
+	// PositionSide selects the lots a depletion may consume: long when empty,
+	// short for a cover (#173). No command consumes the other side.
+	PositionSide string
 }
 
 type InvestmentPositionRecord struct {
@@ -1125,6 +1132,10 @@ func rescaleQuantity(value exact.Coefficient, from int, to int) (exact.Coefficie
 }
 
 func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestmentLotParams, auditEventID int64, replayAdmission bool) (InvestmentLotRecord, error) {
+	side := positionSideOrLong(params.PositionSide)
+	if !validPositionSide(side) || side == PositionSideShort && params.EventKind != "acquisition" {
+		return InvestmentLotRecord{}, fmt.Errorf("%w: invalid position side %q for %s", ErrInvalidDisposalParams, side, params.EventKind)
+	}
 	knowledge := normalizedBasisKnowledge(params.OpeningBasisKnowledge)
 	if knowledge != InvestmentBasisKnown && knowledge != InvestmentBasisUnknown ||
 		knowledge == InvestmentBasisUnknown && (params.CostBasisValue != 0 || params.CostBasisScale != 0 || params.EventKind != "transfer_in") {
@@ -1137,6 +1148,11 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 		if err := requirePositionEventInOrderTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.OpenedOn, "an acquisition"); err != nil {
 			return InvestmentLotRecord{}, err
 		}
+	}
+	// Replay admission does not exempt a lot from the side rule: a backdated
+	// buy into a period the holding was short is still two overlapping sides.
+	if err := requirePositionSideAvailableTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, side, params.OpenedOn); err != nil {
+		return InvestmentLotRecord{}, err
 	}
 	// A lot's projection starts at the scale its acquisition was recorded at and
 	// widens only when a disposal actually needs finer precision (T-97). It is
@@ -1163,12 +1179,12 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 	result, err := tx.ExecContext(ctx, `INSERT INTO investment_lots (
 		book_id, account_id, commodity_id, opened_on, source_transaction_id,
 		quantity_value, quantity_scale, cost_basis_value, cost_basis_scale,
-		cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id, operation_id, opening_basis_knowledge
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		cost_commodity_id, metadata_json, created_at, created_by_user_id, created_audit_event_id, operation_id, opening_basis_knowledge, position_side
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		params.BookID, params.AccountID, params.CommodityID, params.OpenedOn, nullablePositiveInt64(params.SourceTransactionID),
 		params.QuantityValue, params.QuantityScale, nullableBasisValue(params.CostBasisValue, knowledge), nullableBasisScale(params.CostBasisScale, knowledge),
 		params.CostCommodityID, params.MetadataJSON, params.CreatedAt, params.CreatedByUserID, auditEventID,
-		nullablePositiveInt64(operationID), knowledge)
+		nullablePositiveInt64(operationID), knowledge, side)
 	if err != nil {
 		return InvestmentLotRecord{}, fmt.Errorf("insert investment lot: %w", err)
 	}
@@ -1205,11 +1221,8 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 		}
 	}
 	if !replayAdmission {
-		rangeGuard := requirePositionBasisRangeTx
-		if knowledge == InvestmentBasisUnknown {
-			rangeGuard = requireKnownPositionBasisSubtotalRangeTx
-		}
-		if err := rangeGuard(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID); err != nil {
+		if err := requirePositionBasisRangeQueryTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
+			params.CostCommodityID, knowledge == InvestmentBasisUnknown, side); err != nil {
 			return InvestmentLotRecord{}, err
 		}
 	}
@@ -1413,6 +1426,11 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 		return nil, fmt.Errorf("%w: cost basis method %q is not supported", ErrInvalidDisposalParams, method)
 	}
 	params.CostBasisMethod = method
+	params.PositionSide = positionSideOrLong(params.PositionSide)
+	if !validPositionSide(params.PositionSide) ||
+		params.PositionSide == PositionSideShort && (params.EventKind != "" && params.EventKind != "disposal" || params.AdmitUnknownBasis) {
+		return nil, fmt.Errorf("%w: invalid %s depletion", ErrInvalidDisposalParams, params.PositionSide)
+	}
 	// Every lot-eligibility comparison below is a string comparison against
 	// this date, and an empty or malformed one sorts below every stored
 	// opened_on — which would read as "no lots are eligible" rather than as the
@@ -1464,7 +1482,7 @@ func disposeLotsWithAuditTx(ctx context.Context, tx *sql.Tx, params DisposeLotsP
 	// the current all-lots position unreadable (T-104). A sale admitting
 	// unknown basis can only check the representable known subtotal.
 	if err := requirePositionBasisRangeQueryTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
-		params.CostCommodityID, params.AdmitUnknownBasis); err != nil {
+		params.CostCommodityID, params.AdmitUnknownBasis, params.PositionSide); err != nil {
 		return nil, err
 	}
 	if err := updatePositionMethodFamilyTx(ctx, tx, params, method, auditEventID); err != nil {
@@ -1477,11 +1495,11 @@ func resolveDisposalCostCommodityTx(ctx context.Context, tx *sql.Tx, params Disp
 	rows, err := tx.QueryContext(ctx, `
 		SELECT DISTINCT cost_commodity_id
 		FROM current_investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND status = 'open'
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND position_side = ? AND status = 'open'
 			AND opened_on <= ?
 			AND (? = 0 OR cost_commodity_id = ?)
 		ORDER BY cost_commodity_id
-	`, params.BookID, params.AccountID, params.CommodityID, params.EventDate, params.CostCommodityID, params.CostCommodityID)
+	`, params.BookID, params.AccountID, params.CommodityID, positionSideOrLong(params.PositionSide), params.EventDate, params.CostCommodityID, params.CostCommodityID)
 	if err != nil {
 		return 0, fmt.Errorf("read disposal cost commodities: %w", err)
 	}
@@ -1517,8 +1535,8 @@ func enforcePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispo
 	var existing string
 	err := tx.QueryRowContext(ctx, `
 		SELECT method_family FROM investment_position_basis_state
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'
-	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID).Scan(&existing)
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ?
+	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, positionSideOrLong(params.PositionSide)).Scan(&existing)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -1540,14 +1558,14 @@ func updatePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispos
 	var openCount int
 	if err := tx.QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM current_investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND status = 'open'
-	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID).Scan(&openCount); err != nil {
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ? AND status = 'open'
+	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, positionSideOrLong(params.PositionSide)).Scan(&openCount); err != nil {
 		return fmt.Errorf("count open lots after disposal: %w", err)
 	}
 	if openCount == 0 {
 		_, err := tx.ExecContext(ctx, `DELETE FROM investment_position_basis_state
-			WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'`,
-			params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID)
+			WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ?`,
+			params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, positionSideOrLong(params.PositionSide))
 		if err != nil {
 			return fmt.Errorf("close position basis method state: %w", err)
 		}
@@ -1557,13 +1575,13 @@ func updatePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispos
 		INSERT INTO investment_position_basis_state (
 			book_id, account_id, commodity_id, cost_commodity_id, position_side, method_family,
 			updated_at, updated_by_user_id, updated_audit_event_id
-		) VALUES (?, ?, ?, ?, 'long', ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (book_id, account_id, commodity_id, cost_commodity_id, position_side) DO UPDATE SET
 			method_family = excluded.method_family,
 			updated_at = excluded.updated_at,
 			updated_by_user_id = excluded.updated_by_user_id,
 			updated_audit_event_id = excluded.updated_audit_event_id
-	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID,
+	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, positionSideOrLong(params.PositionSide),
 		methodFamily(method), params.CreatedAt, params.ActorUserID, auditEventID)
 	if err != nil {
 		return fmt.Errorf("save position basis method state: %w", err)
@@ -1609,9 +1627,9 @@ func disposeFIFOOrLIFOTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 		SELECT lot.id, lot.remaining_quantity_value, lot.remaining_quantity_scale
 		FROM current_investment_lots lot
 		LEFT JOIN effective_investment_transfer_links link ON link.destination_lot_id = lot.id
-		WHERE lot.book_id = ? AND lot.account_id = ? AND lot.commodity_id = ?
+		WHERE lot.book_id = ? AND lot.account_id = ? AND lot.commodity_id = ? AND lot.position_side = ?
 			AND lot.cost_commodity_id = ? AND lot.status = 'open' AND lot.opened_on <= ?
-		`+orderClause, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate)
+		`+orderClause, params.BookID, params.AccountID, params.CommodityID, positionSideOrLong(params.PositionSide), params.CostCommodityID, params.EventDate)
 	if err != nil {
 		return nil, fmt.Errorf("read %s lots: %w", method, err)
 	}
@@ -1705,10 +1723,10 @@ func disposeAverageCostTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPar
 		SELECT id, remaining_quantity_value, remaining_quantity_scale,
 		       remaining_cost_basis_value, remaining_cost_basis_scale, basis_knowledge
 		FROM current_investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND status = 'open'
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ? AND status = 'open'
 			AND opened_on <= ?
 		ORDER BY opened_on, id
-	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate)
+	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, positionSideOrLong(params.PositionSide), params.EventDate)
 	if err != nil {
 		return nil, fmt.Errorf("read average-cost lots: %w", err)
 	}
@@ -1962,7 +1980,10 @@ func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, tran
 			if err != nil {
 				return InvestmentLotRecord{}, err
 			}
-			replayAdmission := latest != "" && lotParams.OpenedOn < latest
+			// Short lots have no replay contract yet (#175): a backdated short
+			// opening reaches the chronological guard and is refused.
+			replayAdmission := latest != "" && lotParams.OpenedOn < latest &&
+				positionSideOrLong(lotParams.PositionSide) == PositionSideLong
 			lot, err := createLotWithAuditTx(ctx, tx, lotParams, auditEventID, replayAdmission)
 			if err != nil || !replayAdmission {
 				return lot, err
@@ -2056,7 +2077,7 @@ func (r *InvestmentRepository) writeTransactionAndDisposeLots(ctx context.Contex
 			if err != nil {
 				return result{}, err
 			}
-			if latest != "" && disposalParams.EventDate < latest {
+			if latest != "" && disposalParams.EventDate < latest && positionSideOrLong(disposalParams.PositionSide) == PositionSideLong {
 				disposals, decision, err := disposeBehindLaterRewriteTx(ctx, tx, transaction, disposalParams, auditEventID)
 				return result{disposals: disposals, decision: decision}, err
 			}
@@ -2109,8 +2130,8 @@ func createDisposalDecisionTx(ctx context.Context, tx *sql.Tx, transaction Trans
 			disposed_basis_value, disposed_basis_scale, proceeds_value, proceeds_scale, cost_basis_method, resolution_tier,
 			account_version_id, profile_id, profile_version_id, source_effective_from,
 			source_recorded_at, created_at, created_by_user_id, created_audit_event_id, basis_knowledge
-		) VALUES (?, ?, ?, ?, 1, 'long', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, params.BookID, transaction.ID, transaction.VersionID, operationID, params.AccountID, params.CommodityID,
+		) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, params.BookID, transaction.ID, transaction.VersionID, operationID, positionSideOrLong(params.PositionSide), params.AccountID, params.CommodityID,
 		costCommodityID, params.EventDate, params.QuantityValue, params.QuantityScale,
 		disposedBasis.nullableValue(), disposedBasis.nullableScale(), params.ProceedsValue, params.ProceedsScale, params.CostBasisMethod, source.ResolutionTier,
 		nullablePositiveInt64(source.AccountVersionID), nullablePositiveInt64(source.ProfileID),
@@ -2257,6 +2278,7 @@ func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]I
 			), '') AS method_family
 		FROM current_investment_lots lot
 		WHERE lot.book_id = ?
+			AND lot.position_side = 'long'
 			AND lot.status = 'open'
 			AND lot.remaining_quantity_value <> '0'
 		ORDER BY lot.account_id, lot.commodity_id, lot.id
@@ -2920,7 +2942,7 @@ func investmentLotSelect(whereClause string) string {
 		SELECT id, book_id, account_id, commodity_id, opened_on, source_transaction_id, status,
 			quantity_value, quantity_scale, remaining_quantity_value, remaining_quantity_scale,
 			cost_basis_value, cost_basis_scale, remaining_cost_basis_value, remaining_cost_basis_scale,
-			cost_commodity_id, metadata_json, created_at, updated_at, basis_knowledge, opening_basis_knowledge
+			cost_commodity_id, metadata_json, created_at, updated_at, basis_knowledge, opening_basis_knowledge, position_side
 		FROM current_investment_lots
 	` + whereClause
 }
@@ -2934,7 +2956,7 @@ func investmentLotByIDTx(ctx context.Context, tx *sql.Tx, bookID int64, lotID in
 func scanInvestmentLotRow(row rowScanner) (InvestmentLotRecord, error) {
 	var record InvestmentLotRecord
 	var basisValue, basisScale, openingValue, openingScale sql.NullInt64
-	if err := row.Scan(&record.ID, &record.BookID, &record.AccountID, &record.CommodityID, &record.OpenedOn, &record.SourceTransactionID, &record.Status, &record.QuantityValue, &record.QuantityScale, &record.RemainingQuantityValue, &record.RemainingQuantityScale, &openingValue, &openingScale, &basisValue, &basisScale, &record.CostCommodityID, &record.MetadataJSON, &record.CreatedAt, &record.UpdatedAt, &record.BasisKnowledge, &record.OpeningBasisKnowledge); err != nil {
+	if err := row.Scan(&record.ID, &record.BookID, &record.AccountID, &record.CommodityID, &record.OpenedOn, &record.SourceTransactionID, &record.Status, &record.QuantityValue, &record.QuantityScale, &record.RemainingQuantityValue, &record.RemainingQuantityScale, &openingValue, &openingScale, &basisValue, &basisScale, &record.CostCommodityID, &record.MetadataJSON, &record.CreatedAt, &record.UpdatedAt, &record.BasisKnowledge, &record.OpeningBasisKnowledge, &record.PositionSide); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return InvestmentLotRecord{}, ErrNotFound
 		}
@@ -3085,9 +3107,9 @@ func positionBasisAllocationScaleTx(ctx context.Context, tx *sql.Tx, params Disp
 	rows, err := tx.QueryContext(ctx, `
 		SELECT remaining_cost_basis_value, remaining_cost_basis_scale
 		FROM current_investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ?
 			AND status = 'open' AND opened_on <= ? AND (? = 0 OR basis_knowledge = 'known')
-	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, params.EventDate, params.AdmitUnknownBasis)
+	`, params.BookID, params.AccountID, params.CommodityID, params.CostCommodityID, positionSideOrLong(params.PositionSide), params.EventDate, params.AdmitUnknownBasis)
 	if err != nil {
 		return 0, fmt.Errorf("read position basis for allocation scale: %w", err)
 	}
@@ -3119,7 +3141,8 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		return LotDisposalRecord{}, err
 	}
 	if lot.AccountID != params.AccountID || lot.CommodityID != params.CommodityID ||
-		lot.CostCommodityID != params.CostCommodityID || lot.Status != "open" {
+		lot.CostCommodityID != params.CostCommodityID || lot.Status != "open" ||
+		lot.PositionSide != positionSideOrLong(params.PositionSide) {
 		return LotDisposalRecord{}, ErrNotFound
 	}
 	unknown := lot.BasisKnowledge == InvestmentBasisUnknown
@@ -3293,6 +3316,10 @@ type RealizedGainRecord struct {
 	// consumed unknown basis. DisposedBasis and RealizedGain are then unused:
 	// an unresolved disposal never reports a gain against a partial basis.
 	BasisKnowledge string
+	// PositionSide is short for a cover (#173). Its DisposedBasis is the
+	// positive allocated opening proceeds and its Proceeds the signed cover
+	// amount, so the gain is their sum for either side.
+	PositionSide string
 }
 
 type realizedGainEventRow struct {
@@ -3307,6 +3334,7 @@ type realizedGainEventRow struct {
 	costBasisValue  int64
 	costBasisScale  int
 	unknownBasis    bool
+	positionSide    string
 }
 
 // scanRealizedGainBasis reads one disposal's basis knowledge/amount tuple.
@@ -3362,7 +3390,8 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			le.quantity_scale,
 			le.cost_basis_value,
 			le.cost_basis_scale,
-			le.basis_knowledge
+			le.basis_knowledge,
+			lot.position_side
 		FROM effective_investment_lot_events le
 		JOIN current_investment_lots lot ON lot.id = le.lot_id
 		WHERE lot.book_id = ?
@@ -3377,7 +3406,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		var e realizedGainEventRow
 		var basis, basisScale sql.NullInt64
 		var knowledge string
-		if err := rows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID, &e.commodityID, &e.costCommodityID, &e.quantityValue, &e.quantityScale, &basis, &basisScale, &knowledge); err != nil {
+		if err := rows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID, &e.commodityID, &e.costCommodityID, &e.quantityValue, &e.quantityScale, &basis, &basisScale, &knowledge, &e.positionSide); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan realized gain event: %w", err)
 		}
@@ -3400,7 +3429,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 				WHERE original.decision_id = d.id),
 			d.transaction_id, d.event_date, d.account_id, d.commodity_id,
 			d.cost_commodity_id, allocation.quantity_value, allocation.quantity_scale,
-			allocation.cost_basis_value, allocation.cost_basis_scale, allocation.basis_knowledge
+			allocation.cost_basis_value, allocation.cost_basis_scale, allocation.basis_knowledge, d.position_side
 		FROM investment_disposal_decisions d
 		JOIN effective_investment_operations operation ON operation.id = d.operation_id
 		JOIN latest_investment_disposal_revisions revision ON revision.decision_id = d.id
@@ -3419,7 +3448,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		var knowledge string
 		if err := revisedRows.Scan(&e.id, &e.transactionID, &e.eventDate, &e.accountID,
 			&e.commodityID, &e.costCommodityID, &quantity, &e.quantityScale,
-			&basis, &basisScale, &knowledge); err != nil {
+			&basis, &basisScale, &knowledge, &e.positionSide); err != nil {
 			revisedRows.Close()
 			return nil, fmt.Errorf("scan effective realized gain allocation: %w", err)
 		}
@@ -3479,6 +3508,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		commodityID     int64
 		costCommodityID int64
 		eventDate       string
+		positionSide    string
 	}
 	type group struct {
 		key           groupKey
@@ -3491,7 +3521,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 	groups := map[groupKey]*group{}
 	var order []groupKey
 	for _, e := range events {
-		key := groupKey{accountID: e.accountID, commodityID: e.commodityID, costCommodityID: e.costCommodityID, eventDate: e.eventDate}
+		key := groupKey{accountID: e.accountID, commodityID: e.commodityID, costCommodityID: e.costCommodityID, eventDate: e.eventDate, positionSide: e.positionSide}
 		if e.transactionID.Valid {
 			key.txKey = fmt.Sprintf("t:%d", e.transactionID.Int64)
 		} else {
@@ -3509,6 +3539,10 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 		g.quantity.Add(e.quantityValue.BigInt(), e.quantityScale)
 		if e.unknownBasis {
 			g.unknownBasis = true
+		} else if e.positionSide == PositionSideShort {
+			// A cover's event removes opening proceeds the short received,
+			// which add to its result rather than subtract from it.
+			g.costBasis.Add(big.NewInt(-e.costBasisValue), e.costBasisScale)
 		} else {
 			g.costBasis.Add(big.NewInt(e.costBasisValue), e.costBasisScale)
 		}
@@ -3550,6 +3584,7 @@ func (r *InvestmentRepository) ListRealizedGains(ctx context.Context, bookID int
 			DisposedBasisValue: disposedBasis,
 			DisposedBasisScale: g.costBasis.Scale(),
 			BasisKnowledge:     InvestmentBasisKnown,
+			PositionSide:       key.positionSide,
 		}
 
 		var matchedProceeds *exact.ScaledInt
@@ -3782,22 +3817,22 @@ func mapInvestmentConstraintError(err error) error {
 // audit writes. Never accept a new projection that the position read model
 // cannot sum exactly. This also covers reinvestment/import acquisition paths.
 func requirePositionBasisRangeTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64) error {
-	return requirePositionBasisRangeQueryTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, false)
+	return requirePositionBasisRangeQueryTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, false, PositionSideLong)
 }
 
 // Replay of unknown openings can check the representable known subtotal;
 // known-basis writers keep the strict full-position guard above.
 func requireKnownPositionBasisSubtotalRangeTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64) error {
-	return requirePositionBasisRangeQueryTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, true)
+	return requirePositionBasisRangeQueryTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, true, PositionSideLong)
 }
 
-func requirePositionBasisRangeQueryTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, knownOnly bool) error {
+func requirePositionBasisRangeQueryTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, knownOnly bool, side string) error {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT remaining_cost_basis_value, remaining_cost_basis_scale
 		FROM current_investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ?
 			AND status = 'open' AND (? = 0 OR basis_knowledge = 'known')
-	`, bookID, accountID, commodityID, costCommodityID, knownOnly)
+	`, bookID, accountID, commodityID, costCommodityID, side, knownOnly)
 	if err != nil {
 		return fmt.Errorf("read position basis range: %w", err)
 	}

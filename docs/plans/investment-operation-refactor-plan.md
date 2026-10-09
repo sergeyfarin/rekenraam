@@ -515,6 +515,55 @@ notes record design decisions per area; they carry no status or order.
   cross-position effects, closure propagation before admission.
   Bonds/derivatives need separate instrument contracts.
 
+### Short positions (#103)
+
+Decided 2026-10-09 as the #173 design gate, before command admission. #173
+delivers in-order entry; #174 the side-aware reads and mobile entry; #175
+correction, reversal and backdating; #176 provider import.
+
+- **Representation.** `short_sale` opens a `position_side = 'short'` lot whose
+  positive quantity is the borrowed units and whose `cost_basis` columns hold
+  the exact *opening proceeds*: gross plus clearing-included charges, which
+  must stay positive. `short_cover` is a disposal decision with
+  `position_side = 'short'`; its disposed basis is the allocated opening
+  proceeds and its `proceeds` is the cover's signed clearing amount (negative:
+  cash paid plus clearing-included charges). The cover's result is
+  `disposed opening proceeds + signed cover proceeds`, so 100.00 opened and
+  70.00 covered is +30.00. Separately expensed charges post to their expense
+  account and never enter that result, exactly as for long trades.
+- **Journal.** An opening posts the security `H −q`, `T +q` on the trade
+  date and the cash/clearing legs of a sale; a cover posts `H +q`, `T −q`
+  and the cash/clearing legs of a buy. Settlement dates, charge payment dates
+  and per-commodity balancing follow the long trade contract unchanged.
+- **One side per holding at a time.** An account may not hold long and
+  short lots of the same instrument over overlapping dates. A lot opening on
+  one side refuses (`INVESTMENT_POSITION_SIDE_CONFLICT`) while the other side
+  has an open lot in that account, or has any lot event after the opening
+  date. Different accounts may hold opposite sides. Netting is never
+  implicit: going from long to short is a sale (closing the long lots) and
+  then a short sale, entered as two operations, which may share a date.
+- **Methods and elections.** A cover resolves its method through the same
+  three tiers as a sale and accepts `fifo`, `lifo`, `specific_lot` and
+  `average_cost` over short lots only, ordered by opening date. The
+  method-family lock is keyed by side, so a short pool's average-cost lock is
+  independent of any earlier long position. Long commands never select short
+  lots, and a cover never selects long lots.
+- **Dates.** Short entries are in date order only in #173: a short opening or
+  cover dated before a later depletion of the holding, on either side, is
+  refused as out of order with nothing written. #175 adds dated replay.
+- **Other families.** Splits, transfers, return of capital, cash in lieu and
+  write-off select long lots only, so a short-only holding has no eligible
+  units and refuses. Borrow fees, margin interest, collateral and payments in
+  lieu are separate named cash operations outside this family.
+- **Classification.** Net worth and self-check classify a negative countable
+  balance as a named short only up to the quantity of short lots open on that
+  date in that account; any further negative quantity remains an
+  unclassified short.
+- **Reads before #174.** Positions, lots and unrealized gains remain
+  long-only until #174 makes them side-aware; the realized-gains report
+  includes covers with their side-correct result. Correction chains show
+  short operations as not correctable until #175.
+
 ### Required acceptance cases across slices
 
 - A buy with gross `-100` and commission `-2` settles `-102`; a sale with

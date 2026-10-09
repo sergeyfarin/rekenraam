@@ -263,9 +263,10 @@ When a feature introduces a durable new rule, update one of those documents in t
 - Money and countable commodities are not the same kind of quantity. A currency
   balance may be negative — an overdraft and a credit-card balance are real
   positions. A negative non-currency balance may be an out-of-order entry, an
-  error, or an intentional short. Until an explicit short-sale workflow names
-  and tracks the short position, it is unclassified: dated self-checks and
-  net-worth reports must flag it (T-105/T-106). The `commodity_trading` clearing
+  error, or an intentional short. Only units owed by open named short lots on
+  that date classify it as a short (#173); any further negative quantity is
+  unclassified, and dated self-checks and net-worth reports must flag it
+  (T-105/T-106). The `commodity_trading` clearing
   account is exempt because it holds the other half of commodity movements.
 - Never store money or quantities as floating point.
 - Store exact values as a canonical integer coefficient plus scale and

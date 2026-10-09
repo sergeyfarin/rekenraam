@@ -141,6 +141,7 @@
   "api_error_ledger_overflow": "Dieser Saldo ist zu groß, um ihn sicher darzustellen. Verringern Sie die Nachkommastellen der Buchung oder teilen Sie das Konto auf.",
   "api_error_investment_workflow_required": "Diese Anlage kann noch nicht über den normalen Transaktionsablauf geändert werden.",
   "api_error_investment_event_out_of_order": "Dieser Vorgang kann nicht vor einem späteren Verkauf oder Übertrag derselben Position datiert werden. Korrigieren Sie zuerst den späteren Vorgang.",
+  "api_error_investment_position_side_conflict": "Dieses Depot kann nicht gleichzeitig long und short im selben Instrument sein. Schließen Sie zuerst die andere Seite; ein Wechsel besteht aus einem Verkauf und einem Leerverkauf (oder einer Eindeckung und einem Kauf) als zwei Vorgänge.",
   "api_error_investment_transfer_pool_required": "Diese Position nutzt Durchschnittskosten, daher wird eine Menge aus dem gepoolten Einstandswert statt ausgewählter Lose übertragen.",
   "api_error_investment_transfer_pool_unavailable": "Eine gepoolte Übertragung erfordert eine Durchschnittskostenposition; wählen Sie stattdessen die Lose aus.",
   "api_error_investment_sale_already_corrected": "Dieser Verkauf wurde bereits korrigiert. Öffnen Sie den Korrekturverlauf, um die neueste Buchung zu sehen.",

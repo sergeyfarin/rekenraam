@@ -17,6 +17,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   FORECAST_BASIS_CHANGED: () => m.api_error_forecast_basis_changed(),
   INVESTMENT_WORKFLOW_REQUIRED: () => m.api_error_investment_workflow_required(),
   INVESTMENT_EVENT_OUT_OF_ORDER: () => m.api_error_investment_event_out_of_order(),
+  INVESTMENT_POSITION_SIDE_CONFLICT: () => m.api_error_investment_position_side_conflict(),
   INVESTMENT_TRANSFER_POOL_REQUIRED: () => m.api_error_investment_transfer_pool_required(),
   INVESTMENT_TRANSFER_POOL_UNAVAILABLE: () => m.api_error_investment_transfer_pool_unavailable(),
   INVESTMENT_SALE_ALREADY_CORRECTED: () => m.api_error_investment_sale_already_corrected(),

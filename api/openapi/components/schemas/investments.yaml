@@ -2609,6 +2609,7 @@ RealizedGainEntry:
   type: object
   required:
     - basis_knowledge
+    - position_side
     - account_id
     - commodity_id
     - cost_commodity_id
@@ -2649,24 +2650,36 @@ RealizedGainEntry:
       description: Disposed quantity as a base-10 integer string.
     quantity_scale:
       type: integer
+    position_side:
+      type: string
+      enum: [long, short]
+      description: >-
+        Long for a sale or write-off; short for a short cover, whose
+        disposed_basis_value is the positive allocated opening proceeds.
     disposed_basis_value:
       type: [string, 'null']
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
-      description: Disposed cost basis in minor units at disposed_basis_scale.
+      description: >-
+        Signed disposed amount in minor units at disposed_basis_scale: the
+        negated cost basis for a long disposal, the allocated opening
+        proceeds for a short cover.
     disposed_basis_scale:
       type: [integer, 'null']
     proceeds_value:
       type: string
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
-      description: Cash proceeds in minor units at proceeds_scale.
+      description: >-
+        Signed operational proceeds in minor units at proceeds_scale; a
+        cover's is negative, the covering cost.
     proceeds_scale:
       type: integer
     realized_gain_value:
       type: [string, 'null']
       pattern: '^-?(0|[1-9][0-9]{0,18})$'
       description: >-
-        proceeds_value − disposed_basis, in minor units at realized_gain_scale.
-        Format it with realized_gain_scale, never with proceeds_scale.
+        proceeds_value + disposed_basis_value, in minor units at
+        realized_gain_scale. Format it with realized_gain_scale, never with
+        proceeds_scale.
     realized_gain_scale:
       type: [integer, 'null']
       description: >-

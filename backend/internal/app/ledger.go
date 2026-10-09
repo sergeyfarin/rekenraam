@@ -363,7 +363,43 @@ func (s *TransactionService) netWorthTotals(ctx context.Context, asOf string, st
 	for _, posting := range postings {
 		foldPosting(running, posting)
 	}
-	return netWorthBucketTotals(accounts, running, kinds, ReportFilters{})
+	shortEvents, err := s.repository.ShortLotQuantityEventsThrough(ctx, BookID, asOf)
+	if err != nil {
+		return netWorthBucket{}, err
+	}
+	shorts := namedShortQuantities{}
+	for _, event := range shortEvents {
+		shorts.fold(event)
+	}
+	return netWorthBucketTotals(accounts, running, kinds, ReportFilters{}, shorts)
+}
+
+// namedShortQuantities is the dated quantity each holding owes through named
+// short lots (#173). A negative balance up to that quantity is an explained
+// short; anything beyond it stays unclassified.
+type namedShortQuantities map[int64]map[int64]*exact.ScaledInt
+
+func (q namedShortQuantities) fold(event db.ShortLotQuantityEvent) {
+	if q[event.AccountID] == nil {
+		q[event.AccountID] = map[int64]*exact.ScaledInt{}
+	}
+	if q[event.AccountID][event.CommodityID] == nil {
+		q[event.AccountID][event.CommodityID] = exact.NewScaledInt()
+	}
+	q[event.AccountID][event.CommodityID].AddCoefficient(event.QuantityValue, event.QuantityScale)
+}
+
+// unexplainedNegative reports whether balance is more negative than the
+// holding's named short quantity.
+func (q namedShortQuantities) unexplainedNegative(accountID, commodityID int64, balance *exact.ScaledInt) bool {
+	if balance.Sign() >= 0 {
+		return false
+	}
+	owed := q[accountID][commodityID]
+	if owed == nil {
+		return true
+	}
+	return balance.Cmp(owed.Negated()) < 0
 }
 
 // netWorthSeriesTotals computes every bucket's totals from a single pass over
@@ -400,6 +436,12 @@ func (s *TransactionService) netWorthSeriesTotals(ctx context.Context, bounds []
 	if err != nil {
 		return nil, err
 	}
+	shortEvents, err := s.repository.ShortLotQuantityEventsThrough(ctx, BookID, seriesEnd)
+	if err != nil {
+		return nil, err
+	}
+	shorts := namedShortQuantities{}
+	nextShort := 0
 
 	timeline := newLedgerAccountTimeline(versions)
 	running := map[int64]map[int64]*exact.ScaledInt{}
@@ -413,7 +455,11 @@ func (s *TransactionService) netWorthSeriesTotals(ctx context.Context, bounds []
 			foldPosting(running, postings[next])
 			next++
 		}
-		totals, err := netWorthBucketTotals(timeline.snapshotThrough(bound.endDate), running, kinds, filters)
+		for nextShort < len(shortEvents) && shortEvents[nextShort].EventDate <= bound.endDate {
+			shorts.fold(shortEvents[nextShort])
+			nextShort++
+		}
+		totals, err := netWorthBucketTotals(timeline.snapshotThrough(bound.endDate), running, kinds, filters, shorts)
 		if err != nil {
 			return nil, err
 		}
@@ -429,6 +475,7 @@ func netWorthBucketTotals(
 	running map[int64]map[int64]*exact.ScaledInt,
 	kinds map[int64]string,
 	filters ReportFilters,
+	namedShorts namedShortQuantities,
 ) (netWorthBucket, error) {
 	filterSet := reportFilterSetFrom(accounts, filters)
 	accountMap := ledgerAccountMap(accounts)
@@ -447,7 +494,7 @@ func netWorthBucketTotals(
 			if !filterSet.includes(accountID, commodityID) {
 				continue
 			}
-			if kinds[commodityID] != "currency" && amount.Sign() < 0 {
+			if kinds[commodityID] != "currency" && namedShorts.unexplainedNegative(accountID, commodityID, amount) {
 				shorts = append(shorts, UnclassifiedShortPosition{AccountID: accountID, CommodityID: commodityID})
 			}
 			total := totals[commodityID]

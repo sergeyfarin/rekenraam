@@ -310,7 +310,7 @@ func selectedLotsTransferOutTx(ctx context.Context, tx *sql.Tx, params DisposeLo
 		moved = append(moved, depletion)
 	}
 	if err := requirePositionBasisRangeQueryTx(ctx, tx, params.BookID, params.AccountID,
-		params.CommodityID, params.CostCommodityID, params.AdmitUnknownBasis); err != nil {
+		params.CommodityID, params.CostCommodityID, params.AdmitUnknownBasis, PositionSideLong); err != nil {
 		return nil, err
 	}
 	return moved, nil
@@ -337,7 +337,7 @@ func pooledTransferOutTx(ctx context.Context, tx *sql.Tx, params DisposeLotsPara
 		return nil, err
 	}
 	if err := requirePositionBasisRangeQueryTx(ctx, tx, params.BookID, params.AccountID,
-		params.CommodityID, params.CostCommodityID, params.AdmitUnknownBasis); err != nil {
+		params.CommodityID, params.CostCommodityID, params.AdmitUnknownBasis, PositionSideLong); err != nil {
 		return nil, err
 	}
 	if err := updatePositionMethodFamilyTx(ctx, tx, params, params.CostBasisMethod, auditEventID); err != nil {

@@ -289,6 +289,16 @@ paths:
     $ref: "./paths/investments-buy.yaml"
   /api/v1/investments/sell:
     $ref: "./paths/investments-sell.yaml"
+  /api/v1/investments/short-sale:
+    $ref: "./paths/investments-short-sale.yaml"
+  /api/v1/investments/short-sale/reconciliation-impact:
+    $ref: "./paths/investments-short-sale-reconciliation-impact.yaml"
+  /api/v1/investments/short-cover:
+    $ref: "./paths/investments-short-cover.yaml"
+  /api/v1/investments/short-cover/preview:
+    $ref: "./paths/investments-short-cover-preview.yaml"
+  /api/v1/investments/short-cover/reconciliation-impact:
+    $ref: "./paths/investments-short-cover-reconciliation-impact.yaml"
   /api/v1/investments/transfers/external/in:
     $ref: "./paths/investments-external-transfer-in.yaml"
   /api/v1/investments/transfers/external/in/reconciliation-impact:
