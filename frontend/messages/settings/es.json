@@ -966,6 +966,7 @@
   "investments_record_buy": "Registrar compra",
   "investments_record_sell": "Registrar venta",
   "investments_record_short_sale": "Registrar venta en corto",
+  "investments_dated_holdings_hint": "Las posiciones se muestran tal como estaban en la fecha elegida, incluidas las vendidas después.",
   "investments_short_sale_reverse_action": "Revertir venta en corto…",
   "investments_short_cover_reverse_action": "Revertir recompra…",
   "investments_short_sale_correct_action": "Corregir venta en corto…",

@@ -15200,6 +15200,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/dated-holdings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read long holdings and lots at a dated entry slot (#166)
+         * @description Composed for the historical-entry selectors: every long holding with its open lots after all effective events on or before as_of, including holdings a later sale closed. A read-only rolled-back replay, never an authorization for a later write.
+         */
+        get: {
+            parameters: {
+                query: {
+                    as_of: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Dated holdings and lots */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DatedHoldingsResponse"];
+                    };
+                };
+                /** @description Invalid date */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Replacement not found or does not belong to the split */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Split is unavailable or historical replay is impossible */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Exact value exceeds supported range */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/transactions/{transaction_id}/cash-in-lieu-lots": {
         parameters: {
             query?: never;
@@ -24396,6 +24482,45 @@ export interface components {
         };
         CashInLieuLotsResponse: {
             lots: components["schemas"]["InvestmentTradeCorrectionAvailableLotResponse"][];
+        };
+        DatedHoldingsResponse: {
+            /** Format: date */
+            as_of: string;
+            holdings: components["schemas"]["DatedHolding"][];
+        };
+        /** @description A long holding as an entry dated as_of would find it, after every effective event on or before that date (a new entry takes the last same-day slot). Holdings a later sale has closed are included. Discovery only: the command's writer rechecks availability at commit (#166). */
+        DatedHolding: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            commodity_id: number;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            /** @enum {string} */
+            position_side: "long";
+            /** @description Units held at the slot. */
+            quantity_value: string;
+            quantity_scale: number;
+            /**
+             * @description How an outbound transfer allocates basis at commit (the current method lock, else the default).
+             * @enum {string}
+             */
+            transfer_basis_allocation: "selected_lots" | "average_cost_pool";
+            lots: components["schemas"]["DatedHoldingLot"][];
+        };
+        DatedHoldingLot: {
+            /** Format: int64 */
+            lot_id: number;
+            /** Format: date */
+            opened_on: string;
+            /** @description Remaining units at the slot. */
+            quantity_value: string;
+            quantity_scale: number;
+            /** @enum {string} */
+            basis_knowledge: "known" | "unknown";
+            /** @description Remaining basis at the slot; null when unknown. */
+            remaining_cost_basis_value: string | null;
+            remaining_cost_basis_scale: number | null;
         };
         CashInLieuRequest: {
             /**

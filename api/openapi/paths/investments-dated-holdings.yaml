@@ -1,0 +1,49 @@
+get:
+  summary: Read long holdings and lots at a dated entry slot (#166)
+  description: >-
+    Composed for the historical-entry selectors: every long holding with its
+    open lots after all effective events on or before as_of, including
+    holdings a later sale closed. A read-only rolled-back replay, never an
+    authorization for a later write.
+  parameters:
+    - in: query
+      name: as_of
+      required: true
+      schema: { type: string, format: date }
+  responses:
+    "200":
+      description: Dated holdings and lots
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/DatedHoldingsResponse"
+    "400":
+      description: Invalid date
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Replacement not found or does not belong to the split
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Split is unavailable or historical replay is impossible
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Exact value exceeds supported range
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

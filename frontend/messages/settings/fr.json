@@ -966,6 +966,7 @@
   "investments_record_buy": "Enregistrer un achat",
   "investments_record_sell": "Enregistrer une vente",
   "investments_record_short_sale": "Enregistrer une vente à découvert",
+  "investments_dated_holdings_hint": "Les positions sont affichées telles qu'elles étaient à la date choisie, y compris celles vendues depuis.",
   "investments_short_sale_reverse_action": "Annuler la vente à découvert…",
   "investments_short_cover_reverse_action": "Annuler le rachat…",
   "investments_short_sale_correct_action": "Corriger la vente à découvert…",

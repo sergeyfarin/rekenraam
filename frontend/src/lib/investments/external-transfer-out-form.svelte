@@ -5,7 +5,7 @@
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
-    investmentInstrumentsQueryOptions, investmentLotsQueryOptions, investmentPositionsQueryOptions,
+    investmentInstrumentsQueryOptions, datedHoldingsQueryOptions,
     previewExternalTransferOut, recordExternalTransferOut, type ExternalTransferOutPlan,
     type ExternalTransferOutRequest, type GainImpact, type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
@@ -34,11 +34,13 @@
 
   const queryClient = useQueryClient();
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
-  const positionsQuery = createQuery(() => investmentPositionsQueryOptions());
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
   let effectiveOn = $state('');
+  // Holdings and lots as they stood on the transfer date, including ones a
+  // later sale closed (#166). The writer replays and rechecks at commit.
+  const positionsQuery = createQuery(() => datedHoldingsQueryOptions(effectiveOn || new Date().toISOString().slice(0, 10)));
   let sourceKey = $state('');
   let quantities = $state<Record<string, string>>({});
   let pooledQuantity = $state('');
@@ -65,7 +67,7 @@
     account.status === 'active' && account.allows_postings &&
     (account.account_kind === 'security_holding' || account.account_kind === 'fund_holding')));
   // Long holdings only: transferring a short obligation is not modeled (#173).
-  const positions = $derived((positionsQuery.data?.positions ?? []).filter((position) =>
+  const positions = $derived((positionsQuery.data ?? []).filter((position) =>
     position.position_side === 'long' && coefficientSign(position.quantity_value) > 0 &&
     accounts.some((account) => account.id === position.account_id)));
   const sourcePosition = $derived(positions.find((position) =>
@@ -73,13 +75,12 @@
   const pooled = $derived(sourcePosition?.transfer_basis_allocation === 'average_cost_pool');
   const selectedInstrument = $derived((instrumentsQuery.data?.instruments ?? []).find((instrument) =>
     instrument.commodity_id === sourcePosition?.commodity_id));
-  const lotsQuery = createQuery(() => ({
-    ...investmentLotsQueryOptions(sourcePosition?.account_id, sourcePosition?.commodity_id),
-    enabled: !!sourcePosition && !pooled
-  }));
-  const lots = $derived((lotsQuery.data?.lots ?? []).filter((lot) =>
-    lot.status === 'open' && lot.position_side === 'long' && lot.cost_commodity_id === sourcePosition?.cost_commodity_id &&
-    coefficientSign(lot.remaining_quantity_value) > 0));
+  // The dated read already carries the position's open lots at the slot.
+  const lots = $derived(pooled ? [] : (sourcePosition?.lots ?? []).map((lot) => ({
+    id: lot.lot_id, status: 'open', opened_on: lot.opened_on,
+    remaining_quantity_value: lot.quantity_value, remaining_quantity_scale: lot.quantity_scale,
+    remaining_cost_basis_value: lot.remaining_cost_basis_value, remaining_cost_basis_scale: lot.remaining_cost_basis_scale
+  })));
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(
     (currenciesQuery.data?.currencies ?? []).map((currency) => [currency.id, currency])));
   const basisCurrency = $derived(sourcePosition ? currenciesByID.get(sourcePosition.cost_commodity_id) : undefined);
@@ -89,7 +90,7 @@
     instrumentsQuery.isError || currenciesQuery.isError);
   const quantityEntered = $derived(pooled
     ? !!pooledQuantity.trim()
-    : !lotsQuery.isPending && !lotsQuery.isError && lots.some((lot) => !!quantities[String(lot.id)]?.trim()));
+    : lots.some((lot) => !!quantities[String(lot.id)]?.trim()));
   const canPreview = $derived(!loading && !loadError && !!effectiveOn && !!sourcePosition &&
     !!selectedInstrument && quantityEntered);
   const modalGainRows = $derived(preview?.gainImpact
@@ -264,7 +265,7 @@
     </div>
     <div>
       <label for="external-transfer-out-source" class="mb-1 block text-sm font-medium text-foreground">{m.investments_transfer_internal_source()}</label>
-      <select id="external-transfer-out-source" bind:value={sourceKey} required
+      <select id="external-transfer-out-source" aria-describedby="external-transfer-out-source-hint" bind:value={sourceKey} required
         onchange={() => { quantities = {}; pooledQuantity = ''; discardPreview(); }}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_transfer_internal_select_source()}</option>
@@ -277,6 +278,7 @@
           </option>
         {/each}
       </select>
+      <p id="external-transfer-out-source-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
     </div>
     {#if sourcePosition}
       {#if pooled}
@@ -293,11 +295,7 @@
       {:else}
         <fieldset class="space-y-3 rounded-(--radius-control) border border-border p-3">
           <legend class="px-1 text-sm font-medium text-foreground">{m.investments_transfer_internal_lots()}</legend>
-          {#if lotsQuery.isPending}
-            <p class="text-sm text-muted" role="status">{m.investments_loading()}</p>
-          {:else if lotsQuery.isError}
-            <p class="text-sm text-danger" role="alert">{m.investments_transfer_internal_lots_error()}</p>
-          {:else if lots.length === 0}
+          {#if lots.length === 0}
             <p class="text-sm text-muted" role="status">{m.investments_transfer_internal_lots_empty()}</p>
           {:else}
             <p class="text-xs text-muted">{m.investments_transfer_internal_lots_help()}</p>

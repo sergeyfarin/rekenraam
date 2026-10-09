@@ -5,7 +5,7 @@
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
-    investmentInstrumentsQueryOptions, investmentPositionsQueryOptions, previewInvestmentSplit,
+    investmentInstrumentsQueryOptions, datedHoldingsQueryOptions, previewInvestmentSplit,
     previewSplitReplacement, recordInvestmentSplit, replaceSplit, type GainImpact,
     type InvestmentCorrectionSplitTerms, type InvestmentSplitPlan, type InvestmentSplitRequest,
     type ReconciliationImpactResponse
@@ -34,7 +34,6 @@
 
   const queryClient = useQueryClient();
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
-  const positionsQuery = createQuery(() => investmentPositionsQueryOptions());
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
@@ -60,6 +59,10 @@
     payload: InvestmentSplitRequest;
   } | null>(null);
   let reviewModal = $state<{ gainRefreshed: boolean } | null>(null);
+  // Holdings as they stood at the split's date, including ones a later sale
+  // closed (#166); before a date is chosen, today's.
+  const holdingsDate = $derived(effectiveOn || new Date().toISOString().slice(0, 10));
+  const positionsQuery = createQuery(() => datedHoldingsQueryOptions(holdingsDate));
 
   const locale = $derived(getLocale());
   const accounts = $derived((accountsQuery.data?.accounts ?? []).filter((account) =>
@@ -69,7 +72,7 @@
   // across every basis currency its lots carry.
   const holdings = $derived.by(() => {
     const seen = new Map<string, { accountID: number; commodityID: number }>();
-    for (const position of positionsQuery.data?.positions ?? []) {
+    for (const position of positionsQuery.data ?? []) {
       // Splits adjust long lots only; a short-only holding has none (#173).
       if (position.position_side !== 'long' || coefficientSign(position.quantity_value) <= 0) continue;
       if (!accounts.some((account) => account.id === position.account_id)) continue;
@@ -245,7 +248,7 @@
           · {instrumentLabel(correction.terms.commodity_id)}
         </p>
       {:else}
-      <select id="split-holding" bind:value={holdingKey} required onchange={discardPreview}
+      <select id="split-holding" aria-describedby="split-holding-hint" bind:value={holdingKey} required onchange={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_split_select_holding()}</option>
         {#each holdings as holding (holding.key)}
@@ -254,6 +257,7 @@
           </option>
         {/each}
       </select>
+      <p id="split-holding-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
       {/if}
     </div>
     <div>

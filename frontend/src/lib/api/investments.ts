@@ -82,6 +82,7 @@ export type InvestmentCorrectionReinvestmentTerms = components['schemas']['Inves
 
 export const investmentPositionsQueryKey = ['api', 'investments', 'positions'] as const;
 export const cashInLieuLotsQueryKey = ['api', 'investments', 'cash-in-lieu-lots'] as const;
+export const datedHoldingsQueryKey = ['api', 'investments', 'dated-holdings'] as const;
 export const investmentLotsQueryKey = ['api', 'investments', 'lots'] as const;
 export const investmentInstrumentsQueryKey = ['api', 'investments', 'instruments'] as const;
 export const investmentGainsQueryKey = ['api', 'investments', 'gains'] as const;
@@ -93,6 +94,35 @@ export function investmentPositionsQueryOptions() {
   return {
     queryKey: investmentPositionsQueryKey,
     queryFn: () => getInvestmentPositions(),
+    staleTime: 30_000
+  };
+}
+
+export type DatedHolding = components['schemas']['DatedHolding'];
+
+// Holdings and lots as an entry dated asOf finds them, including holdings a
+// later sale closed (#166). One request per selector.
+export async function getDatedHoldings(asOf: string): Promise<DatedHolding[]> {
+  try {
+    const { data, error, response } = await apiClient.GET('/api/v1/investments/dated-holdings', {
+      params: { query: { as_of: asOf } }
+    });
+    if (data !== undefined) return data.holdings;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export function datedHoldingsQueryOptions(asOf: string) {
+  return {
+    queryKey: [...datedHoldingsQueryKey, asOf] as const,
+    queryFn: () => getDatedHoldings(asOf),
+    enabled: /^\d{4}-\d{2}-\d{2}$/.test(asOf),
+    // Keep the previous date's list while the next loads, so editing the
+    // date never swaps the form for a loading state.
+    placeholderData: (previous: DatedHolding[] | undefined) => previous,
     staleTime: 30_000
   };
 }

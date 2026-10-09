@@ -966,6 +966,7 @@
   "investments_record_buy": "Kauf erfassen",
   "investments_record_sell": "Verkauf erfassen",
   "investments_record_short_sale": "Leerverkauf erfassen",
+  "investments_dated_holdings_hint": "Bestände werden zum gewählten Datum angezeigt, auch wenn sie inzwischen verkauft wurden.",
   "investments_short_sale_reverse_action": "Leerverkauf stornieren…",
   "investments_short_cover_reverse_action": "Eindeckung stornieren…",
   "investments_short_sale_correct_action": "Leerverkauf korrigieren…",

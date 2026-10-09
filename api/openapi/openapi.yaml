@@ -331,6 +331,8 @@ paths:
     $ref: "./paths/investments-external-transfer-out-impact.yaml"
   /api/v1/investments/transfers/external/out/preview:
     $ref: "./paths/investments-external-transfer-out-preview.yaml"
+  /api/v1/investments/dated-holdings:
+    $ref: "./paths/investments-dated-holdings.yaml"
   /api/v1/investments/transactions/{transaction_id}/cash-in-lieu-lots:
     $ref: "./paths/investments-cash-in-lieu-lots.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-cash-in-lieu:
@@ -1128,6 +1130,12 @@ components:
       $ref: "./components/schemas/investments.yaml#/CashInLieuReplacementRequest"
     CashInLieuLotsResponse:
       $ref: "./components/schemas/investments.yaml#/CashInLieuLotsResponse"
+    DatedHoldingsResponse:
+      $ref: "./components/schemas/investments.yaml#/DatedHoldingsResponse"
+    DatedHolding:
+      $ref: "./components/schemas/investments.yaml#/DatedHolding"
+    DatedHoldingLot:
+      $ref: "./components/schemas/investments.yaml#/DatedHoldingLot"
     CashInLieuRequest:
       $ref: "./components/schemas/investments.yaml#/CashInLieuRequest"
     CashInLieuPreviewResponse:

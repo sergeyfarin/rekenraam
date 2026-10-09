@@ -966,6 +966,7 @@
   "investments_record_buy": "Записать покупку",
   "investments_record_sell": "Записать продажу",
   "investments_record_short_sale": "Записать короткую продажу",
+  "investments_dated_holdings_hint": "Позиции показаны на выбранную дату, включая проданные позже.",
   "investments_short_sale_reverse_action": "Сторнировать короткую продажу…",
   "investments_short_cover_reverse_action": "Сторнировать закрытие…",
   "investments_short_sale_correct_action": "Исправить короткую продажу…",

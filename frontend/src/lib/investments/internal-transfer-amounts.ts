@@ -4,10 +4,14 @@ import { parseMagnitude } from '#lib/investments/form-amounts.ts';
 
 export type InternalTransferDraft = { lotID: number; quantity: string };
 
+// The lot facts allocation needs. Today's lots and dated lots (#166) both
+// provide them.
+export type TransferSourceLot = Pick<InvestmentLotResponse, 'id' | 'status' | 'remaining_quantity_value' | 'remaining_quantity_scale'>;
+
 /** Validate selected source-lot amounts without rounding or floating point. */
 export function parseInternalTransferAllocations(
   drafts: InternalTransferDraft[],
-  availableLots: InvestmentLotResponse[],
+  availableLots: TransferSourceLot[],
   maxScale: number
 ): { ok: true; allocations: InternalTransferRequest['lot_allocations'] } |
    { ok: false; reason: 'empty' | 'invalid' | 'exceeds_available'; lotID?: number } {

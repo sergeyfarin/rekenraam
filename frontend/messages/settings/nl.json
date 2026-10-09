@@ -966,6 +966,7 @@
   "investments_record_buy": "Aankoop vastleggen",
   "investments_record_sell": "Verkoop vastleggen",
   "investments_record_short_sale": "Shortverkoop vastleggen",
+  "investments_dated_holdings_hint": "Posities worden getoond zoals ze op de gekozen datum waren, ook als ze sindsdien verkocht zijn.",
   "investments_short_sale_reverse_action": "Shortverkoop terugdraaien…",
   "investments_short_cover_reverse_action": "Dekking terugdraaien…",
   "investments_short_sale_correct_action": "Shortverkoop corrigeren…",

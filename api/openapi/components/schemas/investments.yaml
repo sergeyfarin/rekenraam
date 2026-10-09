@@ -3055,6 +3055,57 @@ CashInLieuLotsResponse:
       items:
         $ref: '#/InvestmentTradeCorrectionAvailableLotResponse'
 
+DatedHoldingsResponse:
+  type: object
+  required: [as_of, holdings]
+  properties:
+    as_of:
+      type: string
+      format: date
+    holdings:
+      type: array
+      items:
+        $ref: '#/DatedHolding'
+
+DatedHolding:
+  type: object
+  description: >-
+    A long holding as an entry dated as_of would find it, after every
+    effective event on or before that date (a new entry takes the last
+    same-day slot). Holdings a later sale has closed are included. Discovery
+    only: the command's writer rechecks availability at commit (#166).
+  required: [account_id, commodity_id, cost_commodity_id, position_side, quantity_value, quantity_scale, transfer_basis_allocation, lots]
+  properties:
+    account_id: { type: integer, format: int64 }
+    commodity_id: { type: integer, format: int64 }
+    cost_commodity_id: { type: integer, format: int64 }
+    position_side: { type: string, enum: [long] }
+    quantity_value: { type: string, description: Units held at the slot. }
+    quantity_scale: { type: integer }
+    transfer_basis_allocation:
+      type: string
+      enum: [selected_lots, average_cost_pool]
+      description: How an outbound transfer allocates basis at commit (the current method lock, else the default).
+    lots:
+      type: array
+      items:
+        $ref: '#/DatedHoldingLot'
+
+DatedHoldingLot:
+  type: object
+  required: [lot_id, opened_on, quantity_value, quantity_scale, basis_knowledge, remaining_cost_basis_value, remaining_cost_basis_scale]
+  properties:
+    lot_id: { type: integer, format: int64 }
+    opened_on: { type: string, format: date }
+    quantity_value: { type: string, description: Remaining units at the slot. }
+    quantity_scale: { type: integer }
+    basis_knowledge: { type: string, enum: [known, unknown] }
+    remaining_cost_basis_value:
+      type: [string, 'null']
+      pattern: '^-?(0|[1-9][0-9]{0,18})$'
+      description: Remaining basis at the slot; null when unknown.
+    remaining_cost_basis_scale: { type: [integer, 'null'] }
+
 InvestmentBasisResolutionRequest:
   type: object
   additionalProperties: false

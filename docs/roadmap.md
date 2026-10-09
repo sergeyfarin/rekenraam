@@ -109,10 +109,10 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Historical action entry: dated holdings/lot selection
-   [#166](https://github.com/sergeyfarin/rekenraam/issues/166), then new
-   backdated internal transfer admission
-   [#167](https://github.com/sergeyfarin/rekenraam/issues/167).
+1. New backdated internal transfer admission
+   [#167](https://github.com/sergeyfarin/rekenraam/issues/167). Dated
+   holdings/lot selection [#166](https://github.com/sergeyfarin/rekenraam/issues/166)
+   was delivered 2026-10-09; the internal-transfer picker adopts it with #167.
 
 **Next, in order**
 

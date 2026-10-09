@@ -207,6 +207,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/investments/transfers/internal", internalTransfer(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/transfers/internal/reconciliation-impact", internalTransferReconciliationImpact(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transfers/internal/preview", internalTransferPreview(logger, services.Auth, services.Investment))
+	mux.HandleFunc("GET /api/v1/investments/dated-holdings", datedHoldings(logger, services.Auth, services.Investment))
 	mux.HandleFunc("GET /api/v1/investments/transactions/{transaction_id}/cash-in-lieu-lots", cashInLieuLots(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu", replaceCashInLieu(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu/preview", replaceCashInLieuPreview(logger, services.Auth, services.Investment))

@@ -965,6 +965,7 @@
   "investments_record_buy": "Record buy",
   "investments_record_sell": "Record sell",
   "investments_record_short_sale": "Record short sale",
+  "investments_dated_holdings_hint": "Holdings are listed as they stood on the chosen date, including ones sold since.",
   "investments_short_sale_reverse_action": "Reverse short sale…",
   "investments_short_cover_reverse_action": "Reverse short cover…",
   "investments_short_sale_correct_action": "Correct short sale…",

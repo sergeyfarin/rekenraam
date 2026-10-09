@@ -5,7 +5,7 @@
   import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
-    investmentInstrumentsQueryOptions, investmentPositionsQueryOptions, previewCapitalReturn,
+    investmentInstrumentsQueryOptions, datedHoldingsQueryOptions, previewCapitalReturn,
     recordCapitalReturn, previewCapitalReturnReplacement, replaceCapitalReturn, type CapitalReturnEffect, type CapitalReturnRequest, type GainImpact,
     type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
@@ -35,7 +35,6 @@
 
   const queryClient = useQueryClient();
   const accountsQuery = createQuery(() => accountsQueryOptions(false, false));
-  const positionsQuery = createQuery(() => investmentPositionsQueryOptions());
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
@@ -43,6 +42,9 @@
   let positionKey = $state(initial ? `${initial.holding_account_id}:${initial.commodity_id}:${initial.currency_id}` : '');
   let cashAccountID = $state(initial?.cash_account_id ? String(initial.cash_account_id) :  '');
   let effectiveOn = $state(initial?.effective_on ?? '');
+  // Holdings as they stood on the effective date, including ones a later
+  // sale closed (#166); before a date is chosen, today's.
+  const positionsQuery = createQuery(() => datedHoldingsQueryOptions(effectiveOn || new Date().toISOString().slice(0, 10)));
   let paymentOn = $state(initial?.payment_on ?? '');
   let amount = $state(initial ? formatLedgerAmount(initial.amount_value, initial.amount_scale) : '');
   let reference = $state(typeof initial?.source_evidence?.reference === 'string' ? initial.source_evidence.reference : '');
@@ -72,7 +74,7 @@
     account.account_class === 'asset' && account.status === 'active' && account.allows_postings &&
     account.account_kind !== 'security_holding' && account.account_kind !== 'fund_holding'));
   // Long holdings only: a return of capital does not apply to owed units (#173).
-  const positions = $derived((positionsQuery.data?.positions ?? []).filter((position) =>
+  const positions = $derived((positionsQuery.data ?? []).filter((position) =>
     position.position_side === 'long' &&
     coefficientSign(position.quantity_value) > 0 && holdingIDs.has(position.account_id)));
   const selectedPosition = $derived(positions.find((item) =>
@@ -272,7 +274,7 @@
           · {(instrumentsQuery.data?.instruments ?? []).find((i) => i.commodity_id === initial.commodity_id)?.display_name}</p>
       {:else}
       <label for="capital-return-position" class="mb-1 block text-sm font-medium text-foreground">{m.investments_capital_return_position()}</label>
-      <select id="capital-return-position" bind:this={firstInput} bind:value={positionKey} required onchange={() => { discardPreview(); eligibleLots = []; quantities = {}; }}
+      <select id="capital-return-position" aria-describedby="capital-return-position-hint" bind:this={firstInput} bind:value={positionKey} required onchange={() => { discardPreview(); eligibleLots = []; quantities = {}; }}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_transfer_internal_select_source()}</option>
         {#each positions as item (`${item.account_id}:${item.commodity_id}:${item.cost_commodity_id}`)}
@@ -283,6 +285,7 @@
           </option>
         {/each}
       </select>
+      <p id="capital-return-position-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
       {/if}
     </div>
     <div>
