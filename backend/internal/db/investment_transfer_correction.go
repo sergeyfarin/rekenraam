@@ -156,6 +156,15 @@ func checkTransferOperationForCorrectionTx(ctx context.Context, tx *sql.Tx, book
 	if current != expected {
 		return TransferOperationRecord{}, ErrInvestmentTransferChanged
 	}
+	if current.TransferKind == "external_in" {
+		resolved, err := transferBasisResolvedTx(ctx, tx, bookID, current.OperationID)
+		if err != nil {
+			return TransferOperationRecord{}, err
+		}
+		if resolved {
+			return TransferOperationRecord{}, ErrTransferBasisResolved
+		}
+	}
 	if err := checkInvestmentSourceJournalTx(ctx, tx, bookID, current.TransactionID,
 		current.EventDate, current.TransactionVersionID, current.CurrentVersionID); err != nil {
 		if errors.Is(err, ErrInvestmentSaleChanged) {

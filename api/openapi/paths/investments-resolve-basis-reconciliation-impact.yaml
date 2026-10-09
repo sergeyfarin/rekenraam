@@ -1,0 +1,50 @@
+post:
+  summary: Preview reconciliation and gain impact of a basis resolution
+  description: >-
+    Runs the resolution's actual writer and replay in a rolled-back
+    transaction; gain_impact lists the committed disposals it changes,
+    typically from unresolved to known, with the token the command needs as
+    gain_impact_acknowledgement (T-145).
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+      description: Effective external transfer-in transaction ID.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBasisResolutionRequest"
+  responses:
+    "200":
+      description: Reconciliation impact computed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ReconciliationImpactResponse"
+    "400":
+      description: Invalid request, missing reason, or a zero basis
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: External transfer in not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Basis not unknown or already resolved (INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

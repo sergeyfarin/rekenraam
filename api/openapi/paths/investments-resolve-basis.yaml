@@ -1,0 +1,66 @@
+post:
+  summary: Resolve the unknown basis of an external transfer in
+  description: >-
+    Appends a sourced, audited resolution of an external transfer in that
+    recorded unknown basis (T-145). Its journal posts the complete omitted
+    bridge, commodity trading +b and transfer equity -b in the transfer's cost
+    currency, dated to the transfer. The original link and lot stay unknown
+    evidence. Replay revises every sale and transfer the lot reached,
+    including units already sold or moved on; an outbound transfer whose last
+    unknown link becomes known posts its complete omitted bridge at its own
+    date. A resolved transfer can no longer be reversed or replaced
+    (INVESTMENT_TRANSFER_BASIS_RESOLVED).
+    A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+      description: Effective external transfer-in transaction ID.
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBasisResolutionRequest"
+  responses:
+    "201":
+      description: Basis resolved and every reached position replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentBasisResolutionResponse"
+    "400":
+      description: Invalid request, missing reason, or a zero basis
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: External transfer in not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Basis not unknown or already resolved (INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN), reconciliation override required, or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

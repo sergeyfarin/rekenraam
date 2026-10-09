@@ -99,56 +99,127 @@ func propagateInvestmentTransferRevisionsTx(ctx context.Context, tx *sql.Tx, boo
 }
 
 // recordTransferRevisionsTx appends each changed link's revision. An internal
-// link adds its destination to affected; an outbound link's basis change is
-// summed per transfer and cost currency and posted as one dated bridge
-// adjustment, T −Δ and E +Δ, under the causing command's audit event (T-143).
-// The original bridge and link stay immutable evidence.
+// link adds its destination to affected. Each touched outbound transfer then
+// reconciles its bridge with its effective links (T-143, T-145).
 func recordTransferRevisionsTx(ctx context.Context, tx *sql.Tx, bookID, causedByOperationID, auditEventID,
 	actorUserID int64, createdAt string, revisions []InvestmentReplayTransferRevision,
 	affected map[investmentReplayPositionKey]bool,
 ) error {
-	type bridgeKey struct{ operationID, costCommodityID int64 }
-	deltas := make(map[bridgeKey]*exact.ScaledInt)
-	var order []bridgeKey
+	var outbound []int64
 	for _, revision := range revisions {
-		if revision.ExternalOut && normalizedBasisKnowledge(revision.BasisKnowledge) == InvestmentBasisKnown {
-			// An unknown outbound has no bridge to adjust; only its lineage moves.
-			var prior exact.Coefficient
-			var priorScale int
-			var costID int64
-			if err := tx.QueryRowContext(ctx, `SELECT carried_basis_value, carried_basis_scale, cost_commodity_id
-				FROM effective_investment_transfer_links WHERE operation_id = ? AND link_seq = ?
-					AND basis_knowledge = 'known'`, revision.OperationID, revision.LinkSeq).Scan(
-				&prior, &priorScale, &costID); err != nil {
-				return fmt.Errorf("read outbound transfer link basis: %w", err)
-			}
-			key := bridgeKey{revision.OperationID, costID}
-			if deltas[key] == nil {
-				deltas[key] = exact.NewScaledInt()
-				order = append(order, key)
-			}
-			deltas[key].AddInt64(revision.CostBasisValue, revision.CostBasisScale)
-			deltas[key].SubScaled(exact.ScaledIntFromCoefficient(prior, priorScale))
-		}
 		destination, _, err := appendTransferLinkRevisionTx(ctx, tx, bookID, causedByOperationID,
 			auditEventID, createdAt, revision)
 		if err != nil {
 			return err
 		}
-		if !revision.ExternalOut {
-			affected[destination] = true
-		}
-	}
-	for _, key := range order {
-		if deltas[key].Sign() == 0 {
+		if revision.ExternalOut {
+			if !slices.Contains(outbound, revision.OperationID) {
+				outbound = append(outbound, revision.OperationID)
+			}
 			continue
 		}
-		if _, err := postTransferBridgeJournalTx(ctx, tx, bookID, key.operationID, key.costCommodityID,
-			deltas[key], causedByOperationID, auditEventID, actorUserID, createdAt); err != nil {
+		affected[destination] = true
+	}
+	for _, operationID := range outbound {
+		if err := reconcileOutboundBridgeTx(ctx, tx, bookID, operationID, causedByOperationID,
+			auditEventID, actorUserID, createdAt); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// reconcileOutboundBridgeTx posts, per cost currency, the difference between
+// what an outbound transfer's effective links carry and what its bridge
+// journals have already moved, T -delta and E +delta at the transfer date. While any
+// link is unknown nothing posts: an unknown outbound has no bridge, and when
+// its last link becomes known the complete omitted bridge posts at once.
+// Later known changes post adjustments; the original journals stay.
+func reconcileOutboundBridgeTx(ctx context.Context, tx *sql.Tx, bookID, operationID, causedByOperationID,
+	auditEventID, actorUserID int64, createdAt string) error {
+	rows, err := tx.QueryContext(ctx, `SELECT cost_commodity_id, basis_knowledge, carried_basis_value, carried_basis_scale
+		FROM effective_investment_transfer_links WHERE operation_id = ? ORDER BY link_seq`, operationID)
+	if err != nil {
+		return fmt.Errorf("read outbound transfer links: %w", err)
+	}
+	carried := make(map[int64]*exact.ScaledInt)
+	var order []int64
+	unknown := false
+	for rows.Next() {
+		var costID int64
+		var knowledge string
+		var value sql.NullString
+		var scale sql.NullInt64
+		if err := rows.Scan(&costID, &knowledge, &value, &scale); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan outbound transfer link: %w", err)
+		}
+		if carried[costID] == nil {
+			carried[costID] = exact.NewScaledInt()
+			order = append(order, costID)
+		}
+		if knowledge != InvestmentBasisKnown || !value.Valid || !scale.Valid {
+			unknown = true
+			continue
+		}
+		carried[costID].AddCoefficient(exact.Coefficient(value.String), int(scale.Int64))
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return fmt.Errorf("read outbound transfer links: %w", err)
+	}
+	if unknown {
+		return nil
+	}
+	bridged, err := outboundBridgedTx(ctx, tx, bookID, operationID)
+	if err != nil {
+		return err
+	}
+	for _, costID := range order {
+		delta := exact.ScaledIntFromBig(carried[costID].BigInt(), carried[costID].Scale())
+		if prior := bridged[costID]; prior != nil {
+			delta.SubScaled(prior)
+		}
+		if delta.Sign() == 0 {
+			continue
+		}
+		if _, err := postTransferBridgeJournalTx(ctx, tx, bookID, operationID, costID,
+			delta, causedByOperationID, auditEventID, actorUserID, createdAt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// outboundBridgedTx sums what an outbound transfer's bridge journals posted to
+// the transfer equity account, per cost currency.
+func outboundBridgedTx(ctx context.Context, tx *sql.Tx, bookID, operationID int64) (map[int64]*exact.ScaledInt, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT pv.commodity_id, pv.quantity_value, pv.quantity_scale
+		FROM investment_operation_journal_links link
+		JOIN posting_versions pv ON pv.transaction_version_id = link.transaction_version_id
+		JOIN accounts equity ON equity.id = pv.account_id
+			AND equity.system_role = 'external_investment_transfer_equity'
+		WHERE link.book_id = ? AND link.operation_id = ? AND link.role = 'transfer_bridge'`, bookID, operationID)
+	if err != nil {
+		return nil, fmt.Errorf("read outbound transfer bridges: %w", err)
+	}
+	bridged := make(map[int64]*exact.ScaledInt)
+	for rows.Next() {
+		var costID int64
+		var value exact.Coefficient
+		var scale int
+		if err := rows.Scan(&costID, &value, &scale); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan outbound transfer bridge: %w", err)
+		}
+		if bridged[costID] == nil {
+			bridged[costID] = exact.NewScaledInt()
+		}
+		bridged[costID].AddCoefficient(value, scale)
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, fmt.Errorf("read outbound transfer bridges: %w", err)
+	}
+	return bridged, nil
 }
 
 func sortInvestmentReplayPositionKeys(keys []investmentReplayPositionKey) {

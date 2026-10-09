@@ -55,8 +55,12 @@ type InvestmentCorrectionChain struct {
 	// CanReplaceTransfer allows native replacement of an internal or
 	// external-in transfer (T-119); EffectiveTransfer pre-fills it.
 	CanReplaceTransfer bool
-	EffectiveTransfer  *InvestmentCorrectionTransferTerms
-	Operations         []InvestmentCorrectionNode
+	// CanResolveBasis allows a sourced resolution of an effective external
+	// transfer in whose basis is still unknown (T-145). A resolved transfer
+	// can no longer be reversed or replaced.
+	CanResolveBasis   bool
+	EffectiveTransfer *InvestmentCorrectionTransferTerms
+	Operations        []InvestmentCorrectionNode
 }
 
 // InvestmentCorrectionDividendTerms are an effective cash dividend's posted
@@ -232,14 +236,23 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 		}
 		if correctable && (record.OperationKind == "internal_transfer" || record.OperationKind == "external_transfer_in" ||
 			record.OperationKind == "external_transfer_out") {
-			chain.CanReverseTransfer = true
-			chain.CanReplaceTransfer = true
+			resolved := false
+			if record.OperationKind == "external_transfer_in" {
+				var err error
+				if resolved, err = s.repository.TransferBasisResolved(ctx, BookID, record.OperationID); err != nil {
+					return InvestmentCorrectionChain{}, err
+				}
+			}
+			chain.CanReverseTransfer = !resolved
+			chain.CanReplaceTransfer = !resolved
 			if chain.CanReplaceTransfer {
 				terms, err := s.transferCorrectionTerms(ctx, record.OperationID, record.TransactionID.Int64)
 				if err != nil {
 					return InvestmentCorrectionChain{}, err
 				}
 				chain.EffectiveTransfer = &terms
+				chain.CanResolveBasis = record.OperationKind == "external_transfer_in" &&
+					terms.BasisKnowledge == db.InvestmentBasisUnknown
 			}
 		}
 		if effective && record.OperationKind == "buy" && (!importedLineage || committedSource) &&

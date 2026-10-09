@@ -277,12 +277,12 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		}
 		// The quantity is fixed by the transfer; the basis it carries, and
 		// the successor lot of a corrected acquisition, follow history. Its
-		// knowledge does not: that changes only by sourced resolution.
-		knowledge, err := sameTransferBasisKnowledge(intent.BasisKnowledge, moved.BasisKnowledge)
+		// knowledge may only become known (a resolution reaching it).
+		knowledge, resolved, err := transferKnowledgeAfterReplay(intent.BasisKnowledge, moved.BasisKnowledge)
 		if err != nil {
 			return replayTransferError(intent, err)
 		}
-		if moved.LotID != intent.RecordedLotID || knowledge == InvestmentBasisKnown &&
+		if moved.LotID != intent.RecordedLotID || resolved || knowledge == InvestmentBasisKnown &&
 			exact.ScaledIntFromInt64(moved.CostBasisValue, moved.CostBasisScale).Cmp(
 				exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale)) != 0 {
 			projection.TransferRevisions = append(projection.TransferRevisions, InvestmentReplayTransferRevision{
@@ -318,11 +318,11 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		}
 		for index, link := range intent.PooledLinks {
 			depletion := moved[index]
-			knowledge, err := sameTransferBasisKnowledge(link.BasisKnowledge, depletion.BasisKnowledge)
+			knowledge, resolved, err := transferKnowledgeAfterReplay(link.BasisKnowledge, depletion.BasisKnowledge)
 			if err != nil {
 				return replayTransferError(intent, err)
 			}
-			if depletion.LotID != link.RecordedLotID || knowledge == InvestmentBasisKnown &&
+			if depletion.LotID != link.RecordedLotID || resolved || knowledge == InvestmentBasisKnown &&
 				exact.ScaledIntFromInt64(depletion.CostBasisValue, depletion.CostBasisScale).Cmp(
 					exact.ScaledIntFromCoefficient(link.CostBasisValue, link.CostBasisScale)) != 0 {
 				projection.TransferRevisions = append(projection.TransferRevisions, InvestmentReplayTransferRevision{
@@ -351,7 +351,7 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 			err = errors.New("pooled transfer quantity changed")
 		}
 		if err == nil {
-			_, err = sameTransferBasisKnowledge(intent.BasisKnowledge, totals.knowledge)
+			_, _, err = transferKnowledgeAfterReplay(intent.BasisKnowledge, totals.knowledge)
 		}
 		if err != nil {
 			return replayTransferError(intent, err)
@@ -472,6 +472,7 @@ func pooledLotTransferRevision(intent InvestmentReplayIntent, moved []LotDisposa
 		CostBasisValue: totals.basisValue, CostBasisScale: totals.basisScale, BasisKnowledge: totals.knowledge, PooledLot: true,
 		OriginalDateKnowledge: totals.originalKnowledge, OriginalAcquiredOn: totals.originalDate}
 	changed := len(moved) != len(intent.PooledDepletions) ||
+		totals.knowledge != normalizedBasisKnowledge(intent.BasisKnowledge) ||
 		totals.originalKnowledge != intent.OriginalDateKnowledge || totals.originalDate != intent.OriginalAcquiredOn ||
 		known && exact.ScaledIntFromInt64(totals.basisValue, totals.basisScale).Cmp(
 			exact.ScaledIntFromCoefficient(intent.AmountValue, intent.AmountScale)) != 0
@@ -513,14 +514,20 @@ func pooledTransferLineageReproduced(moved []LotDisposalRecord, links []Investme
 }
 
 // ErrTransferBasisKnowledgeChanged refuses a history change that would turn a
-// transfer's recorded basis knowledge known or unknown. Unknown becomes known
-// only by sourced resolution; known never becomes unknown (T-145).
-var ErrTransferBasisKnowledgeChanged = errors.New("a transfer's basis would change between known and unknown")
+// transfer's known basis unknown. Unknown may become known when a sourced
+// resolution (or a corrected acquisition) reaches it (T-145).
+var ErrTransferBasisKnowledgeChanged = errors.New("a transfer's known basis would become unknown")
 
-func sameTransferBasisKnowledge(recorded, replayed string) (string, error) {
+// transferKnowledgeAfterReplay returns the knowledge replay produced and
+// whether it resolved a recorded unknown.
+func transferKnowledgeAfterReplay(recorded, replayed string) (string, bool, error) {
 	recorded, replayed = normalizedBasisKnowledge(recorded), normalizedBasisKnowledge(replayed)
-	if recorded != replayed {
-		return "", ErrTransferBasisKnowledgeChanged
+	switch {
+	case recorded == replayed:
+		return replayed, false, nil
+	case recorded == InvestmentBasisUnknown:
+		return replayed, true, nil
+	default:
+		return "", false, ErrTransferBasisKnowledgeChanged
 	}
-	return recorded, nil
 }

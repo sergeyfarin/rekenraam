@@ -1719,7 +1719,11 @@ WHEN NOT EXISTS (
   JOIN audit_events a ON a.id = NEW.created_audit_event_id
   WHERE x.operation_id = NEW.operation_id AND x.link_seq = NEW.link_seq
     AND f.book_id = NEW.book_id AND f.transfer_kind IN ('internal', 'external_out')
-    AND x.basis_knowledge = NEW.basis_knowledge
+    -- Unknown may become known (sourced resolution reaching this link
+    -- through replay); known never becomes unknown (T-145).
+    AND (NEW.basis_knowledge = 'known' OR COALESCE((SELECT previous.basis_knowledge
+      FROM investment_transfer_link_revisions previous WHERE previous.id = NEW.supersedes_revision_id),
+      x.basis_knowledge) = 'unknown')
     -- A source-lot link (internal source_lots, or outbound, T-143) may move
     -- to the corrected successor of its source acquisition, same date.
     AND (((f.destination_lineage = 'source_lots' OR f.transfer_kind = 'external_out') AND EXISTS (
@@ -1789,6 +1793,58 @@ BEGIN SELECT RAISE(ABORT, 'investment transfer revision depletions are immutable
 CREATE TRIGGER IF NOT EXISTS investment_transfer_link_revision_depletions_no_delete
 BEFORE DELETE ON investment_transfer_link_revision_depletions
 BEGIN SELECT RAISE(ABORT, 'investment transfer revision depletions are immutable'); END;
+-- +goose StatementEnd
+
+-- A sourced resolution of an unknown inbound transfer's basis (T-145). Its
+-- basis_resolution operation posts the complete omitted bridge (T +b, E -b)
+-- dated to the transfer; the link and lot stay unknown evidence, and the
+-- effective link reads the resolution. It is pinned to the link's lot,
+-- quantity and cost currency; one resolution per link, immutable.
+CREATE TABLE IF NOT EXISTS investment_basis_resolutions (
+  operation_id INTEGER PRIMARY KEY REFERENCES investment_operations(id) ON DELETE RESTRICT,
+  book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
+  transfer_operation_id INTEGER NOT NULL,
+  link_seq INTEGER NOT NULL,
+  lot_id INTEGER NOT NULL REFERENCES investment_lots(id) ON DELETE RESTRICT,
+  quantity_value TEXT NOT NULL CHECK (length(quantity_value) BETWEEN 1 AND 38
+    AND quantity_value NOT GLOB '*[^0-9]*' AND substr(quantity_value, 1, 1) BETWEEN '1' AND '9'),
+  quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
+  cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
+  basis_value TEXT NOT NULL CHECK (length(basis_value) BETWEEN 1 AND 38
+    AND basis_value NOT GLOB '*[^0-9]*' AND substr(basis_value, 1, 1) BETWEEN '1' AND '9'),
+  basis_scale INTEGER NOT NULL CHECK (basis_scale BETWEEN 0 AND 12),
+  source_evidence_json TEXT NOT NULL DEFAULT '{}',
+  created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
+  FOREIGN KEY (transfer_operation_id, link_seq) REFERENCES investment_transfer_lot_links(operation_id, link_seq) ON DELETE RESTRICT,
+  UNIQUE (transfer_operation_id, link_seq)
+);
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_basis_resolutions_valid
+BEFORE INSERT ON investment_basis_resolutions
+WHEN NOT EXISTS (
+  SELECT 1 FROM investment_transfer_lot_links x
+  JOIN investment_transfer_facts f ON f.operation_id = x.operation_id
+  JOIN investment_operations o ON o.id = NEW.operation_id
+  WHERE x.operation_id = NEW.transfer_operation_id AND x.link_seq = NEW.link_seq
+    AND f.book_id = NEW.book_id AND f.transfer_kind = 'external_in' AND x.basis_knowledge = 'unknown'
+    AND x.destination_lot_id = NEW.lot_id AND x.quantity_value = NEW.quantity_value
+    AND x.quantity_scale = NEW.quantity_scale AND x.cost_commodity_id = NEW.cost_commodity_id
+    AND o.book_id = NEW.book_id AND o.operation_kind = 'basis_resolution'
+    AND o.event_date = f.effective_on AND o.created_audit_event_id = NEW.created_audit_event_id
+)
+BEGIN SELECT RAISE(ABORT, 'investment basis resolution is outside its unknown inbound link'); END;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_basis_resolutions_no_update
+BEFORE UPDATE ON investment_basis_resolutions
+BEGIN SELECT RAISE(ABORT, 'investment basis resolutions are immutable'); END;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE TRIGGER IF NOT EXISTS investment_basis_resolutions_no_delete
+BEFORE DELETE ON investment_basis_resolutions
+BEGIN SELECT RAISE(ABORT, 'investment basis resolutions are immutable'); END;
 -- +goose StatementEnd
 
 -- +goose StatementBegin
@@ -1925,18 +1981,26 @@ WHERE NOT EXISTS (SELECT 1 FROM investment_transfer_link_revisions later
 -- date go through this view (T-132, T-135).
 CREATE VIEW effective_investment_transfer_links AS
 SELECT x.operation_id, x.link_seq, x.destination_lot_id, x.quantity_value, x.quantity_scale,
-  CASE WHEN revision.id IS NULL THEN x.basis_knowledge ELSE revision.basis_knowledge END AS basis_knowledge,
+  CASE WHEN revision.id IS NOT NULL THEN revision.basis_knowledge
+    WHEN resolution.operation_id IS NOT NULL THEN 'known' ELSE x.basis_knowledge END AS basis_knowledge,
   x.cost_commodity_id, x.source_lot_id AS committed_source_lot_id,
   CASE WHEN revision.id IS NULL THEN x.source_lot_id ELSE revision.source_lot_id END AS source_lot_id,
-  CASE WHEN revision.id IS NULL THEN x.carried_basis_value ELSE revision.carried_basis_value END AS carried_basis_value,
-  CASE WHEN revision.id IS NULL THEN x.carried_basis_scale ELSE revision.carried_basis_scale END AS carried_basis_scale,
+  CASE WHEN revision.id IS NOT NULL THEN revision.carried_basis_value
+    WHEN resolution.operation_id IS NOT NULL THEN resolution.basis_value ELSE x.carried_basis_value END AS carried_basis_value,
+  CASE WHEN revision.id IS NOT NULL THEN revision.carried_basis_scale
+    WHEN resolution.operation_id IS NOT NULL THEN resolution.basis_scale ELSE x.carried_basis_scale END AS carried_basis_scale,
   COALESCE(revision.original_date_knowledge, x.original_date_knowledge) AS original_date_knowledge,
   CASE WHEN revision.original_date_knowledge IS NULL THEN x.original_acquired_on
     ELSE revision.original_acquired_on END AS original_acquired_on,
   revision.id AS revision_id
 FROM investment_transfer_lot_links x
 LEFT JOIN latest_investment_transfer_link_revisions revision
-  ON revision.operation_id = x.operation_id AND revision.link_seq = x.link_seq;
+  ON revision.operation_id = x.operation_id AND revision.link_seq = x.link_seq
+-- An effective sourced resolution supplies an unknown inbound link's basis
+-- (T-145); the link itself stays unknown evidence.
+LEFT JOIN investment_basis_resolutions resolution
+  ON resolution.transfer_operation_id = x.operation_id AND resolution.link_seq = x.link_seq
+  AND EXISTS (SELECT 1 FROM effective_investment_operations effective WHERE effective.id = resolution.operation_id);
 
 -- The current replay revision of a split's effects in each cost currency.
 CREATE VIEW latest_investment_split_revisions AS
@@ -4282,6 +4346,10 @@ DROP TABLE IF EXISTS investment_capital_return_facts;
 DROP TABLE IF EXISTS investment_split_revision_effects;
 DROP TABLE IF EXISTS investment_split_revisions;
 DROP TABLE IF EXISTS investment_split_facts;
+DROP TRIGGER IF EXISTS investment_basis_resolutions_valid;
+DROP TRIGGER IF EXISTS investment_basis_resolutions_no_update;
+DROP TRIGGER IF EXISTS investment_basis_resolutions_no_delete;
+DROP TABLE IF EXISTS investment_basis_resolutions;
 DROP TRIGGER IF EXISTS investment_transfer_link_revision_depletions_valid;
 DROP TRIGGER IF EXISTS investment_transfer_link_revision_depletions_no_update;
 DROP TRIGGER IF EXISTS investment_transfer_link_revision_depletions_no_delete;

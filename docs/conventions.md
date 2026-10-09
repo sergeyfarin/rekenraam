@@ -247,8 +247,12 @@ When a feature introduces a durable new rule, update one of those documents in t
   with no amount posts security legs only. A form or prefill must show unknown,
   never a known zero.
 - A transfer link and its revisions carry knowledge as one tuple with their
-  amounts. A revision never changes its link's knowledge. An outbound transfer
-  with any unknown link posts no bridge, not even for its known links.
+  amounts. A revision may turn unknown to known (a resolution reaching it),
+  never known to unknown. An outbound transfer with any unknown link posts no
+  bridge; once all are known it posts the complete omitted bridge.
+- Unknown inbound basis is resolved only by an appended, sourced resolution
+  fact whose journal is the complete omitted bridge at the transfer date;
+  the original evidence is never edited.
 - Projected investment basis has explicit `known`/`unknown` knowledge. Unknown
   coefficient and scale are NULL in storage and on the API, and empty in CSV;
   known zero remains numeric. Numeric read-model fields are usable only when

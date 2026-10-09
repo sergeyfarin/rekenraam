@@ -9,7 +9,8 @@ Immutable openings, lot events, disposal decisions, allocations and their replay
 revisions now carry explicit knowledge and NULL pairs, with faithful exports,
 self-check and gain-impact reads. Sales, average pools and replay propagate
 unknown basis into unresolved gains (boundary 2). Unknown inbound, outbound
-and internal transfers and splits are admitted (boundary 3). Known zero
+and internal transfers and splits are admitted (boundary 3), and an unknown
+inbound is resolved by a sourced, audited fact (boundary 4). Known zero
 remains known.
 
 ## Evidence prerequisite delivered
@@ -127,7 +128,42 @@ locales. Named cases:
 `TestReversingUnknownInternalTransferRestoresUnknownSource`,
 `TestUnknownTransferLinkRevisesLineageWithoutChangingKnowledge`, and the
 browser case `investments-unknown-basis.spec.ts` (outbound preview, 390 px).
-Boundary 3 is complete; boundaries 4–5 remain open.
+Boundary 3 is complete.
+
+Boundary 4 is implemented: sourced resolution of an unknown inbound.
+- **Fact and journal.** `POST .../transactions/{id}/resolve-basis` and its
+  rolled-back reconciliation-impact preview append an immutable
+  `investment_basis_resolutions` fact. A `basis_resolution` operation creates
+  it, and its journal posts the complete omitted inbound bridge (trading +b,
+  equity −b) in the transfer's cost currency, dated to the transfer.
+- **Pinning.** The fact is pinned to the unknown link's lot, quantity and cost
+  currency, and is read again inside the write. There is one resolution per
+  link, and the original link and lot stay unknown evidence.
+- **Effective reads.** The effective-link view applies an effective
+  resolution, so replay revises every sale and transfer the lot reached: units
+  sold, moved internally (link revisions may go unknown to known, never back)
+  or held. Average pools become definitive.
+- **Outbound bridges.** These are reconciled from the effective links. An
+  outbound whose last unknown link becomes known posts its complete omitted
+  bridge at its own date, even when its source has closed; later known
+  changes post adjustments.
+- **Correction rules.** Resolution facts have no correction or reversal yet,
+  and the transfer they pin cannot be reversed or replaced
+  (`INVESTMENT_TRANSFER_BASIS_RESOLVED`); the chain reports
+  `can_resolve_basis`. A known zero is recorded by correcting the transfer,
+  since a resolution always posts its bridge.
+- **Self-check and export.** Self-check verifies each resolution's pinned link
+  and that its journal is exactly its bridge. The bundle adds
+  `investment-basis-resolutions.csv`.
+
+Named cases:
+`TestResolvingUnknownInboundAfterPartialSalePostsFullBridgeAndResolvesBoth`,
+`TestResolvingUnknownInboundAfterFullSaleResolvesTheClosedLot`,
+`TestResolvingUnknownInboundReachesInternalTransferDestination`,
+`TestResolvingUnknownSourcePostsOmittedOutboundBridge`,
+`TestResolvingUnknownLotResolvesAveragePoolDisposals`,
+`TestTransferBasisResolutionRefusals`, `TestSelfCheckDetectsResolutionBridgeDamage`,
+`TestResolveTransferBasisAPI`. Boundaries 1–4 are complete; boundary 5 remains.
 
 1. **Immutable knowledge.** Add explicit knowledge with paired nullable basis
    fields to opening facts, lot events, disposal decisions and allocations,

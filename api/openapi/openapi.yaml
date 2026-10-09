@@ -363,6 +363,10 @@ paths:
     $ref: "./paths/investments-reverse-transfer.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-transfer/reconciliation-impact:
     $ref: "./paths/investments-reverse-transfer-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/resolve-basis:
+    $ref: "./paths/investments-resolve-basis.yaml"
+  /api/v1/investments/transactions/{transaction_id}/resolve-basis/reconciliation-impact:
+    $ref: "./paths/investments-resolve-basis-reconciliation-impact.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-transfer:
     $ref: "./paths/investments-replace-transfer.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-transfer/preview:
@@ -1150,6 +1154,10 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReversalRequest"
     InvestmentSaleReversalResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentSaleReversalResponse"
+    InvestmentBasisResolutionRequest:
+      $ref: "./components/schemas/investments.yaml#/InvestmentBasisResolutionRequest"
+    InvestmentBasisResolutionResponse:
+      $ref: "./components/schemas/investments.yaml#/InvestmentBasisResolutionResponse"
     InvestmentBuyReversalRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentBuyReversalRequest"
     InvestmentBuyReversalResponse:

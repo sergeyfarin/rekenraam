@@ -90,3 +90,53 @@ func TestExternalTransferInAPIRequiresExplicitUnknownBasis(t *testing.T) {
 	require.Equal(t, "unknown", terms["basis_knowledge"])
 	require.Nil(t, terms["carried_basis_value"], "never prefilled as zero")
 }
+
+// T-145 boundary 4 over HTTP: an unknown inbound offers resolution, the
+// preview discloses the unresolved-to-known gain change, and the commit binds
+// its acknowledgement. Afterwards the transfer can no longer be corrected.
+func TestResolveTransferBasisAPI(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "RESOLVE")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	in := externalTransferInRequest{EffectiveOn: "2026-02-01", HoldingAccountID: holding.ID, BasisKnowledge: "unknown",
+		CommodityID: instrument.CommodityID, QuantityValue: exact.New(2), CostCommodityID: f.commodityID}
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/transfers/external/in", in, http.StatusCreated)
+	var transfer externalTransferInResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &transfer))
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 6000)
+	sale.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sale, http.StatusCreated)
+
+	base := "/api/v1/investments/transactions/" + strconv.FormatInt(transfer.Transaction.ID, 10)
+	chain := func() map[string]any {
+		res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, base+"/correction-chain", nil, http.StatusOK)
+		var body map[string]any
+		require.NoError(t, json.Unmarshal(res.Body.Bytes(), &body))
+		return body
+	}
+	require.Equal(t, true, chain()["can_resolve_basis"])
+
+	basis := moneyCoefficient(8000)
+	request := investmentBasisResolutionRequest{BasisValue: &basis, BasisScale: 2, Reason: "statement found"}
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, base+"/resolve-basis/reconciliation-impact", request, http.StatusOK)
+	var impact map[string]any
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &impact))
+	gainImpact := impact["gain_impact"].(map[string]any)
+	change := gainImpact["changes"].([]any)[0].(map[string]any)
+	require.Equal(t, "unknown", change["before"].(map[string]any)["basis_knowledge"])
+	require.Equal(t, "known", change["after"].(map[string]any)["basis_knowledge"])
+	request.GainImpactAcknowledgement = gainImpact["acknowledgement"].(string)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/resolve-basis", request, http.StatusCreated)
+
+	after := chain()
+	require.Equal(t, false, after["can_resolve_basis"])
+	require.Equal(t, false, after["can_reverse_transfer"])
+	request.GainImpactAcknowledgement = ""
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/resolve-basis", request, http.StatusConflict)
+	require.Contains(t, res.Body.String(), "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/reverse-transfer",
+		map[string]any{"reason": "wrong"}, http.StatusConflict)
+	require.Contains(t, res.Body.String(), "INVESTMENT_TRANSFER_BASIS_RESOLVED")
+}

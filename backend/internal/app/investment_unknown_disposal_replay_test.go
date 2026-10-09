@@ -37,7 +37,17 @@ type storedDisposal struct {
 	id          int64
 	knowledge   string
 	basis       sql.NullString
+	basisScale  sql.NullInt64
 	allocations map[int64]storedDisposalAllocation
+}
+
+// basisAmount is a known stored total at its own scale.
+func (d storedDisposal) basisAmount(t *testing.T) *exact.ScaledInt {
+	t.Helper()
+	require.True(t, d.basis.Valid && d.basisScale.Valid, "disposal %d basis is unknown", d.id)
+	parsed, err := exact.Parse(d.basis.String)
+	require.NoError(t, err)
+	return exact.ScaledIntFromCoefficient(parsed, int(d.basisScale.Int64))
 }
 
 // latestDisposal reads the newest decision's effective snapshot: its latest
@@ -53,14 +63,14 @@ func effectiveDisposal(t *testing.T, f *investmentsTestFixture, decisionID int64
 	t.Helper()
 	decision := storedDisposal{id: decisionID, allocations: map[int64]storedDisposalAllocation{}}
 	var revisionID sql.NullInt64
-	require.NoError(t, f.database.QueryRow(`SELECT d.basis_knowledge, d.disposed_basis_value, r.id
+	require.NoError(t, f.database.QueryRow(`SELECT d.basis_knowledge, d.disposed_basis_value, d.disposed_basis_scale, r.id
 		FROM investment_disposal_decisions d LEFT JOIN latest_investment_disposal_revisions r ON r.decision_id = d.id
-		WHERE d.id = ?`, decisionID).Scan(&decision.knowledge, &decision.basis, &revisionID))
+		WHERE d.id = ?`, decisionID).Scan(&decision.knowledge, &decision.basis, &decision.basisScale, &revisionID))
 	query := `SELECT lot_id, quantity_value, cost_basis_value, basis_knowledge FROM investment_disposal_allocations WHERE decision_id = ?`
 	key := decisionID
 	if revisionID.Valid {
-		require.NoError(t, f.database.QueryRow(`SELECT basis_knowledge, disposed_basis_value FROM investment_disposal_revisions WHERE id = ?`,
-			revisionID.Int64).Scan(&decision.knowledge, &decision.basis))
+		require.NoError(t, f.database.QueryRow(`SELECT basis_knowledge, disposed_basis_value, disposed_basis_scale FROM investment_disposal_revisions WHERE id = ?`,
+			revisionID.Int64).Scan(&decision.knowledge, &decision.basis, &decision.basisScale))
 		query = `SELECT lot_id, quantity_value, cost_basis_value, basis_knowledge FROM investment_disposal_revision_allocations WHERE revision_id = ?`
 		key = revisionID.Int64
 	}

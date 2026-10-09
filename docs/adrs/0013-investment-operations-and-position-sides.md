@@ -560,3 +560,22 @@ transfer as a dependency instead of turning recorded knowledge known or
 unknown. Effective reads take a revision's knowledge and amounts as one tuple.
 Self-check requires an unknown outbound to have no bridge, and requires a
 pooled set's link knowledge to agree with its depletions.
+
+## Sourced basis resolution refinement (T-145, 2026-10-09)
+
+The unknown basis of an external transfer in is resolved by appending an
+immutable `investment_basis_resolutions` fact. A `basis_resolution` operation
+creates it, and its journal posts the complete omitted inbound bridge, trading
++b and equity −b, in the transfer's cost currency and dated to the transfer.
+No FX conversion is inferred. The fact is pinned to the unknown link's lot,
+quantity and cost currency, with one resolution per link. The link and lot stay
+unknown evidence; the effective-link view supplies the resolved tuple, so
+replay revises every sale, transfer and pool the lot reached.
+
+Transfer-link revisions may now move from unknown to known, never back. An
+outbound transfer's bridge is reconciled from its effective links: it posts
+nothing while any link is unknown, posts the complete omitted bridge at the
+transfer date once all are known, and posts adjustments for later known
+changes. Until correction rules for resolutions are defined, a resolution has
+no correction command, and the inbound transfer it pins can no longer be
+reversed or replaced. A known zero is recorded by correcting the transfer.

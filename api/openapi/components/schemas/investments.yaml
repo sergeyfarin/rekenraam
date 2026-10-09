@@ -1784,7 +1784,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1821,7 +1821,10 @@ InvestmentCorrectionChainResponse:
       description: Whether the effective posted internal or external-in transfer can attempt reversal (T-119). A destination disposal or onward transfer of the removed units may still refuse the command.
     can_replace_transfer:
       type: boolean
-      description: Whether the effective posted internal or external-in transfer can attempt replacement (T-119); internal ones use replace-transfer, external ones replace-transfer-in.
+      description: Whether the effective posted internal or external-in transfer can attempt replacement (T-119); internal ones use replace-transfer, external ones replace-transfer-in. False once an external transfer in has a sourced basis resolution.
+    can_resolve_basis:
+      type: boolean
+      description: Whether the effective external transfer in still carries unknown basis that resolve-basis can resolve (T-145).
     effective_transfer:
       $ref: '#/InvestmentCorrectionTransferTerms'
     can_replace_return_of_capital:
@@ -3008,3 +3011,39 @@ CashInLieuLotsResponse:
       type: array
       items:
         $ref: '#/InvestmentTradeCorrectionAvailableLotResponse'
+
+InvestmentBasisResolutionRequest:
+  type: object
+  additionalProperties: false
+  required: [basis_value, basis_scale, reason]
+  properties:
+    basis_value:
+      type: string
+      pattern: '^[1-9][0-9]{0,18}$'
+      description: >-
+        The transfer's total sourced basis in its own cost currency, never a
+        conversion. A known zero is recorded by correcting the transfer instead.
+    basis_scale:
+      type: integer
+      minimum: 0
+      maximum: 12
+    source_evidence:
+      type: object
+      additionalProperties: true
+      description: Where the basis comes from, such as a broker statement reference.
+    reason:
+      type: string
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+
+InvestmentBasisResolutionResponse:
+  type: object
+  required: [transaction, resolved_transaction_id]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    resolved_transaction_id:
+      type: integer
+      format: int64

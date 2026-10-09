@@ -325,6 +325,7 @@ type investmentCorrectionChainResponse struct {
 	CanCorrectWriteOff      bool                               `json:"can_correct_write_off"`
 	CanReverseTransfer      bool                               `json:"can_reverse_transfer"`
 	CanReplaceTransfer      bool                               `json:"can_replace_transfer"`
+	CanResolveBasis         bool                               `json:"can_resolve_basis"`
 	EffectiveTransfer       *investmentCorrectionTransferTerms `json:"effective_transfer,omitempty"`
 	EffectiveReinvestment   *investmentCorrectionReinvestTerms `json:"effective_reinvestment,omitempty"`
 	Operations              []investmentCorrectionNodeResponse `json:"operations"`
@@ -1159,9 +1160,9 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
 			CanCorrectWriteOff: chain.CanCorrectWriteOff, CanCorrectCashInLieu: chain.CanCorrectCashInLieu,
 			CanReverseTransfer: chain.CanReverseTransfer,
-			CanReplaceTransfer: chain.CanReplaceTransfer,
-			EffectiveTransfer:  toInvestmentCorrectionTransferTerms(chain.EffectiveTransfer),
-			Operations:         operations,
+			CanReplaceTransfer: chain.CanReplaceTransfer, CanResolveBasis: chain.CanResolveBasis,
+			EffectiveTransfer: toInvestmentCorrectionTransferTerms(chain.EffectiveTransfer),
+			Operations:        operations,
 		})
 	}
 }
@@ -1915,6 +1916,10 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_DEPENDENCY", err.Error())
 	case errors.Is(err, app.ErrInvestmentImportedTransfer):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_IMPORTED_TRANSFER", err.Error())
+	case errors.Is(err, app.ErrInvestmentTransferBasisResolved):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_BASIS_RESOLVED", err.Error())
+	case errors.Is(err, app.ErrInvestmentTransferBasisNotUnknown):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
 	// Every investment trade goes through the transaction write guard, so a

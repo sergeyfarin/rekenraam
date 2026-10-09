@@ -21,6 +21,12 @@ var (
 	ErrInvestmentTransferChanged          = errors.New("investment transfer changed")
 	ErrInvestmentImportedTransfer         = errors.New("transfer linked to an import row no longer names its committed source")
 	ErrInvestmentTransferDependency       = errors.New("investment transfer correction cannot satisfy a dependent operation")
+	// ErrInvestmentTransferBasisResolved refuses correcting an inbound transfer
+	// whose unknown basis has a sourced resolution pinned to it (T-145).
+	ErrInvestmentTransferBasisResolved = errors.New("the transfer's unknown basis has a sourced resolution; it cannot be corrected")
+	// ErrInvestmentTransferBasisNotUnknown refuses resolving a transfer whose
+	// basis is known or already resolved.
+	ErrInvestmentTransferBasisNotUnknown = errors.New("the transfer's basis is not unknown")
 )
 
 // InvestmentTransferDependencyError names the later operation a transfer
@@ -181,6 +187,10 @@ func mapTransferCorrectionError(err error) error {
 		return ErrInvestmentTransferChanged
 	case errors.Is(err, db.ErrInvestmentCorrectionDependency):
 		return ErrInvestmentTransferDependency
+	case errors.Is(err, db.ErrTransferBasisResolved):
+		return ErrInvestmentTransferBasisResolved
+	case errors.Is(err, db.ErrTransferBasisNotUnknown):
+		return ErrInvestmentTransferBasisNotUnknown
 	case errors.Is(err, db.ErrOutOfOrderPositionEvent),
 		errors.Is(err, db.ErrGainImpactAcknowledgementRequired),
 		errors.Is(err, db.ErrGainImpactAcknowledgementStale):

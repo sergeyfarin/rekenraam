@@ -161,9 +161,10 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   zero stays numeric). Only a sale or an in-kind transfer may consume unknown
   basis (`AdmitUnknownBasis`); a sale's gain is unresolved — NULL with
   `basis_knowledge`, never a gain against a partial or zero basis — and an
-  outbound with any unknown link posts no bridge. A transfer-link revision
-  never changes knowledge. Other depletions refuse unknown basis until they
-  have their own contract.
+  outbound with any unknown link posts no bridge. Unknown inbound basis is
+  resolved only by an appended sourced resolution (complete omitted bridge at
+  the transfer date); revisions may go unknown→known, never known→unknown.
+  Other depletions refuse unknown basis until they have their own contract.
 - Effective reads use the views `effective_investment_operations`,
   `latest_investment_disposal_revisions`, `latest_investment_split_revisions`,
   `effective_investment_lot_events` and `effective_investment_transfer_links`;

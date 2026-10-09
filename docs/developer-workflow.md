@@ -435,6 +435,14 @@ The candidate checksum changed; stop the app and reset the disposable
 development database using the reset procedure above. The known-basis frozen
 seed remains valid without changes to its data or column layout.
 
+**BREAKING DEV DATABASE, sourced basis resolution (T-145, 2026-10-09):**
+`0001` adds `investment_basis_resolutions` with its insert guard and
+immutability triggers. Its effective-link view applies an effective
+resolution, and transfer-link revisions may move unknown to known. The
+checksum and schema-object count change, and the bundle adds
+`investment-basis-resolutions.csv`. Reset the disposable database and its
+sidecars using the procedure above.
+
 **BREAKING DEV DATABASE, unknown transfer links (T-145, 2026-10-09):**
 `0001` gives transfer-link revisions and their pooled depletions
 `basis_knowledge` with paired nullable amounts. It refuses a revision that

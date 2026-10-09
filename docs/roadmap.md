@@ -121,8 +121,8 @@ below is execution order, not a chain of hard dependencies.
    pooling, replay and read path, while the actions above ship known-basis first and leave an
    unknown-basis lot unresolved, as the contract allows.
    Immutable opening, event and disposal knowledge and unresolved sales (FIFO/LIFO/specific,
-   average pools, replay, gains), unknown transfers in, out and between holdings, and splits
-   are implemented; continue with
+   average pools, replay, gains), unknown transfers in, out and between holdings, splits and
+   sourced resolution (API) are implemented; continue with
    sourced resolution and the UI; the [#160 implementation contract](plans/investment-unknown-basis-plan.md)
    records the boundaries and acceptance cases.
 

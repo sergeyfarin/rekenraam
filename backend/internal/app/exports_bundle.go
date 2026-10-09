@@ -216,6 +216,9 @@ func (s *ExportService) WriteBundle(ctx context.Context, out io.Writer, filter E
 		{"investment-transfer-link-revision-depletions.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "transfer-link-revision-depletions", []string{"revision_id", "depletion_seq", "source_lot_id", "quantity_value", "quantity_scale", "cost_basis_value", "cost_basis_scale", "basis_knowledge"})
 		}},
+		{"investment-basis-resolutions.csv", func(w io.Writer) (int64, error) {
+			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "basis-resolutions", []string{"operation_id", "transfer_operation_id", "link_seq", "lot_id", "quantity_value", "quantity_scale", "cost_commodity_id", "basis_value", "basis_scale", "source_evidence_json", "audit_event_id"})
+		}},
 		{"investment-split-facts.csv", func(w io.Writer) (int64, error) {
 			return s.writeInvestmentFoundationCSV(ctx, w, snapshot, "split-facts", []string{"operation_id", "account_id", "commodity_id", "effective_on", "ratio_numerator", "ratio_denominator", "source_evidence_json", "audit_event_id"})
 		}},
@@ -919,6 +922,7 @@ value in this archive was ever a floating-point number.`,
   investment-transfer-lot-links.csv  sourced lot lineage, dates, and basis knowledge
   investment-transfer-link-revisions.csv  replayed carried basis of internal transfer links
   investment-transfer-link-revision-depletions.csv  replayed source depletions of pooled-lot transfers
+  investment-basis-resolutions.csv  sourced resolutions of unknown inbound transfer basis
   investment-split-facts.csv  sourced split and reverse-split ratios and dates
   investment-split-revisions.csv  replay revisions of split lot effects per cost currency, with any adjustment journal
   investment-split-revision-effects.csv  per-lot quantity changes for those revisions
