@@ -8,7 +8,8 @@ description: "Use when editing requirements, ADRs, workflow docs, agent instruct
 - Keep active docs aligned with current-stack reality, not archived experiments.
 - Requirements belong in `docs/product-requirements.md`.
 - Architecture constraints belong in `docs/early-architecture-decisions.md`.
-- Sequencing belongs in `docs/product-requirements.md`.
+- Execution order and current focus belong only in `docs/roadmap.md`; durable phase boundaries belong in `docs/product-requirements.md`.
+- GitHub issues own delivery checklists; plans and ADRs own durable behavior and scope decisions. Use GitHub `#numbers` for new work; preserve existing local codes as historical aliases.
 - Archive requirement review belongs in `docs/archive/requirements-review.md`.
 - Accepted decisions belong in `docs/adrs/`.
 - Developer process and commands belong in `README.md` and `docs/developer-workflow.md`.

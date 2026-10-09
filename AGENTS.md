@@ -25,10 +25,13 @@ For current execution state, read these (governed by the sources above):
 
 - `docs/roadmap.md` — the only source of work order and current focus.
 - `docs/implemented.md` — what already ships (the feature ledger).
-- `docs/backlog.md` — local ID index for open GitHub Issues; issue status and
+- `docs/backlog.md` — historical local-ID aliases; issue status and
   priority live on GitHub.
 
 If a change introduces a durable new rule, update the relevant document in the same change.
+
+Use GitHub `#numbers` for active work; do not allocate new local issue IDs.
+Follow `docs/conventions.md` → Work Tracking for issue readiness and closure.
 
 ## Task Skills
 

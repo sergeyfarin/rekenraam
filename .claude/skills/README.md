@@ -52,4 +52,5 @@ These tools don't read `.claude/skills/` on their own. Two options:
   The docs govern; skills summarize and point.
 - When a new bug class ships, add it to the `validate-and-ship` review
   checklist and file any remaining work in GitHub Issues so it is checked
-  forever after. Map a local ID in `docs/backlog.md` when repo references need it.
+  forever after. Use its GitHub number; `docs/backlog.md` preserves existing
+  historical aliases rather than allocating new IDs.

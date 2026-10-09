@@ -594,6 +594,37 @@ has actual installations, its migration files are immutable.
 - When archive documents conflict with active docs, active docs win.
 - If an archive idea is adopted, rewrite it in current-stack terms and add it to active docs.
 
+## Work Tracking
+
+- GitHub issue numbers (`#nn`) are the canonical IDs for active work. Do not
+  allocate new `T-nn`, `G-nn` or `S-nn` codes. Existing codes remain historical
+  aliases in `docs/backlog.md`; never renumber them or rewrite dated reviews,
+  accepted ADR headings or old code references just to match GitHub numbers.
+  `Rnn` codes identify roadmap initiatives, not a second issue-number system.
+- The roadmap owns execution order and current focus. GitHub priority labels
+  express urgency, not sequence. Record actual prerequisites and the reason
+  they are required on the issue; a later roadmap slot alone is not a blocker.
+  A `blocked` issue names the missing prerequisite or evidence and what would
+  unblock it. Recheck active blockers when the initiative or evidence changes.
+- Future initiative issues may stay brief. Before implementation starts, the
+  issue must state the problem/evidence, bounded delivery scope, measurable
+  acceptance, dependencies and relevant validation. Use the work-item template;
+  link the governing plan/ADR rather than copying its design contract.
+- GitHub issues own delivery checklists. Feature plans and ADRs own durable
+  behavior and scope decisions, including why a follow-up is retained or
+  deferred. A shipped/deferred design disposition is not a second live task
+  checklist; link to the issue that owns the remaining work.
+- Update tracking when work starts, scope changes, a blocker appears or is
+  resolved, and delivery completes. Progress goes on the relevant issue;
+  roadmap and capability changes are recorded in the same delivery change.
+  Do not periodically copy the overall queue into another issue or report.
+- Close a completed issue with a short record of what shipped, commit links,
+  validation (including any pending CI), retained limits and linked follow-ups.
+  Bounded umbrellas close when their agreed delivery is met. A new independent
+  gap gets its own issue; an unmet original acceptance item keeps its issue
+  open. Retired or duplicate work is closed with that reason and its successor
+  linked, rather than described as implemented.
+
 ## Documentation Conventions
 
 - Requirements belong in `docs/product-requirements.md`.
@@ -602,8 +633,8 @@ has actual installations, its migration files are immutable.
   durable phase boundaries belong in `docs/product-requirements.md`. Plans,
   issues and other docs link to the roadmap rather than restating order.
 - Shipped scope belongs in `docs/implemented.md`; live actionable defects and
-  debt belong in GitHub Issues. `docs/backlog.md` maps local IDs to issues but
-  does not duplicate status or priority. Completed plans and dated reviews are
+  debt belong in GitHub Issues. `docs/backlog.md` maps historical aliases to
+  issues but does not duplicate status or priority. Completed plans and dated reviews are
   historical references, not competing trackers.
 - Navigation belongs in `docs/README.md` and the repository README. Retired
   index issues stay closed as historical references; progress updates belong
@@ -612,11 +643,12 @@ has actual installations, its migration files are immutable.
   queue in issue comments.
 - When roadmap priorities change, cross-check `docs/competitor-comparison.md` and
   record intentional parity gaps or gains in the roadmap's parity section.
-- **An acceptance decision is recorded in the plan it governs, in the same
-  commit that flips the status elsewhere.** `roadmap.md` and
+- **A durable scope/behavior acceptance decision is recorded in the governing
+  plan, in the same commit that flips the status elsewhere.** `roadmap.md` and
   `implemented.md` say *that* an initiative was accepted; the feature plan is
-  where each retained follow-up gets its yes/no and its reason, because the plan
-  is what the next initiative is checked against. R2 shipped with the status
+  where each retained follow-up gets its yes/no and its reason, linked to its
+  GitHub delivery checklist, because the plan is what the next initiative is
+  checked against. R2 shipped with the status
   flipped in three trackers and no decision recorded in `reports-plan.md`, which
   left the three saying "closed" and the plan saying "open" for four days.
 - Decision records belong in `docs/adrs/`.

@@ -9,7 +9,7 @@ Other questions have exactly one home each:
 - Ticket acceptance, state, priority and discussion: [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues).
 - What ships today: `docs/implemented.md`.
 - Feature design contracts: `docs/plans/`. They never define a sequence.
-- Resolving a local `T-nn`/`G-nn` ID to its issue: `docs/backlog.md`.
+- Resolving a historical local code to its issue: `docs/backlog.md`.
 
 Do not restate shipped detail here; when a focus item ships, delete it and
 record the capability in `implemented.md`.
@@ -45,7 +45,7 @@ Statuses: ✅ shipped · ◐ partly shipped ahead of its slice · ▶ current ·
 | R13 | Investment return analytics (TWR/MWR) | ⏭ | this file |
 | R14 | Receipts & attachments (capture, OCR, inbox) | ⏸ | `docs/plans/receipts-plan.md` |
 | R14a | Attachment storage + manual attach (after R5) | ⏭ | `docs/plans/receipts-plan.md` |
-| R15 | Connections expansion (IBKR Flex → GoCardless → T-34 producer) | ⏸ | `docs/plans/connections-plan.md` |
+| R15 | Connections expansion (IBKR Flex → GoCardless → #111 producer) | ⏸ | `docs/plans/connections-plan.md` |
 | R16 | Investment lifecycle completeness (correction, transfers, basis actions, splits, short sales) | ▶ | `docs/plans/investment-operation-refactor-plan.md`; ADR 0013 |
 | R17 | Crypto instrument type + `PriceProvider` registry and quote adapters | ⏭ | this file |
 | R18 | Reproducible investment basis + gains projections | ⏭ | ADR 0012; plan required after R16/R17 |
@@ -73,13 +73,13 @@ The three remaining `plans/` questions were decided the same day:
 
 | Question | Decision |
 |---|---|
-| Connections sequencing | Order adopted, **contents amended**: the quote-provider slice moves into R17 (it builds the `PriceProvider` registry once). R15 is now IBKR Flex → GoCardless → T-34 producer |
+| Connections sequencing | Order adopted, **contents amended**: the quote-provider slice moves into R17 (it builds the `PriceProvider` registry once). R15 is now IBKR Flex → GoCardless → #111 producer |
 | Receipts R14a pull-forward | **No** — but R3 designs the backup/self-check with a documented attachments hook, and R14a ships after R5 |
 | GoCardless / IBKR "verify" items | Not a decision — reclassified as blocking slice-start preconditions on GC-1 and IBKR-1 in `connections-plan.md` |
 
 The R14/R15 plans (2026-07-19) remain deliberately later. Their sequencing
 was decided on 2026-08-05: quotes belong to R17; R15 is IBKR → GoCardless →
-T-34 producer. R14a stays after R5 and was not pulled forward alongside R3. The Yahoo Finance
+#111 producer. R14a stays after R5 and was not pulled forward alongside R3. The Yahoo Finance
 quote-provider question inside R15 was decided 2026-08-05 (ship it, labeled
 unofficial) — `docs/plans/connections-plan.md`.
 
@@ -110,23 +110,23 @@ below is execution order, not a chain of hard dependencies.
 **Now**
 
 1. Short sale/cover
-   [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103).
+   [#103](https://github.com/sergeyfarin/rekenraam/issues/103).
 
 **Next, in order**
 
 2. Historical action entry: dated holdings/lot selection
-   [T-151 #166](https://github.com/sergeyfarin/rekenraam/issues/166), then new
+   [#166](https://github.com/sergeyfarin/rekenraam/issues/166), then new
    backdated internal transfer admission
-   [T-152 #167](https://github.com/sergeyfarin/rekenraam/issues/167).
+   [#167](https://github.com/sergeyfarin/rekenraam/issues/167).
 3. Sourced resolution correction and known-zero resolution
-   [T-153 #168](https://github.com/sergeyfarin/rekenraam/issues/168).
+   [#168](https://github.com/sergeyfarin/rekenraam/issues/168).
 4. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
 
 **Delivered from [#114](https://github.com/sergeyfarin/rekenraam/issues/114):**
-- Outbound transfers with entry, bridge adjustments, backdating and correction (T-142–T-144, 2026-10-05).
-- Return of capital, completed 2026-10-07 (T-146, [T-148 #163](https://github.com/sergeyfarin/rekenraam/issues/163)).
-- Cash in lieu, completed 2026-10-07 (T-147, [T-150 #165](https://github.com/sergeyfarin/rekenraam/issues/165)).
-- Unknown basis [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160), completed 2026-10-09. It covers immutable knowledge, unresolved sales and average pools, unknown transfers in, out and between holdings, splits, and sourced resolution with mobile entry; see the [#160 implementation contract](plans/investment-unknown-basis-plan.md).
+- Outbound transfers with entry, bridge adjustments, backdating and correction (#157–#159, 2026-10-05).
+- Return of capital, completed 2026-10-07 (#161, [#163](https://github.com/sergeyfarin/rekenraam/issues/163)).
+- Cash in lieu, completed 2026-10-07 (#162, [#165](https://github.com/sergeyfarin/rekenraam/issues/165)).
+- Unknown basis [#160](https://github.com/sergeyfarin/rekenraam/issues/160), completed 2026-10-09. It covers immutable knowledge, unresolved sales and average pools, unknown transfers in, out and between holdings, splits, and sourced resolution with mobile entry; see the [#160 implementation contract](plans/investment-unknown-basis-plan.md).
 
 Every bounded #114 child is delivered; #114 is closed following the
 [2026-10-09 audit](reviews/in-kind-basis-actions-audit-2026-10-09.md).
@@ -134,18 +134,18 @@ The audit found historical-entry and resolution-recovery gaps; these are
 separate R16 completion gates above, rather than reopening delivered children.
 
 **Later extensions and parallel trust follow-ups from that audit:** unresolved
-non-sale action results [T-154 #169](https://github.com/sergeyfarin/rekenraam/issues/169),
-basis-resolution provenance declarations [T-155 #170](https://github.com/sergeyfarin/rekenraam/issues/170),
-recorded return-of-capital excess visibility [T-156 #171](https://github.com/sergeyfarin/rekenraam/issues/171),
-and write-off mobile entry [T-157 #172](https://github.com/sergeyfarin/rekenraam/issues/172).
+non-sale action results [#169](https://github.com/sergeyfarin/rekenraam/issues/169),
+basis-resolution provenance declarations [#170](https://github.com/sergeyfarin/rekenraam/issues/170),
+recorded return-of-capital excess visibility [#171](https://github.com/sergeyfarin/rekenraam/issues/171),
+and write-off mobile entry [#172](https://github.com/sergeyfarin/rekenraam/issues/172).
 These do not reopen #114/#160 or expand the bounded R16 completion bar;
 #170/#171 can run alongside the ordered work, while #169/#172 remain later.
 
 **Placed, not sequenced:** race-gate headroom for the backend app package
-[T-149 #164](https://github.com/sergeyfarin/rekenraam/issues/164); zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146);
-lot-opening `NOT NULL` [T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) before the v0.1.0 tag; Refresh
-reach for revised Trading 212 fills before the fetch cursor [T-137 #152](https://github.com/sergeyfarin/rekenraam/issues/152). Blocked on
-provider evidence: [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145), [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136).
+[#164](https://github.com/sergeyfarin/rekenraam/issues/164); zero-delta splits [#146](https://github.com/sergeyfarin/rekenraam/issues/146);
+lot-opening `NOT NULL` [#148](https://github.com/sergeyfarin/rekenraam/issues/148) before the v0.1.0 tag; Refresh
+reach for revised Trading 212 fills before the fetch cursor [#152](https://github.com/sergeyfarin/rekenraam/issues/152). Blocked on
+provider evidence: [#145](https://github.com/sergeyfarin/rekenraam/issues/145), [#136](https://github.com/sergeyfarin/rekenraam/issues/136).
 
 ### Completed initiatives through R10
 
@@ -169,19 +169,19 @@ events remain unclassified warnings. The
 design; [implemented](implemented.md) records the shipped boundary.
 
 R16 is complete when these issues are closed: historical-entry selection
-[T-151 #166](https://github.com/sergeyfarin/rekenraam/issues/166), backdated
-internal transfer admission [T-152 #167](https://github.com/sergeyfarin/rekenraam/issues/167),
-sourced resolution recovery [T-153 #168](https://github.com/sergeyfarin/rekenraam/issues/168),
-short sale/cover [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103),
+[#166](https://github.com/sergeyfarin/rekenraam/issues/166), backdated
+internal transfer admission [#167](https://github.com/sergeyfarin/rekenraam/issues/167),
+sourced resolution recovery [#168](https://github.com/sergeyfarin/rekenraam/issues/168),
+short sale/cover [#103](https://github.com/sergeyfarin/rekenraam/issues/103),
 compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115),
-zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)
+zero-delta splits [#146](https://github.com/sergeyfarin/rekenraam/issues/146)
 and Refresh reach for revised fills
-[T-137 #152](https://github.com/sergeyfarin/rekenraam/issues/152). Outside that
+[#152](https://github.com/sergeyfarin/rekenraam/issues/152). Outside that
 bar: the lot-opening `NOT NULL` constraint
-[T-133 #148](https://github.com/sergeyfarin/rekenraam/issues/148) is a v0.1.0
+[#148](https://github.com/sergeyfarin/rekenraam/issues/148) is a v0.1.0
 release gate, not an R16 one; the evidence-blocked provider mappings
-[T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145) and
-[T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) wait on
+[#145](https://github.com/sergeyfarin/rekenraam/issues/145) and
+[#136](https://github.com/sergeyfarin/rekenraam/issues/136) wait on
 provider evidence and do not hold R16 open; write-off entry UI (#172),
 unresolved non-sale results (#169), provenance declarations (#170), excess
 visibility (#171), and provider return-of-capital/cash-in-lieu suggestions
@@ -201,11 +201,11 @@ new automatic provider or a change to ledger postings.
 ### Parallel trust work for cross-border entry
 
 Before presenting the five drafted non-English catalogs as complete or using
-them in a migration demo, close G-08 (locale-aware amount input), T-87
-(owner-local default dates), and T-80 (catalog parity and native review).
+them in a migration demo, close #100 (locale-aware amount input), #101
+(owner-local default dates), and #102 (catalog parity and native review).
 These are independently shippable correctness and communication fixes; they do
-not require waiting for R16 or R11: [G-08 #100](https://github.com/sergeyfarin/rekenraam/issues/100),
-[T-87 #101](https://github.com/sergeyfarin/rekenraam/issues/101), [T-80 #102](https://github.com/sergeyfarin/rekenraam/issues/102).
+not require waiting for R16 or R11: [#100](https://github.com/sergeyfarin/rekenraam/issues/100),
+[#101](https://github.com/sergeyfarin/rekenraam/issues/101), [#102](https://github.com/sergeyfarin/rekenraam/issues/102).
 
 ### R17 — crypto instrument type
 
@@ -278,7 +278,7 @@ These are valuable, but they are not allowed to displace the current plan:
   `needs_review` queue. (The minimal contains-match rules are in R5 as of
   2026-08-05.)
 - R15 connections expansion, in this order (adopted 2026-08-05):
-  **IBKR Flex Query → GoCardless EU/UK banks → the T-34 dividend/
+  **IBKR Flex Query → GoCardless EU/UK banks → the #111 dividend/
   corporate-action event producer**, then SimpleFIN Bridge (US) later.
   Security quotes moved out of R15 into R17. CSV mapping-profile presets for
   API-less brokers (Trade Republic, DeGiro, Raisin, HL/AJ Bell/ii) are R5
@@ -316,7 +316,7 @@ The 2026-09-27 primary-source recheck in
 `docs/competitor-comparison.md` supports the following order: complete R16's
 correction, transfer, basis and split workflows; provide the R11 price/FX
 operator surface; add the R17 quote registry and crypto entry; then build
-R18 reproducible gains and R13 returns. G-08 locale input and T-87 owner-local
+R18 reproducible gains and R13 returns. #100 locale input and #101 owner-local
 date defaults are parallel correctness work. This ordering is a product
 inference from verified competitor workflows and the present code boundary,
 not a claim of feature uniqueness.
@@ -346,7 +346,7 @@ ADR 0013's pre-release redesign.
 
 T-106's dated negative-position detection and net-worth warning shipped
 2026-09-26. Out-of-order imports remain accepted; a genuine short sale needs
-an explicit named workflow (T-108). T-107's investment money JSON precision
+an explicit named workflow (#103). T-107's investment money JSON precision
 boundary also closed on 2026-09-26.
 
 These are a parallel release-readiness track, not a reason to delay local
@@ -386,9 +386,9 @@ scanning paths before an announcement.
    is European — so the demo the launch rests on must not corrupt dates and
    amounts for exactly the target audience. A correctness-branded finance app
    does not get a second first impression.
-3. **Cross-border entry trust — open.** Close G-08's locale-aware amount input
-   and T-87's owner-local default dates before a multilingual migration demo.
-   Fill T-80's 65 missing message keys per non-English locale and arrange
+3. **Cross-border entry trust — open.** Close #100's locale-aware amount input
+   and #101's owner-local default dates before a multilingual migration demo.
+   Fill #102's 65 missing message keys per non-English locale and arrange
    native review before describing those catalogs as complete.
 4. **Personal-access tokens — open** (added 2026-08-05, review §3f). The
    typed OpenAPI surface is the foundation for an ecosystem, but session

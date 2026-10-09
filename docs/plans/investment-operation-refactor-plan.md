@@ -1,7 +1,7 @@
 # Investment operation and subledger refactor plan
 
 Status: active design contract, reviewed 2026-10-03.
-ADR 0012 and ADR 0013 govern. R16 owns long-position lifecycle work; T-108
+ADR 0012 and ADR 0013 govern. R16 owns long-position lifecycle work; #103
 owns shorts. Planned behavior is not shipped behavior.
 
 This plan is the **design contract only**. Sequence and current focus live in
@@ -14,7 +14,8 @@ record evidence, qualifications and issue boundaries. The
 [2026-10-09 #114 closure audit](../reviews/in-kind-basis-actions-audit-2026-10-09.md)
 records delivered transfer/basis-action intent, reproduced limits and new
 bounded follow-ups.
-Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
+Use GitHub `#numbers` for active references. Existing local `T-nn` codes
+remain historical aliases; `docs/backlog.md` maps them without renumbering.
 
 ## Outcome and boundaries
 

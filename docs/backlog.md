@@ -1,11 +1,12 @@
-# Local ID index
+# Historical issue aliases
 
-Resolves local `T-nn`/`G-nn` IDs cited in the repo to their GitHub issue.
+Resolves existing local `T-nn`/`G-nn`/`S-nn` IDs cited in the repo to their GitHub issue.
 Nothing else lives here: acceptance, state and priority are on
 [GitHub](https://github.com/sergeyfarin/rekenraam/issues); order is in the
-[roadmap](roadmap.md). Add a row when a new issue's ID is referenced in the
-repo; new issues take the next unused `T-nn`, `G-nn` or `S-nn`. Local IDs and
-GitHub numbers are distinct; cite both.
+[roadmap](roadmap.md). GitHub `#numbers` are canonical for active work as of
+2026-10-09. Do not allocate new local codes or renumber existing aliases.
+Add a mapping only when recovering an existing historical reference. New
+issues need no row here. See [Work Tracking](conventions.md#work-tracking).
 
 | Local ID | GitHub issue |
 |---|---|
@@ -61,7 +62,6 @@ GitHub numbers are distinct; cite both.
 | T-148 | [#163 — Complete return of capital: revisions, entitlement, correction, entry UI](https://github.com/sergeyfarin/rekenraam/issues/163) |
 | T-149 | [#164 — Backend app package race run near its timeout](https://github.com/sergeyfarin/rekenraam/issues/164) |
 | T-150 | [#165 — Cash in lieu correction and entry UI](https://github.com/sergeyfarin/rekenraam/issues/165) |
-
 | T-151 | [#166 — Dated holdings and lots for historical action entry](https://github.com/sergeyfarin/rekenraam/issues/166) |
 | T-152 | [#167 — Backdated internal transfer admission](https://github.com/sergeyfarin/rekenraam/issues/167) |
 | T-153 | [#168 — Resolution correction and known-zero resolution](https://github.com/sergeyfarin/rekenraam/issues/168) |
@@ -70,7 +70,7 @@ GitHub numbers are distinct; cite both.
 | T-156 | [#171 — Recorded return-of-capital excess visibility](https://github.com/sergeyfarin/rekenraam/issues/171) |
 | T-157 | [#172 — Mobile write-off entry](https://github.com/sergeyfarin/rekenraam/issues/172) |
 
-IDs not listed here were closed before the GitHub migration; see the
+Additional historical aliases and pre-migration closed work are recorded in the
 [pre-migration snapshot](reviews/open-backlog-before-github-2026-09-27.md)
 (including the T-42–T-47 collision mapping) and the
 [July](reviews/resolved-backlog-2026-07.md) and

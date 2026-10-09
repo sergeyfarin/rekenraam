@@ -290,7 +290,7 @@ full relevant suite.
 | What changed | Update |
 |---|---|
 | Feature shipped / status changed | `docs/implemented.md` (feature ledger); remove the item from the roadmap's current focus |
-| Tech debt found or paid | GitHub Issue with a local ID (`T-NN`), exact file/line, and, when closing, the fix and validating test; map IDs used in the repo in `docs/backlog.md` |
+| Tech debt found or paid | GitHub Issue (`#number`) with evidence, bounded scope, measurable acceptance, dependencies and validation; retain existing local aliases in `docs/backlog.md`, never allocate new ones |
 | Durable product behavior/scope | `docs/product-requirements.md` |
 | Repo-wide rule/convention | `docs/conventions.md` |
 | Long-lived tradeoff decision | new ADR in `docs/adrs/` (ADRs supersede everything once accepted) |
@@ -300,6 +300,18 @@ Precedence when docs conflict: product-requirements → conventions →
 early-architecture-decisions → ADRs govern all → developer-workflow.
 `AGENTS.md` and skills are guidance, not product sources of truth.
 `.archive/` is historical reference only — never port from it directly.
+
+Tracking is event-driven: update the feature issue when work starts, scope or
+blockers change, and delivery completes. The roadmap alone owns overall order;
+priority is urgency and actual dependencies name their reason. Future initiative
+issues may stay brief, but implementation starts only with actionable acceptance.
+GitHub owns delivery checklists; plans/ADRs own durable scope and behavior.
+
+Before closing, record shipped behavior, commit links, validation (and any
+pending CI), retained limits and linked follow-ups. Close a bounded umbrella
+when its agreed delivery is met; an unmet original acceptance item stays open.
+An independent gap gets its own issue. Retired/duplicate work names its actual
+disposition and successor. See `docs/conventions.md` → Work Tracking.
 
 ## Commits
 

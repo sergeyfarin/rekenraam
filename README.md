@@ -81,11 +81,13 @@ changing a populated installation. Local password recovery commands are in the
 Start with the [documentation map](docs/README.md). The
 [roadmap](docs/roadmap.md) gives the work order and current focus,
 [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues) tracks open
-work, [backlog](docs/backlog.md) maps legacy IDs to those issues, and
+work by GitHub number, [backlog](docs/backlog.md) maps historical aliases, and
 [implemented](docs/implemented.md) records what ships.
 Product and architecture decisions live in the
 [requirements](docs/product-requirements.md),
 [conventions](docs/conventions.md), and [ADRs](docs/adrs/).
+The [tracking policy](docs/conventions.md#work-tracking) defines issue readiness,
+progress updates and closure; new work uses GitHub numbers without local IDs.
 
 ### Consolidated development schema
 

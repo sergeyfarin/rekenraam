@@ -51,5 +51,6 @@ Task-shaped skill guides live in `.claude/skills/` (ledger invariants, backend s
 ## Collaboration Defaults
 
 - Use Conventional Commits.
-- Lightweight feature branches and PRs are encouraged, not mandatory.
+- Before `v0.1.0`, commit directly to `main` by default; branch only for work that needs isolation. From that release, feature branches and PRs become the norm. `docs/developer-workflow.md` governs.
 - Keep commit scope focused; do not bundle unrelated refactors.
+- Use GitHub issue numbers for active work. Follow `docs/conventions.md` → Work Tracking for issue readiness, progress and closure; `docs/backlog.md` preserves historical local aliases.

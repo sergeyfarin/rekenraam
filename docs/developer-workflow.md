@@ -524,6 +524,19 @@ run and needs nothing.
   leaves every row count identical. Widen the seed before writing a migration
   that touches something it does not cover.
 
+## Work Tracking
+
+Use GitHub issue numbers for active work and the
+[work-item template](../.github/ISSUE_TEMPLATE/work-item.md) for a bounded
+problem, delivery scope, acceptance, dependencies and validation. Future
+initiatives may stay brief; complete actionable acceptance before coding.
+Existing local codes remain historical aliases in `docs/backlog.md`.
+
+Follow [Work Tracking](conventions.md#work-tracking) for event-driven progress
+and closure. Update the roadmap/capability ledger when their facts change;
+post validation and commit evidence on the feature issue. Delivery checklists
+live on GitHub, while durable behavior and scope decisions live in plans/ADRs.
+
 ## Commit Conventions
 
 This repo uses Conventional Commits.

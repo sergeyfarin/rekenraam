@@ -10,13 +10,14 @@ does a new document go?"** The current-state files and GitHub Issues answer
 |---|---|---|
 | [roadmap.md](roadmap.md) | What are we building next, in what order, and what is the current focus? | The **only** place order lives. Update when scope, order or focus changes; remove focus items when they ship; governed by `product-requirements.md` |
 | [GitHub Issues](https://github.com/sergeyfarin/rekenraam/issues) | What does each ticket require, and is it open? | Acceptance, state, priority, discussion and PR links. Issues never restate the overall order |
-| [backlog.md](backlog.md) | Which GitHub issue owns a local ID? | ID-to-issue table only; no status, priority or order |
+| [backlog.md](backlog.md) | Which GitHub issue owns an old local code? | Historical aliases only; no new local IDs, status, priority or order |
 | [implemented.md](implemented.md) | What ships today, backend vs UI? | Reconcile with the codebase when a slice lands |
 
 The boundary between them: **roadmap** holds order and current focus,
 **GitHub Issues** holds each ticket's acceptance and state, **backlog** maps
-local IDs to issues, and **implemented** is the capability ledger. Feature
-plans hold design only. Each fact has exactly one home; elsewhere, link to it.
+historical aliases to issues, and **implemented** is the capability ledger.
+Feature plans and ADRs hold durable behavior and scope decisions; live delivery
+checklists belong to issues. Each fact has exactly one home; elsewhere, link to it.
 GitHub issue [#120](https://github.com/sergeyfarin/rekenraam/issues/120) was
 retired on 2026-10-09. Its older progress comments remain history; use this
 map and the roadmap for current navigation. Post progress on the relevant
@@ -108,9 +109,11 @@ They distinguish reproduced defects from R16 work still tracked in open issues.
    probably updates an existing file instead of creating a new one.
 2. When a plan's slice ships: record capabilities in `implemented.md`, keep
    the plan in `plans/` as the design record, and delete any per-step
-   checkbox tracking from it (that job belongs to `implemented.md`).
-3. Audit/review findings that need action get a backlog ID; the review file
-   itself is not a tracker.
+   checkbox tracking from it (live checklists belong to GitHub issues).
+3. Audit/review findings that need action get a GitHub issue, using its
+   `#number`; preserve old local IDs only as historical aliases. The review
+   itself is not a tracker. See [Work Tracking](conventions.md#work-tracking)
+   for readiness, progress and closure.
 4. Code and docs reference these files by full path (`docs/plans/...`) — when
    moving or renaming, update references repo-wide (README.md, AGENTS.md,
    `.claude/`, backend and frontend source comments).
