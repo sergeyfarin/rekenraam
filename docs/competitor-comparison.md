@@ -8,14 +8,18 @@ security quality, and features behind particular paid tiers were not assessed.
 The earlier broad survey remains in
 [the July research record](reviews/competitive-analysis-2026-07.md).
 
+Rekenraam delivery status was updated by the
+[2026-10-09 #114 audit](reviews/in-kind-basis-actions-audit-2026-10-09.md).
+The external workflow evidence retains the 2026-09-27 review date.
+
 ## Verified comparison
 
 | Product | Documented strengths relevant here | Boundary or implication for Rekenraam |
 |---|---|---|
-| **Rekenraam** | Exact multi-commodity ledger, reconciliation, CSV/QIF export and import, budgets, recurring drafts, per-currency forecasts, operational investment lots/gains and Trading 212 import. | Investment-native correction, transfers, basis actions, named short sales, price management UI, and reproducible gains projections remain open. See [implemented](implemented.md) and [roadmap](roadmap.md). |
+| **Rekenraam** | Exact multi-commodity ledger, reconciliation, CSV/QIF export and import, budgets, recurring drafts, per-currency forecasts, operational investment lots/gains and Trading 212 import. | Native long-trade/action correction, transfers, splits, known-basis capital return/cash in lieu, and positive unknown-basis resolution ship. Historical-entry and resolution-recovery follow-ups, named shorts, price UI and reproducible gains remain open. See [implemented](implemented.md) and [roadmap](roadmap.md). |
 | **GnuCash** | Its [investment guide](https://www.gnucash.org/docs/v5/C/gnucash-guide/chapter_invest.html) documents lots, dividends, return of capital, splits and mergers, and a price database. | Sets the accounting and transaction-type bar for R16. The guide is for a desktop application; this comparison does not equate its lot methods or tax results with Rekenraam's. |
 | **Quicken Classic** | Its [investment action list](https://info.quicken.com/win/tell-me-about-the-investment-transaction-list-s-ac) names transfers, return of capital, splits, short sales and covers; its [placeholder guide](https://www.quicken.com/support/resolving-placeholders-and-usd0-00-cost-basis-in-quicken-for-mac/) explains missing-basis recovery. | A migration target needs basis-preserving transfers, correction and explicit unknown-basis handling before it can promise comparable investment history. Quicken's [short-cover help](https://info.quicken.com/win/how-do-i-cover-a-short-sale) reinforces naming shorts separately from ordinary sells. |
-| **Portfolio Performance** | Its [security menu](https://help.portfolio-performance.info/en/reference/view/securities/context-menu/) documents security transfers and a split wizard; its [performance manual](https://help.portfolio-performance.info/en/reference/view/reports/performance/dashboard/) documents TTWROR and IRR. | R16's split/transfer gap and later R13 returns gap are concrete. Its default split path retroactively adjusts earlier transactions and quotes; Rekenraam's immutable-source design calls for a dated operation and separate adjusted views. |
+| **Portfolio Performance** | Its [security menu](https://help.portfolio-performance.info/en/reference/view/securities/context-menu/) documents security transfers and a split wizard; its [performance manual](https://help.portfolio-performance.info/en/reference/view/reports/performance/dashboard/) documents TTWROR and IRR. | R16's split/transfer primitives now ship; the audit records remaining historical-entry/recovery gaps, and R13 returns remain open. Its default split path retroactively adjusts earlier transactions and quotes; Rekenraam's immutable-source design calls for a dated operation and separate adjusted views. |
 | **Ghostfolio** | The project's [README](https://github.com/ghostfolio/ghostfolio/blob/main/README.md) documents self-hosting, activity import/export, multi-account holdings, portfolio charts, ROAI periods and a mobile-first PWA. | Portfolio analytics and mobile presentation are relevant R13 benchmarks. Its documented activity/API scope does not establish equivalent ledger or basis semantics, so no absence claim is made here. |
 | **Actual Budget** | Its [rules](https://actualbudget.org/docs/budgeting/rules/) can transform imports, its [schedules](https://actualbudget.org/docs/tour/schedules/) support automatic or reviewed entry, and its [import guide](https://actualbudget.org/docs/transactions/importing/) lists CSV/QIF/OFX/QFX/CAMT. Its [multi-currency guide](https://actualbudget.org/docs/budgeting/multi-currency/) says native support is still absent and describes an experimental workaround. | Rekenraam's exact multi-currency model is a meaningful difference. Actual's broader import formats and rules are a later usability benchmark; its documented schedules reinforce a clear review-before-post workflow. |
 | **Firefly III** | Its [rules](https://docs.firefly-iii.org/how-to/firefly-iii/features/rules/), [data importer](https://docs.firefly-iii.org/how-to/data-importer/import/csv/) and [budgets](https://docs.firefly-iii.org/how-to/firefly-iii/finances/budgets/) cover mature routine transaction management. | Keep R6 import depth and rules on the later list. This review did not verify comparable security-lot accounting, so it makes no claim about its presence or absence. |
@@ -26,9 +30,11 @@ The earlier broad survey remains in
 
 1. **Complete R16 before more investment producers.** The competing investment
    workflows name correction, transfer, return of capital and splits as normal
-   operations. Rekenraam currently cannot safely amend an old trade or carry
-   basis between brokers. Preserve the accepted R16 order: correction, then
-   transfers and basis actions, then named short sales and compound actions.
+   operations. Rekenraam now safely amends long-trade/action history and carries
+   known or explicitly unknown basis between holdings/brokers. That closes the
+   bounded #114 gap; historical-entry and resolution-recovery limits are tracked
+   in #166–#168. Follow the roadmap for named shorts, those completion gates
+   and compound actions. Provider/tax-policy completeness remains separate.
 2. **Promote R11 price management UI after R16 and before R17.** Rekenraam has
    price storage and voiding, but no complete operator surface. A user needs to
    inspect provenance, correct a quote and see valuation coverage before

@@ -10,7 +10,10 @@ the [roadmap](../roadmap.md); shipped behavior in
 [The 2026-10-01 progress snapshot](../reviews/investment-operation-progress-2026-10-01.md)
 preserves the former slice-by-slice history. [The initial review](../reviews/investment-review-2026-10-02.md) and
 [follow-up disposition](../reviews/investment-followup-review-2026-10-02.md)
-record evidence, qualifications and issue boundaries.
+record evidence, qualifications and issue boundaries. The
+[2026-10-09 #114 closure audit](../reviews/in-kind-basis-actions-audit-2026-10-09.md)
+records delivered transfer/basis-action intent, reproduced limits and new
+bounded follow-ups.
 Always distinguish local `T-nn` IDs from GitHub `#nn` numbers.
 
 ## Outcome and boundaries

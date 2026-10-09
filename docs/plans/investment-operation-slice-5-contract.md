@@ -7,7 +7,11 @@ command shipped in slice 5b, its entry screen in 5c, the explicit-lot
 internal transfer API in 5d, and its entry screen in 5e. The manual split /
 reverse split command shipped under T-122 #137 (see below). The known-basis
 external outbound API shipped 2026-10-05 (*Outbound transfer, first command*
-below). The remaining commands are unimplemented.
+below). Return of capital, linked cash in lieu and unknown-basis transfer/
+resolution subsequently shipped; the bounded #114 family is complete under
+the [2026-10-09 audit](../reviews/in-kind-basis-actions-audit-2026-10-09.md).
+Historical-entry and resolution-recovery gaps have separate issues; the roadmap
+owns sequence.
 
 ## Common rules
 
@@ -42,9 +46,11 @@ version, causing operation, source evidence, and audit link. They are never
 silently edited into immutable broker facts. The supported first command of
 each family must either replay dependent later operations or refuse with the
 named dependency before posting; it must never leave the journal and lot
-projection at different historical states. Until unknown-basis replay exists,
-manual entry requiring unknown basis fails with a named unresolved-basis
-error and an imported row remains in review.
+projection at different historical states. Unknown-basis sales, transfers,
+splits and sourced positive resolution now ship under #160. Write-off, cash
+in lieu and return of capital still refuse unresolved inputs until
+[T-154 #169](https://github.com/sergeyfarin/rekenraam/issues/169) specifies each
+family; unsupported imported rows remain in review.
 
 ## In-kind transfers
 
@@ -60,11 +66,12 @@ The source and destination of an internal transfer must be different active
 holding accounts in the same book, with the same security and cost currency.
 Select exact source-lot quantities. The first command uses explicit lot
 selection so it does not silently choose a cost-basis policy for a non-sale.
-The first internal command snapshots known carried basis per source lot. Replay
-of later sales includes its source depletion. A correction that would change
-that linked basis or make its source lot unavailable refuses with the named
-transfer until cross-account transfer revisions can update the destination
-and its dependent disposals atomically.
+The internal command snapshots carried basis knowledge per source lot. Replay
+of later sales includes its source depletion. Cross-account link revisions
+now propagate changed basis to destination lots and dependent disposals
+atomically (#147/#155), including unknown-to-known resolution (#160). A
+selected source lineage that the corrected history cannot supply remains a
+named refusal; historical links stay immutable.
 For a partial lot, carry its proportional remaining basis at the position's
 allocation scale; truncate non-final allocations toward zero and assign the
 exact remainder to the final selected portion. A full-lot movement carries
@@ -84,8 +91,11 @@ family lock: taking the selected lot's individual basis would violate the pool
 rate. It also refuses an existing average-cost lock. A completed lot-specific
 move records `individual_lot` as the source position's method-family lock, so
 a later sale cannot switch the still-open source position to average cost.
-Closing the source position releases the lock. Preview and write return the
-same named conflict until pool-aware transfer allocation and replay exist.
+Closing the source position releases the lock. A source with an average-cost
+policy or lock must use the shipped pooled-quantity command rather than the
+selected-lot shape. New internal transfers still refuse backdating before
+source or destination depletions; [T-152 #167](https://github.com/sergeyfarin/rekenraam/issues/167)
+owns that separate admission contract.
 
 External inbound basis is a sourced fact: accept a known nonnegative value
 including known zero, or record unknown with a NULL coefficient. An outbound
@@ -133,11 +143,14 @@ adjustments, pinned in the correction record so an adjustment landing after
 planning refuses the write) and replays the source; `replace-transfer-out`
 posts that inverse and a corrected outbound transfer whose depletion replays
 at the replaced transfer's slot, replaying every source either depleted.
-Still open: unknown basis (T-145 #160). The
+Unknown basis (T-145 #160) is delivered. The
 [unknown-basis implementation contract](investment-unknown-basis-plan.md)
-records the immutable evidence, replay and sourced-resolution boundaries.
-The transfer-link evidence prerequisite (2026-10-07) enforces NULL coefficient
-and scale together for unknown basis; public transfer commands remain known-only.
+records immutable evidence, unknown transfer admission, replay and sourced
+positive resolution. Unknown amounts keep NULL coefficient and scale together;
+public transfers may carry unknown basis, and an outbound posts its complete
+omitted bridge when resolution makes every effective link known.
+Resolution recovery and journal-free known-zero resolution are tracked in
+[T-153 #168](https://github.com/sergeyfarin/rekenraam/issues/168).
 
 Example: transfer 2 shares carrying 80.00 EUR into the book. Post security
 `H +2`, `T −2` and EUR `T +80.00`, `E −80.00`. A later full sale for 100.00
@@ -323,7 +336,8 @@ Specific-lot choices use a composed dated read (`cash-in-lieu-lots`): historical
 quantities at the new entry slot, or the replacement's original root slot with
 the predecessor excluded. A currently closed position remains correctable.
 Every investment mutation invalidates this dated read along with the existing
-positions/lots/gains/correction reads. Unknown-basis admission remains #160;
+positions/lots/gains/correction reads. Cash-in-lieu unknown-basis admission
+remains refused pending [T-154 #169](https://github.com/sergeyfarin/rekenraam/issues/169);
 Trading 212 fractional-share mapping stays in review until #145 supplies verified
 evidence.
 
@@ -340,22 +354,24 @@ that allocation rather than rewriting the 8.00 EUR receipt.
    **source** basis knowledge, a known-basis inbound lot, replay opening,
    self-check and export. The projection now accepts explicit unknown knowledge
    with NULL remaining basis/scale, and read APIs, gains, UI and bundle schema 5
-   preserve it. Known zero stays numeric. Current writers refuse unresolved
-   positions; replay reconstructs known state from the currently known immutable
-   opening evidence and rolls back knowledge/NULLs atomically. Unknown-basis
-   transfers remain refused until immutable opening/event/disposal knowledge,
-   unknown-basis replay and sourced resolution propagate that state end to end.
+   preserve it. Known zero stays numeric. #160 completed immutable unknown
+   opening/event/disposal knowledge, unknown-input replay and sourced positive
+   resolution. Sales and transfers admit unknown basis, splits conserve it,
+   and other action families retain their explicitly documented refusals.
    Split ratio/eligibility and basis-action links
    are likewise prerequisites for their respective commands.
 2. Known-basis external inbound and explicit-lot internal transfers are shipped.
    Manual split/reverse split with Trading 212 split-row linking shipped
    ([T-122 #137](https://github.com/sergeyfarin/rekenraam/issues/137)), as did pooled average-cost internal transfer allocation
    ([T-123 #138](https://github.com/sergeyfarin/rekenraam/issues/138)), and broader transfer-in/disposal backdating ([T-117 #132](https://github.com/sergeyfarin/rekenraam/issues/132)).
-3. Decide cross-position replay ([T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139)) before outbound transfers,
-   then deliver unknown-basis resolution, return of capital and linked cash in
-   lieu. Prove bridge adjustment/refusal, exact conservation, dependent replay
-   and reconciliation with named tests. Provider suggestions stay in review
-   until their command and mapping are supported.
-4. Add mobile entry and read-side labels for unresolved basis and action
-   provenance before calling the family complete. Update the feature ledger
-   for each shipped command, not merely for the schema.
+3. Cross-position dependency-closure replay ([T-124 #139](https://github.com/sergeyfarin/rekenraam/issues/139)),
+   outbound transfers, unknown-basis resolution, return of capital and linked
+   cash in lieu are delivered with named bridge adjustment/refusal,
+   conservation, replay and reconciliation cases. New backdated internal
+   entry (#167) and resolution recovery (#168) remain separate contracts.
+   Provider suggestions stay in review until their command and verified
+   mapping are supported; #145 and #111 track that boundary.
+4. Mobile entry and unresolved labels ship for the bounded family. Dated
+   historical-entry selectors (#166), stronger provenance declarations (#170),
+   and persistent return-of-capital excess visibility (#171) have their own
+   acceptance. The feature ledger records each shipped command and its limits.

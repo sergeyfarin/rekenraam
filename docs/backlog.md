@@ -62,6 +62,14 @@ GitHub numbers are distinct; cite both.
 | T-149 | [#164 — Backend app package race run near its timeout](https://github.com/sergeyfarin/rekenraam/issues/164) |
 | T-150 | [#165 — Cash in lieu correction and entry UI](https://github.com/sergeyfarin/rekenraam/issues/165) |
 
+| T-151 | [#166 — Dated holdings and lots for historical action entry](https://github.com/sergeyfarin/rekenraam/issues/166) |
+| T-152 | [#167 — Backdated internal transfer admission](https://github.com/sergeyfarin/rekenraam/issues/167) |
+| T-153 | [#168 — Resolution correction and known-zero resolution](https://github.com/sergeyfarin/rekenraam/issues/168) |
+| T-154 | [#169 — Unresolved non-sale action results](https://github.com/sergeyfarin/rekenraam/issues/169) |
+| T-155 | [#170 — Basis-resolution provenance declarations](https://github.com/sergeyfarin/rekenraam/issues/170) |
+| T-156 | [#171 — Recorded return-of-capital excess visibility](https://github.com/sergeyfarin/rekenraam/issues/171) |
+| T-157 | [#172 — Mobile write-off entry](https://github.com/sergeyfarin/rekenraam/issues/172) |
+
 IDs not listed here were closed before the GitHub migration; see the
 [pre-migration snapshot](reviews/open-backlog-before-github-2026-09-27.md)
 (including the T-42–T-47 collision mapping) and the

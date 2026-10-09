@@ -14,7 +14,7 @@ Other questions have exactly one home each:
 Do not restate shipped detail here; when a focus item ships, delete it and
 record the capability in `implemented.md`.
 
-Last reviewed: 2026-10-03. The current order is R16, R11 price management,
+Last reviewed: 2026-10-09. The current order is R16, R11 price management,
 R17 quotes and crypto, R18 gains projections, then R13 returns analytics.
 Cross-border input and date correctness run in parallel. Prior roadmap detail
 is retained in the [completed roadmap record](reviews/completed-roadmap-2026-09-27.md).
@@ -114,7 +114,13 @@ below is execution order, not a chain of hard dependencies.
 
 **Next, in order**
 
-2. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
+2. Historical action entry: dated holdings/lot selection
+   [T-151 #166](https://github.com/sergeyfarin/rekenraam/issues/166), then new
+   backdated internal transfer admission
+   [T-152 #167](https://github.com/sergeyfarin/rekenraam/issues/167).
+3. Sourced resolution correction and known-zero resolution
+   [T-153 #168](https://github.com/sergeyfarin/rekenraam/issues/168).
+4. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
 
 **Delivered from [#114](https://github.com/sergeyfarin/rekenraam/issues/114):**
 - Outbound transfers with entry, bridge adjustments, backdating and correction (T-142–T-144, 2026-10-05).
@@ -122,7 +128,18 @@ below is execution order, not a chain of hard dependencies.
 - Cash in lieu, completed 2026-10-07 (T-147, [T-150 #165](https://github.com/sergeyfarin/rekenraam/issues/165)).
 - Unknown basis [T-145 #160](https://github.com/sergeyfarin/rekenraam/issues/160), completed 2026-10-09. It covers immutable knowledge, unresolved sales and average pools, unknown transfers in, out and between holdings, splits, and sourced resolution with mobile entry; see the [#160 implementation contract](plans/investment-unknown-basis-plan.md).
 
-Every #114 child is delivered.
+Every bounded #114 child is delivered; #114 is closed following the
+[2026-10-09 audit](reviews/in-kind-basis-actions-audit-2026-10-09.md).
+The audit found historical-entry and resolution-recovery gaps; these are
+separate R16 completion gates above, rather than reopening delivered children.
+
+**Later extensions and parallel trust follow-ups from that audit:** unresolved
+non-sale action results [T-154 #169](https://github.com/sergeyfarin/rekenraam/issues/169),
+basis-resolution provenance declarations [T-155 #170](https://github.com/sergeyfarin/rekenraam/issues/170),
+recorded return-of-capital excess visibility [T-156 #171](https://github.com/sergeyfarin/rekenraam/issues/171),
+and write-off mobile entry [T-157 #172](https://github.com/sergeyfarin/rekenraam/issues/172).
+These do not reopen #114/#160 or expand the bounded R16 completion bar;
+#170/#171 can run alongside the ordered work, while #169/#172 remain later.
 
 **Placed, not sequenced:** race-gate headroom for the backend app package
 [T-149 #164](https://github.com/sergeyfarin/rekenraam/issues/164); zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146);
@@ -151,9 +168,11 @@ events remain unclassified warnings. The
 [slice 5 contract](plans/investment-operation-slice-5-contract.md) govern
 design; [implemented](implemented.md) records the shipped boundary.
 
-R16 is complete when these issues are closed: the remaining
-[#114](https://github.com/sergeyfarin/rekenraam/issues/114) actions, short
-sale/cover [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103),
+R16 is complete when these issues are closed: historical-entry selection
+[T-151 #166](https://github.com/sergeyfarin/rekenraam/issues/166), backdated
+internal transfer admission [T-152 #167](https://github.com/sergeyfarin/rekenraam/issues/167),
+sourced resolution recovery [T-153 #168](https://github.com/sergeyfarin/rekenraam/issues/168),
+short sale/cover [T-108 #103](https://github.com/sergeyfarin/rekenraam/issues/103),
 compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115),
 zero-delta splits [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)
 and Refresh reach for revised fills
@@ -163,8 +182,11 @@ bar: the lot-opening `NOT NULL` constraint
 release gate, not an R16 one; the evidence-blocked provider mappings
 [T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145) and
 [T-121 #136](https://github.com/sergeyfarin/rekenraam/issues/136) wait on
-provider evidence and do not hold R16 open; write-off entry UI and provider
-return-of-capital/cash-in-lieu suggestions remain follow-ups.
+provider evidence and do not hold R16 open; write-off entry UI (#172),
+unresolved non-sale results (#169), provenance declarations (#170), excess
+visibility (#171), and provider return-of-capital/cash-in-lieu suggestions
+remain follow-ups. #114's delivered transfer/basis-action family is closed
+under the audit above; this does not close the remaining R16 families.
 
 ### R11 — price and FX management UI, promoted after R16
 
