@@ -45,6 +45,13 @@ HTTPS reverse proxy for direct access from phones or other LAN clients.
 
 ### Backend Validation
 
+The minimum Go toolchain is 1.27.2, declared in `backend/go.mod`. This patch
+fixes the standard-library vulnerabilities reported by the 2026-10-09
+`govulncheck` run. GitHub Actions reads that same minimum with
+`go-version-file`; local Go commands automatically select it when needed.
+The Docker builder follows the 1.27 patch series (`golang:1.27-trixie`);
+pull the current image when rebuilding so a cached older builder is refreshed.
+
 Checks formatting (`gofmt -l`), runs `go vet ./...`, then the full Go suite with
 the race detector. The formatting and vet gates live inside the wrapper script
 so CI enforces them too — before they were added, `gofmt` drift could sit in the
@@ -605,7 +612,7 @@ Workflow conventions:
   the integrated build.
 - Go vulnerability scanning runs in `.github/workflows/govulncheck.yml` with
   `govulncheck ./...` from `backend/` on a weekly schedule, manually via
-  `workflow_dispatch`, and on backend-affecting pull requests.
+  `workflow_dispatch`, and on backend-affecting pushes to main and pull requests.
 - CodeQL code scanning runs as GitHub's **default setup**, configured in
   repository settings (Security → Code scanning), covering `actions`, Go, and
   the JS/TS languages. There is no committed CodeQL workflow.

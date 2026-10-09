@@ -14,7 +14,7 @@ see the [R16 plan](docs/plans/investment-operation-refactor-plan.md) and the
 
 ## Run locally
 
-Use Go 1.27, Node 24, and the pinned pnpm version in `package.json`.
+Use Go 1.27.2 or newer in the 1.27 series, Node 24, and the pinned pnpm version in `package.json`.
 From the repository root:
 
 ```sh
