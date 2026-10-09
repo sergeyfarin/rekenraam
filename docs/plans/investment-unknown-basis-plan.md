@@ -26,10 +26,10 @@ rejects those combinations.
 `TestTransferBasisKnowledgeRequiresCompleteAmountPair` tests all eight NULL
 combinations for both knowledge states; five unknown cases fail before the fix.
 The existing `TestKnownZeroTransferBasisRemainsKnown` covers known zero.
-This prerequisite does not implement unknown openings, disposals or resolution,
-and does not complete any of #160's end-to-end acceptance items.
+This prerequisite alone did not implement unknown openings, disposals or
+resolution; the delivered boundaries below complete the end-to-end acceptance.
 
-## Remaining implementation boundaries
+## Delivered implementation boundaries
 
 The opening/event portion of boundary 1 is implemented: independent original
 knowledge, immutable paired NULLs, nullable original API fields, bundle schema 9,
@@ -63,8 +63,9 @@ total. An unknown lot loses quantity while its remaining basis stays NULL,
 including when it closes. An average pool holding any unknown lot has no
 rate. Every allocation from it is unknown, and every lot in the pool keeps an
 unknown remainder until the pool is exhausted. A new known acquisition after
-that opens a known pool. Write-off, cash in lieu, return of capital, splits and
-transfers still refuse unknown basis atomically. The allocation scale and range
+that opens a known pool. At this boundary, write-off, cash in lieu, return of
+capital, splits and transfers still refused unknown basis atomically; boundary 3
+admitted splits and transfers. The allocation scale and range
 guard of an admitting sale use the known subtotal. Sale preview and commit
 results, realized gains and per-currency totals expose NULL basis and gain
 with `basis_knowledge`; a total with any unresolved entry is NULL with
@@ -82,15 +83,17 @@ change, and the original decision stays unknown evidence. Named cases:
 `TestWriteOffRefusesUnknownProjectionAtomically`,
 `TestUnknownImmutableOpeningKeepsNonSaleDepletionsGated`,
 `TestUnresolvedSaleReportsNullBasisGainAndTotal`.
-Unknown transfer depletions and their dependent links belong to boundary 3.
+Unknown transfer depletions and their dependent links shipped in boundary 3.
 
 Boundary 3a is implemented: public unknown inbound and splits. The inbound
 command and API take an explicit `basis_knowledge: unknown` with no amount; an
 omitted amount, or unknown with an amount, is refused. Unknown inbound posts
 security legs only and opens an unknown lot and link. Backdated, it replays
 later decisions: a later sale it now feeds becomes a disclosed unresolved gain
-change, and a later write-off or outbound transfer it would feed is refused,
-naming that operation. Its replacement may change the knowledge. Replacing it
+change, and a later write-off it would feed is refused, naming that operation.
+Boundary 3b subsequently admitted an unbridged unknown outbound; a previously
+bridged known outbound becoming unknown remains refused. An inbound replacement
+may change the knowledge. Replacing it
 with sourced known basis posts the full bridge and resolves dependent sales
 through replay with acknowledgement; the original link stays unknown evidence.
 Correction terms report `basis_knowledge` and never prefill a known zero.
@@ -111,10 +114,12 @@ basis. Transfer depletions admit unknown basis. A link records its depletion's
 knowledge, and an internal destination lot opens with it. An average-cost pool
 holding unknown basis moves out unknown in either lineage. An outbound with
 any unknown link posts security legs only, with no partial bridge; the
-complete bridge waits for boundary 4. Transfer-link revisions and their
+complete bridge is supplied by resolution in boundary 4. Transfer-link revisions
+and their
 pooled depletions carry paired NULL knowledge, and a database guard refuses a
-revision that changes its link's knowledge. Replay names a transfer whose
-knowledge history would change, in either direction. The effective-link view
+revision that changes its link's knowledge except the unknown-to-known path
+admitted in boundary 4. Replay still refuses known-to-unknown regression.
+The effective-link view
 and replay intents read revision knowledge and amounts as one tuple, never
 filling a NULL from the original link. Self-check matches link, event and
 destination knowledge NULL-safely and requires no bridge on an unknown
@@ -264,16 +269,18 @@ contract:
   evidence and superseded snapshots in self-check; API NULL fields and CSV
   blank amounts; mobile entry and sourced resolution in all UI states.
 
-## Confirmed implementation touchpoints
+## Delivered implementation touchpoints
 
-| Path | Required change before admission |
+| Path | Delivered behavior |
 | --- | --- |
-| `backend/migrations/0001_initial_schema.sql` | Opening/event and decision/allocation/revision NULL pairs are implemented; sourced resolution facts and historical conservation guards remain. Transfer revision admission currently requires a known original link; resolution needs an explicitly validated unknown-to-known path. `effective_investment_transfer_links` currently always reports original knowledge, even when selecting a revision's amount. |
-| `backend/internal/db/investments.go` | Original lot scanners now carry immutable knowledge. Disposal/pool selection, allocation precision and range admission remain known-only; separate quantity from basis arithmetic without inventing zero. |
-| `backend/internal/db/investment_replay_intents.go` | Opening intents select an effective amount/scale/knowledge tuple. Transfer depletions and pooled replay inputs still need unknown knowledge. |
-| `backend/internal/db/investment_replay_simulation.go`, `investment_replay_revisions.go` | Opening reset/activation, lot outputs and persistence preserve unknown knowledge. Disposal outputs, allocations, revisions and pool redistribution still require propagation without erasing unresolved history. |
-| `backend/internal/db/investment_replay_propagation.go` | Propagate knowledge across the dependency closure and distinguish the first omitted bridge from a later numeric bridge adjustment. |
-| `backend/internal/db/investment_gain_impact.go` | Implemented: the snapshot reads original/revised knowledge as one tuple, keeps NULL totals and binds unknown-to-known transitions into the token. Remaining: exercise it through real resolution commands. |
-| `backend/internal/db/self_check.go`, `self_check_replay.go`; `backend/internal/app/self_check.go` | Opening/event scans and replay equivalence now retain quantity and knowledge checks. Extend conservation auditing to unknown original/revised disposal sets while preserving every historical snapshot. |
-| `backend/internal/app/investment_cash_in_lieu.go`, `api/investment_cash_in_lieu.go` | Sale results and previews return NULL basis/gain with knowledge (boundary 2). Cash in lieu still refuses unknown basis, so its result keeps numeric fields; give it nullable fields with its unresolved-result contract. |
-| `backend/internal/api/investments.go`, OpenAPI, export bundle writers and investment forms | Original fields are nullable with immutable knowledge (bundle schema 9). Disposed basis/gain contracts and six-locale entry/resolution flows still need nullable results and explicit unresolved labels. |
+| `backend/migrations/0001_initial_schema.sql` | Paired nullable knowledge on immutable openings, events, decisions, allocations and transfer revisions; immutable pinned resolution facts; effective links read resolved knowledge and amounts together. |
+| `backend/internal/db/investments.go` | Lot scanners expose original and projected knowledge; admitting sales and transfer depletions conserve quantity without inventing basis. |
+| `backend/internal/db/investment_replay_intents.go`, `investment_replay_simulation.go`, `investment_replay_revisions.go` | Replay preserves unknown openings, disposals, pools, splits and transfers, with revisioned knowledge and paired NULL amounts. |
+| `backend/internal/db/investment_replay_propagation.go`, `investment_basis_resolution.go` | Sourced resolution replays the dependency closure and posts omitted outbound bridges or later bridge adjustments. |
+| `backend/internal/db/investment_gain_impact.go` | Reads original/revised knowledge as one tuple and binds unknown-to-known gain transitions into the acknowledgement. |
+| `backend/internal/db/self_check.go`, `self_check_replay.go`; `backend/internal/app/self_check.go` | Quantity, provenance, historical allocation conservation, resolution bridges and replay equivalence remain checked independently of basis availability. |
+| `backend/internal/app/investment_basis_resolution.go`, `backend/internal/api/investment_basis_resolution.go`, OpenAPI | Atomic sourced resolution and rolled-back writer preview, with gain acknowledgement and reconciliation guards. |
+| Export bundle writers and investment forms | Nullable API amounts and CSV blanks preserve unknown knowledge; bundle exports resolution facts; six-locale forms and labels support unknown entry and sourced resolution. |
+
+Cash in lieu, write-off and return of capital still require known basis; their
+unresolved-result contracts remain deliberately later, as described above.
