@@ -15,6 +15,7 @@
   import TransferCorrectionForm from '#lib/investments/transfer-correction-form.svelte';
   import TransferInCorrectionForm from '#lib/investments/transfer-in-correction-form.svelte';
   import BasisResolutionForm from '#lib/investments/basis-resolution-form.svelte';
+  import ShortTradeForm from '#lib/investments/short-trade-form.svelte';
   import GainImpactList from '#lib/investments/gain-impact-list.svelte';
   import { invalidateInvestmentReads } from '#lib/investments/invalidate.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
@@ -46,6 +47,10 @@
     reverseSplit,
     reverseTransfer,
     reverseWriteOff,
+    previewShortSaleReversal,
+    reverseShortSale,
+    previewShortCoverReversal,
+    reverseShortCover,
     type GainImpact,
     type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
@@ -71,13 +76,14 @@
     enabled: transactionID > 0
   }));
 
-  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'cash_in_lieu_entry' | 'resolve_basis' | null>(null);
+  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'cash_in_lieu_entry' | 'resolve_basis' | 'short_sale' | 'short_cover' | null>(null);
   // Splits pre-fill from the chain's effective_split; only trades need the
   // separate source-facts read.
   const replacementQuery = createQuery(() => ({
     queryKey: [...investmentCorrectionChainQueryKey, 'source', transactionID],
     queryFn: () => getInvestmentTradeCorrectionContext(transactionID),
-    enabled: (replacementKind === 'buy' || replacementKind === 'sell' || replacementKind === 'write_off' || replacementKind === 'cash_in_lieu') && transactionID > 0
+    enabled: (replacementKind === 'buy' || replacementKind === 'sell' || replacementKind === 'write_off' || replacementKind === 'cash_in_lieu' ||
+      replacementKind === 'short_sale' || replacementKind === 'short_cover') && transactionID > 0
   }));
   const splitCorrectable = $derived(chainQuery.data?.can_correct_split === true &&
     chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_split);
@@ -95,6 +101,12 @@
   const writeOffCorrectable = $derived(chainQuery.data?.can_correct_write_off === true &&
     chainQuery.data.effective_transaction_id === transactionID);
 
+  // Named short sales and covers are reversed or corrected natively (#175);
+  // the correction form pre-fills from the trade correction context.
+  const shortKind = $derived(chainQuery.data?.effective_transaction_id !== transactionID ? null
+    : chainQuery.data?.can_correct_short_sale ? 'short_sale' as const
+      : chainQuery.data?.can_correct_short_cover ? 'short_cover' as const : null);
+
   // Internal and external-in transfers are reversed or replaced; the
   // replacement form pre-fills from the chain's effective_transfer (T-119).
   const transferReversible = $derived(chainQuery.data?.can_reverse_transfer === true &&
@@ -111,7 +123,7 @@
   );
 
   let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
-  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu'>('sale');
+  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'short_sale' | 'short_cover'>('sale');
   let reason = $state('');
   let pending = $state(false);
   let actionError = $state<unknown>(undefined);
@@ -175,7 +187,11 @@
                   ? await previewCapitalReturnReversalReconciliation(transactionID, body)
                   : reversalKind === 'cash_in_lieu'
                     ? await previewCashInLieuReversalReconciliation(transactionID, body)
-                    : await previewSaleReversalReconciliation(transactionID, body);
+                    : reversalKind === 'short_sale'
+                      ? await previewShortSaleReversal(transactionID, body)
+                      : reversalKind === 'short_cover'
+                        ? await previewShortCoverReversal(transactionID, body)
+                        : await previewSaleReversalReconciliation(transactionID, body);
     if (!impactNeedsReview(preview)) return false;
     impacts = preview.affected_checkpoints;
     gainImpact = hasGainChanges(preview.gain_impact) ? preview.gain_impact : null;
@@ -208,6 +224,10 @@
       await reverseCapitalReturn(transactionID, body, csrfToken);
     } else if (reversalKind === 'cash_in_lieu') {
       await reverseCashInLieu(transactionID, body, csrfToken);
+    } else if (reversalKind === 'short_sale') {
+      await reverseShortSale(transactionID, body, csrfToken);
+    } else if (reversalKind === 'short_cover') {
+      await reverseShortCover(transactionID, body, csrfToken);
     } else {
       await reverseManualSale(transactionID, body, csrfToken);
     }
@@ -392,6 +412,22 @@
         </button>
       </div>
     {/if}
+    {#if shortKind}
+      <div class="flex flex-wrap gap-2">
+        <button type="button"
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+          disabled={!csrfToken || pending}
+          onclick={() => { reversalKind = shortKind ?? 'short_sale'; reason = ''; actionError = undefined; modal = 'reason'; }}>
+          {shortKind === 'short_sale' ? m.investments_short_sale_reverse_action() : m.investments_short_cover_reverse_action()}
+        </button>
+        <button type="button"
+          class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+          disabled={!csrfToken}
+          onclick={() => { replacementKind = shortKind; }}>
+          {shortKind === 'short_sale' ? m.investments_short_sale_correct_action() : m.investments_short_cover_correct_action()}
+        </button>
+      </div>
+    {/if}
     {#if transferReversible}
       <button
         type="button"
@@ -528,6 +564,27 @@
         onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
     </div>
   </div>
+{:else if (replacementKind === 'short_sale' || replacementKind === 'short_cover') && csrfToken}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
+    role="presentation">
+    <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
+      role="dialog" aria-modal="true" aria-label={replacementKind === 'short_sale'
+        ? m.investments_short_sale_correct_title() : m.investments_short_cover_correct_title()}>
+      {#if replacementQuery.isPending}
+        <p class="text-sm text-muted" role="status">{m.transactions_investment_replace_loading()}</p>
+      {:else if replacementQuery.isError}
+        <APIFormError error={replacementQuery.error} />
+        <button type="button" class="mt-2 text-sm font-semibold text-accent" onclick={() => replacementQuery.refetch()}>{m.transactions_retry()}</button>
+      {:else if replacementQuery.data?.operation_kind === replacementKind && !replacementQuery.data.already_corrected}
+        <ShortTradeForm mode={replacementKind === 'short_sale' ? 'open' : 'cover'} {csrfToken} correction={replacementQuery.data}
+          onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+      {:else}
+        <p class="text-sm text-muted">{m.transactions_investment_replace_unavailable()}</p>
+        <button type="button" class="mt-4 min-h-10 rounded-[var(--radius-control)] border border-border bg-control px-4 text-sm font-semibold text-foreground"
+          onclick={() => (replacementKind = null)}>{m.investments_form_cancel()}</button>
+      {/if}
+    </div>
+  </div>
 {:else if replacementKind === 'write_off' && csrfToken}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
     role="presentation">
@@ -597,6 +654,8 @@
               : reversalKind === 'transfer' ? m.transactions_investment_reverse_transfer_title()
               : reversalKind === 'capital_return' ? m.transactions_investment_reverse_capital_return_title()
               : reversalKind === 'cash_in_lieu' ? m.investments_cash_in_lieu_reverse_title()
+              : reversalKind === 'short_sale' ? m.investments_short_sale_reverse_title()
+              : reversalKind === 'short_cover' ? m.investments_short_cover_reverse_title()
               : m.transactions_investment_reverse_title()
             : impacts.length > 0 ? m.transactions_reconciliation_warning_title() : m.investments_gain_impact_title()}
         </h3>
@@ -611,6 +670,8 @@
                 : reversalKind === 'transfer' ? m.transactions_investment_reverse_transfer_copy()
                 : reversalKind === 'capital_return' ? m.transactions_investment_reverse_capital_return_copy()
                 : reversalKind === 'cash_in_lieu' ? m.investments_cash_in_lieu_reverse_copy()
+                : reversalKind === 'short_sale' ? m.investments_short_sale_reverse_copy()
+                : reversalKind === 'short_cover' ? m.investments_short_cover_reverse_copy()
                 : m.transactions_investment_reverse_copy()
               : m.transactions_reconciliation_warning_copy()}
           </p>

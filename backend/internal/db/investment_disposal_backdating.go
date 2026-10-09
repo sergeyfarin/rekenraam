@@ -33,6 +33,13 @@ func disposeBehindLaterRewriteTx(ctx context.Context, tx *sql.Tx, transaction Tr
 	if !isDisposalCalendarDate(params.EventDate) || params.QuantityValue.Sign() <= 0 || params.TransactionID <= 0 {
 		return nil, DisposalDecisionRecord{}, ErrInvalidDisposalParams
 	}
+	// A cover replays its short position exactly as a sale replays its long
+	// one (#175). Only the side's own lots and decisions take part.
+	params.PositionSide = positionSideOrLong(params.PositionSide)
+	side := params.PositionSide
+	if side == PositionSideShort && (params.EventKind != "" || params.AdmitUnknownBasis) {
+		return nil, DisposalDecisionRecord{}, ErrInvalidDisposalParams
+	}
 	costCommodityID, err := historicalDisposalCostCommodityTx(ctx, tx, params)
 	if err != nil {
 		return nil, DisposalDecisionRecord{}, err
@@ -43,7 +50,7 @@ func disposeBehindLaterRewriteTx(ctx context.Context, tx *sql.Tx, transaction Tr
 		return nil, DisposalDecisionRecord{}, err
 	}
 	intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID, params.AccountID,
-		params.CommodityID, params.CostCommodityID, "long")
+		params.CommodityID, params.CostCommodityID, side)
 	if err != nil {
 		return nil, DisposalDecisionRecord{}, err
 	}
@@ -64,8 +71,8 @@ func disposeBehindLaterRewriteTx(ctx context.Context, tx *sql.Tx, transaction Tr
 		TransactionID: transaction.ID,
 		AuditEventID:  auditEventID, CreatedByUserID: params.ActorUserID, CreatedAt: params.CreatedAt,
 	})
-	simulated, err := simulateInvestmentReplayTx(ctx, tx, params.BookID, params.AccountID,
-		params.CommodityID, params.CostCommodityID, proposed)
+	simulated, err := simulateInvestmentReplaySideTx(ctx, tx, params.BookID, params.AccountID,
+		params.CommodityID, params.CostCommodityID, side, proposed)
 	if err != nil {
 		// The new disposal's own failure (too few lots, an ineligible elected
 		// lot, a method switch) is reported as itself, not as a dependency.
@@ -95,12 +102,12 @@ func disposeBehindLaterRewriteTx(ctx context.Context, tx *sql.Tx, transaction Tr
 	// Replay again from the committed intents, now including the new decision,
 	// and install the projection and later decisions' effective revisions.
 	intents, err = investmentReplayIntentsQuery(ctx, tx, params.BookID, params.AccountID,
-		params.CommodityID, params.CostCommodityID, "long")
+		params.CommodityID, params.CostCommodityID, side)
 	if err != nil {
 		return nil, DisposalDecisionRecord{}, err
 	}
-	projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID, params.AccountID,
-		params.CommodityID, params.CostCommodityID, intents)
+	projection, err := simulateInvestmentReplaySideTx(ctx, tx, params.BookID, params.AccountID,
+		params.CommodityID, params.CostCommodityID, side, intents)
 	if err != nil {
 		return nil, DisposalDecisionRecord{}, err
 	}
@@ -117,9 +124,9 @@ func disposeBehindLaterRewriteTx(ctx context.Context, tx *sql.Tx, transaction Tr
 // a later sale closed was still held then.
 func historicalDisposalCostCommodityTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams) (int64, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT DISTINCT cost_commodity_id FROM investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND position_side = 'long'
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND position_side = ?
 			AND opened_on <= ? AND (? = 0 OR cost_commodity_id = ?)
-		ORDER BY cost_commodity_id`, params.BookID, params.AccountID, params.CommodityID,
+		ORDER BY cost_commodity_id`, params.BookID, params.AccountID, params.CommodityID, positionSideOrLong(params.PositionSide),
 		params.EventDate, params.CostCommodityID, params.CostCommodityID)
 	if err != nil {
 		return 0, fmt.Errorf("read backdated disposal cost commodities: %w", err)

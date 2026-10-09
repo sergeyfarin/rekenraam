@@ -49,7 +49,9 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 		inverseParams.ActorUserID != replacementParams.ActorUserID || inverseParams.ActorUserID != disposalParams.ActorUserID ||
 		inverseParams.Spec.InvestmentOperationKind != "" ||
 		inverseParams.Spec.TransactionKind != "investment" || inverseParams.Spec.Status != "posted" ||
-		(expected.OperationKind != "sell" && expected.OperationKind != "write_off" && expected.OperationKind != "cash_in_lieu") ||
+		(expected.OperationKind != "sell" && expected.OperationKind != "write_off" &&
+			expected.OperationKind != "cash_in_lieu" && expected.OperationKind != "short_cover") ||
+		positionSideOrLong(disposalParams.PositionSide) != positionSideOrLong(expected.PositionSide) ||
 		replacementParams.Spec.InvestmentOperationKind != expected.OperationKind ||
 		replacementParams.Spec.TransactionKind != "investment" || replacementParams.Spec.Status != "posted" ||
 		inverseParams.Spec.TransactionDate != expected.EventDate ||
@@ -108,7 +110,7 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 				return nil
 			}
 			intents, err := investmentReplayIntentsQuery(ctx, tx, inverseParams.BookID,
-				current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+				current.AccountID, current.CommodityID, current.CostCommodityID, positionSideOrLong(current.PositionSide))
 			if err != nil {
 				return err
 			}
@@ -156,7 +158,7 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 			var decision DisposalDecisionRecord
 			if moved {
 				if source != target {
-					if err := replayCorrectedPositionTx(ctx, tx, replacementParams.BookID, source,
+					if err := replayCorrectedPositionSideTx(ctx, tx, replacementParams.BookID, source, current.PositionSide,
 						operationID, auditEventID, replacementParams.ActorUserID, replacementParams.CreatedAt); err != nil {
 						return saleReplacementEffects{}, err
 					}
@@ -175,8 +177,8 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 				if err != nil {
 					return saleReplacementEffects{}, err
 				}
-				proposed, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
-					current.AccountID, current.CommodityID, current.CostCommodityID, proposedIntents)
+				proposed, err := simulateInvestmentReplaySideTx(ctx, tx, replacementParams.BookID,
+					current.AccountID, current.CommodityID, current.CostCommodityID, positionSideOrLong(current.PositionSide), proposedIntents)
 				if err != nil {
 					return saleReplacementEffects{}, err
 				}
@@ -202,12 +204,12 @@ func (r *InvestmentRepository) replaceSale(ctx context.Context, expected SaleOpe
 				}
 			}
 			intents, err := investmentReplayIntentsQuery(ctx, tx, replacementParams.BookID,
-				current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+				current.AccountID, current.CommodityID, current.CostCommodityID, positionSideOrLong(current.PositionSide))
 			if err != nil {
 				return saleReplacementEffects{}, err
 			}
-			projection, err := simulateInvestmentReplayTx(ctx, tx, replacementParams.BookID,
-				current.AccountID, current.CommodityID, current.CostCommodityID, intents)
+			projection, err := simulateInvestmentReplaySideTx(ctx, tx, replacementParams.BookID,
+				current.AccountID, current.CommodityID, current.CostCommodityID, positionSideOrLong(current.PositionSide), intents)
 			if err != nil {
 				return saleReplacementEffects{}, err
 			}

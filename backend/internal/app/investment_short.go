@@ -37,7 +37,7 @@ func (s *InvestmentService) ShortSale(ctx context.Context, input InvestmentTrade
 	transactionParams.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
 	transactionRecord, lot, err := s.repository.CreateTransactionAndLot(ctx, transactionParams, lotParams)
 	if err != nil {
-		return InvestmentTradeResult{}, mapInvestmentOpeningWriteError(err, "short sale")
+		return InvestmentTradeResult{}, shortDependency(mapInvestmentOpeningWriteError(err, "short sale"))
 	}
 	return InvestmentTradeResult{Transaction: toTransaction(transactionRecord), LotID: &lot.ID}, nil
 }
@@ -124,7 +124,7 @@ func mapShortCoverWriteError(err error) error {
 		// A specific_lot election naming a long, closed or foreign lot.
 		return ValidationError{Message: "short cover lot allocations must name open short lots of this holding"}
 	}
-	return mapDisposalWriteError(err, false)
+	return shortDependency(mapDisposalWriteError(err, false))
 }
 
 // shortPlan builds the journal a short opening (sale economics) or cover
@@ -302,7 +302,8 @@ func (s *InvestmentService) shortSaleReconciliationImpact(ctx context.Context, i
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	return s.openingReconciliationImpact(ctx, transactionParams, lotParams, "short sale")
+	impact, err := s.openingReconciliationImpact(ctx, transactionParams, lotParams, "short sale")
+	return impact, shortDependency(err)
 }
 
 func (s *InvestmentService) shortCoverReconciliationImpact(ctx context.Context, input InvestmentTradeInput) (ReconciliationImpact, error) {

@@ -382,29 +382,133 @@ func TestPositionSideConflictRefusesOverlappingSides(t *testing.T) {
 	})
 }
 
-func TestShortEntriesRefuseBackdatingUntilReplayExists(t *testing.T) {
+func coverInput(f *investmentsTestFixture, date string, quantity int64, cash int64, method string) InvestmentTradeInput {
+	input := shortInput(f, date, quantity, cash)
+	input.CostBasisMethod = method
+	return input
+}
+
+func shortGainOn(t *testing.T, f *investmentsTestFixture, date string) RealizedGainEntry {
+	t.Helper()
+	gain, ok := gainsByDate(t, f)[date]
+	require.True(t, ok, "a realized result on %s", date)
+	assert.Equal(t, "short", gain.PositionSide)
+	return gain
+}
+
+// #175: a short opening or cover dated behind a later cover replays the short
+// position. A changed cover result needs the preview's acknowledgement; an
+// impossible later cover is named and nothing is written.
+func TestBackdatedShortOpeningRevisesLaterLIFOCoverWithAcknowledgement(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	shortSaleOn(t, f, "2026-03-02", 10, 10000) // 10.00 per unit
+	_, err := f.investmentService.ShortCover(ctx, coverInput(f, "2026-05-01", 4, 3000, "lifo"))
+	require.NoError(t, err)
+	may := shortGainOn(t, f, "2026-05-01")
+	assertMoneyValue(t, 1000, 2, may.RealizedGainValue, may.RealizedGainScale, "40.00 opened − 30.00 covered")
+
+	// A 15.00-per-unit opening entered for April now precedes the May cover,
+	// which LIFO takes first: 60.00 − 30.00.
+	backdated := shortInput(f, "2026-04-01", 5, 7500)
+	before := buyReplacementPreviewSnapshot(t, f.database)
+	impact, err := f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactShortSale, backdated)
+	require.NoError(t, err)
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database), "preview writes nothing")
+	require.NotNil(t, impact.GainImpact)
+	require.Len(t, impact.GainImpact.Changes, 1)
+	requireScaled(t, 1000, 2, impact.GainImpact.Changes[0].Before.Gain, "cover result before")
+	requireScaled(t, 3000, 2, impact.GainImpact.Changes[0].After.Gain, "cover result after")
+
+	_, err = f.investmentService.ShortSale(ctx, backdated)
+	require.ErrorIs(t, err, ErrGainImpactAcknowledgementRequired)
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+	backdated.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	_, err = f.investmentService.ShortSale(ctx, backdated)
+	require.NoError(t, err)
+	may = shortGainOn(t, f, "2026-05-01")
+	assertMoneyValue(t, 3000, 2, may.RealizedGainValue, may.RealizedGainScale, "committed revised result")
+	var revisions int
+	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_disposal_revisions`).Scan(&revisions))
+	assert.Equal(t, 1, revisions, "the May decision keeps its original evidence and gains a revision")
+	shortSelfCheckPasses(t, f)
+}
+
+func TestBackdatedShortCoverRevisesLaterFIFOCover(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	shortSaleOn(t, f, "2026-03-02", 5, 5000) // 10.00 per unit
+	shortSaleOn(t, f, "2026-03-16", 5, 7500) // 15.00 per unit
+	_, err := f.investmentService.ShortCover(ctx, coverInput(f, "2026-05-01", 5, 4000, "fifo"))
+	require.NoError(t, err)
+	first := shortGainOn(t, f, "2026-05-01")
+	assertMoneyValue(t, 1000, 2, first.RealizedGainValue, first.RealizedGainScale, "50.00 − 40.00")
+
+	april := coverInput(f, "2026-04-01", 3, 2400, "fifo")
+	preview, err := f.investmentService.PreviewShortCover(ctx, april)
+	require.NoError(t, err)
+	assertMoneyValue(t, 600, 2, preview.RealizedGain, preview.RealizedGainScale, "30.00 − 24.00 at its own slot")
+	impact, err := f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactShortCover, april)
+	require.NoError(t, err)
+	require.Len(t, impact.GainImpact.Changes, 1)
+	april.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	_, err = f.investmentService.ShortCover(ctx, april)
+	require.NoError(t, err)
+	// May now covers 2 of the first lot and 3 of the second: 20.00 + 45.00.
+	may := shortGainOn(t, f, "2026-05-01")
+	assertMoneyValue(t, 2500, 2, may.RealizedGainValue, may.RealizedGainScale, "65.00 − 40.00")
+	shortSelfCheckPasses(t, f)
+}
+
+func TestBackdatedShortCoverNamesImpossibleLaterCoverAndWritesNothing(t *testing.T) {
+	t.Parallel()
+	f := newInvestmentsTestFixture(t)
+	ctx := context.Background()
+	shortSaleOn(t, f, "2026-03-02", 5, 5000)
+	may, err := f.investmentService.ShortCover(ctx, coverInput(f, "2026-05-01", 5, 4000, "fifo"))
+	require.NoError(t, err)
+	before := buyReplacementPreviewSnapshot(t, f.database)
+	_, err = f.investmentService.ShortCover(ctx, coverInput(f, "2026-04-01", 3, 2400, "fifo"))
+	var dependency InvestmentShortDependencyError
+	require.ErrorAs(t, err, &dependency)
+	assert.Equal(t, *may.DisposalDecision.ID, dependency.DecisionID, "the May cover can no longer be satisfied")
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
+
+	// Same-day entries still follow the order they were entered in.
+	shortSaleOn(t, f, "2026-05-01", 2, 2000)
+	_, err = f.investmentService.ShortCover(ctx, coverInput(f, "2026-05-01", 2, 1500, "fifo"))
+	require.NoError(t, err)
+	shortSelfCheckPasses(t, f)
+}
+
+func TestBackdatedShortReplayRollsBackEverythingOnLateFailure(t *testing.T) {
 	t.Parallel()
 	f := newInvestmentsTestFixture(t)
 	ctx := context.Background()
 	shortSaleOn(t, f, "2026-03-02", 10, 10000)
-	_, err := f.investmentService.ShortCover(ctx, shortInput(f, "2026-05-01", 4, 3000))
+	_, err := f.investmentService.ShortCover(ctx, coverInput(f, "2026-05-01", 4, 3000, "lifo"))
+	require.NoError(t, err)
+	_, err = f.database.Exec(`CREATE TRIGGER reject_short_revision BEFORE INSERT ON investment_disposal_revisions
+		BEGIN SELECT RAISE(ABORT, 'forced late short replay failure'); END`)
 	require.NoError(t, err)
 	before := buyReplacementPreviewSnapshot(t, f.database)
-
-	_, err = f.investmentService.ShortSale(ctx, shortInput(f, "2026-04-01", 1, 1000))
-	require.ErrorIs(t, err, ErrInvestmentEventOutOfOrder, "an opening behind a later cover")
-	_, err = f.investmentService.ShortCover(ctx, shortInput(f, "2026-04-01", 1, 700))
-	require.ErrorIs(t, err, ErrInvestmentEventOutOfOrder, "a cover behind a later cover")
-	_, err = f.investmentService.PreviewShortCover(ctx, shortInput(f, "2026-04-01", 1, 700))
-	require.ErrorIs(t, err, ErrInvestmentEventOutOfOrder, "the preview runs the same writer")
-	_, err = f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactShortSale, shortInput(f, "2026-04-01", 1, 1000))
-	require.ErrorIs(t, err, ErrInvestmentEventOutOfOrder)
-	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database))
-
-	// Same-day entries stay legal in the order they are entered.
-	_, err = f.investmentService.ShortCover(ctx, shortInput(f, "2026-05-01", 6, 4000))
+	backdated := shortInput(f, "2026-04-01", 5, 7500)
+	impact, err := f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactShortSale, backdated)
+	require.ErrorContains(t, err, "forced late short replay failure")
+	require.Equal(t, ReconciliationImpact{}, impact)
+	_, err = f.database.Exec(`DROP TRIGGER reject_short_revision`)
 	require.NoError(t, err)
-	shortSelfCheckPasses(t, f)
+	impact, err = f.investmentService.TradeReconciliationImpact(ctx, InvestmentImpactShortSale, backdated)
+	require.NoError(t, err)
+	_, err = f.database.Exec(`CREATE TRIGGER reject_short_revision BEFORE INSERT ON investment_disposal_revisions
+		BEGIN SELECT RAISE(ABORT, 'forced late short replay failure'); END`)
+	require.NoError(t, err)
+	backdated.GainImpactAcknowledgement = impact.GainImpact.Acknowledgement
+	_, err = f.investmentService.ShortSale(ctx, backdated)
+	require.ErrorContains(t, err, "forced late short replay failure")
+	require.Equal(t, before, buyReplacementPreviewSnapshot(t, f.database), "journal, lot and decisions all roll back")
 }
 
 func TestShortSaleRefusesChargesThatLeaveNoOpeningProceeds(t *testing.T) {

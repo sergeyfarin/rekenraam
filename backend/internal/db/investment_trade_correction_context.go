@@ -119,10 +119,12 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			AND net.component_seq = (SELECT MIN(component_seq) FROM investment_operation_components
 				WHERE operation_id = o.id AND component_kind = 'net_settlement')
 		LEFT JOIN investment_operation_components gross ON gross.operation_id = o.id AND gross.component_kind = 'gross_consideration'
-		LEFT JOIN investment_lots f ON f.operation_id = o.id AND f.position_side = 'long'
-		LEFT JOIN investment_disposal_decisions d ON d.operation_id = o.id AND d.position_side = 'long'
+		LEFT JOIN investment_lots f ON f.operation_id = o.id
+			AND f.position_side = CASE o.operation_kind WHEN 'short_sale' THEN 'short' ELSE 'long' END
+		LEFT JOIN investment_disposal_decisions d ON d.operation_id = o.id
+			AND d.position_side = CASE o.operation_kind WHEN 'short_cover' THEN 'short' ELSE 'long' END
 		JOIN commodities c ON c.id = COALESCE(f.commodity_id, d.commodity_id)
-		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind IN ('buy', 'sell', 'write_off', 'cash_in_lieu')
+		WHERE o.book_id = ? AND linked_version.transaction_id = ? AND o.operation_kind IN ('buy', 'sell', 'write_off', 'cash_in_lieu', 'short_sale', 'short_cover')
 			AND (SELECT count(*) FROM investment_lots WHERE operation_id = o.id) <= 1
 			AND (SELECT count(*) FROM investment_disposal_decisions WHERE operation_id = o.id) <= 1
 	`, bookID, transactionID, bookID, bookID, transactionID).Scan(&record.OperationID, &record.TransactionID,
@@ -202,9 +204,14 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 			return InvestmentTradeCorrectionContext{}, fmt.Errorf("close correction elected lots: %w", err)
 		}
 	}
-	if (record.OperationKind == "sell" || record.OperationKind == "write_off" || record.OperationKind == "cash_in_lieu") && (!record.Imported || record.SourceIdentityID > 0) && !record.AlreadyCorrected {
+	side := PositionSideLong
+	if record.OperationKind == "short_cover" {
+		side = PositionSideShort
+	}
+	if (record.OperationKind == "sell" || record.OperationKind == "write_off" || record.OperationKind == "cash_in_lieu" ||
+		record.OperationKind == "short_cover") && (!record.Imported || record.SourceIdentityID > 0) && !record.AlreadyCorrected {
 		intents, err := investmentReplayIntentsQuery(ctx, tx, bookID,
-			record.HoldingAccountID, record.CommodityID, record.CostCommodityID, "long")
+			record.HoldingAccountID, record.CommodityID, record.CostCommodityID, side)
 		if err != nil {
 			return InvestmentTradeCorrectionContext{}, err
 		}
@@ -224,8 +231,8 @@ func (r *InvestmentRepository) TradeCorrectionContext(ctx context.Context, bookI
 					LotID: choice.LotID, QuantityValue: choice.QuantityValue.String(), QuantityScale: choice.QuantityScale,
 				})
 			}
-			projection, err := simulateInvestmentReplayTx(ctx, tx, bookID,
-				record.HoldingAccountID, record.CommodityID, record.CostCommodityID, intents[:saleIndex])
+			projection, err := simulateInvestmentReplaySideTx(ctx, tx, bookID,
+				record.HoldingAccountID, record.CommodityID, record.CostCommodityID, side, intents[:saleIndex])
 			if err != nil {
 				return InvestmentTradeCorrectionContext{}, fmt.Errorf("read pre-sale available lots: %w", err)
 			}

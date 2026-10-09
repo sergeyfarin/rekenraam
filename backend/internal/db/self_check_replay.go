@@ -13,7 +13,7 @@ import (
 // (ADR 0013 closure), so a projection or revision that is internally
 // consistent but no longer what the recorded intents produce — for example
 // after a writer bug that skipped a dependent replay — passes every other
-// check. This verifier replays each long position from its effective intents
+// check. This verifier replays each position side from its effective intents
 // inside a rolled-back savepoint and compares the result with what is stored.
 // Checking every position against the stored cross-position inputs (the
 // effective transfer links) verifies the whole book's fixed point: a source
@@ -57,22 +57,23 @@ type InvestmentReplayEquivalence struct {
 // the write lock is held for one position at a time and nothing is stored.
 func (r *SelfCheckRepository) InvestmentReplayEquivalence(ctx context.Context, bookID int64) (InvestmentReplayEquivalence, error) {
 	rows, err := r.database.QueryContext(ctx, `
-		SELECT account_id, commodity_id, cost_commodity_id,
+		SELECT account_id, commodity_id, cost_commodity_id, position_side,
 			MAX(operation_id IS NULL)
-		FROM investment_lots WHERE book_id = ? AND position_side = 'long'
-		GROUP BY account_id, commodity_id, cost_commodity_id
-		ORDER BY account_id, commodity_id, cost_commodity_id`, bookID)
+		FROM investment_lots WHERE book_id = ?
+		GROUP BY account_id, commodity_id, cost_commodity_id, position_side
+		ORDER BY account_id, commodity_id, cost_commodity_id, position_side`, bookID)
 	if err != nil {
 		return InvestmentReplayEquivalence{}, fmt.Errorf("read replay-equivalence positions: %w", err)
 	}
 	type position struct {
 		key       investmentReplayPositionKey
+		side      string
 		unmodeled bool
 	}
 	var positions []position
 	for rows.Next() {
 		var p position
-		if err := rows.Scan(&p.key.accountID, &p.key.commodityID, &p.key.costCommodityID, &p.unmodeled); err != nil {
+		if err := rows.Scan(&p.key.accountID, &p.key.commodityID, &p.key.costCommodityID, &p.side, &p.unmodeled); err != nil {
 			rows.Close()
 			return InvestmentReplayEquivalence{}, fmt.Errorf("scan replay-equivalence position: %w", err)
 		}
@@ -87,7 +88,7 @@ func (r *SelfCheckRepository) InvestmentReplayEquivalence(ctx context.Context, b
 			result.Skipped++
 			continue
 		}
-		mismatches, err := r.positionReplayEquivalence(ctx, bookID, p.key)
+		mismatches, err := r.positionReplayEquivalence(ctx, bookID, p.key, p.side)
 		if err != nil {
 			return InvestmentReplayEquivalence{}, err
 		}
@@ -96,7 +97,7 @@ func (r *SelfCheckRepository) InvestmentReplayEquivalence(ctx context.Context, b
 	return result, nil
 }
 
-func (r *SelfCheckRepository) positionReplayEquivalence(ctx context.Context, bookID int64, key investmentReplayPositionKey) ([]InvestmentReplayMismatch, error) {
+func (r *SelfCheckRepository) positionReplayEquivalence(ctx context.Context, bookID int64, key investmentReplayPositionKey, side string) ([]InvestmentReplayMismatch, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin replay-equivalence position: %w", err)
@@ -106,14 +107,14 @@ func (r *SelfCheckRepository) positionReplayEquivalence(ctx context.Context, boo
 		return InvestmentReplayMismatch{AccountID: key.accountID, CommodityID: key.commodityID,
 			CostCommodityID: key.costCommodityID, Kind: kind, ReferenceID: referenceID}
 	}
-	stored, err := storedInvestmentProjectionQuery(ctx, tx, bookID, key)
+	stored, err := storedInvestmentProjectionQuery(ctx, tx, bookID, key, side)
 	if err != nil {
 		return nil, err
 	}
-	intents, err := investmentReplayIntentsQuery(ctx, tx, bookID, key.accountID, key.commodityID, key.costCommodityID, "long")
+	intents, err := investmentReplayIntentsQuery(ctx, tx, bookID, key.accountID, key.commodityID, key.costCommodityID, side)
 	var projection InvestmentReplayProjection
 	if err == nil {
-		projection, err = simulateInvestmentReplayTx(ctx, tx, bookID, key.accountID, key.commodityID, key.costCommodityID, intents)
+		projection, err = simulateInvestmentReplaySideTx(ctx, tx, bookID, key.accountID, key.commodityID, key.costCommodityID, side, intents)
 	}
 	if err != nil {
 		if ctx.Err() != nil {
@@ -223,14 +224,14 @@ type storedInvestmentProjection struct {
 // storedInvestmentProjectionQuery reads what a position currently claims:
 // its lot projection, each effective disposal's current allocation set (the
 // latest revision, else the original snapshot) and its method-family lock.
-func storedInvestmentProjectionQuery(ctx context.Context, tx *sql.Tx, bookID int64, key investmentReplayPositionKey) (storedInvestmentProjection, error) {
+func storedInvestmentProjectionQuery(ctx context.Context, tx *sql.Tx, bookID int64, key investmentReplayPositionKey, side string) (storedInvestmentProjection, error) {
 	stored := storedInvestmentProjection{allocations: make(map[int64][]storedReplayAllocation)}
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, status, remaining_quantity_value, remaining_quantity_scale,
 			remaining_cost_basis_value, remaining_cost_basis_scale, basis_knowledge = 'known'
 		FROM current_investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'
-		ORDER BY id`, bookID, key.accountID, key.commodityID, key.costCommodityID)
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ?
+		ORDER BY id`, bookID, key.accountID, key.commodityID, key.costCommodityID, side)
 	if err != nil {
 		return storedInvestmentProjection{}, fmt.Errorf("read stored lot projection: %w", err)
 	}
@@ -280,8 +281,8 @@ func storedInvestmentProjectionQuery(ctx context.Context, tx *sql.Tx, bookID int
 			FROM investment_disposal_revision_allocations a JOIN investment_disposal_revisions r ON r.id = a.revision_id
 		) a ON a.decision_id = d.id AND a.revision_id = COALESCE(revision.id, 0)
 		WHERE d.book_id = ? AND d.account_id = ? AND d.commodity_id = ? AND d.cost_commodity_id = ?
-			AND d.position_side = 'long'
-		ORDER BY d.id, a.allocation_seq`, bookID, key.accountID, key.commodityID, key.costCommodityID)
+			AND d.position_side = ?
+		ORDER BY d.id, a.allocation_seq`, bookID, key.accountID, key.commodityID, key.costCommodityID, side)
 	if err != nil {
 		return storedInvestmentProjection{}, fmt.Errorf("read stored disposal allocations: %w", err)
 	}
@@ -313,8 +314,8 @@ func storedInvestmentProjectionQuery(ctx context.Context, tx *sql.Tx, bookID int
 	}
 
 	err = tx.QueryRowContext(ctx, `SELECT method_family FROM investment_position_basis_state
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'`,
-		bookID, key.accountID, key.commodityID, key.costCommodityID).Scan(&stored.methodFamily)
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ?`,
+		bookID, key.accountID, key.commodityID, key.costCommodityID, side).Scan(&stored.methodFamily)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return storedInvestmentProjection{}, fmt.Errorf("read stored method-family state: %w", err)
 	}

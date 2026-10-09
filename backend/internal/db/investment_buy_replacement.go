@@ -28,6 +28,9 @@ type BuyOperationRecord struct {
 	ImportedLineage      bool
 	SourceIdentityID     int64
 	SourceEffectSeq      int64
+	// PositionSide is short for a short_sale opening (#175); its correction
+	// replays the short position.
+	PositionSide string
 }
 
 func (r *InvestmentRepository) BuyOperationByTransactionID(ctx context.Context, bookID, transactionID int64) (BuyOperationRecord, error) {
@@ -45,20 +48,21 @@ func buyOperationByTransactionIDQuery(ctx context.Context, reader saleOperationR
 		COALESCE((SELECT effect.identity_id FROM import_commit_identity_effects effect
 			WHERE effect.operation_id = o.id), 0),
 		COALESCE((SELECT effect.effect_seq FROM import_commit_identity_effects effect
-			WHERE effect.operation_id = o.id), 0)
+			WHERE effect.operation_id = o.id), 0), f.position_side
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
-		JOIN investment_lots f ON f.operation_id = o.id AND f.position_side = 'long'
+		JOIN investment_lots f ON f.operation_id = o.id
+			AND f.position_side = CASE o.operation_kind WHEN 'short_sale' THEN 'short' ELSE 'long' END
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
 		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
 		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
 		WHERE o.book_id = ? AND linked_version.transaction_id = ?
-		AND o.operation_kind IN ('buy', 'reinvested_dividend')
+		AND o.operation_kind IN ('buy', 'reinvested_dividend', 'short_sale')
 		AND (SELECT count(*) FROM investment_lots one WHERE one.operation_id = o.id) = 1`,
 		bookID, transactionID).Scan(&record.OperationID, &record.OperationKind, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.LotID,
 		&record.EventDate, &record.AccountID, &record.CommodityID, &record.CostCommodityID,
-		&corrected, &imported, &record.SourceIdentityID, &record.SourceEffectSeq)
+		&corrected, &imported, &record.SourceIdentityID, &record.SourceEffectSeq, &record.PositionSide)
 	if errors.Is(err, sql.ErrNoRows) {
 		return BuyOperationRecord{}, ErrNotFound
 	}
@@ -157,8 +161,9 @@ func (r *InvestmentRepository) replaceBuy(ctx context.Context, expected BuyOpera
 	postWrite func(*sql.Tx, int64, int64) error, preview bool,
 ) (BuyReplacementRecord, error) {
 	if expected.OperationID <= 0 || expected.LotID <= 0 ||
-		(expected.OperationKind != "buy" && expected.OperationKind != "reinvested_dividend") ||
+		(expected.OperationKind != "buy" && expected.OperationKind != "reinvested_dividend" && expected.OperationKind != "short_sale") ||
 		lotParams.EventKind != openingLotEventKind(expected.OperationKind) ||
+		positionSideOrLong(lotParams.PositionSide) != positionSideOrLong(expected.PositionSide) ||
 		inverseParams.BookID <= 0 || inverseParams.BookID != replacementParams.BookID ||
 		inverseParams.BookID != lotParams.BookID ||
 		inverseParams.ActorUserID != replacementParams.ActorUserID ||
@@ -224,7 +229,7 @@ func (r *InvestmentRepository) replaceBuy(ctx context.Context, expected BuyOpera
 			for _, position := range correctedTradePositions(
 				investmentReplayPositionKey{current.AccountID, current.CommodityID, current.CostCommodityID},
 				investmentReplayPositionKey{lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID}) {
-				if err := replayCorrectedPositionTx(ctx, tx, replacementParams.BookID, position,
+				if err := replayCorrectedPositionSideTx(ctx, tx, replacementParams.BookID, position, current.PositionSide,
 					operationID, auditEventID, replacementParams.ActorUserID, replacementParams.CreatedAt); err != nil {
 					return InvestmentLotRecord{}, err
 				}
@@ -257,13 +262,23 @@ func correctedTradePositions(source, replacement investmentReplayPositionKey) []
 func replayCorrectedPositionTx(ctx context.Context, tx *sql.Tx, bookID int64, position investmentReplayPositionKey,
 	operationID, auditEventID, actorUserID int64, createdAt string,
 ) error {
+	return replayCorrectedPositionSideTx(ctx, tx, bookID, position, PositionSideLong,
+		operationID, auditEventID, actorUserID, createdAt)
+}
+
+// replayCorrectedPositionSideTx replays one side of a corrected position
+// (#175); short positions have no transfer propagation to follow.
+func replayCorrectedPositionSideTx(ctx context.Context, tx *sql.Tx, bookID int64, position investmentReplayPositionKey,
+	side string, operationID, auditEventID, actorUserID int64, createdAt string,
+) error {
+	side = positionSideOrLong(side)
 	intents, err := investmentReplayIntentsQuery(ctx, tx, bookID,
-		position.accountID, position.commodityID, position.costCommodityID, "long")
+		position.accountID, position.commodityID, position.costCommodityID, side)
 	if err != nil {
 		return err
 	}
-	projection, err := simulateInvestmentReplayTx(ctx, tx, bookID,
-		position.accountID, position.commodityID, position.costCommodityID, intents)
+	projection, err := simulateInvestmentReplaySideTx(ctx, tx, bookID,
+		position.accountID, position.commodityID, position.costCommodityID, side, intents)
 	if err != nil {
 		if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) {
 			return fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)

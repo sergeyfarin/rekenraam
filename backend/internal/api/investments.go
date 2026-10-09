@@ -324,6 +324,8 @@ type investmentCorrectionChainResponse struct {
 	CanCorrectReinvested    bool                               `json:"can_correct_reinvested_dividend"`
 	CanCorrectCashInLieu    bool                               `json:"can_correct_cash_in_lieu"`
 	CanCorrectWriteOff      bool                               `json:"can_correct_write_off"`
+	CanCorrectShortSale     bool                               `json:"can_correct_short_sale"`
+	CanCorrectShortCover    bool                               `json:"can_correct_short_cover"`
 	CanReverseTransfer      bool                               `json:"can_reverse_transfer"`
 	CanReplaceTransfer      bool                               `json:"can_replace_transfer"`
 	CanResolveBasis         bool                               `json:"can_resolve_basis"`
@@ -1162,6 +1164,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanCorrectDividend: chain.CanCorrectDividend, CanReverseCapitalReturn: chain.CanReverseCapitalReturn, CanReplaceCapitalReturn: chain.CanReplaceCapitalReturn, EffectiveCapitalReturn: toCapitalReturnTerms(chain.EffectiveCapitalReturn), EffectiveDividend: toInvestmentCorrectionDividendTerms(chain.EffectiveDividend),
 			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
 			CanCorrectWriteOff: chain.CanCorrectWriteOff, CanCorrectCashInLieu: chain.CanCorrectCashInLieu,
+			CanCorrectShortSale: chain.CanCorrectShortSale, CanCorrectShortCover: chain.CanCorrectShortCover,
 			CanReverseTransfer: chain.CanReverseTransfer,
 			CanReplaceTransfer: chain.CanReplaceTransfer, CanResolveBasis: chain.CanResolveBasis,
 			EffectiveTransfer: toInvestmentCorrectionTransferTerms(chain.EffectiveTransfer),
@@ -1946,6 +1949,12 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
+	case errors.Is(err, app.ErrInvestmentShortDependency):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SHORT_DEPENDENCY", err.Error())
+	case errors.Is(err, app.ErrInvestmentShortNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "short sale or cover operation not found")
+	case errors.Is(err, app.ErrInvestmentShortAlreadyCorrected), errors.Is(err, app.ErrInvestmentShortChanged):
+		writeAPIError(w, http.StatusConflict, "CONFLICT", err.Error())
 	case errors.Is(err, app.ErrInvestmentPositionSideConflict):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_POSITION_SIDE_CONFLICT", err.Error())
 	// Every investment trade goes through the transaction write guard, so a

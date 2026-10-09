@@ -37,13 +37,19 @@ async function setup(page: Page) {
   const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
     instrument_id: instrument.id, name: holdingName, opened_on: openedOn, effective_from: openedOn
   });
+  const short = (side: 'short-sale' | 'short-cover', daysAgo: number, quantity: string, amount: string) =>
+    apiJSON<{ transaction: { id: number } }>(page, 'POST', `/api/v1/investments/${side}`, csrfToken, {
+      transaction_date: daysFromTodayISO(-daysAgo), commodity_id: instrument.commodity_id, holding_account_id: holding.id,
+      cash_account_id: cash.id, quantity_value: quantity, quantity_scale: 0, cash_amount_value: amount,
+      cash_amount_scale: 2, cash_commodity_id: currencyID, ...(side === 'short-cover' ? { cost_basis_method: 'fifo' } : {})
+    });
   const buy = (quantity: string, amount: string) =>
     apiJSON(page, 'POST', '/api/v1/investments/buy', csrfToken, {
       transaction_date: daysFromTodayISO(-10), commodity_id: instrument.commodity_id, holding_account_id: holding.id,
       cash_account_id: cash.id, quantity_value: quantity, quantity_scale: 0, cash_amount_value: amount,
       cash_amount_scale: 2, cash_commodity_id: currencyID
     });
-  return { name, cashID: cash.id, holdingID: holding.id, commodityID: instrument.commodity_id, buy };
+  return { name, cashID: cash.id, holdingID: holding.id, commodityID: instrument.commodity_id, buy, short };
 }
 
 async function fillShortForm(page: Page, s: Awaited<ReturnType<typeof setup>>, date: string, quantity: string, amount: string) {
@@ -93,4 +99,42 @@ test('a holding that is long refuses a short sale with a translated reason', asy
   const form = await fillShortForm(page, s, daysFromTodayISO(-2), '1', '10.00');
   await form.getByRole('button', { name: 'Confirm short sale' }).click();
   await expect(form.getByRole('alert')).toContainText('cannot be long and short of the same instrument');
+});
+
+async function shortResults(page: Page, commodityID: number): Promise<string[]> {
+  const gains = await apiJSON<{ realized: Array<{ commodity_id: number; realized_gain_value: string; realized_gain_scale: number }> }>(
+    page, 'GET', '/api/v1/investments/gains');
+  return gains.realized
+    .filter((gain) => gain.commodity_id === commodityID)
+    .map((gain) => ((BigInt(gain.realized_gain_value) * 100n) / 10n ** BigInt(gain.realized_gain_scale)).toString());
+}
+
+test('a cover is corrected and then reversed from its transaction on mobile (#175)', async ({ page }) => {
+  const s = await setup(page);
+  await s.short('short-sale', 20, '10', '10000');
+  const cover = await s.short('short-cover', 10, '10', '7000');
+
+  await page.goto(`/app/transactions?transaction_id=${cover.transaction.id}`);
+  await page.getByRole('button', { name: 'Correct short cover…' }).click();
+  const form = page.getByRole('dialog', { name: 'Correct this short cover' });
+  await expect(form.getByLabel(/Cost to cover/)).toHaveValue('70.00');
+  await form.getByLabel('Reason for correction').fill('paid 60.00');
+  await form.getByLabel(/Cost to cover/).fill('60.00');
+  await form.getByRole('button', { name: 'Review and replace' }).click();
+  let review = page.getByRole('alertdialog');
+  await expect(review).toBeVisible();
+  await review.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(form).toBeHidden();
+  await expect.poll(() => shortResults(page, s.commodityID)).toEqual(['4000']);
+
+  const replacement = await apiJSON<{ effective_transaction_id: number }>(page, 'GET',
+    `/api/v1/investments/transactions/${cover.transaction.id}/correction-chain`);
+  await page.goto(`/app/transactions?transaction_id=${replacement.effective_transaction_id}`);
+  await page.getByRole('button', { name: 'Reverse short cover…' }).click();
+  await page.getByLabel('Reason for reversal').fill('cover was not executed');
+  await page.getByRole('button', { name: 'Review and reverse' }).click();
+  review = page.getByRole('alertdialog');
+  await review.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(review).toBeHidden();
+  await expect.poll(() => shortResults(page, s.commodityID)).toEqual([]);
 });

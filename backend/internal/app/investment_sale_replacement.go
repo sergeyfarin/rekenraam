@@ -116,7 +116,11 @@ func (s *InvestmentService) prepareSaleReplacementWrite(ctx context.Context, inp
 	if err != nil {
 		return preparedSaleReplacementWrite{}, err
 	}
-	replacementParams, disposalParams, err := s.prepareSellWrite(ctx, replacement)
+	prepareDisposal := s.prepareSellWrite
+	if family.kind == "short_cover" {
+		prepareDisposal = s.prepareShortCoverWrite
+	}
+	replacementParams, disposalParams, err := prepareDisposal(ctx, replacement)
 	if err != nil {
 		return preparedSaleReplacementWrite{}, err
 	}

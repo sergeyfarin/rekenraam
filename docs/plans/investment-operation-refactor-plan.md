@@ -548,9 +548,16 @@ correction, reversal and backdating; #176 provider import.
   method-family lock is keyed by side, so a short pool's average-cost lock is
   independent of any earlier long position. Long commands never select short
   lots, and a cover never selects long lots.
-- **Dates.** Short entries are in date order only in #173: a short opening or
-  cover dated before a later depletion of the holding, on either side, is
-  refused as out of order with nothing written. #175 adds dated replay.
+- **Dates and correction (#175).** A short opening or cover dated behind a
+  later cover replays the short position exactly as a long one replays:
+  intents are the side's openings and covers only, every later cover keeps
+  its recorded method and elections, a changed result needs the shared
+  acknowledgement, and an impossible later cover is named
+  (`INVESTMENT_SHORT_DEPENDENCY`) with nothing written. A short sale is
+  reversed or replaced through the acquisition writers and a cover through
+  the disposal writers, each fenced to its own kind; originals stay as
+  evidence. The side rule still applies, so replay never crosses into the
+  other side.
 - **Other families.** Splits, transfers, return of capital, cash in lieu and
   write-off select long lots only, so a short-only holding has no eligible
   units and refuses. Borrow fees, margin interest, collateral and payments in

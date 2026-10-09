@@ -1,0 +1,46 @@
+post:
+  summary: Replace a short cover — preview reconciliation and gain impact (#175)
+  description: >-
+    Runs the complete writer in a rolled-back transaction and returns the checkpoints it would invalidate and its gain changes. Posts an inverse and a corrected cover and replays every later cover of the short position under one audit event. Changed cover results need the preview's acknowledgement.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReplacementRequest"
+  responses:
+    "200":
+      description: Reconciliation impact computed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ReconciliationImpactResponse"
+    "400":
+      description: Invalid replacement or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted long sale not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Sale corrected, imported, changed, or followed by another position operation
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

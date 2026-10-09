@@ -44,13 +44,14 @@ func (r *InvestmentRepository) reverseBuy(ctx context.Context, params CreateTran
 		if err != nil {
 			return struct{}{}, err
 		}
+		side := positionSideOrLong(current.PositionSide)
 		intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID,
-			current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+			current.AccountID, current.CommodityID, current.CostCommodityID, side)
 		if err != nil {
 			return struct{}{}, err
 		}
-		projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID,
-			current.AccountID, current.CommodityID, current.CostCommodityID, intents)
+		projection, err := simulateInvestmentReplaySideTx(ctx, tx, params.BookID,
+			current.AccountID, current.CommodityID, current.CostCommodityID, side, intents)
 		if err != nil {
 			if errors.Is(err, ErrInsufficientLots) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrInvestmentCorrectionDependency) {
 				return struct{}{}, fmt.Errorf("%w: %w", ErrInvestmentCorrectionDependency, err)

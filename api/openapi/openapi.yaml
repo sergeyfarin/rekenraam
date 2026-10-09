@@ -289,6 +289,22 @@ paths:
     $ref: "./paths/investments-buy.yaml"
   /api/v1/investments/sell:
     $ref: "./paths/investments-sell.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-short-sale:
+    $ref: "./paths/investments-reverse-short-sale.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-short-sale/reconciliation-impact:
+    $ref: "./paths/investments-reverse-short-sale-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-short-sale:
+    $ref: "./paths/investments-replace-short-sale.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-short-sale/reconciliation-impact:
+    $ref: "./paths/investments-replace-short-sale-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-short-cover:
+    $ref: "./paths/investments-reverse-short-cover.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-short-cover/reconciliation-impact:
+    $ref: "./paths/investments-reverse-short-cover-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-short-cover:
+    $ref: "./paths/investments-replace-short-cover.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-short-cover/reconciliation-impact:
+    $ref: "./paths/investments-replace-short-cover-reconciliation-impact.yaml"
   /api/v1/investments/short-sale:
     $ref: "./paths/investments-short-sale.yaml"
   /api/v1/investments/short-sale/reconciliation-impact:

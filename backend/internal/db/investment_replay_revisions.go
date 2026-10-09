@@ -36,10 +36,14 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 	if projection.MethodFamily != "" && projection.MethodFamily != "individual_lot" && projection.MethodFamily != "average_cost" {
 		return fmt.Errorf("%w: replay method family is invalid", ErrInvalidDisposalParams)
 	}
+	side := positionSideOrLong(projection.PositionSide)
+	if !validPositionSide(side) {
+		return fmt.Errorf("%w: replay position side is invalid", ErrInvalidDisposalParams)
+	}
 	var lotCount int
 	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM current_investment_lots WHERE book_id = ?
-		AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'`,
-		bookID, accountID, commodityID, costCommodityID).Scan(&lotCount); err != nil {
+		AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ?`,
+		bookID, accountID, commodityID, costCommodityID, side).Scan(&lotCount); err != nil {
 		return fmt.Errorf("count replay position lots: %w", err)
 	}
 	if lotCount != len(projection.Lots) {
@@ -111,9 +115,9 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 			disposed_basis_value, disposed_basis_scale, basis_knowledge, created_at, created_audit_event_id
 		) SELECT ?, d.id, ?, ?, ?, ?, ?, ?, ?, ? FROM investment_disposal_decisions d
 			WHERE d.id = ? AND d.book_id = ? AND d.account_id = ? AND d.commodity_id = ?
-				AND d.cost_commodity_id = ? AND d.position_side = 'long'`,
+				AND d.cost_commodity_id = ? AND d.position_side = ?`,
 			bookID, priorSeq+1, causedByOperationID, priorID, basis.nullableValue(), basis.nullableScale(),
-			basis.knowledge, createdAt, auditEventID, disposal.DecisionID, bookID, accountID, commodityID, costCommodityID)
+			basis.knowledge, createdAt, auditEventID, disposal.DecisionID, bookID, accountID, commodityID, costCommodityID, side)
 		if err != nil {
 			return fmt.Errorf("append disposal revision for decision %d: %w", disposal.DecisionID, err)
 		}
@@ -170,13 +174,13 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 		basis_knowledge, updated_at, updated_by_user_id, updated_audit_event_id, lot_id, book_id)
 		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, id, book_id FROM investment_lots
 		WHERE id = ? AND book_id = ? AND account_id = ? AND commodity_id = ?
-		AND cost_commodity_id = ? AND position_side = 'long'
+		AND cost_commodity_id = ? AND position_side = ?
 		ON CONFLICT(lot_id) DO UPDATE SET status = excluded.status,
 		remaining_quantity_value = excluded.remaining_quantity_value, remaining_quantity_scale = excluded.remaining_quantity_scale,
 		remaining_cost_basis_value = excluded.remaining_cost_basis_value, remaining_cost_basis_scale = excluded.remaining_cost_basis_scale, basis_knowledge = excluded.basis_knowledge,
 		updated_at = excluded.updated_at, updated_by_user_id = excluded.updated_by_user_id, updated_audit_event_id = excluded.updated_audit_event_id`,
 			lot.Status, lot.RemainingQuantityValue, lot.RemainingQuantityScale, nullableBasisValue(lot.RemainingCostBasisValue, lot.BasisKnowledge), nullableBasisScale(lot.RemainingCostBasisScale, lot.BasisKnowledge), normalizedBasisKnowledge(lot.BasisKnowledge),
-			createdAt, actorUserID, auditEventID, lot.LotID, bookID, accountID, commodityID, costCommodityID)
+			createdAt, actorUserID, auditEventID, lot.LotID, bookID, accountID, commodityID, costCommodityID, side)
 		if err != nil {
 			return fmt.Errorf("install replay lot projection: %w", err)
 		}
@@ -188,20 +192,20 @@ func persistInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, 
 	if projection.MethodFamily == "" {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM investment_position_basis_state
 			WHERE book_id = ? AND account_id = ? AND commodity_id = ?
-				AND cost_commodity_id = ? AND position_side = 'long'`,
-			bookID, accountID, commodityID, costCommodityID); err != nil {
+				AND cost_commodity_id = ? AND position_side = ?`,
+			bookID, accountID, commodityID, costCommodityID, side); err != nil {
 			return fmt.Errorf("clear replay method-family state: %w", err)
 		}
 	} else {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO investment_position_basis_state (
 			book_id, account_id, commodity_id, cost_commodity_id, method_family,
 			position_side, updated_at, updated_by_user_id, updated_audit_event_id
-		) VALUES (?, ?, ?, ?, ?, 'long', ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(book_id, account_id, commodity_id, cost_commodity_id, position_side)
 		DO UPDATE SET method_family = excluded.method_family, updated_at = excluded.updated_at,
 			updated_by_user_id = excluded.updated_by_user_id,
 			updated_audit_event_id = excluded.updated_audit_event_id`,
-			bookID, accountID, commodityID, costCommodityID, projection.MethodFamily,
+			bookID, accountID, commodityID, costCommodityID, projection.MethodFamily, side,
 			createdAt, actorUserID, auditEventID); err != nil {
 			return fmt.Errorf("install replay method-family state: %w", err)
 		}

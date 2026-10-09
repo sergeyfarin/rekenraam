@@ -109,20 +109,22 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Short sale/cover [#103](https://github.com/sergeyfarin/rekenraam/issues/103), in its child order: core
-   commands, lots and gains [#173](https://github.com/sergeyfarin/rekenraam/issues/173) and read models and mobile
-   entry [#174](https://github.com/sergeyfarin/rekenraam/issues/174) (both delivered 2026-10-09), then
-   correction/backdating [#175](https://github.com/sergeyfarin/rekenraam/issues/175).
-
-**Next, in order**
-
-2. Historical action entry: dated holdings/lot selection
+1. Historical action entry: dated holdings/lot selection
    [#166](https://github.com/sergeyfarin/rekenraam/issues/166), then new
    backdated internal transfer admission
    [#167](https://github.com/sergeyfarin/rekenraam/issues/167).
-3. Sourced resolution correction and known-zero resolution
+
+**Next, in order**
+
+2. Sourced resolution correction and known-zero resolution
    [#168](https://github.com/sergeyfarin/rekenraam/issues/168).
-4. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
+3. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
+
+**Delivered from [#103](https://github.com/sergeyfarin/rekenraam/issues/103):** named short sale and cover —
+core commands [#173](https://github.com/sergeyfarin/rekenraam/issues/173), reads and mobile entry
+[#174](https://github.com/sergeyfarin/rekenraam/issues/174), correction and backdating
+[#175](https://github.com/sergeyfarin/rekenraam/issues/175), all 2026-10-09. Verified provider import
+[#176](https://github.com/sergeyfarin/rekenraam/issues/176) stays evidence-blocked outside the R16 bar.
 
 **Delivered from [#114](https://github.com/sergeyfarin/rekenraam/issues/114):**
 - Outbound transfers with entry, bridge adjustments, backdating and correction (#157–#159, 2026-10-05).
@@ -174,7 +176,7 @@ R16 is complete when these issues are closed: historical-entry selection
 [#166](https://github.com/sergeyfarin/rekenraam/issues/166), backdated
 internal transfer admission [#167](https://github.com/sergeyfarin/rekenraam/issues/167),
 sourced resolution recovery [#168](https://github.com/sergeyfarin/rekenraam/issues/168),
-short sale/cover [#103](https://github.com/sergeyfarin/rekenraam/issues/103) (#173–#174 delivered; #175 open),
+short sale/cover [#103](https://github.com/sergeyfarin/rekenraam/issues/103) (delivered via #173–#175),
 compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115),
 zero-delta splits [#146](https://github.com/sergeyfarin/rekenraam/issues/146)
 and Refresh reach for revised fills

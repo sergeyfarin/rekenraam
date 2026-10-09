@@ -337,8 +337,8 @@ Goal: add power-user workflows after the core ledger is stable.
   self-checks and net-worth reports until it is corrected. A genuine short sale
   must be named explicitly as a short sale and represented as a short position;
   an ordinary negative holding must not silently acquire that meaning. Named
-  short sale and cover entry and side-aware reads exist (#173/#174);
-  correction and provider import follow under #175/#176.
+  short sale and cover entry, side-aware reads, dated replay and native
+  correction exist (#173–#175); verified provider import is #176.
 - Investment monetary coefficients cross the JSON API as canonical decimal
   strings, including requests, lot basis, proceeds, and gains. The current
   backend int64 range remains an admission limit; browser Number conversion

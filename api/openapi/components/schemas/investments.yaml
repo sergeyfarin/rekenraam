@@ -1784,7 +1784,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_short_sale, can_correct_short_cover, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1813,6 +1813,12 @@ InvestmentCorrectionChainResponse:
     can_correct_cash_in_lieu:
       type: boolean
       description: Effective cash in lieu may attempt native reversal or replacement; dependent replay remains guarded.
+    can_correct_short_sale:
+      type: boolean
+      description: The effective operation is a named short sale that may be reversed or replaced (#175).
+    can_correct_short_cover:
+      type: boolean
+      description: The effective operation is a short cover that may be reversed or replaced (#175).
     can_correct_write_off:
       type: boolean
       description: Whether the effective posted write-off can be reversed or replaced (T-118). The trade correction context pre-fills the replacement; dependent replay may still refuse the command.
@@ -1867,7 +1873,7 @@ InvestmentTradeCorrectionContextResponse:
 
     operation_id: { type: integer, format: int64 }
     transaction_id: { type: integer, format: int64 }
-    operation_kind: { type: string, enum: [buy, sell, write_off, cash_in_lieu] }
+    operation_kind: { type: string, enum: [buy, sell, write_off, cash_in_lieu, short_sale, short_cover] }
     event_date: { type: string, format: date }
     holding_account_id: { type: integer, format: int64 }
     commodity_id: { type: integer, format: int64 }

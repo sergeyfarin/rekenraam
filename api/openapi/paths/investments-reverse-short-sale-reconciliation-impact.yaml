@@ -1,0 +1,46 @@
+post:
+  summary: Reverse a short sale — preview reconciliation and gain impact (#175)
+  description: >-
+    Runs the complete writer in a rolled-back transaction and returns the checkpoints it would invalidate and its gain changes. Posts an exact inverse of a named short sale and replays the short position under one audit event. A later cover that needed its units is named (INVESTMENT_SHORT_DEPENDENCY) and nothing is written.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalRequest"
+  responses:
+    "200":
+      description: Replay and reconciliation impact computed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ReconciliationImpactResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted long buy not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected, unlinked import, changed, or dependent replay impossible
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

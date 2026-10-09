@@ -33,6 +33,9 @@ type InvestmentReplayProjection struct {
 	// SubjectCapitalReturn is the effect set of the return of capital the
 	// command is recording, at its replay slot.
 	SubjectCapitalReturn []CapitalReturnEffect
+	// PositionSide is the side this projection replayed; empty is long. A
+	// short position replays only its openings and covers (#175).
+	PositionSide string
 }
 
 // InvestmentReplayTransferRevision is one link's replayed depletion: the
@@ -112,10 +115,15 @@ func (e *InvestmentReplayDependencyError) Unwrap() error { return e.Cause }
 // The caller may later persist the returned state and allocation revision in
 // its own write transaction, after dependency and reconciliation checks.
 func simulateInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, intents []InvestmentReplayIntent) (InvestmentReplayProjection, error) {
+	return simulateInvestmentReplaySideTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, PositionSideLong, intents)
+}
+
+// simulateInvestmentReplaySideTx replays one side of a position (#175).
+func simulateInvestmentReplaySideTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, side string, intents []InvestmentReplayIntent) (InvestmentReplayProjection, error) {
 	if _, err := tx.ExecContext(ctx, `SAVEPOINT investment_replay_simulation`); err != nil {
 		return InvestmentReplayProjection{}, fmt.Errorf("start investment replay simulation: %w", err)
 	}
-	projection, simulationErr := runInvestmentReplayTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, intents)
+	projection, simulationErr := runInvestmentReplayTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, side, intents)
 	_, rollbackErr := tx.ExecContext(ctx, `ROLLBACK TO investment_replay_simulation`)
 	if rollbackErr != nil {
 		abortErr := tx.Rollback()
@@ -134,19 +142,22 @@ func simulateInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, account
 	return projection, nil
 }
 
-func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, intents []InvestmentReplayIntent) (InvestmentReplayProjection, error) {
-	if err := resetInvestmentReplayPositionTx(ctx, tx, bookID, accountID, commodityID, costCommodityID); err != nil {
+func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, side string, intents []InvestmentReplayIntent) (InvestmentReplayProjection, error) {
+	if !validPositionSide(side) {
+		return InvestmentReplayProjection{}, fmt.Errorf("%w: replay position side %q is invalid", ErrInvalidDisposalParams, side)
+	}
+	if err := resetInvestmentReplayPositionTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, side); err != nil {
 		return InvestmentReplayProjection{}, err
 	}
-	projection := InvestmentReplayProjection{}
+	projection := InvestmentReplayProjection{PositionSide: side}
 	ordered := slices.Clone(intents)
 	sortInvestmentReplayIntents(ordered)
 	for _, intent := range ordered {
-		if err := applyInvestmentReplayIntentTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, intent, &projection); err != nil {
+		if err := applyInvestmentReplayIntentTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, side, intent, &projection); err != nil {
 			return InvestmentReplayProjection{}, err
 		}
 	}
-	if err := finishInvestmentReplayPositionTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, &projection); err != nil {
+	if err := finishInvestmentReplayPositionTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, side, &projection); err != nil {
 		return InvestmentReplayProjection{}, err
 	}
 	return projection, nil
@@ -154,7 +165,7 @@ func runInvestmentReplayTx(ctx context.Context, tx *sql.Tx, bookID, accountID, c
 
 // resetInvestmentReplayPositionTx clears one position's lot and method-family
 // projection so its intents can rebuild it from the first opening.
-func resetInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64) error {
+func resetInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, side string) error {
 	if bookID <= 0 || accountID <= 0 || commodityID <= 0 || costCommodityID <= 0 {
 		return fmt.Errorf("%w: replay position key is incomplete", ErrInvalidDisposalParams)
 	}
@@ -162,8 +173,8 @@ func resetInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, ac
 	err := tx.QueryRowContext(ctx, `
 		SELECT l.id FROM investment_lots l
 		WHERE l.book_id = ? AND l.account_id = ? AND l.commodity_id = ?
-			AND l.cost_commodity_id = ? AND l.position_side = 'long' AND l.operation_id IS NULL
-		LIMIT 1`, bookID, accountID, commodityID, costCommodityID).Scan(&unmodeledLotID)
+			AND l.cost_commodity_id = ? AND l.position_side = ? AND l.operation_id IS NULL
+		LIMIT 1`, bookID, accountID, commodityID, costCommodityID, side).Scan(&unmodeledLotID)
 	if err == nil {
 		return fmt.Errorf("%w: lot %d lacks an immutable opening fact", ErrInvalidDisposalParams, unmodeledLotID)
 	}
@@ -176,16 +187,16 @@ func resetInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, ac
 		SELECT id, book_id, 'closed', '0', quantity_scale,
 		CASE WHEN opening_basis_knowledge = 'known' THEN '0' ELSE NULL END, cost_basis_scale,
 		created_at, created_by_user_id, created_audit_event_id, opening_basis_knowledge FROM investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = 'long'
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ? AND position_side = ?
 		ON CONFLICT(lot_id) DO UPDATE SET basis_knowledge = excluded.basis_knowledge, status = 'closed', remaining_quantity_value = '0',
 		remaining_quantity_scale = excluded.remaining_quantity_scale, remaining_cost_basis_value = excluded.remaining_cost_basis_value,
-		remaining_cost_basis_scale = excluded.remaining_cost_basis_scale`, bookID, accountID, commodityID, costCommodityID); err != nil {
+		remaining_cost_basis_scale = excluded.remaining_cost_basis_scale`, bookID, accountID, commodityID, costCommodityID, side); err != nil {
 		return fmt.Errorf("reset replay lot projection: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM investment_position_basis_state
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
-			AND cost_commodity_id = ? AND position_side = 'long'`,
-		bookID, accountID, commodityID, costCommodityID); err != nil {
+			AND cost_commodity_id = ? AND position_side = ?`,
+		bookID, accountID, commodityID, costCommodityID, side); err != nil {
 		return fmt.Errorf("reset replay basis-method state: %w", err)
 	}
 	return nil
@@ -194,7 +205,10 @@ func resetInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, ac
 // applyInvestmentReplayIntentTx replays one intent against its position's
 // projection and records its output in projection.
 func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64,
-	intent InvestmentReplayIntent, projection *InvestmentReplayProjection) error {
+	side string, intent InvestmentReplayIntent, projection *InvestmentReplayProjection) error {
+	if side == PositionSideShort && intent.Kind != "opening" && intent.Kind != "disposal" {
+		return fmt.Errorf("%w: replay intent kind %q has no short-side contract", ErrInvalidDisposalParams, intent.Kind)
+	}
 	switch intent.Kind {
 	case "opening":
 		knowledge := normalizedBasisKnowledge(intent.BasisKnowledge)
@@ -209,8 +223,8 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 				remaining_quantity_value = ?, remaining_quantity_scale = ?,
 				remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?
 			WHERE lot_id IN (SELECT id FROM investment_lots WHERE id = ? AND book_id = ? AND account_id = ? AND commodity_id = ?
-				AND cost_commodity_id = ? AND position_side = 'long' AND opened_on = ?)`, knowledge, intent.QuantityValue, intent.QuantityScale, nullableBasisValue(basis, knowledge), nullableBasisScale(intent.AmountScale, knowledge),
-			intent.LotID, bookID, accountID, commodityID, costCommodityID, intent.EventDate)
+				AND cost_commodity_id = ? AND position_side = ? AND opened_on = ?)`, knowledge, intent.QuantityValue, intent.QuantityScale, nullableBasisValue(basis, knowledge), nullableBasisScale(intent.AmountScale, knowledge),
+			intent.LotID, bookID, accountID, commodityID, costCommodityID, side, intent.EventDate)
 		if err != nil {
 			return fmt.Errorf("activate replay opening lot %d: %w", intent.LotID, err)
 		}
@@ -218,7 +232,7 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		if err != nil || changed != 1 {
 			return fmt.Errorf("%w: replay opening lot %d does not match this position and date", ErrInvalidDisposalParams, intent.LotID)
 		}
-		if err := requireKnownPositionBasisSubtotalRangeTx(ctx, tx, bookID, accountID, commodityID, costCommodityID); err != nil {
+		if err := requirePositionBasisRangeQueryTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, true, side); err != nil {
 			return fmt.Errorf("replay opening lot %d: %w", intent.LotID, err)
 		}
 	case "disposal":
@@ -229,8 +243,8 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 			QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
 			CostBasisMethod: intent.CostBasisMethod, Allocations: intent.SpecificLots,
 			CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID,
-			MetadataJSON:      "{}",
-			AdmitUnknownBasis: intent.AdmitUnknownBasis || intent.OperationKind == "sell"}
+			MetadataJSON: "{}", PositionSide: side,
+			AdmitUnknownBasis: side == PositionSideLong && (intent.AdmitUnknownBasis || intent.OperationKind == "sell")}
 		if !intent.AmountValue.BigInt().IsInt64() {
 			return ErrInvestmentBasisRange
 		}
@@ -409,11 +423,11 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 // finishInvestmentReplayPositionTx reads one replayed position's resulting
 // lot state and method family into projection.
 func finishInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64,
-	projection *InvestmentReplayProjection) error {
+	side string, projection *InvestmentReplayProjection) error {
 	err := tx.QueryRowContext(ctx, `SELECT method_family FROM investment_position_basis_state
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
-			AND cost_commodity_id = ? AND position_side = 'long'`,
-		bookID, accountID, commodityID, costCommodityID).Scan(&projection.MethodFamily)
+			AND cost_commodity_id = ? AND position_side = ?`,
+		bookID, accountID, commodityID, costCommodityID, side).Scan(&projection.MethodFamily)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("read replay method-family state: %w", err)
 	}
@@ -422,8 +436,8 @@ func finishInvestmentReplayPositionTx(ctx context.Context, tx *sql.Tx, bookID, a
 			remaining_cost_basis_value, remaining_cost_basis_scale, basis_knowledge
 		FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ?
-			AND cost_commodity_id = ? AND position_side = 'long'
-		ORDER BY id`, bookID, accountID, commodityID, costCommodityID)
+			AND cost_commodity_id = ? AND position_side = ?
+		ORDER BY id`, bookID, accountID, commodityID, costCommodityID, side)
 	if err != nil {
 		return fmt.Errorf("read replay lot projection: %w", err)
 	}

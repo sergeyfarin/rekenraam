@@ -272,7 +272,7 @@ func runInvestmentReplayClosureTx(ctx context.Context, tx *sql.Tx, bookID, cause
 		if err != nil {
 			return pass, err
 		}
-		if err := resetInvestmentReplayPositionTx(ctx, tx, bookID, key.accountID, key.commodityID, key.costCommodityID); err != nil {
+		if err := resetInvestmentReplayPositionTx(ctx, tx, bookID, key.accountID, key.commodityID, key.costCommodityID, PositionSideLong); err != nil {
 			return pass, err
 		}
 		projections[key] = &InvestmentReplayProjection{}
@@ -303,7 +303,7 @@ func runInvestmentReplayClosureTx(ctx context.Context, tx *sql.Tx, bookID, cause
 		}
 		before := len(projection.TransferRevisions)
 		if err := applyInvestmentReplayIntentTx(ctx, tx, bookID, item.key.accountID, item.key.commodityID,
-			item.key.costCommodityID, intent, projection); err != nil {
+			item.key.costCommodityID, PositionSideLong, intent, projection); err != nil {
 			return pass, err
 		}
 		for _, revision := range projection.TransferRevisions[before:] {
@@ -329,7 +329,7 @@ func runInvestmentReplayClosureTx(ctx context.Context, tx *sql.Tx, bookID, cause
 	for _, key := range keys {
 		projection := projections[key]
 		if err := finishInvestmentReplayPositionTx(ctx, tx, bookID, key.accountID, key.commodityID,
-			key.costCommodityID, projection); err != nil {
+			key.costCommodityID, PositionSideLong, projection); err != nil {
 			return pass, err
 		}
 		pass.projections[key] = *projection

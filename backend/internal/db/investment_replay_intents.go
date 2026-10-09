@@ -138,8 +138,8 @@ func (r *InvestmentRepository) ListInvestmentReplayIntents(ctx context.Context, 
 }
 
 func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, accountID, commodityID, costCommodityID int64, side string) ([]InvestmentReplayIntent, error) {
-	if bookID <= 0 || accountID <= 0 || commodityID <= 0 || costCommodityID <= 0 || side != "long" {
-		return nil, fmt.Errorf("%w: replay requires a long position and its exact book, account, instrument and cost currency", ErrInvalidDisposalParams)
+	if bookID <= 0 || accountID <= 0 || commodityID <= 0 || costCommodityID <= 0 || !validPositionSide(side) {
+		return nil, fmt.Errorf("%w: replay requires a position side and its exact book, account, instrument and cost currency", ErrInvalidDisposalParams)
 	}
 	openings, err := reader.QueryContext(ctx, `
 		SELECT l.id, l.operation_id, o.operation_kind, l.opened_on,
@@ -252,7 +252,10 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 	if err := disposals.Close(); err != nil {
 		return nil, fmt.Errorf("close replay disposals: %w", err)
 	}
-	transfers, err := reader.QueryContext(ctx, `
+	// A short position has only openings and covers: transfers, splits and
+	// basis actions select long lots (#173), so none can touch it.
+	if side == PositionSideLong {
+		transfers, err := reader.QueryContext(ctx, `
 		SELECT f.operation_id, o.operation_kind, f.effective_on, x.link_seq, x.source_lot_id,
 			COALESCE(revision.source_lot_id, x.source_lot_id), src.operation_id, src.opened_on,
 			x.quantity_value, x.quantity_scale,
@@ -276,91 +279,92 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			AND x.cost_commodity_id = ?
 		ORDER BY f.operation_id, x.link_seq
 	`, bookID, accountID, commodityID, costCommodityID)
-	if err != nil {
-		return nil, fmt.Errorf("read replay transfer depletions: %w", err)
-	}
-	// A pooled transfer is one intent: replay depletes the pool once for its
-	// total quantity, then compares every link it produced.
-	pooled := make(map[int64]int)
-	for transfers.Next() {
-		var intent InvestmentReplayIntent
-		var basis sql.NullString
-		var basisScale sql.NullInt64
-		var knowledge string
-		var allocation sql.NullString
-		var sourceOperationID sql.NullInt64
-		if err := transfers.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
-			&intent.LinkSeq, &intent.transferSource.lotID, &intent.RecordedLotID, &sourceOperationID,
-			&intent.transferSource.openedOn, &intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale, &knowledge,
-			&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID,
-			&intent.CreatedAt, &intent.EffectSeq, &allocation, &intent.ExternalOut); err != nil {
-			transfers.Close()
-			return nil, fmt.Errorf("scan replay transfer depletion: %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("read replay transfer depletions: %w", err)
 		}
-		var err error
-		intent.AmountValue, intent.AmountScale, intent.BasisKnowledge, err = replayTransferBasis(basis, basisScale, knowledge)
-		if err != nil || intent.EffectSeq <= 0 {
-			transfers.Close()
-			return nil, fmt.Errorf("%w: transfer operation %d lacks a valid basis or an effect", ErrInvalidDisposalParams, intent.OperationID)
-		}
-		intent.Kind = "transfer_out"
-		intent.transferSource.operationID = sourceOperationID.Int64
-		intent.LotID = intent.transferSource.lotID
-		if allocation.String != InternalTransferAverageCostPool {
-			intents = append(intents, intent)
-			continue
-		}
-		link := InvestmentReplayTransferLink{LinkSeq: intent.LinkSeq, LotID: intent.LotID,
-			RecordedLotID: intent.RecordedLotID, transferSource: intent.transferSource, QuantityValue: intent.QuantityValue,
-			QuantityScale: intent.QuantityScale, CostBasisValue: intent.AmountValue, CostBasisScale: intent.AmountScale,
-			BasisKnowledge: intent.BasisKnowledge}
-		index, exists := pooled[intent.OperationID]
-		if !exists {
-			intent.Kind = "pooled_transfer_out"
-			intent.LotID, intent.LinkSeq, intent.RecordedLotID = 0, 0, 0
-			intent.transferSource = transferSourceOpening{}
-			intent.AmountValue, intent.AmountScale, intent.BasisKnowledge = "", 0, ""
-			pooled[intent.OperationID] = len(intents)
-			intents = append(intents, intent)
-			index = len(intents) - 1
-		} else {
-			total := exact.ScaledIntFromCoefficient(intents[index].QuantityValue, intents[index].QuantityScale)
-			total.AddCoefficient(intent.QuantityValue, intent.QuantityScale)
-			quantity, err := total.Coefficient()
-			if err != nil {
+		// A pooled transfer is one intent: replay depletes the pool once for its
+		// total quantity, then compares every link it produced.
+		pooled := make(map[int64]int)
+		for transfers.Next() {
+			var intent InvestmentReplayIntent
+			var basis sql.NullString
+			var basisScale sql.NullInt64
+			var knowledge string
+			var allocation sql.NullString
+			var sourceOperationID sql.NullInt64
+			if err := transfers.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
+				&intent.LinkSeq, &intent.transferSource.lotID, &intent.RecordedLotID, &sourceOperationID,
+				&intent.transferSource.openedOn, &intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale, &knowledge,
+				&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID,
+				&intent.CreatedAt, &intent.EffectSeq, &allocation, &intent.ExternalOut); err != nil {
 				transfers.Close()
-				return nil, fmt.Errorf("total pooled transfer %d quantity: %w", intent.OperationID, err)
+				return nil, fmt.Errorf("scan replay transfer depletion: %w", err)
 			}
-			intents[index].QuantityValue, intents[index].QuantityScale = quantity, total.Scale()
-			intents[index].EffectSeq = min(intents[index].EffectSeq, intent.EffectSeq)
+			var err error
+			intent.AmountValue, intent.AmountScale, intent.BasisKnowledge, err = replayTransferBasis(basis, basisScale, knowledge)
+			if err != nil || intent.EffectSeq <= 0 {
+				transfers.Close()
+				return nil, fmt.Errorf("%w: transfer operation %d lacks a valid basis or an effect", ErrInvalidDisposalParams, intent.OperationID)
+			}
+			intent.Kind = "transfer_out"
+			intent.transferSource.operationID = sourceOperationID.Int64
+			intent.LotID = intent.transferSource.lotID
+			if allocation.String != InternalTransferAverageCostPool {
+				intents = append(intents, intent)
+				continue
+			}
+			link := InvestmentReplayTransferLink{LinkSeq: intent.LinkSeq, LotID: intent.LotID,
+				RecordedLotID: intent.RecordedLotID, transferSource: intent.transferSource, QuantityValue: intent.QuantityValue,
+				QuantityScale: intent.QuantityScale, CostBasisValue: intent.AmountValue, CostBasisScale: intent.AmountScale,
+				BasisKnowledge: intent.BasisKnowledge}
+			index, exists := pooled[intent.OperationID]
+			if !exists {
+				intent.Kind = "pooled_transfer_out"
+				intent.LotID, intent.LinkSeq, intent.RecordedLotID = 0, 0, 0
+				intent.transferSource = transferSourceOpening{}
+				intent.AmountValue, intent.AmountScale, intent.BasisKnowledge = "", 0, ""
+				pooled[intent.OperationID] = len(intents)
+				intents = append(intents, intent)
+				index = len(intents) - 1
+			} else {
+				total := exact.ScaledIntFromCoefficient(intents[index].QuantityValue, intents[index].QuantityScale)
+				total.AddCoefficient(intent.QuantityValue, intent.QuantityScale)
+				quantity, err := total.Coefficient()
+				if err != nil {
+					transfers.Close()
+					return nil, fmt.Errorf("total pooled transfer %d quantity: %w", intent.OperationID, err)
+				}
+				intents[index].QuantityValue, intents[index].QuantityScale = quantity, total.Scale()
+				intents[index].EffectSeq = min(intents[index].EffectSeq, intent.EffectSeq)
+			}
+			intents[index].PooledLinks = append(intents[index].PooledLinks, link)
 		}
-		intents[index].PooledLinks = append(intents[index].PooledLinks, link)
-	}
-	if err := transfers.Err(); err != nil {
-		transfers.Close()
-		return nil, fmt.Errorf("iterate replay transfer depletions: %w", err)
-	}
-	if err := transfers.Close(); err != nil {
-		return nil, fmt.Errorf("close replay transfer depletions: %w", err)
-	}
+		if err := transfers.Err(); err != nil {
+			transfers.Close()
+			return nil, fmt.Errorf("iterate replay transfer depletions: %w", err)
+		}
+		if err := transfers.Close(); err != nil {
+			return nil, fmt.Errorf("close replay transfer depletions: %w", err)
+		}
 
-	pooledLots, err := investmentReplayPooledLotIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
-	if err != nil {
-		return nil, err
-	}
-	intents = append(intents, pooledLots...)
+		pooledLots, err := investmentReplayPooledLotIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
+		if err != nil {
+			return nil, err
+		}
+		intents = append(intents, pooledLots...)
 
-	splits, err := investmentReplaySplitIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
-	if err != nil {
-		return nil, err
-	}
-	intents = append(intents, splits...)
+		splits, err := investmentReplaySplitIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
+		if err != nil {
+			return nil, err
+		}
+		intents = append(intents, splits...)
 
-	capitalReturns, err := capitalReturnIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
-	if err != nil {
-		return nil, err
+		capitalReturns, err := capitalReturnIntentsQuery(ctx, reader, bookID, accountID, commodityID, costCommodityID)
+		if err != nil {
+			return nil, err
+		}
+		intents = append(intents, capitalReturns...)
 	}
-	intents = append(intents, capitalReturns...)
 
 	selected, err := reader.QueryContext(ctx, `
 		SELECT a.decision_id, a.lot_id, a.quantity_value, a.quantity_scale,

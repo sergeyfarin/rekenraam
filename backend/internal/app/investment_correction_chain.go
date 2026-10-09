@@ -60,7 +60,12 @@ type InvestmentCorrectionChain struct {
 	// can no longer be reversed or replaced.
 	CanResolveBasis   bool
 	EffectiveTransfer *InvestmentCorrectionTransferTerms
-	Operations        []InvestmentCorrectionNode
+	// CanCorrectShortSale / CanCorrectShortCover allow native reversal and
+	// replacement of a named short opening or cover (#175); the trade
+	// correction context pre-fills the replacement.
+	CanCorrectShortSale  bool
+	CanCorrectShortCover bool
+	Operations           []InvestmentCorrectionNode
 }
 
 // InvestmentCorrectionDividendTerms are an effective cash dividend's posted
@@ -233,6 +238,12 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 		}
 		if correctable && record.OperationKind == "write_off" {
 			chain.CanCorrectWriteOff = true
+		}
+		if correctable && record.OperationKind == "short_sale" {
+			chain.CanCorrectShortSale = true
+		}
+		if correctable && record.OperationKind == "short_cover" {
+			chain.CanCorrectShortCover = true
 		}
 		if correctable && (record.OperationKind == "internal_transfer" || record.OperationKind == "external_transfer_in" ||
 			record.OperationKind == "external_transfer_out") {

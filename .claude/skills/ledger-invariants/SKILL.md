@@ -170,8 +170,10 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   `position_side = 'short'` with signed (negative) proceeds, so its result is
   disposed opening proceeds + proceeds. One holding is never long and short
   of an instrument over overlapping dates (`ErrPositionSideConflict`); every
-  lot query keys by side. Short entry is in date order until #175 adds
-  replay. See the operation plan's *Short positions (#103)* section.
+  lot query keys by side. Short replay, backdating and native correction
+  (#175) thread the side through `simulateInvestmentReplaySideTx`; shorts
+  have only openings and covers. See the operation plan's *Short positions
+  (#103)* section.
 - Effective reads use the views `effective_investment_operations`,
   `latest_investment_disposal_revisions`, `latest_investment_split_revisions`,
   `effective_investment_lot_events` and `effective_investment_transfer_links`;

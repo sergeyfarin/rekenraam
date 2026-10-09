@@ -32,6 +32,8 @@ type SaleOperationRecord struct {
 	ImportedLineage      bool
 	SourceIdentityID     int64
 	SourceEffectSeq      int64
+	// PositionSide is short for a short_cover (#175).
+	PositionSide string
 }
 
 func (r *InvestmentRepository) SaleOperationByID(ctx context.Context, bookID, operationID int64) (SaleOperationRecord, error) {
@@ -44,7 +46,7 @@ func (r *InvestmentRepository) SaleOperationByTransactionID(ctx context.Context,
 		JOIN investment_operation_journal_links link ON link.operation_id = operation.id
 			AND link.book_id = operation.book_id AND link.role = 'primary'
 		JOIN transaction_versions version ON version.id = link.transaction_version_id
-		WHERE operation.book_id = ? AND version.transaction_id = ? AND operation.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')`, bookID, transactionID).Scan(&operationID)
+		WHERE operation.book_id = ? AND version.transaction_id = ? AND operation.operation_kind IN ('sell', 'write_off', 'cash_in_lieu', 'short_cover')`, bookID, transactionID).Scan(&operationID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SaleOperationRecord{}, ErrNotFound
 	}
@@ -71,18 +73,19 @@ func saleOperationByIDQuery(ctx context.Context, reader saleOperationReader, boo
 			COALESCE((SELECT effect.identity_id FROM import_commit_identity_effects effect
 				WHERE effect.operation_id = o.id), 0),
 			COALESCE((SELECT effect.effect_seq FROM import_commit_identity_effects effect
-				WHERE effect.operation_id = o.id), 0)
+				WHERE effect.operation_id = o.id), 0), d.position_side
 		FROM investment_operations o
 		JOIN audit_events audit ON audit.id = o.created_audit_event_id
-		JOIN investment_disposal_decisions d ON d.operation_id = o.id AND d.position_side = 'long'
+		JOIN investment_disposal_decisions d ON d.operation_id = o.id
+			AND d.position_side = CASE o.operation_kind WHEN 'short_cover' THEN 'short' ELSE 'long' END
 		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
 		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
 		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
-		WHERE o.book_id = ? AND o.id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu')
+		WHERE o.book_id = ? AND o.id = ? AND o.operation_kind IN ('sell', 'write_off', 'cash_in_lieu', 'short_cover')
 	`, bookID, operationID).Scan(&record.OperationID, &record.OperationKind, &record.TransactionID,
 		&record.TransactionVersionID, &record.CurrentVersionID, &record.EventDate, &record.AccountID,
 		&record.CommodityID, &record.CostCommodityID, &corrected, &imported,
-		&record.SourceIdentityID, &record.SourceEffectSeq)
+		&record.SourceIdentityID, &record.SourceEffectSeq, &record.PositionSide)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SaleOperationRecord{}, ErrNotFound
 	}
@@ -136,13 +139,14 @@ func (r *InvestmentRepository) reverseSale(ctx context.Context, params CreateTra
 		if err != nil {
 			return struct{}{}, err
 		}
+		side := positionSideOrLong(current.PositionSide)
 		intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID,
-			current.AccountID, current.CommodityID, current.CostCommodityID, "long")
+			current.AccountID, current.CommodityID, current.CostCommodityID, side)
 		if err != nil {
 			return struct{}{}, err
 		}
-		projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID,
-			current.AccountID, current.CommodityID, current.CostCommodityID, intents)
+		projection, err := simulateInvestmentReplaySideTx(ctx, tx, params.BookID,
+			current.AccountID, current.CommodityID, current.CostCommodityID, side, intents)
 		if err != nil {
 			return struct{}{}, err
 		}

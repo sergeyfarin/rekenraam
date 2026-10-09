@@ -93,7 +93,19 @@ type preparedBuyReplacementWrite struct {
 func (s *InvestmentService) prepareBuyReplacementWrite(ctx context.Context, input ReplaceInvestmentBuyInput,
 	originType, operationCode string,
 ) (preparedBuyReplacementWrite, error) {
-	operation, inversePlan, err := s.buyReplacementPlan(ctx, input)
+	return s.prepareAcquisitionReplacementWrite(ctx, input, originType, operationCode, "buy")
+}
+
+// prepareAcquisitionReplacementWrite freezes a buy or short-sale replacement
+// (#175): the same inverse, opening and lot facts for preview and commit.
+func (s *InvestmentService) prepareAcquisitionReplacementWrite(ctx context.Context, input ReplaceInvestmentBuyInput,
+	originType, operationCode, kind string,
+) (preparedBuyReplacementWrite, error) {
+	plan := s.buyReplacementPlan
+	if kind == "short_sale" {
+		plan = s.shortSaleCorrectionPlan
+	}
+	operation, inversePlan, err := plan(ctx, input)
 	if err != nil {
 		return preparedBuyReplacementWrite{}, err
 	}
@@ -115,7 +127,11 @@ func (s *InvestmentService) prepareBuyReplacementWrite(ctx context.Context, inpu
 	if err != nil {
 		return preparedBuyReplacementWrite{}, err
 	}
-	replacementParams, lotParams, err := s.prepareBuyWrite(ctx, replacement)
+	prepareOpening := s.prepareBuyWrite
+	if kind == "short_sale" {
+		prepareOpening = s.prepareShortSaleWrite
+	}
+	replacementParams, lotParams, err := prepareOpening(ctx, replacement)
 	if err != nil {
 		return preparedBuyReplacementWrite{}, err
 	}
@@ -182,8 +198,11 @@ func (s *InvestmentService) acquisitionCorrectionPlan(ctx context.Context, input
 		return db.BuyOperationRecord{}, CreateTransactionInput{}, err
 	}
 	notFound, alreadyCorrected, changed := ErrInvestmentBuyNotFound, ErrInvestmentBuyAlreadyCorrected, ErrInvestmentBuyChanged
-	if input.OperationKind == "reinvested_dividend" {
+	switch input.OperationKind {
+	case "reinvested_dividend":
 		notFound, alreadyCorrected, changed = ErrInvestmentReinvestmentNotFound, ErrInvestmentReinvestmentAlreadyCorrected, ErrInvestmentReinvestmentChanged
+	case "short_sale":
+		notFound, alreadyCorrected, changed = ErrInvestmentShortNotFound, ErrInvestmentShortAlreadyCorrected, ErrInvestmentShortChanged
 	}
 	operation, err := s.repository.BuyOperationByTransactionID(ctx, BookID, input.TransactionID)
 	if errors.Is(err, db.ErrNotFound) || (err == nil && operation.OperationKind != input.OperationKind) {

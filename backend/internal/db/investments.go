@@ -1983,10 +1983,10 @@ func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, tran
 			if err != nil {
 				return InvestmentLotRecord{}, err
 			}
-			// Short lots have no replay contract yet (#175): a backdated short
-			// opening reaches the chronological guard and is refused.
-			replayAdmission := latest != "" && lotParams.OpenedOn < latest &&
-				positionSideOrLong(lotParams.PositionSide) == PositionSideLong
+			// Either side replays its own position (#175); the side rule in
+			// createLotWithAuditTx keeps the other side out of the window.
+			side := positionSideOrLong(lotParams.PositionSide)
+			replayAdmission := latest != "" && lotParams.OpenedOn < latest
 			lot, err := createLotWithAuditTx(ctx, tx, lotParams, auditEventID, replayAdmission)
 			if err != nil || !replayAdmission {
 				return lot, err
@@ -1996,12 +1996,12 @@ func (r *InvestmentRepository) createTransactionAndLot(ctx context.Context, tran
 				return InvestmentLotRecord{}, err
 			}
 			intents, err := investmentReplayIntentsQuery(ctx, tx, lotParams.BookID,
-				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID, "long")
+				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID, side)
 			if err != nil {
 				return InvestmentLotRecord{}, err
 			}
-			projection, err := simulateInvestmentReplayTx(ctx, tx, lotParams.BookID,
-				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID, intents)
+			projection, err := simulateInvestmentReplaySideTx(ctx, tx, lotParams.BookID,
+				lotParams.AccountID, lotParams.CommodityID, lotParams.CostCommodityID, side, intents)
 			if err != nil {
 				return InvestmentLotRecord{}, err
 			}
@@ -2080,7 +2080,7 @@ func (r *InvestmentRepository) writeTransactionAndDisposeLots(ctx context.Contex
 			if err != nil {
 				return result{}, err
 			}
-			if latest != "" && disposalParams.EventDate < latest && positionSideOrLong(disposalParams.PositionSide) == PositionSideLong {
+			if latest != "" && disposalParams.EventDate < latest {
 				disposals, decision, err := disposeBehindLaterRewriteTx(ctx, tx, transaction, disposalParams, auditEventID)
 				return result{disposals: disposals, decision: decision}, err
 			}
