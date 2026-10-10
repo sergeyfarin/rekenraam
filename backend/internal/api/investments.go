@@ -340,7 +340,10 @@ type investmentCorrectionChainResponse struct {
 	// EffectiveShareExchange explains an effective exchange, which
 	// can_correct_share_exchange offers to reverse or replace (#179).
 	EffectiveShareExchange *investmentCorrectionShareExchangeTerms `json:"effective_share_exchange,omitempty"`
-	Operations             []investmentCorrectionNodeResponse      `json:"operations"`
+	// EffectiveSpinOff explains an effective spin-off (#180); its correction
+	// arrives with #183.
+	EffectiveSpinOff *investmentCorrectionSpinOffTerms  `json:"effective_spin_off,omitempty"`
+	Operations       []investmentCorrectionNodeResponse `json:"operations"`
 }
 
 type investmentTradeCorrectionChargeResponse struct {
@@ -1196,6 +1199,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			EffectiveBasisResolution:  toInvestmentCorrectionBasisResolutionTerms(chain.EffectiveBasisResolution),
 			BasisResolutions:          toBasisResolutionHistory(chain.BasisResolutions),
 			EffectiveShareExchange:    toInvestmentCorrectionShareExchangeTerms(chain.EffectiveShareExchange),
+			EffectiveSpinOff:          toInvestmentCorrectionSpinOffTerms(chain.EffectiveSpinOff),
 			Operations:                operations,
 		})
 	}
@@ -1955,6 +1959,12 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentSplitDependency):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_DEPENDENCY", err.Error())
+	case errors.Is(err, app.ErrSpinOffNoHoldings):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPIN_OFF_NO_HOLDINGS", err.Error())
+	case errors.Is(err, app.ErrSpinOffFraction):
+		writeAPIError(w, http.StatusUnprocessableEntity, "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE", err.Error())
+	case errors.Is(err, app.ErrSpinOffChanged):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPIN_OFF_CHANGED", err.Error())
 	case errors.Is(err, app.ErrShareExchangeNoHoldings):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EXCHANGE_NO_HOLDINGS", err.Error())
 	case errors.Is(err, app.ErrShareExchangeFraction):

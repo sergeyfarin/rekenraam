@@ -359,6 +359,10 @@ paths:
     $ref: "./paths/investments-share-exchange.yaml"
   /api/v1/investments/share-exchanges/preview:
     $ref: "./paths/investments-share-exchange-preview.yaml"
+  /api/v1/investments/spin-offs:
+    $ref: "./paths/investments-spin-off.yaml"
+  /api/v1/investments/spin-offs/preview:
+    $ref: "./paths/investments-spin-off-preview.yaml"
   /api/v1/investments/transactions/{transaction_id}/correction-chain:
     $ref: "./paths/investments-correction-chain.yaml"
   /api/v1/investments/transactions/{transaction_id}/trade-correction-context:
@@ -1206,6 +1210,20 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentLotOrigin"
     ShareExchangePreviewResponse:
       $ref: "./components/schemas/investments.yaml#/ShareExchangePreviewResponse"
+    SpinOffRequest:
+      $ref: "./components/schemas/investments.yaml#/SpinOffRequest"
+    SpinOffLink:
+      $ref: "./components/schemas/investments.yaml#/SpinOffLink"
+    SpinOffPlan:
+      $ref: "./components/schemas/investments.yaml#/SpinOffPlan"
+    SpinOffBasisTotal:
+      $ref: "./components/schemas/investments.yaml#/SpinOffBasisTotal"
+    InvestmentCorrectionSpinOffTerms:
+      $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionSpinOffTerms"
+    SpinOffPreviewResponse:
+      $ref: "./components/schemas/investments.yaml#/SpinOffPreviewResponse"
+    SpinOffResponse:
+      $ref: "./components/schemas/investments.yaml#/SpinOffResponse"
     ShareExchangeResponse:
       $ref: "./components/schemas/investments.yaml#/ShareExchangeResponse"
     ShareExchangeReplacementRequest:

@@ -16446,6 +16446,193 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/investments/spin-offs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a spin-off of one holding
+         * @description A spin-off or demerger (#180). Every long lot of commodity_id open in holding_account_id on effective_on keeps its units and moves basis_fraction of its remaining basis (truncated at the position's allocation scale; the parent keeps the remainder) to one new lot of destination_commodity_id in the destination holding. The new lot holds the parent lot's units times ratio_numerator/ratio_denominator exactly, with the parent's cost currency, knowledge and original acquisition date. The journal posts only the new instrument (destination holding +Q' and commodity_trading −Q'); nothing is realized. A spin-off dated behind a later rewrite of either position is refused until #183.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SpinOffRequest"];
+                };
+            };
+            responses: {
+                /** @description Spin-off journal, fact, basis reductions, new lots and links recorded atomically */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpinOffResponse"];
+                    };
+                };
+                /** @description Invalid spin-off facts, including a fraction outside (0, 1) or a destination holding that refuses the new instrument */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description INVESTMENT_SPIN_OFF_NO_HOLDINGS, INVESTMENT_SPIN_OFF_CHANGED (preview again), INVESTMENT_EVENT_OUT_OF_ORDER (dated behind a later rewrite of either position), INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the parent), or reconciliation override required */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE — a lot's new quantity needs more decimals than the new instrument permits; the distribution is never rounded */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/spin-offs/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a spin-off
+         * @description Runs the complete spin-off writer in a rolled-back transaction. Returns every link (parent units, new units, allocated and remaining basis and original date), the totals per cost currency and every active checkpoint the writer would invalidate. No durable change or temporary ID escapes; commit rechecks everything.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SpinOffRequest"];
+                };
+            };
+            responses: {
+                /** @description Spin-off preview computed (no mutation) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SpinOffPreviewResponse"];
+                    };
+                };
+                /** @description Invalid spin-off facts */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description INVESTMENT_SPIN_OFF_NO_HOLDINGS, INVESTMENT_EVENT_OUT_OF_ORDER or INVESTMENT_POSITION_SIDE_CONFLICT */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/investments/transactions/{transaction_id}/correction-chain": {
         parameters: {
             query?: never;
@@ -24024,7 +24211,7 @@ export interface components {
              * @description Stable code for a journal the system posted without user text (T-136), or for a share exchange's journal (#178); the client localizes it and uses it as the title when the journal has no memo. Absent for ordinary journals.
              * @enum {string}
              */
-            system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange";
+            system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange" | "spin_off";
             invalidated_checkpoint_ids: number[];
         };
         TransactionsResponse: {
@@ -24080,7 +24267,7 @@ export interface components {
              * @description Stable code for a journal the system posted without user text (T-136), or for a share exchange's journal (#178); the client localizes it and uses it as the title when the journal has no memo. Absent for ordinary journals.
              * @enum {string}
              */
-            system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange";
+            system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange" | "spin_off";
             correction_chain?: components["schemas"]["RegisterCorrectionChain"];
         };
         /** @description Present when the row's transaction belongs to a correction chain of more than one transaction (T-120). The original, reversal and replacement stay separate posted rows, so the running balance counts each posting once; every row carries the whole chain, so members on other register pages are still named. */
@@ -25761,7 +25948,7 @@ export interface components {
             /** Format: int64 */
             operation_id: number;
             /** @enum {string} */
-            transfer_kind: "external_in" | "internal" | "exchange";
+            transfer_kind: "external_in" | "internal" | "exchange" | "spin_off";
             /**
              * Format: int64
              * @description For an exchange, the old instrument; otherwise this lot's own.
@@ -25792,6 +25979,149 @@ export interface components {
         ShareExchangePreviewResponse: {
             plan: components["schemas"]["ShareExchangePlan"];
             impact: components["schemas"]["ReconciliationImpactResponse"];
+        };
+        /** @description A spin-off or demerger (#180): every long lot of commodity_id in holding_account_id keeps its units and moves basis_fraction of its remaining basis to a new lot of destination_commodity_id. */
+        SpinOffRequest: {
+            /**
+             * Format: date
+             * @description The distribution date. Every long lot open on this date, at the operation's slot, is entitled. Ex and record dates belong in source_evidence.
+             */
+            effective_on: string;
+            /** Format: int64 */
+            holding_account_id: number;
+            /**
+             * Format: int64
+             * @description Holding that receives the new instrument. Defaults to holding_account_id; a holding whose default instrument is the parent needs the new instrument's own holding.
+             */
+            destination_holding_account_id?: number;
+            /**
+             * Format: int64
+             * @description The parent instrument.
+             */
+            commodity_id: number;
+            /**
+             * Format: int64
+             * @description The distributed instrument; must differ from commodity_id and not be a currency.
+             */
+            destination_commodity_id: number;
+            /**
+             * Format: int64
+             * @description New units distributed for ratio_denominator parent units.
+             */
+            ratio_numerator: number;
+            /**
+             * Format: int64
+             * @description Parent units entitling ratio_numerator new units. The ratio is stored in lowest terms.
+             */
+            ratio_denominator: number;
+            /** @description Coefficient of the share of each parent lot's basis that moves: basis_fraction_value / 10^basis_fraction_scale, strictly between 0 and 1 (0.141 for an issuer's 14.1 % allocation is "141" at scale 3). Stored in lowest decimal terms, at most 12 decimal places. */
+            basis_fraction_value: string;
+            basis_fraction_scale: number;
+            source_evidence?: {
+                [key: string]: unknown;
+            };
+            memo?: string;
+            change_reason?: string;
+            reconciliation_override?: boolean;
+        };
+        SpinOffLink: {
+            /**
+             * Format: int64
+             * @description The parent lot, which stays open with its units.
+             */
+            source_lot_id: number;
+            /**
+             * Format: int64
+             * @description Null in a preview.
+             */
+            destination_lot_id: number | null;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            /** @description The parent lot's units that entitle it. */
+            source_quantity_value: string;
+            source_quantity_scale: number;
+            /** @description Parent units times the ratio, exactly. */
+            destination_quantity_value: string;
+            destination_quantity_scale: number;
+            /** @enum {string} */
+            basis_knowledge: "known" | "unknown";
+            /** @description The parent's remaining basis times the fraction, truncated at the position's allocation scale; the new lot's opening basis and the parent's reduction. Null when unknown. */
+            allocated_basis_value: string | null;
+            allocated_basis_scale: number | null;
+            /** @description The parent lot's basis after the spin-off; null when unknown and in the correction chain. */
+            remaining_basis_value: string | null;
+            remaining_basis_scale: number | null;
+            /** @enum {string} */
+            original_date_knowledge: "known" | "unknown";
+            /** Format: date */
+            original_acquired_on: string | null;
+        };
+        SpinOffPlan: {
+            /** Format: int64 */
+            ratio_numerator: number;
+            /** Format: int64 */
+            ratio_denominator: number;
+            basis_fraction_value: string;
+            basis_fraction_scale: number;
+            links: components["schemas"]["SpinOffLink"][];
+            /** @description New units the journal moves into the destination holding. */
+            destination_quantity_value: string;
+            destination_quantity_scale: number;
+            /** @description What the spin-off divides in each cost currency, in link order. */
+            basis_totals: components["schemas"]["SpinOffBasisTotal"][];
+        };
+        SpinOffBasisTotal: {
+            /** Format: int64 */
+            cost_commodity_id: number;
+            source_quantity_value: string;
+            source_quantity_scale: number;
+            destination_quantity_value: string;
+            destination_quantity_scale: number;
+            /**
+             * @description Unknown when any lot in this currency has unknown basis, as for a position.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
+            /** @description Exact sum of the allocated basis; null when unknown. */
+            allocated_basis_value: string | null;
+            allocated_basis_scale: number | null;
+            /** @description Exact sum of the parent's remaining basis; null when unknown and in the correction chain. */
+            remaining_basis_value: string | null;
+            remaining_basis_scale: number | null;
+            unknown_lots: number;
+        };
+        InvestmentCorrectionSpinOffTerms: {
+            /** Format: date */
+            effective_on: string;
+            /** Format: int64 */
+            holding_account_id: number;
+            /**
+             * Format: int64
+             * @description Equal to holding_account_id when the new units went to the same holding.
+             */
+            destination_holding_account_id: number;
+            /**
+             * Format: int64
+             * @description The parent instrument.
+             */
+            commodity_id: number;
+            /**
+             * Format: int64
+             * @description The distributed instrument.
+             */
+            destination_commodity_id: number;
+            source_evidence: {
+                [key: string]: unknown;
+            };
+            plan: components["schemas"]["SpinOffPlan"];
+        };
+        SpinOffPreviewResponse: {
+            plan: components["schemas"]["SpinOffPlan"];
+            impact: components["schemas"]["ReconciliationImpactResponse"];
+        };
+        SpinOffResponse: {
+            transaction: components["schemas"]["TransactionResponse"];
+            plan: components["schemas"]["SpinOffPlan"];
         };
         ShareExchangeResponse: {
             transaction: components["schemas"]["TransactionResponse"];
@@ -26190,6 +26520,8 @@ export interface components {
             effective_reinvestment?: components["schemas"]["InvestmentCorrectionReinvestmentTerms"];
             /** @description Present when the effective operation is a share exchange (#178): its instruments, holdings, ratio and each link's current carried basis. It is not yet correctable; reversal and replacement arrive with #179. */
             effective_share_exchange?: components["schemas"]["InvestmentCorrectionShareExchangeTerms"];
+            /** @description Present when the effective operation is a spin-off (#180): its instruments, holdings, ratio, basis fraction and each link's current allocated basis. Its own correction arrives with #183. */
+            effective_spin_off?: components["schemas"]["InvestmentCorrectionSpinOffTerms"];
             operations: components["schemas"]["InvestmentCorrectionNodeResponse"][];
         };
         /** @description Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility. */
@@ -26720,7 +27052,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "INVESTMENT_SPIN_OFF_NO_HOLDINGS" | "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPIN_OFF_CHANGED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

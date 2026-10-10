@@ -708,6 +708,115 @@ an exchange. It is an instrument version change with no position effect.
   
   Replay-equivalence covers exchanged positions.
 
+**Spin-off (#180).** Decided 2026-10-10. A spin-off is also called a demerger.
+The parent holding stays, and units of a new instrument are distributed to it.
+Part of each parent lot's basis moves to its new lot by an exact sourced
+fraction, such as an issuer's published allocation percentage. No cash moves
+and nothing is realized. A distribution the issuer treats as a taxable
+dividend in kind is not this kind.
+
+- **Representation.** The operation kind is `spin_off`. Its fact is an
+  `investment_transfer_facts` row of `transfer_kind = 'spin_off'`:
+  - `commodity_id` is the parent and `destination_commodity_id` the new instrument;
+  - `source_account_id` is the parent holding and `destination_account_id` the
+    holding that receives the new units. That is the same account by default,
+    or the new instrument's own, as for an exchange;
+  - the distribution ratio is `ratio_numerator`/`ratio_denominator`: positive,
+    in lowest terms, new units per parent unit;
+  - the basis fraction is `basis_fraction_value`/`basis_fraction_scale`. It is
+    an exact decimal strictly between 0 and 1 (scale at most 12): the share of
+    each parent lot's basis that moves to the new instrument.
+
+  The fact records no method or lineage. Each eligible parent lot gets one
+  `investment_transfer_lot_links` row:
+  - its quantity is the parent lot's remaining units, which entitle it;
+  - its carried basis is the basis allocated to the new lot;
+  - the destination lot's immutable quantity is that quantity times the ratio.
+
+  The parent lot gets a `basis_reduction` lot event with quantity 0 and basis
+  `−allocated`; the new lot opens with a `transfer_in` event. Unlike an
+  exchange, the parent lot stays open with its units.
+- **Eligibility.** The spin-off takes every long lot of the parent open in that
+  account at the operation's slot, in every cost currency. It refuses in the
+  same cases as an exchange: no lot open, an open short of the parent, the
+  same instrument on both sides, or either instrument a currency. The new
+  instrument's side rule applies as for any opening.
+- **Quantity.** Each lot's remaining quantity is multiplied by the ratio
+  exactly, as for an exchange. A product that the new instrument's quantity
+  scale cannot represent refuses the command; it is never rounded. #181 adds
+  the cash in lieu that settles fractions.
+- **Basis.** Each lot's allocated basis is its remaining basis times the
+  fraction, truncated at the position's basis allocation scale. The parent
+  keeps the remainder, `remaining − allocated`. The remainder rule is
+  deterministic and needs no cross-lot balancing: the parent's reduction is
+  exactly the new lot's opening basis, so basis is conserved per lot, and
+  therefore per cost currency, whatever the rounding. The new lot keeps the
+  parent's cost currency and its effective original acquisition date on the
+  link, so holding periods follow the parent's purchase. An unknown parent
+  lot stays unknown and opens an unknown new lot, never zero. A later sourced
+  resolution of the parent replays through the spin-off, and the link
+  revision goes from unknown to known.
+- **Journal.** One journal entry on the effective date posts two lines in the
+  new instrument: the destination holding `+Q'` and `commodity_trading` `−Q'`.
+  The parent and the cost currency post nothing. Basis never leaves clearing,
+  so a position's clearing residual is the total gain of the parent and new
+  lots. Example: 100 parent units bought for 1,000.00, with 1 new unit per 2
+  parent units and a fraction of 0.2. The result is 50 new units at 200.00
+  and a parent basis of 800.00. Selling the parent for 900.00 realizes
+  +100.00, and selling the new units for 250.00 realizes +50.00. The
+  cost-currency residual is `−150.00`. The writer recomputes `Q'` inside its
+  transaction and refuses a plan that went stale.
+- **Method state.** Neither position's method-family lock changes. The parent
+  is not depleted, and the new lots join their position like any opening.
+- **Dates.** The operation has one `effective` date: the distribution date,
+  when the new units are held and the basis divides. Ex and record dates go
+  in the source evidence, and eligibility is the position at the slot. A lot
+  sold between the ex date and the distribution date is therefore not
+  entitled. Repeated typed dates arrive with #181.
+- **Admission (this slice).** A spin-off is dated in order. One dated behind a
+  later rewrite of the parent position, or of the new position, is refused
+  with `ErrOutOfOrderPositionEvent`. Backdating by subject replay comes with
+  the correction child, #183.
+- **Replay and closure.** Replay reads a spin-off's links as one `spin_off`
+  intent per operation and cost currency. For each link, the lot is the
+  link's source lot, or the corrected successor of the same acquisition on
+  the same date. That lot must be open with exactly the link's units, and it
+  gives up its remaining basis times the fraction. After the group, every
+  lot of the position opened on or before the effective date must be linked.
+  Otherwise the command that caused the gap refuses with the spin-off named:
+  - a backdated purchase leaves an unlinked lot: `ErrSpinOffIncomplete`;
+  - a backdated sale or transfer changes a lot's units:
+    `ErrSpinOffEntitlementChanged`.
+
+  A changed allocation appends a link revision, and the new position replays
+  from it. A known allocation never becomes unknown (T-145). The
+  affected-position closure follows spin-off edges from (parent holding,
+  parent, cost currency) to (destination holding, new instrument, cost
+  currency). `effective_investment_lot_events` drops a revised link's
+  `basis_reduction`, as it drops a revised transfer's events. Removing an
+  entitled acquisition is a named refusal.
+- **Correction.** The generic void path and the transfer and exchange
+  correction commands stay closed to a spin-off. Its own reversal,
+  replacement and backdating are #183, following ADR 0013 *Transfer
+  Correction Refinement* as the exchange did.
+- **Reads.** The preview and the result return every link and the totals per
+  cost currency: parent units, new units, allocated basis, and the parent's
+  remaining basis. Both bases are unknown when any lot in that currency is
+  unknown. The chain carries `effective_spin_off` with the current allocated
+  basis. It omits the parent's remaining basis then, which is not recorded. Lot `origin` names `spin_off` with the parent
+  lot, ratio and original date. The journal carries the `spin_off` system
+  label.
+- **Evidence.** The export bundle carries the fraction on
+  `investment-transfer-facts.csv`. Self-check verifies, per link:
+  - the parent `basis_reduction` and the new `transfer_in` effects exist on
+    the effective date;
+  - the link quantity × ratio equals the new lot's quantity;
+  - the reduction, carried basis and new lot's opening basis are one amount
+    with one knowledge and cost currency;
+  - the journal's two legs equal the new lots' total.
+
+  Replay-equivalence covers both positions.
+
 ### Required acceptance cases across slices
 
 - A buy with gross `-100` and commission `-2` settles `-102`; a sale with

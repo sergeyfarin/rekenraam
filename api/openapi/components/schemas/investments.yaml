@@ -1563,6 +1563,235 @@ ShareExchangeResponse:
     plan:
       $ref: "../schemas/investments.yaml#/ShareExchangePlan"
 
+SpinOffRequest:
+  type: object
+  additionalProperties: false
+  required: [effective_on, holding_account_id, commodity_id, destination_commodity_id, ratio_numerator,
+    ratio_denominator, basis_fraction_value, basis_fraction_scale]
+  description: >
+    A spin-off or demerger (#180): every long lot of commodity_id in
+    holding_account_id keeps its units and moves basis_fraction of its
+    remaining basis to a new lot of destination_commodity_id.
+  properties:
+    effective_on:
+      type: string
+      format: date
+      description: >
+        The distribution date. Every long lot open on this date, at the
+        operation's slot, is entitled. Ex and record dates belong in
+        source_evidence.
+    holding_account_id:
+      type: integer
+      format: int64
+    destination_holding_account_id:
+      type: integer
+      format: int64
+      description: >
+        Holding that receives the new instrument. Defaults to holding_account_id;
+        a holding whose default instrument is the parent needs the new
+        instrument's own holding.
+    commodity_id:
+      type: integer
+      format: int64
+      description: The parent instrument.
+    destination_commodity_id:
+      type: integer
+      format: int64
+      description: The distributed instrument; must differ from commodity_id and not be a currency.
+    ratio_numerator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+      description: New units distributed for ratio_denominator parent units.
+    ratio_denominator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+      description: Parent units entitling ratio_numerator new units. The ratio is stored in lowest terms.
+    basis_fraction_value:
+      type: string
+      description: >
+        Coefficient of the share of each parent lot's basis that moves:
+        basis_fraction_value / 10^basis_fraction_scale, strictly between 0 and 1
+        (0.141 for an issuer's 14.1 % allocation is "141" at scale 3). Stored in
+        lowest decimal terms, at most 12 decimal places.
+    basis_fraction_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    change_reason:
+      type: string
+    reconciliation_override:
+      type: boolean
+
+SpinOffLink:
+  type: object
+  required: [source_lot_id, destination_lot_id, cost_commodity_id, source_quantity_value, source_quantity_scale,
+    destination_quantity_value, destination_quantity_scale, basis_knowledge, allocated_basis_value,
+    allocated_basis_scale, remaining_basis_value, remaining_basis_scale, original_date_knowledge, original_acquired_on]
+  properties:
+    source_lot_id:
+      type: integer
+      format: int64
+      description: The parent lot, which stays open with its units.
+    destination_lot_id:
+      type: [integer, "null"]
+      format: int64
+      description: Null in a preview.
+    cost_commodity_id:
+      type: integer
+      format: int64
+    source_quantity_value:
+      type: string
+      description: The parent lot's units that entitle it.
+    source_quantity_scale:
+      type: integer
+    destination_quantity_value:
+      type: string
+      description: Parent units times the ratio, exactly.
+    destination_quantity_scale:
+      type: integer
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+    allocated_basis_value:
+      type: [string, "null"]
+      description: >
+        The parent's remaining basis times the fraction, truncated at the
+        position's allocation scale; the new lot's opening basis and the
+        parent's reduction. Null when unknown.
+    allocated_basis_scale:
+      type: [integer, "null"]
+    remaining_basis_value:
+      type: [string, "null"]
+      description: The parent lot's basis after the spin-off; null when unknown and in the correction chain.
+    remaining_basis_scale:
+      type: [integer, "null"]
+    original_date_knowledge:
+      type: string
+      enum: [known, unknown]
+    original_acquired_on:
+      type: [string, "null"]
+      format: date
+
+SpinOffPlan:
+  type: object
+  required: [ratio_numerator, ratio_denominator, basis_fraction_value, basis_fraction_scale, links,
+    destination_quantity_value, destination_quantity_scale, basis_totals]
+  properties:
+    ratio_numerator:
+      type: integer
+      format: int64
+    ratio_denominator:
+      type: integer
+      format: int64
+    basis_fraction_value:
+      type: string
+    basis_fraction_scale:
+      type: integer
+    links:
+      type: array
+      items:
+        $ref: "../schemas/investments.yaml#/SpinOffLink"
+    destination_quantity_value:
+      type: string
+      description: New units the journal moves into the destination holding.
+    destination_quantity_scale:
+      type: integer
+    basis_totals:
+      type: array
+      description: What the spin-off divides in each cost currency, in link order.
+      items:
+        $ref: "../schemas/investments.yaml#/SpinOffBasisTotal"
+
+SpinOffBasisTotal:
+  type: object
+  required: [cost_commodity_id, source_quantity_value, source_quantity_scale, destination_quantity_value,
+    destination_quantity_scale, basis_knowledge, allocated_basis_value, allocated_basis_scale,
+    remaining_basis_value, remaining_basis_scale, unknown_lots]
+  properties:
+    cost_commodity_id:
+      type: integer
+      format: int64
+    source_quantity_value:
+      type: string
+    source_quantity_scale:
+      type: integer
+    destination_quantity_value:
+      type: string
+    destination_quantity_scale:
+      type: integer
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: Unknown when any lot in this currency has unknown basis, as for a position.
+    allocated_basis_value:
+      type: [string, "null"]
+      description: Exact sum of the allocated basis; null when unknown.
+    allocated_basis_scale:
+      type: [integer, "null"]
+    remaining_basis_value:
+      type: [string, "null"]
+      description: Exact sum of the parent's remaining basis; null when unknown and in the correction chain.
+    remaining_basis_scale:
+      type: [integer, "null"]
+    unknown_lots:
+      type: integer
+
+InvestmentCorrectionSpinOffTerms:
+  type: object
+  required: [effective_on, holding_account_id, destination_holding_account_id, commodity_id,
+    destination_commodity_id, source_evidence, plan]
+  properties:
+    effective_on:
+      type: string
+      format: date
+    holding_account_id:
+      type: integer
+      format: int64
+    destination_holding_account_id:
+      type: integer
+      format: int64
+      description: Equal to holding_account_id when the new units went to the same holding.
+    commodity_id:
+      type: integer
+      format: int64
+      description: The parent instrument.
+    destination_commodity_id:
+      type: integer
+      format: int64
+      description: The distributed instrument.
+    source_evidence:
+      type: object
+      additionalProperties: true
+    plan:
+      $ref: "../schemas/investments.yaml#/SpinOffPlan"
+
+SpinOffPreviewResponse:
+  type: object
+  required: [plan, impact]
+  properties:
+    plan:
+      $ref: "../schemas/investments.yaml#/SpinOffPlan"
+    impact:
+      $ref: "../schemas/transactions.yaml#/ReconciliationImpactResponse"
+
+SpinOffResponse:
+  type: object
+  required: [transaction, plan]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    plan:
+      $ref: "../schemas/investments.yaml#/SpinOffPlan"
+
 ShareExchangeReplacementRequest:
   type: object
   additionalProperties: false
@@ -2129,6 +2358,12 @@ InvestmentCorrectionChainResponse:
         Present when the effective operation is a share exchange (#178): its
         instruments, holdings, ratio and each link's current carried basis.
         It is not yet correctable; reversal and replacement arrive with #179.
+    effective_spin_off:
+      $ref: '#/InvestmentCorrectionSpinOffTerms'
+      description: >-
+        Present when the effective operation is a spin-off (#180): its
+        instruments, holdings, ratio, basis fraction and each link's current
+        allocated basis. Its own correction arrives with #183.
     operations:
       type: array
       minItems: 1
@@ -2621,7 +2856,7 @@ InvestmentLotOrigin:
       format: int64
     transfer_kind:
       type: string
-      enum: [external_in, internal, exchange]
+      enum: [external_in, internal, exchange, spin_off]
     source_commodity_id:
       type: integer
       format: int64

@@ -1,0 +1,71 @@
+post:
+  summary: Record a spin-off of one holding
+  description: >
+    A spin-off or demerger (#180). Every long lot of commodity_id open in
+    holding_account_id on effective_on keeps its units and moves
+    basis_fraction of its remaining basis (truncated at the position's
+    allocation scale; the parent keeps the remainder) to one new lot of
+    destination_commodity_id in the destination holding. The new lot holds the
+    parent lot's units times ratio_numerator/ratio_denominator exactly, with
+    the parent's cost currency, knowledge and original acquisition date. The
+    journal posts only the new instrument (destination holding +Q' and
+    commodity_trading −Q'); nothing is realized. A spin-off dated behind a
+    later rewrite of either position is refused until #183.
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/SpinOffRequest"
+  responses:
+    "201":
+      description: Spin-off journal, fact, basis reductions, new lots and links recorded atomically
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/SpinOffResponse"
+    "400":
+      description: Invalid spin-off facts, including a fraction outside (0, 1) or a destination holding that refuses the new instrument
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: >
+        INVESTMENT_SPIN_OFF_NO_HOLDINGS, INVESTMENT_SPIN_OFF_CHANGED (preview again),
+        INVESTMENT_EVENT_OUT_OF_ORDER (dated behind a later rewrite of either position),
+        INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the parent),
+        or reconciliation override required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE — a lot's new quantity needs more decimals than the new instrument permits; the distribution is never rounded
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

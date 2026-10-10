@@ -46,6 +46,11 @@ export type ShareExchangeResponse = components['schemas']['ShareExchangeResponse
 export type InvestmentCorrectionShareExchangeTerms = components['schemas']['InvestmentCorrectionShareExchangeTerms'];
 export type ShareExchangeReplacementRequest = components['schemas']['ShareExchangeReplacementRequest'];
 export type ShareExchangeReplacementResponse = components['schemas']['ShareExchangeReplacementResponse'];
+export type SpinOffRequest = components['schemas']['SpinOffRequest'];
+export type SpinOffPlan = components['schemas']['SpinOffPlan'];
+export type SpinOffPreviewResponse = components['schemas']['SpinOffPreviewResponse'];
+export type SpinOffResponse = components['schemas']['SpinOffResponse'];
+export type InvestmentCorrectionSpinOffTerms = components['schemas']['InvestmentCorrectionSpinOffTerms'];
 export type InvestmentLotOrigin = components['schemas']['InvestmentLotOrigin'];
 export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
@@ -418,6 +423,31 @@ export async function recordInvestmentSplit(
 export async function previewShareExchange(input: ShareExchangeRequest): Promise<ShareExchangePreviewResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/share-exchanges/preview', { body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewSpinOff(input: SpinOffRequest): Promise<SpinOffPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/spin-offs/preview', { body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordSpinOff(input: SpinOffRequest, csrfToken: string): Promise<SpinOffResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/spin-offs', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
     if (data !== undefined) return data;
     throw toAPIClientError(response, error);
   } catch (error) {

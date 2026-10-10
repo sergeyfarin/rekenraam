@@ -9,12 +9,14 @@ import (
 	"rekenraam/backend/internal/exact"
 )
 
-// SelfCheckShareExchange is one share exchange (#177) folded exactly: whether
-// every link's destination holds its source quantity times the recorded
-// ratio, and the link totals beside what the primary journal posted to the
-// holding and commodity_trading in each instrument.
+// SelfCheckShareExchange is one share exchange (#177) or spin-off (#180)
+// folded exactly: whether every link's destination holds its source quantity
+// times the recorded ratio, and the link totals beside what the primary
+// journal posted to the holding and commodity_trading in each instrument. A
+// spin-off posts nothing in the parent.
 type SelfCheckShareExchange struct {
 	OperationID  int64
+	SpinOff      bool
 	Links        int
 	RatioBroken  bool
 	Source       *exact.ScaledInt // sum of link (old) quantities
@@ -29,20 +31,24 @@ type SelfCheckShareExchange struct {
 // Agrees reports whether the exchange converted every link at its ratio and
 // posted exactly the four legs its links moved.
 func (e SelfCheckShareExchange) Agrees() bool {
+	oldMoved := e.Source
+	if e.SpinOff {
+		oldMoved = exact.NewScaledInt()
+	}
 	return e.Links > 0 && !e.RatioBroken && !e.StrayPosting &&
-		e.OldHolding.Cmp(e.Source.Negated()) == 0 && e.OldTrading.Cmp(e.Source) == 0 &&
+		e.OldHolding.Cmp(oldMoved.Negated()) == 0 && e.OldTrading.Cmp(oldMoved) == 0 &&
 		e.NewHolding.Cmp(e.Destination) == 0 && e.NewTrading.Cmp(e.Destination.Negated()) == 0
 }
 
-// SelfCheckShareExchanges reads every share exchange's links and primary
-// journal postings. Coefficients are compared and summed in Go.
+// SelfCheckShareExchanges reads every share exchange's and spin-off's links
+// and primary journal postings. Coefficients are compared and summed in Go.
 func (r *SelfCheckRepository) SelfCheckShareExchanges(ctx context.Context, transaction *sql.Tx, bookID int64) ([]SelfCheckShareExchange, error) {
 	exchanges := make(map[int64]*SelfCheckShareExchange)
 	var order []int64
-	get := func(operationID int64) *SelfCheckShareExchange {
+	get := func(operationID int64, spinOff bool) *SelfCheckShareExchange {
 		exchange, exists := exchanges[operationID]
 		if !exists {
-			exchange = &SelfCheckShareExchange{OperationID: operationID, Source: exact.NewScaledInt(),
+			exchange = &SelfCheckShareExchange{OperationID: operationID, SpinOff: spinOff, Source: exact.NewScaledInt(),
 				Destination: exact.NewScaledInt(), OldHolding: exact.NewScaledInt(), OldTrading: exact.NewScaledInt(),
 				NewHolding: exact.NewScaledInt(), NewTrading: exact.NewScaledInt()}
 			exchanges[operationID] = exchange
@@ -51,13 +57,14 @@ func (r *SelfCheckRepository) SelfCheckShareExchanges(ctx context.Context, trans
 		return exchange
 	}
 	links, err := transaction.QueryContext(ctx, `
-		SELECT o.id, f.ratio_numerator, f.ratio_denominator, x.quantity_value, x.quantity_scale,
-			d.quantity_value, d.quantity_scale
+		SELECT o.id, o.operation_kind = 'spin_off', f.ratio_numerator, f.ratio_denominator,
+			x.quantity_value, x.quantity_scale, d.quantity_value, d.quantity_scale
 		FROM investment_operations o
-		LEFT JOIN investment_transfer_facts f ON f.operation_id = o.id AND f.transfer_kind = 'exchange'
+		LEFT JOIN investment_transfer_facts f ON f.operation_id = o.id
+			AND f.transfer_kind = CASE o.operation_kind WHEN 'spin_off' THEN 'spin_off' ELSE 'exchange' END
 		LEFT JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
 		LEFT JOIN investment_lots d ON d.id = x.destination_lot_id
-		WHERE o.book_id = ? AND o.operation_kind = 'share_exchange'
+		WHERE o.book_id = ? AND o.operation_kind IN ('share_exchange', 'spin_off')
 		ORDER BY o.id, x.link_seq`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read self-check share exchange links: %w", err)
@@ -65,13 +72,14 @@ func (r *SelfCheckRepository) SelfCheckShareExchanges(ctx context.Context, trans
 	defer links.Close()
 	for links.Next() {
 		var operationID int64
+		var spinOff bool
 		var numerator, denominator, sourceScale, destinationScale sql.NullInt64
 		var source, destination sql.NullString
-		if err := links.Scan(&operationID, &numerator, &denominator, &source, &sourceScale,
+		if err := links.Scan(&operationID, &spinOff, &numerator, &denominator, &source, &sourceScale,
 			&destination, &destinationScale); err != nil {
 			return nil, fmt.Errorf("scan self-check share exchange link: %w", err)
 		}
-		exchange := get(operationID)
+		exchange := get(operationID, spinOff)
 		if !source.Valid {
 			continue
 		}
@@ -98,14 +106,14 @@ func (r *SelfCheckRepository) SelfCheckShareExchanges(ctx context.Context, trans
 		return nil, fmt.Errorf("iterate self-check share exchange links: %w", err)
 	}
 	postings, err := transaction.QueryContext(ctx, `
-		SELECT f.operation_id, pv.commodity_id = f.commodity_id, pv.commodity_id = f.destination_commodity_id,
+		SELECT f.operation_id, f.transfer_kind = 'spin_off', pv.commodity_id = f.commodity_id, pv.commodity_id = f.destination_commodity_id,
 			pv.account_id = f.source_account_id, pv.account_id = f.destination_account_id,
 			a.system_role IS 'commodity_trading', pv.quantity_value, pv.quantity_scale
 		FROM investment_transfer_facts f
 		JOIN investment_operation_journal_links link ON link.operation_id = f.operation_id AND link.role = 'primary'
 		JOIN posting_versions pv ON pv.transaction_version_id = link.transaction_version_id
 		JOIN accounts a ON a.id = pv.account_id
-		WHERE f.book_id = ? AND f.transfer_kind = 'exchange'
+		WHERE f.book_id = ? AND f.transfer_kind IN ('exchange', 'spin_off')
 		ORDER BY f.operation_id`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read self-check share exchange postings: %w", err)
@@ -113,14 +121,14 @@ func (r *SelfCheckRepository) SelfCheckShareExchanges(ctx context.Context, trans
 	defer postings.Close()
 	for postings.Next() {
 		var operationID int64
-		var oldCommodity, newCommodity, sourceHolding, destinationHolding, trading bool
+		var spinOff, oldCommodity, newCommodity, sourceHolding, destinationHolding, trading bool
 		var value exact.Coefficient
 		var scale int
-		if err := postings.Scan(&operationID, &oldCommodity, &newCommodity, &sourceHolding, &destinationHolding,
+		if err := postings.Scan(&operationID, &spinOff, &oldCommodity, &newCommodity, &sourceHolding, &destinationHolding,
 			&trading, &value, &scale); err != nil {
 			return nil, fmt.Errorf("scan self-check share exchange posting: %w", err)
 		}
-		exchange := get(operationID)
+		exchange := get(operationID, spinOff)
 		amount := exact.ScaledIntFromCoefficient(value, scale)
 		switch {
 		case oldCommodity && sourceHolding:

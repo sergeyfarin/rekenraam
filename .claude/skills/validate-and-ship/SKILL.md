@@ -301,6 +301,16 @@ non-trivial diff (yours or reviewed):
     transfer and wrong for an exchange. Read the destination lot's own
     quantity and `COALESCE(f.destination_commodity_id, f.commodity_id)`.
     Named regression: `TestShareExchangeUpstreamBuyReplacementRevisesTheNewLot`.
+32. **A transfer link's source side assumed to be a `transfer_out` that moves
+    units** — a spin-off (#180) is a transfer fact of kind `spin_off` whose
+    parent lot keeps its units: its source effect is a quantity-0
+    `basis_reduction`. A reader that finds a link's source event by
+    `event_kind = 'transfer_out'`, or folds a revised link as `−link quantity`
+    out of the source (replay intents, `effective_investment_lot_events`, the
+    self-check's revised-link events), silently drops or double-moves a
+    spin-off. Key the source event on the transfer kind. Named regressions:
+    `TestSpinOffUpstreamBuyReplacementRevisesBothSides`,
+    `TestSpinOffCarriesUnknownBasisAndResolvesThroughReplay`.
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

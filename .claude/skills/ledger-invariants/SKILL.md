@@ -200,6 +200,11 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   A share exchange (#179) is corrected by its own reversal and replacement
   the same way. A backdated exchange takes the whole holding open at its
   slot through the same subject intent.
+- A spin-off (#180) keeps every parent lot's units and moves remaining basis
+  × an exact sourced fraction (truncated at the allocation scale, remainder
+  stays) to one new lot per parent lot: the parent's `basis_reduction` equals
+  the new lot's opening basis, so basis is conserved per lot. Unknown stays
+  unknown on both sides. It is in-order only until #183.
 
 ## Dates and times
 

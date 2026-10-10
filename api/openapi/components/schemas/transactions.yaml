@@ -238,7 +238,7 @@ TransactionResponse:
       type: string
     system_label:
       type: string
-      enum: [split_adjustment, transfer_bridge, share_exchange]
+      enum: [split_adjustment, transfer_bridge, share_exchange, spin_off]
       description: Stable code for a journal the system posted without user text (T-136), or for a share exchange's journal (#178); the client localizes it and uses it as the title when the journal has no memo. Absent for ordinary journals.
     invalidated_checkpoint_ids:
       type: array
@@ -353,7 +353,7 @@ AccountRegisterEntryResponse:
       type: string
     system_label:
       type: string
-      enum: [split_adjustment, transfer_bridge, share_exchange]
+      enum: [split_adjustment, transfer_bridge, share_exchange, spin_off]
       description: Stable code for a journal the system posted without user text (T-136), or for a share exchange's journal (#178); the client localizes it and uses it as the title when the journal has no memo. Absent for ordinary journals.
     correction_chain:
       $ref: "../../openapi.yaml#/components/schemas/RegisterCorrectionChain"

@@ -79,7 +79,22 @@ type InvestmentCorrectionChain struct {
 	// EffectiveShareExchange explains an effective share exchange (#178).
 	// It offers no correction yet: reversal and replacement arrive with #179.
 	EffectiveShareExchange *InvestmentCorrectionShareExchangeTerms
-	Operations             []InvestmentCorrectionNode
+	// EffectiveSpinOff explains an effective spin-off (#180). Its own
+	// correction arrives with #183.
+	EffectiveSpinOff *InvestmentCorrectionSpinOffTerms
+	Operations       []InvestmentCorrectionNode
+}
+
+// InvestmentCorrectionSpinOffTerms are a spin-off's instruments, holdings,
+// ratio, basis fraction and every link with its current allocated basis.
+type InvestmentCorrectionSpinOffTerms struct {
+	HoldingAccountID            int64
+	DestinationHoldingAccountID int64
+	CommodityID                 int64
+	DestinationCommodityID      int64
+	EffectiveOn                 string
+	SourceEvidenceJSON          string
+	Plan                        SpinOffPlan
 }
 
 // InvestmentCorrectionShareExchangeTerms are an exchange's instruments,
@@ -335,6 +350,24 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 				return InvestmentCorrectionChain{}, err
 			}
 			chain.EffectiveShareExchange = &InvestmentCorrectionShareExchangeTerms{
+				HoldingAccountID: terms.AccountID, DestinationHoldingAccountID: terms.DestinationAccountID,
+				CommodityID: terms.CommodityID, DestinationCommodityID: terms.DestinationCommodityID,
+				EffectiveOn: terms.EffectiveOn, SourceEvidenceJSON: terms.SourceEvidenceJSON, Plan: plan,
+			}
+		}
+		if effective && record.OperationKind == "spin_off" {
+			terms, err := s.repository.SpinOffTermsByOperation(ctx, BookID, record.OperationID)
+			if err != nil {
+				return InvestmentCorrectionChain{}, err
+			}
+			// The parent's remaining basis then is not recorded: the chain
+			// carries what moved, not what stayed.
+			plan, err := spinOffPlanOf(terms.RatioNumerator, terms.RatioDenominator, terms.BasisFractionValue,
+				terms.BasisFractionScale, terms.Plan, false)
+			if err != nil {
+				return InvestmentCorrectionChain{}, err
+			}
+			chain.EffectiveSpinOff = &InvestmentCorrectionSpinOffTerms{
 				HoldingAccountID: terms.AccountID, DestinationHoldingAccountID: terms.DestinationAccountID,
 				CommodityID: terms.CommodityID, DestinationCommodityID: terms.DestinationCommodityID,
 				EffectiveOn: terms.EffectiveOn, SourceEvidenceJSON: terms.SourceEvidenceJSON, Plan: plan,

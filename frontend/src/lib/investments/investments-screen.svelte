@@ -23,6 +23,7 @@
   import CapitalReturnForm from '#lib/investments/capital-return-form.svelte';
   import SplitForm from '#lib/investments/split-form.svelte';
   import ShareExchangeForm from '#lib/investments/share-exchange-form.svelte';
+  import SpinOffForm from '#lib/investments/spin-off-form.svelte';
   import ShortTradeForm from '#lib/investments/short-trade-form.svelte';
   import PositionSideBadge from '#lib/investments/position-side-badge.svelte';
   import GainsReport from '#lib/investments/gains-report.svelte';
@@ -87,6 +88,12 @@
         ratioOld: String(origin.ratio_denominator), date: formatDate(openedOn)
       });
     }
+    if (origin.transfer_kind === 'spin_off' && origin.ratio_numerator !== null && origin.ratio_denominator !== null) {
+      return m.investments_lot_spun_off_from({
+        instrument: instrumentName(origin.source_commodity_id), ratioNew: String(origin.ratio_numerator),
+        ratioOld: String(origin.ratio_denominator), date: formatDate(openedOn)
+      });
+    }
     return m.investments_lot_transferred_in({ date: formatDate(openedOn) });
   }
 
@@ -119,7 +126,7 @@
   }
 
   // Trade form modal
-  type TradeModal = 'buy' | 'sell' | 'short-open' | 'short-cover' | 'dividend' | 'reinvested' | 'external-transfer-in' | 'external-transfer-out' | 'internal-transfer' | 'split' | 'share-exchange' | 'capital-return' | null;
+  type TradeModal = 'buy' | 'sell' | 'short-open' | 'short-cover' | 'dividend' | 'reinvested' | 'external-transfer-in' | 'external-transfer-out' | 'internal-transfer' | 'split' | 'share-exchange' | 'spin-off' | 'capital-return' | null;
   let activeModal = $state<TradeModal>(null);
 
   function openModal(modal: TradeModal) {
@@ -256,6 +263,13 @@
         class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       >
         {m.investments_record_share_exchange()}
+      </button>
+      <button
+        type="button"
+        onclick={() => openModal('spin-off')}
+        class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      >
+        {m.investments_record_spin_off()}
       </button>
       <button
         type="button"
@@ -448,7 +462,7 @@
     class="fixed inset-x-4 bottom-0 z-50 max-h-[90vh] overflow-y-auto rounded-t-(--radius-panel) border border-border bg-surface shadow-(--shadow-panel) sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-(--radius-panel)"
     role="dialog"
     aria-modal="true"
-    aria-labelledby={activeModal === 'short-open' ? 'short-open-title' : activeModal === 'short-cover' ? 'short-cover-title' : activeModal === 'external-transfer-in' ? 'external-transfer-in-title' : activeModal === 'internal-transfer' ? 'internal-transfer-title' : activeModal === 'external-transfer-out' ? 'external-transfer-out-title' : activeModal === 'split' ? 'split-title' : activeModal === 'share-exchange' ? 'share-exchange-title' : activeModal === 'capital-return' ? 'capital-return-title' : undefined}
+    aria-labelledby={activeModal === 'short-open' ? 'short-open-title' : activeModal === 'short-cover' ? 'short-cover-title' : activeModal === 'external-transfer-in' ? 'external-transfer-in-title' : activeModal === 'internal-transfer' ? 'internal-transfer-title' : activeModal === 'external-transfer-out' ? 'external-transfer-out-title' : activeModal === 'split' ? 'split-title' : activeModal === 'share-exchange' ? 'share-exchange-title' : activeModal === 'spin-off' ? 'spin-off-title' : activeModal === 'capital-return' ? 'capital-return-title' : undefined}
   >
     <div class="p-6">
       {#if activeModal === 'buy'}
@@ -473,6 +487,8 @@
         <SplitForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {:else if activeModal === 'share-exchange'}
         <ShareExchangeForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
+      {:else if activeModal === 'spin-off'}
+        <SpinOffForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {:else if activeModal === 'capital-return'}
         <CapitalReturnForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {/if}

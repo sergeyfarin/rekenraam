@@ -1,0 +1,51 @@
+post:
+  summary: Preview a spin-off
+  description: >
+    Runs the complete spin-off writer in a rolled-back transaction. Returns
+    every link (parent units, new units, allocated and remaining basis and
+    original date), the totals per cost currency and every active checkpoint
+    the writer would invalidate. No durable change or temporary ID escapes;
+    commit rechecks everything.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/SpinOffRequest"
+  responses:
+    "200":
+      description: Spin-off preview computed (no mutation)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/SpinOffPreviewResponse"
+    "400":
+      description: Invalid spin-off facts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: INVESTMENT_SPIN_OFF_NO_HOLDINGS, INVESTMENT_EVENT_OUT_OF_ORDER or INVESTMENT_POSITION_SIDE_CONFLICT
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

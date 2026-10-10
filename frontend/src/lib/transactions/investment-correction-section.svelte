@@ -17,6 +17,7 @@
   import BasisResolutionForm from '#lib/investments/basis-resolution-form.svelte';
   import ShortTradeForm from '#lib/investments/short-trade-form.svelte';
   import ShareExchangeSummary from '#lib/investments/share-exchange-summary.svelte';
+  import SpinOffSummary from '#lib/investments/spin-off-summary.svelte';
   import ShareExchangeForm from '#lib/investments/share-exchange-form.svelte';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import GainImpactList from '#lib/investments/gain-impact-list.svelte';
@@ -146,8 +147,11 @@
   const shareExchange = $derived(chainQuery.data?.effective_transaction_id === transactionID
     ? chainQuery.data.effective_share_exchange ?? null : null);
   const shareExchangeCorrectable = $derived(shareExchange !== null && chainQuery.data?.can_correct_share_exchange === true);
-  const instrumentsQuery = createQuery(() => ({ ...investmentInstrumentsQueryOptions(), enabled: shareExchange !== null }));
-  const exchangeAccountsQuery = createQuery(() => ({ ...accountsQueryOptions(false, false), enabled: shareExchange !== null }));
+  // A spin-off is explained the same way (#180); its correction is #183.
+  const spinOff = $derived(chainQuery.data?.effective_transaction_id === transactionID
+    ? chainQuery.data.effective_spin_off ?? null : null);
+  const instrumentsQuery = createQuery(() => ({ ...investmentInstrumentsQueryOptions(), enabled: shareExchange !== null || spinOff !== null }));
+  const exchangeAccountsQuery = createQuery(() => ({ ...accountsQueryOptions(false, false), enabled: shareExchange !== null || spinOff !== null }));
   function exchangeInstrumentName(commodityID: number): string {
     const instrument = (instrumentsQuery.data?.instruments ?? []).find((item) => item.commodity_id === commodityID);
     return instrument?.display_name ?? instrument?.commodity_code ?? `#${commodityID}`;
@@ -451,6 +455,30 @@
               {m.transactions_investment_replace_exchange_action()}
             </button>
           </div>
+        {/if}
+      </div>
+    {/if}
+    {#if spinOff}
+      <div class="space-y-2" role="group" aria-labelledby="spin-off-detail-heading">
+        <h4 id="spin-off-detail-heading" class="text-xs font-semibold text-muted">{m.transactions_investment_spin_off_title()}</h4>
+        {#if instrumentsQuery.isPending || exchangeAccountsQuery.isPending}
+          <p class="text-sm text-muted" role="status">{m.transactions_investment_history_loading()}</p>
+        {:else}
+          <p class="text-sm text-foreground">{m.transactions_investment_spin_off_summary({
+            parentName: exchangeInstrumentName(spinOff.commodity_id),
+            newName: exchangeInstrumentName(spinOff.destination_commodity_id),
+            date: formatDate(spinOff.effective_on)
+          })}</p>
+          <p class="text-xs text-muted">{spinOff.destination_holding_account_id === spinOff.holding_account_id
+            ? m.transactions_investment_spin_off_same_holding({ name: exchangeAccountName(spinOff.holding_account_id) })
+            : m.transactions_investment_exchange_holdings({
+              source: exchangeAccountName(spinOff.holding_account_id),
+              destination: exchangeAccountName(spinOff.destination_holding_account_id)
+            })}</p>
+          <SpinOffSummary plan={spinOff.plan}
+            parentName={exchangeInstrumentName(spinOff.commodity_id)}
+            newName={exchangeInstrumentName(spinOff.destination_commodity_id)}
+            currenciesByID={new Map((currenciesQuery.data?.currencies ?? []).map((c: CurrencyResponse) => [c.id, c]))} />
         {/if}
       </div>
     {/if}

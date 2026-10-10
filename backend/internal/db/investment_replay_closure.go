@@ -20,7 +20,7 @@ type InvestmentReplayPosition struct {
 // InvestmentReplayClosure returns the affected-position dependency closure
 // that ADR 0013's cross-position replay refinement (T-124) selects instead of
 // a whole-book rebuild. Starting from the positions a command changes, it
-// follows internal-transfer and share-exchange lot links from source to
+// follows internal-transfer, share-exchange and spin-off lot links from source to
 // destination: a source whose replay may change from date D can change the
 // carried basis of every transfer it makes on or after D, which changes the
 // destination's opening from that transfer date. The walk repeats to a fixed point, so chains and
@@ -91,7 +91,7 @@ func investmentReplayClosureQuery(ctx context.Context, reader queryer, bookID in
 			f.destination_account_id, COALESCE(f.destination_commodity_id, f.commodity_id), f.effective_on
 		FROM investment_transfer_facts f
 		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
-		WHERE f.book_id = ? AND f.transfer_kind IN ('internal', 'exchange') AND x.cost_commodity_id IS NOT NULL
+		WHERE f.book_id = ? AND f.transfer_kind IN ('internal', 'exchange', 'spin_off') AND x.cost_commodity_id IS NOT NULL
 		ORDER BY f.effective_on, f.source_account_id, f.destination_account_id`, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("read replay closure transfers: %w", err)
@@ -105,7 +105,7 @@ func investmentReplayClosureQuery(ctx context.Context, reader queryer, bookID in
 			rows.Close()
 			return nil, fmt.Errorf("scan replay closure transfer: %w", err)
 		}
-		// A share exchange's destination is another instrument (#177); the
+		// A share exchange's or spin-off's destination is another instrument (#177, #180); the
 		// cost currency always carries over.
 		edge.destination.costCommodityID = source.costCommodityID
 		edges[source] = append(edges[source], edge)

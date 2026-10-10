@@ -362,6 +362,44 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		if err := keepPositionMethodFamilyTx(ctx, tx, params, intent.AuditEventID); err != nil {
 			return err
 		}
+	case "spin_off":
+		// A spin-off reduces each entitled parent lot again at its slot
+		// (#180). The units and the new lots are fixed by the links; the
+		// allocated basis and a corrected acquisition's successor lot follow
+		// history. A parent lot open at the slot that no link entitles means
+		// the spin-off no longer covers the holding.
+		allocationScale, err := positionBasisAllocationScaleTx(ctx, tx, DisposeLotsParams{BookID: bookID,
+			AccountID: accountID, CommodityID: commodityID, CostCommodityID: costCommodityID,
+			EventDate: intent.EventDate, AdmitUnknownBasis: true})
+		if err != nil {
+			return err
+		}
+		entitled := make(map[int64]bool, len(intent.ExchangeLinks))
+		for _, link := range intent.ExchangeLinks {
+			reduced, err := spinOffLotTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, link.LotID,
+				intent.EventDate, link.QuantityValue, link.QuantityScale, intent.BasisFractionValue,
+				intent.BasisFractionScale, allocationScale, intent.CreatedAt, intent.CreatedByUserID, intent.AuditEventID)
+			if err != nil {
+				return replayTransferError(intent, err)
+			}
+			entitled[link.LotID] = true
+			knowledge, resolved, err := transferKnowledgeAfterReplay(link.BasisKnowledge, reduced.BasisKnowledge)
+			if err != nil {
+				return replayTransferError(intent, err)
+			}
+			if link.LotID != link.RecordedLotID || resolved || knowledge == InvestmentBasisKnown &&
+				exact.ScaledIntFromInt64(reduced.AllocatedBasisValue, reduced.AllocatedBasisScale).Cmp(
+					exact.ScaledIntFromCoefficient(link.CostBasisValue, link.CostBasisScale)) != 0 {
+				projection.TransferRevisions = append(projection.TransferRevisions, InvestmentReplayTransferRevision{
+					OperationID: intent.OperationID, LinkSeq: link.LinkSeq, SourceLotID: link.LotID,
+					CostBasisValue: reduced.AllocatedBasisValue, CostBasisScale: reduced.AllocatedBasisScale,
+					BasisKnowledge: knowledge})
+			}
+		}
+		if err := requireSpinOffCompleteTx(ctx, tx, bookID, accountID, commodityID, costCommodityID,
+			intent.EventDate, entitled); err != nil {
+			return replayTransferError(intent, err)
+		}
 	case "pooled_transfer_out":
 		params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
 			CommodityID: commodityID, CostCommodityID: costCommodityID,

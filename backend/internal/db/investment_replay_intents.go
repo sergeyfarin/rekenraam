@@ -26,7 +26,7 @@ type InvestmentReplayIntent struct {
 	OperationKind    string
 	EffectSeq        int
 	EventDate        string
-	Kind             string // opening, disposal, transfer_out, pooled_transfer_out, pooled_lot_transfer_out, exchange_out or split
+	Kind             string // opening, disposal, transfer_out, pooled_transfer_out, pooled_lot_transfer_out, exchange_out, spin_off or split
 	LotID            int64  // opening or transfer_out
 	LinkSeq          int    // transfer_out: the link whose carried basis it produces
 	// RecordedLotID is the source lot a transfer_out's current effective
@@ -88,8 +88,13 @@ type InvestmentReplayIntent struct {
 	PooledDepletions []InvestmentReplayTransferLink
 	// ExchangeLinks are a share exchange's per-lot depletions in this cost
 	// currency, in link order (#177). Replay applies them together, then
-	// requires the holding at the slot to be empty.
+	// requires the holding at the slot to be empty. A spin-off's (#180) are
+	// its entitled parent lots, whose amount is the allocated basis; replay
+	// reduces each by the basis fraction, then requires every lot open at the
+	// slot to be one of them.
 	ExchangeLinks         []InvestmentReplayTransferLink
+	BasisFractionValue    exact.Coefficient // spin-off only
+	BasisFractionScale    int
 	OriginalDateKnowledge string
 	OriginalAcquiredOn    string
 	TransactionID         int64
@@ -268,19 +273,21 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			CASE WHEN revision.id IS NULL THEN x.carried_basis_scale ELSE revision.carried_basis_scale END,
 			CASE WHEN revision.id IS NULL THEN x.basis_knowledge ELSE revision.basis_knowledge END,
 			e.transaction_id, e.created_audit_event_id, e.created_by_user_id, e.created_at,
-			effect.effect_seq, f.basis_allocation, f.transfer_kind = 'external_out', f.transfer_kind = 'exchange'
+			effect.effect_seq, f.basis_allocation, f.transfer_kind = 'external_out', f.transfer_kind,
+			f.basis_fraction_value, f.basis_fraction_scale
 		FROM investment_transfer_facts f
 		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
 		JOIN effective_investment_operations o ON o.id = f.operation_id
 		JOIN investment_lots src ON src.id = x.source_lot_id
 		JOIN investment_operation_lot_effects effect ON effect.operation_id = f.operation_id
-		JOIN investment_lot_events e ON e.id = effect.lot_event_id
-			AND e.lot_id = x.source_lot_id AND e.event_kind = 'transfer_out'
+		-- A spin-off's parent side is a basis reduction (#180).
+		JOIN investment_lot_events e ON e.id = effect.lot_event_id AND e.lot_id = x.source_lot_id
+			AND e.event_kind = CASE f.transfer_kind WHEN 'spin_off' THEN 'basis_reduction' ELSE 'transfer_out' END
 		LEFT JOIN latest_investment_transfer_link_revisions revision
 			ON revision.operation_id = x.operation_id AND revision.link_seq = x.link_seq
 		WHERE f.book_id = ? AND f.source_account_id = ? AND f.commodity_id = ?
 			AND ((f.transfer_kind = 'internal' AND f.destination_lineage = 'source_lots')
-				OR f.transfer_kind IN ('external_out', 'exchange'))
+				OR f.transfer_kind IN ('external_out', 'exchange', 'spin_off'))
 			AND x.cost_commodity_id = ?
 		ORDER BY f.operation_id, x.link_seq
 	`, bookID, accountID, commodityID, costCommodityID)
@@ -300,12 +307,15 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			var knowledge string
 			var allocation sql.NullString
 			var sourceOperationID sql.NullInt64
-			var exchange bool
+			var transferKind string
+			var fraction sql.NullString
+			var fractionScale sql.NullInt64
 			if err := transfers.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
 				&intent.LinkSeq, &intent.transferSource.lotID, &intent.RecordedLotID, &sourceOperationID,
 				&intent.transferSource.openedOn, &intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale, &knowledge,
 				&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID,
-				&intent.CreatedAt, &intent.EffectSeq, &allocation, &intent.ExternalOut, &exchange); err != nil {
+				&intent.CreatedAt, &intent.EffectSeq, &allocation, &intent.ExternalOut, &transferKind,
+				&fraction, &fractionScale); err != nil {
 				transfers.Close()
 				return nil, fmt.Errorf("scan replay transfer depletion: %w", err)
 			}
@@ -318,7 +328,7 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			intent.Kind = "transfer_out"
 			intent.transferSource.operationID = sourceOperationID.Int64
 			intent.LotID = intent.transferSource.lotID
-			if exchange {
+			if transferKind == "exchange" || transferKind == "spin_off" {
 				link := InvestmentReplayTransferLink{LinkSeq: intent.LinkSeq, LotID: intent.LotID,
 					RecordedLotID: intent.RecordedLotID, transferSource: intent.transferSource,
 					QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
@@ -326,6 +336,14 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 				index, exists := exchanges[intent.OperationID]
 				if !exists {
 					intent.Kind = "exchange_out"
+					if transferKind == "spin_off" {
+						intent.Kind = "spin_off"
+						if !fraction.Valid || !fractionScale.Valid {
+							transfers.Close()
+							return nil, fmt.Errorf("%w: spin-off %d has no basis fraction", ErrInvalidDisposalParams, intent.OperationID)
+						}
+						intent.BasisFractionValue, intent.BasisFractionScale = exact.Coefficient(fraction.String), int(fractionScale.Int64)
+					}
 					intent.LotID, intent.LinkSeq, intent.RecordedLotID = 0, 0, 0
 					intent.transferSource = transferSourceOpening{}
 					intent.QuantityValue, intent.QuantityScale = "", 0
@@ -513,7 +531,7 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 					intents[index].PooledLinks[link].LotID, err = effectiveSource(intents[index].PooledLinks[link].transferSource)
 				}
 			}
-		case "exchange_out":
+		case "exchange_out", "spin_off":
 			for link := range intents[index].ExchangeLinks {
 				if err == nil {
 					intents[index].ExchangeLinks[link].LotID, err = effectiveSource(intents[index].ExchangeLinks[link].transferSource)

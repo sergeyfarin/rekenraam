@@ -563,9 +563,12 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 			-- A share exchange's destination holds the link's old units times
 			-- its ratio (#177); every other destination holds the link's units.
 			COALESCE(destination.quantity_value, link.quantity_value),
-			COALESCE(destination.quantity_scale, link.quantity_scale)
+			COALESCE(destination.quantity_scale, link.quantity_scale),
+			-- A spin-off's parent keeps its units and gives up only basis (#180).
+			fact.transfer_kind = 'spin_off'
 		FROM latest_investment_transfer_link_revisions revision
 		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
+		JOIN investment_transfer_facts fact ON fact.operation_id = revision.operation_id
 		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
 			AND link.link_seq = revision.link_seq
 		JOIN current_investment_lots source ON source.id = revision.source_lot_id
@@ -583,9 +586,10 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		var basis sql.NullString
 		var basisScale sql.NullInt64
 		var knowledge string
+		var spinOff bool
 		if err := transfers.Scan(&out.LotID, &out.AccountID, &out.CommodityID, &out.CostCommodityID,
 			&in.LotID, &in.AccountID, &in.CommodityID, &in.CostCommodityID,
-			&quantity, &scale, &basis, &basisScale, &knowledge, &inQuantity, &inScale); err != nil {
+			&quantity, &scale, &basis, &basisScale, &knowledge, &inQuantity, &inScale, &spinOff); err != nil {
 			transfers.Close()
 			return nil, fmt.Errorf("scan effective self-check transfer revision: %w", err)
 		}
@@ -596,6 +600,9 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 		}
 		in.QuantityValue, in.QuantityScale, in.CostBasisValue, in.CostBasisScale = inQuantity, inScale, value, valueScale
 		out.QuantityValue, out.QuantityScale, out.CostBasisValue, out.CostBasisScale = quantity.Negated(), scale, -value, valueScale
+		if spinOff {
+			out.QuantityValue, out.QuantityScale = "0", 0
+		}
 		in.BasisKnowledge, out.BasisKnowledge = knowledge, knowledge
 		events = append(events, out)
 		if in.LotID > 0 {
