@@ -1244,6 +1244,14 @@
   "api_error_investment_split_changed": "La position a changé après la prévisualisation. Prévisualisez de nouveau la division.",
   "api_error_investment_split_dependency": "Une vente ou un transfert ultérieur ne serait plus possible après cette division.",
   "api_error_import_split_link_unavailable": "Cette ligne ne peut plus être liée à cette division. Elle est peut-être déjà liée, ou la division ne concerne plus ce titre.",
+  "transactions_investment_reverse_exchange_action": "Annuler l’échange…",
+  "transactions_investment_reverse_exchange_title": "Annuler cet échange d’actions",
+  "transactions_investment_reverse_exchange_copy": "Cela comptabilise une opération inverse datée de l’échange. L’ancienne position récupère ses lots et les nouveaux lots sont retirés. Une vente ou un transfert ultérieur des nouvelles parts bloquera l’annulation. L’échange d’origine reste dans l’historique.",
+  "transactions_investment_replace_exchange_action": "Corriger l’échange…",
+  "transactions_investment_replace_exchange_title": "Corriger cet échange d’actions",
+  "investments_exchange_replace_help": "Modifiez la date, la parité, le nouvel instrument ou le compte qui reçoit les titres. L’échange d’origine est annulé et l’échange corrigé convertit toute la position au même rang dans la journée ; les ventes ultérieures sont recalculées.",
+  "investments_exchange_replace_reason": "Motif de la correction",
+  "investments_exchange_replace_submit": "Corriger l’échange",
   "transactions_investment_reverse_split_action": "Contrepasser la division…",
   "transactions_investment_reverse_split_title": "Contrepasser cette division",
   "transactions_investment_reverse_split_copy": "Cela comptabilise une transaction inverse à la date de la division et recalcule sans elle les affectations de lots ultérieures. Si une vente ultérieure ne peut plus être couverte sans la division, la contrepassation est refusée. La division d’origine reste dans l’historique.",
@@ -1370,6 +1378,5 @@
   "transactions_investment_exchange_summary": "{oldName} → {newName} : {ratioNew} nouvelles pour {ratioOld} anciennes, à compter du {date}",
   "transactions_investment_exchange_same_holding": "Les nouvelles unités sont restées dans {name}.",
   "transactions_investment_exchange_holdings": "De {source} vers {destination}.",
-  "transactions_investment_exchange_not_correctable": "Un échange d’actions ne peut pas encore être corrigé ni annulé.",
   "transactions_system_label_share_exchange": "Échange d’actions"
 }

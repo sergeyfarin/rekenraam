@@ -1244,6 +1244,14 @@
   "api_error_investment_split_changed": "Позиция изменилась после предпросмотра. Повторите предпросмотр сплита.",
   "api_error_investment_split_dependency": "После этого сплита более поздняя продажа или перенос станут невозможны.",
   "api_error_import_split_link_unavailable": "Эту строку больше нельзя связать с этим сплитом. Возможно, она уже связана или сплит не относится к этой бумаге.",
+  "transactions_investment_reverse_exchange_action": "Отменить обмен…",
+  "transactions_investment_reverse_exchange_title": "Отменить этот обмен акций",
+  "transactions_investment_reverse_exchange_copy": "Будет проведена обратная операция датой обмена. Старая позиция получит свои лоты обратно, а новые лоты будут закрыты. Более поздняя продажа или перевод новых бумаг заблокирует отмену. Исходный обмен останется в истории.",
+  "transactions_investment_replace_exchange_action": "Исправить обмен…",
+  "transactions_investment_replace_exchange_title": "Исправить этот обмен акций",
+  "investments_exchange_replace_help": "Измените дату, коэффициент, новый инструмент или счёт получения. Исходный обмен отменяется, а исправленный конвертирует всю позицию на том же месте в этот день; более поздние продажи пересчитываются.",
+  "investments_exchange_replace_reason": "Причина исправления",
+  "investments_exchange_replace_submit": "Исправить обмен",
   "transactions_investment_reverse_split_action": "Отменить сплит…",
   "transactions_investment_reverse_split_title": "Отменить этот сплит",
   "transactions_investment_reverse_split_copy": "Будет проведена обратная транзакция датой сплита, а последующие распределения по лотам будут пересчитаны без него. Если более позднюю продажу без сплита покрыть нельзя, отмена будет отклонена. Исходный сплит останется в истории.",
@@ -1370,6 +1378,5 @@
   "transactions_investment_exchange_summary": "{oldName} → {newName}: {ratioNew} новых за {ratioOld} старых, с {date}",
   "transactions_investment_exchange_same_holding": "Новые бумаги остались на счёте {name}.",
   "transactions_investment_exchange_holdings": "Со счёта {source} на счёт {destination}.",
-  "transactions_investment_exchange_not_correctable": "Обмен акций пока нельзя исправить или отменить.",
   "transactions_system_label_share_exchange": "Обмен акций"
 }

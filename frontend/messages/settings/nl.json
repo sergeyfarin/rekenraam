@@ -1244,6 +1244,14 @@
   "api_error_investment_split_changed": "De positie is na het voorbeeld gewijzigd. Bekijk de splitsing opnieuw.",
   "api_error_investment_split_dependency": "Een latere verkoop of overboeking zou na deze splitsing niet meer mogelijk zijn.",
   "api_error_import_split_link_unavailable": "Deze rij kan niet meer aan die splitsing worden gekoppeld. Mogelijk is hij al gekoppeld of hoort de splitsing niet bij dit effect.",
+  "transactions_investment_reverse_exchange_action": "Omwisseling terugdraaien…",
+  "transactions_investment_reverse_exchange_title": "Deze aandelenomwisseling terugdraaien",
+  "transactions_investment_reverse_exchange_copy": "Dit boekt een tegenboeking op de datum van de omwisseling. De oude positie krijgt haar lots terug en de nieuwe lots vervallen. Een latere verkoop of overboeking van de nieuwe stukken blokkeert het terugdraaien. De oorspronkelijke omwisseling blijft in de geschiedenis.",
+  "transactions_investment_replace_exchange_action": "Omwisseling corrigeren…",
+  "transactions_investment_replace_exchange_title": "Deze aandelenomwisseling corrigeren",
+  "investments_exchange_replace_help": "Wijzig de datum, de verhouding, het nieuwe instrument of de ontvangende rekening. De oorspronkelijke omwisseling wordt teruggedraaid en de gecorrigeerde zet de hele positie om op dezelfde plek in die dag; latere verkopen worden herberekend.",
+  "investments_exchange_replace_reason": "Reden van correctie",
+  "investments_exchange_replace_submit": "Omwisseling corrigeren",
   "transactions_investment_reverse_split_action": "Splitsing terugboeken…",
   "transactions_investment_reverse_split_title": "Deze splitsing terugboeken",
   "transactions_investment_reverse_split_copy": "Dit boekt een tegengestelde transactie op de splitsingsdatum en berekent latere lottoewijzingen opnieuw zonder de splitsing. Als een latere verkoop zonder de splitsing niet kan worden gedekt, wordt de terugboeking geweigerd. De oorspronkelijke splitsing blijft in de geschiedenis.",
@@ -1370,6 +1378,5 @@
   "transactions_investment_exchange_summary": "{oldName} → {newName}: {ratioNew} nieuwe voor {ratioOld} oude, per {date}",
   "transactions_investment_exchange_same_holding": "De nieuwe eenheden bleven op {name}.",
   "transactions_investment_exchange_holdings": "Van {source} naar {destination}.",
-  "transactions_investment_exchange_not_correctable": "Een aandelenomwisseling kan nog niet worden gecorrigeerd of teruggedraaid.",
   "transactions_system_label_share_exchange": "Aandelenomwisseling"
 }

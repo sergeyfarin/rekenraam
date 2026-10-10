@@ -43,7 +43,20 @@ async function setup(page: Page) {
       cash_account_id: cash.id, quantity_value: quantity, quantity_scale: 0, cash_amount_value: amount,
       cash_amount_scale: 2, cash_commodity_id: currencyID, cost_basis_method: 'fifo'
     });
-  return { old, successor, buy };
+  // A 1:1 exchange into the new instrument's own holding, recorded directly.
+  const exchange = () =>
+    apiJSON<{ transaction: { id: number } }>(page, 'POST', '/api/v1/investments/share-exchanges', csrfToken, {
+      effective_on: daysFromTodayISO(-10), holding_account_id: old.holdingID,
+      destination_holding_account_id: successor.holdingID, commodity_id: old.commodity_id,
+      destination_commodity_id: successor.commodity_id, ratio_numerator: 1, ratio_denominator: 1
+    });
+  const sellNew = (daysAgo: number, quantity: string, amount: string) =>
+    apiJSON(page, 'POST', '/api/v1/investments/sell', csrfToken, {
+      transaction_date: daysFromTodayISO(-daysAgo), commodity_id: successor.commodity_id,
+      holding_account_id: successor.holdingID, cash_account_id: cash.id, quantity_value: quantity, quantity_scale: 0,
+      cash_amount_value: amount, cash_amount_scale: 2, cash_commodity_id: currencyID, cost_basis_method: 'fifo'
+    });
+  return { old, successor, buy, exchange, sellNew };
 }
 
 async function openForm(page: Page, s: Awaited<ReturnType<typeof setup>>, newUnits: string, oldUnits: string) {
@@ -84,7 +97,8 @@ test('a share exchange previews exact lots and the new lots keep their original 
   await page.goto(`/app/transactions?transaction_id=${listed.lots[0].source_transaction_id}`);
   const detail = page.getByRole('group', { name: 'Share exchange' });
   await expect(detail).toContainText(`${s.old.name} → ${s.successor.name}: 3 new for 2 old`);
-  await expect(detail).toContainText('cannot be corrected or reversed yet');
+  await expect(detail.getByRole('button', { name: 'Correct exchange…' })).toBeVisible();
+  await expect(detail.getByRole('button', { name: 'Reverse exchange…' })).toBeVisible();
 });
 
 test('an exchange leaving an unrepresentable fraction is refused with a translated reason', async ({ page }) => {
@@ -92,4 +106,65 @@ test('an exchange leaving an unrepresentable fraction is refused with a translat
   await s.buy(40, '10', '10000');
   await openForm(page, s, '1', '7');
   await expect(page.getByRole('alert')).toContainText('Exchanges are never rounded');
+});
+
+// #179: correcting an exchange's ratio on a phone restates the later sale of
+// the new units, which the user accepts from the shared gain review.
+test('correcting an exchange ratio revises the later sale gain on mobile', async ({ page }) => {
+  const s = await setup(page);
+  await s.buy(40, '10', '10000');
+  const exchanged = await s.exchange();
+  await s.sellNew(5, '5', '10000'); // FIFO: 5 of 10 new units, basis 50.00
+
+  await page.goto(`/app/transactions?transaction_id=${exchanged.transaction.id}`);
+  await page.getByRole('button', { name: 'Correct exchange…' }).click();
+  const form = page.getByRole('dialog', { name: 'Correct this share exchange' });
+  await expect(form.getByLabel('New units received')).toHaveValue('1');
+  await expect(form.getByText(`${s.old.holdingName} · ${s.old.name}`)).toBeVisible();
+  await form.getByLabel('Reason for correction').fill('the merger was 2 for 1');
+  await form.getByLabel('New units received').fill('2');
+  await form.getByRole('button', { name: 'Preview exchange' }).click();
+  await expect(form.getByRole('region', { name: 'Exchange preview' })).toContainText(`10 ${s.old.name} → 20 ${s.successor.name}`);
+  await form.getByRole('button', { name: 'Correct exchange' }).click();
+
+  const review = page.getByRole('alertdialog');
+  await expect(review).toContainText(`Sale on ${daysFromTodayISO(-5)}: basis 50.00 → 25.00`);
+  await review.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(form).toBeHidden();
+  await expect.poll(async () => {
+    const chain = await apiJSON<{ effective_share_exchange?: { plan: { ratio_numerator: number; ratio_denominator: number } } }>(
+      page, 'GET', `/api/v1/investments/transactions/${exchanged.transaction.id}/correction-chain`);
+    const plan = chain.effective_share_exchange?.plan;
+    return plan ? `${plan.ratio_numerator}:${plan.ratio_denominator}` : '';
+  }).toBe('2:1');
+});
+
+test('reversing an exchange whose new units were sold is refused with a translated reason', async ({ page }) => {
+  const s = await setup(page);
+  await s.buy(40, '10', '10000');
+  const exchanged = await s.exchange();
+  await s.sellNew(5, '5', '10000');
+
+  await page.goto(`/app/transactions?transaction_id=${exchanged.transaction.id}`);
+  await page.getByRole('button', { name: 'Reverse exchange…' }).click();
+  await page.getByLabel('Reason for reversal').fill('no merger happened');
+  await page.getByRole('button', { name: 'Review and reverse' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('Reverse or correct that one first');
+});
+
+test('reversing an unsold exchange restores the old holding', async ({ page }) => {
+  const s = await setup(page);
+  await s.buy(40, '10', '10000');
+  const exchanged = await s.exchange();
+
+  await page.goto(`/app/transactions?transaction_id=${exchanged.transaction.id}`);
+  await page.getByRole('button', { name: 'Reverse exchange…' }).click();
+  await page.getByLabel('Reason for reversal').fill('no merger happened');
+  await page.getByRole('button', { name: 'Review and reverse' }).click();
+  await expect(page.getByRole('alertdialog')).toBeHidden();
+  await expect.poll(async () => {
+    const lots = await apiJSON<{ lots: Array<{ status: string; remaining_quantity_value: string }> }>(
+      page, 'GET', `/api/v1/investments/lots?account_id=${s.old.holdingID}&commodity_id=${s.old.commodity_id}`);
+    return lots.lots.filter((lot) => lot.status === 'open').map((lot) => lot.remaining_quantity_value);
+  }).toEqual(['10']);
 });

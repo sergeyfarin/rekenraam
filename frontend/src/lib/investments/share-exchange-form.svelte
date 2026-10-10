@@ -1,11 +1,14 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { untrack } from 'svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     investmentInstrumentsQueryOptions, datedHoldingsQueryOptions, previewShareExchange, recordShareExchange,
-    type GainImpact, type ReconciliationImpactResponse, type ShareExchangePlan, type ShareExchangeRequest
+    previewShareExchangeReplacement, replaceShareExchange,
+    type GainImpact, type InvestmentCorrectionShareExchangeTerms, type ReconciliationImpactResponse,
+    type ShareExchangePlan, type ShareExchangeReplacementRequest, type ShareExchangeRequest
   } from '#lib/api/investments.ts';
   import { invalidateInvestmentReads } from './invalidate';
   import {
@@ -23,11 +26,14 @@
   // Share exchange entry (#178): a merger, fund merger or class conversion
   // turns the whole long holding of one instrument into another at an exact
   // ratio. The server plans every lot; the form previews that plan and records
-  // exactly what was previewed.
-  let { csrfToken, onSaved, onCancel }: {
+  // exactly what was previewed. With correction set, the form replaces that
+  // posted exchange (#179): the exchanged holding is fixed, the current terms
+  // are pre-filled and a reason is required.
+  let { csrfToken, onSaved, onCancel, correction }: {
     csrfToken: string;
     onSaved: () => void;
     onCancel: () => void;
+    correction?: { transactionID: number; terms: InvestmentCorrectionShareExchangeTerms };
   } = $props();
 
   const queryClient = useQueryClient();
@@ -35,14 +41,19 @@
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
-  let effectiveOn = $state('');
-  let holdingKey = $state('');
-  let newCommodityID = $state('');
+  // Pre-fill once from the exchange being corrected; later edits are the user's.
+  const initialTerms = untrack(() => correction?.terms);
+  let effectiveOn = $state(initialTerms?.effective_on ?? '');
+  let holdingKey = $state(initialTerms ? `${initialTerms.holding_account_id}:${initialTerms.commodity_id}` : '');
+  let newCommodityID = $state(initialTerms ? String(initialTerms.destination_commodity_id) : '');
   // Null follows the suggested destination; a choice the user makes sticks
   // until the holding or the new instrument changes.
-  let chosenDestination = $state<string | null>(null);
-  let newUnits = $state('');
-  let oldUnits = $state('');
+  let chosenDestination = $state<string | null>(!initialTerms ? null
+    : initialTerms.destination_holding_account_id === initialTerms.holding_account_id
+      ? 'same' : String(initialTerms.destination_holding_account_id));
+  let newUnits = $state(initialTerms ? String(initialTerms.plan.ratio_numerator) : '');
+  let oldUnits = $state(initialTerms ? String(initialTerms.plan.ratio_denominator) : '');
+  let reason = $state('');
   let sourceReference = $state('');
   let memo = $state('');
   let pending = $state(false);
@@ -80,7 +91,10 @@
     }
     return [...seen.entries()].map(([key, value]) => ({ key, ...value }));
   });
-  const selectedHolding = $derived(holdings.find((holding) => holding.key === holdingKey));
+  // A corrected exchange's old holding was emptied by it; it stays fixed.
+  const selectedHolding = $derived(correction
+    ? { key: holdingKey, accountID: correction.terms.holding_account_id, commodityID: correction.terms.commodity_id }
+    : holdings.find((holding) => holding.key === holdingKey));
   const newInstruments = $derived(instruments.filter((instrument) => instrument.commodity_id !== selectedHolding?.commodityID));
   const newID = $derived(Number(newCommodityID) || 0);
   // A holding account tied to one instrument cannot hold another, so the new
@@ -105,7 +119,7 @@
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
   const canPreview = $derived(!loading && !loadError && !!effectiveOn && !!selectedHolding && newID > 0 &&
-    !!destination && !!newUnits.trim() && !!oldUnits.trim());
+    !!destination && !!newUnits.trim() && !!oldUnits.trim() && (!correction || !!reason.trim()));
   const modalGainRows = $derived(preview?.gainImpact
     ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
     : []);
@@ -127,8 +141,20 @@
     discardPreview();
   }
 
+  function replacementRequest(payload: ShareExchangeRequest): ShareExchangeReplacementRequest {
+    return {
+      reason: reason.trim(), effective_on: payload.effective_on,
+      destination_holding_account_id: payload.destination_holding_account_id,
+      destination_commodity_id: payload.destination_commodity_id,
+      ratio_numerator: payload.ratio_numerator, ratio_denominator: payload.ratio_denominator,
+      source_evidence: payload.source_evidence, memo: payload.memo
+    };
+  }
+
   async function runPreview(payload: ShareExchangeRequest): Promise<void> {
-    const result = await previewShareExchange(payload);
+    const result = correction
+      ? await previewShareExchangeReplacement(correction.transactionID, replacementRequest(payload))
+      : await previewShareExchange(payload);
     preview = {
       plan: result.plan,
       impacts: result.impact.affected_checkpoints,
@@ -170,11 +196,15 @@
   async function record(override: boolean) {
     if (!preview) return;
     const acknowledgement = gainAcknowledgement(preview.gainImpact);
-    await recordShareExchange({
-      ...preview.payload,
+    const confirmations = {
       ...(override ? { reconciliation_override: true } : {}),
       ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
-    }, csrfToken);
+    };
+    if (correction) {
+      await replaceShareExchange(correction.transactionID, { ...replacementRequest(preview.payload), ...confirmations }, csrfToken);
+    } else {
+      await recordShareExchange({ ...preview.payload, ...confirmations }, csrfToken);
+    }
     await invalidateInvestmentReads(queryClient);
     onSaved();
   }
@@ -230,8 +260,10 @@
 {/if}
 
 <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
-  <h2 id="share-exchange-title" class="text-base font-semibold text-foreground">{m.investments_exchange_title()}</h2>
-  <p class="text-sm text-muted">{m.investments_exchange_help()}</p>
+  <h2 id="share-exchange-title" class="text-base font-semibold text-foreground">
+    {correction ? m.transactions_investment_replace_exchange_title() : m.investments_exchange_title()}
+  </h2>
+  <p class="text-sm text-muted">{correction ? m.investments_exchange_replace_help() : m.investments_exchange_help()}</p>
   {#if loading}
     <p class="text-sm text-muted" role="status">{m.investments_loading()}</p>
   {:else if loadError}
@@ -242,11 +274,17 @@
       <input id="exchange-date" type="date" bind:this={dateInput} bind:value={effectiveOn} required oninput={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
     </div>
-    {#if holdings.length === 0}
+    {#if holdings.length === 0 && !correction}
       <p class="text-sm text-muted" role="status">{m.investments_exchange_empty()}</p>
     {/if}
     <div>
       <label for="exchange-holding" class="mb-1 block text-sm font-medium text-foreground">{m.investments_exchange_holding()}</label>
+      {#if correction}
+        <p id="exchange-holding" class="rounded-(--radius-control) border border-border bg-surface px-3 py-2 text-sm text-foreground">
+          {accounts.find((account) => account.id === correction.terms.holding_account_id)?.name ?? `#${correction.terms.holding_account_id}`}
+          · {instrumentLabel(correction.terms.commodity_id)}
+        </p>
+      {:else}
       <select id="exchange-holding" aria-describedby="exchange-holding-hint" bind:value={holdingKey} required onchange={resetDestination}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_exchange_select_holding()}</option>
@@ -257,6 +295,7 @@
         {/each}
       </select>
       <p id="exchange-holding-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
+      {/if}
     </div>
     <div>
       <label for="exchange-new-instrument" class="mb-1 block text-sm font-medium text-foreground">{m.investments_exchange_new_instrument()}</label>
@@ -314,6 +353,13 @@
       <input id="exchange-reference" type="text" bind:value={sourceReference} maxlength="500" oninput={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
     </div>
+    {#if correction}
+      <div>
+        <label for="exchange-reason" class="mb-1 block text-sm font-medium text-foreground">{m.investments_exchange_replace_reason()}</label>
+        <input id="exchange-reason" type="text" bind:value={reason} maxlength="500" required oninput={discardPreview}
+          class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
+      </div>
+    {/if}
     <div>
       <label for="exchange-memo" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_memo()}</label>
       <input id="exchange-memo" type="text" bind:value={memo} maxlength="500" oninput={discardPreview}
@@ -336,7 +382,7 @@
     {#if preview}
       <button type="button" onclick={handleRecord} disabled={pending || !csrfToken}
         class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-        {pending ? m.investments_exchange_pending() : m.investments_exchange_submit()}
+        {pending ? m.investments_exchange_pending() : correction ? m.investments_exchange_replace_submit() : m.investments_exchange_submit()}
       </button>
     {:else}
       <button type="submit" disabled={!canPreview || pending}

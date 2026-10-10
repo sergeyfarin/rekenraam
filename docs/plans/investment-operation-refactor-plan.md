@@ -687,7 +687,8 @@ an exchange. It is an instrument version change with no position effect.
     reversed exchange describe nothing current.
 
   The chain sets `can_correct_share_exchange` for an effective exchange. The
-  correction screens are not yet in the browser.
+  transaction detail offers the reversal and the entry form in correction
+  mode, with the exchanged holding fixed.
 - **Reads (#178).** The lot list gives each lot opened by a transfer link an
   `origin`: kind, source instrument and lot, ratio and original acquisition
   date. `opened_on` stays the day the lot arrived in the holding. The plan

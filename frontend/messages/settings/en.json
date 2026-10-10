@@ -1272,6 +1272,14 @@
   "api_error_investment_split_changed": "The holding changed after the preview. Preview the split again.",
   "api_error_investment_split_dependency": "A later sale or transfer would no longer be possible after this split.",
   "api_error_import_split_link_unavailable": "This row can no longer be linked to that split. It may already be linked, or the split no longer applies to this security.",
+  "transactions_investment_reverse_exchange_action": "Reverse exchange…",
+  "transactions_investment_reverse_exchange_title": "Reverse this share exchange",
+  "transactions_investment_reverse_exchange_copy": "This posts an inverse transaction dated to the exchange. The old holding gets its lots back and the new lots are retired. A later sale or move of the new units will block the reversal. The original exchange stays in history.",
+  "transactions_investment_replace_exchange_action": "Correct exchange…",
+  "transactions_investment_replace_exchange_title": "Correct this share exchange",
+  "investments_exchange_replace_help": "Change the date, ratio, new instrument or receiving holding. The original exchange is reversed and the corrected one converts the whole holding at the same place in that day; later sales are recalculated.",
+  "investments_exchange_replace_reason": "Reason for correction",
+  "investments_exchange_replace_submit": "Correct exchange",
   "transactions_investment_reverse_split_action": "Reverse split…",
   "transactions_investment_reverse_split_title": "Reverse this split",
   "transactions_investment_reverse_split_copy": "This posts an inverse transaction dated to the split and recalculates later lot allocations without it. A later sale that the unsplit holding cannot cover will block the reversal. The original split stays in history.",
@@ -1398,6 +1406,5 @@
   "transactions_investment_exchange_summary": "{oldName} → {newName}: {ratioNew} new for {ratioOld} old, effective {date}",
   "transactions_investment_exchange_same_holding": "The new units stayed in {name}.",
   "transactions_investment_exchange_holdings": "From {source} into {destination}.",
-  "transactions_investment_exchange_not_correctable": "A share exchange cannot be corrected or reversed yet.",
   "transactions_system_label_share_exchange": "Share exchange"
 }

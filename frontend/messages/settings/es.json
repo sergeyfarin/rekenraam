@@ -1244,6 +1244,14 @@
   "api_error_investment_split_changed": "La posición cambió tras la previsualización. Vuelve a previsualizar el desdoblamiento.",
   "api_error_investment_split_dependency": "Una venta o transferencia posterior dejaría de ser posible tras este desdoblamiento.",
   "api_error_import_split_link_unavailable": "Esta fila ya no se puede vincular a ese desdoblamiento. Puede que ya esté vinculada o que el desdoblamiento no corresponda a este valor.",
+  "transactions_investment_reverse_exchange_action": "Revertir canje…",
+  "transactions_investment_reverse_exchange_title": "Revertir este canje de acciones",
+  "transactions_investment_reverse_exchange_copy": "Esto registra una transacción inversa con la fecha del canje. La posición antigua recupera sus lotes y los lotes nuevos se retiran. Una venta o traspaso posterior de las nuevas acciones bloqueará la reversión. El canje original queda en el historial.",
+  "transactions_investment_replace_exchange_action": "Corregir canje…",
+  "transactions_investment_replace_exchange_title": "Corregir este canje de acciones",
+  "investments_exchange_replace_help": "Cambie la fecha, la proporción, el nuevo instrumento o la cuenta que recibe los títulos. El canje original se revierte y el corregido convierte toda la posición en el mismo lugar de ese día; las ventas posteriores se recalculan.",
+  "investments_exchange_replace_reason": "Motivo de la corrección",
+  "investments_exchange_replace_submit": "Corregir canje",
   "transactions_investment_reverse_split_action": "Revertir desdoblamiento…",
   "transactions_investment_reverse_split_title": "Revertir este desdoblamiento",
   "transactions_investment_reverse_split_copy": "Esto registra una transacción inversa con la fecha del desdoblamiento y recalcula sin él las asignaciones de lotes posteriores. Si una venta posterior no puede cubrirse sin el desdoblamiento, la reversión se rechaza. El desdoblamiento original permanece en el historial.",
@@ -1370,6 +1378,5 @@
   "transactions_investment_exchange_summary": "{oldName} → {newName}: {ratioNew} nuevas por {ratioOld} antiguas, con efecto el {date}",
   "transactions_investment_exchange_same_holding": "Las nuevas unidades se quedaron en {name}.",
   "transactions_investment_exchange_holdings": "De {source} a {destination}.",
-  "transactions_investment_exchange_not_correctable": "Un canje de acciones todavía no se puede corregir ni revertir.",
   "transactions_system_label_share_exchange": "Canje de acciones"
 }

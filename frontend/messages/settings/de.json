@@ -1244,6 +1244,14 @@
   "api_error_investment_split_changed": "Der Bestand hat sich nach der Vorschau geändert. Bitte den Split erneut prüfen.",
   "api_error_investment_split_dependency": "Ein späterer Verkauf oder Übertrag wäre nach diesem Split nicht mehr möglich.",
   "api_error_import_split_link_unavailable": "Diese Zeile kann nicht mehr mit diesem Split verknüpft werden. Sie ist möglicherweise bereits verknüpft, oder der Split gehört nicht zu diesem Wertpapier.",
+  "transactions_investment_reverse_exchange_action": "Tausch stornieren…",
+  "transactions_investment_reverse_exchange_title": "Diesen Aktientausch stornieren",
+  "transactions_investment_reverse_exchange_copy": "Dies bucht eine Gegenbuchung zum Datum des Tauschs. Der alte Bestand erhält seine Lots zurück, die neuen Lots werden aufgelöst. Ein späterer Verkauf oder Übertrag der neuen Stücke verhindert die Stornierung. Der ursprüngliche Tausch bleibt im Verlauf.",
+  "transactions_investment_replace_exchange_action": "Tausch korrigieren…",
+  "transactions_investment_replace_exchange_title": "Diesen Aktientausch korrigieren",
+  "investments_exchange_replace_help": "Ändern Sie Datum, Verhältnis, neues Wertpapier oder empfangendes Depot. Der ursprüngliche Tausch wird storniert und der korrigierte wandelt den gesamten Bestand an derselben Stelle dieses Tages um; spätere Verkäufe werden neu berechnet.",
+  "investments_exchange_replace_reason": "Grund der Korrektur",
+  "investments_exchange_replace_submit": "Tausch korrigieren",
   "transactions_investment_reverse_split_action": "Split rückgängig machen…",
   "transactions_investment_reverse_split_title": "Diesen Split rückgängig machen",
   "transactions_investment_reverse_split_copy": "Dies bucht eine gegenläufige Transaktion zum Datum des Splits und berechnet spätere Lot-Zuordnungen ohne ihn neu. Wenn ein späterer Verkauf ohne den Split nicht gedeckt ist, wird die Rückbuchung abgelehnt. Der ursprüngliche Split bleibt im Verlauf.",
@@ -1370,6 +1378,5 @@
   "transactions_investment_exchange_summary": "{oldName} → {newName}: {ratioNew} neue für {ratioOld} alte, Stichtag {date}",
   "transactions_investment_exchange_same_holding": "Die neuen Stücke blieben in {name}.",
   "transactions_investment_exchange_holdings": "Von {source} nach {destination}.",
-  "transactions_investment_exchange_not_correctable": "Ein Aktientausch kann noch nicht korrigiert oder storniert werden.",
   "transactions_system_label_share_exchange": "Aktientausch"
 }

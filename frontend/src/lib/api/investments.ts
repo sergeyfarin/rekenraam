@@ -44,6 +44,8 @@ export type ShareExchangeBasisTotal = components['schemas']['ShareExchangeBasisT
 export type ShareExchangePreviewResponse = components['schemas']['ShareExchangePreviewResponse'];
 export type ShareExchangeResponse = components['schemas']['ShareExchangeResponse'];
 export type InvestmentCorrectionShareExchangeTerms = components['schemas']['InvestmentCorrectionShareExchangeTerms'];
+export type ShareExchangeReplacementRequest = components['schemas']['ShareExchangeReplacementRequest'];
+export type ShareExchangeReplacementResponse = components['schemas']['ShareExchangeReplacementResponse'];
 export type InvestmentLotOrigin = components['schemas']['InvestmentLotOrigin'];
 export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
@@ -1274,6 +1276,78 @@ export async function replaceSplit(
   try {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/investments/transactions/{transaction_id}/replace-split',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+// Share exchange reversal and replacement (#179). Both previews run the
+// actual writer in a rolled-back transaction.
+export async function previewShareExchangeReversalReconciliation(
+  transactionID: number,
+  input: InvestmentSaleReversalRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-share-exchange/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseShareExchange(
+  transactionID: number,
+  input: InvestmentSaleReversalRequest,
+  csrfToken: string
+): Promise<InvestmentSaleReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-share-exchange',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewShareExchangeReplacement(
+  transactionID: number,
+  input: ShareExchangeReplacementRequest
+): Promise<ShareExchangePreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-share-exchange/preview',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceShareExchange(
+  transactionID: number,
+  input: ShareExchangeReplacementRequest,
+  csrfToken: string
+): Promise<ShareExchangeReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-share-exchange',
       { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
     );
     if (data !== undefined) return data;
