@@ -565,6 +565,58 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 						WHERE x.operation_id = o.id AND (source.account_id <> f.source_account_id
 							OR source.commodity_id <> f.commodity_id OR source.cost_commodity_id <> link.cost_commodity_id))))
 			)`},
+		// Each exchange link moves one source lot whole into one destination
+		// lot of the new instrument in the destination holding, carrying its basis
+		// and knowledge, through effects on the exchange's own journal (#177).
+		// The ratio and journal totals are folded in Go.
+		{"share exchange missing its fact or linked whole-lot effects", `
+			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
+			AND o.operation_kind = 'share_exchange'
+			AND (NOT EXISTS (SELECT 1 FROM investment_transfer_facts f
+				JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
+				WHERE f.operation_id = o.id AND f.transfer_kind = 'exchange' AND f.effective_on = o.event_date)
+			OR EXISTS (SELECT 1 FROM investment_transfer_lot_links x
+				JOIN investment_transfer_facts f ON f.operation_id = x.operation_id
+				WHERE f.operation_id = o.id AND NOT EXISTS (
+					SELECT 1 FROM investment_lots source JOIN investment_lots destination
+						ON destination.id = x.destination_lot_id
+					JOIN investment_lot_events source_event ON source_event.lot_id = source.id
+						AND source_event.event_kind = 'transfer_out'
+					JOIN investment_operation_lot_effects source_effect ON source_effect.lot_event_id = source_event.id
+						AND source_effect.operation_id = o.id
+					JOIN investment_lot_events destination_event ON destination_event.lot_id = destination.id
+						AND destination_event.event_kind = 'transfer_in'
+					JOIN investment_operation_lot_effects destination_effect ON destination_effect.lot_event_id = destination_event.id
+						AND destination_effect.operation_id = o.id
+					WHERE source.id = x.source_lot_id AND source.book_id = f.book_id
+						AND source.account_id = f.source_account_id AND destination.account_id = f.destination_account_id
+						AND source.commodity_id = f.commodity_id AND destination.commodity_id = f.destination_commodity_id
+						AND source.position_side = 'long' AND destination.position_side = 'long'
+						AND destination.opened_on = f.effective_on AND source_event.event_date = f.effective_on
+						AND EXISTS (SELECT 1 FROM investment_operation_journal_links link
+							JOIN transaction_versions v ON v.id = link.transaction_version_id
+							WHERE link.operation_id = o.id AND link.role = 'primary'
+							AND v.transaction_id = destination.source_transaction_id
+							AND v.transaction_id = source_event.transaction_id
+							AND v.transaction_id = destination_event.transaction_id)
+						AND x.basis_knowledge = destination.opening_basis_knowledge
+						AND x.carried_basis_value IS destination.cost_basis_value
+						AND x.carried_basis_scale IS destination.cost_basis_scale
+						AND x.cost_commodity_id = source.cost_commodity_id
+						AND x.cost_commodity_id = destination.cost_commodity_id
+						AND source_event.quantity_value = '-' || x.quantity_value
+						AND source_event.quantity_scale = x.quantity_scale
+						AND source_event.basis_knowledge = x.basis_knowledge
+						AND source_event.cost_basis_scale IS x.carried_basis_scale
+						AND (x.basis_knowledge = 'unknown' OR source_event.cost_basis_value = '-' || x.carried_basis_value
+							OR (source_event.cost_basis_value = '0' AND x.carried_basis_value = '0'))))
+			-- Every effect the exchange made is one of its links' events.
+			OR EXISTS (SELECT 1 FROM investment_operation_lot_effects effect
+				JOIN investment_lot_events e ON e.id = effect.lot_event_id
+				WHERE effect.operation_id = o.id AND NOT EXISTS (
+					SELECT 1 FROM investment_transfer_lot_links x
+					WHERE x.operation_id = o.id AND ((e.event_kind = 'transfer_out' AND x.source_lot_id = e.lot_id)
+						OR (e.event_kind = 'transfer_in' AND x.destination_lot_id = e.lot_id)))))`},
 		{"outbound transfer missing linked source effects", `
 			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
 			AND o.operation_kind = 'external_transfer_out'
@@ -871,6 +923,28 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 		result.Status = SelfCheckFailed
 		result.FindingCount += pooledMismatch
 		summaries = append(summaries, fmt.Sprintf("%d pooled transfer depletion sets do not carry their link's quantity and basis", pooledMismatch))
+	}
+	// A share exchange must hold source quantity times its ratio in every
+	// destination lot and post exactly those totals in both instruments (#177).
+	exchanges, err := s.repository.SelfCheckShareExchanges(ctx, snapshot, BookID)
+	if err != nil {
+		return SelfCheckResult{}, err
+	}
+	var exchangeMismatch int64
+	for _, exchange := range exchanges {
+		if exchange.Agrees() {
+			continue
+		}
+		exchangeMismatch++
+		if len(result.Sample) < db.SelfCheckSampleLimit {
+			result.Sample = append(result.Sample, exchange.OperationID)
+			sampleReferences = append(sampleReferences, fmt.Sprintf("operation #%d", exchange.OperationID))
+		}
+	}
+	if exchangeMismatch > 0 {
+		result.Status = SelfCheckFailed
+		result.FindingCount += exchangeMismatch
+		summaries = append(summaries, fmt.Sprintf("%d share exchanges do not convert their lots at the recorded ratio or post a different journal", exchangeMismatch))
 	}
 	// An outbound transfer's bridge must post to the transfer equity account
 	// exactly the basis its links carried out, in each cost currency.

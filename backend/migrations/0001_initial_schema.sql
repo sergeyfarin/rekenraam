@@ -1532,7 +1532,7 @@ CREATE TABLE IF NOT EXISTS investment_operation_lot_effects (
 CREATE TABLE IF NOT EXISTS investment_transfer_facts (
   operation_id INTEGER PRIMARY KEY REFERENCES investment_operations(id) ON DELETE RESTRICT,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
-  transfer_kind TEXT NOT NULL CHECK (transfer_kind IN ('external_in', 'external_out', 'internal')),
+  transfer_kind TEXT NOT NULL CHECK (transfer_kind IN ('external_in', 'external_out', 'internal', 'exchange')),
   effective_on TEXT NOT NULL CHECK (effective_on GLOB '????-??-??'),
   commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
   source_account_id INTEGER REFERENCES accounts(id) ON DELETE RESTRICT,
@@ -1557,6 +1557,17 @@ CREATE TABLE IF NOT EXISTS investment_transfer_facts (
   -- original acquisition date among the units moved; replay may revise its
   -- basis, date and source depletions but never its identity or quantity.
   destination_lineage TEXT CHECK (destination_lineage IS NULL OR destination_lineage IN ('source_lots', 'pooled_lot')),
+  -- A share exchange (#177) moves every lot of commodity_id in the source
+  -- holding into destination_commodity_id in the destination holding (the
+  -- same account, or the new instrument's own), at the exact ratio of new
+  -- units per old unit, carrying each lot whole: it has no allocation,
+  -- method or lineage.
+  destination_commodity_id INTEGER REFERENCES commodities(id) ON DELETE RESTRICT,
+  ratio_numerator INTEGER CHECK (ratio_numerator IS NULL OR ratio_numerator > 0),
+  ratio_denominator INTEGER CHECK (ratio_denominator IS NULL OR ratio_denominator > 0),
+  CHECK ((transfer_kind = 'exchange') = (destination_commodity_id IS NOT NULL
+    AND ratio_numerator IS NOT NULL AND ratio_denominator IS NOT NULL)),
+  CHECK (destination_commodity_id IS NULL OR destination_commodity_id <> commodity_id),
   CHECK ((transfer_kind IN ('internal', 'external_out')) = (basis_allocation IS NOT NULL
     AND cost_basis_method IS NOT NULL AND method_resolution_tier IS NOT NULL)),
   CHECK ((transfer_kind = 'internal') = (destination_lineage IS NOT NULL)),
@@ -1565,7 +1576,9 @@ CREATE TABLE IF NOT EXISTS investment_transfer_facts (
   CHECK ((transfer_kind = 'external_in' AND source_account_id IS NULL AND destination_account_id IS NOT NULL)
     OR (transfer_kind = 'external_out' AND source_account_id IS NOT NULL AND destination_account_id IS NULL)
     OR (transfer_kind = 'internal' AND source_account_id IS NOT NULL AND destination_account_id IS NOT NULL
-      AND source_account_id <> destination_account_id))
+      AND source_account_id <> destination_account_id)
+    OR (transfer_kind = 'exchange' AND source_account_id IS NOT NULL
+      AND destination_account_id IS NOT NULL))
 );
 
 CREATE TABLE IF NOT EXISTS investment_transfer_lot_links (
@@ -1608,7 +1621,10 @@ WHEN NOT EXISTS (
     AND a.book_id = NEW.book_id AND a.id = o.created_audit_event_id AND c.book_id = NEW.book_id
     AND ((NEW.transfer_kind = 'external_in' AND o.operation_kind = 'external_transfer_in')
       OR (NEW.transfer_kind = 'external_out' AND o.operation_kind = 'external_transfer_out')
-      OR (NEW.transfer_kind = 'internal' AND o.operation_kind = 'internal_transfer'))
+      OR (NEW.transfer_kind = 'internal' AND o.operation_kind = 'internal_transfer')
+      OR (NEW.transfer_kind = 'exchange' AND o.operation_kind = 'share_exchange'
+        AND EXISTS (SELECT 1 FROM commodities n WHERE n.id = NEW.destination_commodity_id
+          AND n.book_id = NEW.book_id)))
     AND (NEW.source_account_id IS NULL OR EXISTS (
       SELECT 1 FROM accounts s WHERE s.id = NEW.source_account_id AND s.book_id = NEW.book_id))
     AND (NEW.destination_account_id IS NULL OR EXISTS (
@@ -1630,13 +1646,13 @@ WHEN NOT EXISTS (
     AND (NEW.destination_lot_id IS NULL OR EXISTS (
       SELECT 1 FROM investment_lots d WHERE d.id = NEW.destination_lot_id
         AND d.book_id = f.book_id AND d.account_id = f.destination_account_id
-        AND d.commodity_id = f.commodity_id))
+        AND d.commodity_id = COALESCE(f.destination_commodity_id, f.commodity_id)))
     AND (NEW.cost_commodity_id IS NULL OR EXISTS (
       SELECT 1 FROM commodities c WHERE c.id = NEW.cost_commodity_id AND c.book_id = f.book_id))
     AND (NEW.original_acquired_on IS NULL OR NEW.original_acquired_on <= f.effective_on)
     AND ((f.transfer_kind = 'external_in' AND NEW.source_lot_id IS NULL AND NEW.destination_lot_id IS NOT NULL)
       OR (f.transfer_kind = 'external_out' AND NEW.source_lot_id IS NOT NULL AND NEW.destination_lot_id IS NULL)
-      OR (f.transfer_kind = 'internal' AND f.destination_lineage = 'source_lots'
+      OR ((f.transfer_kind = 'exchange' OR (f.transfer_kind = 'internal' AND f.destination_lineage = 'source_lots'))
         AND NEW.source_lot_id IS NOT NULL AND NEW.destination_lot_id IS NOT NULL)
       -- A pooled-lot transfer has exactly one link, from the pool: its source
       -- depletions are the operation's transfer_out lot effects.
@@ -1718,7 +1734,7 @@ WHEN NOT EXISTS (
   JOIN investment_operations o ON o.id = NEW.caused_by_operation_id
   JOIN audit_events a ON a.id = NEW.created_audit_event_id
   WHERE x.operation_id = NEW.operation_id AND x.link_seq = NEW.link_seq
-    AND f.book_id = NEW.book_id AND f.transfer_kind IN ('internal', 'external_out')
+    AND f.book_id = NEW.book_id AND f.transfer_kind IN ('internal', 'external_out', 'exchange')
     -- Unknown may become known (sourced resolution reaching this link
     -- through replay); known never becomes unknown (T-145).
     AND (NEW.basis_knowledge = 'known' OR COALESCE((SELECT previous.basis_knowledge
@@ -1726,7 +1742,7 @@ WHEN NOT EXISTS (
       x.basis_knowledge) = 'unknown')
     -- A source-lot link (internal source_lots, or outbound, T-143) may move
     -- to the corrected successor of its source acquisition, same date.
-    AND (((f.destination_lineage = 'source_lots' OR f.transfer_kind = 'external_out') AND EXISTS (
+    AND (((f.destination_lineage = 'source_lots' OR f.transfer_kind IN ('external_out', 'exchange')) AND EXISTS (
         SELECT 1 FROM investment_lots source JOIN investment_lots original ON original.id = x.source_lot_id
         WHERE source.id = NEW.source_lot_id AND source.book_id = NEW.book_id
           AND source.account_id = f.source_account_id AND source.commodity_id = f.commodity_id

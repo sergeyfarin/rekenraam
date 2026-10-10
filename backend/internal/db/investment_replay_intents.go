@@ -26,7 +26,7 @@ type InvestmentReplayIntent struct {
 	OperationKind    string
 	EffectSeq        int
 	EventDate        string
-	Kind             string // opening, disposal, transfer_out, pooled_transfer_out, pooled_lot_transfer_out or split
+	Kind             string // opening, disposal, transfer_out, pooled_transfer_out, pooled_lot_transfer_out, exchange_out or split
 	LotID            int64  // opening or transfer_out
 	LinkSeq          int    // transfer_out: the link whose carried basis it produces
 	// RecordedLotID is the source lot a transfer_out's current effective
@@ -84,7 +84,11 @@ type InvestmentReplayIntent struct {
 	// PooledDepletions are a pooled_lot transfer's effective source
 	// depletions; AmountValue is its effective carried basis and the original
 	// date fields its effective date. Replay may revise all three (T-135).
-	PooledDepletions      []InvestmentReplayTransferLink
+	PooledDepletions []InvestmentReplayTransferLink
+	// ExchangeLinks are a share exchange's per-lot depletions in this cost
+	// currency, in link order (#177). Replay applies them together, then
+	// requires the holding at the slot to be empty.
+	ExchangeLinks         []InvestmentReplayTransferLink
 	OriginalDateKnowledge string
 	OriginalAcquiredOn    string
 	TransactionID         int64
@@ -263,7 +267,7 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			CASE WHEN revision.id IS NULL THEN x.carried_basis_scale ELSE revision.carried_basis_scale END,
 			CASE WHEN revision.id IS NULL THEN x.basis_knowledge ELSE revision.basis_knowledge END,
 			e.transaction_id, e.created_audit_event_id, e.created_by_user_id, e.created_at,
-			effect.effect_seq, f.basis_allocation, f.transfer_kind = 'external_out'
+			effect.effect_seq, f.basis_allocation, f.transfer_kind = 'external_out', f.transfer_kind = 'exchange'
 		FROM investment_transfer_facts f
 		JOIN investment_transfer_lot_links x ON x.operation_id = f.operation_id
 		JOIN effective_investment_operations o ON o.id = f.operation_id
@@ -275,7 +279,7 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			ON revision.operation_id = x.operation_id AND revision.link_seq = x.link_seq
 		WHERE f.book_id = ? AND f.source_account_id = ? AND f.commodity_id = ?
 			AND ((f.transfer_kind = 'internal' AND f.destination_lineage = 'source_lots')
-				OR f.transfer_kind = 'external_out')
+				OR f.transfer_kind IN ('external_out', 'exchange'))
 			AND x.cost_commodity_id = ?
 		ORDER BY f.operation_id, x.link_seq
 	`, bookID, accountID, commodityID, costCommodityID)
@@ -283,8 +287,11 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			return nil, fmt.Errorf("read replay transfer depletions: %w", err)
 		}
 		// A pooled transfer is one intent: replay depletes the pool once for its
-		// total quantity, then compares every link it produced.
+		// total quantity, then compares every link it produced. A share
+		// exchange is one intent too: replay takes each of its lots, then
+		// checks that nothing of the holding is left at its slot.
 		pooled := make(map[int64]int)
+		exchanges := make(map[int64]int)
 		for transfers.Next() {
 			var intent InvestmentReplayIntent
 			var basis sql.NullString
@@ -292,11 +299,12 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			var knowledge string
 			var allocation sql.NullString
 			var sourceOperationID sql.NullInt64
+			var exchange bool
 			if err := transfers.Scan(&intent.OperationID, &intent.OperationKind, &intent.EventDate,
 				&intent.LinkSeq, &intent.transferSource.lotID, &intent.RecordedLotID, &sourceOperationID,
 				&intent.transferSource.openedOn, &intent.QuantityValue, &intent.QuantityScale, &basis, &basisScale, &knowledge,
 				&intent.TransactionID, &intent.AuditEventID, &intent.CreatedByUserID,
-				&intent.CreatedAt, &intent.EffectSeq, &allocation, &intent.ExternalOut); err != nil {
+				&intent.CreatedAt, &intent.EffectSeq, &allocation, &intent.ExternalOut, &exchange); err != nil {
 				transfers.Close()
 				return nil, fmt.Errorf("scan replay transfer depletion: %w", err)
 			}
@@ -309,6 +317,27 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			intent.Kind = "transfer_out"
 			intent.transferSource.operationID = sourceOperationID.Int64
 			intent.LotID = intent.transferSource.lotID
+			if exchange {
+				link := InvestmentReplayTransferLink{LinkSeq: intent.LinkSeq, LotID: intent.LotID,
+					RecordedLotID: intent.RecordedLotID, transferSource: intent.transferSource,
+					QuantityValue: intent.QuantityValue, QuantityScale: intent.QuantityScale,
+					CostBasisValue: intent.AmountValue, CostBasisScale: intent.AmountScale, BasisKnowledge: intent.BasisKnowledge}
+				index, exists := exchanges[intent.OperationID]
+				if !exists {
+					intent.Kind = "exchange_out"
+					intent.LotID, intent.LinkSeq, intent.RecordedLotID = 0, 0, 0
+					intent.transferSource = transferSourceOpening{}
+					intent.QuantityValue, intent.QuantityScale = "", 0
+					intent.AmountValue, intent.AmountScale, intent.BasisKnowledge = "", 0, ""
+					exchanges[intent.OperationID] = len(intents)
+					intents = append(intents, intent)
+					index = len(intents) - 1
+				} else {
+					intents[index].EffectSeq = min(intents[index].EffectSeq, intent.EffectSeq)
+				}
+				intents[index].ExchangeLinks = append(intents[index].ExchangeLinks, link)
+				continue
+			}
 			if allocation.String != InternalTransferAverageCostPool {
 				intents = append(intents, intent)
 				continue
@@ -481,6 +510,12 @@ func investmentReplayIntentsQuery(ctx context.Context, reader queryer, bookID, a
 			for link := range intents[index].PooledLinks {
 				if err == nil {
 					intents[index].PooledLinks[link].LotID, err = effectiveSource(intents[index].PooledLinks[link].transferSource)
+				}
+			}
+		case "exchange_out":
+			for link := range intents[index].ExchangeLinks {
+				if err == nil {
+					intents[index].ExchangeLinks[link].LotID, err = effectiveSource(intents[index].ExchangeLinks[link].transferSource)
 				}
 			}
 		}

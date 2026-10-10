@@ -219,6 +219,8 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/investments/return-of-capital/preview", capitalReturnPreview(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/splits", investmentSplit(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/splits/preview", investmentSplitPreview(logger, services.Auth, services.Investment))
+	mux.HandleFunc("POST /api/v1/investments/share-exchanges", shareExchange(logger, services.Auth, services.Investment, options))
+	mux.HandleFunc("POST /api/v1/investments/share-exchanges/preview", shareExchangePreview(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-transfer", reverseInvestmentTransfer(logger, services.Auth, services.Investment, options))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/reverse-transfer/reconciliation-impact", reverseInvestmentTransferReconciliationImpact(logger, services.Auth, services.Investment))
 	mux.HandleFunc("POST /api/v1/investments/transactions/{transaction_id}/resolve-basis", resolveInvestmentTransferBasis(logger, services.Auth, services.Investment, options))

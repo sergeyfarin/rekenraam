@@ -291,6 +291,16 @@ non-trivial diff (yours or reviewed):
     side; synthetic self-check events take the side of their lot. Named
     regressions: `TestShortCoverRefusesOverCoverAndOtherSideLots`,
     `TestPositionSideConflictRefusesOverlappingSides`.
+31. **Transfer-link quantity read as the destination's quantity, or its
+    instrument read as the destination's** — a share exchange (#177) is an
+    `investment_transfer_facts` row of kind `exchange`: its link quantity is
+    the *old* units, its destination lot holds them times the ratio, and the
+    destination instrument is `destination_commodity_id`. A reader that opens
+    or audits a destination from `link.quantity_value` or `f.commodity_id`
+    (the closure edge, the self-check's revised-link events) is right for a
+    transfer and wrong for an exchange. Read the destination lot's own
+    quantity and `COALESCE(f.destination_commodity_id, f.commodity_id)`.
+    Named regression: `TestShareExchangeUpstreamBuyReplacementRevisesTheNewLot`.
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

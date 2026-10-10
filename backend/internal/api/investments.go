@@ -1935,6 +1935,12 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentSplitDependency):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPLIT_DEPENDENCY", err.Error())
+	case errors.Is(err, app.ErrShareExchangeNoHoldings):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_EXCHANGE_NO_HOLDINGS", err.Error())
+	case errors.Is(err, app.ErrShareExchangeFraction):
+		writeAPIError(w, http.StatusUnprocessableEntity, "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE", err.Error())
+	case errors.Is(err, app.ErrShareExchangeChanged):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_EXCHANGE_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentSplitNotFound):
 		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "investment split operation not found")
 	case errors.Is(err, app.ErrInvestmentSplitAlreadyCorrected):

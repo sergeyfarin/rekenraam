@@ -1359,6 +1359,145 @@ InvestmentSplitResponse:
     plan:
       $ref: "../schemas/investments.yaml#/InvestmentSplitPlan"
 
+ShareExchangeRequest:
+  type: object
+  additionalProperties: false
+  required: [effective_on, holding_account_id, commodity_id, destination_commodity_id, ratio_numerator, ratio_denominator]
+  description: >
+    A share exchange (#177): an all-stock merger, fund merger or class
+    conversion of the whole long holding of commodity_id in holding_account_id.
+  properties:
+    effective_on:
+      type: string
+      format: date
+      description: Every long lot open on this date, at the operation's slot, is exchanged.
+    holding_account_id:
+      type: integer
+      format: int64
+    destination_holding_account_id:
+      type: integer
+      format: int64
+      description: >
+        Holding that receives the new instrument. Defaults to holding_account_id;
+        a holding whose default instrument is the old one needs the new
+        instrument's own holding.
+    commodity_id:
+      type: integer
+      format: int64
+      description: The old instrument.
+    destination_commodity_id:
+      type: integer
+      format: int64
+      description: The new instrument; must differ from commodity_id and not be a currency.
+    ratio_numerator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+      description: New units received for ratio_denominator old units. 1:1 is valid for a class change.
+    ratio_denominator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+      description: Old units surrendered. The ratio is stored in lowest terms.
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    change_reason:
+      type: string
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+      description: Accepted for the shared contract; an in-order exchange changes no committed disposal.
+
+ShareExchangeLink:
+  type: object
+  required: [source_lot_id, destination_lot_id, cost_commodity_id, source_quantity_value, source_quantity_scale,
+    destination_quantity_value, destination_quantity_scale, basis_knowledge, carried_basis_value,
+    carried_basis_scale, original_date_knowledge, original_acquired_on]
+  properties:
+    source_lot_id:
+      type: integer
+      format: int64
+    destination_lot_id:
+      type: [integer, "null"]
+      format: int64
+      description: Null in a preview.
+    cost_commodity_id:
+      type: integer
+      format: int64
+    source_quantity_value:
+      type: string
+    source_quantity_scale:
+      type: integer
+    destination_quantity_value:
+      type: string
+      description: Source quantity times the ratio, exactly.
+    destination_quantity_scale:
+      type: integer
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+    carried_basis_value:
+      type: [string, "null"]
+      description: The source lot's remaining basis, unchanged; null when unknown.
+    carried_basis_scale:
+      type: [integer, "null"]
+    original_date_knowledge:
+      type: string
+      enum: [known, unknown]
+    original_acquired_on:
+      type: [string, "null"]
+      format: date
+
+ShareExchangePlan:
+  type: object
+  required: [ratio_numerator, ratio_denominator, links, source_quantity_value, source_quantity_scale,
+    destination_quantity_value, destination_quantity_scale]
+  properties:
+    ratio_numerator:
+      type: integer
+      format: int64
+    ratio_denominator:
+      type: integer
+      format: int64
+    links:
+      type: array
+      items:
+        $ref: "../schemas/investments.yaml#/ShareExchangeLink"
+    source_quantity_value:
+      type: string
+      description: Old units the journal moves out of the holding.
+    source_quantity_scale:
+      type: integer
+    destination_quantity_value:
+      type: string
+      description: New units the journal moves into the destination holding.
+    destination_quantity_scale:
+      type: integer
+
+ShareExchangePreviewResponse:
+  type: object
+  required: [plan, impact]
+  properties:
+    plan:
+      $ref: "../schemas/investments.yaml#/ShareExchangePlan"
+    impact:
+      $ref: "../schemas/transactions.yaml#/ReconciliationImpactResponse"
+
+ShareExchangeResponse:
+  type: object
+  required: [transaction, plan]
+  properties:
+    transaction:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    plan:
+      $ref: "../schemas/investments.yaml#/ShareExchangePlan"
+
 InvestmentSplitReplacementRequest:
   type: object
   additionalProperties: false

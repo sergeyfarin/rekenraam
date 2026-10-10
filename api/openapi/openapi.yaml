@@ -355,6 +355,10 @@ paths:
     $ref: "./paths/investments-split.yaml"
   /api/v1/investments/splits/preview:
     $ref: "./paths/investments-split-preview.yaml"
+  /api/v1/investments/share-exchanges:
+    $ref: "./paths/investments-share-exchange.yaml"
+  /api/v1/investments/share-exchanges/preview:
+    $ref: "./paths/investments-share-exchange-preview.yaml"
   /api/v1/investments/transactions/{transaction_id}/correction-chain:
     $ref: "./paths/investments-correction-chain.yaml"
   /api/v1/investments/transactions/{transaction_id}/trade-correction-context:
@@ -1180,6 +1184,16 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitPreviewResponse"
     InvestmentSplitResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitResponse"
+    ShareExchangeRequest:
+      $ref: "./components/schemas/investments.yaml#/ShareExchangeRequest"
+    ShareExchangeLink:
+      $ref: "./components/schemas/investments.yaml#/ShareExchangeLink"
+    ShareExchangePlan:
+      $ref: "./components/schemas/investments.yaml#/ShareExchangePlan"
+    ShareExchangePreviewResponse:
+      $ref: "./components/schemas/investments.yaml#/ShareExchangePreviewResponse"
+    ShareExchangeResponse:
+      $ref: "./components/schemas/investments.yaml#/ShareExchangeResponse"
     InvestmentSplitReplacementRequest:
       $ref: "./components/schemas/investments.yaml#/InvestmentSplitReplacementRequest"
     InvestmentSplitReplacementResponse:

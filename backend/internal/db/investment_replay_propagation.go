@@ -354,7 +354,7 @@ func appendTransferLinkRevisionTx(ctx context.Context, tx *sql.Tx, bookID, cause
 		JOIN investment_transfer_facts f ON f.operation_id = x.operation_id
 		LEFT JOIN investment_lots d ON d.id = x.destination_lot_id
 		WHERE x.operation_id = ? AND x.link_seq = ? AND f.book_id = ?
-			AND f.transfer_kind IN ('internal', 'external_out')`,
+			AND f.transfer_kind IN ('internal', 'external_out', 'exchange')`,
 		revision.OperationID, revision.LinkSeq, bookID).Scan(&destinationLotID,
 		&destination.accountID, &destination.commodityID, &destination.costCommodityID, &external); err != nil {
 		return investmentReplayPositionKey{}, 0, fmt.Errorf("read revised transfer link destination: %w", err)

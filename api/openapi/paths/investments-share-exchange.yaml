@@ -1,0 +1,70 @@
+post:
+  summary: Record a share exchange of one holding
+  description: >
+    An all-stock merger, fund merger or class conversion (#177). Every long lot
+    of commodity_id open in holding_account_id on effective_on becomes one lot
+    of destination_commodity_id in the destination holding, holding its
+    remaining quantity times ratio_numerator/ratio_denominator exactly, with
+    its remaining basis, cost currency, knowledge and original acquisition date
+    unchanged. The journal posts only security legs (old holding −Q and
+    commodity_trading +Q; new holding +Q' and commodity_trading −Q'); nothing
+    is realized. Entry is in date order: an exchange behind a later depletion
+    of either holding is refused until correction and backdating ship (#179).
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/ShareExchangeRequest"
+  responses:
+    "201":
+      description: Exchange journal, fact, lot effects and links recorded atomically
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ShareExchangeResponse"
+    "400":
+      description: Invalid exchange facts, including a destination holding that refuses the new instrument
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: >
+        INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EXCHANGE_CHANGED (preview again),
+        INVESTMENT_EVENT_OUT_OF_ORDER (dated behind a later depletion),
+        INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the old instrument),
+        or reconciliation override required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE — a lot's new quantity needs more decimals than the new instrument permits; the exchange is never rounded
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

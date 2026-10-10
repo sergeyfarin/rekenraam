@@ -27,6 +27,7 @@ func recordInvestmentFoundationTx(ctx context.Context, tx *sql.Tx, params Create
 		params.Spec.InvestmentOperationKind == "external_transfer_out" ||
 		params.Spec.InvestmentOperationKind == "internal_transfer" ||
 		params.Spec.InvestmentOperationKind == "split" ||
+		params.Spec.InvestmentOperationKind == "share_exchange" ||
 		params.Spec.InvestmentOperationKind == "basis_resolution" {
 		dateRole = "effective"
 	}

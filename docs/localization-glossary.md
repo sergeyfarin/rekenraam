@@ -115,6 +115,7 @@ consumer products than *conciliado*, which is already taken by "reconciled";
 | Transfer out (investments leaving the book) | Transferir … salientes | Transférer … sortants | Uitboeken | Ausbuchen | Вывод / вывести |
 | Return of capital | Devolución de capital | Remboursement de capital | Kapitaalteruggave | Kapitalrückzahlung | Возврат капитала |
 | Cash in lieu (of fractional shares) | Efectivo en lugar de fracciones | Espèces en lieu et place des rompus | Contante afrekening van fracties | Barausgleich für Spitzen | Компенсация за дробные акции |
+| Share exchange (merger, fund merger, class conversion) | Canje de acciones | Échange de titres | Omwisseling (van effecten) | Umtausch (von Wertpapieren) | Обмен ценных бумаг |
 
 **Void is not delete.** A voided transaction stays in the ledger with its
 effect reversed, which is exactly what Dutch *storneren* and German

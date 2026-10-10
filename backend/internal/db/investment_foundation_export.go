@@ -42,7 +42,8 @@ func (r *ExportRepository) ExportInvestmentFoundation(ctx context.Context, tx *s
 		"transfer-facts": `SELECT f.operation_id, f.transfer_kind, f.effective_on, f.commodity_id,
 			f.source_account_id, f.destination_account_id, f.source_evidence_json, f.created_audit_event_id,
 			f.basis_allocation, f.cost_basis_method, f.method_resolution_tier,
-			f.method_account_version_id, f.method_profile_version_id, f.destination_lineage
+			f.method_account_version_id, f.method_profile_version_id, f.destination_lineage,
+			f.destination_commodity_id, f.ratio_numerator, f.ratio_denominator
 			FROM investment_transfer_facts f WHERE f.book_id = ? ORDER BY f.operation_id`,
 		"transfer-lot-links": `SELECT l.operation_id, l.link_seq, l.source_lot_id, l.destination_lot_id,
 			l.quantity_value, l.quantity_scale, l.basis_knowledge, l.carried_basis_value,

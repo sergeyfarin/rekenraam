@@ -1,0 +1,50 @@
+post:
+  summary: Preview a share exchange
+  description: >
+    Runs the complete exchange writer in a rolled-back transaction. Returns
+    every link (old and new quantity, carried basis and original date), the
+    journal totals and every active checkpoint the writer would invalidate.
+    No durable change or temporary ID escapes; commit rechecks everything.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/ShareExchangeRequest"
+  responses:
+    "200":
+      description: Exchange preview computed (no mutation)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ShareExchangePreviewResponse"
+    "400":
+      description: Invalid exchange facts
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EVENT_OUT_OF_ORDER or INVESTMENT_POSITION_SIDE_CONFLICT
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

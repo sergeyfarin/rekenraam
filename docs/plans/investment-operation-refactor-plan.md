@@ -514,11 +514,12 @@ notes record design decisions per area; they carry no status or order.
   evidence; cancelled order status is insufficient.
 - **Remaining slice 5 actions, shorts, compound actions.** Outbound transfers,
   unknown-basis resolution, return of capital and linked cash in lieu retain
-  the slice 5 posting/replay contracts. Compound kinds require repeated
-  typed-date sequences (`investment_operation_dates` is still keyed by
-  `(operation_id, date_role)`), explicit clearing attribution and, for
-  cross-position effects, closure propagation before admission.
-  Bonds/derivatives need separate instrument contracts.
+  the slice 5 posting/replay contracts. Compound kinds need explicit clearing
+  attribution and, for cross-position effects, closure propagation before
+  admission. A kind with several cash events also needs repeated typed-date
+  sequences (`investment_operation_dates` is still keyed by
+  `(operation_id, date_role)`); that sequence lands with #181, the first such
+  kind. Bonds/derivatives need separate instrument contracts.
 
 ### Short positions (#103)
 
@@ -577,6 +578,101 @@ correction, reversal and backdating; #176 provider import.
   unrealized result is remaining opening proceeds less the cost to cover.
   Realized gains report a cover with its side-correct result. Correction
   chains show short operations as not correctable until #175.
+
+### Compound corporate actions (#115)
+
+Decided 2026-10-10. #115 delivers one kind at a time; each kind's contract
+is recorded here before its command is admitted. The share exchange (#177,
+with reads #178 and correction/backdating #179) comes first because the
+others build on it. A spin-off (#180) moves part of a holding's basis across
+instruments. A cash-and-stock merger and cash in lieu of exchange fractions
+(#181) add cash and repeated dates. Tender/partial redemption, rights and
+provider mappings are outside #115. Delisting is the existing write-off.
+
+**Share exchange (#177).** The exchange covers an all-stock merger, a fund
+merger and a conversion or class change. One instrument in one holding account
+becomes another instrument at a fixed exact ratio. The new units go to the
+same account by default, or to the new instrument's own holding when the
+source holding's default instrument refuses another one. No cash moves and
+nothing is realized. A ticker change that keeps the instrument is not
+an exchange. It is an instrument version change with no position effect.
+
+- **Representation.** The operation kind is `share_exchange`. Its fact is an
+  `investment_transfer_facts` row of `transfer_kind = 'exchange'`:
+  - `commodity_id` is the old instrument and `destination_commodity_id` the new one;
+  - `source_account_id` is the exchanged holding and `destination_account_id`
+    the holding that receives the new units (the same account or another);
+  - the ratio is `ratio_numerator`/`ratio_denominator`: positive, in lowest
+    terms, new units per old unit. 1:1 is valid for a class change.
+  
+  The fact records no method or lineage. An exchange takes every lot whole, so
+  there is no choice to snapshot. Each source lot gets one
+  `investment_transfer_lot_links` row. The link's quantity is the source
+  quantity, and the destination lot's immutable quantity is that quantity
+  times the ratio. Lot events reuse `transfer_out` and `transfer_in`, so gains,
+  holding periods and dated holdings read the move as non-realizing.
+- **Eligibility.** The exchange takes every long lot of the old instrument
+  open in that account at the operation's slot, in every cost currency. A
+  partial exchange is a tender, which is not this kind. It refuses:
+  - when no lot is open;
+  - when the old instrument has an open short lot, because a short obligation's
+    exchange is outside this kind;
+  - when the old and new instruments are the same;
+  - when either instrument is a currency.
+  
+  The new instrument's side rule applies as for any opening.
+- **Quantity.** Each lot's remaining quantity is multiplied by the ratio
+  exactly, as in a split, up to the new instrument's quantity scale on the
+  effective date. A product the scale cannot represent refuses the command; it
+  is never rounded. #181 adds the cash in lieu that settles fractions.
+- **Basis and dates.** Each destination lot opens on the effective date with
+  the source lot's remaining basis, cost currency and knowledge. Known stays
+  known and unknown stays unknown, never zero. The link keeps the source's
+  effective original acquisition date, as an internal transfer's link does,
+  so FIFO/LIFO order and holding periods follow the original purchase. Basis
+  is conserved per cost currency and only per-share basis changes.
+- **Journal.** One journal entry on the effective date posts four lines, each
+  balancing within its commodity. The old holding gets `−Q` and
+  `commodity_trading` gets `+Q` in the old instrument. The destination holding gets
+  `+Q'` and `commodity_trading` gets `−Q'` in the new instrument. `Q` and `Q'`
+  are the exact totals. There is no cost-currency leg: basis never leaves
+  clearing, so a later sale's clearing residual equals its operational gain
+  against the carried basis. For 100 shares bought for 1,000.00, exchanged
+  3:2 into 150 new shares and sold for 1,200.00, the residual is `−200.00`
+  and the gain `+200.00`. The writer recomputes the totals inside its
+  transaction and refuses a plan that went stale.
+- **Method state.** The exchange does not set the old position's
+  method-family lock to individual lots. It empties the position, which
+  releases the lock, and a lot opened later keeps whatever lock applies. The
+  new position's state is unchanged and the new lots join it like any opening.
+- **Dates.** The operation has one `effective` date. Record and ex dates do
+  not change eligibility, which is the position at the slot. Repeated typed
+  dates arrive with #181.
+- **Admission.** Entry is in date order until #179. An exchange dated
+  behind a later depletion of the old or the new position refuses by name
+  and writes nothing. Same-day entries keep entry order.
+- **Replay and closure.** Replay reads an exchange's links as fixed
+  source-lot depletions of the old position. It groups them per operation
+  and cost currency and follows a corrected acquisition to its successor lot,
+  as an internal transfer's `source_lots` link does. After the group, no lot
+  of that position opened on or before the effective date may remain open.
+  Otherwise the exchange no longer covers the whole holding, as after a
+  backdated purchase, and the command that caused it refuses with the
+  exchange named. A changed carried basis appends a link revision and the
+  new position replays. The affected-position closure follows exchange
+  edges from (source holding, old instrument, cost currency) to
+  (destination holding, new instrument, cost currency). Removing an exchanged acquisition is the named
+  refusal that applies to every transferred acquisition.
+- **Correction.** Until #179 an exchange is not correctable. The generic
+  void path stays closed.
+- **Evidence.** The export bundle carries the destination instrument and
+  ratio on `investment-transfer-facts.csv`. Self-check verifies, per link:
+  - the source and destination effects exist;
+  - source quantity × ratio equals the destination lot's quantity;
+  - basis value, scale, knowledge and cost currency are conserved;
+  - the journal's four legs equal the lot effects per instrument.
+  
+  Replay-equivalence covers exchanged positions.
 
 ### Required acceptance cases across slices
 

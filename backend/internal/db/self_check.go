@@ -559,7 +559,11 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 			COALESCE(link.destination_lot_id, 0), COALESCE(destination.account_id, 0),
 			COALESCE(destination.commodity_id, 0), COALESCE(destination.cost_commodity_id, 0),
 			link.quantity_value, link.quantity_scale, revision.carried_basis_value, revision.carried_basis_scale,
-			revision.basis_knowledge
+			revision.basis_knowledge,
+			-- A share exchange's destination holds the link's old units times
+			-- its ratio (#177); every other destination holds the link's units.
+			COALESCE(destination.quantity_value, link.quantity_value),
+			COALESCE(destination.quantity_scale, link.quantity_scale)
 		FROM latest_investment_transfer_link_revisions revision
 		JOIN effective_investment_operations operation ON operation.id = revision.operation_id
 		JOIN investment_transfer_lot_links link ON link.operation_id = revision.operation_id
@@ -574,23 +578,23 @@ func (r *SelfCheckRepository) SelfCheckLotEvents(ctx context.Context, transactio
 	}
 	for transfers.Next() {
 		var out, in SelfCheckLotEventRecord
-		var quantity exact.Coefficient
-		var scale int
+		var quantity, inQuantity exact.Coefficient
+		var scale, inScale int
 		var basis sql.NullString
 		var basisScale sql.NullInt64
 		var knowledge string
 		if err := transfers.Scan(&out.LotID, &out.AccountID, &out.CommodityID, &out.CostCommodityID,
 			&in.LotID, &in.AccountID, &in.CommodityID, &in.CostCommodityID,
-			&quantity, &scale, &basis, &basisScale, &knowledge); err != nil {
+			&quantity, &scale, &basis, &basisScale, &knowledge, &inQuantity, &inScale); err != nil {
 			transfers.Close()
 			return nil, fmt.Errorf("scan effective self-check transfer revision: %w", err)
 		}
 		value, valueScale, err := selfCheckRevisionBasis(basis, basisScale, knowledge)
-		if err != nil || value < 0 || quantity.Sign() <= 0 {
+		if err != nil || value < 0 || quantity.Sign() <= 0 || inQuantity.Sign() <= 0 {
 			transfers.Close()
 			return nil, fmt.Errorf("invalid effective self-check transfer revision for lot %d", in.LotID)
 		}
-		in.QuantityValue, in.QuantityScale, in.CostBasisValue, in.CostBasisScale = quantity, scale, value, valueScale
+		in.QuantityValue, in.QuantityScale, in.CostBasisValue, in.CostBasisScale = inQuantity, inScale, value, valueScale
 		out.QuantityValue, out.QuantityScale, out.CostBasisValue, out.CostBasisScale = quantity.Negated(), scale, -value, valueScale
 		in.BasisKnowledge, out.BasisKnowledge = knowledge, knowledge
 		events = append(events, out)

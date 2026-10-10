@@ -312,6 +312,46 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 				CostBasisValue: moved.CostBasisValue, CostBasisScale: moved.CostBasisScale,
 				BasisKnowledge: knowledge, ExternalOut: intent.ExternalOut})
 		}
+	case "exchange_out":
+		// A share exchange takes each recorded lot whole (#177). The quantity
+		// is fixed by the link; the basis it carries and a corrected
+		// acquisition's successor lot follow history, as for a source-lot
+		// transfer. Units of the holding still open at the slot afterwards
+		// mean the exchange no longer covers the holding.
+		params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
+			CommodityID: commodityID, CostCommodityID: costCommodityID,
+			TransactionID: intent.TransactionID, EventDate: intent.EventDate,
+			EventKind: "transfer_out", MetadataJSON: "{}", AdmitUnknownBasis: true,
+			CreatedAt: intent.CreatedAt, ActorUserID: intent.CreatedByUserID}
+		allocationScale, err := positionBasisAllocationScaleTx(ctx, tx, params)
+		if err != nil {
+			return err
+		}
+		for _, link := range intent.ExchangeLinks {
+			moved, err := disposeLotTx(ctx, tx, params, link.LotID, link.QuantityValue, link.QuantityScale,
+				intent.AuditEventID, allocationScale)
+			if err != nil {
+				return replayTransferError(intent, err)
+			}
+			knowledge, resolved, err := transferKnowledgeAfterReplay(link.BasisKnowledge, moved.BasisKnowledge)
+			if err != nil {
+				return replayTransferError(intent, err)
+			}
+			if moved.LotID != link.RecordedLotID || resolved || knowledge == InvestmentBasisKnown &&
+				exact.ScaledIntFromInt64(moved.CostBasisValue, moved.CostBasisScale).Cmp(
+					exact.ScaledIntFromCoefficient(link.CostBasisValue, link.CostBasisScale)) != 0 {
+				projection.TransferRevisions = append(projection.TransferRevisions, InvestmentReplayTransferRevision{
+					OperationID: intent.OperationID, LinkSeq: link.LinkSeq, SourceLotID: moved.LotID,
+					CostBasisValue: moved.CostBasisValue, CostBasisScale: moved.CostBasisScale,
+					BasisKnowledge: knowledge})
+			}
+		}
+		if err := requireShareExchangeCompleteTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, intent.EventDate); err != nil {
+			return replayTransferError(intent, err)
+		}
+		if err := keepPositionMethodFamilyTx(ctx, tx, params, intent.AuditEventID); err != nil {
+			return err
+		}
 	case "pooled_transfer_out":
 		params := DisposeLotsParams{BookID: bookID, AccountID: accountID,
 			CommodityID: commodityID, CostCommodityID: costCommodityID,
