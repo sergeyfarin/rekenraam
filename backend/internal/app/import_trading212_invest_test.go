@@ -1847,3 +1847,56 @@ func TestCommitImportBatchRefusesRowsOfBatchDiscardedMidCommit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "discarded", batch.Status)
 }
+
+// #182: an imported buy into a holding that already holds an unknown-basis
+// lot posts, and the position reads as unknown basis.
+func TestCommitImportBatch_BuyBesideAnUnknownBasisLotPosts(t *testing.T) {
+	t.Parallel()
+	f := newInvestTestFixture(t)
+	ctx := context.Background()
+	conn := f.createConnection(t, &f.cashAccountID)
+	fill := trading212OrderFill{
+		FillType: "TRADE", FillID: "fill-1", OrderID: "order-1", Ticker: "AAPL_US_EQ", ISIN: "US0378331005",
+		Side: "BUY", Quantity: "2", Price: "150.25", Currency: "USD",
+		FilledAt: "2026-06-01T10:00:00Z", NetValue: "-300.75", NetValueCurrency: "EUR",
+	}
+	batchID, _ := f.stageOrderFillRow(t, conn.ID, fill)
+	_, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	instruments, err := f.investmentSvc.ListInstruments(ctx)
+	require.NoError(t, err)
+	require.Len(t, instruments, 1)
+	holdingAccountID, found, err := f.connService.HoldingAccountForCommodity(ctx, conn.ID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	require.True(t, found)
+
+	seedExternalTransferEquity(t, f.database)
+	_, err = f.investmentSvc.ExternalTransferIn(ctx, ExternalTransferInInput{
+		OwnerUserID: f.ownerUserID, EffectiveOn: "2026-06-02", HoldingAccountID: holdingAccountID,
+		CommodityID: instruments[0].CommodityID, QuantityValue: exact.New(3), CostCommodityID: f.eurCommodityID,
+		BasisKnowledge: db.InvestmentBasisUnknown, OriginalAcquiredOn: "2020-03-01",
+		SourceEvidenceJSON: `{"broker":"statement-42"}`, ChangeReason: "migrated holding",
+	})
+	require.NoError(t, err)
+
+	fill.FillID, fill.OrderID, fill.FilledAt = "fill-2", "order-2", "2026-06-03T10:00:00Z"
+	batchID, _ = f.stageOrderFillRow(t, conn.ID, fill)
+	result, err := f.importService.CommitImportBatch(ctx, CommitImportBatchInput{OwnerUserID: f.ownerUserID, BatchID: batchID})
+	require.NoError(t, err)
+	require.Equal(t, 1, result.CommittedCount, "the buy beside an unknown lot commits")
+
+	positions, err := f.investmentSvc.Positions(ctx)
+	require.NoError(t, err)
+	require.Len(t, positions, 1)
+	assert.Equal(t, "7", positions[0].QuantityValue.String())
+	assert.Equal(t, db.InvestmentBasisUnknown, positions[0].BasisKnowledge)
+	lots, err := f.investmentSvc.ListLots(ctx, holdingAccountID, instruments[0].CommodityID)
+	require.NoError(t, err)
+	known := 0
+	for _, lot := range lots {
+		if lot.BasisKnowledge == db.InvestmentBasisKnown {
+			known++
+		}
+	}
+	assert.Equal(t, 2, known, "each imported lot keeps its known basis")
+}

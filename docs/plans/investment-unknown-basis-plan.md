@@ -85,6 +85,20 @@ change, and the original decision stays unknown evidence. Named cases:
 `TestUnresolvedSaleReportsNullBasisGainAndTotal`.
 Unknown transfer depletions and their dependent links shipped in boundary 3.
 
+Known acquisitions beside unknown basis (#182, 2026-10-10): a known-basis
+acquisition into a position holding an unknown lot is admitted, in either
+order. Every acquisition's T-104 range guard checks the known subtotal; the
+position read model sums basis only for an all-known position, where that
+subtotal is the full sum. The position reads as unknown, the new lot keeps its
+exact basis, and a sale of only known lots stays known. Buy, buy replacement,
+reinvested dividend and import commit share `createLotWithAuditTx`, so one
+rule covers them. Named cases:
+`TestKnownBuyBesideAnUnknownBasisLotPostsInEitherOrder`,
+`TestReinvestedDividendBesideAnUnknownBasisLotPosts`,
+`TestBuyReplacementBesideAnUnknownBasisLotPosts`,
+`TestKnownBuyBesideAnUnknownBasisLotStillRefusesUnrepresentableKnownSubtotal`,
+`TestCommitImportBatch_BuyBesideAnUnknownBasisLotPosts`.
+
 Boundary 3a is implemented: public unknown inbound and splits. The inbound
 command and API take an explicit `basis_knowledge: unknown` with no amount; an
 omitted amount, or unknown with an amount, is refused. Unknown inbound posts

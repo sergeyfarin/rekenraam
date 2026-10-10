@@ -1242,8 +1242,11 @@ func createLotWithAuditTx(ctx context.Context, tx *sql.Tx, params CreateInvestme
 		}
 	}
 	if !replayAdmission {
+		// #182: an acquisition checks the known subtotal whatever its own
+		// knowledge. The position read model sums only an all-known position, so
+		// this is the full-position sum whenever that sum is ever read.
 		if err := requirePositionBasisRangeQueryTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
-			params.CostCommodityID, knowledge == InvestmentBasisUnknown, side); err != nil {
+			params.CostCommodityID, true, side); err != nil {
 			return InvestmentLotRecord{}, err
 		}
 	}
@@ -3919,12 +3922,9 @@ func requirePositionBasisRangeTx(ctx context.Context, tx *sql.Tx, bookID, accoun
 	return requirePositionBasisRangeQueryTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, false, PositionSideLong)
 }
 
-// Replay of unknown openings can check the representable known subtotal;
-// known-basis writers keep the strict full-position guard above.
-func requireKnownPositionBasisSubtotalRangeTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64) error {
-	return requirePositionBasisRangeQueryTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, true, PositionSideLong)
-}
-
+// requirePositionBasisRangeQueryTx with knownOnly sums the known subtotal.
+// Acquisitions and admitting depletions use it; a depletion that refuses
+// unknown basis keeps the strict scan, which names ErrUnknownInvestmentBasis.
 func requirePositionBasisRangeQueryTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64, knownOnly bool, side string) error {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT remaining_cost_basis_value, remaining_cost_basis_scale
