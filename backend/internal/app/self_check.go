@@ -426,8 +426,13 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				  AND v.version_seq = 1 AND v.treatment = 'clearing_included')`},
 		{"journal-backed operation missing a posted version link", `
 			SELECT o.id FROM investment_operations o WHERE o.book_id = ?
-			-- All shipped investment operations require a posted journal. A future
-			-- basis-only kind must declare its exemption when that writer ships.
+			-- Investment operations require a posted journal. The declared
+			-- exemption (#168): a known-zero basis resolution has no bridge to
+			-- post, and neither does the reversal of one. Its fact and its
+			-- absence of journals are checked with the resolution below.
+			AND NOT EXISTS (SELECT 1 FROM investment_basis_resolutions zero
+				WHERE zero.basis_value = '0' AND (zero.operation_id = o.id
+					OR (o.operation_kind = 'reversal' AND zero.operation_id = o.correction_of_operation_id)))
 			AND NOT EXISTS (SELECT 1 FROM investment_operation_journal_links l
 				JOIN transaction_versions v ON v.id = l.transaction_version_id
 				JOIN transactions t ON t.id = v.transaction_id
@@ -596,8 +601,9 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 					WHERE x.operation_id = o.id AND x.source_lot_id = e.lot_id))))`},
 		// A sourced resolution's primary journal is exactly its omitted inbound
 		// bridge: trading +b and equity -b in the cost currency, at the
-		// transfer date, and nothing else (T-145). The pinned facts are
-		// checked against the still-unknown link it resolves.
+		// transfer date, and nothing else (T-145). A known zero has no primary
+		// journal at all (#168). The pinned facts are checked against the
+		// still-unknown link it resolves.
 		{"basis resolution disagrees with its bridge or pinned transfer", `
 			SELECT o.id FROM investment_operations o
 			WHERE o.book_id = ? AND o.operation_kind = 'basis_resolution'
@@ -610,8 +616,12 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 					AND f.effective_on = o.event_date)
 			OR (SELECT COUNT(*) FROM investment_operation_journal_links l
 				JOIN posting_versions pv ON pv.transaction_version_id = l.transaction_version_id
-				WHERE l.operation_id = o.id AND l.role = 'primary') <> 2
-			OR NOT EXISTS (SELECT 1 FROM investment_basis_resolutions r
+				WHERE l.operation_id = o.id AND l.role = 'primary')
+				<> CASE WHEN EXISTS (SELECT 1 FROM investment_basis_resolutions zero
+					WHERE zero.operation_id = o.id AND zero.basis_value = '0') THEN 0 ELSE 2 END
+			OR (NOT EXISTS (SELECT 1 FROM investment_basis_resolutions zero
+				WHERE zero.operation_id = o.id AND zero.basis_value = '0')
+			AND NOT EXISTS (SELECT 1 FROM investment_basis_resolutions r
 				JOIN investment_operation_journal_links l ON l.operation_id = r.operation_id AND l.role = 'primary'
 				JOIN transaction_versions v ON v.id = l.transaction_version_id
 				JOIN posting_versions trading ON trading.transaction_version_id = l.transaction_version_id
@@ -621,7 +631,16 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 				WHERE r.operation_id = o.id AND v.transaction_date = o.event_date
 					AND trading.commodity_id = r.cost_commodity_id AND equity.commodity_id = r.cost_commodity_id
 					AND trading.quantity_value = r.basis_value AND trading.quantity_scale = r.basis_scale
-					AND equity.quantity_value = '-' || r.basis_value AND equity.quantity_scale = r.basis_scale))`},
+					AND equity.quantity_value = '-' || r.basis_value AND equity.quantity_scale = r.basis_scale)))`},
+		// The reversal of a journal-free known zero has nothing to invert, and
+		// a zero successor's only journal is its predecessor's inverse (#168).
+		{"known-zero basis resolution or its reversal posts a journal", `
+			SELECT o.id FROM investment_operations o
+			JOIN investment_basis_resolutions zero ON zero.operation_id IN (o.id, o.correction_of_operation_id)
+			WHERE o.book_id = ? AND zero.basis_value = '0'
+				AND (o.operation_kind = 'reversal' OR zero.operation_id = o.id)
+				AND EXISTS (SELECT 1 FROM investment_operation_journal_links l
+					WHERE l.operation_id = o.id AND l.role <> 'reversal')`},
 		// A link has at most one effective resolution, and a replacement
 		// corrects a resolution of the same link (#168).
 		{"transfer link has more than one effective basis resolution or a misdirected correction", `

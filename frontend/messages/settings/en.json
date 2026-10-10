@@ -1333,6 +1333,5 @@
   "investments_basis_resolution_amount_help": "For all shares received, including any already sold or moved, in the transfer's own currency. A resolution cannot be undone yet.",
   "investments_basis_resolution_reason": "Reason",
   "investments_basis_resolution_submit": "Review and resolve",
-  "investments_basis_resolution_pending": "Resolving…",
-  "investments_basis_resolution_zero_error": "A zero cost basis is recorded by correcting the transfer."
+  "investments_basis_resolution_pending": "Resolving…"
 }

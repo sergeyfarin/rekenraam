@@ -80,10 +80,6 @@
         ? m.investments_form_amount_too_large() : m.investments_transfer_basis_error());
       return null;
     }
-    if (basis.field.value === '0') {
-      formError = new TranslatedFormError(m.investments_basis_resolution_zero_error());
-      return null;
-    }
     return {
       basis_value: basis.field.value, basis_scale: basis.field.scale, reason: reason.trim(),
       ...(reference.trim() ? { source_evidence: { reference: reference.trim() } } : {})

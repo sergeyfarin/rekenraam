@@ -1305,6 +1305,5 @@
   "investments_basis_resolution_amount_help": "За все полученные бумаги, включая уже проданные или переведённые, в валюте перевода. Отменить это пока нельзя.",
   "investments_basis_resolution_reason": "Причина",
   "investments_basis_resolution_submit": "Проверить и записать",
-  "investments_basis_resolution_pending": "Запись…",
-  "investments_basis_resolution_zero_error": "Нулевая себестоимость записывается исправлением перевода."
+  "investments_basis_resolution_pending": "Запись…"
 }

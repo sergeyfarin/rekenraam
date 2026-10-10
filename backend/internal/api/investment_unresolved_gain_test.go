@@ -197,7 +197,8 @@ func TestCorrectTransferBasisResolutionAPI(t *testing.T) {
 	var replaced investmentBasisResolutionReplacementResponse
 	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &replaced))
 	require.Equal(t, transfer.Transaction.ID, replaced.TransferTransactionID)
-	require.Equal(t, resolved.Transaction.ID, replaced.CorrectedTransactionID)
+	require.NotNil(t, replaced.Inverse)
+	require.NotNil(t, replaced.Replacement)
 	require.Equal(t, "6000", chain()["effective_basis_resolution"].(map[string]any)["basis_value"])
 
 	reversal := map[string]any{"reason": "statement belonged to another account"}
@@ -210,4 +211,42 @@ func TestCorrectTransferBasisResolutionAPI(t *testing.T) {
 	require.Nil(t, after["effective_basis_resolution"])
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, "/api/v1/investments/transactions/999999/reverse-basis-resolution/reconciliation-impact",
 		map[string]any{"reason": "missing"}, http.StatusNotFound)
+}
+
+// A sourced known zero resolves through the same endpoint without a journal:
+// the response has no transaction, and it is reversed the same way (#168).
+func TestKnownZeroBasisResolutionAPI(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "ZERO")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	in := externalTransferInRequest{EffectiveOn: "2026-02-01", HoldingAccountID: holding.ID, BasisKnowledge: "unknown",
+		CommodityID: instrument.CommodityID, QuantityValue: exact.New(2), CostCommodityID: f.commodityID}
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/transfers/external/in", in, http.StatusCreated)
+	var transfer externalTransferInResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &transfer))
+	base := "/api/v1/investments/transactions/" + strconv.FormatInt(transfer.Transaction.ID, 10)
+
+	zero := moneyCoefficient(0)
+	resolve := investmentBasisResolutionRequest{BasisValue: &zero, BasisScale: 2, Reason: "gifted shares, statement shows nil cost"}
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, base+"/resolve-basis/reconciliation-impact", resolve, http.StatusOK)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/resolve-basis", resolve, http.StatusCreated)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &body))
+	require.Contains(t, body, "transaction")
+	require.Nil(t, body["transaction"], "a known zero posts no journal")
+
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, base+"/correction-chain", nil, http.StatusOK)
+	var chain map[string]any
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &chain))
+	effective := chain["effective_basis_resolution"].(map[string]any)
+	require.Equal(t, "0", effective["basis_value"])
+	require.Nil(t, effective["transaction_id"], "a journal-free resolution has no transaction")
+
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/reverse-basis-resolution",
+		map[string]any{"reason": "the statement was for another lot"}, http.StatusCreated)
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &body))
+	require.Nil(t, body["transaction"])
+	require.Equal(t, float64(transfer.Transaction.ID), body["transfer_transaction_id"])
 }

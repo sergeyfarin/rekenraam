@@ -17,7 +17,7 @@ func resolveInput(f *investmentsTestFixture, transactionID, basis int64) Resolve
 
 // resolveAcknowledged previews a resolution and commits it with the preview's
 // gain acknowledgement, as the resolution form does after confirmation.
-func resolveAcknowledged(t *testing.T, f *investmentsTestFixture, input ResolveTransferBasisInput) Transaction {
+func resolveAcknowledged(t *testing.T, f *investmentsTestFixture, input ResolveTransferBasisInput) *Transaction {
 	t.Helper()
 	impact, err := f.investmentService.ResolveTransferBasisImpact(context.Background(), input)
 	require.NoError(t, err)
@@ -223,8 +223,9 @@ func TestTransferBasisResolutionRefusals(t *testing.T) {
 	unknownInput := unknownTransferInInput(f, "2026-06-02", "")
 	unknown, err := f.investmentService.ExternalTransferIn(ctx, unknownInput)
 	require.NoError(t, err)
-	_, err = f.investmentService.ResolveTransferBasis(ctx, resolveInput(f, unknown.Transaction.ID, 0))
-	require.ErrorContains(t, err, "zero basis is recorded by correcting the transfer")
+	negative := resolveInput(f, unknown.Transaction.ID, -100)
+	_, err = f.investmentService.ResolveTransferBasis(ctx, negative)
+	require.ErrorContains(t, err, "resolved basis must be nonnegative")
 	missingReason := resolveInput(f, unknown.Transaction.ID, 100)
 	missingReason.Reason = " "
 	_, err = f.investmentService.ResolveTransferBasis(ctx, missingReason)

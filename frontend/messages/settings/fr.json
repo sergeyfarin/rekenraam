@@ -1305,6 +1305,5 @@
   "investments_basis_resolution_amount_help": "Pour tous les titres reçus, y compris ceux déjà vendus ou transférés, dans la devise du transfert. Cette opération ne peut pas encore être annulée.",
   "investments_basis_resolution_reason": "Motif",
   "investments_basis_resolution_submit": "Vérifier et enregistrer",
-  "investments_basis_resolution_pending": "Enregistrement…",
-  "investments_basis_resolution_zero_error": "Un prix de revient nul s’enregistre en corrigeant le transfert."
+  "investments_basis_resolution_pending": "Enregistrement…"
 }

@@ -3118,12 +3118,12 @@ InvestmentBasisResolutionRequest:
   properties:
     basis_value:
       type: string
-      pattern: '^[1-9][0-9]{0,18}$'
+      pattern: '^(0|[1-9][0-9]{0,18})$'
       description: >-
         The transfer's total sourced basis in its own cost currency, never a
-        conversion. A known zero is recorded by correcting the transfer instead.
-        A replacement keeps the pinned transfer and currency and must differ
-        from the effective basis.
+        conversion. A sourced known zero is journal-free: it records the fact
+        without a bridge journal (#168). A replacement keeps the pinned
+        transfer and currency and must differ from the effective basis.
     basis_scale:
       type: integer
       minimum: 0
@@ -3144,22 +3144,28 @@ InvestmentBasisResolutionResponse:
   required: [transaction, resolved_transaction_id]
   properties:
     transaction:
-      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+      description: The resolution's bridge journal; null for a journal-free known zero (#168).
+      oneOf:
+        - $ref: "../schemas/transactions.yaml#/TransactionResponse"
+        - type: 'null'
     resolved_transaction_id:
       type: integer
       format: int64
 
 InvestmentBasisResolutionReplacementResponse:
   type: object
-  required: [inverse, replacement, corrected_transaction_id, transfer_transaction_id]
+  required: [inverse, replacement, transfer_transaction_id]
   properties:
     inverse:
-      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+      description: The inverse of the replaced bridge; null when the replaced resolution was a journal-free known zero.
+      oneOf:
+        - $ref: "../schemas/transactions.yaml#/TransactionResponse"
+        - type: 'null'
     replacement:
-      $ref: "../schemas/transactions.yaml#/TransactionResponse"
-    corrected_transaction_id:
-      type: integer
-      format: int64
+      description: The successor's bridge journal; null when the successor is a journal-free known zero.
+      oneOf:
+        - $ref: "../schemas/transactions.yaml#/TransactionResponse"
+        - type: 'null'
     transfer_transaction_id:
       type: integer
       format: int64
@@ -3173,17 +3179,30 @@ InvestmentCorrectionBasisResolutionTerms:
       format: int64
       description: The effective basis_resolution operation.
     transaction_id:
-      type: integer
+      type: [integer, 'null']
       format: int64
-      description: The effective resolution's bridge journal.
+      description: The effective resolution's bridge journal; null for a journal-free known zero.
     cost_commodity_id:
       type: integer
       format: int64
     basis_value:
       type: string
-      pattern: '^[1-9][0-9]{0,37}$'
+      pattern: '^(0|[1-9][0-9]{0,37})$'
     basis_scale:
       type: integer
     source_evidence:
       type: object
       additionalProperties: true
+
+InvestmentBasisResolutionReversalResponse:
+  type: object
+  required: [transaction, transfer_transaction_id]
+  properties:
+    transaction:
+      description: The inverse of the reversed bridge; null when the reversed resolution was a journal-free known zero.
+      oneOf:
+        - $ref: "../schemas/transactions.yaml#/TransactionResponse"
+        - type: 'null'
+    transfer_transaction_id:
+      type: integer
+      format: int64

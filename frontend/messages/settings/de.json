@@ -1305,6 +1305,5 @@
   "investments_basis_resolution_amount_help": "Für alle erhaltenen Anteile, auch bereits verkaufte oder übertragene, in der Währung der Übertragung. Dies kann noch nicht rückgängig gemacht werden.",
   "investments_basis_resolution_reason": "Grund",
   "investments_basis_resolution_submit": "Prüfen und erfassen",
-  "investments_basis_resolution_pending": "Wird erfasst…",
-  "investments_basis_resolution_zero_error": "Anschaffungskosten von null erfassen Sie, indem Sie die Übertragung korrigieren."
+  "investments_basis_resolution_pending": "Wird erfasst…"
 }

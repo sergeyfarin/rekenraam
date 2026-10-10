@@ -1305,6 +1305,5 @@
   "investments_basis_resolution_amount_help": "Para todas las acciones recibidas, incluidas las ya vendidas o traspasadas, en la moneda del traspaso. Aún no se puede deshacer.",
   "investments_basis_resolution_reason": "Motivo",
   "investments_basis_resolution_submit": "Revisar y registrar",
-  "investments_basis_resolution_pending": "Registrando…",
-  "investments_basis_resolution_zero_error": "Un coste cero se registra corrigiendo el traspaso."
+  "investments_basis_resolution_pending": "Registrando…"
 }

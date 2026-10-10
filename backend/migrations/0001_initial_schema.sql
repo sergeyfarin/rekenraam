@@ -1812,8 +1812,9 @@ CREATE TABLE IF NOT EXISTS investment_basis_resolutions (
     AND quantity_value NOT GLOB '*[^0-9]*' AND substr(quantity_value, 1, 1) BETWEEN '1' AND '9'),
   quantity_scale INTEGER NOT NULL CHECK (quantity_scale BETWEEN 0 AND 24),
   cost_commodity_id INTEGER NOT NULL REFERENCES commodities(id) ON DELETE RESTRICT,
-  basis_value TEXT NOT NULL CHECK (length(basis_value) BETWEEN 1 AND 38
-    AND basis_value NOT GLOB '*[^0-9]*' AND substr(basis_value, 1, 1) BETWEEN '1' AND '9'),
+  -- A known zero is '0' and journal-free: it has no bridge to post (#168).
+  basis_value TEXT NOT NULL CHECK (basis_value = '0' OR (length(basis_value) BETWEEN 1 AND 38
+    AND basis_value NOT GLOB '*[^0-9]*' AND substr(basis_value, 1, 1) BETWEEN '1' AND '9')),
   basis_scale INTEGER NOT NULL CHECK (basis_scale BETWEEN 0 AND 12),
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,

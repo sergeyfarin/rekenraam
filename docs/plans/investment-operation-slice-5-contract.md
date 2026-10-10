@@ -155,8 +155,9 @@ records immutable evidence, unknown transfer admission, replay and sourced
 positive resolution. Unknown amounts keep NULL coefficient and scale together;
 public transfers may carry unknown basis, and an outbound posts its complete
 omitted bridge when resolution makes every effective link known.
-Resolution recovery and journal-free known-zero resolution are tracked in
-[#168](https://github.com/sergeyfarin/rekenraam/issues/168).
+Resolution correction and journal-free known-zero resolution are delivered
+under [#168](https://github.com/sergeyfarin/rekenraam/issues/168); see the
+unknown-basis plan's *Resolution correction* section.
 
 Example: transfer 2 shares carrying 80.00 EUR into the book. Post security
 `H +2`, `T −2` and EUR `T +80.00`, `E −80.00`. A later full sale for 100.00
@@ -300,8 +301,8 @@ correction fences, gain acknowledgement and checkpoint guard. A corrected
 split's facts, effects, revisions and journals stay immutable; self-check
 includes its inverse journal and expects no effects from a split that is no
 longer effective. Deferred: zero-delta splits (no eligible holdings, refused
-with `INVESTMENT_SPLIT_NO_HOLDINGS` because a journal-free operation path does
-not exist; [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)), verified Trading 212 mapping ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)). Linked cash in lieu is implemented as described below.
+with `INVESTMENT_SPLIT_NO_HOLDINGS` until a zero-delta split defines its own
+journal-free contract, which may reuse #168's audit-only command header; [T-131 #146](https://github.com/sergeyfarin/rekenraam/issues/146)), verified Trading 212 mapping ([T-130 #145](https://github.com/sergeyfarin/rekenraam/issues/145)). Linked cash in lieu is implemented as described below.
 
 ## Cash in lieu
 

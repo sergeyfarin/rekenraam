@@ -1305,6 +1305,5 @@
   "investments_basis_resolution_amount_help": "Voor alle ontvangen aandelen, ook die al verkocht of verplaatst zijn, in de eigen valuta van de overboeking. Dit kan nog niet ongedaan worden gemaakt.",
   "investments_basis_resolution_reason": "Reden",
   "investments_basis_resolution_submit": "Controleren en vastleggen",
-  "investments_basis_resolution_pending": "Vastleggen…",
-  "investments_basis_resolution_zero_error": "Een kostprijs van nul leg je vast door de overboeking te corrigeren."
+  "investments_basis_resolution_pending": "Vastleggen…"
 }

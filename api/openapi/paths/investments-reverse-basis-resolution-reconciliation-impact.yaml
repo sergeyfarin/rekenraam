@@ -24,7 +24,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ReconciliationImpactResponse"
     "400":
-      description: Invalid request, missing reason, or a zero or repeated basis
+      description: Invalid request, missing reason, a negative basis, or a basis repeating the effective one
       content:
         application/json:
           schema:

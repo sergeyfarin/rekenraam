@@ -96,13 +96,28 @@ func unknownTransferBasisQuery(ctx context.Context, reader queryer, bookID, oper
 
 // ResolveTransferBasis appends the resolution and its bridge journal, then
 // replays the resolved holding and every position its lots reached, all under
-// one audit event and the caller's gain-impact policy.
+// one audit event and the caller's gain-impact policy. A known zero has no
+// bridge: its header is audit-only and the operation is journal-free (#168).
 func (r *InvestmentRepository) ResolveTransferBasis(ctx context.Context, journal CreateTransactionParams, params ResolveTransferBasisParams) (TransactionRecord, error) {
 	transaction, _, err := executeInvestmentWriteTx(ctx, r.database, journal,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (struct{}, error) {
-			return struct{}{}, resolveTransferBasisTx(ctx, tx, journal, params, transaction, auditEventID)
+			operationID, err := basisResolutionOperationTx(ctx, tx, journal, transaction, auditEventID)
+			if err != nil {
+				return struct{}{}, err
+			}
+			return struct{}{}, resolveTransferBasisTx(ctx, tx, journal, params, operationID, auditEventID)
 		}, nil)
 	return transaction, err
+}
+
+// basisResolutionOperationTx is the operation a resolution's header names: a
+// journal-free operation for an audit-only header, else the journal's own.
+func basisResolutionOperationTx(ctx context.Context, tx *sql.Tx, header CreateTransactionParams,
+	transaction TransactionRecord, auditEventID int64) (int64, error) {
+	if header.AuditOnly {
+		return insertJournalFreeInvestmentOperationTx(ctx, tx, header, auditEventID)
+	}
+	return investmentOperationIDTx(ctx, tx, header.BookID, transaction.ID)
 }
 
 // SimulateTransferBasisResolution runs the complete resolution, replay and
@@ -110,7 +125,11 @@ func (r *InvestmentRepository) ResolveTransferBasis(ctx context.Context, journal
 func (r *InvestmentRepository) SimulateTransferBasisResolution(ctx context.Context, journal CreateTransactionParams, params ResolveTransferBasisParams) (SimulatedInvestmentWrite, error) {
 	transaction, _, err := previewInvestmentWriteTx(ctx, r.database, journal,
 		func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (struct{}, error) {
-			return struct{}{}, resolveTransferBasisTx(ctx, tx, journal, params, transaction, auditEventID)
+			operationID, err := basisResolutionOperationTx(ctx, tx, journal, transaction, auditEventID)
+			if err != nil {
+				return struct{}{}, err
+			}
+			return struct{}{}, resolveTransferBasisTx(ctx, tx, journal, params, operationID, auditEventID)
 		}, nil)
 	if err != nil {
 		return SimulatedInvestmentWrite{}, err
@@ -118,11 +137,15 @@ func (r *InvestmentRepository) SimulateTransferBasisResolution(ctx context.Conte
 	return simulatedInvestmentWrite(transaction), nil
 }
 
-func resolveTransferBasisTx(ctx context.Context, tx *sql.Tx, journal CreateTransactionParams, params ResolveTransferBasisParams,
-	transaction TransactionRecord, auditEventID int64) error {
-	if params.BookID <= 0 || params.TransferOperationID <= 0 || params.BasisValue.Sign() <= 0 ||
+func resolveTransferBasisTx(ctx context.Context, tx *sql.Tx, header CreateTransactionParams, params ResolveTransferBasisParams,
+	operationID, auditEventID int64) error {
+	if params.BookID <= 0 || params.TransferOperationID <= 0 || params.BasisValue.Sign() < 0 ||
 		params.BasisScale < 0 || params.BasisScale > 12 {
-		return fmt.Errorf("%w: a resolution needs a positive known basis at a money scale", ErrInvalidDisposalParams)
+		return fmt.Errorf("%w: a resolution needs a nonnegative known basis at a money scale", ErrInvalidDisposalParams)
+	}
+	// A known zero posts no bridge, so only it is journal-free (#168).
+	if (params.BasisValue.Sign() == 0) != header.AuditOnly {
+		return fmt.Errorf("%w: only a known-zero resolution is journal-free", ErrInvalidDisposalParams)
 	}
 	// Every pinned fact is read again inside the write: the transfer must
 	// still be effective, unknown and unresolved at commit.
@@ -130,12 +153,8 @@ func resolveTransferBasisTx(ctx context.Context, tx *sql.Tx, journal CreateTrans
 	if err != nil {
 		return err
 	}
-	if journal.Spec.TransactionDate != target.EffectiveOn {
+	if header.Spec.TransactionDate != target.EffectiveOn {
 		return fmt.Errorf("%w: a resolution is dated to its transfer", ErrInvalidDisposalParams)
-	}
-	operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
-	if err != nil {
-		return err
 	}
 	evidence := params.SourceEvidenceJSON
 	if evidence == "" {
@@ -153,7 +172,7 @@ func resolveTransferBasisTx(ctx context.Context, tx *sql.Tx, journal CreateTrans
 	// moved on as well as those still held, across the dependency closure.
 	return replayCorrectedPositionTx(ctx, tx, params.BookID,
 		investmentReplayPositionKey{target.AccountID, target.CommodityID, target.CostCommodityID},
-		operationID, auditEventID, journal.ActorUserID, journal.CreatedAt)
+		operationID, auditEventID, header.ActorUserID, header.CreatedAt)
 }
 
 // TransferBasisResolved reports whether an inbound transfer's unknown basis
@@ -182,7 +201,7 @@ func transferBasisResolvedTx(ctx context.Context, reader *sql.Tx, bookID, operat
 
 // BasisResolutionOperationRecord is a transfer's effective resolution as a
 // correction command reads it before the write; the guard reads it again
-// inside (#168).
+// inside (#168). A journal-free known zero has zero transaction and versions.
 type BasisResolutionOperationRecord struct {
 	OperationID           int64
 	TransactionID         int64
@@ -216,16 +235,16 @@ func effectiveTransferBasisResolutionQuery(ctx context.Context, reader saleOpera
 func basisResolutionOperationQuery(ctx context.Context, reader saleOperationReader, bookID int64, predicate string, argument int64) (BasisResolutionOperationRecord, error) {
 	var record BasisResolutionOperationRecord
 	var corrected int
-	err := reader.QueryRowContext(ctx, `SELECT o.id, linked_version.transaction_id, link.transaction_version_id,
-		current.id, o.event_date, r.transfer_operation_id, transfer_version.transaction_id, r.link_seq, r.lot_id,
+	err := reader.QueryRowContext(ctx, `SELECT o.id, COALESCE(linked_version.transaction_id, 0),
+		COALESCE(link.transaction_version_id, 0), COALESCE(current.id, 0), o.event_date, r.transfer_operation_id, transfer_version.transaction_id, r.link_seq, r.lot_id,
 		l.account_id, l.commodity_id, r.cost_commodity_id, r.basis_value, r.basis_scale, r.source_evidence_json,
 		EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id)
 		FROM investment_operations o
 		JOIN investment_basis_resolutions r ON r.operation_id = o.id
 		JOIN investment_lots l ON l.id = r.lot_id
-		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
-		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
-		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
+		LEFT JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
+		LEFT JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
+		LEFT JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
 		JOIN investment_operation_journal_links transfer_link ON transfer_link.operation_id = r.transfer_operation_id
 			AND transfer_link.role = 'primary'
 		JOIN transaction_versions transfer_version ON transfer_version.id = transfer_link.transaction_version_id
@@ -258,6 +277,9 @@ func checkBasisResolutionForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID
 	if current != expected {
 		return ErrInvestmentSaleChanged
 	}
+	if current.TransactionID == 0 {
+		return nil // a journal-free known zero has no journal to recheck
+	}
 	return checkInvestmentSourceJournalTx(ctx, tx, bookID, current.TransactionID,
 		current.EventDate, current.TransactionVersionID, current.CurrentVersionID)
 }
@@ -286,19 +308,23 @@ func (r *InvestmentRepository) PreviewTransferBasisResolutionReversal(ctx contex
 }
 
 func (r *InvestmentRepository) reverseTransferBasisResolution(ctx context.Context, params CreateTransactionParams, expected BasisResolutionOperationRecord, preview bool) (TransactionRecord, error) {
+	// A journal-free zero is reversed by a journal-free reversal; a bridged
+	// resolution by the inverse of its bridge.
+	journalFree := expected.TransactionID == 0
 	if params.BookID <= 0 || params.ActorUserID <= 0 || expected.OperationID <= 0 || expected.AccountID <= 0 ||
 		params.Spec.InvestmentOperationKind != "reversal" || params.Spec.TransactionKind != "investment" ||
 		params.Spec.Status != "posted" || params.Spec.TransactionDate != expected.EventDate ||
 		params.InvestmentCorrectionOfOperationID != expected.OperationID ||
 		params.InvestmentCorrectionMode != "reverse" || params.InvestmentCorrectionReason == "" ||
-		!params.CorrectionOfTransactionID.Valid || params.CorrectionOfTransactionID.Int64 != expected.TransactionID {
+		params.AuditOnly != journalFree || params.CorrectionOfTransactionID.Valid == journalFree ||
+		(!journalFree && params.CorrectionOfTransactionID.Int64 != expected.TransactionID) {
 		return TransactionRecord{}, fmt.Errorf("%w: basis resolution reversal is incomplete", ErrInvalidDisposalParams)
 	}
 	guard := func(tx *sql.Tx) error {
 		return checkBasisResolutionForCorrectionTx(ctx, tx, params.BookID, expected)
 	}
 	effect := func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (struct{}, error) {
-		operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
+		operationID, err := basisResolutionOperationTx(ctx, tx, params, transaction, auditEventID)
 		if err != nil {
 			return struct{}{}, err
 		}
@@ -316,8 +342,17 @@ func (r *InvestmentRepository) reverseTransferBasisResolution(ctx context.Contex
 }
 
 type BasisResolutionReplacementRecord struct {
-	Inverse     TransactionRecord
-	Replacement TransactionRecord
+	Inverse     TransactionRecord // zero when the predecessor was a journal-free zero
+	Replacement TransactionRecord // zero when the successor is a journal-free zero
+}
+
+// BasisResolutionReplacement is the write a replacement makes. Inverse is the
+// inverse of the predecessor's bridge, nil for a journal-free zero
+// predecessor. Successor is the new bridge journal, or an audit-only header
+// for a known-zero successor, which is journal-free (#168).
+type BasisResolutionReplacement struct {
+	Inverse   *CreateTransactionParams
+	Successor CreateTransactionParams
 }
 
 // ReplaceTransferBasisResolution atomically cancels a resolution's bridge and
@@ -325,60 +360,93 @@ type BasisResolutionReplacementRecord struct {
 // cost currency with its own complete bridge at the transfer date. Replay of
 // the dependency closure revises sales, onward links and outbound bridges.
 func (r *InvestmentRepository) ReplaceTransferBasisResolution(ctx context.Context, expected BasisResolutionOperationRecord,
-	inverse, replacement CreateTransactionParams, params ResolveTransferBasisParams,
+	write BasisResolutionReplacement, params ResolveTransferBasisParams,
 ) (BasisResolutionReplacementRecord, error) {
-	return r.replaceTransferBasisResolution(ctx, expected, inverse, replacement, params, false)
+	return r.replaceTransferBasisResolution(ctx, expected, write, params, false)
 }
 
 func (r *InvestmentRepository) SimulateTransferBasisResolutionReplacement(ctx context.Context, expected BasisResolutionOperationRecord,
-	inverse, replacement CreateTransactionParams, params ResolveTransferBasisParams,
+	write BasisResolutionReplacement, params ResolveTransferBasisParams,
 ) (SimulatedInvestmentWrite, error) {
-	record, err := r.replaceTransferBasisResolution(ctx, expected, inverse, replacement, params, true)
+	record, err := r.replaceTransferBasisResolution(ctx, expected, write, params, true)
 	if err != nil {
 		return SimulatedInvestmentWrite{}, err
 	}
-	return simulatedInvestmentWrite(record.Inverse, record.Replacement), nil
+	// The command's first journal carries the gain impact.
+	var journals []TransactionRecord
+	for _, journal := range []TransactionRecord{record.Inverse, record.Replacement} {
+		if journal.ID != 0 {
+			journals = append(journals, journal)
+		}
+	}
+	return simulatedInvestmentWrite(journals...), nil
 }
 
 func (r *InvestmentRepository) replaceTransferBasisResolution(ctx context.Context, expected BasisResolutionOperationRecord,
-	inverse, replacement CreateTransactionParams, params ResolveTransferBasisParams, preview bool,
+	write BasisResolutionReplacement, params ResolveTransferBasisParams, preview bool,
 ) (BasisResolutionReplacementRecord, error) {
-	if expected.OperationID <= 0 || inverse.BookID != params.BookID || inverse.BookID != replacement.BookID ||
-		inverse.ActorUserID != replacement.ActorUserID || inverse.ActorUserID <= 0 ||
-		inverse.Spec.InvestmentOperationKind != "" || inverse.Spec.TransactionKind != "investment" || inverse.Spec.Status != "posted" ||
-		inverse.Spec.TransactionDate != expected.EventDate || replacement.Spec.TransactionKind != "investment" ||
-		replacement.Spec.InvestmentOperationKind != "basis_resolution" || replacement.Spec.Status != "posted" ||
-		replacement.Spec.TransactionDate != expected.EventDate || replacement.InvestmentCorrectionOfOperationID != expected.OperationID ||
-		replacement.InvestmentCorrectionMode != "replace" || replacement.InvestmentCorrectionReason == "" ||
-		!inverse.CorrectionOfTransactionID.Valid || inverse.CorrectionOfTransactionID.Int64 != expected.TransactionID ||
-		replacement.CorrectionOfTransactionID != inverse.CorrectionOfTransactionID ||
-		params.TransferOperationID != expected.TransferOperationID {
+	successor := write.Successor
+	predecessorJournalFree := expected.TransactionID == 0
+	if expected.OperationID <= 0 || successor.BookID != params.BookID || successor.ActorUserID <= 0 ||
+		successor.Spec.TransactionKind != "investment" || successor.Spec.InvestmentOperationKind != "basis_resolution" ||
+		successor.Spec.Status != "posted" || successor.Spec.TransactionDate != expected.EventDate ||
+		successor.InvestmentCorrectionOfOperationID != expected.OperationID ||
+		successor.InvestmentCorrectionMode != "replace" || successor.InvestmentCorrectionReason == "" ||
+		params.TransferOperationID != expected.TransferOperationID ||
+		(write.Inverse == nil) != predecessorJournalFree || (write.Inverse == nil && successor.AuditOnly) {
 		return BasisResolutionReplacementRecord{}, fmt.Errorf("%w: basis resolution replacement is incomplete", ErrInvalidDisposalParams)
 	}
-	write := executeInvestmentJournalsWithGuardTx[struct{}]
-	if preview {
-		write = previewInvestmentJournalsWithGuardTx[struct{}]
+	var journals []CreateTransactionParams
+	if inverse := write.Inverse; inverse != nil {
+		if inverse.BookID != params.BookID || inverse.ActorUserID != successor.ActorUserID ||
+			inverse.Spec.InvestmentOperationKind != "" || inverse.Spec.TransactionKind != "investment" ||
+			inverse.Spec.Status != "posted" || inverse.Spec.TransactionDate != expected.EventDate ||
+			!inverse.CorrectionOfTransactionID.Valid || inverse.CorrectionOfTransactionID.Int64 != expected.TransactionID ||
+			(!successor.AuditOnly && successor.CorrectionOfTransactionID != inverse.CorrectionOfTransactionID) {
+			return BasisResolutionReplacementRecord{}, fmt.Errorf("%w: basis resolution replacement is incomplete", ErrInvalidDisposalParams)
+		}
+		journals = append(journals, *inverse)
 	}
-	journals, _, err := write(ctx, r.database, []CreateTransactionParams{inverse, replacement},
+	if !successor.AuditOnly {
+		journals = append(journals, successor)
+	}
+	run := executeInvestmentJournalsWithGuardTx[struct{}]
+	if preview {
+		run = previewInvestmentJournalsWithGuardTx[struct{}]
+	}
+	records, _, err := run(ctx, r.database, journals,
 		func(tx *sql.Tx) error {
 			return checkBasisResolutionForCorrectionTx(ctx, tx, params.BookID, expected)
 		},
-		func(tx *sql.Tx, journals []TransactionRecord, auditID int64) (struct{}, error) {
-			opID, err := investmentOperationIDTx(ctx, tx, params.BookID, journals[1].ID)
+		func(tx *sql.Tx, records []TransactionRecord, auditID int64) (struct{}, error) {
+			var successorJournal TransactionRecord
+			if !successor.AuditOnly {
+				successorJournal = records[len(records)-1]
+			}
+			opID, err := basisResolutionOperationTx(ctx, tx, successor, successorJournal, auditID)
 			if err != nil {
 				return struct{}{}, err
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
-				(book_id, operation_id, transaction_version_id, link_seq, role) VALUES (?, ?, ?, 2, 'reversal')`,
-				params.BookID, opID, journals[0].VersionID); err != nil {
-				return struct{}{}, fmt.Errorf("link basis resolution inverse: %w", err)
+			if write.Inverse != nil {
+				if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
+					(book_id, operation_id, transaction_version_id, link_seq, role) VALUES (?, ?, ?, 2, 'reversal')`,
+					params.BookID, opID, records[0].VersionID); err != nil {
+					return struct{}{}, fmt.Errorf("link basis resolution inverse: %w", err)
+				}
 			}
 			// With its predecessor superseded the link reads unknown again,
 			// so the successor is pinned exactly as a first resolution is.
-			return struct{}{}, resolveTransferBasisTx(ctx, tx, replacement, params, journals[1], auditID)
+			return struct{}{}, resolveTransferBasisTx(ctx, tx, successor, params, opID, auditID)
 		}, nil)
 	if err != nil {
 		return BasisResolutionReplacementRecord{}, err
 	}
-	return BasisResolutionReplacementRecord{Inverse: journals[0], Replacement: journals[1]}, nil
+	var record BasisResolutionReplacementRecord
+	if write.Inverse != nil {
+		record.Inverse = records[0]
+	}
+	if !successor.AuditOnly {
+		record.Replacement = records[len(records)-1]
+	}
+	return record, nil
 }

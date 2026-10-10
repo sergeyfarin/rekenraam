@@ -172,7 +172,17 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 			return nil, zero, err
 		}
 	}
-	first, auditEventID, err := createTransactionWithAuditTx(ctx, tx, params[0])
+	var first TransactionRecord
+	var auditEventID int64
+	if params[0].AuditOnly {
+		// A journal-free command (#168) has exactly its header.
+		if len(params) != 1 {
+			return nil, zero, fmt.Errorf("a journal-free investment command has no journals")
+		}
+		auditEventID, err = openInvestmentCommandAuditTx(ctx, tx, params[0])
+	} else {
+		first, auditEventID, err = createTransactionWithAuditTx(ctx, tx, params[0])
+	}
 	if err != nil {
 		return nil, zero, err
 	}
@@ -249,4 +259,50 @@ func runInvestmentJournalsWithGuardTx[T any](ctx context.Context, database *sql.
 	}
 	finished = true
 	return journals, result, nil
+}
+
+// openInvestmentCommandAuditTx opens the audit event of a journal-free
+// investment command under the book write lock, as a journal's would be.
+func openInvestmentCommandAuditTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams) (int64, error) {
+	if _, err := readBookForUpdate(ctx, tx, params.BookID); err != nil {
+		return 0, err
+	}
+	return insertAuditEvent(ctx, tx, AuditEventParams{
+		BookID: params.BookID, ActorUserID: params.ActorUserID, AuthSessionID: params.AuthSessionID,
+		OccurredAt: params.CreatedAt, RequestID: params.RequestID, OriginType: params.OriginType,
+		Operation: params.Operation, Reason: params.ChangeReason,
+	})
+}
+
+// insertJournalFreeInvestmentOperationTx records the operation a journal-free
+// command describes (#168): its kind, date and correction link come from the
+// header, under the command's audit event, with no journal link.
+func insertJournalFreeInvestmentOperationTx(ctx context.Context, tx *sql.Tx, params CreateTransactionParams, auditEventID int64) (int64, error) {
+	if !params.AuditOnly || params.Spec.InvestmentOperationKind == "" {
+		return 0, fmt.Errorf("%w: a journal-free operation needs an audit-only header", ErrInvalidDisposalParams)
+	}
+	result, err := tx.ExecContext(ctx, `INSERT INTO investment_operations (
+			book_id, operation_kind, event_date, created_at, created_audit_event_id,
+			correction_of_operation_id, correction_mode, correction_reason
+		) VALUES (?, ?, ?, ?, ?, NULLIF(?, 0), NULLIF(?, ''), NULLIF(?, ''))`,
+		params.BookID, params.Spec.InvestmentOperationKind, params.Spec.TransactionDate, params.CreatedAt,
+		auditEventID, params.InvestmentCorrectionOfOperationID, params.InvestmentCorrectionMode,
+		params.InvestmentCorrectionReason)
+	if err != nil {
+		return 0, fmt.Errorf("insert journal-free investment operation: %w", err)
+	}
+	operationID, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("read journal-free investment operation id: %w", err)
+	}
+	// The same date role a journal-backed operation of the kind records.
+	dateRole := "effective"
+	if params.Spec.InvestmentOperationKind == "reversal" {
+		dateRole = "trade"
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_dates (operation_id, date_role, event_date)
+		VALUES (?, ?, ?)`, operationID, dateRole, params.Spec.TransactionDate); err != nil {
+		return 0, fmt.Errorf("record journal-free investment operation date: %w", err)
+	}
+	return operationID, nil
 }

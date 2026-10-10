@@ -607,3 +607,14 @@ first is the explicit unwind. After it the transfer can be corrected or
 resolved again, and the reversed fact never follows a replacement transfer.
 Gain changes need the exact acknowledgement and reconciled balances the
 explicit override, as for every correction.
+
+A sourced known zero is the first basis-only operation (decision 1). It is a
+journal-free `basis_resolution` operation, since a zero bridge would be a
+fabricated journal. Its command runs through the shared investment writer
+with an audit-only header, which opens the audit event and runs guards,
+replay, checkpoint netting and gain acknowledgement without posting a
+transaction. Replacing a bridged resolution with zero posts only the inverse
+bridge; replacing zero posts only the successor bridge. A zero is reversed by
+a journal-free reversal. Self-check names this as the only exemption from
+the journal-link rule. Other journal-free kinds, such as #146's zero-delta
+split, must declare their own exemption.

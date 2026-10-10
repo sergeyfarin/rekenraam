@@ -7,7 +7,8 @@ post:
     unresolved under the preview's gain_impact_acknowledgement. A known
     outbound or onward internal link it reached never silently becomes
     unknown: the reversal refuses with that operation named and writes
-    nothing. The reversed fact stays evidence.
+    nothing. The reversed fact stays evidence. A journal-free known zero is
+    reversed without a journal.
   parameters:
     - in: path
       name: transaction_id
@@ -30,9 +31,9 @@ post:
       content:
         application/json:
           schema:
-            $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalResponse"
+            $ref: "../openapi.yaml#/components/schemas/InvestmentBasisResolutionReversalResponse"
     "400":
-      description: Invalid request, missing reason, or a zero or repeated basis
+      description: Invalid request, missing reason, a negative basis, or a basis repeating the effective one
       content:
         application/json:
           schema:

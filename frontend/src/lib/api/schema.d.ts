@@ -17830,7 +17830,7 @@ export interface paths {
         put?: never;
         /**
          * Resolve the unknown basis of an external transfer in
-         * @description Appends a sourced, audited resolution of an external transfer in that recorded unknown basis (T-145). Its journal posts the complete omitted bridge, commodity trading +b and transfer equity -b in the transfer's cost currency, dated to the transfer. The original link and lot stay unknown evidence. Replay revises every sale and transfer the lot reached, including units already sold or moved on; an outbound transfer whose last unknown link becomes known posts its complete omitted bridge at its own date. While the resolution is effective the transfer cannot be reversed or replaced (INVESTMENT_TRANSFER_BASIS_RESOLVED); the resolution is corrected through replace-basis-resolution or reverse-basis-resolution (#168). A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written.
+         * @description Appends a sourced, audited resolution of an external transfer in that recorded unknown basis (T-145). Its journal posts the complete omitted bridge, commodity trading +b and transfer equity -b in the transfer's cost currency, dated to the transfer; a sourced known zero is journal-free and returns a null transaction (#168). The original link and lot stay unknown evidence. Replay revises every sale and transfer the lot reached, including units already sold or moved on; an outbound transfer whose last unknown link becomes known posts its complete omitted bridge at its own date. While the resolution is effective the transfer cannot be reversed or replaced (INVESTMENT_TRANSFER_BASIS_RESOLVED); the resolution is corrected through replace-basis-resolution or reverse-basis-resolution (#168). A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written.
          */
         post: {
             parameters: {
@@ -17859,7 +17859,7 @@ export interface paths {
                         "application/json": components["schemas"]["InvestmentBasisResolutionResponse"];
                     };
                 };
-                /** @description Invalid request, missing reason, or a zero basis */
+                /** @description Invalid request, missing reason, or a negative basis */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -17950,7 +17950,7 @@ export interface paths {
                         "application/json": components["schemas"]["ReconciliationImpactResponse"];
                     };
                 };
-                /** @description Invalid request, missing reason, or a zero basis */
+                /** @description Invalid request, missing reason, or a negative basis */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -18034,7 +18034,7 @@ export interface paths {
                         "application/json": components["schemas"]["InvestmentBasisResolutionReplacementResponse"];
                     };
                 };
-                /** @description Invalid request, missing reason, or a zero or repeated basis */
+                /** @description Invalid request, missing reason, a negative basis, or a basis repeating the effective one */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -18125,7 +18125,7 @@ export interface paths {
                         "application/json": components["schemas"]["ReconciliationImpactResponse"];
                     };
                 };
-                /** @description Invalid request, missing reason, or a zero or repeated basis */
+                /** @description Invalid request, missing reason, a negative basis, or a basis repeating the effective one */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -18180,7 +18180,7 @@ export interface paths {
         put?: never;
         /**
          * Reverse a sourced basis resolution
-         * @description Withdraws a sourced resolution (#168): its bridge is inverted as a reversal operation and the transfer's basis reads unknown again, so the transfer can be resolved afresh or corrected. Sales it resolved become unresolved under the preview's gain_impact_acknowledgement. A known outbound or onward internal link it reached never silently becomes unknown: the reversal refuses with that operation named and writes nothing. The reversed fact stays evidence.
+         * @description Withdraws a sourced resolution (#168): its bridge is inverted as a reversal operation and the transfer's basis reads unknown again, so the transfer can be resolved afresh or corrected. Sales it resolved become unresolved under the preview's gain_impact_acknowledgement. A known outbound or onward internal link it reached never silently becomes unknown: the reversal refuses with that operation named and writes nothing. The reversed fact stays evidence. A journal-free known zero is reversed without a journal.
          */
         post: {
             parameters: {
@@ -18206,10 +18206,10 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["InvestmentSaleReversalResponse"];
+                        "application/json": components["schemas"]["InvestmentBasisResolutionReversalResponse"];
                     };
                 };
-                /** @description Invalid request, missing reason, or a zero or repeated basis */
+                /** @description Invalid request, missing reason, a negative basis, or a basis repeating the effective one */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -18300,7 +18300,7 @@ export interface paths {
                         "application/json": components["schemas"]["ReconciliationImpactResponse"];
                     };
                 };
-                /** @description Invalid request, missing reason, or a zero or repeated basis */
+                /** @description Invalid request, missing reason, a negative basis, or a basis repeating the effective one */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -25221,7 +25221,7 @@ export interface components {
             corrected_transaction_id: number;
         };
         InvestmentBasisResolutionRequest: {
-            /** @description The transfer's total sourced basis in its own cost currency, never a conversion. A known zero is recorded by correcting the transfer instead. A replacement keeps the pinned transfer and currency and must differ from the effective basis. */
+            /** @description The transfer's total sourced basis in its own cost currency, never a conversion. A sourced known zero is journal-free: it records the fact without a bridge journal (#168). A replacement keeps the pinned transfer and currency and must differ from the effective basis. */
             basis_value: string;
             basis_scale: number;
             /** @description Where the basis comes from, such as a broker statement reference. */
@@ -25233,15 +25233,22 @@ export interface components {
             gain_impact_acknowledgement?: string;
         };
         InvestmentBasisResolutionResponse: {
-            transaction: components["schemas"]["TransactionResponse"];
+            /** @description The resolution's bridge journal; null for a journal-free known zero (#168). */
+            transaction: components["schemas"]["TransactionResponse"] | null;
             /** Format: int64 */
             resolved_transaction_id: number;
         };
         InvestmentBasisResolutionReplacementResponse: {
-            inverse: components["schemas"]["TransactionResponse"];
-            replacement: components["schemas"]["TransactionResponse"];
+            /** @description The inverse of the replaced bridge; null when the replaced resolution was a journal-free known zero. */
+            inverse: components["schemas"]["TransactionResponse"] | null;
+            /** @description The successor's bridge journal; null when the successor is a journal-free known zero. */
+            replacement: components["schemas"]["TransactionResponse"] | null;
             /** Format: int64 */
-            corrected_transaction_id: number;
+            transfer_transaction_id: number;
+        };
+        InvestmentBasisResolutionReversalResponse: {
+            /** @description The inverse of the reversed bridge; null when the reversed resolution was a journal-free known zero. */
+            transaction: components["schemas"]["TransactionResponse"] | null;
             /** Format: int64 */
             transfer_transaction_id: number;
         };
@@ -25253,9 +25260,9 @@ export interface components {
             operation_id: number;
             /**
              * Format: int64
-             * @description The effective resolution's bridge journal.
+             * @description The effective resolution's bridge journal; null for a journal-free known zero.
              */
-            transaction_id: number;
+            transaction_id: number | null;
             /** Format: int64 */
             cost_commodity_id: number;
             basis_value: string;

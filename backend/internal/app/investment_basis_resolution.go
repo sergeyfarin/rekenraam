@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
@@ -52,17 +53,13 @@ func (s *InvestmentService) resolveTransferBasisWrite(ctx context.Context, input
 }
 
 // transferBasisResolutionJournal prepares a resolution's complete bridge
-// journal for a transfer's pinned cost currency and date.
+// journal for a transfer's pinned cost currency and date. A known zero has no
+// bridge: it gets an audit-only header and a journal-free operation (#168).
 func (s *InvestmentService) transferBasisResolutionJournal(ctx context.Context, input ResolveTransferBasisInput,
 	transferOperationID, costCommodityID int64, effectiveOn string,
 ) (db.CreateTransactionParams, db.ResolveTransferBasisParams, error) {
 	if input.BasisValue < 0 || input.BasisScale < 0 || input.BasisScale > 12 {
 		return db.CreateTransactionParams{}, db.ResolveTransferBasisParams{}, ValidationError{Message: "resolved basis must be nonnegative at a valid money scale"}
-	}
-	if input.BasisValue == 0 {
-		// A resolution posts its bridge; a known zero posts none, so it is
-		// recorded by correcting the transfer with an explicit zero basis.
-		return db.CreateTransactionParams{}, db.ResolveTransferBasisParams{}, ValidationError{Message: "a zero basis is recorded by correcting the transfer, not by resolution"}
 	}
 	reason, err := cleanChangeReason(input.Reason, "")
 	if err != nil || reason == "" {
@@ -71,6 +68,12 @@ func (s *InvestmentService) transferBasisResolutionJournal(ctx context.Context, 
 	evidence, err := cleanSizedJSONObject(input.SourceEvidenceJSON, "source evidence", investmentJSONMaxBytes)
 	if err != nil {
 		return db.CreateTransactionParams{}, db.ResolveTransferBasisParams{}, err
+	}
+	params := db.ResolveTransferBasisParams{BookID: BookID, TransferOperationID: transferOperationID,
+		BasisValue: exact.New(input.BasisValue), BasisScale: input.BasisScale, SourceEvidenceJSON: evidence}
+	if input.BasisValue == 0 {
+		return s.journalFreeInvestmentHeader(input.OwnerUserID, input.AuthSessionID, input.RequestID,
+			"investment.basis_resolution", reason, "basis_resolution", effectiveOn, input.ReconciliationOverride), params, nil
 	}
 	tradingID, err := s.repository.CommodityTradingAccountID(ctx, BookID)
 	if err != nil {
@@ -101,8 +104,23 @@ func (s *InvestmentService) transferBasisResolutionJournal(ctx context.Context, 
 	if err != nil {
 		return db.CreateTransactionParams{}, db.ResolveTransferBasisParams{}, err
 	}
-	return journal, db.ResolveTransferBasisParams{BookID: BookID, TransferOperationID: transferOperationID,
-		BasisValue: exact.New(input.BasisValue), BasisScale: input.BasisScale, SourceEvidenceJSON: evidence}, nil
+	return journal, params, nil
+}
+
+// journalFreeInvestmentHeader is the audit-only header of a journal-free
+// investment command (#168): who, when and why, and the operation kind and
+// date its effect records, with no journal.
+func (s *InvestmentService) journalFreeInvestmentHeader(ownerUserID, authSessionID int64, requestID, operation, reason,
+	kind, eventDate string, reconciliationOverride bool,
+) db.CreateTransactionParams {
+	return db.CreateTransactionParams{
+		BookID: BookID, ActorUserID: ownerUserID, AuthSessionID: authSessionID, RequestID: requestID,
+		OriginType: "browser_api", Operation: operation, ChangeReason: reason,
+		CreatedAt:              s.transactionService.now().UTC().Format(time.RFC3339),
+		ReconciliationOverride: reconciliationOverride, InvalidateCheckpointReason: reason, AuditOnly: true,
+		Spec: db.TransactionSpec{Status: "posted", TransactionKind: "investment",
+			InvestmentOperationKind: kind, TransactionDate: eventDate},
+	}
 }
 
 // ResolveTransferBasisImpact runs the complete resolution, replay and gain
@@ -124,17 +142,17 @@ func (s *InvestmentService) ResolveTransferBasisImpact(ctx context.Context, inpu
 // ResolveTransferBasis records the sourced basis of an unknown inbound
 // transfer. Every sale and transfer its lot reached is revised by replay; the
 // changed gains need the preview's acknowledgement.
-func (s *InvestmentService) ResolveTransferBasis(ctx context.Context, input ResolveTransferBasisInput) (Transaction, error) {
+func (s *InvestmentService) ResolveTransferBasis(ctx context.Context, input ResolveTransferBasisInput) (*Transaction, error) {
 	journal, params, err := s.resolveTransferBasisWrite(ctx, input)
 	if err != nil {
-		return Transaction{}, err
+		return nil, err
 	}
 	journal.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
 	transaction, err := s.repository.ResolveTransferBasis(ctx, journal, params)
 	if err != nil {
-		return Transaction{}, mapTransferCorrectionError(err)
+		return nil, mapTransferCorrectionError(err)
 	}
-	return toTransaction(transaction), nil
+	return optionalTransaction(transaction), nil
 }
 
 var (
@@ -165,11 +183,13 @@ type CorrectTransferBasisResolutionInput struct {
 	SourceEvidenceJSON string
 }
 
+// ReplaceTransferBasisResolutionResult has no Inverse when the replaced
+// resolution was a journal-free zero, and no Replacement when the successor is
+// one (#168).
 type ReplaceTransferBasisResolutionResult struct {
-	Inverse                Transaction
-	Replacement            Transaction
-	CorrectedTransactionID int64
-	TransferTransactionID  int64
+	Inverse               *Transaction
+	Replacement           *Transaction
+	TransferTransactionID int64
 }
 
 func (s *InvestmentService) prepareBasisResolutionReversal(ctx context.Context, input CorrectTransferBasisResolutionInput) (db.BasisResolutionOperationRecord, db.CreateTransactionParams, error) {
@@ -193,6 +213,15 @@ func (s *InvestmentService) prepareBasisResolutionReversal(ctx context.Context, 
 	}
 	if err != nil {
 		return db.BasisResolutionOperationRecord{}, db.CreateTransactionParams{}, err
+	}
+	if operation.TransactionID == 0 {
+		// A journal-free known zero is reversed without a journal.
+		params := s.journalFreeInvestmentHeader(input.OwnerUserID, input.AuthSessionID, input.RequestID,
+			"investment.basis_resolution.reverse", reason, "reversal", operation.EventDate, input.ReconciliationOverride)
+		params.InvestmentCorrectionOfOperationID = operation.OperationID
+		params.InvestmentCorrectionMode = "reverse"
+		params.InvestmentCorrectionReason = reason
+		return operation, params, nil
 	}
 	original, err := s.transactionService.Transaction(ctx, operation.TransactionID)
 	if err != nil {
@@ -225,17 +254,17 @@ func (s *InvestmentService) prepareBasisResolutionReversal(ctx context.Context, 
 // become unresolved under the preview's acknowledgement; a known outbound or
 // onward link it reached refuses with that operation named, never silently
 // becoming unknown (#168).
-func (s *InvestmentService) ReverseTransferBasisResolution(ctx context.Context, input CorrectTransferBasisResolutionInput) (Transaction, error) {
+func (s *InvestmentService) ReverseTransferBasisResolution(ctx context.Context, input CorrectTransferBasisResolutionInput) (*Transaction, error) {
 	operation, params, err := s.prepareBasisResolutionReversal(ctx, input)
 	if err != nil {
-		return Transaction{}, err
+		return nil, err
 	}
 	params.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
 	record, err := s.repository.ReverseTransferBasisResolution(ctx, params, operation)
 	if err != nil {
-		return Transaction{}, mapBasisResolutionCorrectionError(err)
+		return nil, mapBasisResolutionCorrectionError(err)
 	}
-	return toTransaction(record), nil
+	return optionalTransaction(record), nil
 }
 
 func (s *InvestmentService) ReverseTransferBasisResolutionImpact(ctx context.Context, input CorrectTransferBasisResolutionInput) (ReconciliationImpact, error) {
@@ -252,35 +281,43 @@ func (s *InvestmentService) ReverseTransferBasisResolutionImpact(ctx context.Con
 	return s.simulatedReconciliationImpact(ctx, simulated)
 }
 
-func (s *InvestmentService) prepareBasisResolutionReplacement(ctx context.Context, input CorrectTransferBasisResolutionInput) (db.BasisResolutionOperationRecord, db.CreateTransactionParams, db.CreateTransactionParams, db.ResolveTransferBasisParams, error) {
+func (s *InvestmentService) prepareBasisResolutionReplacement(ctx context.Context, input CorrectTransferBasisResolutionInput) (db.BasisResolutionOperationRecord, db.BasisResolutionReplacement, db.ResolveTransferBasisParams, error) {
 	operation, inverse, err := s.prepareBasisResolutionReversal(ctx, input)
 	if err != nil {
-		return operation, inverse, db.CreateTransactionParams{}, db.ResolveTransferBasisParams{}, err
+		return operation, db.BasisResolutionReplacement{}, db.ResolveTransferBasisParams{}, err
 	}
 	if input.BasisScale >= 0 && exact.ScaledIntFromCoefficient(exact.New(input.BasisValue), input.BasisScale).Cmp(
 		exact.ScaledIntFromCoefficient(operation.BasisValue, operation.BasisScale)) == 0 {
-		return operation, inverse, db.CreateTransactionParams{}, db.ResolveTransferBasisParams{}, ValidationError{Message: "the replacement repeats the effective resolution"}
+		return operation, db.BasisResolutionReplacement{}, db.ResolveTransferBasisParams{}, ValidationError{Message: "the replacement repeats the effective resolution"}
 	}
-	journal, params, err := s.transferBasisResolutionJournal(ctx, ResolveTransferBasisInput{
+	successor, params, err := s.transferBasisResolutionJournal(ctx, ResolveTransferBasisInput{
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID, RequestID: input.RequestID,
 		BasisValue: input.BasisValue, BasisScale: input.BasisScale, SourceEvidenceJSON: input.SourceEvidenceJSON,
 		Reason: input.Reason, ReconciliationOverride: input.ReconciliationOverride,
 	}, operation.TransferOperationID, operation.CostCommodityID, operation.EventDate)
 	if err != nil {
-		return operation, inverse, journal, params, err
+		return operation, db.BasisResolutionReplacement{}, params, err
 	}
-	inverse.Spec.InvestmentOperationKind = ""
-	inverse.InvestmentCorrectionOfOperationID, inverse.InvestmentCorrectionMode = 0, ""
-	inverse.InvestmentCorrectionReason = ""
-	inverse.Operation = "investment.basis_resolution.replace"
-	journal.Operation = inverse.Operation
-	journal.CorrectionOfTransactionID = inverse.CorrectionOfTransactionID
-	journal.InvestmentCorrectionOfOperationID, journal.InvestmentCorrectionMode = operation.OperationID, "replace"
-	journal.InvestmentCorrectionReason = inverse.ChangeReason
-	journal.CreatedAt = inverse.CreatedAt
-	inverse.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
-	journal.GainImpact = nil
-	return operation, inverse, journal, params, nil
+	write := db.BasisResolutionReplacement{Successor: successor}
+	write.Successor.Operation = "investment.basis_resolution.replace"
+	write.Successor.InvestmentCorrectionOfOperationID, write.Successor.InvestmentCorrectionMode = operation.OperationID, "replace"
+	write.Successor.InvestmentCorrectionReason = inverse.InvestmentCorrectionReason
+	write.Successor.CreatedAt = inverse.CreatedAt
+	// The command's first journal carries the gain policy: the inverse of a
+	// bridged predecessor, else the successor's bridge.
+	write.Successor.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
+	if operation.TransactionID != 0 {
+		inverse.Spec.InvestmentOperationKind = ""
+		inverse.InvestmentCorrectionOfOperationID, inverse.InvestmentCorrectionMode = 0, ""
+		inverse.InvestmentCorrectionReason = ""
+		inverse.Operation = write.Successor.Operation
+		inverse.GainImpact, write.Successor.GainImpact = write.Successor.GainImpact, nil
+		if !write.Successor.AuditOnly {
+			write.Successor.CorrectionOfTransactionID = inverse.CorrectionOfTransactionID
+		}
+		write.Inverse = &inverse
+	}
+	return operation, write, params, nil
 }
 
 // ReplaceTransferBasisResolution corrects a wrong sourced basis: the old
@@ -288,26 +325,26 @@ func (s *InvestmentService) prepareBasisResolutionReplacement(ctx context.Contex
 // date, and replay revises every sale, onward link and outbound bridge the
 // lot reached. The original resolution stays as superseded evidence (#168).
 func (s *InvestmentService) ReplaceTransferBasisResolution(ctx context.Context, input CorrectTransferBasisResolutionInput) (ReplaceTransferBasisResolutionResult, error) {
-	operation, inverse, replacement, params, err := s.prepareBasisResolutionReplacement(ctx, input)
+	operation, write, params, err := s.prepareBasisResolutionReplacement(ctx, input)
 	if err != nil {
 		return ReplaceTransferBasisResolutionResult{}, err
 	}
-	record, err := s.repository.ReplaceTransferBasisResolution(ctx, operation, inverse, replacement, params)
+	record, err := s.repository.ReplaceTransferBasisResolution(ctx, operation, write, params)
 	if err != nil {
 		return ReplaceTransferBasisResolutionResult{}, mapBasisResolutionCorrectionError(err)
 	}
-	return ReplaceTransferBasisResolutionResult{Inverse: toTransaction(record.Inverse), Replacement: toTransaction(record.Replacement),
-		CorrectedTransactionID: operation.TransactionID, TransferTransactionID: operation.TransferTransactionID}, nil
+	return ReplaceTransferBasisResolutionResult{Inverse: optionalTransaction(record.Inverse), Replacement: optionalTransaction(record.Replacement),
+		TransferTransactionID: operation.TransferTransactionID}, nil
 }
 
 func (s *InvestmentService) ReplaceTransferBasisResolutionImpact(ctx context.Context, input CorrectTransferBasisResolutionInput) (ReconciliationImpact, error) {
 	input.ReconciliationOverride = true
-	operation, inverse, replacement, params, err := s.prepareBasisResolutionReplacement(ctx, input)
+	input.GainImpactAcknowledgement = ""
+	operation, write, params, err := s.prepareBasisResolutionReplacement(ctx, input)
 	if err != nil {
 		return ReconciliationImpact{}, err
 	}
-	inverse.GainImpact = gainImpactPolicy("")
-	simulated, err := s.repository.SimulateTransferBasisResolutionReplacement(ctx, operation, inverse, replacement, params)
+	simulated, err := s.repository.SimulateTransferBasisResolutionReplacement(ctx, operation, write, params)
 	if err != nil {
 		return ReconciliationImpact{}, mapBasisResolutionCorrectionError(err)
 	}
@@ -322,4 +359,14 @@ func mapBasisResolutionCorrectionError(err error) error {
 		return ErrInvestmentBasisResolutionChanged
 	}
 	return mapTransferCorrectionError(err)
+}
+
+// optionalTransaction is a journal a command may not post: nil for the zero
+// record a journal-free command returns.
+func optionalTransaction(record db.TransactionRecord) *Transaction {
+	if record.ID == 0 {
+		return nil
+	}
+	transaction := toTransaction(record)
+	return &transaction
 }

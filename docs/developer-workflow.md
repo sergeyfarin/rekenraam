@@ -442,6 +442,11 @@ The candidate checksum changed; stop the app and reset the disposable
 development database using the reset procedure above. The known-basis frozen
 seed remains valid without changes to its data or column layout.
 
+**BREAKING DEV DATABASE, known-zero resolution (#168, 2026-10-10):**
+`investment_basis_resolutions.basis_value` admits `'0'` for a journal-free
+known zero. The checksum changes. Reset the disposable database and its
+sidecars using the procedure above.
+
 **BREAKING DEV DATABASE, resolution correction (#168, 2026-10-10):**
 `0001` replaces the one-resolution-per-link unique constraint on
 `investment_basis_resolutions` with a link index. The insert guard admits a

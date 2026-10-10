@@ -29,7 +29,7 @@ func replaceResolutionAcknowledged(t *testing.T, f *investmentsTestFixture, inpu
 	return result
 }
 
-func reverseResolutionAcknowledged(t *testing.T, f *investmentsTestFixture, input CorrectTransferBasisResolutionInput) Transaction {
+func reverseResolutionAcknowledged(t *testing.T, f *investmentsTestFixture, input CorrectTransferBasisResolutionInput) *Transaction {
 	t.Helper()
 	impact, err := f.investmentService.ReverseTransferBasisResolutionImpact(context.Background(), input)
 	require.NoError(t, err)
@@ -42,8 +42,9 @@ func reverseResolutionAcknowledged(t *testing.T, f *investmentsTestFixture, inpu
 }
 
 // journalByRole sums one transaction's postings by account system role.
-func journalByRole(t *testing.T, f *investmentsTestFixture, transaction Transaction) map[string]*exact.ScaledInt {
+func journalByRole(t *testing.T, f *investmentsTestFixture, transaction *Transaction) map[string]*exact.ScaledInt {
 	t.Helper()
+	require.NotNil(t, transaction, "the command posted this journal")
 	sums := map[string]*exact.ScaledInt{}
 	for _, entry := range transaction.JournalEntries {
 		for _, posting := range entry.Postings {
@@ -113,9 +114,8 @@ func TestReplacingResolutionRevisesPartialSaleAndKeepsEvidence(t *testing.T) {
 	require.ErrorIs(t, err, ErrGainImpactAcknowledgementRequired)
 	result := replaceResolutionAcknowledged(t, f, input)
 
-	require.Equal(t, resolved.ID, result.CorrectedTransactionID)
 	require.Equal(t, transfer.Transaction.ID, result.TransferTransactionID)
-	for _, journal := range []Transaction{result.Inverse, result.Replacement} {
+	for _, journal := range []*Transaction{result.Inverse, result.Replacement} {
 		require.Equal(t, "2026-06-01", journal.TransactionDate, "both journals are dated to the transfer")
 	}
 	inverse := journalByRole(t, f, result.Inverse)
@@ -194,7 +194,7 @@ func TestReplacingResolutionRevisesSplitInternalDestinationAndBridgedOutbound(t 
 }
 
 // Corrections chain: each replacement supersedes exactly the effective fact,
-// a repeated or zero correction is refused, and the resolution journals
+// a repeated correction is refused, and the resolution journals
 // always net to the effective basis.
 func TestRepeatedResolutionCorrectionKeepsOneEffectiveFact(t *testing.T) {
 	t.Parallel()
@@ -215,8 +215,6 @@ func TestRepeatedResolutionCorrectionKeepsOneEffectiveFact(t *testing.T) {
 	same.BasisScale = 0
 	_, err = f.investmentService.ReplaceTransferBasisResolution(ctx, same)
 	require.ErrorContains(t, err, "repeats the effective resolution", "3 at scale 0 equals 3.00")
-	_, err = f.investmentService.ReplaceTransferBasisResolution(ctx, correctResolutionInput(f, transfer.Transaction.ID, 0))
-	require.ErrorContains(t, err, "zero basis")
 	_, err = f.investmentService.ResolveTransferBasis(ctx, resolveInput(f, transfer.Transaction.ID, 500))
 	require.ErrorIs(t, err, ErrInvestmentTransferBasisNotUnknown, "a resolved transfer is corrected, not resolved again")
 
@@ -247,7 +245,7 @@ func TestRepeatedResolutionCorrectionKeepsOneEffectiveFact(t *testing.T) {
 		JOIN investment_transfer_facts tf ON tf.operation_id = x.operation_id WHERE tf.transfer_kind = 'external_in'`).Scan(&carried))
 	require.Equal(t, "300", carried)
 	net := exact.ScaledIntFromCoefficient(exact.New(0), 0)
-	for _, journal := range []Transaction{first, second.Inverse, second.Replacement, third.Inverse, third.Replacement} {
+	for _, journal := range []*Transaction{first, second.Inverse, second.Replacement, third.Inverse, third.Replacement} {
 		net.AddScaled(journalByRole(t, f, journal)["commodity_trading"])
 	}
 	requireScaled(t, 300, 2, net, "the resolution journals net to the effective basis")

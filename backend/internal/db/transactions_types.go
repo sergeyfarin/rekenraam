@@ -249,6 +249,11 @@ type CreateTransactionParams struct {
 	// GainImpact opts an investment command into replay gain disclosure
 	// (T-114). Only the command's first journal carries it.
 	GainImpact *GainImpactPolicy
+	// AuditOnly marks the header of a journal-free investment command (#168):
+	// the writer opens its audit event and runs its effects, guards and gain
+	// acknowledgement, but posts no transaction. Spec carries only the
+	// operation kind and date the effect records.
+	AuditOnly bool
 }
 
 // InvestmentComponentSpec is an exact source fact, signed from the owner's

@@ -156,9 +156,8 @@ Boundary 4 is implemented: sourced resolution of an unknown inbound.
 - **Correction rules.** While a resolution is effective, the transfer it pins
   cannot be reversed or replaced (`INVESTMENT_TRANSFER_BASIS_RESOLVED`); the
   chain reports `can_resolve_basis`. Correction of the resolution itself is
-  delivered under #168 (see *Resolution correction* below). A known zero is
-  recorded by correcting the transfer, since a resolution always posts its
-  bridge.
+  delivered under #168 (see *Resolution correction* below), as is a
+  journal-free known-zero resolution.
 - **Self-check and export.** Self-check verifies each resolution's pinned link
   and that its journal is exactly its bridge. The bundle adds
   `investment-basis-resolutions.csv`.
@@ -214,15 +213,47 @@ one effective resolution per link. Named cases:
 `TestTransferCorrectionAfterResolutionReversal`,
 `TestReversingResolutionRefusesKnownDependentWithOperationNamed`,
 `TestResolutionCorrectionLateRefusalsRollBackEverything`,
-`TestCorrectTransferBasisResolutionAPI`. Still open in #168: a journal-free
-known-zero resolution with its own operation, export, self-check and restore
-contract, and the correction and history UI in six locales.
+`TestCorrectTransferBasisResolutionAPI`.
+
+Slice 2 is delivered (2026-10-10): a sourced known zero. `resolve-basis`
+admits a zero basis and records it without a fabricated zero journal. The
+operation contract is the following.
+- **Operation.** A journal-free `basis_resolution` operation is created
+  under its own audit event through an audit-only command header. The same
+  writer runs the guards, replay, checkpoint netting and gain
+  acknowledgement, but posts no transaction. The operation records an
+  `effective` date row and a `'0'` fact; no journal link is added.
+- **Corrections.** A bridged resolution replaced by a zero posts only the
+  inverse of its bridge, linked to the zero operation as `reversal`. A zero
+  replaced by a positive basis posts only the successor's bridge, and a zero
+  is reversed by a journal-free `reversal` operation. An outbound it reaches
+  becomes known with a zero bridge, so nothing posts.
+- **Self-check.** The journal-link check declares this exemption, and only
+  this one. A zero must have no primary journal and a positive basis exactly
+  its bridge. A zero or its reversal that posts any journal other than a
+  predecessor's inverse is damage.
+- **Export and restore.** The export lists the operation with a blank
+  transaction and the fact with a numeric `0`. A backup restore keeps both,
+  and self-check passes on the restored file.
+- **APIs.** API responses return a null `transaction` (resolve and reverse)
+  or null `inverse`/`replacement` (replace) where no journal posts. The
+  effective terms carry a null `transaction_id`.
+
+This is a separate operation kind from #146's zero-delta split. #146 may
+reuse the audit-only header and must declare its own self-check exemption;
+neither exemption covers the other. Named cases:
+`TestResolvingUnknownInboundAsKnownZeroIsJournalFree`,
+`TestKnownZeroResolutionMakesOutboundKnownWithoutABridge`,
+`TestReplacingResolutionBetweenZeroAndPositiveBasis`,
+`TestReversingKnownZeroResolutionIsJournalFree`,
+`TestSelfCheckDetectsKnownZeroJournalMismatch`,
+`TestKnownZeroResolutionExportsAndSurvivesRestore`,
+`TestKnownZeroBasisResolutionAPI`. Still open in #168: the correction and
+history UI in six locales, with mobile browser cases.
 
 **Deliberately later.** These are not #160 acceptance; each needs its own
 contract:
 - unresolved write-off, cash-in-lieu and return-of-capital results ([#169](https://github.com/sergeyfarin/rekenraam/issues/169));
-- a known-zero resolution, which today is recorded by correcting the transfer
-  (#168);
 - mandatory provenance declarations: the current API/UI source reference is
   optional; [#170](https://github.com/sergeyfarin/rekenraam/issues/170)
   defines the statement or explicit owner-assertion contract.

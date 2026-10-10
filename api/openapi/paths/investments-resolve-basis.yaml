@@ -4,7 +4,8 @@ post:
     Appends a sourced, audited resolution of an external transfer in that
     recorded unknown basis (T-145). Its journal posts the complete omitted
     bridge, commodity trading +b and transfer equity -b in the transfer's cost
-    currency, dated to the transfer. The original link and lot stay unknown
+    currency, dated to the transfer; a sourced known zero is journal-free and
+    returns a null transaction (#168). The original link and lot stay unknown
     evidence. Replay revises every sale and transfer the lot reached,
     including units already sold or moved on; an outbound transfer whose last
     unknown link becomes known posts its complete omitted bridge at its own
@@ -37,7 +38,7 @@ post:
           schema:
             $ref: "../openapi.yaml#/components/schemas/InvestmentBasisResolutionResponse"
     "400":
-      description: Invalid request, missing reason, or a zero basis
+      description: Invalid request, missing reason, or a negative basis
       content:
         application/json:
           schema:

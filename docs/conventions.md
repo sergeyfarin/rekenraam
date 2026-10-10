@@ -255,7 +255,9 @@ When a feature introduces a durable new rule, update one of those documents in t
   the original evidence is never edited. A resolution is corrected only
   through its operation chain (replace or reverse), and a link has at most one
   effective resolution. A reversal never silently returns a known outbound or
-  onward link to unknown: it refuses with that operation named (#168).
+  onward link to unknown: it refuses with that operation named (#168). A
+  sourced known zero is journal-free, never a fabricated zero journal; any
+  other journal-free operation kind must declare its own self-check exemption.
 - Projected investment basis has explicit `known`/`unknown` knowledge. Unknown
   coefficient and scale are NULL in storage and on the API, and empty in CSV;
   known zero remains numeric. Numeric read-model fields are usable only when
