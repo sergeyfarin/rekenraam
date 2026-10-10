@@ -1271,7 +1271,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   106,
+		"index":   107,
 		"table":   110,
 		"trigger": 142,
 		"view":    14,

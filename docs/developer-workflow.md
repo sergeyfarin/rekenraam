@@ -442,6 +442,14 @@ The candidate checksum changed; stop the app and reset the disposable
 development database using the reset procedure above. The known-basis frozen
 seed remains valid without changes to its data or column layout.
 
+**BREAKING DEV DATABASE, resolution correction (#168, 2026-10-10):**
+`0001` replaces the one-resolution-per-link unique constraint on
+`investment_basis_resolutions` with a link index. The insert guard admits a
+second fact only when no other resolution of the link is still effective, and
+a replacement must correct a resolution of the same link. The checksum and
+index count change. Reset the disposable database and its sidecars using the
+procedure above.
+
 **BREAKING DEV DATABASE, sourced basis resolution (T-145, 2026-10-09):**
 `0001` adds `investment_basis_resolutions` with its insert guard and
 immutability triggers. Its effective-link view applies an effective

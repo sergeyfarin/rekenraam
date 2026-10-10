@@ -329,9 +329,13 @@ type investmentCorrectionChainResponse struct {
 	CanReverseTransfer      bool                               `json:"can_reverse_transfer"`
 	CanReplaceTransfer      bool                               `json:"can_replace_transfer"`
 	CanResolveBasis         bool                               `json:"can_resolve_basis"`
-	EffectiveTransfer       *investmentCorrectionTransferTerms `json:"effective_transfer,omitempty"`
-	EffectiveReinvestment   *investmentCorrectionReinvestTerms `json:"effective_reinvestment,omitempty"`
-	Operations              []investmentCorrectionNodeResponse `json:"operations"`
+	// CanCorrectBasisResolution offers replace/reverse of a resolved
+	// transfer's effective resolution through the transfer (#168).
+	CanCorrectBasisResolution bool                                      `json:"can_correct_basis_resolution"`
+	EffectiveBasisResolution  *investmentCorrectionBasisResolutionTerms `json:"effective_basis_resolution,omitempty"`
+	EffectiveTransfer         *investmentCorrectionTransferTerms        `json:"effective_transfer,omitempty"`
+	EffectiveReinvestment     *investmentCorrectionReinvestTerms        `json:"effective_reinvestment,omitempty"`
+	Operations                []investmentCorrectionNodeResponse        `json:"operations"`
 }
 
 type investmentTradeCorrectionChargeResponse struct {
@@ -1167,8 +1171,10 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanCorrectShortSale: chain.CanCorrectShortSale, CanCorrectShortCover: chain.CanCorrectShortCover,
 			CanReverseTransfer: chain.CanReverseTransfer,
 			CanReplaceTransfer: chain.CanReplaceTransfer, CanResolveBasis: chain.CanResolveBasis,
-			EffectiveTransfer: toInvestmentCorrectionTransferTerms(chain.EffectiveTransfer),
-			Operations:        operations,
+			EffectiveTransfer:         toInvestmentCorrectionTransferTerms(chain.EffectiveTransfer),
+			CanCorrectBasisResolution: chain.CanCorrectBasisResolution,
+			EffectiveBasisResolution:  toInvestmentCorrectionBasisResolutionTerms(chain.EffectiveBasisResolution),
+			Operations:                operations,
 		})
 	}
 }
@@ -1947,6 +1953,12 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_BASIS_RESOLVED", err.Error())
 	case errors.Is(err, app.ErrInvestmentTransferBasisNotUnknown):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN", err.Error())
+	case errors.Is(err, app.ErrInvestmentTransferBasisNotResolved):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED", err.Error())
+	case errors.Is(err, app.ErrInvestmentBasisResolutionAlreadyCorrected):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED", err.Error())
+	case errors.Is(err, app.ErrInvestmentBasisResolutionChanged):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_BASIS_RESOLUTION_CHANGED", err.Error())
 	case errors.Is(err, app.ErrInvestmentEventOutOfOrder):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EVENT_OUT_OF_ORDER", err.Error())
 	case errors.Is(err, app.ErrInvestmentShortDependency):

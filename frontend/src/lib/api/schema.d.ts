@@ -17830,7 +17830,7 @@ export interface paths {
         put?: never;
         /**
          * Resolve the unknown basis of an external transfer in
-         * @description Appends a sourced, audited resolution of an external transfer in that recorded unknown basis (T-145). Its journal posts the complete omitted bridge, commodity trading +b and transfer equity -b in the transfer's cost currency, dated to the transfer. The original link and lot stay unknown evidence. Replay revises every sale and transfer the lot reached, including units already sold or moved on; an outbound transfer whose last unknown link becomes known posts its complete omitted bridge at its own date. A resolved transfer can no longer be reversed or replaced (INVESTMENT_TRANSFER_BASIS_RESOLVED). A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written.
+         * @description Appends a sourced, audited resolution of an external transfer in that recorded unknown basis (T-145). Its journal posts the complete omitted bridge, commodity trading +b and transfer equity -b in the transfer's cost currency, dated to the transfer. The original link and lot stay unknown evidence. Replay revises every sale and transfer the lot reached, including units already sold or moved on; an outbound transfer whose last unknown link becomes known posts its complete omitted bridge at its own date. While the resolution is effective the transfer cannot be reversed or replaced (INVESTMENT_TRANSFER_BASIS_RESOLVED); the resolution is corrected through replace-basis-resolution or reverse-basis-resolution (#168). A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written.
          */
         post: {
             parameters: {
@@ -17978,6 +17978,356 @@ export interface paths {
                     };
                 };
                 /** @description Basis not unknown or already resolved (INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-basis-resolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a sourced basis resolution
+         * @description Corrects a wrong sourced basis (#168). Under one audit event the old resolution's bridge is inverted and a successor basis_resolution operation, chained to it as a replacement, appends a new immutable fact pinned to the same transfer link, lot, quantity and cost currency and posts its complete bridge at the transfer date. The superseded fact, the link and the opening stay evidence. Replay of the dependency closure revises every sale, onward link and average pool the lot reached; an outbound already bridged posts a dated adjustment. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    /** @description The resolved external transfer in's transaction ID; the command acts on its effective resolution. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentBasisResolutionRequest"];
+                };
+            };
+            responses: {
+                /** @description Resolution replaced and every reached position replayed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentBasisResolutionReplacementResponse"];
+                    };
+                };
+                /** @description Invalid request, missing reason, or a zero or repeated basis */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description External transfer in not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No effective resolution (INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED), resolution corrected concurrently (INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED) or changed (INVESTMENT_BASIS_RESOLUTION_CHANGED), a dependent the replay cannot satisfy (INVESTMENT_TRANSFER_DEPENDENCY), reconciliation override required, or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-basis-resolution/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation and gain impact of a resolution replacement
+         * @description Runs the replacement's actual writer and replay in a rolled-back transaction; gain_impact lists the committed disposals it changes with the token the command needs as gain_impact_acknowledgement (#168).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The resolved external transfer in's transaction ID; the command acts on its effective resolution. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentBasisResolutionRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request, missing reason, or a zero or repeated basis */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description External transfer in not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No effective resolution (INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED), resolution corrected concurrently (INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED) or changed, or a dependent the replay cannot satisfy (INVESTMENT_TRANSFER_DEPENDENCY) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-basis-resolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a sourced basis resolution
+         * @description Withdraws a sourced resolution (#168): its bridge is inverted as a reversal operation and the transfer's basis reads unknown again, so the transfer can be resolved afresh or corrected. Sales it resolved become unresolved under the preview's gain_impact_acknowledgement. A known outbound or onward internal link it reached never silently becomes unknown: the reversal refuses with that operation named and writes nothing. The reversed fact stays evidence.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    /** @description The resolved external transfer in's transaction ID; the command acts on its effective resolution. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentSaleReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Resolution reversed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentSaleReversalResponse"];
+                    };
+                };
+                /** @description Invalid request, missing reason, or a zero or repeated basis */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description External transfer in not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No effective resolution (INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED), resolution corrected concurrently (INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED) or changed (INVESTMENT_BASIS_RESOLUTION_CHANGED), a known outbound or onward link that would return to unknown basis, named by operation (INVESTMENT_TRANSFER_DEPENDENCY), reconciliation override required, or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-basis-resolution/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview reconciliation and gain impact of a resolution reversal
+         * @description Runs the reversal's actual writer and replay in a rolled-back transaction (#168); gain_impact lists the disposals that become unresolved.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description The resolved external transfer in's transaction ID; the command acts on its effective resolution. */
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentSaleReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request, missing reason, or a zero or repeated basis */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description External transfer in not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No effective resolution (INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED), resolution corrected concurrently (INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED) or changed, or a dependent the replay cannot satisfy (INVESTMENT_TRANSFER_DEPENDENCY) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -24871,7 +25221,7 @@ export interface components {
             corrected_transaction_id: number;
         };
         InvestmentBasisResolutionRequest: {
-            /** @description The transfer's total sourced basis in its own cost currency, never a conversion. A known zero is recorded by correcting the transfer instead. */
+            /** @description The transfer's total sourced basis in its own cost currency, never a conversion. A known zero is recorded by correcting the transfer instead. A replacement keeps the pinned transfer and currency and must differ from the effective basis. */
             basis_value: string;
             basis_scale: number;
             /** @description Where the basis comes from, such as a broker statement reference. */
@@ -24886,6 +25236,33 @@ export interface components {
             transaction: components["schemas"]["TransactionResponse"];
             /** Format: int64 */
             resolved_transaction_id: number;
+        };
+        InvestmentBasisResolutionReplacementResponse: {
+            inverse: components["schemas"]["TransactionResponse"];
+            replacement: components["schemas"]["TransactionResponse"];
+            /** Format: int64 */
+            corrected_transaction_id: number;
+            /** Format: int64 */
+            transfer_transaction_id: number;
+        };
+        InvestmentCorrectionBasisResolutionTerms: {
+            /**
+             * Format: int64
+             * @description The effective basis_resolution operation.
+             */
+            operation_id: number;
+            /**
+             * Format: int64
+             * @description The effective resolution's bridge journal.
+             */
+            transaction_id: number;
+            /** Format: int64 */
+            cost_commodity_id: number;
+            basis_value: string;
+            basis_scale: number;
+            source_evidence: {
+                [key: string]: unknown;
+            };
         };
         InvestmentBuyReversalRequest: {
             /** @description Why the posted manual long buy is being reversed. */
@@ -25006,10 +25383,13 @@ export interface components {
             can_correct_write_off: boolean;
             /** @description Whether the effective posted internal or external-in transfer can attempt reversal (T-119). A destination disposal or onward transfer of the removed units may still refuse the command. */
             can_reverse_transfer: boolean;
-            /** @description Whether the effective posted internal or external-in transfer can attempt replacement (T-119); internal ones use replace-transfer, external ones replace-transfer-in. False once an external transfer in has a sourced basis resolution. */
+            /** @description Whether the effective posted internal or external-in transfer can attempt replacement (T-119); internal ones use replace-transfer, external ones replace-transfer-in. False while an external transfer in has an effective sourced basis resolution; reversing the resolution (#168) makes it correctable again. */
             can_replace_transfer: boolean;
             /** @description Whether the effective external transfer in still carries unknown basis that resolve-basis can resolve (T-145). */
             can_resolve_basis: boolean;
+            /** @description Whether this external transfer in has an effective sourced resolution that replace-basis-resolution or reverse-basis-resolution can correct through the transfer (#168). */
+            can_correct_basis_resolution: boolean;
+            effective_basis_resolution?: components["schemas"]["InvestmentCorrectionBasisResolutionTerms"];
             effective_transfer?: components["schemas"]["InvestmentCorrectionTransferTerms"];
             /** @description Whether the effective posted return can be replaced atomically at its correction-root slot. */
             can_replace_return_of_capital: boolean;

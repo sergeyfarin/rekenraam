@@ -1,0 +1,65 @@
+post:
+  summary: Replace a sourced basis resolution
+  description: >-
+    Corrects a wrong sourced basis (#168). Under one audit event the old
+    resolution's bridge is inverted and a successor basis_resolution
+    operation, chained to it as a replacement, appends a new immutable fact
+    pinned to the same transfer link, lot, quantity and cost currency and
+    posts its complete bridge at the transfer date. The superseded fact, the
+    link and the opening stay evidence. Replay of the dependency closure
+    revises every sale, onward link and average pool the lot reached; an
+    outbound already bridged posts a dated adjustment. A non-empty gain
+    change set requires the preview's exact gain_impact_acknowledgement.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+      description: The resolved external transfer in's transaction ID; the command acts on its effective resolution.
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentBasisResolutionRequest"
+  responses:
+    "201":
+      description: Resolution replaced and every reached position replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentBasisResolutionReplacementResponse"
+    "400":
+      description: Invalid request, missing reason, or a zero or repeated basis
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: External transfer in not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: No effective resolution (INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED), resolution corrected concurrently (INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED) or changed (INVESTMENT_BASIS_RESOLUTION_CHANGED), a dependent the replay cannot satisfy (INVESTMENT_TRANSFER_DEPENDENCY), reconciliation override required, or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

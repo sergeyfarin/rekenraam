@@ -8,8 +8,10 @@ post:
     evidence. Replay revises every sale and transfer the lot reached,
     including units already sold or moved on; an outbound transfer whose last
     unknown link becomes known posts its complete omitted bridge at its own
-    date. A resolved transfer can no longer be reversed or replaced
-    (INVESTMENT_TRANSFER_BASIS_RESOLVED).
+    date. While the resolution is effective the transfer cannot be reversed
+    or replaced (INVESTMENT_TRANSFER_BASIS_RESOLVED); the resolution is
+    corrected through replace-basis-resolution or reverse-basis-resolution
+    (#168).
     A non-empty gain change set requires the preview's exact gain_impact_acknowledgement: INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED or _STALE (409) otherwise, with nothing written.
   parameters:
     - in: path

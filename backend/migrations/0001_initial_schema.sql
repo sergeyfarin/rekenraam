@@ -1799,7 +1799,9 @@ BEGIN SELECT RAISE(ABORT, 'investment transfer revision depletions are immutable
 -- basis_resolution operation posts the complete omitted bridge (T +b, E -b)
 -- dated to the transfer; the link and lot stay unknown evidence, and the
 -- effective link reads the resolution. It is pinned to the link's lot,
--- quantity and cost currency; one resolution per link, immutable.
+-- quantity and cost currency and immutable. A link has at most one effective
+-- resolution: a later fact either replaces it through its operation's
+-- correction chain or follows its reversal (#168).
 CREATE TABLE IF NOT EXISTS investment_basis_resolutions (
   operation_id INTEGER PRIMARY KEY REFERENCES investment_operations(id) ON DELETE RESTRICT,
   book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE RESTRICT,
@@ -1815,9 +1817,11 @@ CREATE TABLE IF NOT EXISTS investment_basis_resolutions (
   basis_scale INTEGER NOT NULL CHECK (basis_scale BETWEEN 0 AND 12),
   source_evidence_json TEXT NOT NULL DEFAULT '{}',
   created_audit_event_id INTEGER NOT NULL REFERENCES audit_events(id) ON DELETE RESTRICT,
-  FOREIGN KEY (transfer_operation_id, link_seq) REFERENCES investment_transfer_lot_links(operation_id, link_seq) ON DELETE RESTRICT,
-  UNIQUE (transfer_operation_id, link_seq)
+  FOREIGN KEY (transfer_operation_id, link_seq) REFERENCES investment_transfer_lot_links(operation_id, link_seq) ON DELETE RESTRICT
 );
+
+CREATE INDEX IF NOT EXISTS investment_basis_resolutions_link_idx
+  ON investment_basis_resolutions (transfer_operation_id, link_seq);
 
 -- +goose StatementBegin
 CREATE TRIGGER IF NOT EXISTS investment_basis_resolutions_valid
@@ -1832,7 +1836,17 @@ WHEN NOT EXISTS (
     AND x.quantity_scale = NEW.quantity_scale AND x.cost_commodity_id = NEW.cost_commodity_id
     AND o.book_id = NEW.book_id AND o.operation_kind = 'basis_resolution'
     AND o.event_date = f.effective_on AND o.created_audit_event_id = NEW.created_audit_event_id
+    -- A replacement corrects a resolution of the same link (#168).
+    AND (o.correction_of_operation_id IS NULL OR EXISTS (SELECT 1 FROM investment_basis_resolutions prior
+      WHERE prior.operation_id = o.correction_of_operation_id
+        AND prior.transfer_operation_id = NEW.transfer_operation_id AND prior.link_seq = NEW.link_seq))
 )
+-- No other resolution of the link is still effective: a predecessor is
+-- replaced by this one or was reversed.
+OR EXISTS (SELECT 1 FROM investment_basis_resolutions prior
+  JOIN investment_operations po ON po.id = prior.operation_id
+  WHERE prior.transfer_operation_id = NEW.transfer_operation_id AND prior.link_seq = NEW.link_seq
+    AND NOT EXISTS (SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = po.id))
 BEGIN SELECT RAISE(ABORT, 'investment basis resolution is outside its unknown inbound link'); END;
 -- +goose StatementEnd
 
@@ -4349,6 +4363,7 @@ DROP TABLE IF EXISTS investment_split_facts;
 DROP TRIGGER IF EXISTS investment_basis_resolutions_valid;
 DROP TRIGGER IF EXISTS investment_basis_resolutions_no_update;
 DROP TRIGGER IF EXISTS investment_basis_resolutions_no_delete;
+DROP INDEX IF EXISTS investment_basis_resolutions_link_idx;
 DROP TABLE IF EXISTS investment_basis_resolutions;
 DROP TRIGGER IF EXISTS investment_transfer_link_revision_depletions_valid;
 DROP TRIGGER IF EXISTS investment_transfer_link_revision_depletions_no_update;

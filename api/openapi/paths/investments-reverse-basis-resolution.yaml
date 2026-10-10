@@ -1,0 +1,63 @@
+post:
+  summary: Reverse a sourced basis resolution
+  description: >-
+    Withdraws a sourced resolution (#168): its bridge is inverted as a
+    reversal operation and the transfer's basis reads unknown again, so the
+    transfer can be resolved afresh or corrected. Sales it resolved become
+    unresolved under the preview's gain_impact_acknowledgement. A known
+    outbound or onward internal link it reached never silently becomes
+    unknown: the reversal refuses with that operation named and writes
+    nothing. The reversed fact stays evidence.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+      description: The resolved external transfer in's transaction ID; the command acts on its effective resolution.
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalRequest"
+  responses:
+    "201":
+      description: Resolution reversed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalResponse"
+    "400":
+      description: Invalid request, missing reason, or a zero or repeated basis
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: External transfer in not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: No effective resolution (INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED), resolution corrected concurrently (INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED) or changed (INVESTMENT_BASIS_RESOLUTION_CHANGED), a known outbound or onward link that would return to unknown basis, named by operation (INVESTMENT_TRANSFER_DEPENDENCY), reconciliation override required, or committed-disposal gain changes not acknowledged (INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED / _STALE)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

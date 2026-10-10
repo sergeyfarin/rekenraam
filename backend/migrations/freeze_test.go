@@ -13,7 +13,7 @@ import (
 // permits an explicitly declared pre-release redesign before installations;
 // installed-release migrations are immutable.
 var frozenMigrationChecksums = map[string]string{
-	"0001_initial_schema.sql": "0fcb3c00a9c480cac0592fd8ebd745952c32bc4d48c4a839aad2df33d2fcb43a",
+	"0001_initial_schema.sql": "e71d6537c16c17898592f78849610e02b6e419bca0377c205fae09fd4955d12d",
 }
 
 func TestPinnedMigrationChecksums(t *testing.T) {

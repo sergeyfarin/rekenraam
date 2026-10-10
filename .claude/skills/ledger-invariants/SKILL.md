@@ -164,6 +164,9 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   outbound with any unknown link posts no bridge. Unknown inbound basis is
   resolved only by an appended sourced resolution (complete omitted bridge at
   the transfer date); revisions may go unknown→known, never known→unknown.
+  A resolution is corrected by its own replace/reverse commands (#168), with
+  at most one effective resolution per link. A reversal that would return a
+  known outbound or onward link to unknown refuses with that operation named.
   Other depletions refuse unknown basis until they have their own contract.
 - Named shorts (#173): a short lot holds owed units at a positive quantity
   and its exact opening proceeds in the basis columns; a cover's decision is

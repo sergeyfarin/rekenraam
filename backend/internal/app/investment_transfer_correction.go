@@ -22,8 +22,10 @@ var (
 	ErrInvestmentImportedTransfer         = errors.New("transfer linked to an import row no longer names its committed source")
 	ErrInvestmentTransferDependency       = errors.New("investment transfer correction cannot satisfy a dependent operation")
 	// ErrInvestmentTransferBasisResolved refuses correcting an inbound transfer
-	// whose unknown basis has a sourced resolution pinned to it (T-145).
-	ErrInvestmentTransferBasisResolved = errors.New("the transfer's unknown basis has a sourced resolution; it cannot be corrected")
+	// whose unknown basis has an effective sourced resolution pinned to it
+	// (T-145). The resolution is the named dependency: reversing it first
+	// (#168) makes the transfer correctable again.
+	ErrInvestmentTransferBasisResolved = errors.New("the transfer's unknown basis has a sourced resolution; reverse the resolution before correcting the transfer")
 	// ErrInvestmentTransferBasisNotUnknown refuses resolving a transfer whose
 	// basis is known or already resolved.
 	ErrInvestmentTransferBasisNotUnknown = errors.New("the transfer's basis is not unknown")

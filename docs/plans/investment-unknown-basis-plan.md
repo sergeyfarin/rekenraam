@@ -153,11 +153,12 @@ Boundary 4 is implemented: sourced resolution of an unknown inbound.
   outbound whose last unknown link becomes known posts its complete omitted
   bridge at its own date, even when its source has closed; later known
   changes post adjustments.
-- **Correction rules.** Resolution facts have no correction or reversal yet,
-  and the transfer they pin cannot be reversed or replaced
-  (`INVESTMENT_TRANSFER_BASIS_RESOLVED`); the chain reports
-  `can_resolve_basis`. A known zero is recorded by correcting the transfer,
-  since a resolution always posts its bridge.
+- **Correction rules.** While a resolution is effective, the transfer it pins
+  cannot be reversed or replaced (`INVESTMENT_TRANSFER_BASIS_RESOLVED`); the
+  chain reports `can_resolve_basis`. Correction of the resolution itself is
+  delivered under #168 (see *Resolution correction* below). A known zero is
+  recorded by correcting the transfer, since a resolution always posts its
+  bridge.
 - **Self-check and export.** Self-check verifies each resolution's pinned link
   and that its journal is exactly its bridge. The bundle adds
   `investment-basis-resolutions.csv`.
@@ -191,9 +192,34 @@ Boundary 5 is implemented, the operator surface and remaining diagnostics:
   The browser case "a sourced statement resolves an unknown basis and its sale
   gain on mobile" runs in `investments-unknown-basis.spec.ts` (390 px).
 
+**Resolution correction (#168).** Slice 1 is delivered (2026-10-10).
+`POST .../transactions/{transfer_id}/replace-basis-resolution` and
+`.../reverse-basis-resolution`, each with a rolled-back
+`/reconciliation-impact` preview, correct the transfer's effective resolution
+through its operation chain. They address the transfer rather than the
+resolution journal, so a later journal-free resolution is addressable too. A replacement inverts the old bridge and appends a
+successor fact pinned to the same link, lot, quantity and cost currency, with
+its complete bridge at the transfer date. A reversal inverts the bridge and
+returns the link to unknown. Replay of the dependency closure revises sales,
+onward links and pools, and bridged outbounds post dated adjustments. A
+reversal refuses with the operation named when a known outbound or onward
+link would return to unknown. The resolved transfer stays uncorrectable until
+its resolution is reversed. The transfer's chain exposes
+`can_correct_basis_resolution` and `effective_basis_resolution`. The insert guard and self-check keep at most
+one effective resolution per link. Named cases:
+`TestReplacingResolutionRevisesPartialSaleAndKeepsEvidence`,
+`TestReplacingResolutionRevisesSplitInternalDestinationAndBridgedOutbound`,
+`TestRepeatedResolutionCorrectionKeepsOneEffectiveFact`,
+`TestReversingResolutionRestoresUnknownBasisAndUnresolvedSale`,
+`TestTransferCorrectionAfterResolutionReversal`,
+`TestReversingResolutionRefusesKnownDependentWithOperationNamed`,
+`TestResolutionCorrectionLateRefusalsRollBackEverything`,
+`TestCorrectTransferBasisResolutionAPI`. Still open in #168: a journal-free
+known-zero resolution with its own operation, export, self-check and restore
+contract, and the correction and history UI in six locales.
+
 **Deliberately later.** These are not #160 acceptance; each needs its own
 contract:
-- correction or reversal of a resolution fact ([#168](https://github.com/sergeyfarin/rekenraam/issues/168));
 - unresolved write-off, cash-in-lieu and return-of-capital results ([#169](https://github.com/sergeyfarin/rekenraam/issues/169));
 - a known-zero resolution, which today is recorded by correcting the transfer
   (#168);

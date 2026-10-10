@@ -140,3 +140,74 @@ func TestResolveTransferBasisAPI(t *testing.T) {
 		map[string]any{"reason": "wrong"}, http.StatusConflict)
 	require.Contains(t, res.Body.String(), "INVESTMENT_TRANSFER_BASIS_RESOLVED")
 }
+
+// A resolution is corrected through its transfer: the chain offers it with
+// the effective terms, a replacement needs the gain acknowledgement, and a
+// reversal makes the transfer resolvable again (#168).
+func TestCorrectTransferBasisResolutionAPI(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	instrument := createInstrumentForSession(t, handler, f, "RECORRECT")
+	holding := createHoldingAccountForSession(t, handler, f, instrument.ID)
+	in := externalTransferInRequest{EffectiveOn: "2026-02-01", HoldingAccountID: holding.ID, BasisKnowledge: "unknown",
+		CommodityID: instrument.CommodityID, QuantityValue: exact.New(2), CostCommodityID: f.commodityID}
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/transfers/external/in", in, http.StatusCreated)
+	var transfer externalTransferInResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &transfer))
+	sale := tradeRequestBody(f, holding.ID, instrument.CommodityID, "1", 6000)
+	sale.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, "/api/v1/investments/sell", sale, http.StatusCreated)
+
+	base := "/api/v1/investments/transactions/" + strconv.FormatInt(transfer.Transaction.ID, 10)
+	chain := func() map[string]any {
+		res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, base+"/correction-chain", nil, http.StatusOK)
+		var body map[string]any
+		require.NoError(t, json.Unmarshal(res.Body.Bytes(), &body))
+		return body
+	}
+	acknowledgement := func(path string, request any) string {
+		res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, path+"/reconciliation-impact", request, http.StatusOK)
+		var impact map[string]any
+		require.NoError(t, json.Unmarshal(res.Body.Bytes(), &impact))
+		return impact["gain_impact"].(map[string]any)["acknowledgement"].(string)
+	}
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/reverse-basis-resolution",
+		map[string]any{"reason": "nothing yet"}, http.StatusConflict)
+	require.Contains(t, res.Body.String(), "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED")
+
+	basis := moneyCoefficient(8000)
+	resolve := investmentBasisResolutionRequest{BasisValue: &basis, BasisScale: 2, Reason: "statement found"}
+	resolve.GainImpactAcknowledgement = acknowledgement(base+"/resolve-basis", resolve)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/resolve-basis", resolve, http.StatusCreated)
+	var resolved investmentBasisResolutionResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &resolved))
+	terms := chain()
+	require.Equal(t, true, terms["can_correct_basis_resolution"])
+	effective := terms["effective_basis_resolution"].(map[string]any)
+	require.Equal(t, "8000", effective["basis_value"])
+	require.Equal(t, float64(resolved.Transaction.ID), effective["transaction_id"])
+
+	corrected := moneyCoefficient(6000)
+	replace := investmentBasisResolutionRequest{BasisValue: &corrected, BasisScale: 2, Reason: "statement mistyped"}
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/replace-basis-resolution", replace, http.StatusConflict)
+	require.Contains(t, res.Body.String(), "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED")
+	replace.GainImpactAcknowledgement = acknowledgement(base+"/replace-basis-resolution", replace)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/replace-basis-resolution", replace, http.StatusCreated)
+	var replaced investmentBasisResolutionReplacementResponse
+	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &replaced))
+	require.Equal(t, transfer.Transaction.ID, replaced.TransferTransactionID)
+	require.Equal(t, resolved.Transaction.ID, replaced.CorrectedTransactionID)
+	require.Equal(t, "6000", chain()["effective_basis_resolution"].(map[string]any)["basis_value"])
+
+	reversal := map[string]any{"reason": "statement belonged to another account"}
+	reversal["gain_impact_acknowledgement"] = acknowledgement(base+"/reverse-basis-resolution", reversal)
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, base+"/reverse-basis-resolution", reversal, http.StatusCreated)
+	after := chain()
+	require.Equal(t, true, after["can_resolve_basis"])
+	require.Equal(t, true, after["can_reverse_transfer"])
+	require.Equal(t, false, after["can_correct_basis_resolution"])
+	require.Nil(t, after["effective_basis_resolution"])
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, "/api/v1/investments/transactions/999999/reverse-basis-resolution/reconciliation-impact",
+		map[string]any{"reason": "missing"}, http.StatusNotFound)
+}

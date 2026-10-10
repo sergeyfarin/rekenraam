@@ -1784,7 +1784,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_short_sale, can_correct_short_cover, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_short_sale, can_correct_short_cover, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, can_correct_basis_resolution, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1827,10 +1827,15 @@ InvestmentCorrectionChainResponse:
       description: Whether the effective posted internal or external-in transfer can attempt reversal (T-119). A destination disposal or onward transfer of the removed units may still refuse the command.
     can_replace_transfer:
       type: boolean
-      description: Whether the effective posted internal or external-in transfer can attempt replacement (T-119); internal ones use replace-transfer, external ones replace-transfer-in. False once an external transfer in has a sourced basis resolution.
+      description: Whether the effective posted internal or external-in transfer can attempt replacement (T-119); internal ones use replace-transfer, external ones replace-transfer-in. False while an external transfer in has an effective sourced basis resolution; reversing the resolution (#168) makes it correctable again.
     can_resolve_basis:
       type: boolean
       description: Whether the effective external transfer in still carries unknown basis that resolve-basis can resolve (T-145).
+    can_correct_basis_resolution:
+      type: boolean
+      description: Whether this external transfer in has an effective sourced resolution that replace-basis-resolution or reverse-basis-resolution can correct through the transfer (#168).
+    effective_basis_resolution:
+      $ref: '#/InvestmentCorrectionBasisResolutionTerms'
     effective_transfer:
       $ref: '#/InvestmentCorrectionTransferTerms'
     can_replace_return_of_capital:
@@ -3117,6 +3122,8 @@ InvestmentBasisResolutionRequest:
       description: >-
         The transfer's total sourced basis in its own cost currency, never a
         conversion. A known zero is recorded by correcting the transfer instead.
+        A replacement keeps the pinned transfer and currency and must differ
+        from the effective basis.
     basis_scale:
       type: integer
       minimum: 0
@@ -3141,3 +3148,42 @@ InvestmentBasisResolutionResponse:
     resolved_transaction_id:
       type: integer
       format: int64
+
+InvestmentBasisResolutionReplacementResponse:
+  type: object
+  required: [inverse, replacement, corrected_transaction_id, transfer_transaction_id]
+  properties:
+    inverse:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    replacement:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    corrected_transaction_id:
+      type: integer
+      format: int64
+    transfer_transaction_id:
+      type: integer
+      format: int64
+
+InvestmentCorrectionBasisResolutionTerms:
+  type: object
+  required: [operation_id, transaction_id, cost_commodity_id, basis_value, basis_scale, source_evidence]
+  properties:
+    operation_id:
+      type: integer
+      format: int64
+      description: The effective basis_resolution operation.
+    transaction_id:
+      type: integer
+      format: int64
+      description: The effective resolution's bridge journal.
+    cost_commodity_id:
+      type: integer
+      format: int64
+    basis_value:
+      type: string
+      pattern: '^[1-9][0-9]{0,37}$'
+    basis_scale:
+      type: integer
+    source_evidence:
+      type: object
+      additionalProperties: true

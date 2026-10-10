@@ -252,7 +252,10 @@ When a feature introduces a durable new rule, update one of those documents in t
   bridge; once all are known it posts the complete omitted bridge.
 - Unknown inbound basis is resolved only by an appended, sourced resolution
   fact whose journal is the complete omitted bridge at the transfer date;
-  the original evidence is never edited.
+  the original evidence is never edited. A resolution is corrected only
+  through its operation chain (replace or reverse), and a link has at most one
+  effective resolution. A reversal never silently returns a known outbound or
+  onward link to unknown: it refuses with that operation named (#168).
 - Projected investment basis has explicit `known`/`unknown` knowledge. Unknown
   coefficient and scale are NULL in storage and on the API, and empty in CSV;
   known zero remains numeric. Numeric read-model fields are usable only when

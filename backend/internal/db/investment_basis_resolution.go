@@ -179,3 +179,206 @@ func transferBasisResolvedTx(ctx context.Context, reader *sql.Tx, bookID, operat
 	}
 	return resolved, nil
 }
+
+// BasisResolutionOperationRecord is a transfer's effective resolution as a
+// correction command reads it before the write; the guard reads it again
+// inside (#168).
+type BasisResolutionOperationRecord struct {
+	OperationID           int64
+	TransactionID         int64
+	TransactionVersionID  int64
+	CurrentVersionID      int64
+	EventDate             string
+	TransferOperationID   int64
+	TransferTransactionID int64
+	LinkSeq               int
+	LotID                 int64
+	AccountID             int64
+	CommodityID           int64
+	CostCommodityID       int64
+	BasisValue            exact.Coefficient
+	BasisScale            int
+	SourceEvidenceJSON    string
+	AlreadyCorrected      bool
+}
+
+// EffectiveTransferBasisResolution reads the effective resolution pinned to an
+// inbound transfer operation, or ErrNotFound.
+func (r *InvestmentRepository) EffectiveTransferBasisResolution(ctx context.Context, bookID, transferOperationID int64) (BasisResolutionOperationRecord, error) {
+	return effectiveTransferBasisResolutionQuery(ctx, r.database, bookID, transferOperationID)
+}
+
+func effectiveTransferBasisResolutionQuery(ctx context.Context, reader saleOperationReader, bookID, transferOperationID int64) (BasisResolutionOperationRecord, error) {
+	return basisResolutionOperationQuery(ctx, reader, bookID, `r.transfer_operation_id = ?
+		AND EXISTS (SELECT 1 FROM effective_investment_operations effective WHERE effective.id = o.id)`, transferOperationID)
+}
+
+func basisResolutionOperationQuery(ctx context.Context, reader saleOperationReader, bookID int64, predicate string, argument int64) (BasisResolutionOperationRecord, error) {
+	var record BasisResolutionOperationRecord
+	var corrected int
+	err := reader.QueryRowContext(ctx, `SELECT o.id, linked_version.transaction_id, link.transaction_version_id,
+		current.id, o.event_date, r.transfer_operation_id, transfer_version.transaction_id, r.link_seq, r.lot_id,
+		l.account_id, l.commodity_id, r.cost_commodity_id, r.basis_value, r.basis_scale, r.source_evidence_json,
+		EXISTS(SELECT 1 FROM investment_operations successor WHERE successor.correction_of_operation_id = o.id)
+		FROM investment_operations o
+		JOIN investment_basis_resolutions r ON r.operation_id = o.id
+		JOIN investment_lots l ON l.id = r.lot_id
+		JOIN investment_operation_journal_links link ON link.operation_id = o.id AND link.book_id = o.book_id AND link.role = 'primary'
+		JOIN transaction_versions linked_version ON linked_version.id = link.transaction_version_id
+		JOIN current_transaction_versions current ON current.transaction_id = linked_version.transaction_id
+		JOIN investment_operation_journal_links transfer_link ON transfer_link.operation_id = r.transfer_operation_id
+			AND transfer_link.role = 'primary'
+		JOIN transaction_versions transfer_version ON transfer_version.id = transfer_link.transaction_version_id
+		WHERE o.book_id = ? AND o.operation_kind = 'basis_resolution' AND `+predicate,
+		bookID, argument).Scan(&record.OperationID, &record.TransactionID, &record.TransactionVersionID,
+		&record.CurrentVersionID, &record.EventDate, &record.TransferOperationID, &record.TransferTransactionID,
+		&record.LinkSeq, &record.LotID, &record.AccountID, &record.CommodityID, &record.CostCommodityID,
+		&record.BasisValue, &record.BasisScale, &record.SourceEvidenceJSON, &corrected)
+	if errors.Is(err, sql.ErrNoRows) {
+		return BasisResolutionOperationRecord{}, ErrNotFound
+	}
+	if err != nil {
+		return BasisResolutionOperationRecord{}, fmt.Errorf("read basis resolution operation: %w", err)
+	}
+	record.AlreadyCorrected = corrected != 0
+	return record, nil
+}
+
+// checkBasisResolutionForCorrectionTx re-reads the transfer's effective
+// resolution inside the write: it must still be the one read, unchanged and
+// posted as read.
+func checkBasisResolutionForCorrectionTx(ctx context.Context, tx *sql.Tx, bookID int64, expected BasisResolutionOperationRecord) error {
+	current, err := effectiveTransferBasisResolutionQuery(ctx, tx, bookID, expected.TransferOperationID)
+	if errors.Is(err, ErrNotFound) || (err == nil && current.OperationID != expected.OperationID) {
+		return ErrInvestmentOperationAlreadyCorrected
+	}
+	if err != nil {
+		return err
+	}
+	if current != expected {
+		return ErrInvestmentSaleChanged
+	}
+	return checkInvestmentSourceJournalTx(ctx, tx, bookID, current.TransactionID,
+		current.EventDate, current.TransactionVersionID, current.CurrentVersionID)
+}
+
+func (record BasisResolutionOperationRecord) position() investmentReplayPositionKey {
+	return investmentReplayPositionKey{record.AccountID, record.CommodityID, record.CostCommodityID}
+}
+
+// ReverseTransferBasisResolution posts the exact inverse of a resolution's
+// bridge as a reversal operation. The link reads unknown again, and replay
+// revises every position the lot reached; a dependent that cannot return to
+// unknown basis (a known outbound or onward link) refuses with its operation
+// named (#168).
+func (r *InvestmentRepository) ReverseTransferBasisResolution(ctx context.Context, params CreateTransactionParams, expected BasisResolutionOperationRecord) (TransactionRecord, error) {
+	return r.reverseTransferBasisResolution(ctx, params, expected, false)
+}
+
+// PreviewTransferBasisResolutionReversal runs the reversal and its replay,
+// then rolls back.
+func (r *InvestmentRepository) PreviewTransferBasisResolutionReversal(ctx context.Context, params CreateTransactionParams, expected BasisResolutionOperationRecord) (SimulatedInvestmentWrite, error) {
+	transaction, err := r.reverseTransferBasisResolution(ctx, params, expected, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, err
+	}
+	return simulatedInvestmentWrite(transaction), nil
+}
+
+func (r *InvestmentRepository) reverseTransferBasisResolution(ctx context.Context, params CreateTransactionParams, expected BasisResolutionOperationRecord, preview bool) (TransactionRecord, error) {
+	if params.BookID <= 0 || params.ActorUserID <= 0 || expected.OperationID <= 0 || expected.AccountID <= 0 ||
+		params.Spec.InvestmentOperationKind != "reversal" || params.Spec.TransactionKind != "investment" ||
+		params.Spec.Status != "posted" || params.Spec.TransactionDate != expected.EventDate ||
+		params.InvestmentCorrectionOfOperationID != expected.OperationID ||
+		params.InvestmentCorrectionMode != "reverse" || params.InvestmentCorrectionReason == "" ||
+		!params.CorrectionOfTransactionID.Valid || params.CorrectionOfTransactionID.Int64 != expected.TransactionID {
+		return TransactionRecord{}, fmt.Errorf("%w: basis resolution reversal is incomplete", ErrInvalidDisposalParams)
+	}
+	guard := func(tx *sql.Tx) error {
+		return checkBasisResolutionForCorrectionTx(ctx, tx, params.BookID, expected)
+	}
+	effect := func(tx *sql.Tx, transaction TransactionRecord, auditEventID int64) (struct{}, error) {
+		operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
+		if err != nil {
+			return struct{}{}, err
+		}
+		return struct{}{}, replayCorrectedPositionTx(ctx, tx, params.BookID, expected.position(),
+			operationID, auditEventID, params.ActorUserID, params.CreatedAt)
+	}
+	var transaction TransactionRecord
+	var err error
+	if preview {
+		transaction, _, err = previewInvestmentWriteWithGuardTx(ctx, r.database, params, guard, effect)
+	} else {
+		transaction, _, err = executeInvestmentWriteWithGuardTx(ctx, r.database, params, guard, effect, nil)
+	}
+	return transaction, err
+}
+
+type BasisResolutionReplacementRecord struct {
+	Inverse     TransactionRecord
+	Replacement TransactionRecord
+}
+
+// ReplaceTransferBasisResolution atomically cancels a resolution's bridge and
+// appends its successor: a new fact pinned to the same link, lot, quantity and
+// cost currency with its own complete bridge at the transfer date. Replay of
+// the dependency closure revises sales, onward links and outbound bridges.
+func (r *InvestmentRepository) ReplaceTransferBasisResolution(ctx context.Context, expected BasisResolutionOperationRecord,
+	inverse, replacement CreateTransactionParams, params ResolveTransferBasisParams,
+) (BasisResolutionReplacementRecord, error) {
+	return r.replaceTransferBasisResolution(ctx, expected, inverse, replacement, params, false)
+}
+
+func (r *InvestmentRepository) SimulateTransferBasisResolutionReplacement(ctx context.Context, expected BasisResolutionOperationRecord,
+	inverse, replacement CreateTransactionParams, params ResolveTransferBasisParams,
+) (SimulatedInvestmentWrite, error) {
+	record, err := r.replaceTransferBasisResolution(ctx, expected, inverse, replacement, params, true)
+	if err != nil {
+		return SimulatedInvestmentWrite{}, err
+	}
+	return simulatedInvestmentWrite(record.Inverse, record.Replacement), nil
+}
+
+func (r *InvestmentRepository) replaceTransferBasisResolution(ctx context.Context, expected BasisResolutionOperationRecord,
+	inverse, replacement CreateTransactionParams, params ResolveTransferBasisParams, preview bool,
+) (BasisResolutionReplacementRecord, error) {
+	if expected.OperationID <= 0 || inverse.BookID != params.BookID || inverse.BookID != replacement.BookID ||
+		inverse.ActorUserID != replacement.ActorUserID || inverse.ActorUserID <= 0 ||
+		inverse.Spec.InvestmentOperationKind != "" || inverse.Spec.TransactionKind != "investment" || inverse.Spec.Status != "posted" ||
+		inverse.Spec.TransactionDate != expected.EventDate || replacement.Spec.TransactionKind != "investment" ||
+		replacement.Spec.InvestmentOperationKind != "basis_resolution" || replacement.Spec.Status != "posted" ||
+		replacement.Spec.TransactionDate != expected.EventDate || replacement.InvestmentCorrectionOfOperationID != expected.OperationID ||
+		replacement.InvestmentCorrectionMode != "replace" || replacement.InvestmentCorrectionReason == "" ||
+		!inverse.CorrectionOfTransactionID.Valid || inverse.CorrectionOfTransactionID.Int64 != expected.TransactionID ||
+		replacement.CorrectionOfTransactionID != inverse.CorrectionOfTransactionID ||
+		params.TransferOperationID != expected.TransferOperationID {
+		return BasisResolutionReplacementRecord{}, fmt.Errorf("%w: basis resolution replacement is incomplete", ErrInvalidDisposalParams)
+	}
+	write := executeInvestmentJournalsWithGuardTx[struct{}]
+	if preview {
+		write = previewInvestmentJournalsWithGuardTx[struct{}]
+	}
+	journals, _, err := write(ctx, r.database, []CreateTransactionParams{inverse, replacement},
+		func(tx *sql.Tx) error {
+			return checkBasisResolutionForCorrectionTx(ctx, tx, params.BookID, expected)
+		},
+		func(tx *sql.Tx, journals []TransactionRecord, auditID int64) (struct{}, error) {
+			opID, err := investmentOperationIDTx(ctx, tx, params.BookID, journals[1].ID)
+			if err != nil {
+				return struct{}{}, err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operation_journal_links
+				(book_id, operation_id, transaction_version_id, link_seq, role) VALUES (?, ?, ?, 2, 'reversal')`,
+				params.BookID, opID, journals[0].VersionID); err != nil {
+				return struct{}{}, fmt.Errorf("link basis resolution inverse: %w", err)
+			}
+			// With its predecessor superseded the link reads unknown again,
+			// so the successor is pinned exactly as a first resolution is.
+			return struct{}{}, resolveTransferBasisTx(ctx, tx, replacement, params, journals[1], auditID)
+		}, nil)
+	if err != nil {
+		return BasisResolutionReplacementRecord{}, err
+	}
+	return BasisResolutionReplacementRecord{Inverse: journals[0], Replacement: journals[1]}, nil
+}

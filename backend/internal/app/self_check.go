@@ -622,6 +622,20 @@ func (s *SelfCheckService) investmentFoundationCheck(ctx context.Context, snapsh
 					AND trading.commodity_id = r.cost_commodity_id AND equity.commodity_id = r.cost_commodity_id
 					AND trading.quantity_value = r.basis_value AND trading.quantity_scale = r.basis_scale
 					AND equity.quantity_value = '-' || r.basis_value AND equity.quantity_scale = r.basis_scale))`},
+		// A link has at most one effective resolution, and a replacement
+		// corrects a resolution of the same link (#168).
+		{"transfer link has more than one effective basis resolution or a misdirected correction", `
+			SELECT r.operation_id FROM investment_basis_resolutions r
+			JOIN investment_operations o ON o.id = r.operation_id
+			WHERE r.book_id = ?
+			AND ((EXISTS (SELECT 1 FROM effective_investment_operations e WHERE e.id = r.operation_id)
+				AND EXISTS (SELECT 1 FROM investment_basis_resolutions other
+					JOIN effective_investment_operations e ON e.id = other.operation_id
+					WHERE other.transfer_operation_id = r.transfer_operation_id AND other.link_seq = r.link_seq
+						AND other.operation_id <> r.operation_id))
+			OR (o.correction_of_operation_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM investment_basis_resolutions prior
+				WHERE prior.operation_id = o.correction_of_operation_id
+					AND prior.transfer_operation_id = r.transfer_operation_id AND prior.link_seq = r.link_seq)))`},
 		{"transfer basis allocation disagrees with its source depletions", `
 			SELECT f.operation_id FROM investment_transfer_facts f
 			WHERE f.book_id = ? AND f.transfer_kind IN ('internal', 'external_out')

@@ -60,6 +60,11 @@ type InvestmentCorrectionChain struct {
 	// can no longer be reversed or replaced.
 	CanResolveBasis   bool
 	EffectiveTransfer *InvestmentCorrectionTransferTerms
+	// CanCorrectBasisResolution allows reversing or replacing an external
+	// transfer in's effective sourced resolution through the transfer (#168);
+	// EffectiveBasisResolution pre-fills the replacement.
+	CanCorrectBasisResolution bool
+	EffectiveBasisResolution  *InvestmentCorrectionBasisResolutionTerms
 	// CanCorrectShortSale / CanCorrectShortCover allow native reversal and
 	// replacement of a named short opening or cover (#175); the trade
 	// correction context pre-fills the replacement.
@@ -121,6 +126,17 @@ type InvestmentCorrectionTransferTerms struct {
 	OriginalAcquiredOn   string
 	SourceEvidenceJSON   string
 	Memo                 string
+}
+
+// InvestmentCorrectionBasisResolutionTerms are an effective resolution's
+// sourced basis; the transfer, lot, quantity and currency are pinned.
+type InvestmentCorrectionBasisResolutionTerms struct {
+	OperationID        int64
+	TransactionID      int64
+	CostCommodityID    int64
+	BasisValue         exact.Coefficient
+	BasisScale         int
+	SourceEvidenceJSON string
 }
 
 // InvestmentCorrectionSplitTerms are an effective split's current terms.
@@ -256,6 +272,18 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 			}
 			chain.CanReverseTransfer = !resolved
 			chain.CanReplaceTransfer = !resolved
+			if resolved {
+				resolution, err := s.repository.EffectiveTransferBasisResolution(ctx, BookID, record.OperationID)
+				if err != nil {
+					return InvestmentCorrectionChain{}, err
+				}
+				chain.CanCorrectBasisResolution = true
+				chain.EffectiveBasisResolution = &InvestmentCorrectionBasisResolutionTerms{
+					OperationID: resolution.OperationID, TransactionID: resolution.TransactionID,
+					CostCommodityID: resolution.CostCommodityID, BasisValue: resolution.BasisValue,
+					BasisScale: resolution.BasisScale, SourceEvidenceJSON: resolution.SourceEvidenceJSON,
+				}
+			}
 			if chain.CanReplaceTransfer {
 				terms, err := s.transferCorrectionTerms(ctx, record.OperationID, record.TransactionID.Int64)
 				if err != nil {

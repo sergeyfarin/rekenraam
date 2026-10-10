@@ -584,3 +584,26 @@ The transaction detail of an unknown external transfer in offers the
 resolution as a mobile form in six locales. It previews through the actual
 writer and confirms gain changes and checkpoints like other corrections. This
 completes T-145 (#160).
+
+## Resolution correction refinement (#168, 2026-10-10)
+
+A sourced resolution is corrected through the ordinary operation correction
+chain, never by editing its fact. A replacement is a `basis_resolution`
+operation with `correction_mode = 'replace'` pinned to the same link, lot,
+quantity and cost currency. Under one audit event it posts the exact inverse
+of the predecessor's bridge and its own complete bridge, both dated to the
+transfer, then replays the dependency closure. Sales, onward links and pools
+are revised, and an already-bridged outbound posts a dated adjustment. A
+reversal inverts the bridge as a `reversal` operation, so the link reads
+unknown again. A dependent whose recorded knowledge cannot return to unknown,
+such as a known outbound or an onward link, refuses with its operation named.
+Superseded and reversed facts stay as evidence. A link has at most one
+effective resolution: the insert guard refuses a second, a replacement must
+correct a resolution of the same link, and self-check verifies both.
+
+While its resolution is effective, the inbound transfer still refuses
+correction (`INVESTMENT_TRANSFER_BASIS_RESOLVED`). Reversing the resolution
+first is the explicit unwind. After it the transfer can be corrected or
+resolved again, and the reversed fact never follows a replacement transfer.
+Gain changes need the exact acknowledgement and reconciled balances the
+explicit override, as for every correction.
