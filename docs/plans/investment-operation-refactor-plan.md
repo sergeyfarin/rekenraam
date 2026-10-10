@@ -648,9 +648,16 @@ an exchange. It is an instrument version change with no position effect.
 - **Dates.** The operation has one `effective` date. Record and ex dates do
   not change eligibility, which is the position at the slot. Repeated typed
   dates arrive with #181.
-- **Admission.** Entry is in date order until #179. An exchange dated
-  behind a later depletion of the old or the new position refuses by name
-  and writes nothing. Same-day entries keep entry order.
+- **Admission.** An exchange dated behind a later depletion of the old or
+  the new position is admitted by replay (#179). Behind the old position, the
+  writer replays each of its cost currencies with the exchange as a subject
+  intent at its own slot. The subject takes every long lot open there whole,
+  and those depletions become the exchange's lot events. Behind the new
+  position, the new lots open by replay admission. Both holdings then replay,
+  so a later decision is revised (gains need the shared acknowledgement) or
+  named as a dependency, and a refusal writes nothing. The plan that prices
+  the journal runs the same replay in a rolled-back transaction, and the
+  writer refuses totals that moved. Same-day entries keep entry order.
 - **Replay and closure.** Replay reads an exchange's links as fixed
   source-lot depletions of the old position. It groups them per operation
   and cost currency and follows a corrected acquisition to its successor lot,
@@ -663,10 +670,24 @@ an exchange. It is an instrument version change with no position effect.
   edges from (source holding, old instrument, cost currency) to
   (destination holding, new instrument, cost currency). Removing an exchanged acquisition is the named
   refusal that applies to every transferred acquisition.
-- **Correction.** Until #179 an exchange is not correctable. The generic
-  void path stays closed. The correction chain explains an effective exchange
-  (`effective_share_exchange`) without offering any action, and the
-  transaction detail says so.
+- **Correction (#179).** An exchange has its own reversal and replacement,
+  following ADR 0013 *Transfer Correction Refinement*; the generic void path
+  and the transfer correction commands stay closed to it.
+  - A reversal posts the exact inverse of the exchange journal on its date.
+    It replays the old holding, which gets its lots back, then the new
+    holding, which loses the lots the exchange opened. A sale or onward
+    transfer of the removed units is the named refusal.
+  - A replacement keeps the exchanged holding and old instrument. It may
+    change the date, ratio, new instrument, receiving holding or evidence,
+    and refuses unchanged terms. It takes the replaced exchange's
+    correction-root slot and converts the whole holding open there, computed
+    by the subject replay without the replaced exchange. Every holding either
+    exchange touched then replays.
+  - Originals, links and link revisions stay as evidence. Revisions of a
+    reversed exchange describe nothing current.
+
+  The chain sets `can_correct_share_exchange` for an effective exchange. The
+  correction screens are not yet in the browser.
 - **Reads (#178).** The lot list gives each lot opened by a transfer link an
   `origin`: kind, source instrument and lot, ratio and original acquisition
   date. `opened_on` stays the day the lot arrived in the holding. The plan

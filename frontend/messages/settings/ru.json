@@ -1272,6 +1272,7 @@
   "api_error_investment_exchange_no_holdings": "На дату обмена на этом счёте нет позиции по этому инструменту.",
   "api_error_investment_exchange_fraction_unrepresentable": "Обмен оставил бы дробную часть, которую новый инструмент не может записать точно. Обмен никогда не округляется.",
   "api_error_investment_exchange_changed": "Позиция изменилась после предварительного просмотра обмена. Выполните просмотр ещё раз.",
+  "api_error_investment_exchange_already_corrected": "Этот обмен акций уже исправлен.",
   "investments_capital_return_correct": "Исправить возврат капитала",
   "investments_capital_return_correct_submit": "Сохранить исправленный возврат",
   "investments_capital_return_specific_quantities": "Точное количество по лотам",

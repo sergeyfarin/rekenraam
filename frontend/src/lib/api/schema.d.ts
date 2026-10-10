@@ -16270,7 +16270,7 @@ export interface paths {
         put?: never;
         /**
          * Record a share exchange of one holding
-         * @description An all-stock merger, fund merger or class conversion (#177). Every long lot of commodity_id open in holding_account_id on effective_on becomes one lot of destination_commodity_id in the destination holding, holding its remaining quantity times ratio_numerator/ratio_denominator exactly, with its remaining basis, cost currency, knowledge and original acquisition date unchanged. The journal posts only security legs (old holding −Q and commodity_trading +Q; new holding +Q' and commodity_trading −Q'); nothing is realized. Entry is in date order: an exchange behind a later depletion of either holding is refused until correction and backdating ship (#179).
+         * @description An all-stock merger, fund merger or class conversion (#177). Every long lot of commodity_id open in holding_account_id on effective_on becomes one lot of destination_commodity_id in the destination holding, holding its remaining quantity times ratio_numerator/ratio_denominator exactly, with its remaining basis, cost currency, knowledge and original acquisition date unchanged. The journal posts only security legs (old holding −Q and commodity_trading +Q; new holding +Q' and commodity_trading −Q'); nothing is realized. An exchange dated behind a later depletion of either holding is admitted by replay (#179): the whole holding open at its slot converts, and later decisions are revised (needing the preview's gain_impact_acknowledgement) or named as dependencies, with nothing written on refusal.
          */
         post: {
             parameters: {
@@ -16323,7 +16323,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EXCHANGE_CHANGED (preview again), INVESTMENT_EVENT_OUT_OF_ORDER (dated behind a later depletion), INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the old instrument), or reconciliation override required */
+                /** @description INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EXCHANGE_CHANGED (preview again), INVESTMENT_TRANSFER_DEPENDENCY (a later operation the backdated exchange makes impossible), INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED/STALE, INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the old instrument), or reconciliation override required */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -16411,7 +16411,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EVENT_OUT_OF_ORDER or INVESTMENT_POSITION_SIDE_CONFLICT */
+                /** @description INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_TRANSFER_DEPENDENCY (a backdated exchange would make a later operation impossible), INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED/STALE or INVESTMENT_POSITION_SIDE_CONFLICT */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -16742,6 +16742,370 @@ export interface paths {
                 };
                 /** @description Sale already corrected, unlinked import, or changed */
                 409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-share-exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a posted share exchange
+         * @description Posts the exact inverse of the exchange journal, dated to the exchange, removes it from effective history and replays the old holding (which gets its lots back) and then the new one (which loses the lots the exchange opened), in one audited database transaction (#179). The original exchange stays posted history. A later sale or onward transfer of the removed new units refuses with INVESTMENT_TRANSFER_DEPENDENCY naming it, and nothing is written. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentSaleReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Exchange reversed and both holdings replayed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["InvestmentSaleReversalResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted share exchange not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected (INVESTMENT_EXCHANGE_ALREADY_CORRECTED), changed (INVESTMENT_EXCHANGE_CHANGED), INVESTMENT_TRANSFER_DEPENDENCY names a later operation the correction would make impossible, reconciliation override required, or gain changes not acknowledged */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/reverse-share-exchange/reconciliation-impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a share exchange reversal
+         * @description Runs the reversal writer and both replays in a rolled-back transaction and returns the reconciliation checkpoints and committed-disposal gain changes it would cause (#179).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InvestmentSaleReversalRequest"];
+                };
+            };
+            responses: {
+                /** @description Replay and reconciliation impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ReconciliationImpactResponse"];
+                    };
+                };
+                /** @description Invalid request or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted share exchange not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, changed, or a later operation impossible */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-share-exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct a posted share exchange
+         * @description Posts the exact inverse of the exchange journal and a replacement exchange with corrected terms for the same holding and old instrument, in one audited database transaction (#179). The replacement takes the replaced exchange's correction-root same-day slot and converts the whole holding open there; the old holding and every new holding replay, so later decisions are revised or named. Unchanged terms are refused. A non-empty gain change set requires the preview's exact gain_impact_acknowledgement.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ShareExchangeReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Exchange replaced and holdings replayed */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ShareExchangeReplacementResponse"];
+                    };
+                };
+                /** @description Invalid request, unchanged terms or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Origin or CSRF validation failed */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted share exchange not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected (INVESTMENT_EXCHANGE_ALREADY_CORRECTED), changed (INVESTMENT_EXCHANGE_CHANGED), no holdings at the corrected slot (INVESTMENT_EXCHANGE_NO_HOLDINGS), INVESTMENT_TRANSFER_DEPENDENCY names a later operation the correction would make impossible, position side conflict, reconciliation override required, or gain changes not acknowledged */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Corrected ratio not representable at the new instrument's scale (INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/investments/transactions/{transaction_id}/replace-share-exchange/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a share exchange replacement
+         * @description Returns the corrected exchange's links and journal totals, computed at the replaced exchange's slot without it, plus the checkpoints and gain changes the replacement writer would cause, from a rolled-back run (#179).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    transaction_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ShareExchangeReplacementRequest"];
+                };
+            };
+            responses: {
+                /** @description Plan and impact computed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ShareExchangePreviewResponse"];
+                    };
+                };
+                /** @description Invalid request, unchanged terms or missing reason */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Posted share exchange not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Already corrected, changed, no holdings at the corrected slot, or a later operation impossible */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Corrected ratio not representable */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -25306,7 +25670,7 @@ export interface components {
             memo?: string;
             change_reason?: string;
             reconciliation_override?: boolean;
-            /** @description Accepted for the shared contract; an in-order exchange changes no committed disposal. */
+            /** @description The preview's exact acknowledgement when a backdated exchange revises a committed disposal (#179); an in-order exchange changes none. */
             gain_impact_acknowledgement?: string;
         };
         ShareExchangeLink: {
@@ -25432,6 +25796,36 @@ export interface components {
         ShareExchangeResponse: {
             transaction: components["schemas"]["TransactionResponse"];
             plan: components["schemas"]["ShareExchangePlan"];
+        };
+        /** @description Corrected terms for a share exchange (#179). The exchanged holding and its old instrument stay those of the exchange; the date, ratio, new instrument, receiving holding or source evidence must change. */
+        ShareExchangeReplacementRequest: {
+            reason: string;
+            /** Format: date */
+            effective_on: string;
+            /**
+             * Format: int64
+             * @description Defaults to the exchanged holding.
+             */
+            destination_holding_account_id?: number;
+            /** Format: int64 */
+            destination_commodity_id: number;
+            /** Format: int64 */
+            ratio_numerator: number;
+            /** Format: int64 */
+            ratio_denominator: number;
+            source_evidence?: {
+                [key: string]: unknown;
+            };
+            memo?: string;
+            reconciliation_override?: boolean;
+            gain_impact_acknowledgement?: string;
+        };
+        ShareExchangeReplacementResponse: {
+            inverse: components["schemas"]["TransactionResponse"];
+            replacement: components["schemas"]["TransactionResponse"];
+            plan: components["schemas"]["ShareExchangePlan"];
+            /** Format: int64 */
+            corrected_transaction_id: number;
         };
         /** @description Corrected terms for the same holding account and security (T-129). */
         InvestmentSplitReplacementRequest: {
@@ -25767,6 +26161,8 @@ export interface components {
             can_correct_short_sale: boolean;
             /** @description The effective operation is a short cover that may be reversed or replaced (#175). */
             can_correct_short_cover: boolean;
+            /** @description The effective operation is a share exchange that may be reversed or replaced (#179); effective_share_exchange carries its terms. */
+            can_correct_share_exchange: boolean;
             /** @description Whether the effective posted write-off can be reversed or replaced (T-118). The trade correction context pre-fills the replacement; dependent replay may still refuse the command. */
             can_correct_write_off: boolean;
             /** @description Whether the effective posted internal or external-in transfer can attempt reversal (T-119). A destination disposal or onward transfer of the removed units may still refuse the command. */
@@ -26324,7 +26720,7 @@ export interface components {
         };
         ErrorBody: {
             /** @enum {string} */
-            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
+            code: "VALIDATION_FAILED" | "UNAUTHENTICATED" | "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "CSRF_INVALID" | "RATE_LIMITED" | "RESOURCE_BUSY" | "LEDGER_OVERFLOW" | "FORECAST_TOO_LARGE" | "FORECAST_BASIS_CHANGED" | "INVESTMENT_WORKFLOW_REQUIRED" | "INVESTMENT_EVENT_OUT_OF_ORDER" | "INVESTMENT_POSITION_SIDE_CONFLICT" | "INVESTMENT_SHORT_DEPENDENCY" | "INVESTMENT_TRANSFER_POOL_REQUIRED" | "INVESTMENT_TRANSFER_POOL_UNAVAILABLE" | "INVESTMENT_SALE_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SALE" | "INVESTMENT_SALE_CHANGED" | "INVESTMENT_SALE_DEPENDENCY" | "INVESTMENT_BUY_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_BUY" | "INVESTMENT_BUY_CHANGED" | "INVESTMENT_BUY_DEPENDENCY" | "INVESTMENT_DIVIDEND_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_DIVIDEND" | "INVESTMENT_DIVIDEND_CHANGED" | "INVESTMENT_WRITE_OFF_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_ALREADY_CORRECTED" | "INVESTMENT_TRANSFER_CHANGED" | "INVESTMENT_TRANSFER_DEPENDENCY" | "INVESTMENT_IMPORTED_TRANSFER" | "INVESTMENT_TRANSFER_BASIS_RESOLVED" | "INVESTMENT_TRANSFER_BASIS_NOT_UNKNOWN" | "INVESTMENT_TRANSFER_BASIS_NOT_RESOLVED" | "INVESTMENT_BASIS_RESOLUTION_ALREADY_CORRECTED" | "INVESTMENT_BASIS_RESOLUTION_CHANGED" | "INVESTMENT_WRITE_OFF_CHANGED" | "INVESTMENT_REINVESTMENT_ALREADY_CORRECTED" | "INVESTMENT_REINVESTMENT_CHANGED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED" | "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_STALE" | "INVESTMENT_SPLIT_NO_HOLDINGS" | "INVESTMENT_CAPITAL_RETURN_DEPENDENCY" | "INVESTMENT_CAPITAL_RETURN_NO_HOLDINGS" | "INVESTMENT_CASH_IN_LIEU_SPLIT_UNAVAILABLE" | "INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE" | "INVESTMENT_SPLIT_CHANGED" | "INVESTMENT_SPLIT_DEPENDENCY" | "INVESTMENT_SPLIT_ALREADY_CORRECTED" | "INVESTMENT_IMPORTED_SPLIT" | "INVESTMENT_EXCHANGE_NO_HOLDINGS" | "INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE" | "INVESTMENT_EXCHANGE_CHANGED" | "INVESTMENT_EXCHANGE_ALREADY_CORRECTED" | "IMPORT_SPLIT_LINK_UNAVAILABLE" | "TRANSACTION_DRAFT_NOT_USER_CREATABLE" | "TRANSACTION_VERSION_STALE" | "POSTING_ACCOUNT_VERSION_STALE" | "RECURRING_TEMPLATE_UNBALANCED" | "RECURRING_SCHEDULE_INVALID" | "RECURRING_TEMPLATE_ARCHIVED" | "RECURRING_OCCURRENCE_ALREADY_MATERIALIZED" | "SETUP_REQUIRED" | "SETUP_ALREADY_COMPLETE" | "CONFIG_REQUIRED" | "PROVIDER_ERROR" | "EXPORT_SCOPE_UNSUPPORTED" | "QIF_ACCOUNT_UNSUPPORTED" | "INTERNAL_ERROR";
             message: string;
         };
         ErrorResponse: {

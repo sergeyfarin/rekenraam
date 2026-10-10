@@ -59,6 +59,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   INVESTMENT_EXCHANGE_NO_HOLDINGS: () => m.api_error_investment_exchange_no_holdings(),
   INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE: () => m.api_error_investment_exchange_fraction_unrepresentable(),
   INVESTMENT_EXCHANGE_CHANGED: () => m.api_error_investment_exchange_changed(),
+  INVESTMENT_EXCHANGE_ALREADY_CORRECTED: () => m.api_error_investment_exchange_already_corrected(),
   IMPORT_SPLIT_LINK_UNAVAILABLE: () => m.api_error_import_split_link_unavailable(),
   TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   TRANSACTION_VERSION_STALE: () => m.api_error_transaction_version_stale(),

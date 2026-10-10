@@ -8,8 +8,11 @@ post:
     its remaining basis, cost currency, knowledge and original acquisition date
     unchanged. The journal posts only security legs (old holding −Q and
     commodity_trading +Q; new holding +Q' and commodity_trading −Q'); nothing
-    is realized. Entry is in date order: an exchange behind a later depletion
-    of either holding is refused until correction and backdating ship (#179).
+    is realized. An exchange dated behind a later depletion of either holding
+    is admitted by replay (#179): the whole holding open at its slot converts,
+    and later decisions are revised (needing the preview's
+    gain_impact_acknowledgement) or named as dependencies, with nothing
+    written on refusal.
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -49,7 +52,8 @@ post:
     "409":
       description: >
         INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_EXCHANGE_CHANGED (preview again),
-        INVESTMENT_EVENT_OUT_OF_ORDER (dated behind a later depletion),
+        INVESTMENT_TRANSFER_DEPENDENCY (a later operation the backdated exchange
+        makes impossible), INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED/STALE,
         INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the old instrument),
         or reconciliation override required
       content:

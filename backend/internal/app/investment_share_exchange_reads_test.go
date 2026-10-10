@@ -66,7 +66,7 @@ func TestShareExchangeReadsExplainInstrumentsRatioAndBasis(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "share_exchange", transaction.SystemLabel)
 
-	// The chain explains the exchange and offers no correction yet (#179).
+	// The chain explains the exchange and offers only its own correction (#179).
 	chain, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, exchanged.Transaction.ID)
 	require.NoError(t, err)
 	require.NotNil(t, chain.EffectiveShareExchange)
@@ -78,7 +78,8 @@ func TestShareExchangeReadsExplainInstrumentsRatioAndBasis(t *testing.T) {
 	assert.Equal(t, "2026-06-01", terms.EffectiveOn)
 	assert.Equal(t, exchanged.Plan, terms.Plan, "the chain reads back exactly what was committed")
 	assert.False(t, chain.CanReverseTransfer || chain.CanReplaceTransfer || chain.CanReverseBuy || chain.CanReverseSale ||
-		chain.CanCorrectSplit, "an exchange is not yet correctable")
+		chain.CanCorrectSplit, "no other kind's correction applies")
+	assert.True(t, chain.CanCorrectShareExchange)
 }
 
 func TestShareExchangeReadsKeepUnknownBasisUnknownAndShowRevisedBasis(t *testing.T) {

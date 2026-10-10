@@ -1,25 +1,29 @@
 post:
-  summary: Preview a share exchange
-  description: >
-    Runs the complete exchange writer in a rolled-back transaction. Returns
-    every link (old and new quantity, carried basis and original date), the
-    journal totals and every active checkpoint the writer would invalidate.
-    No durable change or temporary ID escapes; commit rechecks everything.
+  summary: Preview a share exchange replacement
+  description: >-
+    Returns the corrected exchange's links and journal totals, computed at the
+    replaced exchange's slot without it, plus the checkpoints and gain changes
+    the replacement writer would cause, from a rolled-back run (#179).
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
   requestBody:
     required: true
     content:
       application/json:
         schema:
-          $ref: "../openapi.yaml#/components/schemas/ShareExchangeRequest"
+          $ref: "../openapi.yaml#/components/schemas/ShareExchangeReplacementRequest"
   responses:
     "200":
-      description: Exchange preview computed (no mutation)
+      description: Plan and impact computed
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ShareExchangePreviewResponse"
     "400":
-      description: Invalid exchange facts
+      description: Invalid request, unchanged terms or missing reason
       content:
         application/json:
           schema:
@@ -30,20 +34,20 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted share exchange not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "409":
-      description: INVESTMENT_EXCHANGE_NO_HOLDINGS, INVESTMENT_TRANSFER_DEPENDENCY (a backdated exchange would make a later operation impossible), INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED/STALE or INVESTMENT_POSITION_SIDE_CONFLICT
+      description: Already corrected, changed, no holdings at the corrected slot, or a later operation impossible
       content:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "422":
-      description: INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE
-      content:
-        application/json:
-          schema:
-            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
-    "500":
-      description: Internal server error
+      description: Corrected ratio not representable
       content:
         application/json:
           schema:

@@ -1272,6 +1272,7 @@
   "api_error_investment_exchange_no_holdings": "No se mantiene nada de este instrumento en esa cuenta en la fecha del canje.",
   "api_error_investment_exchange_fraction_unrepresentable": "El canje dejaría una fracción que el nuevo instrumento no puede registrar con exactitud. Un canje nunca se redondea.",
   "api_error_investment_exchange_changed": "La posición cambió después de la vista previa del canje. Vuelva a generar la vista previa.",
+  "api_error_investment_exchange_already_corrected": "Este canje de acciones ya se ha corregido.",
   "investments_capital_return_correct": "Corregir la devolución de capital",
   "investments_capital_return_correct_submit": "Guardar devolución corregida",
   "investments_capital_return_specific_quantities": "Cantidades específicas por lote",

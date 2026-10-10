@@ -228,24 +228,12 @@ func TestShareExchangeRefusalsWriteNothing(t *testing.T) {
 			buyOn(t, f, "2026-02-01", 1, 10000)
 			return shareExchangeInput(f, newID, "2026-06-01", 1, 3)
 		}, func(t *testing.T, err error) { assert.ErrorIs(t, err, ErrShareExchangeFraction) }},
-		{"dated behind a later sale", func(t *testing.T, f *investmentsTestFixture, newID int64) ShareExchangeInput {
+		{"dated behind a later sale it would leave without units", func(t *testing.T, f *investmentsTestFixture, newID int64) ShareExchangeInput {
 			buyOn(t, f, "2026-02-01", 10, 10000)
 			_, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-07-01", 2))
 			require.NoError(t, err)
 			return shareExchangeInput(f, newID, "2026-06-01", 1, 1)
-		}, func(t *testing.T, err error) { assert.ErrorIs(t, err, ErrInvestmentEventOutOfOrder) }},
-		{"dated behind a later depletion of the new instrument", func(t *testing.T, f *investmentsTestFixture, newID int64) ShareExchangeInput {
-			buyOn(t, f, "2026-02-01", 10, 10000)
-			newBuy := tradeOn(f, f.holdingAccountID, "2026-02-01", 5, 5000)
-			newBuy.CommodityID = newID
-			_, err := f.investmentService.Buy(context.Background(), newBuy)
-			require.NoError(t, err)
-			newSale := sellInput(f, "2026-07-01", 1)
-			newSale.CommodityID = newID
-			_, err = f.investmentService.Sell(context.Background(), newSale)
-			require.NoError(t, err)
-			return shareExchangeInput(f, newID, "2026-06-01", 1, 1)
-		}, func(t *testing.T, err error) { assert.ErrorIs(t, err, ErrInvestmentEventOutOfOrder) }},
+		}, func(t *testing.T, err error) { assert.ErrorIs(t, err, ErrInvestmentTransferDependency) }},
 		{"open short of the old instrument", func(t *testing.T, f *investmentsTestFixture, newID int64) ShareExchangeInput {
 			shortSaleOn(t, f, "2026-02-01", 5, 5000)
 			return shareExchangeInput(f, newID, "2026-06-01", 1, 1)

@@ -1607,7 +1607,7 @@ func updatePositionMethodFamilyTx(ctx context.Context, tx *sql.Tx, params Dispos
 		INSERT INTO investment_position_basis_state (
 			book_id, account_id, commodity_id, cost_commodity_id, position_side, method_family,
 			updated_at, updated_by_user_id, updated_audit_event_id
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, 0))
 		ON CONFLICT (book_id, account_id, commodity_id, cost_commodity_id, position_side) DO UPDATE SET
 			method_family = excluded.method_family,
 			updated_at = excluded.updated_at,
@@ -3292,7 +3292,7 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 		UPDATE investment_lot_state
 		SET remaining_quantity_value = ?, remaining_quantity_scale = ?,
 			remaining_cost_basis_value = ?, remaining_cost_basis_scale = ?, status = ?,
-			updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = ?
+			updated_at = ?, updated_by_user_id = ?, updated_audit_event_id = NULLIF(?, 0)
 		WHERE lot_id IN (SELECT id FROM investment_lots WHERE book_id = ? AND id = ?)`, nextRemainingQuantity, commonScale,
 		nullableBasisValue(nextRemainingCost, knowledge), nullableBasisScale(allocationScale, knowledge), status,
 		params.CreatedAt, params.ActorUserID, auditEventID, params.BookID, lotID); err != nil {
@@ -3304,7 +3304,7 @@ func disposeLotTx(ctx context.Context, tx *sql.Tx, params DisposeLotsParams, lot
 			cost_basis_value, cost_basis_scale, cost_basis_method, metadata_json,
 			created_at, created_by_user_id, created_audit_event_id, basis_knowledge
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, 0), ?)
 	`, params.BookID, lotID, eventKind, nullablePositiveInt64(params.TransactionID), params.EventDate,
 		quantityValue.Negated(), quantityScale, nullableBasisValue(-costBasisValue, knowledge), nullableBasisScale(allocationScale, knowledge),
 		params.CostBasisMethod, params.MetadataJSON, params.CreatedAt, params.ActorUserID, auditEventID, knowledge)

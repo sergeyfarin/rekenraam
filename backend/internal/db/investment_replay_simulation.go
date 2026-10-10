@@ -327,6 +327,16 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		if err != nil {
 			return err
 		}
+		// The exchange a command is recording has no links yet: it takes
+		// every lot open at its slot whole and reports them (#179).
+		if intent.TransferIsSubject {
+			moved, err := takeShareExchangeHoldingTx(ctx, tx, params, intent.AuditEventID, allocationScale)
+			if err != nil {
+				return err
+			}
+			projection.SubjectTransferOut = append(projection.SubjectTransferOut, moved...)
+			return keepPositionMethodFamilyTx(ctx, tx, params, intent.AuditEventID)
+		}
 		for _, link := range intent.ExchangeLinks {
 			moved, err := disposeLotTx(ctx, tx, params, link.LotID, link.QuantityValue, link.QuantityScale,
 				intent.AuditEventID, allocationScale)

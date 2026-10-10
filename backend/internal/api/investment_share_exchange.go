@@ -210,3 +210,156 @@ func shareExchangePreview(logger *slog.Logger, authService *app.AuthService, inv
 		})
 	}
 }
+
+// Share exchange correction (#179). Reversal reuses the sale-reversal request
+// and response; replacement carries corrected terms for the same holding and
+// old instrument.
+type shareExchangeReplacementRequest struct {
+	Reason                    string          `json:"reason"`
+	EffectiveOn               string          `json:"effective_on"`
+	DestinationHoldingID      int64           `json:"destination_holding_account_id,omitempty"`
+	DestinationCommodityID    int64           `json:"destination_commodity_id"`
+	RatioNumerator            int64           `json:"ratio_numerator"`
+	RatioDenominator          int64           `json:"ratio_denominator"`
+	SourceEvidence            json.RawMessage `json:"source_evidence,omitempty"`
+	Memo                      string          `json:"memo"`
+	ReconciliationOverride    bool            `json:"reconciliation_override"`
+	GainImpactAcknowledgement string          `json:"gain_impact_acknowledgement,omitempty"`
+}
+
+type shareExchangeReplacementResponse struct {
+	Inverse                transactionResponse       `json:"inverse"`
+	Replacement            transactionResponse       `json:"replacement"`
+	Plan                   shareExchangePlanResponse `json:"plan"`
+	CorrectedTransactionID int64                     `json:"corrected_transaction_id"`
+}
+
+func shareExchangeReplacementInput(owner app.Owner, r *http.Request, transactionID int64, request shareExchangeReplacementRequest) app.ReplaceShareExchangeInput {
+	evidence := rawJSONText(request.SourceEvidence)
+	if evidence == "null" {
+		evidence = ""
+	}
+	return app.ReplaceShareExchangeInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		TransactionID: transactionID, Reason: request.Reason, EffectiveOn: request.EffectiveOn,
+		DestinationHoldingAccountID: request.DestinationHoldingID, DestinationCommodityID: request.DestinationCommodityID,
+		RatioNumerator: request.RatioNumerator, RatioDenominator: request.RatioDenominator,
+		SourceEvidenceJSON: evidence, Memo: request.Memo,
+		ReconciliationOverride:    request.ReconciliationOverride,
+		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+	}
+}
+
+func reverseShareExchange(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		transaction, err := investmentService.ReverseShareExchange(r.Context(), app.ReverseShareExchangeInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			TransactionID: transactionID, Reason: request.Reason,
+			ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "reverse share exchange", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSaleReversalResponse{Transaction: toTransactionResponse(transaction), CorrectedTransactionID: transactionID})
+	}))
+}
+
+func reverseShareExchangeReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReverseShareExchangeReconciliationImpact(r.Context(), app.ReverseShareExchangeInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview share exchange reversal reconciliation impact", err)
+			return
+		}
+		writeReconciliationImpact(w, impact)
+	}
+}
+
+func replaceShareExchange(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request shareExchangeReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.ReplaceShareExchange(r.Context(), shareExchangeReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "replace share exchange", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, shareExchangeReplacementResponse{
+			Inverse: toTransactionResponse(result.Inverse), Replacement: toTransactionResponse(result.Replacement),
+			Plan: toShareExchangePlanResponse(result.Plan), CorrectedTransactionID: result.CorrectedTransactionID,
+		})
+	}))
+}
+
+func replaceShareExchangePreview(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request shareExchangeReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		preview, err := investmentService.PreviewShareExchangeReplacement(r.Context(), shareExchangeReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview share exchange replacement", err)
+			return
+		}
+		impact := toReconciliationImpactResponse(preview.Impact)
+		gainImpact, err := toGainImpactResponse(preview.Impact.GainImpact)
+		if err != nil {
+			writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+			return
+		}
+		impact.GainImpact = gainImpact
+		writeJSON(w, http.StatusOK, shareExchangePreviewResponse{
+			Plan: toShareExchangePlanResponse(preview.Plan), Impact: impact,
+		})
+	}
+}

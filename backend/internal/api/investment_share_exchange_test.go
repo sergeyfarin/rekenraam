@@ -85,7 +85,8 @@ func TestShareExchangeAPIPreviewCommitAndNamedRefusals(t *testing.T) {
 	assert.Equal(t, successor.CommodityID, chain.EffectiveShareExchange.DestinationCommodityID)
 	assert.JSONEq(t, `{"notice":"merger"}`, string(chain.EffectiveShareExchange.SourceEvidence))
 	assert.Equal(t, exchanged.Plan, chain.EffectiveShareExchange.Plan)
-	assert.False(t, chain.CanReverseTransfer || chain.CanReplaceTransfer, "not yet correctable (#179)")
+	assert.False(t, chain.CanReverseTransfer || chain.CanReplaceTransfer, "an exchange has its own correction")
+	assert.True(t, chain.CanCorrectShareExchange)
 	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, fmt.Sprintf(
 		"/api/v1/transactions/%d", exchanged.Transaction.ID), nil, http.StatusOK)
 	assert.Contains(t, res.Body.String(), `"system_label":"share_exchange"`)
@@ -106,4 +107,116 @@ func TestShareExchangeAPIPreviewCommitAndNamedRefusals(t *testing.T) {
 	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
 		"/api/v1/investments/share-exchanges", request, http.StatusBadRequest)
 	assert.Contains(t, res.Body.String(), "VALIDATION_FAILED")
+}
+
+// #179: reversal and replacement endpoints, their previews and the named
+// refusals: a sale of removed new units, a repeated correction, a missing
+// exchange and unchanged terms.
+func TestShareExchangeCorrectionAPI(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	old := createInstrumentForSession(t, handler, f, "OLDCO")
+	successor := createInstrumentForSession(t, handler, f, "NEWCO")
+	holding := createHoldingAccountForSession(t, handler, f, old.ID)
+	successorHolding := createHoldingAccountForSession(t, handler, f, successor.ID)
+	buy := tradeRequestBody(f, holding.ID, old.CommodityID, "10", 10000)
+	buy.TransactionDate = "2026-01-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", buy, http.StatusCreated)
+	exchange := func(date string) shareExchangeResponse {
+		t.Helper()
+		res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+			"/api/v1/investments/share-exchanges", shareExchangeRequest{EffectiveOn: date, HoldingAccountID: holding.ID,
+				DestinationHoldingID: successorHolding.ID, CommodityID: old.CommodityID,
+				DestinationCommodityID: successor.CommodityID, RatioNumerator: 1, RatioDenominator: 1}, http.StatusCreated)
+		var exchanged shareExchangeResponse
+		require.NoError(t, json.NewDecoder(res.Body).Decode(&exchanged))
+		return exchanged
+	}
+	first := exchange("2026-02-01")
+	path := func(id int64, action string) string {
+		return fmt.Sprintf("/api/v1/investments/transactions/%d/%s", id, action)
+	}
+
+	// Replace 1:1 with 2:1: the preview and the commit carry 20 new units.
+	replacement := shareExchangeReplacementRequest{Reason: "wrong ratio", EffectiveOn: "2026-02-01",
+		DestinationHoldingID: successorHolding.ID, DestinationCommodityID: successor.CommodityID,
+		RatioNumerator: 2, RatioDenominator: 1}
+	res := doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path(first.Transaction.ID, "replace-share-exchange/preview"), replacement, http.StatusOK)
+	var preview shareExchangePreviewResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
+	assert.Equal(t, "20", preview.Plan.DestinationQuantityValue.String())
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path(first.Transaction.ID, "replace-share-exchange"), replacement, http.StatusForbidden)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(first.Transaction.ID, "replace-share-exchange"), replacement, http.StatusCreated)
+	var replaced shareExchangeReplacementResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&replaced))
+	assert.Equal(t, first.Transaction.ID, replaced.CorrectedTransactionID)
+	assert.Equal(t, "20", replaced.Plan.DestinationQuantityValue.String())
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(first.Transaction.ID, "replace-share-exchange"), replacement, http.StatusConflict)
+	assert.Contains(t, res.Body.String(), "INVESTMENT_EXCHANGE_ALREADY_CORRECTED")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(replaced.Replacement.ID, "replace-share-exchange"), replacement, http.StatusBadRequest)
+	assert.Contains(t, res.Body.String(), "VALIDATION_FAILED", "unchanged terms")
+
+	// A sale of the new units blocks reversing the replacement, by name.
+	sale := tradeRequestBody(f, successorHolding.ID, successor.CommodityID, "5", 10000)
+	sale.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/sell", sale, http.StatusCreated)
+	reversal := investmentSaleReversalRequest{Reason: "not a merger"}
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path(replaced.Replacement.ID, "reverse-share-exchange/reconciliation-impact"), reversal, http.StatusConflict)
+	assert.Contains(t, res.Body.String(), "INVESTMENT_TRANSFER_DEPENDENCY")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(replaced.Replacement.ID, "reverse-share-exchange"), reversal, http.StatusConflict)
+	assert.Contains(t, res.Body.String(), "INVESTMENT_TRANSFER_DEPENDENCY")
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(999999, "reverse-share-exchange"), reversal, http.StatusNotFound)
+}
+
+// #179: an exchange dated behind later sales of the old instrument. One the
+// emptied holding leaves without units is named; one replay revises needs
+// the preview's acknowledgement, then commits.
+func TestShareExchangeBackdatedAPI(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	old := createInstrumentForSession(t, handler, f, "OLDCO")
+	successor := createInstrumentForSession(t, handler, f, "NEWCO")
+	holding := createHoldingAccountForSession(t, handler, f, old.ID)
+	successorHolding := createHoldingAccountForSession(t, handler, f, successor.ID)
+	trade := func(endpoint, date, quantity string) {
+		t.Helper()
+		body := tradeRequestBody(f, holding.ID, old.CommodityID, quantity, 10000)
+		body.TransactionDate, body.CostBasisMethod = date, "fifo"
+		doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost, endpoint, body, http.StatusCreated)
+	}
+	trade("/api/v1/investments/buy", "2026-01-01", "10")
+	trade("/api/v1/investments/sell", "2026-09-01", "3")
+	request := shareExchangeRequest{EffectiveOn: "2026-06-01", HoldingAccountID: holding.ID,
+		DestinationHoldingID: successorHolding.ID, CommodityID: old.CommodityID,
+		DestinationCommodityID: successor.CommodityID, RatioNumerator: 1, RatioDenominator: 1}
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/share-exchanges", request, http.StatusConflict)
+	assert.Contains(t, res.Body.String(), "INVESTMENT_TRANSFER_DEPENDENCY")
+
+	// Units bought after the exchange date can carry the September sale.
+	trade("/api/v1/investments/buy", "2026-08-01", "5")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/share-exchanges", request, http.StatusConflict)
+	assert.Contains(t, res.Body.String(), "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		"/api/v1/investments/share-exchanges/preview", request, http.StatusOK)
+	var preview shareExchangePreviewResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
+	require.NotNil(t, preview.Impact.GainImpact)
+	assert.Equal(t, "10", preview.Plan.SourceQuantityValue.String(), "the holding open in June")
+	request.GainImpactAcknowledgement = preview.Impact.GainImpact.Acknowledgement
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/share-exchanges", request, http.StatusCreated)
 }

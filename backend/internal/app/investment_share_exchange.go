@@ -44,8 +44,8 @@ type ShareExchangeInput struct {
 	Memo                        string
 	ChangeReason                string
 	ReconciliationOverride      bool
-	// GainImpactAcknowledgement is accepted for the shared contract; an
-	// in-order exchange changes no committed disposal.
+	// GainImpactAcknowledgement acknowledges the gains a backdated exchange
+	// revises (#179); an in-order exchange changes no committed disposal.
 	GainImpactAcknowledgement string
 }
 
@@ -106,6 +106,13 @@ type ShareExchangeResult struct {
 }
 
 func (s *InvestmentService) prepareShareExchangeWrite(ctx context.Context, input ShareExchangeInput) (db.CreateTransactionParams, db.CreateShareExchangeParams, error) {
+	return s.prepareShareExchangeWriteWith(ctx, input, 0, "investment.share_exchange")
+}
+
+// prepareShareExchangeWriteWith plans the exchange journal. A replacement
+// names the exchange it corrects, whose slot and holding the plan replays.
+func (s *InvestmentService) prepareShareExchangeWriteWith(ctx context.Context, input ShareExchangeInput,
+	replacesOperationID int64, auditOperation string) (db.CreateTransactionParams, db.CreateShareExchangeParams, error) {
 	fail := func(err error) (db.CreateTransactionParams, db.CreateShareExchangeParams, error) {
 		return db.CreateTransactionParams{}, db.CreateShareExchangeParams{}, err
 	}
@@ -164,8 +171,9 @@ func (s *InvestmentService) prepareShareExchangeWrite(ctx context.Context, input
 		BookID: BookID, AccountID: input.HoldingAccountID, DestinationAccountID: destinationAccountID,
 		CommodityID: input.CommodityID, DestinationCommodityID: input.DestinationCommodityID, EffectiveOn: date,
 		RatioNumerator: numerator, RatioDenominator: denominator, SourceEvidenceJSON: evidence,
+		ReplacesOperationID: replacesOperationID,
 	}
-	planned, err := s.repository.PlanShareExchange(ctx, exchange)
+	planned, err := s.repository.PlanShareExchange(ctx, exchange, input.OwnerUserID)
 	if err != nil {
 		return fail(mapShareExchangeError(err))
 	}
@@ -178,7 +186,7 @@ func (s *InvestmentService) prepareShareExchangeWrite(ctx context.Context, input
 		Create: CreateTransactionInput{
 			OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 			RequestID: input.RequestID, OriginType: "browser_api",
-			Operation: "investment.share_exchange", ChangeReason: input.ChangeReason,
+			Operation: auditOperation, ChangeReason: input.ChangeReason,
 			ReconciliationOverride: input.ReconciliationOverride,
 			Spec: TransactionInput{
 				Status: "posted", TransactionKind: "investment", InvestmentOperationKind: "share_exchange",
@@ -331,6 +339,8 @@ func mapShareExchangeError(err error) error {
 		return InvestmentTransferDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
 	}
 	switch {
+	case errors.Is(err, db.ErrInvestmentCorrectionDependency):
+		return ErrInvestmentTransferDependency
 	case errors.Is(err, db.ErrSplitFractionUnrepresentable):
 		// Not wrapped: the split refusal shares the arithmetic, not the code.
 		return ErrShareExchangeFraction

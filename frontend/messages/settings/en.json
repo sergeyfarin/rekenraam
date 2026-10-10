@@ -1300,6 +1300,7 @@
   "api_error_investment_exchange_no_holdings": "Nothing of this instrument is held in that account on the exchange date.",
   "api_error_investment_exchange_fraction_unrepresentable": "The exchange would leave a fraction the new instrument cannot record exactly. Exchanges are never rounded.",
   "api_error_investment_exchange_changed": "The holding changed after the exchange was previewed. Preview it again.",
+  "api_error_investment_exchange_already_corrected": "This share exchange has already been corrected.",
   "investments_capital_return_correct": "Correct return of capital",
   "investments_capital_return_correct_submit": "Save corrected return",
   "investments_capital_return_specific_quantities": "Specific lot quantities",

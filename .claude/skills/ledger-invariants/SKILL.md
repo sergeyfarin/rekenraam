@@ -197,6 +197,9 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   slot (as a backdated split does), never from today's lot state. A new
   internal transfer behind a later depletion of either holding uses the same
   subject intent at its own slot and then replays both holdings (#167).
+  A share exchange (#179) is corrected by its own reversal and replacement
+  the same way. A backdated exchange takes the whole holding open at its
+  slot through the same subject intent.
 
 ## Dates and times
 

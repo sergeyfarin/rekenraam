@@ -53,8 +53,9 @@ type InvestmentReplayIntent struct {
 	// checking them.
 	SplitIsSubject bool
 	// TransferIsSubject marks the internal transfer a replacement command is
-	// recording (T-119). It has no committed links yet, so replay reports its
-	// source depletions instead of comparing them.
+	// recording (T-119), or the share exchange a backdating or replacing
+	// command is recording (#179). It has no committed links yet, so replay
+	// reports its source depletions instead of comparing them.
 	TransferIsSubject bool
 	// ExternalOut marks the depletion of an outbound transfer: its basis left
 	// the book through a posted bridge, so a changed basis revises its link and

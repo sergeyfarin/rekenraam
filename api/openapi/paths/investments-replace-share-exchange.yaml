@@ -1,0 +1,68 @@
+post:
+  summary: Correct a posted share exchange
+  description: >-
+    Posts the exact inverse of the exchange journal and a replacement exchange
+    with corrected terms for the same holding and old instrument, in one
+    audited database transaction (#179). The replacement takes the replaced
+    exchange's correction-root same-day slot and converts the whole holding
+    open there; the old holding and every new holding replay, so later
+    decisions are revised or named. Unchanged terms are refused. A non-empty
+    gain change set requires the preview's exact gain_impact_acknowledgement.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/ShareExchangeReplacementRequest"
+  responses:
+    "201":
+      description: Exchange replaced and holdings replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ShareExchangeReplacementResponse"
+    "400":
+      description: Invalid request, unchanged terms or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted share exchange not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected (INVESTMENT_EXCHANGE_ALREADY_CORRECTED), changed (INVESTMENT_EXCHANGE_CHANGED), no holdings at the corrected slot (INVESTMENT_EXCHANGE_NO_HOLDINGS), INVESTMENT_TRANSFER_DEPENDENCY names a later operation the correction would make impossible, position side conflict, reconciliation override required, or gain changes not acknowledged
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "422":
+      description: Corrected ratio not representable at the new instrument's scale (INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE)
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

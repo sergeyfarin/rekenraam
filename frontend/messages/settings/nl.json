@@ -1272,6 +1272,7 @@
   "api_error_investment_exchange_no_holdings": "Op de omwisselingsdatum wordt niets van dit instrument in die rekening aangehouden.",
   "api_error_investment_exchange_fraction_unrepresentable": "De omwisseling zou een fractie opleveren die het nieuwe instrument niet exact kan vastleggen. Omwisselingen worden nooit afgerond.",
   "api_error_investment_exchange_changed": "De positie is gewijzigd sinds het voorbeeld van de omwisseling. Bekijk het voorbeeld opnieuw.",
+  "api_error_investment_exchange_already_corrected": "Deze aandelenomwisseling is al gecorrigeerd.",
   "investments_capital_return_correct": "Kapitaalteruggave corrigeren",
   "investments_capital_return_correct_submit": "Gecorrigeerde teruggave opslaan",
   "investments_capital_return_specific_quantities": "Specifieke aantallen per lot",

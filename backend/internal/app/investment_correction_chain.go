@@ -73,6 +73,9 @@ type InvestmentCorrectionChain struct {
 	// correction context pre-fills the replacement.
 	CanCorrectShortSale  bool
 	CanCorrectShortCover bool
+	// CanCorrectShareExchange allows native exchange reversal and
+	// replacement (#179); EffectiveShareExchange carries the terms.
+	CanCorrectShareExchange bool
 	// EffectiveShareExchange explains an effective share exchange (#178).
 	// It offers no correction yet: reversal and replacement arrive with #179.
 	EffectiveShareExchange *InvestmentCorrectionShareExchangeTerms
@@ -278,6 +281,9 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 		}
 		if correctable && record.OperationKind == "short_cover" {
 			chain.CanCorrectShortCover = true
+		}
+		if correctable && record.OperationKind == "share_exchange" {
+			chain.CanCorrectShareExchange = true
 		}
 		if correctable && (record.OperationKind == "internal_transfer" || record.OperationKind == "external_transfer_in" ||
 			record.OperationKind == "external_transfer_out") {

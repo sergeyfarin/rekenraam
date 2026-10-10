@@ -1272,6 +1272,7 @@
   "api_error_investment_exchange_no_holdings": "Rien de cet instrument n'est détenu dans ce compte à la date de l'échange.",
   "api_error_investment_exchange_fraction_unrepresentable": "L'échange laisserait une fraction que le nouvel instrument ne peut pas enregistrer exactement. Un échange n'est jamais arrondi.",
   "api_error_investment_exchange_changed": "La position a changé depuis l'aperçu de l'échange. Relancez l'aperçu.",
+  "api_error_investment_exchange_already_corrected": "Cet échange d’actions a déjà été corrigé.",
   "investments_capital_return_correct": "Corriger le remboursement de capital",
   "investments_capital_return_correct_submit": "Enregistrer le remboursement corrigé",
   "investments_capital_return_specific_quantities": "Quantités précises par lot",

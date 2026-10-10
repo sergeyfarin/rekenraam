@@ -1412,7 +1412,9 @@ ShareExchangeRequest:
       type: boolean
     gain_impact_acknowledgement:
       type: string
-      description: Accepted for the shared contract; an in-order exchange changes no committed disposal.
+      description: >
+        The preview's exact acknowledgement when a backdated exchange revises a
+        committed disposal (#179); an in-order exchange changes none.
 
 ShareExchangeLink:
   type: object
@@ -1560,6 +1562,61 @@ ShareExchangeResponse:
       $ref: "../schemas/transactions.yaml#/TransactionResponse"
     plan:
       $ref: "../schemas/investments.yaml#/ShareExchangePlan"
+
+ShareExchangeReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, effective_on, destination_commodity_id, ratio_numerator, ratio_denominator]
+  description: >
+    Corrected terms for a share exchange (#179). The exchanged holding and its
+    old instrument stay those of the exchange; the date, ratio, new instrument,
+    receiving holding or source evidence must change.
+  properties:
+    reason:
+      type: string
+    effective_on:
+      type: string
+      format: date
+    destination_holding_account_id:
+      type: integer
+      format: int64
+      description: Defaults to the exchanged holding.
+    destination_commodity_id:
+      type: integer
+      format: int64
+    ratio_numerator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+    ratio_denominator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+
+ShareExchangeReplacementResponse:
+  type: object
+  required: [inverse, replacement, plan, corrected_transaction_id]
+  properties:
+    inverse:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    replacement:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    plan:
+      $ref: "../schemas/investments.yaml#/ShareExchangePlan"
+    corrected_transaction_id:
+      type: integer
+      format: int64
 
 InvestmentSplitReplacementRequest:
   type: object
@@ -1986,7 +2043,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_short_sale, can_correct_short_cover, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, can_correct_basis_resolution, basis_resolutions, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_short_sale, can_correct_short_cover, can_correct_share_exchange, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, can_correct_basis_resolution, basis_resolutions, operations]
   properties:
     root_operation_id:
       type: integer
@@ -2021,6 +2078,9 @@ InvestmentCorrectionChainResponse:
     can_correct_short_cover:
       type: boolean
       description: The effective operation is a short cover that may be reversed or replaced (#175).
+    can_correct_share_exchange:
+      type: boolean
+      description: The effective operation is a share exchange that may be reversed or replaced (#179); effective_share_exchange carries its terms.
     can_correct_write_off:
       type: boolean
       description: Whether the effective posted write-off can be reversed or replaced (T-118). The trade correction context pre-fills the replacement; dependent replay may still refuse the command.
