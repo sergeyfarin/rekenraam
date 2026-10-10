@@ -209,6 +209,12 @@ func TestCorrectTransferBasisResolutionAPI(t *testing.T) {
 	require.Equal(t, true, after["can_reverse_transfer"])
 	require.Equal(t, false, after["can_correct_basis_resolution"])
 	require.Nil(t, after["effective_basis_resolution"])
+	history := after["basis_resolutions"].([]any)
+	require.Len(t, history, 2)
+	require.Equal(t, "superseded", history[0].(map[string]any)["status"])
+	require.Equal(t, "reversed", history[1].(map[string]any)["status"])
+	require.Equal(t, "replace", history[1].(map[string]any)["correction_mode"])
+	require.Equal(t, "statement belonged to another account", history[1].(map[string]any)["reversal_reason"])
 	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost, "/api/v1/investments/transactions/999999/reverse-basis-resolution/reconciliation-impact",
 		map[string]any{"reason": "missing"}, http.StatusNotFound)
 }

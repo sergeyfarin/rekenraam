@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"rekenraam/backend/internal/app"
+	"rekenraam/backend/internal/db"
 	"rekenraam/backend/internal/exact"
 )
 
@@ -254,4 +255,36 @@ func reverseInvestmentBasisResolutionReconciliationImpact(logger *slog.Logger, a
 		}
 		writeReconciliationImpact(w, impact)
 	}
+}
+
+// investmentBasisResolutionHistoryEntry is one resolution fact of a transfer
+// and its standing: effective, superseded or reversed (#168).
+type investmentBasisResolutionHistoryEntry struct {
+	OperationID    int64             `json:"operation_id"`
+	TransactionID  *int64            `json:"transaction_id"`
+	BasisValue     exact.Coefficient `json:"basis_value"`
+	BasisScale     int               `json:"basis_scale"`
+	SourceEvidence json.RawMessage   `json:"source_evidence"`
+	CorrectionMode string            `json:"correction_mode,omitempty"`
+	Reason         string            `json:"reason"`
+	CreatedAt      string            `json:"created_at"`
+	Status         string            `json:"status"`
+	ReversalReason string            `json:"reversal_reason,omitempty"`
+}
+
+func toBasisResolutionHistory(records []db.BasisResolutionHistoryRecord) []investmentBasisResolutionHistoryEntry {
+	history := make([]investmentBasisResolutionHistoryEntry, 0, len(records))
+	for _, record := range records {
+		entry := investmentBasisResolutionHistoryEntry{OperationID: record.OperationID,
+			BasisValue: record.BasisValue, BasisScale: record.BasisScale,
+			SourceEvidence: json.RawMessage(defaultJSONObject(record.SourceEvidenceJSON)),
+			CorrectionMode: record.CorrectionMode, Reason: record.Reason, CreatedAt: record.CreatedAt,
+			Status: record.Status, ReversalReason: record.ReversalReason}
+		if record.TransactionID != 0 {
+			id := record.TransactionID
+			entry.TransactionID = &id
+		}
+		history = append(history, entry)
+	}
+	return history
 }

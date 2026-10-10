@@ -211,6 +211,15 @@ func TestRepeatedResolutionCorrectionKeepsOneEffectiveFact(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lineage.Operations, 3, "each replacement corrects the one before it")
 	require.Equal(t, third.Replacement.ID, *lineage.EffectiveTransactionID)
+	transferChain, err := f.investmentService.CorrectionChain(ctx, f.ownerUserID, transfer.Transaction.ID)
+	require.NoError(t, err)
+	var statuses, modes, values []string
+	for _, entry := range transferChain.BasisResolutions {
+		statuses, modes, values = append(statuses, entry.Status), append(modes, entry.CorrectionMode), append(values, entry.BasisValue.String())
+	}
+	require.Equal(t, []string{"superseded", "superseded", "effective"}, statuses)
+	require.Equal(t, []string{"", "replace", "replace"}, modes)
+	require.Equal(t, []string{"100", "200", "300"}, values, "every sourced basis stays visible")
 	same := correctResolutionInput(f, transfer.Transaction.ID, 3)
 	same.BasisScale = 0
 	_, err = f.investmentService.ReplaceTransferBasisResolution(ctx, same)
@@ -298,6 +307,13 @@ func TestReversingResolutionRestoresUnknownBasisAndUnresolvedSale(t *testing.T) 
 	require.NoError(t, f.database.QueryRow(`SELECT COUNT(*) FROM investment_basis_resolutions`).Scan(&facts))
 	require.Equal(t, 2, facts)
 	require.NotEqual(t, resolved.ID, again.ID)
+	chain, err = f.investmentService.CorrectionChain(ctx, f.ownerUserID, transfer.Transaction.ID)
+	require.NoError(t, err)
+	require.Len(t, chain.BasisResolutions, 2, "the history keeps the reversed fact")
+	require.Equal(t, "reversed", chain.BasisResolutions[0].Status)
+	require.Equal(t, "statement total was mistyped", chain.BasisResolutions[0].ReversalReason)
+	require.Equal(t, "effective", chain.BasisResolutions[1].Status)
+	require.Equal(t, again.ID, chain.BasisResolutions[1].TransactionID)
 	requireHealthyUnresolvedBook(t, f)
 }
 

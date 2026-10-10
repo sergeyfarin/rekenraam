@@ -65,6 +65,9 @@ type InvestmentCorrectionChain struct {
 	// EffectiveBasisResolution pre-fills the replacement.
 	CanCorrectBasisResolution bool
 	EffectiveBasisResolution  *InvestmentCorrectionBasisResolutionTerms
+	// BasisResolutions is every resolution fact pinned to an effective
+	// external transfer in, oldest first, with its current standing (#168).
+	BasisResolutions []db.BasisResolutionHistoryRecord
 	// CanCorrectShortSale / CanCorrectShortCover allow native reversal and
 	// replacement of a named short opening or cover (#175); the trade
 	// correction context pre-fills the replacement.
@@ -272,6 +275,13 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 			}
 			chain.CanReverseTransfer = !resolved
 			chain.CanReplaceTransfer = !resolved
+			if record.OperationKind == "external_transfer_in" {
+				history, err := s.repository.TransferBasisResolutionHistory(ctx, BookID, record.OperationID)
+				if err != nil {
+					return InvestmentCorrectionChain{}, err
+				}
+				chain.BasisResolutions = history
+			}
 			if resolved {
 				resolution, err := s.repository.EffectiveTransferBasisResolution(ctx, BookID, record.OperationID)
 				if err != nil {

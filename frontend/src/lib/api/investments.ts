@@ -71,6 +71,10 @@ export type InvestmentTransferInReplacementRequest = components['schemas']['Inve
 export type InvestmentTransferInReplacementResponse = components['schemas']['InvestmentTransferInReplacementResponse'];
 export type InvestmentBasisResolutionRequest = components['schemas']['InvestmentBasisResolutionRequest'];
 export type InvestmentBasisResolutionResponse = components['schemas']['InvestmentBasisResolutionResponse'];
+export type InvestmentBasisResolutionReplacementResponse = components['schemas']['InvestmentBasisResolutionReplacementResponse'];
+export type InvestmentBasisResolutionReversalResponse = components['schemas']['InvestmentBasisResolutionReversalResponse'];
+export type InvestmentCorrectionBasisResolutionTerms = components['schemas']['InvestmentCorrectionBasisResolutionTerms'];
+export type InvestmentBasisResolutionHistoryEntry = components['schemas']['InvestmentBasisResolutionHistoryEntry'];
 export type InvestmentTransferReplacementResponse = components['schemas']['InvestmentTransferReplacementResponse'];
 export type InvestmentCorrectionTransferTerms = components['schemas']['InvestmentCorrectionTransferTerms'];
 export type InvestmentSaleReplacementResponse = components['schemas']['InvestmentSaleReplacementResponse'];
@@ -1715,6 +1719,66 @@ export async function resolveTransferBasis(transactionID: number, input: Investm
   try {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/investments/transactions/{transaction_id}/resolve-basis',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+/** Preview replacing a transfer's effective sourced basis resolution (#168) through its actual writer. */
+export async function previewBasisResolutionReplacement(transactionID: number, input: InvestmentBasisResolutionRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-basis-resolution/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+/** Replace a transfer's effective sourced basis resolution with a corrected sourced basis (#168). */
+export async function replaceBasisResolution(transactionID: number, input: InvestmentBasisResolutionRequest, csrfToken: string): Promise<InvestmentBasisResolutionReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-basis-resolution',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+/** Preview withdrawing a transfer's effective sourced basis resolution (#168). */
+export async function previewBasisResolutionReversal(transactionID: number, input: InvestmentSaleReversalRequest): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-basis-resolution/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+/** Withdraw a transfer's effective sourced basis resolution; its basis reads unknown again (#168). */
+export async function reverseBasisResolution(transactionID: number, input: InvestmentSaleReversalRequest, csrfToken: string): Promise<InvestmentBasisResolutionReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-basis-resolution',
       { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
     );
     if (data !== undefined) return data;

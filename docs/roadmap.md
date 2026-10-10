@@ -109,18 +109,15 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. Sourced resolution correction and known-zero resolution
-   [#168](https://github.com/sergeyfarin/rekenraam/issues/168).
+1. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
 
-**Next, in order**
-
-2. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
-
-**Delivered historical-entry gates:** dated holdings/lot selection
-[#166](https://github.com/sergeyfarin/rekenraam/issues/166) (2026-10-09) and
+**Delivered historical-entry and recovery gates:** dated holdings/lot selection
+[#166](https://github.com/sergeyfarin/rekenraam/issues/166) (2026-10-09),
 backdated internal transfer admission
 [#167](https://github.com/sergeyfarin/rekenraam/issues/167) (2026-10-10),
-whose internal-transfer picker adopts #166.
+whose internal-transfer picker adopts #166, and sourced resolution correction
+with journal-free known-zero resolution
+[#168](https://github.com/sergeyfarin/rekenraam/issues/168) (2026-10-10).
 
 **Delivered from [#103](https://github.com/sergeyfarin/rekenraam/issues/103):** named short sale and cover —
 core commands [#173](https://github.com/sergeyfarin/rekenraam/issues/173), reads and mobile entry

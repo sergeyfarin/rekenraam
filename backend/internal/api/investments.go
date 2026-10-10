@@ -333,6 +333,7 @@ type investmentCorrectionChainResponse struct {
 	// transfer's effective resolution through the transfer (#168).
 	CanCorrectBasisResolution bool                                      `json:"can_correct_basis_resolution"`
 	EffectiveBasisResolution  *investmentCorrectionBasisResolutionTerms `json:"effective_basis_resolution,omitempty"`
+	BasisResolutions          []investmentBasisResolutionHistoryEntry   `json:"basis_resolutions"`
 	EffectiveTransfer         *investmentCorrectionTransferTerms        `json:"effective_transfer,omitempty"`
 	EffectiveReinvestment     *investmentCorrectionReinvestTerms        `json:"effective_reinvestment,omitempty"`
 	Operations                []investmentCorrectionNodeResponse        `json:"operations"`
@@ -1174,6 +1175,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			EffectiveTransfer:         toInvestmentCorrectionTransferTerms(chain.EffectiveTransfer),
 			CanCorrectBasisResolution: chain.CanCorrectBasisResolution,
 			EffectiveBasisResolution:  toInvestmentCorrectionBasisResolutionTerms(chain.EffectiveBasisResolution),
+			BasisResolutions:          toBasisResolutionHistory(chain.BasisResolutions),
 			Operations:                operations,
 		})
 	}

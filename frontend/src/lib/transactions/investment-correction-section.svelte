@@ -51,9 +51,12 @@
     reverseShortSale,
     previewShortCoverReversal,
     reverseShortCover,
+    previewBasisResolutionReversal,
+    reverseBasisResolution,
     type GainImpact,
     type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
+  import { formatQuantity } from '#lib/money/format.ts';
 
   let {
     transactionID,
@@ -76,7 +79,7 @@
     enabled: transactionID > 0
   }));
 
-  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'cash_in_lieu_entry' | 'resolve_basis' | 'short_sale' | 'short_cover' | null>(null);
+  let replacementKind = $state<'buy' | 'sell' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'cash_in_lieu_entry' | 'resolve_basis' | 'correct_basis' | 'short_sale' | 'short_cover' | null>(null);
   // Splits pre-fill from the chain's effective_split; only trades need the
   // separate source-facts read.
   const replacementQuery = createQuery(() => ({
@@ -117,13 +120,26 @@
   // a sourced statement (T-145).
   const basisResolvable = $derived(chainQuery.data?.can_resolve_basis === true &&
     chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_transfer);
+  // Its effective resolution is corrected or withdrawn through the transfer;
+  // every resolution stays listed with its standing (#168).
+  const basisCorrectable = $derived(chainQuery.data?.can_correct_basis_resolution === true &&
+    chainQuery.data.effective_transaction_id === transactionID && !!chainQuery.data.effective_basis_resolution);
+  const basisResolutions = $derived(chainQuery.data?.effective_transaction_id === transactionID
+    ? chainQuery.data.basis_resolutions : []);
+  // Every resolution of a transfer is in its cost currency: the effective
+  // terms name it, else the transfer's own terms.
+  const basisCurrencyCode = $derived.by(() => {
+    const currencyID = chainQuery.data?.effective_basis_resolution?.cost_commodity_id
+      ?? chainQuery.data?.effective_transfer?.cost_commodity_id;
+    return (currenciesQuery.data?.currencies ?? []).find((c: CurrencyResponse) => c.id === currencyID)?.code ?? '';
+  });
 
   const sourceLinkedEffectiveBuy = $derived(
     chainQuery.data?.can_reverse_buy === true && chainQuery.data.effective_transaction_id === transactionID
   );
 
   let modal = $state<'closed' | 'reason' | 'reconciliation'>('closed');
-  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'short_sale' | 'short_cover'>('sale');
+  let reversalKind = $state<'buy' | 'sale' | 'split' | 'dividend' | 'reinvestment' | 'write_off' | 'transfer' | 'capital_return' | 'cash_in_lieu' | 'short_sale' | 'short_cover' | 'basis_resolution'>('sale');
   let reason = $state('');
   let pending = $state(false);
   let actionError = $state<unknown>(undefined);
@@ -191,7 +207,9 @@
                       ? await previewShortSaleReversal(transactionID, body)
                       : reversalKind === 'short_cover'
                         ? await previewShortCoverReversal(transactionID, body)
-                        : await previewSaleReversalReconciliation(transactionID, body);
+                        : reversalKind === 'basis_resolution'
+                          ? await previewBasisResolutionReversal(transactionID, body)
+                          : await previewSaleReversalReconciliation(transactionID, body);
     if (!impactNeedsReview(preview)) return false;
     impacts = preview.affected_checkpoints;
     gainImpact = hasGainChanges(preview.gain_impact) ? preview.gain_impact : null;
@@ -228,6 +246,8 @@
       await reverseShortSale(transactionID, body, csrfToken);
     } else if (reversalKind === 'short_cover') {
       await reverseShortCover(transactionID, body, csrfToken);
+    } else if (reversalKind === 'basis_resolution') {
+      await reverseBasisResolution(transactionID, body, csrfToken);
     } else {
       await reverseManualSale(transactionID, body, csrfToken);
     }
@@ -327,6 +347,45 @@
     </ol>
     {#if chainQuery.data.operations.some((node) => node.imported)}
       <p class="text-xs text-muted">{m.transactions_investment_history_imported()}</p>
+    {/if}
+    {#if basisResolutions.length > 0}
+      <div class="space-y-2" role="group" aria-labelledby="basis-resolution-history-heading">
+        <h4 id="basis-resolution-history-heading" class="text-xs font-semibold text-muted">
+          {m.investments_basis_resolution_history_title()}
+        </h4>
+        <ol class="space-y-2">
+          {#each basisResolutions as entry (entry.operation_id)}
+            <li class="rounded-[var(--radius-control)] border border-border bg-surface px-3 py-2 text-sm">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="font-medium text-foreground">
+                  {m.investments_basis_resolution_history_amount({
+                    amount: formatQuantity(entry.basis_value, entry.basis_scale, locale),
+                    currency: basisCurrencyCode
+                  })}
+                  {#if entry.transaction_id} · #{entry.transaction_id}{/if}
+                </span>
+                <span class="text-xs text-muted">
+                  {entry.status === 'effective' ? m.transactions_investment_history_current()
+                    : entry.status === 'reversed' ? m.transactions_investment_history_reversed()
+                    : m.transactions_investment_history_superseded()}
+                </span>
+              </div>
+              <p class="mt-1 text-xs text-muted">
+                {m.investments_basis_resolution_history_recorded({ date: formatDate(entry.created_at) })}
+                {#if entry.transaction_id === null} · {m.investments_basis_resolution_history_no_journal()}{/if}
+              </p>
+              {#if entry.reason}
+                <p class="mt-1 text-xs text-foreground">{entry.reason}</p>
+              {/if}
+              {#if entry.reversal_reason}
+                <p class="mt-1 text-xs text-foreground">
+                  {m.investments_basis_resolution_history_withdrawn({ reason: entry.reversal_reason })}
+                </p>
+              {/if}
+            </li>
+          {/each}
+        </ol>
+      </div>
     {/if}
     {#if systemLabel === 'split_adjustment'}
       <p class="text-xs text-muted">{m.transactions_investment_split_adjustment_note()}</p>
@@ -446,6 +505,20 @@
         {m.transactions_investment_replace_transfer_action()}
       </button>
     {/if}
+    {#if basisCorrectable}
+      <button type="button"
+        class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+        disabled={!csrfToken}
+        onclick={() => { replacementKind = 'correct_basis'; }}>
+        {m.transactions_investment_correct_basis_action()}
+      </button>
+      <button type="button"
+        class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-warning/50 bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
+        disabled={!csrfToken || pending}
+        onclick={() => { reversalKind = 'basis_resolution'; reason = ''; actionError = undefined; modal = 'reason'; }}>
+        {m.transactions_investment_withdraw_basis_action()}
+      </button>
+    {/if}
     {#if basisResolvable}
       <button type="button"
         class="inline-flex min-h-10 items-center rounded-[var(--radius-control)] border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground hover:bg-control-hover disabled:opacity-60"
@@ -560,7 +633,18 @@
     role="presentation">
     <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
       role="dialog" aria-modal="true" aria-label={m.investments_basis_resolution_title()}>
-      <BasisResolutionForm {csrfToken} {transactionID} transfer={chainQuery.data.effective_transfer}
+      <BasisResolutionForm {csrfToken} {transactionID} costCommodityID={chainQuery.data.effective_transfer.cost_commodity_id}
+        onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
+    </div>
+  </div>
+{:else if replacementKind === 'correct_basis' && csrfToken && chainQuery.data?.effective_basis_resolution}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 px-3 py-4 backdrop-blur-sm"
+    role="presentation">
+    <div class="max-h-full w-full max-w-2xl overflow-y-auto rounded-[var(--radius-panel)] border border-border bg-surface p-4 shadow-[var(--shadow-panel)] sm:p-6"
+      role="dialog" aria-modal="true" aria-label={m.investments_basis_resolution_correct_title()}>
+      <BasisResolutionForm {csrfToken} {transactionID}
+        costCommodityID={chainQuery.data.effective_basis_resolution.cost_commodity_id}
+        current={chainQuery.data.effective_basis_resolution}
         onSaved={replacementSaved} onCancel={() => (replacementKind = null)} />
     </div>
   </div>
@@ -656,6 +740,7 @@
               : reversalKind === 'cash_in_lieu' ? m.investments_cash_in_lieu_reverse_title()
               : reversalKind === 'short_sale' ? m.investments_short_sale_reverse_title()
               : reversalKind === 'short_cover' ? m.investments_short_cover_reverse_title()
+              : reversalKind === 'basis_resolution' ? m.transactions_investment_withdraw_basis_title()
               : m.transactions_investment_reverse_title()
             : impacts.length > 0 ? m.transactions_reconciliation_warning_title() : m.investments_gain_impact_title()}
         </h3>
@@ -672,6 +757,7 @@
                 : reversalKind === 'cash_in_lieu' ? m.investments_cash_in_lieu_reverse_copy()
                 : reversalKind === 'short_sale' ? m.investments_short_sale_reverse_copy()
                 : reversalKind === 'short_cover' ? m.investments_short_cover_reverse_copy()
+                : reversalKind === 'basis_resolution' ? m.transactions_investment_withdraw_basis_copy()
                 : m.transactions_investment_reverse_copy()
               : m.transactions_reconciliation_warning_copy()}
           </p>

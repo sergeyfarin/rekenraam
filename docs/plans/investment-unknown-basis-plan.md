@@ -248,8 +248,25 @@ neither exemption covers the other. Named cases:
 `TestReversingKnownZeroResolutionIsJournalFree`,
 `TestSelfCheckDetectsKnownZeroJournalMismatch`,
 `TestKnownZeroResolutionExportsAndSurvivesRestore`,
-`TestKnownZeroBasisResolutionAPI`. Still open in #168: the correction and
-history UI in six locales, with mobile browser cases.
+`TestKnownZeroBasisResolutionAPI`.
+
+Slice 3 is delivered (2026-10-10), the operator surface, which completes #168:
+- **History.** The transfer's correction chain carries `basis_resolutions`:
+  every fact pinned to it, oldest first, with its basis, evidence, reason,
+  `effective`/`superseded`/`reversed` standing and any withdrawal reason. It
+  is one request, with no per-row fetch.
+- **Actions.** The detail of a resolved transfer offers "Correct cost
+  basis…". This form is prefilled from the effective terms and previewed
+  through the replacement writer. It also offers "Withdraw cost basis", a
+  reasoned reversal with the shared gain and checkpoint review. The
+  resolution form now admits 0 for a sourced known zero.
+- **Labels.** The history lists each resolution with its standing as text,
+  not colour alone. The five resolution error codes are translated. All
+  copy is in six locales.
+- **Named cases.** `TestRepeatedResolutionCorrectionKeepsOneEffectiveFact`
+  and `TestCorrectTransferBasisResolutionAPI` cover the history. The browser
+  case "a sourced basis resolution is corrected and withdrawn on mobile" runs
+  in `investments-unknown-basis.spec.ts` (390 px).
 
 **Deliberately later.** These are not #160 acceptance; each needs its own
 contract:

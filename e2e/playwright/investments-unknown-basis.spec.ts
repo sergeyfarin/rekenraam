@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
@@ -103,9 +103,11 @@ test('an unknown-basis holding transfers out without a cost basis entry', async 
   }).toBe('1');
 });
 
-test('a sourced statement resolves an unknown basis and its sale gain on mobile', async ({ page }) => {
+// Two units arrive from another broker with unknown basis 30 days ago, and
+// one is sold for 50.00 ten days ago, so its gain is unresolved.
+async function seedUnknownArrivalWithSale(page: Page, prefix: string) {
   const { csrfToken, currencyID } = await readyForLedger(page);
-  const suffix = `res${Date.now()}`;
+  const suffix = `${prefix}${Date.now()}`;
   const openedOn = daysFromTodayISO(-60);
   const cash = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
     name: `Resolve cash ${suffix}`, account_class: 'asset', account_kind: 'brokerage_cash',
@@ -127,6 +129,21 @@ test('a sourced statement resolves an unknown basis and its sale gain on mobile'
     cash_account_id: cash.id, quantity_value: '1', quantity_scale: 0, cash_amount_value: '5000',
     cash_amount_scale: 2, cash_commodity_id: currencyID, cost_basis_method: 'fifo'
   });
+  return { csrfToken, instrument, arrived };
+}
+
+// The realized gain on the instrument, in cents, or its basis knowledge
+// while unresolved.
+async function realizedGainCents(page: Page, commodityID: number): Promise<string | undefined> {
+  const gains = await apiJSON<{ realized: Array<{ commodity_id: number; basis_knowledge: string; realized_gain_value: string | null; realized_gain_scale: number | null }> }>(
+    page, 'GET', '/api/v1/investments/gains');
+  const gain = gains.realized.find((entry) => entry.commodity_id === commodityID);
+  if (!gain || gain.realized_gain_value === null || gain.realized_gain_scale === null) return gain?.basis_knowledge;
+  return ((BigInt(gain.realized_gain_value) * 100n) / 10n ** BigInt(gain.realized_gain_scale)).toString();
+}
+
+test('a sourced statement resolves an unknown basis and its sale gain on mobile', async ({ page }) => {
+  const { instrument, arrived } = await seedUnknownArrivalWithSale(page, 'res');
 
   await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
   await page.getByRole('button', { name: 'Resolve cost basis…' }).click();
@@ -142,12 +159,53 @@ test('a sourced statement resolves an unknown basis and its sale gain on mobile'
   await expect(dialog).toContainText('40.00');
   await dialog.getByRole('button', { name: 'Accept changed gains' }).click();
   await expect(form).toBeHidden();
-  await expect.poll(async () => {
-    const gains = await apiJSON<{ realized: Array<{ commodity_id: number; basis_knowledge: string; realized_gain_value: string | null; realized_gain_scale: number | null }> }>(
-      page, 'GET', '/api/v1/investments/gains');
-    const gain = gains.realized.find((entry) => entry.commodity_id === instrument.commodity_id);
-    if (!gain || gain.realized_gain_value === null || gain.realized_gain_scale === null) return gain?.basis_knowledge;
-    return ((BigInt(gain.realized_gain_value) * 100n) / 10n ** BigInt(gain.realized_gain_scale)).toString();
-  }).toBe('1000');
+  await expect.poll(() => realizedGainCents(page, instrument.commodity_id)).toBe('1000');
   await expect(page.getByRole('button', { name: 'Resolve cost basis…' })).toHaveCount(0);
+});
+
+// #168: a mistyped statement total is corrected, then the resolution is
+// withdrawn; every resolution stays listed with its standing.
+test('a sourced basis resolution is corrected and withdrawn on mobile', async ({ page }) => {
+  const { csrfToken, instrument, arrived } = await seedUnknownArrivalWithSale(page, 'cor');
+  const resolvePath = `/api/v1/investments/transactions/${arrived.transaction.id}/resolve-basis`;
+  const resolution = { basis_value: '8000', basis_scale: 2, reason: 'old broker statement found' };
+  const impact = await apiJSON<{ gain_impact: { acknowledgement: string } }>(
+    page, 'POST', `${resolvePath}/reconciliation-impact`, csrfToken, resolution);
+  await apiJSON(page, 'POST', resolvePath, csrfToken,
+    { ...resolution, gain_impact_acknowledgement: impact.gain_impact.acknowledgement });
+
+  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await page.getByRole('button', { name: 'Correct cost basis…' }).click();
+  const form = page.getByRole('dialog', { name: 'Correct cost basis' });
+  await expect(form.getByLabel(/^Total cost basis/)).toHaveValue('80.00');
+  await form.getByLabel(/^Total cost basis/).fill('60.00');
+  await form.getByLabel('Reason').fill('statement total was mistyped');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await form.getByRole('button', { name: 'Review and correct' }).click();
+
+  // The sold unit's basis moves from 40.00 to 30.00.
+  const review = page.getByRole('alertdialog');
+  await expect(review).toContainText('30.00');
+  await review.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(form).toBeHidden();
+  await expect.poll(() => realizedGainCents(page, instrument.commodity_id)).toBe('2000');
+  // Saving closes the detail; reopen it to read the resolution history.
+  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  const history = page.getByRole('group', { name: 'Cost basis resolutions' });
+  await expect(history.getByRole('listitem')).toHaveCount(2);
+  await expect(history.getByRole('listitem').first()).toContainText('Superseded');
+  await expect(history.getByRole('listitem').last()).toContainText('Current');
+
+  await page.getByRole('button', { name: 'Withdraw cost basis' }).click();
+  const withdraw = page.getByRole('alertdialog', { name: 'Withdraw the cost basis' });
+  await withdraw.getByLabel('Reason for reversal').fill('statement belonged to another account');
+  await withdraw.getByRole('button', { name: 'Review and reverse' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect.poll(() => realizedGainCents(page, instrument.commodity_id)).toBe('unknown');
+  await page.goto(`/app/transactions?transaction_id=${arrived.transaction.id}`);
+  await expect(page.getByRole('button', { name: 'Resolve cost basis…' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Withdraw cost basis' })).toHaveCount(0);
+  await expect(history.getByRole('listitem').last()).toContainText('Reversed');
+  await expect(history.getByRole('listitem').last()).toContainText('Withdrawn: statement belonged to another account');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });

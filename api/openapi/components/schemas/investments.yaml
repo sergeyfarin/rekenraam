@@ -1784,7 +1784,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_short_sale, can_correct_short_cover, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, can_correct_basis_resolution, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_short_sale, can_correct_short_cover, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, can_correct_basis_resolution, basis_resolutions, operations]
   properties:
     root_operation_id:
       type: integer
@@ -1836,6 +1836,11 @@ InvestmentCorrectionChainResponse:
       description: Whether this external transfer in has an effective sourced resolution that replace-basis-resolution or reverse-basis-resolution can correct through the transfer (#168).
     effective_basis_resolution:
       $ref: '#/InvestmentCorrectionBasisResolutionTerms'
+    basis_resolutions:
+      type: array
+      description: Every sourced resolution pinned to this external transfer in, oldest first, with its standing (#168). Empty for other operations.
+      items:
+        $ref: '#/InvestmentBasisResolutionHistoryEntry'
     effective_transfer:
       $ref: '#/InvestmentCorrectionTransferTerms'
     can_replace_return_of_capital:
@@ -3206,3 +3211,39 @@ InvestmentBasisResolutionReversalResponse:
     transfer_transaction_id:
       type: integer
       format: int64
+
+InvestmentBasisResolutionHistoryEntry:
+  type: object
+  required: [operation_id, transaction_id, basis_value, basis_scale, source_evidence, reason, created_at, status]
+  properties:
+    operation_id:
+      type: integer
+      format: int64
+    transaction_id:
+      type: [integer, 'null']
+      format: int64
+      description: The resolution's bridge journal; null for a journal-free known zero.
+    basis_value:
+      type: string
+      pattern: '^(0|[1-9][0-9]{0,37})$'
+    basis_scale:
+      type: integer
+    source_evidence:
+      type: object
+      additionalProperties: true
+    correction_mode:
+      type: string
+      enum: [replace]
+      description: Present when this resolution replaced an earlier one.
+    reason:
+      type: string
+      description: Why this resolution was recorded or the earlier one replaced.
+    created_at:
+      type: string
+      format: date-time
+    status:
+      type: string
+      enum: [effective, superseded, reversed]
+    reversal_reason:
+      type: string
+      description: Why a reversed resolution was withdrawn.

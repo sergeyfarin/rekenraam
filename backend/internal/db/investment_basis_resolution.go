@@ -450,3 +450,57 @@ func (r *InvestmentRepository) replaceTransferBasisResolution(ctx context.Contex
 	}
 	return record, nil
 }
+
+// BasisResolutionHistoryRecord is one resolution fact pinned to a transfer,
+// with how it stands now: effective, superseded by a replacement, or
+// reversed (#168). TransactionID is zero for a journal-free known zero.
+type BasisResolutionHistoryRecord struct {
+	OperationID        int64
+	TransactionID      int64
+	BasisValue         exact.Coefficient
+	BasisScale         int
+	SourceEvidenceJSON string
+	CorrectionMode     string
+	Reason             string
+	CreatedAt          string
+	Status             string
+	// ReversalReason is why a reversed resolution was withdrawn.
+	ReversalReason string
+}
+
+// TransferBasisResolutionHistory lists every resolution fact pinned to an
+// inbound transfer operation, oldest first.
+func (r *InvestmentRepository) TransferBasisResolutionHistory(ctx context.Context, bookID, transferOperationID int64) ([]BasisResolutionHistoryRecord, error) {
+	rows, err := r.database.QueryContext(ctx, `SELECT o.id, COALESCE(v.transaction_id, 0), r.basis_value, r.basis_scale,
+		r.source_evidence_json, COALESCE(o.correction_mode, ''), COALESCE(a.reason, ''), o.created_at,
+		CASE WHEN EXISTS (SELECT 1 FROM effective_investment_operations e WHERE e.id = o.id) THEN 'effective'
+			WHEN EXISTS (SELECT 1 FROM investment_operations s WHERE s.correction_of_operation_id = o.id
+				AND s.correction_mode = 'reverse') THEN 'reversed'
+			ELSE 'superseded' END,
+		COALESCE((SELECT s.correction_reason FROM investment_operations s
+			WHERE s.correction_of_operation_id = o.id AND s.correction_mode = 'reverse'), '')
+		FROM investment_basis_resolutions r
+		JOIN investment_operations o ON o.id = r.operation_id
+		JOIN audit_events a ON a.id = o.created_audit_event_id
+		LEFT JOIN investment_operation_journal_links l ON l.operation_id = o.id AND l.role = 'primary'
+		LEFT JOIN transaction_versions v ON v.id = l.transaction_version_id
+		WHERE r.book_id = ? AND r.transfer_operation_id = ?
+		ORDER BY o.id`, bookID, transferOperationID)
+	if err != nil {
+		return nil, fmt.Errorf("read basis resolution history: %w", err)
+	}
+	defer rows.Close()
+	var history []BasisResolutionHistoryRecord
+	for rows.Next() {
+		var record BasisResolutionHistoryRecord
+		if err := rows.Scan(&record.OperationID, &record.TransactionID, &record.BasisValue, &record.BasisScale,
+			&record.SourceEvidenceJSON, &record.CorrectionMode, &record.Reason, &record.CreatedAt, &record.Status, &record.ReversalReason); err != nil {
+			return nil, fmt.Errorf("scan basis resolution history: %w", err)
+		}
+		history = append(history, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate basis resolution history: %w", err)
+	}
+	return history, nil
+}

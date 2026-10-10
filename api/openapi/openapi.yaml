@@ -1204,6 +1204,8 @@ components:
       $ref: "./components/schemas/investments.yaml#/InvestmentBasisResolutionReplacementResponse"
     InvestmentBasisResolutionReversalResponse:
       $ref: "./components/schemas/investments.yaml#/InvestmentBasisResolutionReversalResponse"
+    InvestmentBasisResolutionHistoryEntry:
+      $ref: "./components/schemas/investments.yaml#/InvestmentBasisResolutionHistoryEntry"
     InvestmentCorrectionBasisResolutionTerms:
       $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionBasisResolutionTerms"
     InvestmentBuyReversalRequest:

@@ -16,39 +16,46 @@
     impactNeedsReview,
     isGainAcknowledgementRefusal
   } from '#lib/investments/gain-impact.ts';
+  import { formatLedgerAmount } from '#lib/money/amount.ts';
   import {
+    previewBasisResolutionReplacement,
     previewTransferBasisResolution,
+    replaceBasisResolution,
     resolveTransferBasis,
+    type InvestmentCorrectionBasisResolutionTerms,
     type GainImpact,
     type InvestmentBasisResolutionRequest,
-    type InvestmentCorrectionTransferTerms,
     type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
   import { invalidateInvestmentReads } from './invalidate';
 
-  // Resolves an external transfer in whose basis was recorded unknown (T-145).
-  // The basis is the transfer's total sourced basis in its own currency; the
-  // resolution posts the omitted cost-basis entry on the transfer date and
-  // revises every sale and transfer the shares reached.
+  // Resolves an external transfer in whose basis was recorded unknown (T-145),
+  // or, given the effective resolution, corrects it (#168). The basis is the
+  // transfer's total sourced basis in its own currency; the resolution posts
+  // the omitted cost-basis entry on the transfer date (none for a known zero)
+  // and revises every sale and transfer the shares reached.
   let {
     csrfToken,
     transactionID,
-    transfer,
+    costCommodityID,
+    current = null,
     onSaved,
     onCancel
   }: {
     csrfToken: string;
     transactionID: number;
-    transfer: InvestmentCorrectionTransferTerms;
+    costCommodityID: number;
+    current?: InvestmentCorrectionBasisResolutionTerms | null;
     onSaved: () => void;
     onCancel: () => void;
   } = $props();
 
-  const source = untrack(() => transfer);
+  const correcting = untrack(() => current);
   const queryClient = useQueryClient();
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
-  let basisStr = $state('');
+  let basisStr = $state(correcting
+    ? formatLedgerAmount(correcting.basis_value, correcting.basis_scale) : '');
   let reference = $state('');
   let reason = $state('');
   let pending = $state(false);
@@ -68,7 +75,7 @@
 
   const currenciesByID = $derived(new Map<number, CurrencyResponse>(
     (currenciesQuery.data?.currencies ?? []).map((currency: CurrencyResponse) => [currency.id, currency])));
-  const basisCurrency = $derived(currenciesByID.get(source.cost_commodity_id));
+  const basisCurrency = $derived(currenciesByID.get(costCommodityID));
   const gainRows = $derived(review?.gainImpact
     ? gainImpactRows(review.gainImpact.changes, gainImpactCurrency(currenciesByID), getLocale()) : []);
   const canSubmit = $derived(!!basisStr.trim() && !!reason.trim());
@@ -105,7 +112,9 @@
   // Preview through the actual resolution writer; checkpoints or the gains it
   // resolves go to the confirmation.
   async function reviewImpact(payload: InvestmentBasisResolutionRequest, refreshed: boolean): Promise<boolean> {
-    const impact = await previewTransferBasisResolution(transactionID, payload);
+    const impact = correcting
+      ? await previewBasisResolutionReplacement(transactionID, payload)
+      : await previewTransferBasisResolution(transactionID, payload);
     if (!impactNeedsReview(impact)) return false;
     const gainImpact = hasGainChanges(impact.gain_impact) ? impact.gain_impact : null;
     review = { impacts: impact.affected_checkpoints, gainImpact, gainRefreshed: refreshed && !!gainImpact, payload };
@@ -113,11 +122,13 @@
   }
 
   async function commit(payload: InvestmentBasisResolutionRequest, override: boolean, acknowledgement: string) {
-    await resolveTransferBasis(transactionID, {
+    const body = {
       ...payload,
       ...(override ? { reconciliation_override: true } : {}),
       ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
-    }, csrfToken);
+    };
+    if (correcting) await replaceBasisResolution(transactionID, body, csrfToken);
+    else await resolveTransferBasis(transactionID, body, csrfToken);
     await invalidateInvestmentReads(queryClient);
     onSaved();
   }
@@ -152,8 +163,12 @@
 {/if}
 
 <form onsubmit={handleSubmit} class="space-y-4" aria-busy={pending}>
-  <h2 class="text-base font-semibold text-foreground">{m.investments_basis_resolution_title()}</h2>
-  <p class="text-sm text-muted">{m.investments_basis_resolution_copy()}</p>
+  <h2 class="text-base font-semibold text-foreground">
+    {correcting ? m.investments_basis_resolution_correct_title() : m.investments_basis_resolution_title()}
+  </h2>
+  <p class="text-sm text-muted">
+    {correcting ? m.investments_basis_resolution_correct_copy() : m.investments_basis_resolution_copy()}
+  </p>
 
   <div>
     <label for="basis-resolution-amount" class="mb-1 block text-sm font-medium text-foreground">
@@ -190,7 +205,8 @@
     </button>
     <button type="submit" disabled={!canSubmit || pending}
       class="min-h-10 rounded-(--radius-control) bg-foreground px-4 py-2 text-sm font-semibold text-background transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-      {pending ? m.investments_basis_resolution_pending() : m.investments_basis_resolution_submit()}
+      {pending ? m.investments_basis_resolution_pending()
+        : correcting ? m.investments_basis_resolution_correct_submit() : m.investments_basis_resolution_submit()}
     </button>
   </div>
 </form>
