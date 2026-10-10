@@ -186,14 +186,24 @@ func (r *InvestmentRepository) createInternalTransfer(ctx context.Context, journ
 				(len(transfer.Allocations) == 0) != (transfer.PooledQuantityValue.Sign() > 0) {
 				return InternalTransferResult{}, ErrInvalidDisposalParams
 			}
-			if err := requirePositionEventInOrderTx(ctx, tx, transfer.BookID, transfer.SourceAccountID,
-				transfer.CommodityID, transfer.EffectiveOn, "an internal transfer"); err != nil {
+			// A transfer dated behind a later depletion of either holding is
+			// admitted by replay (#167): the source depletion is the one its
+			// own slot sees, the destination lots open behind later
+			// destination events, and both positions then replay, so every
+			// later decision is revised or named as a dependency.
+			sourceBackdated, err := positionRewrittenAfterTx(ctx, tx, transfer.BookID, transfer.SourceAccountID,
+				transfer.CommodityID, transfer.EffectiveOn)
+			if err != nil {
 				return InternalTransferResult{}, err
 			}
-			if err := requirePositionEventInOrderTx(ctx, tx, transfer.BookID, transfer.DestinationAccountID,
-				transfer.CommodityID, transfer.EffectiveOn, "an internal transfer"); err != nil {
+			destinationBackdated, err := positionRewrittenAfterTx(ctx, tx, transfer.BookID, transfer.DestinationAccountID,
+				transfer.CommodityID, transfer.EffectiveOn)
+			if err != nil {
 				return InternalTransferResult{}, err
 			}
+			// Today's lock applies, as for an outbound transfer: it is the
+			// family the open position's later decisions were recorded under.
+			// Replay checks the move against the lock held at its slot.
 			policy, err := internalTransferPolicyTx(ctx, tx, transfer)
 			if err != nil {
 				return InternalTransferResult{}, err
@@ -213,17 +223,21 @@ func (r *InvestmentRepository) createInternalTransfer(ctx context.Context, journ
 				// Unknown basis moves as unknown: the destination inherits it.
 				AdmitUnknownBasis: true}
 			var moved []LotDisposalRecord
-			if policy.allocation == InternalTransferAverageCostPool {
+			switch {
+			case sourceBackdated:
+				moved, err = subjectTransferDepletionTx(ctx, tx, operationID, "internal_transfer", transfer, policy,
+					transaction, journal, operationID, auditEventID)
+			case policy.allocation == InternalTransferAverageCostPool:
 				params.QuantityValue, params.QuantityScale = transfer.PooledQuantityValue, transfer.PooledQuantityScale
 				moved, err = pooledTransferOutTx(ctx, tx, params, auditEventID)
-			} else {
+			default:
 				moved, err = selectedLotsTransferOutTx(ctx, tx, params, transfer.Allocations, auditEventID)
 			}
 			if err != nil {
 				return InternalTransferResult{}, err
 			}
 			result, err := openInternalTransferDestinationsTx(ctx, tx, transfer, policy, transaction, journal,
-				operationID, auditEventID, moved, false)
+				operationID, auditEventID, moved, destinationBackdated)
 			if err != nil {
 				return InternalTransferResult{}, err
 			}
@@ -231,6 +245,19 @@ func (r *InvestmentRepository) createInternalTransfer(ctx context.Context, journ
 			// its first sale; a fully moved position releases the lock.
 			if err := updatePositionMethodFamilyTx(ctx, tx, params, policy.method, auditEventID); err != nil {
 				return InternalTransferResult{}, fmt.Errorf("save internal transfer source basis method: %w", err)
+			}
+			var replayed []investmentReplayPositionKey
+			if sourceBackdated {
+				replayed = append(replayed, investmentReplayPositionKey{transfer.SourceAccountID, transfer.CommodityID, transfer.CostCommodityID})
+			}
+			if destinationBackdated {
+				replayed = append(replayed, investmentReplayPositionKey{transfer.DestinationAccountID, transfer.CommodityID, transfer.CostCommodityID})
+			}
+			for _, position := range replayed {
+				if err := replayCorrectedPositionTx(ctx, tx, transfer.BookID, position,
+					operationID, auditEventID, journal.ActorUserID, journal.CreatedAt); err != nil {
+					return InternalTransferResult{}, err
+				}
 			}
 			return result, nil
 		}, nil)

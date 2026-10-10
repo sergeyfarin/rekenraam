@@ -214,8 +214,9 @@ func (s *InvestmentService) PreviewInternalTransferReconciliationImpact(ctx cont
 }
 
 // InternalTransfer commits the journal, source depletions, destination lots
-// and links under one audit event. A change to any committed disposal's gain
-// needs the preview's acknowledgement (T-114).
+// and links under one audit event. A transfer dated behind a later depletion
+// of either holding replays both (#167); a change to any committed disposal's
+// gain needs the preview's acknowledgement (T-114).
 func (s *InvestmentService) InternalTransfer(ctx context.Context, input InternalTransferInput) (InternalTransferResult, error) {
 	plan, transfer, err := s.internalTransferPlan(ctx, input)
 	if err != nil {
@@ -245,6 +246,12 @@ func toInternalTransferPlan(result db.InternalTransferResult) InternalTransferPl
 }
 
 func mapInternalTransferError(err error) error {
+	// A backdated transfer names the later decision it makes impossible, as a
+	// backdated sale does (#167).
+	var dependency *db.InvestmentReplayDependencyError
+	if errors.As(err, &dependency) {
+		return InvestmentSaleDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
+	}
 	switch {
 	case errors.Is(err, db.ErrOutOfOrderPositionEvent):
 		return err

@@ -14733,7 +14733,7 @@ export interface paths {
         put?: never;
         /**
          * Transfer an investment holding between holding accounts
-         * @description Moves selected long lots with their own basis (individual-lot source) or a quantity at the dated average-cost pool rate (average-cost source), without cash or gain. Destination lots keep source lineage and original dates.
+         * @description Moves selected long lots with their own basis (individual-lot source) or a quantity at the dated average-cost pool rate (average-cost source), without cash or gain. Destination lots keep source lineage and original dates. A transfer dated behind a later depletion of either holding is admitted through replay at its own slot: both holdings and anything downstream replay atomically, a later decision it makes impossible is refused by name (INVESTMENT_SALE_DEPENDENCY), and changed later gains need the preview's gain_impact_acknowledgement.
          */
         post: {
             parameters: {
@@ -14786,7 +14786,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Reconciliation override or gain acknowledgement required, the allocation does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED / INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a dated lot dependency conflicts */
+                /** @description Reconciliation override or gain acknowledgement required, the allocation does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED / INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a later decision the dated transfer makes impossible (INVESTMENT_SALE_DEPENDENCY) */
                 409: {
                     headers: {
                         [name: string]: unknown;

@@ -1379,6 +1379,17 @@ func latestPositionRewriteDateTx(ctx context.Context, tx *sql.Tx, bookID int64, 
 	return latest, nil
 }
 
+// positionRewrittenAfterTx reports whether an event dated eventDate falls
+// behind a later depletion of the position, so only replay can admit it.
+// Same-day events stay in entry order, as requirePositionEventInOrderTx allows.
+func positionRewrittenAfterTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID int64, eventDate string) (bool, error) {
+	latest, err := latestPositionRewriteDateTx(ctx, tx, bookID, accountID, commodityID)
+	if err != nil {
+		return false, err
+	}
+	return latest != "" && eventDate < latest, nil
+}
+
 // requirePositionEventInOrderTx refuses a lot event dated before the last event
 // that rewrote the position's projection (T-95).
 //

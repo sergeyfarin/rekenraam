@@ -886,7 +886,6 @@
   "investments_transfer_internal_destination": "Zieldepot",
   "investments_transfer_internal_lots": "Quelllose",
   "investments_transfer_internal_lots_help": "Für jedes zu übertragende Los eine Menge eingeben. Andere Felder leer lassen.",
-  "investments_transfer_internal_lots_error": "Quelllose konnten nicht geladen werden. Versuchen Sie es erneut.",
   "investments_transfer_internal_lots_empty": "Für diese Position sind keine offenen Quelllose verfügbar.",
   "investments_transfer_internal_lot_quantity": "Zu übertragende Menge",
   "investments_transfer_internal_available": "Verfügbar:",

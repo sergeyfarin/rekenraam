@@ -275,6 +275,14 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 		if err != nil {
 			return err
 		}
+		// The transfer a command is recording must agree with the lock its
+		// source holds at the slot (#167); a recorded one is checked by the
+		// decisions it later meets.
+		if intent.TransferIsSubject {
+			if err := enforcePositionMethodFamilyTx(ctx, tx, params, "specific_lot"); err != nil {
+				return err
+			}
+		}
 		moved, err := disposeLotTx(ctx, tx, params, intent.LotID,
 			intent.QuantityValue, intent.QuantityScale, intent.AuditEventID, allocationScale)
 		if err == nil {

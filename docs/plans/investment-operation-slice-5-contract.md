@@ -93,9 +93,15 @@ move records `individual_lot` as the source position's method-family lock, so
 a later sale cannot switch the still-open source position to average cost.
 Closing the source position releases the lock. A source with an average-cost
 policy or lock must use the shipped pooled-quantity command rather than the
-selected-lot shape. New internal transfers still refuse backdating before
-source or destination depletions; [#167](https://github.com/sergeyfarin/rekenraam/issues/167)
-owns that separate admission contract.
+selected-lot shape. A new internal transfer dated behind a later depletion of
+its source or destination is admitted by replay
+([#167](https://github.com/sergeyfarin/rekenraam/issues/167), 2026-10-10): the
+source depletion is replay's subject at the transfer's own slot (after that
+day's earlier entries) under today's method lock, which replay checks against
+the lock held at the slot; destination lots open by replay admission; both
+holdings then replay with propagation, under the shared gain acknowledgement,
+and a later decision the move makes impossible is named
+(`INVESTMENT_SALE_DEPENDENCY`) with nothing written.
 
 External inbound basis is a sourced fact: accept a known nonnegative value
 including known zero, or record unknown with a NULL coefficient. An outbound
@@ -368,7 +374,8 @@ that allocation rather than rewriting the 8.00 EUR receipt.
    outbound transfers, unknown-basis resolution, return of capital and linked
    cash in lieu are delivered with named bridge adjustment/refusal,
    conservation, replay and reconciliation cases. New backdated internal
-   entry (#167) and resolution recovery (#168) remain separate contracts.
+   entry (#167) was delivered 2026-10-10; resolution recovery (#168) remains
+   a separate contract.
    Provider suggestions stay in review until their command and verified
    mapping are supported; #145 and #111 track that boundary.
 4. Mobile entry and unresolved labels ship for the bounded family. Dated

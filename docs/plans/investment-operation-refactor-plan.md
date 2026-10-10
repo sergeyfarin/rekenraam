@@ -463,6 +463,11 @@ notes record design decisions per area; they carry no status or order.
   historical evidence) and revises later decisions under their recorded policy
   and elections. Preview, reconciliation impact and commit run the same
   writer. An impossible later decision is named (`INVESTMENT_SALE_DEPENDENCY`).
+  A new internal transfer behind a later depletion of either holding (#167)
+  takes its source depletion from replay with the transfer as subject at its
+  own slot (as a replacement does at its root's slot), opens destination lots
+  by replay admission, then replays the backdated holdings; propagation
+  carries any change downstream.
 - **Cross-position replay scope** (T-124, ADR 0013 *Cross-Position Replay
   Scope Refinement*). An affected-position dependency closure
   (`InvestmentReplayClosure`), seeded per changed position and date and

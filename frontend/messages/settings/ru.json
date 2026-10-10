@@ -886,7 +886,6 @@
   "investments_transfer_internal_destination": "Счёт ценных бумаг получателя",
   "investments_transfer_internal_lots": "Исходные лоты",
   "investments_transfer_internal_lots_help": "Введите количество для каждого переводимого лота. Остальные поля оставьте пустыми.",
-  "investments_transfer_internal_lots_error": "Не удалось загрузить исходные лоты. Повторите попытку.",
   "investments_transfer_internal_lots_empty": "Для этой позиции нет открытых исходных лотов.",
   "investments_transfer_internal_lot_quantity": "Количество для перевода",
   "investments_transfer_internal_available": "Доступно:",

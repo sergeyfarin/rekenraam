@@ -886,7 +886,6 @@
   "investments_transfer_internal_destination": "Bestemmingseffectenrekening",
   "investments_transfer_internal_lots": "Bronpartijen",
   "investments_transfer_internal_lots_help": "Vul voor elke over te boeken partij een aantal in. Laat de andere velden leeg.",
-  "investments_transfer_internal_lots_error": "Bronpartijen konden niet worden geladen. Probeer het opnieuw.",
   "investments_transfer_internal_lots_empty": "Voor deze positie zijn geen open bronpartijen beschikbaar.",
   "investments_transfer_internal_lot_quantity": "Over te boeken aantal",
   "investments_transfer_internal_available": "Beschikbaar:",

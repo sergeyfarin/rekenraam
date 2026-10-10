@@ -885,7 +885,6 @@
   "investments_transfer_internal_destination": "Destination holding account",
   "investments_transfer_internal_lots": "Source lots",
   "investments_transfer_internal_lots_help": "Enter a quantity for each lot to move. Leave the others blank.",
-  "investments_transfer_internal_lots_error": "Could not load source lots. Try again.",
   "investments_transfer_internal_lots_empty": "No open source lots are available for this position.",
   "investments_transfer_internal_lot_quantity": "Quantity to move",
   "investments_transfer_internal_available": "Available:",

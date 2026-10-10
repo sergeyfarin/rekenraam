@@ -4,9 +4,10 @@ import { readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
 
 /**
- * #166: split, return-of-capital and outbound-transfer entry select holdings
- * and lots as they stood on the chosen date, including holdings a later sale
- * closed. Commit still runs the real writer, gain review and checkpoints.
+ * #166: split, return-of-capital, outbound and internal transfer entry select
+ * holdings and lots as they stood on the chosen date, including holdings a
+ * later sale closed. Commit still runs the real writer, gain review and
+ * checkpoints; an internal transfer behind later history replays (#167).
  */
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -36,6 +37,10 @@ async function setup(page: Page, prefix: string) {
   const holding = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
     instrument_id: instrument.id, name: holdingName, opened_on: openedOn, effective_from: openedOn
   });
+  const destinationName = `Hist destination ${suffix}`;
+  await apiJSON(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, {
+    instrument_id: instrument.id, name: destinationName, opened_on: openedOn, effective_from: openedOn
+  });
   const trade = (side: 'buy' | 'sell', daysAgo: number, quantity: string, amount: string) =>
     apiJSON(page, 'POST', `/api/v1/investments/${side}`, csrfToken, {
       transaction_date: daysFromTodayISO(-daysAgo), commodity_id: instrument.commodity_id, holding_account_id: holding.id,
@@ -44,7 +49,8 @@ async function setup(page: Page, prefix: string) {
     });
   return {
     commodityID: instrument.commodity_id, trade, cashLabel: `Hist cash ${suffix}`,
-    holdingLabel: `${holdingName} · ${name}`, positionLabel: `${holdingName} · ${name} · ${currencyCode}`
+    holdingLabel: `${holdingName} · ${name}`, positionLabel: `${holdingName} · ${name} · ${currencyCode}`,
+    destinationLabel: destinationName
   };
 }
 
@@ -143,5 +149,47 @@ test('a dated outbound transfer that a later sale cannot survive is refused by n
   await dialog.getByRole('textbox', { name: /Quantity to move/ }).fill('2');
   await dialog.getByRole('button', { name: 'Preview transfer' }).click();
   await expect(dialog.getByRole('alert')).toBeVisible();
+  await expect.poll(() => gainsFor(page, s.commodityID)).toEqual(['3000']);
+});
+
+test('an internal move from a lot consumed since is entered by its date on mobile', async ({ page }) => {
+  const s = await setup(page, 'hti');
+  await s.trade('buy', 40, '3', '3000'); // 10.00 per share
+  await s.trade('buy', 30, '3', '4500'); // 15.00 per share
+  await s.trade('sell', 5, '3', '6000'); // FIFO: the first lot, basis 30.00
+
+  await page.goto('/app/investments');
+  await page.getByRole('button', { name: 'Move between holdings' }).click();
+  await page.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-20));
+  await page.getByLabel('Source position').selectOption({ label: s.positionLabel });
+  await page.getByLabel('Destination holding account').selectOption({ label: s.destinationLabel });
+  const lots = page.getByRole('textbox', { name: /Quantity to move/ });
+  await expect(lots).toHaveCount(2);
+  await lots.first().fill('2');
+  await page.getByRole('button', { name: 'Preview transfer' }).click();
+  await expect(page.getByRole('region', { name: 'What moves' })).toContainText('basis 20.00');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.getByRole('button', { name: 'Record transfer' }).click();
+  // The later FIFO sale now takes one share of the first lot and two of the second.
+  const review = page.getByRole('alertdialog');
+  await expect(review).toContainText('basis 30.00 → 40.00');
+  await review.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(review).toBeHidden();
+  await expect.poll(() => gainsFor(page, s.commodityID)).toEqual(['2000']);
+});
+
+test('a dated internal move that a later sale cannot survive is refused by name', async ({ page }) => {
+  const s = await setup(page, 'hty');
+  await s.trade('buy', 40, '3', '3000');
+  await s.trade('sell', 5, '3', '6000'); // needs all three shares
+
+  await page.goto('/app/investments');
+  await page.getByRole('button', { name: 'Move between holdings' }).click();
+  await page.getByLabel('Transfer date in this book').fill(daysFromTodayISO(-20));
+  await page.getByLabel('Source position').selectOption({ label: s.positionLabel });
+  await page.getByLabel('Destination holding account').selectOption({ label: s.destinationLabel });
+  await page.getByRole('textbox', { name: /Quantity to move/ }).fill('2');
+  await page.getByRole('button', { name: 'Preview transfer' }).click();
+  await expect(page.locator('#internal-transfer-form-error')).toBeVisible();
   await expect.poll(() => gainsFor(page, s.commodityID)).toEqual(['3000']);
 });

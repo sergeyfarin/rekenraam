@@ -189,7 +189,9 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   seed propagation. Revisions of a reversed transfer are evidence only; read
   current state through revisions of effective operations. A replacement computes
   its source depletion with a subject replay intent at the correction-root
-  slot (as a backdated split does), never from today's lot state.
+  slot (as a backdated split does), never from today's lot state. A new
+  internal transfer behind a later depletion of either holding uses the same
+  subject intent at its own slot and then replays both holdings (#167).
 
 ## Dates and times
 

@@ -886,7 +886,6 @@
   "investments_transfer_internal_destination": "Compte de titres destinataire",
   "investments_transfer_internal_lots": "Lots sources",
   "investments_transfer_internal_lots_help": "Saisissez une quantité pour chaque lot à déplacer. Laissez les autres vides.",
-  "investments_transfer_internal_lots_error": "Impossible de charger les lots sources. Réessayez.",
   "investments_transfer_internal_lots_empty": "Aucun lot source ouvert pour cette position.",
   "investments_transfer_internal_lot_quantity": "Quantité à déplacer",
   "investments_transfer_internal_available": "Disponible :",

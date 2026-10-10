@@ -189,7 +189,7 @@ func (s *InvestmentService) PreviewExternalTransferOut(ctx context.Context, inpu
 	journal.GainImpact = gainImpactPolicy("")
 	simulated, result, err := s.repository.SimulateExternalTransferOut(ctx, journal, transfer)
 	if err != nil {
-		return ExternalTransferOutPreview{}, mapExternalTransferOutError(err)
+		return ExternalTransferOutPreview{}, mapInternalTransferError(err)
 	}
 	impact, err := s.simulatedReconciliationImpact(ctx, simulated)
 	if err != nil {
@@ -208,19 +208,9 @@ func (s *InvestmentService) ExternalTransferOut(ctx context.Context, input Exter
 	journal.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
 	transaction, result, err := s.repository.CreateExternalTransferOut(ctx, journal, transfer)
 	if err != nil {
-		return ExternalTransferOutResult{}, mapExternalTransferOutError(err)
+		return ExternalTransferOutResult{}, mapInternalTransferError(err)
 	}
 	return ExternalTransferOutResult{Transaction: toTransaction(transaction), Plan: toExternalTransferOutPlan(result)}, nil
-}
-
-// mapExternalTransferOutError names a later decision a backdated outbound
-// transfer makes impossible, as a backdated sale does (T-143).
-func mapExternalTransferOutError(err error) error {
-	var dependency *db.InvestmentReplayDependencyError
-	if errors.As(err, &dependency) {
-		return InvestmentSaleDependencyError{OperationID: dependency.OperationID, DecisionID: dependency.DecisionID}
-	}
-	return mapInternalTransferError(err)
 }
 
 func toExternalTransferOutPlan(result db.ExternalTransferOutResult) ExternalTransferOutPlan {

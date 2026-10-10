@@ -109,16 +109,18 @@ below is execution order, not a chain of hard dependencies.
 
 **Now**
 
-1. New backdated internal transfer admission
-   [#167](https://github.com/sergeyfarin/rekenraam/issues/167). Dated
-   holdings/lot selection [#166](https://github.com/sergeyfarin/rekenraam/issues/166)
-   was delivered 2026-10-09; the internal-transfer picker adopts it with #167.
+1. Sourced resolution correction and known-zero resolution
+   [#168](https://github.com/sergeyfarin/rekenraam/issues/168).
 
 **Next, in order**
 
-2. Sourced resolution correction and known-zero resolution
-   [#168](https://github.com/sergeyfarin/rekenraam/issues/168).
-3. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
+2. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115).
+
+**Delivered historical-entry gates:** dated holdings/lot selection
+[#166](https://github.com/sergeyfarin/rekenraam/issues/166) (2026-10-09) and
+backdated internal transfer admission
+[#167](https://github.com/sergeyfarin/rekenraam/issues/167) (2026-10-10),
+whose internal-transfer picker adopts #166.
 
 **Delivered from [#103](https://github.com/sergeyfarin/rekenraam/issues/103):** named short sale and cover —
 core commands [#173](https://github.com/sergeyfarin/rekenraam/issues/173), reads and mobile entry

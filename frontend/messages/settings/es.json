@@ -886,7 +886,6 @@
   "investments_transfer_internal_destination": "Cuenta de valores de destino",
   "investments_transfer_internal_lots": "Lotes de origen",
   "investments_transfer_internal_lots_help": "Introduzca una cantidad para cada lote que quiera mover. Deje los demás en blanco.",
-  "investments_transfer_internal_lots_error": "No se pudieron cargar los lotes de origen. Inténtelo de nuevo.",
   "investments_transfer_internal_lots_empty": "No hay lotes abiertos disponibles para esta posición.",
   "investments_transfer_internal_lot_quantity": "Cantidad a mover",
   "investments_transfer_internal_available": "Disponible:",

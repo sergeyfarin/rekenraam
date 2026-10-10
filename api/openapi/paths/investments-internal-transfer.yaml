@@ -3,7 +3,12 @@ post:
   description: >-
     Moves selected long lots with their own basis (individual-lot source) or a
     quantity at the dated average-cost pool rate (average-cost source), without
-    cash or gain. Destination lots keep source lineage and original dates.
+    cash or gain. Destination lots keep source lineage and original dates. A
+    transfer dated behind a later depletion of either holding is admitted
+    through replay at its own slot: both holdings and anything downstream
+    replay atomically, a later decision it makes impossible is refused by name
+    (INVESTMENT_SALE_DEPENDENCY), and changed later gains need the preview's
+    gain_impact_acknowledgement.
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -44,7 +49,8 @@ post:
       description: >-
         Reconciliation override or gain acknowledgement required, the allocation
         does not match the source method (INVESTMENT_TRANSFER_POOL_REQUIRED /
-        INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a dated lot dependency conflicts
+        INVESTMENT_TRANSFER_POOL_UNAVAILABLE), or a later decision the dated
+        transfer makes impossible (INVESTMENT_SALE_DEPENDENCY)
       content:
         application/json:
           schema:
