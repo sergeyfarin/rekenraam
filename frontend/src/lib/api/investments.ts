@@ -38,6 +38,13 @@ export type InvestmentSplitResponse = components['schemas']['InvestmentSplitResp
 export type InvestmentSplitReplacementRequest = components['schemas']['InvestmentSplitReplacementRequest'];
 export type InvestmentSplitReplacementResponse = components['schemas']['InvestmentSplitReplacementResponse'];
 export type InvestmentCorrectionSplitTerms = components['schemas']['InvestmentCorrectionSplitTerms'];
+export type ShareExchangeRequest = components['schemas']['ShareExchangeRequest'];
+export type ShareExchangePlan = components['schemas']['ShareExchangePlan'];
+export type ShareExchangeBasisTotal = components['schemas']['ShareExchangeBasisTotal'];
+export type ShareExchangePreviewResponse = components['schemas']['ShareExchangePreviewResponse'];
+export type ShareExchangeResponse = components['schemas']['ShareExchangeResponse'];
+export type InvestmentCorrectionShareExchangeTerms = components['schemas']['InvestmentCorrectionShareExchangeTerms'];
+export type InvestmentLotOrigin = components['schemas']['InvestmentLotOrigin'];
 export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
 export type ReinvestedDividendRequest = components['schemas']['ReinvestedDividendRequest'];
@@ -393,6 +400,33 @@ export async function recordInvestmentSplit(
 ): Promise<InvestmentSplitResponse> {
   try {
     const { data, error, response } = await apiClient.POST('/api/v1/investments/splits', {
+      params: { header: { 'X-CSRF-Token': csrfToken } },
+      body: input
+    });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+// Share exchange (#177/#178): the whole holding of one instrument becomes
+// another at an exact ratio, carrying each lot's basis and original date.
+export async function previewShareExchange(input: ShareExchangeRequest): Promise<ShareExchangePreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/share-exchanges/preview', { body: input });
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function recordShareExchange(input: ShareExchangeRequest, csrfToken: string): Promise<ShareExchangeResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST('/api/v1/investments/share-exchanges', {
       params: { header: { 'X-CSRF-Token': csrfToken } },
       body: input
     });

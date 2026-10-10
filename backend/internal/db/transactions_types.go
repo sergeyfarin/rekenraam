@@ -87,7 +87,8 @@ type TransactionRecord struct {
 	ChangedByUserID           int64
 	ChangeReason              string
 	// SystemLabel names a journal the system posted without user text, such
-	// as "split_adjustment" (T-136); empty otherwise.
+	// as "split_adjustment" (T-136), or a share exchange's journal (#178);
+	// empty otherwise.
 	SystemLabel              string
 	TagIDs                   []int64
 	JournalEntries           []JournalEntryRecord

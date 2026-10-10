@@ -664,7 +664,19 @@ an exchange. It is an instrument version change with no position effect.
   (destination holding, new instrument, cost currency). Removing an exchanged acquisition is the named
   refusal that applies to every transferred acquisition.
 - **Correction.** Until #179 an exchange is not correctable. The generic
-  void path stays closed.
+  void path stays closed. The correction chain explains an effective exchange
+  (`effective_share_exchange`) without offering any action, and the
+  transaction detail says so.
+- **Reads (#178).** The lot list gives each lot opened by a transfer link an
+  `origin`: kind, source instrument and lot, ratio and original acquisition
+  date. `opened_on` stays the day the lot arrived in the holding. The plan
+  and the chain total units and carried basis per cost currency; one
+  unknown lot makes that currency's total unknown, as for a position, and
+  counts it. The chain reads each link's current, possibly revised, basis
+  from the effective links and each destination quantity from the
+  destination lot (validate-and-ship item 31). An exchange journal carries
+  the `share_exchange` system label, its register title when it has no
+  memo.
 - **Evidence.** The export bundle carries the destination instrument and
   ratio on `investment-transfer-facts.csv`. Self-check verifies, per link:
   - the source and destination effects exist;

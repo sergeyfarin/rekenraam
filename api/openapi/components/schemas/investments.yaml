@@ -1457,7 +1457,7 @@ ShareExchangeLink:
 ShareExchangePlan:
   type: object
   required: [ratio_numerator, ratio_denominator, links, source_quantity_value, source_quantity_scale,
-    destination_quantity_value, destination_quantity_scale]
+    destination_quantity_value, destination_quantity_scale, basis_totals]
   properties:
     ratio_numerator:
       type: integer
@@ -1479,6 +1479,69 @@ ShareExchangePlan:
       description: New units the journal moves into the destination holding.
     destination_quantity_scale:
       type: integer
+    basis_totals:
+      type: array
+      description: The units and basis carried in each cost currency, in link order (#178).
+      items:
+        $ref: "../schemas/investments.yaml#/ShareExchangeBasisTotal"
+
+ShareExchangeBasisTotal:
+  type: object
+  required: [cost_commodity_id, source_quantity_value, source_quantity_scale, destination_quantity_value,
+    destination_quantity_scale, basis_knowledge, carried_basis_value, carried_basis_scale, unknown_lots]
+  properties:
+    cost_commodity_id:
+      type: integer
+      format: int64
+    source_quantity_value:
+      type: string
+    source_quantity_scale:
+      type: integer
+    destination_quantity_value:
+      type: string
+    destination_quantity_scale:
+      type: integer
+    basis_knowledge:
+      type: string
+      enum: [known, unknown]
+      description: Unknown when any lot in this currency has unknown basis, as for a position.
+    carried_basis_value:
+      type: [string, "null"]
+      description: Exact sum of the carried basis; null when unknown.
+    carried_basis_scale:
+      type: [integer, "null"]
+    unknown_lots:
+      type: integer
+      description: Lots in this currency whose basis is unknown.
+
+InvestmentCorrectionShareExchangeTerms:
+  type: object
+  required: [effective_on, holding_account_id, destination_holding_account_id, commodity_id,
+    destination_commodity_id, source_evidence, plan]
+  properties:
+    effective_on:
+      type: string
+      format: date
+    holding_account_id:
+      type: integer
+      format: int64
+    destination_holding_account_id:
+      type: integer
+      format: int64
+      description: Equal to holding_account_id when the new units stayed in the same holding.
+    commodity_id:
+      type: integer
+      format: int64
+      description: The old instrument.
+    destination_commodity_id:
+      type: integer
+      format: int64
+      description: The new instrument.
+    source_evidence:
+      type: object
+      additionalProperties: true
+    plan:
+      $ref: "../schemas/investments.yaml#/ShareExchangePlan"
 
 ShareExchangePreviewResponse:
   type: object
@@ -2000,6 +2063,12 @@ InvestmentCorrectionChainResponse:
       description: Whether the effective posted reinvested dividend can be reversed or replaced (T-115). Dependent replay may still refuse the command.
     effective_reinvestment:
       $ref: '#/InvestmentCorrectionReinvestmentTerms'
+    effective_share_exchange:
+      $ref: '#/InvestmentCorrectionShareExchangeTerms'
+      description: >-
+        Present when the effective operation is a share exchange (#178): its
+        instruments, holdings, ratio and each link's current carried basis.
+        It is not yet correctable; reversal and replacement arrive with #179.
     operations:
       type: array
       minItems: 1
@@ -2475,6 +2544,49 @@ InvestmentLotResponse:
     updated_at:
       type: string
       format: date-time
+    origin:
+      $ref: "#/InvestmentLotOrigin"
+
+InvestmentLotOrigin:
+  type: object
+  description: >-
+    Present on the lot list for a lot opened by a transfer or share exchange
+    (#178): where its units came from and their original acquisition date.
+    opened_on stays the date the lot arrived in this holding.
+  required: [operation_id, transfer_kind, source_commodity_id, source_account_id, source_lot_id,
+    ratio_numerator, ratio_denominator, original_date_knowledge, original_acquired_on]
+  properties:
+    operation_id:
+      type: integer
+      format: int64
+    transfer_kind:
+      type: string
+      enum: [external_in, internal, exchange]
+    source_commodity_id:
+      type: integer
+      format: int64
+      description: For an exchange, the old instrument; otherwise this lot's own.
+    source_account_id:
+      type: [integer, "null"]
+      format: int64
+      description: Null for an external transfer in.
+    source_lot_id:
+      type: [integer, "null"]
+      format: int64
+    ratio_numerator:
+      type: [integer, "null"]
+      format: int64
+      description: New units per ratio_denominator old units; set for an exchange only.
+    ratio_denominator:
+      type: [integer, "null"]
+      format: int64
+    original_date_knowledge:
+      type: string
+      enum: [known, unknown]
+    original_acquired_on:
+      type: [string, "null"]
+      format: date
+      description: Null when the original acquisition date is unknown.
 
 InvestmentLotsResponse:
   type: object

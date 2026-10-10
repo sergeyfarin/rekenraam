@@ -2,7 +2,7 @@
 // or description (built-in values are never English text), only a stable
 // system_label code, which the caller localizes (T-136).
 
-export type SystemLabel = 'split_adjustment' | 'transfer_bridge';
+export type SystemLabel = 'split_adjustment' | 'transfer_bridge' | 'share_exchange';
 
 export interface TitledTransaction {
   payee_name?: string | null;

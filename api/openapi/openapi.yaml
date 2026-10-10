@@ -1190,6 +1190,12 @@ components:
       $ref: "./components/schemas/investments.yaml#/ShareExchangeLink"
     ShareExchangePlan:
       $ref: "./components/schemas/investments.yaml#/ShareExchangePlan"
+    ShareExchangeBasisTotal:
+      $ref: "./components/schemas/investments.yaml#/ShareExchangeBasisTotal"
+    InvestmentCorrectionShareExchangeTerms:
+      $ref: "./components/schemas/investments.yaml#/InvestmentCorrectionShareExchangeTerms"
+    InvestmentLotOrigin:
+      $ref: "./components/schemas/investments.yaml#/InvestmentLotOrigin"
     ShareExchangePreviewResponse:
       $ref: "./components/schemas/investments.yaml#/ShareExchangePreviewResponse"
     ShareExchangeResponse:

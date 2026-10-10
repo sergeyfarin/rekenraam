@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -56,6 +57,38 @@ func TestShareExchangeAPIPreviewCommitAndNamedRefusals(t *testing.T) {
 	require.Len(t, exchanged.Plan.Links, 1)
 	require.NotNil(t, exchanged.Plan.Links[0].DestinationLotID)
 	assert.Equal(t, *preview.Plan.Links[0].CarriedBasisValue, *exchanged.Plan.Links[0].CarriedBasisValue)
+	require.Len(t, exchanged.Plan.BasisTotals, 1)
+	assert.Equal(t, "known", exchanged.Plan.BasisTotals[0].BasisKnowledge)
+	assert.Equal(t, *exchanged.Plan.Links[0].CarriedBasisValue, *exchanged.Plan.BasisTotals[0].CarriedBasisValue)
+
+	// #178: the new lot names the exchange and keeps the original date; the
+	// chain explains the exchange; the journal carries its title label.
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, fmt.Sprintf(
+		"/api/v1/investments/lots?account_id=%d&commodity_id=%d", successorHolding.ID, successor.CommodityID), nil, http.StatusOK)
+	var lots investmentLotsResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&lots))
+	require.Len(t, lots.Lots, 1)
+	origin := lots.Lots[0].Origin
+	require.NotNil(t, origin)
+	assert.Equal(t, "exchange", origin.TransferKind)
+	assert.Equal(t, old.CommodityID, origin.SourceCommodityID)
+	assert.Equal(t, holding.ID, *origin.SourceAccountID)
+	assert.Equal(t, [2]int64{3, 2}, [2]int64{*origin.RatioNumerator, *origin.RatioDenominator})
+	assert.Equal(t, "2026-01-01", *origin.OriginalAcquiredOn)
+	assert.Equal(t, "2026-02-01", lots.Lots[0].OpenedOn)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, fmt.Sprintf(
+		"/api/v1/investments/transactions/%d/correction-chain", exchanged.Transaction.ID), nil, http.StatusOK)
+	var chain investmentCorrectionChainResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&chain))
+	require.NotNil(t, chain.EffectiveShareExchange)
+	assert.Equal(t, successorHolding.ID, chain.EffectiveShareExchange.DestinationHoldingAccountID)
+	assert.Equal(t, successor.CommodityID, chain.EffectiveShareExchange.DestinationCommodityID)
+	assert.JSONEq(t, `{"notice":"merger"}`, string(chain.EffectiveShareExchange.SourceEvidence))
+	assert.Equal(t, exchanged.Plan, chain.EffectiveShareExchange.Plan)
+	assert.False(t, chain.CanReverseTransfer || chain.CanReplaceTransfer, "not yet correctable (#179)")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, fmt.Sprintf(
+		"/api/v1/transactions/%d", exchanged.Transaction.ID), nil, http.StatusOK)
+	assert.Contains(t, res.Body.String(), `"system_label":"share_exchange"`)
 
 	// Nothing of the old instrument is left to exchange again.
 	request.EffectiveOn = "2026-03-01"

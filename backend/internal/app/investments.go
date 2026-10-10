@@ -609,6 +609,24 @@ type InvestmentLot struct {
 	// PositionSide is short for a lot of borrowed units, whose basis amounts
 	// are its opening proceeds (#173).
 	PositionSide string
+	// Origin is set on the lot list for a lot opened by a transfer or share
+	// exchange (#178).
+	Origin *InvestmentLotOrigin
+}
+
+// InvestmentLotOrigin is the transfer link that opened a lot. Ratio and the
+// source instrument describe a share exchange; OriginalAcquiredOn is empty
+// when the original date is unknown.
+type InvestmentLotOrigin struct {
+	OperationID           int64
+	TransferKind          string
+	SourceCommodityID     int64
+	SourceAccountID       *int64
+	SourceLotID           *int64
+	RatioNumerator        *int64
+	RatioDenominator      *int64
+	OriginalDateKnowledge string
+	OriginalAcquiredOn    string
 }
 
 type InvestmentPosition struct {
@@ -2666,6 +2684,19 @@ func toInvestmentLot(record db.InvestmentLotRecord) InvestmentLot {
 		CreatedAt:               record.CreatedAt,
 		UpdatedAt:               record.UpdatedAt,
 		PositionSide:            record.PositionSide,
+		Origin:                  toInvestmentLotOrigin(record.Origin),
+	}
+}
+
+func toInvestmentLotOrigin(record *db.InvestmentLotOriginRecord) *InvestmentLotOrigin {
+	if record == nil {
+		return nil
+	}
+	return &InvestmentLotOrigin{
+		OperationID: record.OperationID, TransferKind: record.TransferKind, SourceCommodityID: record.SourceCommodityID,
+		SourceAccountID: nullableSQLInt64Ptr(record.SourceAccountID), SourceLotID: nullableSQLInt64Ptr(record.SourceLotID),
+		RatioNumerator: nullableSQLInt64Ptr(record.RatioNumerator), RatioDenominator: nullableSQLInt64Ptr(record.RatioDenominator),
+		OriginalDateKnowledge: record.OriginalDateKnowledge, OriginalAcquiredOn: record.OriginalAcquiredOn.String,
 	}
 }
 

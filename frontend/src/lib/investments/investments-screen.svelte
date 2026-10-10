@@ -11,6 +11,7 @@
     investmentLotsQueryOptions,
     investmentInstrumentsQueryOptions,
     investmentEventSuggestionsQueryOptions,
+    type InvestmentLotOrigin,
     type InvestmentPositionResponse
   } from '#lib/api/investments.ts';
   import BuyForm from '#lib/investments/buy-form.svelte';
@@ -21,6 +22,7 @@
   import ExternalTransferOutForm from '#lib/investments/external-transfer-out-form.svelte';
   import CapitalReturnForm from '#lib/investments/capital-return-form.svelte';
   import SplitForm from '#lib/investments/split-form.svelte';
+  import ShareExchangeForm from '#lib/investments/share-exchange-form.svelte';
   import ShortTradeForm from '#lib/investments/short-trade-form.svelte';
   import PositionSideBadge from '#lib/investments/position-side-badge.svelte';
   import GainsReport from '#lib/investments/gains-report.svelte';
@@ -76,6 +78,18 @@
     selectedPosition = null;
   }
 
+  // Where a transferred or exchanged lot came from (#178). opened_on is the
+  // day it arrived here; the original acquisition date travels with it.
+  function lotOriginLine(origin: InvestmentLotOrigin, openedOn: string): string {
+    if (origin.transfer_kind === 'exchange' && origin.ratio_numerator !== null && origin.ratio_denominator !== null) {
+      return m.investments_lot_exchanged_from({
+        instrument: instrumentName(origin.source_commodity_id), ratioNew: String(origin.ratio_numerator),
+        ratioOld: String(origin.ratio_denominator), date: formatDate(openedOn)
+      });
+    }
+    return m.investments_lot_transferred_in({ date: formatDate(openedOn) });
+  }
+
   function lotStatusLabel(status: string): string {
     switch (status) {
       case 'open':
@@ -105,7 +119,7 @@
   }
 
   // Trade form modal
-  type TradeModal = 'buy' | 'sell' | 'short-open' | 'short-cover' | 'dividend' | 'reinvested' | 'external-transfer-in' | 'external-transfer-out' | 'internal-transfer' | 'split' | 'capital-return' | null;
+  type TradeModal = 'buy' | 'sell' | 'short-open' | 'short-cover' | 'dividend' | 'reinvested' | 'external-transfer-in' | 'external-transfer-out' | 'internal-transfer' | 'split' | 'share-exchange' | 'capital-return' | null;
   let activeModal = $state<TradeModal>(null);
 
   function openModal(modal: TradeModal) {
@@ -235,6 +249,13 @@
         class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       >
         {m.investments_record_split()}
+      </button>
+      <button
+        type="button"
+        onclick={() => openModal('share-exchange')}
+        class="inline-flex items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm font-semibold text-foreground transition hover:bg-control-hover"
+      >
+        {m.investments_record_share_exchange()}
       </button>
       <button
         type="button"
@@ -379,7 +400,16 @@
                           <span class="text-right font-mono text-muted">
                             {formatScaledValue(lot.quantity_value, lot.quantity_scale, locale)}
                           </span>
+                          {#if lot.origin}
+                            <span class="text-muted">{m.investments_lot_original_acquired()}</span>
+                            <span class="text-right text-foreground">
+                              {lot.origin.original_acquired_on ? formatDate(lot.origin.original_acquired_on) : m.investments_lot_original_acquired_unknown()}
+                            </span>
+                          {/if}
                         </div>
+                        {#if lot.origin}
+                          <p class="mt-2 text-xs text-muted">{lotOriginLine(lot.origin, lot.opened_on)}</p>
+                        {/if}
                       </div>
                     {/each}
                   </div>
@@ -418,7 +448,7 @@
     class="fixed inset-x-4 bottom-0 z-50 max-h-[90vh] overflow-y-auto rounded-t-(--radius-panel) border border-border bg-surface shadow-(--shadow-panel) sm:inset-x-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-(--radius-panel)"
     role="dialog"
     aria-modal="true"
-    aria-labelledby={activeModal === 'short-open' ? 'short-open-title' : activeModal === 'short-cover' ? 'short-cover-title' : activeModal === 'external-transfer-in' ? 'external-transfer-in-title' : activeModal === 'internal-transfer' ? 'internal-transfer-title' : activeModal === 'external-transfer-out' ? 'external-transfer-out-title' : activeModal === 'split' ? 'split-title' : activeModal === 'capital-return' ? 'capital-return-title' : undefined}
+    aria-labelledby={activeModal === 'short-open' ? 'short-open-title' : activeModal === 'short-cover' ? 'short-cover-title' : activeModal === 'external-transfer-in' ? 'external-transfer-in-title' : activeModal === 'internal-transfer' ? 'internal-transfer-title' : activeModal === 'external-transfer-out' ? 'external-transfer-out-title' : activeModal === 'split' ? 'split-title' : activeModal === 'share-exchange' ? 'share-exchange-title' : activeModal === 'capital-return' ? 'capital-return-title' : undefined}
   >
     <div class="p-6">
       {#if activeModal === 'buy'}
@@ -441,6 +471,8 @@
         <ExternalTransferOutForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {:else if activeModal === 'split'}
         <SplitForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
+      {:else if activeModal === 'share-exchange'}
+        <ShareExchangeForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {:else if activeModal === 'capital-return'}
         <CapitalReturnForm {csrfToken} onSaved={onTradeSaved} onCancel={closeModal} />
       {/if}

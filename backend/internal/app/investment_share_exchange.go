@@ -67,7 +67,8 @@ type ShareExchangeLink struct {
 }
 
 // ShareExchangePlan is the stored ratio, every link and the exact totals the
-// journal moves out of the old and into the new instrument.
+// journal moves out of the old and into the new instrument. BasisTotals
+// carries the basis per cost currency (#178).
 type ShareExchangePlan struct {
 	RatioNumerator           int64
 	RatioDenominator         int64
@@ -76,6 +77,22 @@ type ShareExchangePlan struct {
 	SourceQuantityScale      int
 	DestinationQuantityValue exact.Coefficient
 	DestinationQuantityScale int
+	BasisTotals              []ShareExchangeBasisTotal
+}
+
+// ShareExchangeBasisTotal is the units and basis an exchange carries in one
+// cost currency. Any unknown lot leaves the currency's basis unknown, as a
+// position's basis is; UnknownLots counts them.
+type ShareExchangeBasisTotal struct {
+	CostCommodityID          int64
+	SourceQuantityValue      exact.Coefficient
+	SourceQuantityScale      int
+	DestinationQuantityValue exact.Coefficient
+	DestinationQuantityScale int
+	BasisKnowledge           string
+	CarriedBasisValue        exact.Coefficient
+	CarriedBasisScale        int
+	UnknownLots              int
 }
 
 type ShareExchangePreview struct {
@@ -204,7 +221,11 @@ func (s *InvestmentService) PreviewShareExchange(ctx context.Context, input Shar
 	if err != nil {
 		return ShareExchangePreview{}, err
 	}
-	return ShareExchangePreview{Plan: toShareExchangePlan(exchange, plan), Impact: impact}, nil
+	out, err := toShareExchangePlan(exchange, plan)
+	if err != nil {
+		return ShareExchangePreview{}, err
+	}
+	return ShareExchangePreview{Plan: out, Impact: impact}, nil
 }
 
 func (s *InvestmentService) PreviewShareExchangeReconciliationImpact(ctx context.Context, input ShareExchangeInput) (ReconciliationImpact, error) {
@@ -227,18 +248,81 @@ func (s *InvestmentService) ShareExchange(ctx context.Context, input ShareExchan
 	if err != nil {
 		return ShareExchangeResult{}, mapShareExchangeError(err)
 	}
-	return ShareExchangeResult{Transaction: toTransaction(transaction), Plan: toShareExchangePlan(exchange, plan)}, nil
+	out, err := toShareExchangePlan(exchange, plan)
+	if err != nil {
+		return ShareExchangeResult{}, err
+	}
+	return ShareExchangeResult{Transaction: toTransaction(transaction), Plan: out}, nil
 }
 
-func toShareExchangePlan(exchange db.CreateShareExchangeParams, plan db.ShareExchangePlan) ShareExchangePlan {
-	out := ShareExchangePlan{RatioNumerator: exchange.RatioNumerator, RatioDenominator: exchange.RatioDenominator,
+func toShareExchangePlan(exchange db.CreateShareExchangeParams, plan db.ShareExchangePlan) (ShareExchangePlan, error) {
+	return shareExchangePlanOf(exchange.RatioNumerator, exchange.RatioDenominator, plan)
+}
+
+func shareExchangePlanOf(numerator, denominator int64, plan db.ShareExchangePlan) (ShareExchangePlan, error) {
+	out := ShareExchangePlan{RatioNumerator: numerator, RatioDenominator: denominator,
 		SourceQuantityValue: plan.SourceQuantityValue, SourceQuantityScale: plan.SourceQuantityScale,
 		DestinationQuantityValue: plan.DestinationQuantityValue, DestinationQuantityScale: plan.DestinationQuantityScale,
 		Links: make([]ShareExchangeLink, 0, len(plan.Links))}
 	for _, link := range plan.Links {
 		out.Links = append(out.Links, ShareExchangeLink(link))
 	}
-	return out
+	totals, err := shareExchangeBasisTotals(out.Links)
+	if err != nil {
+		return ShareExchangePlan{}, err
+	}
+	out.BasisTotals = totals
+	return out, nil
+}
+
+// shareExchangeBasisTotals sums the links per cost currency, in first-seen
+// order, exactly.
+func shareExchangeBasisTotals(links []ShareExchangeLink) ([]ShareExchangeBasisTotal, error) {
+	type sums struct {
+		source, destination, basis *exact.ScaledInt
+		unknown                    int
+	}
+	order := []int64{}
+	byCurrency := map[int64]*sums{}
+	for _, link := range links {
+		current, ok := byCurrency[link.CostCommodityID]
+		if !ok {
+			current = &sums{source: exact.NewScaledInt(), destination: exact.NewScaledInt(), basis: exact.NewScaledInt()}
+			byCurrency[link.CostCommodityID] = current
+			order = append(order, link.CostCommodityID)
+		}
+		current.source.AddCoefficient(link.SourceQuantityValue, link.SourceQuantityScale)
+		current.destination.AddCoefficient(link.DestinationQuantityValue, link.DestinationQuantityScale)
+		if link.BasisKnowledge == db.InvestmentBasisUnknown {
+			current.unknown++
+			continue
+		}
+		current.basis.AddInt64(link.CarriedBasisValue, link.CarriedBasisScale)
+	}
+	totals := make([]ShareExchangeBasisTotal, 0, len(order))
+	for _, currencyID := range order {
+		current := byCurrency[currencyID]
+		total := ShareExchangeBasisTotal{CostCommodityID: currencyID, UnknownLots: current.unknown,
+			SourceQuantityScale: current.source.Scale(), DestinationQuantityScale: current.destination.Scale(),
+			BasisKnowledge: db.InvestmentBasisKnown}
+		var err error
+		if total.SourceQuantityValue, err = current.source.Coefficient(); err != nil {
+			return nil, err
+		}
+		if total.DestinationQuantityValue, err = current.destination.Coefficient(); err != nil {
+			return nil, err
+		}
+		if current.unknown > 0 {
+			total.BasisKnowledge = db.InvestmentBasisUnknown
+		} else {
+			if total.CarriedBasisValue, err = current.basis.Coefficient(); err != nil {
+				return nil, err
+			}
+			total.CarriedBasisScale = current.basis.Scale()
+		}
+		totals = append(totals, total)
+	}
+	return totals, nil
 }
 
 func mapShareExchangeError(err error) error {

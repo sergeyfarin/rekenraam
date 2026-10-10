@@ -23657,10 +23657,10 @@ export interface components {
             deleted_at?: string;
             change_reason: string;
             /**
-             * @description Stable code for a journal the system posted without user text (T-136); the client localizes it. Absent for ordinary journals.
+             * @description Stable code for a journal the system posted without user text (T-136), or for a share exchange's journal (#178); the client localizes it and uses it as the title when the journal has no memo. Absent for ordinary journals.
              * @enum {string}
              */
-            system_label?: "split_adjustment" | "transfer_bridge";
+            system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange";
             invalidated_checkpoint_ids: number[];
         };
         TransactionsResponse: {
@@ -23713,10 +23713,10 @@ export interface components {
             updated_at: string;
             change_reason: string;
             /**
-             * @description Stable code for a journal the system posted without user text (T-136); the client localizes it. Absent for ordinary journals.
+             * @description Stable code for a journal the system posted without user text (T-136), or for a share exchange's journal (#178); the client localizes it and uses it as the title when the journal has no memo. Absent for ordinary journals.
              * @enum {string}
              */
-            system_label?: "split_adjustment" | "transfer_bridge";
+            system_label?: "split_adjustment" | "transfer_bridge" | "share_exchange";
             correction_chain?: components["schemas"]["RegisterCorrectionChain"];
         };
         /** @description Present when the row's transaction belongs to a correction chain of more than one transaction (T-120). The original, reversal and replacement stay separate posted rows, so the running balance counts each posting once; every row carries the whole chain, so members on other register pages are still named. */
@@ -25346,6 +25346,84 @@ export interface components {
             /** @description New units the journal moves into the destination holding. */
             destination_quantity_value: string;
             destination_quantity_scale: number;
+            /** @description The units and basis carried in each cost currency, in link order (#178). */
+            basis_totals: components["schemas"]["ShareExchangeBasisTotal"][];
+        };
+        ShareExchangeBasisTotal: {
+            /** Format: int64 */
+            cost_commodity_id: number;
+            source_quantity_value: string;
+            source_quantity_scale: number;
+            destination_quantity_value: string;
+            destination_quantity_scale: number;
+            /**
+             * @description Unknown when any lot in this currency has unknown basis, as for a position.
+             * @enum {string}
+             */
+            basis_knowledge: "known" | "unknown";
+            /** @description Exact sum of the carried basis; null when unknown. */
+            carried_basis_value: string | null;
+            carried_basis_scale: number | null;
+            /** @description Lots in this currency whose basis is unknown. */
+            unknown_lots: number;
+        };
+        InvestmentCorrectionShareExchangeTerms: {
+            /** Format: date */
+            effective_on: string;
+            /** Format: int64 */
+            holding_account_id: number;
+            /**
+             * Format: int64
+             * @description Equal to holding_account_id when the new units stayed in the same holding.
+             */
+            destination_holding_account_id: number;
+            /**
+             * Format: int64
+             * @description The old instrument.
+             */
+            commodity_id: number;
+            /**
+             * Format: int64
+             * @description The new instrument.
+             */
+            destination_commodity_id: number;
+            source_evidence: {
+                [key: string]: unknown;
+            };
+            plan: components["schemas"]["ShareExchangePlan"];
+        };
+        /** @description Present on the lot list for a lot opened by a transfer or share exchange (#178): where its units came from and their original acquisition date. opened_on stays the date the lot arrived in this holding. */
+        InvestmentLotOrigin: {
+            /** Format: int64 */
+            operation_id: number;
+            /** @enum {string} */
+            transfer_kind: "external_in" | "internal" | "exchange";
+            /**
+             * Format: int64
+             * @description For an exchange, the old instrument; otherwise this lot's own.
+             */
+            source_commodity_id: number;
+            /**
+             * Format: int64
+             * @description Null for an external transfer in.
+             */
+            source_account_id: number | null;
+            /** Format: int64 */
+            source_lot_id: number | null;
+            /**
+             * Format: int64
+             * @description New units per ratio_denominator old units; set for an exchange only.
+             */
+            ratio_numerator: number | null;
+            /** Format: int64 */
+            ratio_denominator: number | null;
+            /** @enum {string} */
+            original_date_knowledge: "known" | "unknown";
+            /**
+             * Format: date
+             * @description Null when the original acquisition date is unknown.
+             */
+            original_acquired_on: string | null;
         };
         ShareExchangePreviewResponse: {
             plan: components["schemas"]["ShareExchangePlan"];
@@ -25714,6 +25792,8 @@ export interface components {
             /** @description Whether the effective posted reinvested dividend can be reversed or replaced (T-115). Dependent replay may still refuse the command. */
             can_correct_reinvested_dividend: boolean;
             effective_reinvestment?: components["schemas"]["InvestmentCorrectionReinvestmentTerms"];
+            /** @description Present when the effective operation is a share exchange (#178): its instruments, holdings, ratio and each link's current carried basis. It is not yet correctable; reversal and replacement arrive with #179. */
+            effective_share_exchange?: components["schemas"]["InvestmentCorrectionShareExchangeTerms"];
             operations: components["schemas"]["InvestmentCorrectionNodeResponse"][];
         };
         /** @description Immutable buy or sale source facts for pre-filling a full replacement. The write command rechecks eligibility. */
@@ -25984,6 +26064,7 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            origin?: components["schemas"]["InvestmentLotOrigin"];
         };
         InvestmentLotsResponse: {
             lots: components["schemas"]["InvestmentLotResponse"][];

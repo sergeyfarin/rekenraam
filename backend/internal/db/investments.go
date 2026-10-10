@@ -217,6 +217,24 @@ type InvestmentLotRecord struct {
 	UpdatedAt               string
 	BasisKnowledge          string
 	PositionSide            string
+	// Origin is set by ListLots for a lot opened by a transfer or share
+	// exchange link (#178); other reads leave it nil.
+	Origin *InvestmentLotOriginRecord
+}
+
+// InvestmentLotOriginRecord is the effective transfer link that opened a lot:
+// where its units came from and their original acquisition date. Ratio is set
+// for a share exchange, whose source lot held another instrument.
+type InvestmentLotOriginRecord struct {
+	OperationID           int64
+	TransferKind          string
+	SourceCommodityID     int64
+	SourceAccountID       sql.NullInt64
+	SourceLotID           sql.NullInt64
+	RatioNumerator        sql.NullInt64
+	RatioDenominator      sql.NullInt64
+	OriginalDateKnowledge string
+	OriginalAcquiredOn    sql.NullString
 }
 
 type CreateInvestmentLotParams struct {
@@ -2211,7 +2229,57 @@ func (r *InvestmentRepository) ListLots(ctx context.Context, bookID int64, accou
 		return nil, fmt.Errorf("list investment lots: %w", err)
 	}
 	defer rows.Close()
-	return scanInvestmentLots(rows)
+	lots, err := scanInvestmentLots(rows)
+	if err != nil {
+		return nil, err
+	}
+	origins, err := r.lotOrigins(ctx, where, args)
+	if err != nil {
+		return nil, err
+	}
+	for index := range lots {
+		if origin, ok := origins[lots[index].ID]; ok {
+			lots[index].Origin = &origin
+		}
+	}
+	return lots, nil
+}
+
+// lotOrigins reads, in one query, the effective transfer link that opened
+// each lot matching the list filter (#178). A destination lot has at most one
+// link (UNIQUE destination_lot_id).
+func (r *InvestmentRepository) lotOrigins(ctx context.Context, where []string, args []any) (map[int64]InvestmentLotOriginRecord, error) {
+	qualified := make([]string, len(where))
+	for index, condition := range where {
+		qualified[index] = "lot." + condition
+	}
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT link.destination_lot_id, fact.operation_id, fact.transfer_kind, fact.commodity_id,
+			fact.source_account_id, link.source_lot_id, fact.ratio_numerator, fact.ratio_denominator,
+			link.original_date_knowledge, link.original_acquired_on
+		FROM effective_investment_transfer_links link
+		JOIN investment_transfer_facts fact ON fact.operation_id = link.operation_id
+		JOIN investment_lots lot ON lot.id = link.destination_lot_id
+		WHERE `+strings.Join(qualified, " AND "), args...)
+	if err != nil {
+		return nil, fmt.Errorf("list investment lot origins: %w", err)
+	}
+	defer rows.Close()
+	origins := map[int64]InvestmentLotOriginRecord{}
+	for rows.Next() {
+		var lotID int64
+		var origin InvestmentLotOriginRecord
+		if err := rows.Scan(&lotID, &origin.OperationID, &origin.TransferKind, &origin.SourceCommodityID,
+			&origin.SourceAccountID, &origin.SourceLotID, &origin.RatioNumerator, &origin.RatioDenominator,
+			&origin.OriginalDateKnowledge, &origin.OriginalAcquiredOn); err != nil {
+			return nil, fmt.Errorf("scan investment lot origin: %w", err)
+		}
+		origins[lotID] = origin
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate investment lot origins: %w", err)
+	}
+	return origins, nil
 }
 
 func (r *InvestmentRepository) Positions(ctx context.Context, bookID int64) ([]InvestmentPositionRecord, error) {

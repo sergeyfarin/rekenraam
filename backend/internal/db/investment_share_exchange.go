@@ -382,3 +382,78 @@ func requireShareExchangeCompleteTx(ctx context.Context, tx *sql.Tx, bookID, acc
 	}
 	return nil
 }
+
+// ShareExchangeTerms are a committed exchange's fact and its effective links
+// (#178): replay may since have revised a link's carried basis.
+type ShareExchangeTerms struct {
+	AccountID              int64
+	DestinationAccountID   int64
+	CommodityID            int64
+	DestinationCommodityID int64
+	EffectiveOn            string
+	RatioNumerator         int64
+	RatioDenominator       int64
+	SourceEvidenceJSON     string
+	Plan                   ShareExchangePlan
+}
+
+// ShareExchangeTermsByOperation reads an exchange for the transaction detail.
+// Each destination quantity is the destination lot's opening quantity, which
+// is the link quantity times the ratio (validate-and-ship item 31).
+func (r *InvestmentRepository) ShareExchangeTermsByOperation(ctx context.Context, bookID, operationID int64) (ShareExchangeTerms, error) {
+	var terms ShareExchangeTerms
+	err := r.database.QueryRowContext(ctx, `SELECT source_account_id, destination_account_id, commodity_id,
+		destination_commodity_id, effective_on, ratio_numerator, ratio_denominator, source_evidence_json
+		FROM investment_transfer_facts WHERE book_id = ? AND operation_id = ? AND transfer_kind = 'exchange'`,
+		bookID, operationID).Scan(&terms.AccountID, &terms.DestinationAccountID, &terms.CommodityID,
+		&terms.DestinationCommodityID, &terms.EffectiveOn, &terms.RatioNumerator, &terms.RatioDenominator,
+		&terms.SourceEvidenceJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ShareExchangeTerms{}, ErrNotFound
+	}
+	if err != nil {
+		return ShareExchangeTerms{}, fmt.Errorf("read share exchange terms: %w", err)
+	}
+	rows, err := r.database.QueryContext(ctx, `SELECT link.source_lot_id, link.destination_lot_id, link.cost_commodity_id,
+		link.quantity_value, link.quantity_scale, lot.quantity_value, lot.quantity_scale,
+		link.basis_knowledge, link.carried_basis_value, link.carried_basis_scale,
+		link.original_date_knowledge, COALESCE(link.original_acquired_on, '')
+		FROM effective_investment_transfer_links link
+		JOIN investment_lots lot ON lot.id = link.destination_lot_id
+		WHERE link.operation_id = ? ORDER BY link.link_seq`, operationID)
+	if err != nil {
+		return ShareExchangeTerms{}, fmt.Errorf("read share exchange links: %w", err)
+	}
+	defer rows.Close()
+	sourceTotal, destinationTotal := exact.NewScaledInt(), exact.NewScaledInt()
+	for rows.Next() {
+		var link ShareExchangeLink
+		var basis, basisScale sql.NullInt64
+		if err := rows.Scan(&link.SourceLotID, &link.DestinationLotID, &link.CostCommodityID,
+			&link.SourceQuantityValue, &link.SourceQuantityScale, &link.DestinationQuantityValue, &link.DestinationQuantityScale,
+			&link.BasisKnowledge, &basis, &basisScale, &link.OriginalDateKnowledge, &link.OriginalAcquiredOn); err != nil {
+			return ShareExchangeTerms{}, fmt.Errorf("scan share exchange link: %w", err)
+		}
+		link.BasisKnowledge = normalizedBasisKnowledge(link.BasisKnowledge)
+		if link.BasisKnowledge == InvestmentBasisKnown {
+			if !basis.Valid || !basisScale.Valid {
+				return ShareExchangeTerms{}, fmt.Errorf("share exchange link of lot %d has a known basis without an amount", link.SourceLotID)
+			}
+			link.CarriedBasisValue, link.CarriedBasisScale = basis.Int64, int(basisScale.Int64)
+		}
+		sourceTotal.AddCoefficient(link.SourceQuantityValue, link.SourceQuantityScale)
+		destinationTotal.AddCoefficient(link.DestinationQuantityValue, link.DestinationQuantityScale)
+		terms.Plan.Links = append(terms.Plan.Links, link)
+	}
+	if err := rows.Err(); err != nil {
+		return ShareExchangeTerms{}, fmt.Errorf("read share exchange links: %w", err)
+	}
+	if terms.Plan.SourceQuantityValue, err = sourceTotal.Coefficient(); err != nil {
+		return ShareExchangeTerms{}, err
+	}
+	if terms.Plan.DestinationQuantityValue, err = destinationTotal.Coefficient(); err != nil {
+		return ShareExchangeTerms{}, err
+	}
+	terms.Plan.SourceQuantityScale, terms.Plan.DestinationQuantityScale = sourceTotal.Scale(), destinationTotal.Scale()
+	return terms, nil
+}

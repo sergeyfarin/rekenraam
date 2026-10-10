@@ -336,7 +336,10 @@ type investmentCorrectionChainResponse struct {
 	BasisResolutions          []investmentBasisResolutionHistoryEntry   `json:"basis_resolutions"`
 	EffectiveTransfer         *investmentCorrectionTransferTerms        `json:"effective_transfer,omitempty"`
 	EffectiveReinvestment     *investmentCorrectionReinvestTerms        `json:"effective_reinvestment,omitempty"`
-	Operations                []investmentCorrectionNodeResponse        `json:"operations"`
+	// EffectiveShareExchange explains an effective exchange; it is not yet
+	// correctable (#179).
+	EffectiveShareExchange *investmentCorrectionShareExchangeTerms `json:"effective_share_exchange,omitempty"`
+	Operations             []investmentCorrectionNodeResponse      `json:"operations"`
 }
 
 type investmentTradeCorrectionChargeResponse struct {
@@ -600,6 +603,20 @@ type investmentLotResponse struct {
 	CreatedAt               string            `json:"created_at"`
 	UpdatedAt               string            `json:"updated_at"`
 	PositionSide            string            `json:"position_side"`
+	// Origin is present on the lot list only (#178).
+	Origin *investmentLotOriginResponse `json:"origin,omitempty"`
+}
+
+type investmentLotOriginResponse struct {
+	OperationID           int64   `json:"operation_id"`
+	TransferKind          string  `json:"transfer_kind"`
+	SourceCommodityID     int64   `json:"source_commodity_id"`
+	SourceAccountID       *int64  `json:"source_account_id"`
+	SourceLotID           *int64  `json:"source_lot_id"`
+	RatioNumerator        *int64  `json:"ratio_numerator"`
+	RatioDenominator      *int64  `json:"ratio_denominator"`
+	OriginalDateKnowledge string  `json:"original_date_knowledge"`
+	OriginalAcquiredOn    *string `json:"original_acquired_on"`
 }
 
 type investmentLotsResponse struct {
@@ -1176,6 +1193,7 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanCorrectBasisResolution: chain.CanCorrectBasisResolution,
 			EffectiveBasisResolution:  toInvestmentCorrectionBasisResolutionTerms(chain.EffectiveBasisResolution),
 			BasisResolutions:          toBasisResolutionHistory(chain.BasisResolutions),
+			EffectiveShareExchange:    toInvestmentCorrectionShareExchangeTerms(chain.EffectiveShareExchange),
 			Operations:                operations,
 		})
 	}
@@ -2187,7 +2205,22 @@ func toInvestmentLotResponse(lot app.InvestmentLot) investmentLotResponse {
 	if lot.OpeningBasisKnowledge == "" {
 		lot.OpeningBasisKnowledge = "known"
 	}
-	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: projectedBasisValue(lot.CostBasisValue, lot.OpeningBasisKnowledge), CostBasisScale: projectedBasisScale(lot.CostBasisScale, lot.OpeningBasisKnowledge), OpeningBasisKnowledge: lot.OpeningBasisKnowledge, RemainingCostBasisValue: projectedBasisValue(lot.RemainingCostBasisValue, lot.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(lot.RemainingCostBasisScale, lot.BasisKnowledge), BasisKnowledge: lot.BasisKnowledge, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt, PositionSide: lot.PositionSide}
+	return investmentLotResponse{ID: lot.ID, BookID: lot.BookID, AccountID: lot.AccountID, CommodityID: lot.CommodityID, OpenedOn: lot.OpenedOn, SourceTransactionID: lot.SourceTransactionID, Status: lot.Status, QuantityValue: lot.QuantityValue, QuantityScale: lot.QuantityScale, RemainingQuantityValue: lot.RemainingQuantityValue, RemainingQuantityScale: lot.RemainingQuantityScale, CostBasisValue: projectedBasisValue(lot.CostBasisValue, lot.OpeningBasisKnowledge), CostBasisScale: projectedBasisScale(lot.CostBasisScale, lot.OpeningBasisKnowledge), OpeningBasisKnowledge: lot.OpeningBasisKnowledge, RemainingCostBasisValue: projectedBasisValue(lot.RemainingCostBasisValue, lot.BasisKnowledge), RemainingCostBasisScale: projectedBasisScale(lot.RemainingCostBasisScale, lot.BasisKnowledge), BasisKnowledge: lot.BasisKnowledge, CostCommodityID: lot.CostCommodityID, Metadata: json.RawMessage(lot.MetadataJSON), CreatedAt: lot.CreatedAt, UpdatedAt: lot.UpdatedAt, PositionSide: lot.PositionSide, Origin: toInvestmentLotOriginResponse(lot.Origin)}
+}
+
+func toInvestmentLotOriginResponse(origin *app.InvestmentLotOrigin) *investmentLotOriginResponse {
+	if origin == nil {
+		return nil
+	}
+	out := &investmentLotOriginResponse{OperationID: origin.OperationID, TransferKind: origin.TransferKind,
+		SourceCommodityID: origin.SourceCommodityID, SourceAccountID: origin.SourceAccountID, SourceLotID: origin.SourceLotID,
+		RatioNumerator: origin.RatioNumerator, RatioDenominator: origin.RatioDenominator,
+		OriginalDateKnowledge: origin.OriginalDateKnowledge}
+	if origin.OriginalAcquiredOn != "" {
+		date := origin.OriginalAcquiredOn
+		out.OriginalAcquiredOn = &date
+	}
+	return out
 }
 
 func toInvestmentLotResponses(lots []app.InvestmentLot) []investmentLotResponse {

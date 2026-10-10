@@ -111,8 +111,8 @@ below is execution order, not a chain of hard dependencies.
 
 1. Compound actions [#115](https://github.com/sergeyfarin/rekenraam/issues/115), split on 2026-10-10 into
    share exchange core [#177](https://github.com/sergeyfarin/rekenraam/issues/177) (delivered 2026-10-10),
-   its reads and mobile entry [#178](https://github.com/sergeyfarin/rekenraam/issues/178) (next), its correction and
-   backdating [#179](https://github.com/sergeyfarin/rekenraam/issues/179), spin-off
+   its reads and mobile entry [#178](https://github.com/sergeyfarin/rekenraam/issues/178) (delivered 2026-10-10), its correction and
+   backdating [#179](https://github.com/sergeyfarin/rekenraam/issues/179) (next), spin-off
    [#180](https://github.com/sergeyfarin/rekenraam/issues/180), and cash-and-stock merger with exchange
    fractions [#181](https://github.com/sergeyfarin/rekenraam/issues/181). Tender, rights and provider
    corporate-action mappings are outside the #115 bar.

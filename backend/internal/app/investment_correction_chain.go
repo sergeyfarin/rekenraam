@@ -73,7 +73,22 @@ type InvestmentCorrectionChain struct {
 	// correction context pre-fills the replacement.
 	CanCorrectShortSale  bool
 	CanCorrectShortCover bool
-	Operations           []InvestmentCorrectionNode
+	// EffectiveShareExchange explains an effective share exchange (#178).
+	// It offers no correction yet: reversal and replacement arrive with #179.
+	EffectiveShareExchange *InvestmentCorrectionShareExchangeTerms
+	Operations             []InvestmentCorrectionNode
+}
+
+// InvestmentCorrectionShareExchangeTerms are an exchange's instruments,
+// holdings, ratio and every link with its current carried basis.
+type InvestmentCorrectionShareExchangeTerms struct {
+	HoldingAccountID            int64
+	DestinationHoldingAccountID int64
+	CommodityID                 int64
+	DestinationCommodityID      int64
+	EffectiveOn                 string
+	SourceEvidenceJSON          string
+	Plan                        ShareExchangePlan
 }
 
 // InvestmentCorrectionDividendTerms are an effective cash dividend's posted
@@ -302,6 +317,21 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 				chain.EffectiveTransfer = &terms
 				chain.CanResolveBasis = record.OperationKind == "external_transfer_in" &&
 					terms.BasisKnowledge == db.InvestmentBasisUnknown
+			}
+		}
+		if effective && record.OperationKind == "share_exchange" {
+			terms, err := s.repository.ShareExchangeTermsByOperation(ctx, BookID, record.OperationID)
+			if err != nil {
+				return InvestmentCorrectionChain{}, err
+			}
+			plan, err := shareExchangePlanOf(terms.RatioNumerator, terms.RatioDenominator, terms.Plan)
+			if err != nil {
+				return InvestmentCorrectionChain{}, err
+			}
+			chain.EffectiveShareExchange = &InvestmentCorrectionShareExchangeTerms{
+				HoldingAccountID: terms.AccountID, DestinationHoldingAccountID: terms.DestinationAccountID,
+				CommodityID: terms.CommodityID, DestinationCommodityID: terms.DestinationCommodityID,
+				EffectiveOn: terms.EffectiveOn, SourceEvidenceJSON: terms.SourceEvidenceJSON, Plan: plan,
 			}
 		}
 		if effective && record.OperationKind == "buy" && (!importedLineage || committedSource) &&

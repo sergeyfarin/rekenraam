@@ -16,6 +16,8 @@
   import TransferInCorrectionForm from '#lib/investments/transfer-in-correction-form.svelte';
   import BasisResolutionForm from '#lib/investments/basis-resolution-form.svelte';
   import ShortTradeForm from '#lib/investments/short-trade-form.svelte';
+  import ShareExchangeSummary from '#lib/investments/share-exchange-summary.svelte';
+  import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import GainImpactList from '#lib/investments/gain-impact-list.svelte';
   import { invalidateInvestmentReads } from '#lib/investments/invalidate.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
@@ -30,6 +32,7 @@
   import {
     getInvestmentCorrectionChain,
     getInvestmentTradeCorrectionContext,
+    investmentInstrumentsQueryOptions,
     investmentCorrectionChainQueryKey,
     previewBuyReversalReconciliation,
     previewDividendReversalReconciliation,
@@ -133,6 +136,20 @@
       ?? chainQuery.data?.effective_transfer?.cost_commodity_id;
     return (currenciesQuery.data?.currencies ?? []).find((c: CurrencyResponse) => c.id === currencyID)?.code ?? '';
   });
+
+  // A share exchange is explained with its instruments, holdings, ratio and
+  // carried basis (#178); it is not yet correctable (#179).
+  const shareExchange = $derived(chainQuery.data?.effective_transaction_id === transactionID
+    ? chainQuery.data.effective_share_exchange ?? null : null);
+  const instrumentsQuery = createQuery(() => ({ ...investmentInstrumentsQueryOptions(), enabled: shareExchange !== null }));
+  const exchangeAccountsQuery = createQuery(() => ({ ...accountsQueryOptions(false, false), enabled: shareExchange !== null }));
+  function exchangeInstrumentName(commodityID: number): string {
+    const instrument = (instrumentsQuery.data?.instruments ?? []).find((item) => item.commodity_id === commodityID);
+    return instrument?.display_name ?? instrument?.commodity_code ?? `#${commodityID}`;
+  }
+  function exchangeAccountName(accountID: number): string {
+    return (exchangeAccountsQuery.data?.accounts ?? []).find((account) => account.id === accountID)?.name ?? `#${accountID}`;
+  }
 
   const sourceLinkedEffectiveBuy = $derived(
     chainQuery.data?.can_reverse_buy === true && chainQuery.data.effective_transaction_id === transactionID
@@ -385,6 +402,32 @@
             </li>
           {/each}
         </ol>
+      </div>
+    {/if}
+    {#if shareExchange}
+      <div class="space-y-2" role="group" aria-labelledby="share-exchange-detail-heading">
+        <h4 id="share-exchange-detail-heading" class="text-xs font-semibold text-muted">{m.transactions_investment_exchange_title()}</h4>
+        {#if instrumentsQuery.isPending || exchangeAccountsQuery.isPending}
+          <p class="text-sm text-muted" role="status">{m.transactions_investment_history_loading()}</p>
+        {:else}
+          <p class="text-sm text-foreground">{m.transactions_investment_exchange_summary({
+            oldName: exchangeInstrumentName(shareExchange.commodity_id),
+            newName: exchangeInstrumentName(shareExchange.destination_commodity_id),
+            ratioNew: String(shareExchange.plan.ratio_numerator), ratioOld: String(shareExchange.plan.ratio_denominator),
+            date: formatDate(shareExchange.effective_on)
+          })}</p>
+          <p class="text-xs text-muted">{shareExchange.destination_holding_account_id === shareExchange.holding_account_id
+            ? m.transactions_investment_exchange_same_holding({ name: exchangeAccountName(shareExchange.holding_account_id) })
+            : m.transactions_investment_exchange_holdings({
+              source: exchangeAccountName(shareExchange.holding_account_id),
+              destination: exchangeAccountName(shareExchange.destination_holding_account_id)
+            })}</p>
+          <ShareExchangeSummary plan={shareExchange.plan}
+            oldName={exchangeInstrumentName(shareExchange.commodity_id)}
+            newName={exchangeInstrumentName(shareExchange.destination_commodity_id)}
+            currenciesByID={new Map((currenciesQuery.data?.currencies ?? []).map((c: CurrencyResponse) => [c.id, c]))} />
+        {/if}
+        <p class="text-xs text-muted" role="note">{m.transactions_investment_exchange_not_correctable()}</p>
       </div>
     {/if}
     {#if systemLabel === 'split_adjustment'}

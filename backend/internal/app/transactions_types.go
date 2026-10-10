@@ -59,7 +59,8 @@ type Transaction struct {
 	DeletedAt                 string
 	ChangeReason              string
 	// SystemLabel is a stable code for a journal the system posted without
-	// user text, such as "split_adjustment"; empty otherwise (T-136).
+	// user text, such as "split_adjustment" (T-136), or "share_exchange" for
+	// an exchange's journal (#178); empty otherwise.
 	SystemLabel              string
 	InvalidatedCheckpointIDs []int64
 }
