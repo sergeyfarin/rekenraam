@@ -1,29 +1,41 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+  import { untrack } from 'svelte';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import {
     investmentInstrumentsQueryOptions, datedHoldingsQueryOptions, previewSpinOff, recordSpinOff,
-    type ReconciliationImpactResponse, type SpinOffPlan, type SpinOffRequest
+    previewSpinOffReplacement, replaceSpinOff,
+    type GainImpact, type InvestmentCorrectionSpinOffTerms, type ReconciliationImpactResponse,
+    type SpinOffPlan, type SpinOffReplacementRequest, type SpinOffRequest
   } from '#lib/api/investments.ts';
   import { invalidateInvestmentReads } from './invalidate';
+  import {
+    gainAcknowledgement, gainImpactCurrency, gainImpactRows, hasGainChanges, impactNeedsReview,
+    isGainAcknowledgementRefusal
+  } from './gain-impact';
   import ReconciliationConfirm from './reconciliation-confirm.svelte';
   import SpinOffSummary from './spin-off-summary.svelte';
-  import { parseBasisPercent, parseExchangeRatio } from './split-ratio';
+  import { basisFractionPercent, parseBasisPercent, parseExchangeRatio } from './split-ratio';
   import { TranslatedFormError } from '#lib/form-errors.ts';
-  import { coefficientSign } from '#lib/money/amount.ts';
+  import { coefficientSign, formatLedgerAmount } from '#lib/money/amount.ts';
   import { m } from '#lib/paraglide/messages.js';
+  import { getLocale } from '#lib/paraglide/runtime.js';
 
   // Spin-off entry (#180): the parent holding keeps its units, a new
   // instrument is distributed to it, and the issuer's published share of the
   // basis moves to the new lots. The server plans every lot; the form previews
-  // that plan and records exactly what was previewed. Correction and
-  // backdating arrive with #183.
-  let { csrfToken, onSaved, onCancel }: {
+  // that plan and records exactly what was previewed. A spin-off dated behind
+  // later activity revises it, which the shared gain review discloses (#183).
+  // With correction set, the form replaces that posted spin-off: the parent
+  // holding is fixed, the current terms are pre-filled and a reason is
+  // required.
+  let { csrfToken, onSaved, onCancel, correction }: {
     csrfToken: string;
     onSaved: () => void;
     onCancel: () => void;
+    correction?: { transactionID: number; terms: InvestmentCorrectionSpinOffTerms };
   } = $props();
 
   const queryClient = useQueryClient();
@@ -31,17 +43,28 @@
   const instrumentsQuery = createQuery(() => investmentInstrumentsQueryOptions());
   const currenciesQuery = createQuery(() => currenciesQueryOptions());
 
-  let effectiveOn = $state('');
-  let holdingKey = $state('');
-  let newCommodityID = $state('');
+  // Pre-fill once from the spin-off being corrected; later edits are the user's.
+  const initialTerms = untrack(() => correction?.terms);
+  const initialPercent = initialTerms
+    ? basisFractionPercent(initialTerms.plan.basis_fraction_value, initialTerms.plan.basis_fraction_scale) : null;
+  let effectiveOn = $state(initialTerms?.effective_on ?? '');
+  let holdingKey = $state(initialTerms ? `${initialTerms.holding_account_id}:${initialTerms.commodity_id}` : '');
+  let newCommodityID = $state(initialTerms ? String(initialTerms.destination_commodity_id) : '');
   // Null follows the suggested destination; a choice the user makes sticks
   // until the holding or the new instrument changes.
-  let chosenDestination = $state<string | null>(null);
-  let newUnits = $state('');
-  let parentUnits = $state('');
-  let basisPercent = $state('');
-  let exDate = $state('');
-  let sourceReference = $state('');
+  let chosenDestination = $state<string | null>(!initialTerms ? null
+    : initialTerms.destination_holding_account_id === initialTerms.holding_account_id
+      ? 'same' : String(initialTerms.destination_holding_account_id));
+  let newUnits = $state(initialTerms ? String(initialTerms.plan.ratio_numerator) : '');
+  let parentUnits = $state(initialTerms ? String(initialTerms.plan.ratio_denominator) : '');
+  let basisPercent = $state(initialPercent ? formatLedgerAmount(initialPercent.value, initialPercent.scale) : '');
+  // The recorded evidence pre-fills the ex date and reference it was entered
+  // with; sending it back unchanged is not a correction.
+  const initialEvidence = (initialTerms?.source_evidence ?? {}) as Record<string, unknown>;
+  const evidenceText = (key: string) => typeof initialEvidence[key] === 'string' ? initialEvidence[key] : '';
+  let exDate = $state(evidenceText('ex_date'));
+  let reason = $state('');
+  let sourceReference = $state(evidenceText('reference'));
   let memo = $state('');
   let pending = $state(false);
   let formError = $state<unknown>(undefined);
@@ -52,9 +75,11 @@
   let preview = $state<{
     plan: SpinOffPlan;
     impacts: ReconciliationImpactResponse['affected_checkpoints'];
+    gainImpact: GainImpact | null;
     payload: SpinOffRequest;
   } | null>(null);
-  let reviewOpen = $state(false);
+  let reviewModal = $state<{ gainRefreshed: boolean } | null>(null);
+  const locale = getLocale();
   // Holdings as they stood on the distribution date (#166); before a date is
   // chosen, today's.
   const holdingsDate = $derived(effectiveOn || new Date().toISOString().slice(0, 10));
@@ -76,7 +101,10 @@
     }
     return [...seen.entries()].map(([key, value]) => ({ key, ...value }));
   });
-  const selectedHolding = $derived(holdings.find((holding) => holding.key === holdingKey));
+  // A corrected spin-off's parent holding stays fixed.
+  const selectedHolding = $derived(correction
+    ? { key: holdingKey, accountID: correction.terms.holding_account_id, commodityID: correction.terms.commodity_id }
+    : holdings.find((holding) => holding.key === holdingKey));
   const newInstruments = $derived(instruments.filter((instrument) => instrument.commodity_id !== selectedHolding?.commodityID));
   const newID = $derived(Number(newCommodityID) || 0);
   // A holding account tied to one instrument cannot hold another, so the new
@@ -101,7 +129,11 @@
   const loadError = $derived(accountsQuery.isError || positionsQuery.isError ||
     instrumentsQuery.isError || currenciesQuery.isError);
   const canPreview = $derived(!loading && !loadError && !!effectiveOn && !!selectedHolding && newID > 0 &&
-    !!destination && !!newUnits.trim() && !!parentUnits.trim() && !!basisPercent.trim());
+    !!destination && !!newUnits.trim() && !!parentUnits.trim() && !!basisPercent.trim() &&
+    (!correction || !!reason.trim()));
+  const modalGainRows = $derived(preview?.gainImpact
+    ? gainImpactRows(preview.gainImpact.changes, gainImpactCurrency(currenciesByID), locale)
+    : []);
 
   $effect(() => {
     if (!loading && !didFocus && dateInput) {
@@ -133,7 +165,10 @@
       formError = new TranslatedFormError(m.investments_spin_off_percent_error());
       return;
     }
-    const evidence: Record<string, string> = {};
+    // Evidence keys the form does not edit carry over from the corrected
+    // spin-off.
+    const { reference: _reference, ex_date: _exDate, ...kept } = initialEvidence;
+    const evidence: Record<string, unknown> = { ...kept };
     if (sourceReference.trim()) evidence.reference = sourceReference.trim();
     if (exDate) evidence.ex_date = exDate;
     const payload: SpinOffRequest = {
@@ -152,8 +187,7 @@
     pending = true;
     formError = undefined;
     try {
-      const result = await previewSpinOff(payload);
-      preview = { plan: result.plan, impacts: result.impact.affected_checkpoints, payload };
+      await runPreview(payload);
     } catch (error) {
       preview = null;
       formError = error;
@@ -162,17 +196,68 @@
     }
   }
 
+  function replacementRequest(payload: SpinOffRequest): SpinOffReplacementRequest {
+    return {
+      reason: reason.trim(), effective_on: payload.effective_on,
+      destination_holding_account_id: payload.destination_holding_account_id,
+      destination_commodity_id: payload.destination_commodity_id,
+      ratio_numerator: payload.ratio_numerator, ratio_denominator: payload.ratio_denominator,
+      basis_fraction_value: payload.basis_fraction_value, basis_fraction_scale: payload.basis_fraction_scale,
+      source_evidence: payload.source_evidence, memo: payload.memo
+    };
+  }
+
+  async function runPreview(payload: SpinOffRequest): Promise<void> {
+    const result = correction
+      ? await previewSpinOffReplacement(correction.transactionID, replacementRequest(payload))
+      : await previewSpinOff(payload);
+    preview = {
+      plan: result.plan,
+      impacts: result.impact.affected_checkpoints,
+      gainImpact: hasGainChanges(result.impact.gain_impact) ? result.impact.gain_impact : null,
+      payload
+    };
+  }
+
+  async function record(override: boolean) {
+    if (!preview) return;
+    const acknowledgement = gainAcknowledgement(preview.gainImpact);
+    const confirmations = {
+      ...(override ? { reconciliation_override: true } : {}),
+      ...(acknowledgement ? { gain_impact_acknowledgement: acknowledgement } : {})
+    };
+    if (correction) {
+      await replaceSpinOff(correction.transactionID, { ...replacementRequest(preview.payload), ...confirmations }, csrfToken);
+    } else {
+      await recordSpinOff({ ...preview.payload, ...confirmations }, csrfToken);
+    }
+    await invalidateInvestmentReads(queryClient);
+    onSaved();
+  }
+
   // The server recomputes everything at commit; a moved holding is refused.
+  // A changed gain set re-opens the review with the current figures instead
+  // of a dead-end error.
   async function commit(override: boolean) {
     if (!preview) return;
     pending = true;
     formError = undefined;
     try {
-      await recordSpinOff({ ...preview.payload, ...(override ? { reconciliation_override: true } : {}) }, csrfToken);
-      await invalidateInvestmentReads(queryClient);
-      onSaved();
+      await record(override);
     } catch (error) {
-      formError = error;
+      if (isGainAcknowledgementRefusal(error) && preview) {
+        try {
+          await runPreview(preview.payload);
+          if (preview && impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {
+            reviewModal = { gainRefreshed: !!preview.gainImpact };
+          }
+        } catch (previewError) {
+          preview = null;
+          formError = previewError;
+        }
+      } else {
+        formError = error;
+      }
     } finally {
       pending = false;
     }
@@ -180,27 +265,32 @@
 
   function handleRecord() {
     if (!preview) return;
-    if (preview.impacts.length > 0) {
-      reviewOpen = true;
+    if (impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {
+      reviewModal = { gainRefreshed: false };
       return;
     }
     void commit(false);
   }
 
   function confirmReview() {
-    reviewOpen = false;
-    void commit(true);
+    if (!preview) return;
+    const override = preview.impacts.length > 0;
+    reviewModal = null;
+    void commit(override);
   }
 </script>
 
-{#if reviewOpen && preview}
-  <ReconciliationConfirm impacts={preview.impacts} gainRows={[]} gainRefreshed={false} {pending}
-    onCancel={() => (reviewOpen = false)} onConfirm={confirmReview} />
+{#if reviewModal && preview}
+  <ReconciliationConfirm impacts={preview.impacts} gainRows={modalGainRows}
+    gainRefreshed={reviewModal.gainRefreshed} {pending}
+    onCancel={() => (reviewModal = null)} onConfirm={confirmReview} />
 {/if}
 
 <form onsubmit={handlePreview} class="space-y-4" aria-busy={pending}>
-  <h2 id="spin-off-title" class="text-base font-semibold text-foreground">{m.investments_spin_off_title()}</h2>
-  <p class="text-sm text-muted">{m.investments_spin_off_help()}</p>
+  <h2 id="spin-off-title" class="text-base font-semibold text-foreground">
+    {correction ? m.transactions_investment_replace_spin_off_title() : m.investments_spin_off_title()}
+  </h2>
+  <p class="text-sm text-muted">{correction ? m.investments_spin_off_replace_help() : m.investments_spin_off_help()}</p>
   {#if loading}
     <p class="text-sm text-muted" role="status">{m.investments_loading()}</p>
   {:else if loadError}
@@ -220,11 +310,17 @@
           class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
       </div>
     </div>
-    {#if holdings.length === 0}
+    {#if holdings.length === 0 && !correction}
       <p class="text-sm text-muted" role="status">{m.investments_spin_off_empty()}</p>
     {/if}
     <div>
       <label for="spin-off-holding" class="mb-1 block text-sm font-medium text-foreground">{m.investments_spin_off_holding()}</label>
+      {#if correction}
+        <p id="spin-off-holding" class="rounded-(--radius-control) border border-border bg-surface px-3 py-2 text-sm text-foreground">
+          {accounts.find((account) => account.id === correction.terms.holding_account_id)?.name ?? `#${correction.terms.holding_account_id}`}
+          · {instrumentLabel(correction.terms.commodity_id)}
+        </p>
+      {:else}
       <select id="spin-off-holding" aria-describedby="spin-off-holding-hint" bind:value={holdingKey} required onchange={resetDestination}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
         <option value="">{m.investments_exchange_select_holding()}</option>
@@ -235,6 +331,7 @@
         {/each}
       </select>
       <p id="spin-off-holding-hint" class="mt-1 text-xs text-muted">{m.investments_dated_holdings_hint()}</p>
+      {/if}
     </div>
     <div>
       <label for="spin-off-new-instrument" class="mb-1 block text-sm font-medium text-foreground">{m.investments_spin_off_new_instrument()}</label>
@@ -302,6 +399,13 @@
       <input id="spin-off-reference" type="text" bind:value={sourceReference} maxlength="500" oninput={discardPreview}
         class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
     </div>
+    {#if correction}
+      <div>
+        <label for="spin-off-reason" class="mb-1 block text-sm font-medium text-foreground">{m.investments_spin_off_replace_reason()}</label>
+        <input id="spin-off-reason" type="text" bind:value={reason} maxlength="500" required oninput={discardPreview}
+          class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" />
+      </div>
+    {/if}
     <div>
       <label for="spin-off-memo" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_memo()}</label>
       <input id="spin-off-memo" type="text" bind:value={memo} maxlength="500" oninput={discardPreview}
@@ -324,7 +428,7 @@
     {#if preview}
       <button type="button" onclick={handleRecord} disabled={pending || !csrfToken}
         class="rounded-(--radius-control) bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
-        {pending ? m.investments_spin_off_pending() : m.investments_spin_off_submit()}
+        {pending ? m.investments_spin_off_pending() : correction ? m.investments_spin_off_replace_submit() : m.investments_spin_off_submit()}
       </button>
     {:else}
       <button type="submit" disabled={!canPreview || pending}

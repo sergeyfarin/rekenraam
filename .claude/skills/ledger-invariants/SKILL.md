@@ -204,7 +204,9 @@ Persistence) and `docs/product-requirements.md`. When in doubt, read those.
   × an exact sourced fraction (truncated at the allocation scale, remainder
   stays) to one new lot per parent lot: the parent's `basis_reduction` equals
   the new lot's opening basis, so basis is conserved per lot. Unknown stays
-  unknown on both sides. It is in-order only until #183.
+  unknown on both sides. It is corrected by its own reversal and replacement
+  (#183), and a backdated spin-off entitles every lot open at its slot
+  through a subject `spin_off` replay intent, as a backdated exchange does.
 
 ## Dates and times
 

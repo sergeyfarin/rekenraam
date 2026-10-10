@@ -27,6 +27,9 @@ type InvestmentReplayProjection struct {
 	// lot events record (average_cost for a pool, empty for selected lots).
 	SubjectTransferOut    []LotDisposalRecord
 	SubjectTransferMethod string
+	// SubjectSpinOff is the subject spin-off's per-lot reductions at its
+	// replay slot (#183): every long lot open there, in effect order.
+	SubjectSpinOff []SpinOffLink
 	// CapitalReturns are returns of capital whose replayed effects differ
 	// from their effective ones; persisting appends a revision (T-148).
 	CapitalReturns []InvestmentReplayCapitalReturn
@@ -372,6 +375,13 @@ func applyInvestmentReplayIntentTx(ctx context.Context, tx *sql.Tx, bookID, acco
 			AccountID: accountID, CommodityID: commodityID, CostCommodityID: costCommodityID,
 			EventDate: intent.EventDate, AdmitUnknownBasis: true})
 		if err != nil {
+			return err
+		}
+		// The spin-off a command is recording has no links yet: it entitles
+		// every lot open at its slot with the units it holds there (#183).
+		if intent.TransferIsSubject {
+			reduced, err := spinOffHoldingTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, intent, allocationScale)
+			projection.SubjectSpinOff = append(projection.SubjectSpinOff, reduced...)
 			return err
 		}
 		entitled := make(map[int64]bool, len(intent.ExchangeLinks))

@@ -46,6 +46,9 @@ type SpinOffInput struct {
 	Memo                        string
 	ChangeReason                string
 	ReconciliationOverride      bool
+	// GainImpactAcknowledgement acknowledges the gains a backdated spin-off
+	// revises (#183); an in-order spin-off changes no committed disposal.
+	GainImpactAcknowledgement string
 }
 
 // SpinOffLink is one parent lot's distribution. DestinationLotID is zero in a
@@ -92,9 +95,15 @@ type SpinOffResult struct {
 	Plan        SpinOffPlan
 }
 
-// prepareSpinOffWrite plans the spin-off journal: two legs in the new
-// instrument, so the basis never leaves commodity_trading.
 func (s *InvestmentService) prepareSpinOffWrite(ctx context.Context, input SpinOffInput) (db.CreateTransactionParams, db.CreateSpinOffParams, error) {
+	return s.prepareSpinOffWriteWith(ctx, input, 0, "investment.spin_off")
+}
+
+// prepareSpinOffWriteWith plans the spin-off journal: two legs in the new
+// instrument, so the basis never leaves commodity_trading. A replacement
+// names the spin-off it corrects, whose slot and parent the plan replays.
+func (s *InvestmentService) prepareSpinOffWriteWith(ctx context.Context, input SpinOffInput,
+	replacesOperationID int64, auditOperation string) (db.CreateTransactionParams, db.CreateSpinOffParams, error) {
 	fail := func(err error) (db.CreateTransactionParams, db.CreateSpinOffParams, error) {
 		return db.CreateTransactionParams{}, db.CreateSpinOffParams{}, err
 	}
@@ -157,8 +166,9 @@ func (s *InvestmentService) prepareSpinOffWrite(ctx context.Context, input SpinO
 		CommodityID: input.CommodityID, DestinationCommodityID: input.DestinationCommodityID, EffectiveOn: date,
 		RatioNumerator: numerator, RatioDenominator: denominator,
 		BasisFractionValue: fractionValue, BasisFractionScale: fractionScale, SourceEvidenceJSON: evidence,
+		ReplacesOperationID: replacesOperationID,
 	}
-	planned, err := s.repository.PlanSpinOff(ctx, spinOff)
+	planned, err := s.repository.PlanSpinOff(ctx, spinOff, input.OwnerUserID)
 	if err != nil {
 		return fail(mapSpinOffError(err))
 	}
@@ -166,7 +176,7 @@ func (s *InvestmentService) prepareSpinOffWrite(ctx context.Context, input SpinO
 	create := CreateTransactionInput{
 		OwnerUserID: input.OwnerUserID, AuthSessionID: input.AuthSessionID,
 		RequestID: input.RequestID, OriginType: "browser_api",
-		Operation: "investment.spin_off", ChangeReason: input.ChangeReason,
+		Operation: auditOperation, ChangeReason: input.ChangeReason,
 		ReconciliationOverride: input.ReconciliationOverride,
 		Spec: TransactionInput{
 			Status: "posted", TransactionKind: "investment", InvestmentOperationKind: "spin_off",
@@ -249,8 +259,7 @@ func (s *InvestmentService) SpinOff(ctx context.Context, input SpinOffInput) (Sp
 	if err != nil {
 		return SpinOffResult{}, err
 	}
-	// An in-order spin-off changes no committed disposal.
-	journal.GainImpact = gainImpactPolicy("")
+	journal.GainImpact = gainImpactPolicy(input.GainImpactAcknowledgement)
 	transaction, plan, err := s.repository.CreateSpinOff(ctx, journal, spinOff)
 	if err != nil {
 		return SpinOffResult{}, mapSpinOffError(err)
@@ -342,7 +351,8 @@ func mapSpinOffError(err error) error {
 	case errors.Is(err, db.ErrSplitFractionUnrepresentable):
 		return ErrSpinOffFraction
 	case errors.Is(err, db.ErrSpinOffNoHoldings), errors.Is(err, db.ErrSpinOffPositionChanged),
-		errors.Is(err, db.ErrOutOfOrderPositionEvent), errors.Is(err, db.ErrPositionSideConflict):
+		errors.Is(err, db.ErrOutOfOrderPositionEvent), errors.Is(err, db.ErrPositionSideConflict),
+		errors.Is(err, db.ErrGainImpactAcknowledgementRequired), errors.Is(err, db.ErrGainImpactAcknowledgementStale):
 		return err
 	case errors.Is(err, db.ErrInvalidDisposalParams), errors.Is(err, db.ErrInvestmentBasisRange):
 		return ValidationError{Message: err.Error()}

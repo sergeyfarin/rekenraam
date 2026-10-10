@@ -1,0 +1,63 @@
+post:
+  summary: Reverse a posted spin-off
+  description: >-
+    Posts the exact inverse of the spin-off journal, dated to the spin-off,
+    removes it from effective history and replays the parent holding (whose
+    lots get their basis back) and then the new one (which loses the lots the
+    spin-off opened), in one audited database transaction (#183). The original
+    spin-off stays posted history. A later sale or onward transfer of the
+    removed new units refuses with INVESTMENT_TRANSFER_DEPENDENCY naming it, and nothing is
+    written. A non-empty gain change set requires the preview's exact
+    gain_impact_acknowledgement.
+  parameters:
+    - in: path
+      name: transaction_id
+      required: true
+      schema: { type: integer, format: int64 }
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema: { type: string }
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalRequest"
+  responses:
+    "201":
+      description: Spin-off reversed and both holdings replayed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalResponse"
+    "400":
+      description: Invalid request or missing reason
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Origin or CSRF validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Posted spin-off not found
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "409":
+      description: Already corrected (INVESTMENT_SPIN_OFF_ALREADY_CORRECTED), changed (INVESTMENT_SPIN_OFF_CHANGED), INVESTMENT_TRANSFER_DEPENDENCY names a later operation the correction would make impossible, reconciliation override required, or gain changes not acknowledged
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

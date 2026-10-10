@@ -354,12 +354,6 @@ func TestSpinOffRefusalsWriteNothing(t *testing.T) {
 			buyOn(t, f, "2026-02-01", 1, 10000)
 			return spinOffInput(f, newID, "2026-06-01", 1, 3, "1", 1)
 		}, func(t *testing.T, err error) { assert.ErrorIs(t, err, ErrSpinOffFraction) }},
-		{"dated behind a later sale", func(t *testing.T, f *investmentsTestFixture, newID int64) SpinOffInput {
-			buyOn(t, f, "2026-02-01", 10, 10000)
-			_, err := f.investmentService.Sell(context.Background(), sellInput(f, "2026-07-01", 2))
-			require.NoError(t, err)
-			return spinOffInput(f, newID, "2026-06-01", 1, 1, "1", 1)
-		}, func(t *testing.T, err error) { assert.ErrorIs(t, err, db.ErrOutOfOrderPositionEvent) }},
 		{"open short of the parent", func(t *testing.T, f *investmentsTestFixture, newID int64) SpinOffInput {
 			shortSaleOn(t, f, "2026-02-01", 5, 5000)
 			return spinOffInput(f, newID, "2026-06-01", 1, 1, "1", 1)

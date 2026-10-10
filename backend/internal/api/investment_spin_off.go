@@ -25,6 +25,9 @@ type spinOffRequest struct {
 	Memo                   string            `json:"memo"`
 	ChangeReason           string            `json:"change_reason"`
 	ReconciliationOverride bool              `json:"reconciliation_override"`
+	// GainImpactAcknowledgement acknowledges the gains a backdated spin-off
+	// revises (#183).
+	GainImpactAcknowledgement string `json:"gain_impact_acknowledgement,omitempty"`
 }
 
 type spinOffLinkResponse struct {
@@ -123,7 +126,8 @@ func spinOffInput(owner app.Owner, r *http.Request, request spinOffRequest) app.
 		RatioNumerator: request.RatioNumerator, RatioDenominator: request.RatioDenominator,
 		BasisFractionValue: request.BasisFractionValue, BasisFractionScale: request.BasisFractionScale,
 		SourceEvidenceJSON: evidence, Memo: request.Memo, ChangeReason: request.ChangeReason,
-		ReconciliationOverride: request.ReconciliationOverride,
+		ReconciliationOverride:    request.ReconciliationOverride,
+		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 	}
 }
 
@@ -215,8 +219,166 @@ func spinOffPreview(logger *slog.Logger, authService *app.AuthService, investmen
 			writeInvestmentServiceError(w, r, logger, "spin-off preview", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, spinOffPreviewResponse{
-			Plan: toSpinOffPlanResponse(preview.Plan, true), Impact: toReconciliationImpactResponse(preview.Impact),
+		writeSpinOffPreview(w, preview)
+	}
+}
+
+// writeSpinOffPreview writes a plan and its impact, including the gains a
+// backdated spin-off or a correction would revise.
+func writeSpinOffPreview(w http.ResponseWriter, preview app.SpinOffPreview) {
+	impact := toReconciliationImpactResponse(preview.Impact)
+	gainImpact, err := toGainImpactResponse(preview.Impact.GainImpact)
+	if err != nil {
+		writeAPIError(w, http.StatusUnprocessableEntity, "LEDGER_OVERFLOW", "gain impact value exceeds the coefficient range")
+		return
+	}
+	impact.GainImpact = gainImpact
+	writeJSON(w, http.StatusOK, spinOffPreviewResponse{Plan: toSpinOffPlanResponse(preview.Plan, true), Impact: impact})
+}
+
+// Spin-off correction (#183). Reversal reuses the sale-reversal request and
+// response; replacement carries corrected terms for the same parent holding
+// and instrument.
+type spinOffReplacementRequest struct {
+	Reason                    string            `json:"reason"`
+	EffectiveOn               string            `json:"effective_on"`
+	DestinationHoldingID      int64             `json:"destination_holding_account_id,omitempty"`
+	DestinationCommodityID    int64             `json:"destination_commodity_id"`
+	RatioNumerator            int64             `json:"ratio_numerator"`
+	RatioDenominator          int64             `json:"ratio_denominator"`
+	BasisFractionValue        exact.Coefficient `json:"basis_fraction_value"`
+	BasisFractionScale        int               `json:"basis_fraction_scale"`
+	SourceEvidence            json.RawMessage   `json:"source_evidence,omitempty"`
+	Memo                      string            `json:"memo"`
+	ReconciliationOverride    bool              `json:"reconciliation_override"`
+	GainImpactAcknowledgement string            `json:"gain_impact_acknowledgement,omitempty"`
+}
+
+type spinOffReplacementResponse struct {
+	Inverse                transactionResponse `json:"inverse"`
+	Replacement            transactionResponse `json:"replacement"`
+	Plan                   spinOffPlanResponse `json:"plan"`
+	CorrectedTransactionID int64               `json:"corrected_transaction_id"`
+}
+
+func spinOffReplacementInput(owner app.Owner, r *http.Request, transactionID int64, request spinOffReplacementRequest) app.ReplaceSpinOffInput {
+	evidence := rawJSONText(request.SourceEvidence)
+	if evidence == "null" {
+		evidence = ""
+	}
+	return app.ReplaceSpinOffInput{
+		OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+		TransactionID: transactionID, Reason: request.Reason, EffectiveOn: request.EffectiveOn,
+		DestinationHoldingAccountID: request.DestinationHoldingID, DestinationCommodityID: request.DestinationCommodityID,
+		RatioNumerator: request.RatioNumerator, RatioDenominator: request.RatioDenominator,
+		BasisFractionValue: request.BasisFractionValue, BasisFractionScale: request.BasisFractionScale,
+		SourceEvidenceJSON: evidence, Memo: request.Memo,
+		ReconciliationOverride:    request.ReconciliationOverride,
+		GainImpactAcknowledgement: request.GainImpactAcknowledgement,
+	}
+}
+
+func reverseSpinOff(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		transaction, err := investmentService.ReverseSpinOff(r.Context(), app.ReverseSpinOffInput{
+			OwnerUserID: owner.ID, AuthSessionID: authenticatedSessionID(r), RequestID: RequestIDFromContext(r.Context()),
+			TransactionID: transactionID, Reason: request.Reason,
+			ReconciliationOverride: request.ReconciliationOverride, GainImpactAcknowledgement: request.GainImpactAcknowledgement,
 		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "reverse spin-off", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, investmentSaleReversalResponse{Transaction: toTransactionResponse(transaction), CorrectedTransactionID: transactionID})
+	}))
+}
+
+func reverseSpinOffReconciliationImpact(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request investmentSaleReversalRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		impact, err := investmentService.ReverseSpinOffReconciliationImpact(r.Context(), app.ReverseSpinOffInput{
+			OwnerUserID: owner.ID, TransactionID: transactionID, Reason: request.Reason,
+		})
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview spin-off reversal reconciliation impact", err)
+			return
+		}
+		writeReconciliationImpact(w, impact)
+	}
+}
+
+func replaceSpinOff(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService, options HandlerOptions) http.HandlerFunc {
+	return requireAuthenticatedMutation(logger, authService, options, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedMutationOwner(w, r)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request spinOffReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		result, err := investmentService.ReplaceSpinOff(r.Context(), spinOffReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "replace spin-off", err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, spinOffReplacementResponse{
+			Inverse: toTransactionResponse(result.Inverse), Replacement: toTransactionResponse(result.Replacement),
+			Plan: toSpinOffPlanResponse(result.Plan, true), CorrectedTransactionID: result.CorrectedTransactionID,
+		})
+	}))
+}
+
+func replaceSpinOffPreview(logger *slog.Logger, authService *app.AuthService, investmentService *app.InvestmentService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := authenticatedOwner(w, r, logger, authService)
+		if !ok {
+			return
+		}
+		transactionID, ok := readPathInt64(w, r, "transaction_id", "transaction id")
+		if !ok {
+			return
+		}
+		var request spinOffReplacementRequest
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
+			return
+		}
+		preview, err := investmentService.PreviewSpinOffReplacement(r.Context(), spinOffReplacementInput(owner, r, transactionID, request))
+		if err != nil {
+			writeInvestmentServiceError(w, r, logger, "preview spin-off replacement", err)
+			return
+		}
+		writeSpinOffPreview(w, preview)
 	}
 }

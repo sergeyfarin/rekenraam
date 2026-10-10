@@ -44,7 +44,21 @@ async function setup(page: Page) {
       cash_account_id: cash.id, quantity_value: quantity, quantity_scale: 0, cash_amount_value: amount,
       cash_amount_scale: 2, cash_commodity_id: currencyID, cost_basis_method: 'fifo'
     });
-  return { parent, spun, buy };
+  const sell = (instrument: typeof parent, daysAgo: number, quantity: string, amount: string) =>
+    apiJSON(page, 'POST', '/api/v1/investments/sell', csrfToken, {
+      transaction_date: daysFromTodayISO(-daysAgo), commodity_id: instrument.commodity_id,
+      holding_account_id: instrument.holdingID, cash_account_id: cash.id, quantity_value: quantity, quantity_scale: 0,
+      cash_amount_value: amount, cash_amount_scale: 2, cash_commodity_id: currencyID, cost_basis_method: 'fifo'
+    });
+  // A 1:1 spin-off of 10 % into the new instrument's own holding, recorded directly.
+  const spinOff = () =>
+    apiJSON<{ transaction: { id: number } }>(page, 'POST', '/api/v1/investments/spin-offs', csrfToken, {
+      effective_on: daysFromTodayISO(-10), holding_account_id: parent.holdingID,
+      destination_holding_account_id: spun.holdingID, commodity_id: parent.commodity_id,
+      destination_commodity_id: spun.commodity_id, ratio_numerator: 1, ratio_denominator: 1,
+      basis_fraction_value: '1', basis_fraction_scale: 1, source_evidence: { ex_date: daysFromTodayISO(-12) }
+    });
+  return { parent, spun, buy, sell, spinOff };
 }
 
 async function openForm(page: Page, s: Awaited<ReturnType<typeof setup>>, newUnits: string, parentUnits: string, percent: string) {
@@ -103,4 +117,97 @@ test('a spin-off leaving an unrepresentable fraction is refused with a translate
   await s.buy(40, '1', '10000');
   await openForm(page, s, '1', '7', '10');
   await expect(page.getByRole('alert')).toContainText('Spin-offs are never rounded');
+});
+
+// #183: a spin-off dated behind a later parent sale is admitted by replay; the
+// restated gain is disclosed in the shared review before anything is written.
+test('a backdated spin-off revises the later parent sale through the gain review', async ({ page }) => {
+  const s = await setup(page);
+  await s.buy(40, '10', '10000');
+  await s.sell(s.parent, 5, '5', '10000'); // basis 50.00
+  await openForm(page, s, '1', '1', '20');
+  await expect(page.getByRole('region', { name: 'Spin-off preview' })).toContainText(`10 ${s.parent.name} kept → 10 ${s.spun.name}`);
+  await page.getByRole('dialog').getByRole('button', { name: 'Record spin-off' }).click();
+
+  const review = page.getByRole('alertdialog');
+  await expect(review).toContainText(`Sale on ${daysFromTodayISO(-5)}: basis 50.00 → 40.00`);
+  await review.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(page.getByRole('heading', { name: 'Record a spin-off' })).toBeHidden();
+  await expect.poll(async () => {
+    const lots = await apiJSON<{ lots: Array<{ remaining_quantity_value: string }> }>(
+      page, 'GET', `/api/v1/investments/lots?account_id=${s.spun.holdingID}&commodity_id=${s.spun.commodity_id}`);
+    return lots.lots.map((lot) => lot.remaining_quantity_value);
+  }).toEqual(['10']);
+});
+
+// #183: correcting a spin-off's percentage on a phone restates the later
+// parent sale, which the user accepts from the shared gain review.
+test('correcting a spin-off percentage revises the later parent sale on mobile', async ({ page }) => {
+  const s = await setup(page);
+  await s.buy(40, '10', '10000');
+  const spun = await s.spinOff();
+  await s.sell(s.parent, 5, '5', '10000'); // basis 45.00 after 10 % moved
+
+  await page.goto(`/app/transactions?transaction_id=${spun.transaction.id}`);
+  const detail = page.getByRole('group', { name: 'Spin-off' });
+  await expect(detail.getByRole('button', { name: 'Reverse spin-off…' })).toBeVisible();
+  await detail.getByRole('button', { name: 'Correct spin-off…' }).click();
+  const form = page.getByRole('dialog', { name: 'Correct this spin-off' });
+  await expect(form.getByText(`${s.parent.holdingName} · ${s.parent.name}`)).toBeVisible();
+  await expect(form.getByLabel('Cost basis moved to the new instrument')).toHaveValue('10');
+  await expect(form.getByLabel('New units received')).toHaveValue('1');
+  await expect(form.getByLabel('Ex-date (optional)')).toHaveValue(daysFromTodayISO(-12));
+  await form.getByLabel('Reason for correction').fill('the issuer published 30 %');
+  await form.getByRole('button', { name: 'Preview spin-off' }).click();
+  await expect(form.getByRole('alert')).toContainText(/./);
+  await form.getByLabel('Cost basis moved to the new instrument').fill('30');
+  await form.getByRole('button', { name: 'Preview spin-off' }).click();
+  await expect(form.getByRole('region', { name: 'Spin-off preview' })).toContainText('Basis moved: 30.00');
+  await form.getByRole('button', { name: 'Correct spin-off' }).click();
+
+  const review = page.getByRole('alertdialog');
+  await expect(review).toContainText(`Sale on ${daysFromTodayISO(-5)}: basis 45.00 → 35.00`);
+  await review.getByRole('button', { name: 'Accept changed gains' }).click();
+  await expect(form).toBeHidden();
+  await expect.poll(async () => {
+    const chain = await apiJSON<{ effective_spin_off?: { plan: { basis_fraction_value: string; basis_fraction_scale: number } } }>(
+      page, 'GET', `/api/v1/investments/transactions/${spun.transaction.id}/correction-chain`);
+    const plan = chain.effective_spin_off?.plan;
+    return plan ? `${plan.basis_fraction_value}/${plan.basis_fraction_scale}` : '';
+  }).toBe('3/1');
+});
+
+test('reversing a spin-off whose new units were sold is refused with a translated reason', async ({ page }) => {
+  const s = await setup(page);
+  await s.buy(40, '10', '10000');
+  const spun = await s.spinOff();
+  await s.sell(s.spun, 5, '5', '1000');
+
+  await page.goto(`/app/transactions?transaction_id=${spun.transaction.id}`);
+  await page.getByRole('button', { name: 'Reverse spin-off…' }).click();
+  await page.getByLabel('Reason for reversal').fill('no spin-off happened');
+  await page.getByRole('button', { name: 'Review and reverse' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('Reverse or correct that one first');
+});
+
+test('reversing an unsold spin-off gives the parent its basis back', async ({ page }) => {
+  const s = await setup(page);
+  await s.buy(40, '10', '10000');
+  const spun = await s.spinOff();
+
+  await page.goto(`/app/transactions?transaction_id=${spun.transaction.id}`);
+  await page.getByRole('button', { name: 'Reverse spin-off…' }).click();
+  await page.getByLabel('Reason for reversal').fill('no spin-off happened');
+  await page.getByRole('button', { name: 'Review and reverse' }).click();
+  await expect(page.getByRole('alertdialog')).toBeHidden();
+  await expect.poll(async () => {
+    const lots = await apiJSON<{ lots: Array<{ status: string; remaining_cost_basis_value: string; remaining_cost_basis_scale: number }> }>(
+      page, 'GET', `/api/v1/investments/lots?account_id=${s.parent.holdingID}&commodity_id=${s.parent.commodity_id}`);
+    return lots.lots.filter((lot) => lot.status === 'open').length;
+  }).toBe(1);
+  await expect.poll(async () => {
+    const lots = await apiJSON<{ lots: Array<{ status: string }> }>(
+      page, 'GET', `/api/v1/investments/lots?account_id=${s.spun.holdingID}&commodity_id=${s.spun.commodity_id}`);
+    return lots.lots.filter((lot) => lot.status === 'open').length;
+  }).toBe(0);
 });

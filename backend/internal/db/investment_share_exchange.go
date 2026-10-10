@@ -99,11 +99,11 @@ func validShareExchangeParams(params CreateShareExchangeParams) bool {
 		isDisposalCalendarDate(params.EffectiveOn) && params.RatioNumerator > 0 && params.RatioDenominator > 0
 }
 
-// shareExchangeSubject is what a replayed plan records the exchange as: the
-// command's operation, journal and audit event. It is zero in a plan that has
-// no operation yet, which then sorts after every same-day event, exactly where
-// the committed operation (the newest ID) will sort.
-type shareExchangeSubject struct {
+// compoundActionSubject is what a replayed plan records a share exchange or a
+// spin-off as: the command's operation, journal and audit event. It is zero in
+// a plan that has no operation yet, which then sorts after every same-day
+// event, exactly where the committed operation (the newest ID) will sort.
+type compoundActionSubject struct {
 	OperationID   int64
 	TransactionID int64
 	AuditEventID  int64
@@ -127,7 +127,7 @@ type shareExchangeWritePlan struct {
 // order reads today's holding. One dated behind a later depletion of the old
 // instrument, or a replacement, replays the holding with the exchange as its
 // subject at the slot, so it takes the whole position open then (#179).
-func planShareExchangeTx(ctx context.Context, tx *sql.Tx, params CreateShareExchangeParams, subject shareExchangeSubject) (shareExchangeWritePlan, error) {
+func planShareExchangeTx(ctx context.Context, tx *sql.Tx, params CreateShareExchangeParams, subject compoundActionSubject) (shareExchangeWritePlan, error) {
 	if !validShareExchangeParams(params) {
 		return shareExchangeWritePlan{}, fmt.Errorf("%w: share exchange terms are incomplete", ErrInvalidDisposalParams)
 	}
@@ -249,8 +249,27 @@ func planShareExchangeTx(ctx context.Context, tx *sql.Tx, params CreateShareExch
 // The depletions are what the exchange takes at that slot; a later decision
 // the emptied holding cannot satisfy is a named dependency.
 func shareExchangeSubjectDepletionsTx(ctx context.Context, tx *sql.Tx, params CreateShareExchangeParams,
-	subject shareExchangeSubject) ([]LotDisposalRecord, error) {
-	costIDs, err := holdingCostCommodityIDsTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID)
+	subject compoundActionSubject) ([]LotDisposalRecord, error) {
+	projections, err := replayCompoundActionSubjectTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
+		params.ReplacesOperationID, subject, InvestmentReplayIntent{OperationKind: "share_exchange",
+			EventDate: params.EffectiveOn, Kind: "exchange_out"})
+	if err != nil {
+		return nil, err
+	}
+	var depletions []LotDisposalRecord
+	for _, projection := range projections {
+		depletions = append(depletions, projection.SubjectTransferOut...)
+	}
+	return depletions, nil
+}
+
+// replayCompoundActionSubjectTx replays each long cost-currency position of a
+// holding with intent as the command's subject at its slot, and returns each
+// projection in cost-currency order. A replacement takes the replaced
+// operation's correction-root slot and replays without it.
+func replayCompoundActionSubjectTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, replacesOperationID int64,
+	subject compoundActionSubject, intent InvestmentReplayIntent) ([]InvestmentReplayProjection, error) {
+	costIDs, err := holdingCostCommodityIDsTx(ctx, tx, bookID, accountID, commodityID)
 	if err != nil {
 		return nil, err
 	}
@@ -258,38 +277,35 @@ func shareExchangeSubjectDepletionsTx(ctx context.Context, tx *sql.Tx, params Cr
 	if orderID <= 0 {
 		orderID = math.MaxInt64
 	}
-	if params.ReplacesOperationID > 0 {
-		roots, err := investmentReplayOrderOperationIDsQuery(ctx, tx, params.BookID)
+	if replacesOperationID > 0 {
+		roots, err := investmentReplayOrderOperationIDsQuery(ctx, tx, bookID)
 		if err != nil {
 			return nil, err
 		}
-		if orderID = roots[params.ReplacesOperationID]; orderID <= 0 {
-			return nil, fmt.Errorf("%w: replaced exchange %d has no correction root", ErrInvalidDisposalParams, params.ReplacesOperationID)
+		if orderID = roots[replacesOperationID]; orderID <= 0 {
+			return nil, fmt.Errorf("%w: replaced operation %d has no correction root", ErrInvalidDisposalParams, replacesOperationID)
 		}
 	}
-	var depletions []LotDisposalRecord
+	intent.OperationID, intent.OrderOperationID, intent.EffectSeq, intent.TransferIsSubject = subject.OperationID, orderID, 1, true
+	intent.TransactionID, intent.AuditEventID = subject.TransactionID, subject.AuditEventID
+	intent.CreatedByUserID, intent.CreatedAt = subject.ActorUserID, subject.CreatedAt
+	projections := make([]InvestmentReplayProjection, 0, len(costIDs))
 	for _, costID := range costIDs {
-		intents, err := investmentReplayIntentsQuery(ctx, tx, params.BookID, params.AccountID, params.CommodityID, costID, "long")
+		intents, err := investmentReplayIntentsQuery(ctx, tx, bookID, accountID, commodityID, costID, "long")
 		if err != nil {
 			return nil, err
 		}
-		// Before its inverse posts, the replaced exchange is still effective.
-		intents = slices.DeleteFunc(intents, func(intent InvestmentReplayIntent) bool {
-			return params.ReplacesOperationID > 0 && intent.OperationID == params.ReplacesOperationID
+		// Before its inverse posts, the replaced operation is still effective.
+		intents = slices.DeleteFunc(intents, func(existing InvestmentReplayIntent) bool {
+			return replacesOperationID > 0 && existing.OperationID == replacesOperationID
 		})
-		intents = append(intents, InvestmentReplayIntent{
-			OperationID: subject.OperationID, OrderOperationID: orderID, OperationKind: "share_exchange",
-			EffectSeq: 1, EventDate: params.EffectiveOn, Kind: "exchange_out", TransferIsSubject: true,
-			TransactionID: subject.TransactionID, AuditEventID: subject.AuditEventID,
-			CreatedByUserID: subject.ActorUserID, CreatedAt: subject.CreatedAt,
-		})
-		projection, err := simulateInvestmentReplayTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, costID, intents)
+		projection, err := simulateInvestmentReplayTx(ctx, tx, bookID, accountID, commodityID, costID, append(intents, intent))
 		if err != nil {
 			return nil, err
 		}
-		depletions = append(depletions, projection.SubjectTransferOut...)
+		projections = append(projections, projection)
 	}
-	return depletions, nil
+	return projections, nil
 }
 
 // holdingCostCommodityIDsTx lists the cost currencies a holding has ever
@@ -386,7 +402,7 @@ func (r *InvestmentRepository) PlanShareExchange(ctx context.Context, params Cre
 		return ShareExchangePlan{}, fmt.Errorf("begin share exchange plan: %w", err)
 	}
 	defer rollbackTx(ctx, tx)
-	plan, err := planShareExchangeTx(ctx, tx, params, shareExchangeSubject{ActorUserID: actorUserID, CreatedAt: "1970-01-01T00:00:00Z"})
+	plan, err := planShareExchangeTx(ctx, tx, params, compoundActionSubject{ActorUserID: actorUserID, CreatedAt: "1970-01-01T00:00:00Z"})
 	if err != nil {
 		return ShareExchangePlan{}, err
 	}
@@ -435,7 +451,7 @@ func writeShareExchangeTx(ctx context.Context, tx *sql.Tx, params CreateShareExc
 	if err != nil {
 		return ShareExchangePlan{}, err
 	}
-	plan, err := planShareExchangeTx(ctx, tx, params, shareExchangeSubject{OperationID: operationID,
+	plan, err := planShareExchangeTx(ctx, tx, params, compoundActionSubject{OperationID: operationID,
 		TransactionID: transaction.ID, AuditEventID: auditEventID, ActorUserID: journal.ActorUserID, CreatedAt: journal.CreatedAt})
 	if err != nil {
 		return ShareExchangePlan{}, err

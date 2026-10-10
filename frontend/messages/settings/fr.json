@@ -1416,5 +1416,14 @@
   "api_error_investment_spin_off_no_holdings": "Aucune unité de l'instrument mère n'est détenue sur ce compte à la date de distribution.",
   "api_error_investment_spin_off_fraction_unrepresentable": "La distribution laisserait une fraction que le nouvel instrument ne peut pas enregistrer exactement. Les scissions ne sont jamais arrondies.",
   "api_error_investment_spin_off_changed": "La position a changé après l'aperçu de la scission. Relancez l'aperçu.",
+  "api_error_investment_spin_off_already_corrected": "Cette scission a déjà été corrigée.",
+  "transactions_investment_reverse_spin_off_action": "Annuler la scission…",
+  "transactions_investment_reverse_spin_off_title": "Annuler cette scission",
+  "transactions_investment_reverse_spin_off_copy": "Cela comptabilise une opération inverse datée de la scission. Chaque lot de la société mère récupère son prix de revient et les nouveaux lots sont retirés. Une vente ou un transfert ultérieur des nouvelles parts bloquera l’annulation. La scission d’origine reste dans l’historique.",
+  "transactions_investment_replace_spin_off_action": "Corriger la scission…",
+  "transactions_investment_replace_spin_off_title": "Corriger cette scission",
+  "investments_spin_off_replace_help": "Modifiez la date, la parité, le pourcentage du prix de revient, le nouvel instrument ou le compte qui reçoit les titres. La scission d’origine est annulée et la scission corrigée répartit chaque lot détenu au même rang dans la journée ; les ventes ultérieures sont recalculées.",
+  "investments_spin_off_replace_reason": "Motif de la correction",
+  "investments_spin_off_replace_submit": "Corriger la scission",
   "investments_spin_off_preview": "Aperçu de la scission"
 }

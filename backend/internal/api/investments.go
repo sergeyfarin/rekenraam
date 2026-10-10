@@ -327,6 +327,7 @@ type investmentCorrectionChainResponse struct {
 	CanCorrectShortSale     bool                               `json:"can_correct_short_sale"`
 	CanCorrectShortCover    bool                               `json:"can_correct_short_cover"`
 	CanCorrectShareExchange bool                               `json:"can_correct_share_exchange"`
+	CanCorrectSpinOff       bool                               `json:"can_correct_spin_off"`
 	CanReverseTransfer      bool                               `json:"can_reverse_transfer"`
 	CanReplaceTransfer      bool                               `json:"can_replace_transfer"`
 	CanResolveBasis         bool                               `json:"can_resolve_basis"`
@@ -340,8 +341,8 @@ type investmentCorrectionChainResponse struct {
 	// EffectiveShareExchange explains an effective exchange, which
 	// can_correct_share_exchange offers to reverse or replace (#179).
 	EffectiveShareExchange *investmentCorrectionShareExchangeTerms `json:"effective_share_exchange,omitempty"`
-	// EffectiveSpinOff explains an effective spin-off (#180); its correction
-	// arrives with #183.
+	// EffectiveSpinOff explains an effective spin-off (#180), which
+	// can_correct_spin_off offers to reverse or replace (#183).
 	EffectiveSpinOff *investmentCorrectionSpinOffTerms  `json:"effective_spin_off,omitempty"`
 	Operations       []investmentCorrectionNodeResponse `json:"operations"`
 }
@@ -1191,9 +1192,9 @@ func investmentCorrectionChain(logger *slog.Logger, authService *app.AuthService
 			CanCorrectReinvested: chain.CanCorrectReinvestedDividend, EffectiveReinvestment: toInvestmentCorrectionReinvestTerms(chain.EffectiveReinvestment),
 			CanCorrectWriteOff: chain.CanCorrectWriteOff, CanCorrectCashInLieu: chain.CanCorrectCashInLieu,
 			CanCorrectShortSale: chain.CanCorrectShortSale, CanCorrectShortCover: chain.CanCorrectShortCover,
-			CanCorrectShareExchange: chain.CanCorrectShareExchange,
-			CanReverseTransfer:      chain.CanReverseTransfer,
-			CanReplaceTransfer:      chain.CanReplaceTransfer, CanResolveBasis: chain.CanResolveBasis,
+			CanCorrectShareExchange: chain.CanCorrectShareExchange, CanCorrectSpinOff: chain.CanCorrectSpinOff,
+			CanReverseTransfer: chain.CanReverseTransfer,
+			CanReplaceTransfer: chain.CanReplaceTransfer, CanResolveBasis: chain.CanResolveBasis,
 			EffectiveTransfer:         toInvestmentCorrectionTransferTerms(chain.EffectiveTransfer),
 			CanCorrectBasisResolution: chain.CanCorrectBasisResolution,
 			EffectiveBasisResolution:  toInvestmentCorrectionBasisResolutionTerms(chain.EffectiveBasisResolution),
@@ -1965,6 +1966,10 @@ func writeInvestmentServiceError(w http.ResponseWriter, r *http.Request, logger 
 		writeAPIError(w, http.StatusUnprocessableEntity, "INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE", err.Error())
 	case errors.Is(err, app.ErrSpinOffChanged):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPIN_OFF_CHANGED", err.Error())
+	case errors.Is(err, app.ErrSpinOffNotFound):
+		writeAPIError(w, http.StatusNotFound, "NOT_FOUND", "spin-off operation not found")
+	case errors.Is(err, app.ErrSpinOffAlreadyCorrected):
+		writeAPIError(w, http.StatusConflict, "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED", err.Error())
 	case errors.Is(err, app.ErrShareExchangeNoHoldings):
 		writeAPIError(w, http.StatusConflict, "INVESTMENT_EXCHANGE_NO_HOLDINGS", err.Error())
 	case errors.Is(err, app.ErrShareExchangeFraction):

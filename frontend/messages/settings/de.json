@@ -1416,5 +1416,14 @@
   "api_error_investment_spin_off_no_holdings": "Vom Mutterinstrument wird am Zuteilungsdatum in diesem Konto nichts gehalten.",
   "api_error_investment_spin_off_fraction_unrepresentable": "Die Zuteilung würde einen Bruchteil ergeben, den das neue Instrument nicht exakt erfassen kann. Abspaltungen werden nie gerundet.",
   "api_error_investment_spin_off_changed": "Der Bestand hat sich nach der Vorschau der Abspaltung geändert. Erstellen Sie die Vorschau erneut.",
+  "api_error_investment_spin_off_already_corrected": "Diese Abspaltung wurde bereits korrigiert.",
+  "transactions_investment_reverse_spin_off_action": "Abspaltung stornieren…",
+  "transactions_investment_reverse_spin_off_title": "Diese Abspaltung stornieren",
+  "transactions_investment_reverse_spin_off_copy": "Dies bucht eine Gegenbuchung zum Datum der Abspaltung. Jedes Lot des Mutterpapiers erhält seine Anschaffungskosten zurück, die neuen Lots werden aufgelöst. Ein späterer Verkauf oder Übertrag der neuen Stücke verhindert die Stornierung. Die ursprüngliche Abspaltung bleibt im Verlauf.",
+  "transactions_investment_replace_spin_off_action": "Abspaltung korrigieren…",
+  "transactions_investment_replace_spin_off_title": "Diese Abspaltung korrigieren",
+  "investments_spin_off_replace_help": "Ändern Sie Datum, Verhältnis, Kostenanteil, neues Wertpapier oder empfangendes Depot. Die ursprüngliche Abspaltung wird storniert und die korrigierte teilt jedes an derselben Stelle dieses Tages gehaltene Lot; spätere Verkäufe werden neu berechnet.",
+  "investments_spin_off_replace_reason": "Grund der Korrektur",
+  "investments_spin_off_replace_submit": "Abspaltung korrigieren",
   "investments_spin_off_preview": "Abspaltung prüfen"
 }

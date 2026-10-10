@@ -1416,5 +1416,14 @@
   "api_error_investment_spin_off_no_holdings": "Van het moederinstrument wordt op de uitkeringsdatum niets aangehouden op die rekening.",
   "api_error_investment_spin_off_fraction_unrepresentable": "De uitkering zou een fractie opleveren die het nieuwe instrument niet exact kan vastleggen. Afsplitsingen worden nooit afgerond.",
   "api_error_investment_spin_off_changed": "De positie is gewijzigd nadat het voorbeeld van de afsplitsing is gemaakt. Bekijk het voorbeeld opnieuw.",
+  "api_error_investment_spin_off_already_corrected": "Deze afsplitsing is al gecorrigeerd.",
+  "transactions_investment_reverse_spin_off_action": "Afsplitsing terugdraaien…",
+  "transactions_investment_reverse_spin_off_title": "Deze afsplitsing terugdraaien",
+  "transactions_investment_reverse_spin_off_copy": "Dit boekt een tegenboeking op de datum van de afsplitsing. Elke lot van het moederfonds krijgt zijn kostprijs terug en de nieuwe lots vervallen. Een latere verkoop of overboeking van de nieuwe stukken blokkeert het terugdraaien. De oorspronkelijke afsplitsing blijft in de geschiedenis.",
+  "transactions_investment_replace_spin_off_action": "Afsplitsing corrigeren…",
+  "transactions_investment_replace_spin_off_title": "Deze afsplitsing corrigeren",
+  "investments_spin_off_replace_help": "Wijzig de datum, de verhouding, het kostprijspercentage, het nieuwe instrument of de ontvangende rekening. De oorspronkelijke afsplitsing wordt teruggedraaid en de gecorrigeerde verdeelt elke lot die op dezelfde plek in die dag werd gehouden; latere verkopen worden herberekend.",
+  "investments_spin_off_replace_reason": "Reden van correctie",
+  "investments_spin_off_replace_submit": "Afsplitsing corrigeren",
   "investments_spin_off_preview": "Voorbeeld van afsplitsing"
 }

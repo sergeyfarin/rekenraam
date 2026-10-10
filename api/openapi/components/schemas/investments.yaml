@@ -1630,6 +1630,11 @@ SpinOffRequest:
       type: string
     reconciliation_override:
       type: boolean
+    gain_impact_acknowledgement:
+      type: string
+      description: >
+        The preview's exact acknowledgement of the committed gains a
+        backdated spin-off revises (#183). An in-order spin-off needs none.
 
 SpinOffLink:
   type: object
@@ -1791,6 +1796,69 @@ SpinOffResponse:
       $ref: "../schemas/transactions.yaml#/TransactionResponse"
     plan:
       $ref: "../schemas/investments.yaml#/SpinOffPlan"
+
+SpinOffReplacementRequest:
+  type: object
+  additionalProperties: false
+  required: [reason, effective_on, destination_commodity_id, ratio_numerator, ratio_denominator,
+    basis_fraction_value, basis_fraction_scale]
+  description: >
+    Corrected terms for a spin-off (#183). The parent holding and instrument
+    stay those of the spin-off; the date, ratio, basis fraction, new
+    instrument, receiving holding or source evidence must change.
+  properties:
+    reason:
+      type: string
+    effective_on:
+      type: string
+      format: date
+    destination_holding_account_id:
+      type: integer
+      format: int64
+      description: Defaults to the parent holding.
+    destination_commodity_id:
+      type: integer
+      format: int64
+    ratio_numerator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+    ratio_denominator:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 1000000000
+    basis_fraction_value:
+      type: string
+      description: Coefficient of the corrected basis fraction, as for SpinOffRequest.
+    basis_fraction_scale:
+      type: integer
+      minimum: 0
+      maximum: 24
+    source_evidence:
+      type: object
+      additionalProperties: true
+    memo:
+      type: string
+    reconciliation_override:
+      type: boolean
+    gain_impact_acknowledgement:
+      type: string
+
+SpinOffReplacementResponse:
+  type: object
+  required: [inverse, replacement, plan, corrected_transaction_id]
+  properties:
+    inverse:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    replacement:
+      $ref: "../schemas/transactions.yaml#/TransactionResponse"
+    plan:
+      $ref: "../schemas/investments.yaml#/SpinOffPlan"
+    corrected_transaction_id:
+      type: integer
+      format: int64
 
 ShareExchangeReplacementRequest:
   type: object
@@ -2272,7 +2340,7 @@ InvestmentReinvestmentReplacementRequest:
 
 InvestmentCorrectionChainResponse:
   type: object
-  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_short_sale, can_correct_short_cover, can_correct_share_exchange, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, can_correct_basis_resolution, basis_resolutions, operations]
+  required: [root_operation_id, effective_transaction_id, can_reverse_manual_sale, can_reverse_manual_buy, can_reverse_sale, can_reverse_buy, can_correct_split, can_correct_dividend, can_correct_reinvested_dividend, can_reverse_return_of_capital, can_replace_return_of_capital, can_correct_write_off, can_correct_short_sale, can_correct_short_cover, can_correct_share_exchange, can_correct_spin_off, can_correct_cash_in_lieu, can_reverse_transfer, can_replace_transfer, can_resolve_basis, can_correct_basis_resolution, basis_resolutions, operations]
   properties:
     root_operation_id:
       type: integer
@@ -2310,6 +2378,9 @@ InvestmentCorrectionChainResponse:
     can_correct_share_exchange:
       type: boolean
       description: The effective operation is a share exchange that may be reversed or replaced (#179); effective_share_exchange carries its terms.
+    can_correct_spin_off:
+      type: boolean
+      description: The effective operation is a spin-off that may be reversed or replaced (#183); effective_spin_off carries its terms.
     can_correct_write_off:
       type: boolean
       description: Whether the effective posted write-off can be reversed or replaced (T-118). The trade correction context pre-fills the replacement; dependent replay may still refuse the command.
@@ -2357,13 +2428,14 @@ InvestmentCorrectionChainResponse:
       description: >-
         Present when the effective operation is a share exchange (#178): its
         instruments, holdings, ratio and each link's current carried basis.
-        It is not yet correctable; reversal and replacement arrive with #179.
+        can_correct_share_exchange offers its reversal and replacement (#179).
     effective_spin_off:
       $ref: '#/InvestmentCorrectionSpinOffTerms'
       description: >-
         Present when the effective operation is a spin-off (#180): its
         instruments, holdings, ratio, basis fraction and each link's current
-        allocated basis. Its own correction arrives with #183.
+        allocated basis. can_correct_spin_off offers its reversal and
+        replacement (#183).
     operations:
       type: array
       minItems: 1

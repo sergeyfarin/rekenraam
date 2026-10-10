@@ -63,6 +63,7 @@ const apiErrorMessageByCode: Record<APIErrorCode, () => string> = {
   INVESTMENT_SPIN_OFF_NO_HOLDINGS: () => m.api_error_investment_spin_off_no_holdings(),
   INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE: () => m.api_error_investment_spin_off_fraction_unrepresentable(),
   INVESTMENT_SPIN_OFF_CHANGED: () => m.api_error_investment_spin_off_changed(),
+  INVESTMENT_SPIN_OFF_ALREADY_CORRECTED: () => m.api_error_investment_spin_off_already_corrected(),
   IMPORT_SPLIT_LINK_UNAVAILABLE: () => m.api_error_import_split_link_unavailable(),
   TRANSACTION_DRAFT_NOT_USER_CREATABLE: () => m.api_error_transaction_draft_not_user_creatable(),
   TRANSACTION_VERSION_STALE: () => m.api_error_transaction_version_stale(),

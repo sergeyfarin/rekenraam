@@ -64,6 +64,9 @@ type CreateSpinOffParams struct {
 	BasisFractionValue     exact.Coefficient
 	BasisFractionScale     int
 	SourceEvidenceJSON     string
+	// ReplacesOperationID is the spin-off a replacement corrects (#183): the
+	// plan replays without it, at its correction-root slot.
+	ReplacesOperationID int64
 	// The expected total is what the journal posts. The writer recomputes it
 	// inside its transaction and refuses a mismatch.
 	ExpectedDestinationQuantityValue exact.Coefficient
@@ -215,115 +218,192 @@ func requireSpinOffCompleteTx(ctx context.Context, tx *sql.Tx, bookID, accountID
 	return nil
 }
 
-// planSpinOffTx derives every link without writing. A spin-off is admitted
-// in date order only (#183 adds backdating), so it reads today's holding.
-func planSpinOffTx(ctx context.Context, tx *sql.Tx, params CreateSpinOffParams) (SpinOffPlan, error) {
+// spinOffWritePlan is the plan plus how the writer must record it.
+type spinOffWritePlan struct {
+	SpinOffPlan
+	// Replayed means the parent reductions are the ones replay produced at the
+	// spin-off's slot (#183); replay installs them in the projection.
+	Replayed bool
+	// DestinationBackdated means the new lots open behind a later event of the
+	// destination holding, so they open by replay admission and it replays.
+	DestinationBackdated bool
+}
+
+// planSpinOffTx derives every link without writing. A spin-off in date order
+// reads today's holding. One dated behind a later rewrite of the parent, or a
+// replacement, replays the parent with the spin-off as its subject at the
+// slot, so it entitles every lot open then with the units it held (#183).
+func planSpinOffTx(ctx context.Context, tx *sql.Tx, params CreateSpinOffParams, subject compoundActionSubject) (spinOffWritePlan, error) {
 	if !validSpinOffParams(params) {
-		return SpinOffPlan{}, fmt.Errorf("%w: spin-off terms are incomplete", ErrInvalidDisposalParams)
+		return spinOffWritePlan{}, fmt.Errorf("%w: spin-off terms are incomplete", ErrInvalidDisposalParams)
 	}
-	for _, holding := range [][2]int64{{params.AccountID, params.CommodityID},
-		{params.DestinationAccountID, params.DestinationCommodityID}} {
-		backdated, err := positionRewrittenAfterTx(ctx, tx, params.BookID, holding[0], holding[1], params.EffectiveOn)
-		if err != nil {
-			return SpinOffPlan{}, err
-		}
-		if backdated {
-			return SpinOffPlan{}, ErrOutOfOrderPositionEvent
-		}
+	replacing := params.ReplacesOperationID > 0
+	parentBackdated, err := positionRewrittenAfterTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, params.EffectiveOn)
+	if err != nil {
+		return spinOffWritePlan{}, err
+	}
+	destinationBackdated, err := positionRewrittenAfterTx(ctx, tx, params.BookID, params.DestinationAccountID,
+		params.DestinationCommodityID, params.EffectiveOn)
+	if err != nil {
+		return spinOffWritePlan{}, err
 	}
 	var shortLots int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM current_investment_lots
 		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND position_side = 'short' AND status = 'open'`,
 		params.BookID, params.AccountID, params.CommodityID).Scan(&shortLots); err != nil {
-		return SpinOffPlan{}, fmt.Errorf("read spin-off short lots: %w", err)
+		return spinOffWritePlan{}, fmt.Errorf("read spin-off short lots: %w", err)
 	}
 	if shortLots > 0 {
-		return SpinOffPlan{}, ErrSpinOffShortPosition
+		return spinOffWritePlan{}, ErrSpinOffShortPosition
 	}
 	ceiling, err := splitQuantityCeilingTx(ctx, tx, params.BookID, params.DestinationCommodityID, params.EffectiveOn)
 	if err != nil {
-		return SpinOffPlan{}, err
+		return spinOffWritePlan{}, err
 	}
+	plan := spinOffWritePlan{Replayed: replacing || parentBackdated, DestinationBackdated: replacing || destinationBackdated}
 	type parentLot struct {
-		id, costID     int64
-		openedOn       string
-		quantity       exact.Coefficient
-		quantityScale  int
-		basis, scale   sql.NullInt64
-		basisKnowledge string
-	}
-	rows, err := tx.QueryContext(ctx, `
-		SELECT id, cost_commodity_id, opened_on, remaining_quantity_value, remaining_quantity_scale,
-			remaining_cost_basis_value, remaining_cost_basis_scale, basis_knowledge
-		FROM current_investment_lots
-		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND position_side = 'long'
-			AND status = 'open' AND opened_on <= ?
-		ORDER BY cost_commodity_id, opened_on, id`, params.BookID, params.AccountID, params.CommodityID, params.EffectiveOn)
-	if err != nil {
-		return SpinOffPlan{}, fmt.Errorf("read spin-off parent lots: %w", err)
+		link     SpinOffLink
+		openedOn string
 	}
 	var lots []parentLot
-	for rows.Next() {
-		var lot parentLot
-		if err := rows.Scan(&lot.id, &lot.costID, &lot.openedOn, &lot.quantity, &lot.quantityScale,
-			&lot.basis, &lot.scale, &lot.basisKnowledge); err != nil {
-			rows.Close()
-			return SpinOffPlan{}, fmt.Errorf("scan spin-off parent lot: %w", err)
+	if plan.Replayed {
+		projections, err := replayCompoundActionSubjectTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID,
+			params.ReplacesOperationID, subject, InvestmentReplayIntent{OperationKind: "spin_off",
+				EventDate: params.EffectiveOn, Kind: "spin_off",
+				BasisFractionValue: params.BasisFractionValue, BasisFractionScale: params.BasisFractionScale})
+		if err != nil {
+			return spinOffWritePlan{}, err
 		}
-		if lot.quantity.Sign() > 0 {
-			lots = append(lots, lot)
+		for _, projection := range projections {
+			for _, link := range projection.SubjectSpinOff {
+				lot, err := investmentLotByIDTx(ctx, tx, params.BookID, link.SourceLotID)
+				if err != nil {
+					return spinOffWritePlan{}, err
+				}
+				lots = append(lots, parentLot{link: link, openedOn: lot.OpenedOn})
+			}
 		}
-	}
-	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
-		return SpinOffPlan{}, fmt.Errorf("read spin-off parent lots: %w", err)
+	} else {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT id, cost_commodity_id, opened_on, remaining_quantity_value, remaining_quantity_scale,
+				remaining_cost_basis_value, remaining_cost_basis_scale, basis_knowledge
+			FROM current_investment_lots
+			WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND position_side = 'long'
+				AND status = 'open' AND opened_on <= ?
+			ORDER BY cost_commodity_id, opened_on, id`, params.BookID, params.AccountID, params.CommodityID, params.EffectiveOn)
+		if err != nil {
+			return spinOffWritePlan{}, fmt.Errorf("read spin-off parent lots: %w", err)
+		}
+		type openLot struct {
+			parentLot
+			basis, scale sql.NullInt64
+		}
+		var open []openLot
+		for rows.Next() {
+			var lot openLot
+			link := &lot.link
+			if err := rows.Scan(&link.SourceLotID, &link.CostCommodityID, &lot.openedOn, &link.SourceQuantityValue,
+				&link.SourceQuantityScale, &lot.basis, &lot.scale, &link.BasisKnowledge); err != nil {
+				rows.Close()
+				return spinOffWritePlan{}, fmt.Errorf("scan spin-off parent lot: %w", err)
+			}
+			if link.SourceQuantityValue.Sign() > 0 {
+				open = append(open, lot)
+			}
+		}
+		if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+			return spinOffWritePlan{}, fmt.Errorf("read spin-off parent lots: %w", err)
+		}
+		allocationScales := make(map[int64]int)
+		for _, lot := range open {
+			link := &lot.link
+			scale, cached := allocationScales[link.CostCommodityID]
+			if !cached {
+				if scale, err = positionBasisAllocationScaleTx(ctx, tx, spinOffPositionParams(params, link.CostCommodityID)); err != nil {
+					return spinOffWritePlan{}, err
+				}
+				allocationScales[link.CostCommodityID] = scale
+			}
+			link.BasisKnowledge = normalizedBasisKnowledge(link.BasisKnowledge)
+			switch {
+			case link.BasisKnowledge == InvestmentBasisKnown && lot.basis.Valid && lot.scale.Valid:
+				allocated, remaining, err := spinOffAllocation(lot.basis.Int64, int(lot.scale.Int64),
+					params.BasisFractionValue, params.BasisFractionScale, scale)
+				if err != nil {
+					return spinOffWritePlan{}, err
+				}
+				link.AllocatedBasisValue, _ = allocated.Int64()
+				link.RemainingBasisValue, _ = remaining.Int64()
+				link.AllocatedBasisScale, link.RemainingBasisScale = allocated.Scale(), remaining.Scale()
+			case link.BasisKnowledge == InvestmentBasisUnknown && !lot.basis.Valid:
+			default:
+				return spinOffWritePlan{}, fmt.Errorf("%w: lot %d has an invalid basis knowledge/amount pair", ErrInvalidDisposalParams, link.SourceLotID)
+			}
+			lots = append(lots, lot.parentLot)
+		}
 	}
 	if len(lots) == 0 {
-		return SpinOffPlan{}, ErrSpinOffNoHoldings
+		return spinOffWritePlan{}, ErrSpinOffNoHoldings
 	}
-	allocationScales := make(map[int64]int)
-	var plan SpinOffPlan
 	total := exact.NewScaledInt()
 	for _, lot := range lots {
-		scale, cached := allocationScales[lot.costID]
-		if !cached {
-			if scale, err = positionBasisAllocationScaleTx(ctx, tx, spinOffPositionParams(params, lot.costID)); err != nil {
-				return SpinOffPlan{}, err
-			}
-			allocationScales[lot.costID] = scale
-		}
-		link := SpinOffLink{SourceLotID: lot.id, CostCommodityID: lot.costID,
-			SourceQuantityValue: lot.quantity, SourceQuantityScale: lot.quantityScale,
-			BasisKnowledge: normalizedBasisKnowledge(lot.basisKnowledge)}
-		switch {
-		case link.BasisKnowledge == InvestmentBasisKnown && lot.basis.Valid && lot.scale.Valid:
-			allocated, remaining, err := spinOffAllocation(lot.basis.Int64, int(lot.scale.Int64),
-				params.BasisFractionValue, params.BasisFractionScale, scale)
-			if err != nil {
-				return SpinOffPlan{}, err
-			}
-			link.AllocatedBasisValue, _ = allocated.Int64()
-			link.RemainingBasisValue, _ = remaining.Int64()
-			link.AllocatedBasisScale, link.RemainingBasisScale = allocated.Scale(), remaining.Scale()
-		case link.BasisKnowledge == InvestmentBasisUnknown && !lot.basis.Valid:
-		default:
-			return SpinOffPlan{}, fmt.Errorf("%w: lot %d has an invalid basis knowledge/amount pair", ErrInvalidDisposalParams, lot.id)
-		}
-		if link.DestinationQuantityValue, link.DestinationQuantityScale, err = splitLotQuantity(lot.quantity,
-			lot.quantityScale, params.RatioNumerator, params.RatioDenominator, ceiling); err != nil {
-			return SpinOffPlan{}, fmt.Errorf("lot %d: %w", lot.id, err)
+		link := lot.link
+		if link.DestinationQuantityValue, link.DestinationQuantityScale, err = splitLotQuantity(link.SourceQuantityValue,
+			link.SourceQuantityScale, params.RatioNumerator, params.RatioDenominator, ceiling); err != nil {
+			return spinOffWritePlan{}, fmt.Errorf("lot %d: %w", link.SourceLotID, err)
 		}
 		if link.OriginalDateKnowledge, link.OriginalAcquiredOn, err = internalTransferOriginalDateTx(ctx, tx,
-			lot.id, lot.openedOn); err != nil {
-			return SpinOffPlan{}, err
+			link.SourceLotID, lot.openedOn); err != nil {
+			return spinOffWritePlan{}, err
 		}
 		total.AddCoefficient(link.DestinationQuantityValue, link.DestinationQuantityScale)
 		plan.Links = append(plan.Links, link)
 	}
 	if plan.DestinationQuantityValue, err = total.Coefficient(); err != nil {
-		return SpinOffPlan{}, err
+		return spinOffWritePlan{}, err
 	}
 	plan.DestinationQuantityScale = total.Scale()
 	return plan, nil
+}
+
+// spinOffHoldingTx is the subject spin-off's replay step: it entitles every
+// long lot of the position open at the slot with the units it holds there
+// and reduces each by the fraction.
+func spinOffHoldingTx(ctx context.Context, tx *sql.Tx, bookID, accountID, commodityID, costCommodityID int64,
+	intent InvestmentReplayIntent, allocationScale int) ([]SpinOffLink, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id, remaining_quantity_value, remaining_quantity_scale
+		FROM current_investment_lots
+		WHERE book_id = ? AND account_id = ? AND commodity_id = ? AND cost_commodity_id = ?
+			AND position_side = 'long' AND status = 'open' AND opened_on <= ?
+		ORDER BY opened_on, id`, bookID, accountID, commodityID, costCommodityID, intent.EventDate)
+	if err != nil {
+		return nil, fmt.Errorf("read spin-off holding: %w", err)
+	}
+	var entitled []LotAllocation
+	for rows.Next() {
+		var lot LotAllocation
+		if err := rows.Scan(&lot.LotID, &lot.QuantityValue, &lot.QuantityScale); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("scan spin-off holding: %w", err)
+		}
+		if lot.QuantityValue.Sign() > 0 {
+			entitled = append(entitled, lot)
+		}
+	}
+	if err := errors.Join(rows.Err(), rows.Close()); err != nil {
+		return nil, fmt.Errorf("read spin-off holding: %w", err)
+	}
+	links := make([]SpinOffLink, 0, len(entitled))
+	for _, lot := range entitled {
+		link, err := spinOffLotTx(ctx, tx, bookID, accountID, commodityID, costCommodityID, lot.LotID, intent.EventDate,
+			lot.QuantityValue, lot.QuantityScale, intent.BasisFractionValue, intent.BasisFractionScale, allocationScale,
+			intent.CreatedAt, intent.CreatedByUserID, intent.AuditEventID)
+		if err != nil {
+			return nil, err
+		}
+		links = append(links, link)
+	}
+	return links, nil
 }
 
 func spinOffPositionParams(params CreateSpinOffParams, costCommodityID int64) DisposeLotsParams {
@@ -335,13 +415,18 @@ func spinOffPositionParams(params CreateSpinOffParams, costCommodityID int64) Di
 
 // PlanSpinOff computes the spin-off's links and journal total in a
 // transaction that is always rolled back.
-func (r *InvestmentRepository) PlanSpinOff(ctx context.Context, params CreateSpinOffParams) (SpinOffPlan, error) {
+// A replayed plan's simulated lot events name actorUserID and no audit event.
+func (r *InvestmentRepository) PlanSpinOff(ctx context.Context, params CreateSpinOffParams, actorUserID int64) (SpinOffPlan, error) {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return SpinOffPlan{}, fmt.Errorf("begin spin-off plan: %w", err)
 	}
 	defer rollbackTx(ctx, tx)
-	return planSpinOffTx(ctx, tx, params)
+	plan, err := planSpinOffTx(ctx, tx, params, compoundActionSubject{ActorUserID: actorUserID, CreatedAt: "1970-01-01T00:00:00Z"})
+	if err != nil {
+		return SpinOffPlan{}, err
+	}
+	return plan.SpinOffPlan, nil
 }
 
 // CreateSpinOff commits the journal, the spin-off fact, every parent basis
@@ -375,14 +460,18 @@ func (r *InvestmentRepository) createSpinOff(ctx context.Context, journal Create
 
 // writeSpinOffTx records a spin-off whose journal the enclosing writer just
 // posted: it recomputes the plan, refuses a stale journal total, then reduces
-// every parent lot and opens its new lot.
+// every parent lot and opens its new lot. A replayed plan records the
+// reductions replay produced at the slot, opens the new lots by replay
+// admission and replays both holdings, so every later decision is revised or
+// named as a dependency (#183).
 func writeSpinOffTx(ctx context.Context, tx *sql.Tx, params CreateSpinOffParams, transaction TransactionRecord,
 	journal CreateTransactionParams, auditEventID int64) (SpinOffPlan, error) {
 	operationID, err := investmentOperationIDTx(ctx, tx, params.BookID, transaction.ID)
 	if err != nil {
 		return SpinOffPlan{}, err
 	}
-	plan, err := planSpinOffTx(ctx, tx, params)
+	plan, err := planSpinOffTx(ctx, tx, params, compoundActionSubject{OperationID: operationID,
+		TransactionID: transaction.ID, AuditEventID: auditEventID, ActorUserID: journal.ActorUserID, CreatedAt: journal.CreatedAt})
 	if err != nil {
 		return SpinOffPlan{}, err
 	}
@@ -403,6 +492,7 @@ func writeSpinOffTx(ctx context.Context, tx *sql.Tx, params CreateSpinOffParams,
 	// Every parent reduction precedes every new lot in effect order, which is
 	// where replay applies the grouped spin-off intent.
 	allocationScales := make(map[int64]int)
+	var costCommodityIDs []int64
 	for index := range plan.Links {
 		planned := plan.Links[index]
 		scale, cached := allocationScales[planned.CostCommodityID]
@@ -411,12 +501,15 @@ func writeSpinOffTx(ctx context.Context, tx *sql.Tx, params CreateSpinOffParams,
 				return SpinOffPlan{}, err
 			}
 			allocationScales[planned.CostCommodityID] = scale
+			costCommodityIDs = append(costCommodityIDs, planned.CostCommodityID)
 		}
-		link, err := spinOffLotTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, planned.CostCommodityID,
-			planned.SourceLotID, params.EffectiveOn, planned.SourceQuantityValue, planned.SourceQuantityScale,
-			params.BasisFractionValue, params.BasisFractionScale, scale, journal.CreatedAt, journal.ActorUserID, auditEventID)
-		if err != nil {
-			return SpinOffPlan{}, err
+		link := planned
+		if !plan.Replayed {
+			if link, err = spinOffLotTx(ctx, tx, params.BookID, params.AccountID, params.CommodityID, planned.CostCommodityID,
+				planned.SourceLotID, params.EffectiveOn, planned.SourceQuantityValue, planned.SourceQuantityScale,
+				params.BasisFractionValue, params.BasisFractionScale, scale, journal.CreatedAt, journal.ActorUserID, auditEventID); err != nil {
+				return SpinOffPlan{}, err
+			}
 		}
 		reduction := exact.ScaledIntFromInt64(link.AllocatedBasisValue, link.AllocatedBasisScale).Negated()
 		reductionValue, err := reduction.Coefficient()
@@ -455,7 +548,7 @@ func writeSpinOffTx(ctx context.Context, tx *sql.Tx, params CreateSpinOffParams,
 			CostCommodityID: link.CostCommodityID, OpeningBasisKnowledge: link.BasisKnowledge,
 			MetadataJSON: `{"source":"spin_off"}`, EventKind: "transfer_in",
 			CreatedAt: journal.CreatedAt, CreatedByUserID: journal.ActorUserID,
-		}, auditEventID, false)
+		}, auditEventID, plan.DestinationBackdated)
 		if err != nil {
 			return SpinOffPlan{}, err
 		}
@@ -472,13 +565,26 @@ func writeSpinOffTx(ctx context.Context, tx *sql.Tx, params CreateSpinOffParams,
 			return SpinOffPlan{}, fmt.Errorf("link spin-off lots: %w", err)
 		}
 	}
-	for costCommodityID := range allocationScales {
+	// The parent first, so a dependency its reduced basis breaks is named
+	// before one the new lots change.
+	var replayed [][2]int64
+	if plan.Replayed {
+		replayed = append(replayed, [2]int64{params.AccountID, params.CommodityID})
+	}
+	if plan.DestinationBackdated {
+		replayed = append(replayed, [2]int64{params.DestinationAccountID, params.DestinationCommodityID})
+	}
+	if err := replayHoldingsTx(ctx, tx, params.BookID, replayed, operationID, auditEventID,
+		journal.ActorUserID, journal.CreatedAt); err != nil {
+		return SpinOffPlan{}, err
+	}
+	for _, costCommodityID := range costCommodityIDs {
 		if err := requirePositionBasisRangeQueryTx(ctx, tx, params.BookID, params.AccountID,
 			params.CommodityID, costCommodityID, true, PositionSideLong); err != nil {
 			return SpinOffPlan{}, err
 		}
 	}
-	return plan, nil
+	return plan.SpinOffPlan, nil
 }
 
 // knownBasisText is a lot event's signed basis amount, NULL when unknown.

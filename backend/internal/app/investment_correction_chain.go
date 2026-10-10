@@ -77,12 +77,12 @@ type InvestmentCorrectionChain struct {
 	// replacement (#179); EffectiveShareExchange carries the terms.
 	CanCorrectShareExchange bool
 	// EffectiveShareExchange explains an effective share exchange (#178).
-	// It offers no correction yet: reversal and replacement arrive with #179.
 	EffectiveShareExchange *InvestmentCorrectionShareExchangeTerms
-	// EffectiveSpinOff explains an effective spin-off (#180). Its own
-	// correction arrives with #183.
-	EffectiveSpinOff *InvestmentCorrectionSpinOffTerms
-	Operations       []InvestmentCorrectionNode
+	// CanCorrectSpinOff allows native spin-off reversal and replacement
+	// (#183); EffectiveSpinOff (#180) carries the terms.
+	CanCorrectSpinOff bool
+	EffectiveSpinOff  *InvestmentCorrectionSpinOffTerms
+	Operations        []InvestmentCorrectionNode
 }
 
 // InvestmentCorrectionSpinOffTerms are a spin-off's instruments, holdings,
@@ -299,6 +299,9 @@ func (s *InvestmentService) CorrectionChain(ctx context.Context, ownerUserID, tr
 		}
 		if correctable && record.OperationKind == "share_exchange" {
 			chain.CanCorrectShareExchange = true
+		}
+		if correctable && record.OperationKind == "spin_off" {
+			chain.CanCorrectSpinOff = true
 		}
 		if correctable && (record.OperationKind == "internal_transfer" || record.OperationKind == "external_transfer_in" ||
 			record.OperationKind == "external_transfer_out") {

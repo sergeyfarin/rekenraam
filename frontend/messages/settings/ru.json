@@ -1416,5 +1416,14 @@
   "api_error_investment_spin_off_no_holdings": "На дату распределения на этом счёте нет материнского инструмента.",
   "api_error_investment_spin_off_fraction_unrepresentable": "Распределение оставило бы дробную часть, которую новый инструмент не может записать точно. Выделения никогда не округляются.",
   "api_error_investment_spin_off_changed": "Позиция изменилась после предпросмотра выделения. Выполните предпросмотр снова.",
+  "api_error_investment_spin_off_already_corrected": "Это выделение уже исправлено.",
+  "transactions_investment_reverse_spin_off_action": "Отменить выделение…",
+  "transactions_investment_reverse_spin_off_title": "Отменить это выделение компании",
+  "transactions_investment_reverse_spin_off_copy": "Будет проведена обратная операция датой выделения. Каждый лот материнской бумаги получит свою стоимость приобретения обратно, а новые лоты будут закрыты. Более поздняя продажа или перевод новых бумаг заблокирует отмену. Исходное выделение останется в истории.",
+  "transactions_investment_replace_spin_off_action": "Исправить выделение…",
+  "transactions_investment_replace_spin_off_title": "Исправить это выделение компании",
+  "investments_spin_off_replace_help": "Измените дату, коэффициент, долю стоимости приобретения, новый инструмент или счёт получения. Исходное выделение отменяется, а исправленное делит каждый лот, удерживаемый на том же месте в этот день; более поздние продажи пересчитываются.",
+  "investments_spin_off_replace_reason": "Причина исправления",
+  "investments_spin_off_replace_submit": "Исправить выделение",
   "investments_spin_off_preview": "Предпросмотр выделения"
 }

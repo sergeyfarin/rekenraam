@@ -773,10 +773,19 @@ dividend in kind is not this kind.
   in the source evidence, and eligibility is the position at the slot. A lot
   sold between the ex date and the distribution date is therefore not
   entitled. Repeated typed dates arrive with #181.
-- **Admission (this slice).** A spin-off is dated in order. One dated behind a
-  later rewrite of the parent position, or of the new position, is refused
-  with `ErrOutOfOrderPositionEvent`. Backdating by subject replay comes with
-  the correction child, #183.
+- **Admission (#183).** A spin-off dated behind a later rewrite of the parent
+  or the new position is admitted by replay, as an exchange is. Behind the
+  parent, the writer replays each of its cost currencies with the spin-off as
+  a subject `spin_off` intent at its own slot. The subject entitles every long
+  lot open there with the units it holds then, and reduces each by the
+  fraction; those reductions become the spin-off's `basis_reduction` events
+  and links. Behind the new position, the new lots open by replay admission.
+  Both holdings then replay, so a later decision is revised (gains need the
+  shared acknowledgement) or named as a dependency, and a refusal writes
+  nothing. The plan that prices the journal runs the same replay in a
+  rolled-back transaction, and the writer refuses a total that moved. A lot
+  sold before the distribution date is not entitled, and one sold after it
+  keeps its entitlement: the later sale disposes of the reduced basis.
 - **Replay and closure.** Replay reads a spin-off's links as one `spin_off`
   intent per operation and cost currency. For each link, the lot is the
   link's source lot, or the corrected successor of the same acquisition on
@@ -795,10 +804,27 @@ dividend in kind is not this kind.
   currency). `effective_investment_lot_events` drops a revised link's
   `basis_reduction`, as it drops a revised transfer's events. Removing an
   entitled acquisition is a named refusal.
-- **Correction.** The generic void path and the transfer and exchange
-  correction commands stay closed to a spin-off. Its own reversal,
-  replacement and backdating are #183, following ADR 0013 *Transfer
-  Correction Refinement* as the exchange did.
+- **Correction (#183).** A spin-off has its own reversal and replacement,
+  following ADR 0013 *Transfer Correction Refinement* as the exchange did;
+  the generic void path and the transfer and exchange correction commands
+  stay closed to it.
+  - A reversal posts the exact inverse of the spin-off journal on its date.
+    It replays the parent, whose lots get their basis back, then the new
+    holding, which loses the lots the spin-off opened. A sale or onward
+    transfer of the removed units is the named refusal.
+  - A replacement keeps the parent holding and instrument. It may change the
+    date, ratio, basis fraction, new instrument, receiving holding or
+    evidence, and refuses unchanged terms (equivalent ratios and fractions are
+    the same terms). It takes the replaced spin-off's correction-root slot
+    and entitles every lot open there, computed by the subject replay without
+    the replaced spin-off. Every holding either spin-off touched then replays.
+  - Originals, links, reductions and link revisions stay as evidence.
+    `effective_investment_lot_events` drops a reversed spin-off's
+    reductions, and revisions of a reversed spin-off describe nothing current.
+
+  The chain sets `can_correct_spin_off` for an effective spin-off. The
+  transaction detail offers the reversal and the entry form in correction
+  mode, with the parent holding fixed.
 - **Reads.** The preview and the result return every link and the totals per
   cost currency: parent units, new units, allocated basis, and the parent's
   remaining basis. Both bases are unknown when any lot in that currency is

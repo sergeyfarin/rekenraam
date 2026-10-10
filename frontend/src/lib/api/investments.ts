@@ -51,6 +51,8 @@ export type SpinOffPlan = components['schemas']['SpinOffPlan'];
 export type SpinOffPreviewResponse = components['schemas']['SpinOffPreviewResponse'];
 export type SpinOffResponse = components['schemas']['SpinOffResponse'];
 export type InvestmentCorrectionSpinOffTerms = components['schemas']['InvestmentCorrectionSpinOffTerms'];
+export type SpinOffReplacementRequest = components['schemas']['SpinOffReplacementRequest'];
+export type SpinOffReplacementResponse = components['schemas']['SpinOffReplacementResponse'];
 export type InvestmentLotOrigin = components['schemas']['InvestmentLotOrigin'];
 export type InvestmentWriteOffRequest = components['schemas']['InvestmentWriteOffRequest'];
 export type DividendRequest = components['schemas']['DividendRequest'];
@@ -1378,6 +1380,78 @@ export async function replaceShareExchange(
   try {
     const { data, error, response } = await apiClient.POST(
       '/api/v1/investments/transactions/{transaction_id}/replace-share-exchange',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+// Spin-off reversal and replacement (#183). Both previews run the actual
+// writer in a rolled-back transaction.
+export async function previewSpinOffReversalReconciliation(
+  transactionID: number,
+  input: InvestmentSaleReversalRequest
+): Promise<ReconciliationImpactResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-spin-off/reconciliation-impact',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function reverseSpinOff(
+  transactionID: number,
+  input: InvestmentSaleReversalRequest,
+  csrfToken: string
+): Promise<InvestmentSaleReversalResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/reverse-spin-off',
+      { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function previewSpinOffReplacement(
+  transactionID: number,
+  input: SpinOffReplacementRequest
+): Promise<SpinOffPreviewResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-spin-off/preview',
+      { params: { path: { transaction_id: transactionID } }, body: input }
+    );
+    if (data !== undefined) return data;
+    throw toAPIClientError(response, error);
+  } catch (error) {
+    if (error instanceof APIClientError) throw error;
+    throw toNetworkError(error);
+  }
+}
+
+export async function replaceSpinOff(
+  transactionID: number,
+  input: SpinOffReplacementRequest,
+  csrfToken: string
+): Promise<SpinOffReplacementResponse> {
+  try {
+    const { data, error, response } = await apiClient.POST(
+      '/api/v1/investments/transactions/{transaction_id}/replace-spin-off',
       { params: { path: { transaction_id: transactionID }, header: { 'X-CSRF-Token': csrfToken } }, body: input }
     );
     if (data !== undefined) return data;

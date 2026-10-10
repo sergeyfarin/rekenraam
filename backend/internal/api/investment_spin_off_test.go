@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"rekenraam/backend/internal/exact"
 )
 
 // #180: the spin-off endpoints, their preview, the reads and the named refusals.
@@ -82,6 +84,7 @@ func TestSpinOffAPIPreviewCommitReadsAndNamedRefusals(t *testing.T) {
 	assert.Nil(t, chain.EffectiveSpinOff.Plan.Links[0].RemainingBasisValue, "the chain does not restate what stayed")
 	assert.False(t, chain.CanReverseTransfer || chain.CanReplaceTransfer || chain.CanCorrectShareExchange,
 		"a spin-off's correction is its own (#183)")
+	assert.True(t, chain.CanCorrectSpinOff)
 	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet, fmt.Sprintf(
 		"/api/v1/transactions/%d", created.Transaction.ID), nil, http.StatusOK)
 	assert.Contains(t, res.Body.String(), `"system_label":"spin_off"`)
@@ -106,8 +109,94 @@ func TestSpinOffAPIPreviewCommitReadsAndNamedRefusals(t *testing.T) {
 	sale.TransactionDate = "2026-04-01"
 	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
 		"/api/v1/investments/sell", sale, http.StatusCreated)
-	request.BasisFractionValue, request.BasisFractionScale = "1", 1
+	// A spin-off dated behind the April sale is admitted by replay (#183)
+	// once the restated gain is acknowledged.
+	request.BasisFractionValue, request.BasisFractionScale, request.RatioDenominator = "1", 1, 1
 	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
 		"/api/v1/investments/spin-offs", request, http.StatusConflict)
-	assert.Contains(t, res.Body.String(), "INVESTMENT_EVENT_OUT_OF_ORDER")
+	assert.Contains(t, res.Body.String(), "INVESTMENT_GAIN_IMPACT_ACKNOWLEDGEMENT_REQUIRED")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		"/api/v1/investments/spin-offs/preview", request, http.StatusOK)
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
+	require.NotNil(t, preview.Impact.GainImpact)
+	assert.Equal(t, "10", preview.Plan.Links[0].SourceQuantityValue.String(), "entitled with the units held in March")
+	request.GainImpactAcknowledgement = preview.Impact.GainImpact.Acknowledgement
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/spin-offs", request, http.StatusCreated)
+}
+
+// #183: reversal and replacement of a spin-off, the dependency refusal and the
+// correction fences.
+func TestSpinOffCorrectionAPI(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	f := bootstrapInvestmentAPITest(t, handler)
+	parent := createInstrumentForSession(t, handler, f, "PARENT")
+	spun := createInstrumentForSession(t, handler, f, "SPINCO")
+	holding := createHoldingAccountForSession(t, handler, f, parent.ID)
+	spunHolding := createHoldingAccountForSession(t, handler, f, spun.ID)
+	buy := tradeRequestBody(f, holding.ID, parent.CommodityID, "10", 10000)
+	buy.TransactionDate = "2026-01-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/buy", buy, http.StatusCreated)
+	res := doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/spin-offs", spinOffRequest{EffectiveOn: "2026-02-01", HoldingAccountID: holding.ID,
+			DestinationHoldingID: spunHolding.ID, CommodityID: parent.CommodityID, DestinationCommodityID: spun.CommodityID,
+			RatioNumerator: 1, RatioDenominator: 1, BasisFractionValue: "1", BasisFractionScale: 1}, http.StatusCreated)
+	var first spinOffResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&first))
+	path := func(id int64, action string) string {
+		return fmt.Sprintf("/api/v1/investments/transactions/%d/%s", id, action)
+	}
+	// The exchange commands do not reach a spin-off.
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(first.Transaction.ID, "reverse-share-exchange"), investmentSaleReversalRequest{Reason: "x"}, http.StatusNotFound)
+
+	// Replace 10 % with 25 % and 1:1 with 2:1: the preview and the commit agree.
+	replacement := spinOffReplacementRequest{Reason: "issuer restated the allocation", EffectiveOn: "2026-02-01",
+		DestinationHoldingID: spunHolding.ID, DestinationCommodityID: spun.CommodityID,
+		RatioNumerator: 2, RatioDenominator: 1, BasisFractionValue: "25", BasisFractionScale: 2}
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path(first.Transaction.ID, "replace-spin-off/preview"), replacement, http.StatusOK)
+	var preview spinOffPreviewResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&preview))
+	assert.Equal(t, "20", preview.Plan.DestinationQuantityValue.String())
+	total := preview.Plan.BasisTotals[0]
+	require.NotNil(t, total.AllocatedBasisValue)
+	assert.Zero(t, exact.ScaledIntFromCoefficient(exact.Coefficient(*total.AllocatedBasisValue), *total.AllocatedBasisScale).Cmp(
+		exact.ScaledIntFromInt64(2500, 2)), "a quarter of 100.00")
+	doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path(first.Transaction.ID, "replace-spin-off"), replacement, http.StatusForbidden)
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(first.Transaction.ID, "replace-spin-off"), replacement, http.StatusCreated)
+	var replaced spinOffReplacementResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&replaced))
+	assert.Equal(t, first.Transaction.ID, replaced.CorrectedTransactionID)
+	assert.Equal(t, "20", replaced.Plan.DestinationQuantityValue.String())
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(first.Transaction.ID, "replace-spin-off"), replacement, http.StatusConflict)
+	assert.Contains(t, res.Body.String(), "INVESTMENT_SPIN_OFF_ALREADY_CORRECTED")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(replaced.Replacement.ID, "replace-spin-off"), replacement, http.StatusBadRequest)
+	assert.Contains(t, res.Body.String(), "VALIDATION_FAILED", "unchanged terms")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodGet,
+		path(replaced.Replacement.ID, "correction-chain"), nil, http.StatusOK)
+	var chain investmentCorrectionChainResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&chain))
+	assert.True(t, chain.CanCorrectSpinOff)
+
+	// A sale of the new units blocks reversing the replacement, by name.
+	sale := tradeRequestBody(f, spunHolding.ID, spun.CommodityID, "5", 10000)
+	sale.TransactionDate = "2026-03-01"
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		"/api/v1/investments/sell", sale, http.StatusCreated)
+	reversal := investmentSaleReversalRequest{Reason: "not a spin-off"}
+	res = doInvestmentRequest(t, handler, f.sessionCookie, "", http.MethodPost,
+		path(replaced.Replacement.ID, "reverse-spin-off/reconciliation-impact"), reversal, http.StatusConflict)
+	assert.Contains(t, res.Body.String(), "INVESTMENT_TRANSFER_DEPENDENCY")
+	res = doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(replaced.Replacement.ID, "reverse-spin-off"), reversal, http.StatusConflict)
+	assert.Contains(t, res.Body.String(), "INVESTMENT_TRANSFER_DEPENDENCY")
+	doInvestmentRequest(t, handler, f.sessionCookie, f.csrfToken, http.MethodPost,
+		path(999999, "reverse-spin-off"), reversal, http.StatusNotFound)
 }

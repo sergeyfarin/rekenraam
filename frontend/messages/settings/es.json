@@ -1416,5 +1416,14 @@
   "api_error_investment_spin_off_no_holdings": "No se mantiene nada del instrumento matriz en esa cuenta en la fecha de distribución.",
   "api_error_investment_spin_off_fraction_unrepresentable": "La distribución dejaría una fracción que el nuevo instrumento no puede registrar con exactitud. Las escisiones nunca se redondean.",
   "api_error_investment_spin_off_changed": "La posición cambió después de la vista previa de la escisión. Vuelva a generarla.",
+  "api_error_investment_spin_off_already_corrected": "Esta escisión ya se ha corregido.",
+  "transactions_investment_reverse_spin_off_action": "Revertir escisión…",
+  "transactions_investment_reverse_spin_off_title": "Revertir esta escisión",
+  "transactions_investment_reverse_spin_off_copy": "Esto registra una transacción inversa con la fecha de la escisión. Cada lote de la matriz recupera su coste y los lotes nuevos se retiran. Una venta o traspaso posterior de las nuevas acciones bloqueará la reversión. La escisión original queda en el historial.",
+  "transactions_investment_replace_spin_off_action": "Corregir escisión…",
+  "transactions_investment_replace_spin_off_title": "Corregir esta escisión",
+  "investments_spin_off_replace_help": "Cambie la fecha, la proporción, el porcentaje del coste, el nuevo instrumento o la cuenta que recibe los títulos. La escisión original se revierte y la corregida reparte cada lote mantenido en el mismo lugar de ese día; las ventas posteriores se recalculan.",
+  "investments_spin_off_replace_reason": "Motivo de la corrección",
+  "investments_spin_off_replace_submit": "Corregir escisión",
   "investments_spin_off_preview": "Vista previa de la escisión"
 }

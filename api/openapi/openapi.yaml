@@ -379,6 +379,14 @@ paths:
     $ref: "./paths/investments-replace-share-exchange.yaml"
   /api/v1/investments/transactions/{transaction_id}/replace-share-exchange/preview:
     $ref: "./paths/investments-replace-share-exchange-preview.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-spin-off:
+    $ref: "./paths/investments-reverse-spin-off.yaml"
+  /api/v1/investments/transactions/{transaction_id}/reverse-spin-off/reconciliation-impact:
+    $ref: "./paths/investments-reverse-spin-off-reconciliation-impact.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-spin-off:
+    $ref: "./paths/investments-replace-spin-off.yaml"
+  /api/v1/investments/transactions/{transaction_id}/replace-spin-off/preview:
+    $ref: "./paths/investments-replace-spin-off-preview.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-split:
     $ref: "./paths/investments-reverse-split.yaml"
   /api/v1/investments/transactions/{transaction_id}/reverse-split/reconciliation-impact:
@@ -1224,6 +1232,10 @@ components:
       $ref: "./components/schemas/investments.yaml#/SpinOffPreviewResponse"
     SpinOffResponse:
       $ref: "./components/schemas/investments.yaml#/SpinOffResponse"
+    SpinOffReplacementRequest:
+      $ref: "./components/schemas/investments.yaml#/SpinOffReplacementRequest"
+    SpinOffReplacementResponse:
+      $ref: "./components/schemas/investments.yaml#/SpinOffReplacementResponse"
     ShareExchangeResponse:
       $ref: "./components/schemas/investments.yaml#/ShareExchangeResponse"
     ShareExchangeReplacementRequest:

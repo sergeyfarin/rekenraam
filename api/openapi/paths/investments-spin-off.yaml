@@ -10,7 +10,10 @@ post:
     the parent's cost currency, knowledge and original acquisition date. The
     journal posts only the new instrument (destination holding +Q' and
     commodity_trading −Q'); nothing is realized. A spin-off dated behind a
-    later rewrite of either position is refused until #183.
+    later rewrite of either position is admitted by replay (#183): it entitles
+    every lot open at its slot with the units it held then, both holdings
+    replay, a later decision it changes is revised (requiring the preview's
+    gain_impact_acknowledgement) or named, and a refusal writes nothing.
   parameters:
     - in: header
       name: X-CSRF-Token
@@ -50,9 +53,9 @@ post:
     "409":
       description: >
         INVESTMENT_SPIN_OFF_NO_HOLDINGS, INVESTMENT_SPIN_OFF_CHANGED (preview again),
-        INVESTMENT_EVENT_OUT_OF_ORDER (dated behind a later rewrite of either position),
+        INVESTMENT_TRANSFER_DEPENDENCY (a later operation the backdated spin-off makes impossible),
         INVESTMENT_POSITION_SIDE_CONFLICT (an open short of the parent),
-        or reconciliation override required
+        reconciliation override required, or gain changes not acknowledged
       content:
         application/json:
           schema:

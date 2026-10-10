@@ -1444,5 +1444,14 @@
   "api_error_investment_spin_off_no_holdings": "Nothing of the parent instrument is held in that account on the distribution date.",
   "api_error_investment_spin_off_fraction_unrepresentable": "The distribution would leave a fraction the new instrument cannot record exactly. Spin-offs are never rounded.",
   "api_error_investment_spin_off_changed": "The holding changed after the spin-off was previewed. Preview it again.",
+  "api_error_investment_spin_off_already_corrected": "This spin-off has already been corrected.",
+  "transactions_investment_reverse_spin_off_action": "Reverse spin-off…",
+  "transactions_investment_reverse_spin_off_title": "Reverse this spin-off",
+  "transactions_investment_reverse_spin_off_copy": "This posts an inverse transaction dated to the spin-off. Each parent lot gets its basis back and the new lots are retired. A later sale or move of the new units will block the reversal. The original spin-off stays in history.",
+  "transactions_investment_replace_spin_off_action": "Correct spin-off…",
+  "transactions_investment_replace_spin_off_title": "Correct this spin-off",
+  "investments_spin_off_replace_help": "Change the date, ratio, basis percentage, new instrument or receiving holding. The original spin-off is reversed and the corrected one divides every lot held at the same place in that day; later sales are recalculated.",
+  "investments_spin_off_replace_reason": "Reason for correction",
+  "investments_spin_off_replace_submit": "Correct spin-off",
   "investments_spin_off_preview": "Preview spin-off"
 }
