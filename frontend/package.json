@@ -44,7 +44,7 @@
     "dependencies": {
         "@inlang/paraglide-js": "2.26.0",
         "@tanstack/svelte-query": "6.3.1",
-        "@tanstack/svelte-table": "9.2.6",
+        "@tanstack/svelte-table": "9.2.8",
         "date-fns": "4.4.0",
         "minisearch": "7.2.0",
         "openapi-fetch": "0.17.0"
