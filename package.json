@@ -16,7 +16,7 @@
     "build": "./scripts/build-single-binary.sh"
   },
   "devDependencies": {
-    "concurrently": "10.0.5",
+    "concurrently": "10.0.6",
     "cross-env": "10.1.0"
   }
 }
