@@ -21,16 +21,32 @@ native-language review (#102), or release readiness.
 
 ## Evidence limitation identified by #280
 
-[#348](https://github.com/sergeyfarin/rekenraam/issues/348) demonstrates that the
-nested-dialog pixel override below can accept low-contrast text when a border
-or icon has higher contrast. A real Chromium negative control yielded one axe
+[#348](https://github.com/sergeyfarin/rekenraam/issues/348) demonstrated that the
+original nested-dialog pixel override could accept low-contrast text when a border
+or icon had higher contrast. A real Chromium negative control yielded one axe
 violation but zero retained violations and a reported 21:1 border ratio. The
-matrix's pixel-override rows therefore do **not** establish text contrast.
-The historical ratios below remain the original observation, with this limit;
-other axe/fit/close checks retain their bounded evidence. #344's separate
+matrix's pixel-override rows (¹ below) therefore do **not** establish text
+contrast; they remain the historical observation. Other axe/fit/close checks
+retain their bounded evidence. #344's separate
 shared-worker fixture/fit failures are repaired with explicit long-option and
 24-place lot fixtures; the complete 352-journey gate passes at `af233abb`
 ([follow-up evidence](subview-shared-book-fixes-2026-10-19.md)).
+
+**Resolved by #348 (2026-10-20).** The override now measures text only
+(`e2e/playwright/support/rendered-contrast.ts`): each node is screenshotted
+as rendered and again with its own text fill transparent, so the changed
+pixels are its glyphs and the second shot is the background rendered under
+them. Borders, icons and child elements are identical in both shots and
+cannot stand in for text. The 4.5:1 threshold is unchanged, and a kept or
+dropped finding keeps axe's own diagnostics with the measured text and
+background colours. `rendered-contrast.spec.ts` holds the controls: `#999`
+text with a black border and a black icon stays a failure (2.85:1), `#333`
+text passes at 12.63:1, and a finding outside a nested dialog is never
+re-measured. In the post-fix sweep (all eight configurations), axe raised no
+nested-dialog contrast finding, so no cell relies on the override. The
+`de 390` configuration failed one unrelated fit check (`add currency`, 8 px
+page scroll). The unmodified `a7d125e` fails identically in that sandbox,
+while CI at the same commit is green.
 
 ## Scope and baseline
 
@@ -90,10 +106,11 @@ asked for it: a modal `<dialog>` inside another. axe sometimes measured its
 confirm button as if the outer modal's backdrop covered it. It reported
 1.99:1 and 3.2:1 in some desktop runs, while a screenshot shows the opaque
 button on top at about 5:1. For a `color-contrast` hit whose every node sits
-in a nested open dialog, the sweep re-measures the rendered pixels (the
-element's commonest colour against the pixel that contrasts most with it). It
+in a nested open dialog, the sweep re-measures the rendered pixels. It
 keeps the hit only below 4.5:1 and records the rendered ratio in the matrix
-cell's `note`. In the final run, three desktop cells carry such a note:
+cell's `note`. The measurement originally compared the element's commonest
+colour with the pixel that contrasts most with it; #348 replaced that
+with a text-only measurement (above). In the final run of this audit, three desktop cells carry such a note:
 5.39:1 in light and German and 9.24:1 in dark. The token computation gives
 5.12:1 and 9.26:1 at rest. Hits outside nested dialogs are never
 re-measured.

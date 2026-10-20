@@ -4,6 +4,7 @@ import { expect, repoRoot, test, type Locator, type Page } from './support/fixtu
 import { seedReferenceBook } from './support/reference-book';
 import { accessibilityViolations, type AxeViolation } from './support/a11y';
 import { apiJSON, csrfTokenFor } from './support/api';
+import { withRenderedContrast } from './support/rendered-contrast';
 import { ensureBrowserSession } from './support/session';
 import { setTrading212Dividends, setTrading212Fills, trading212StubAvailable } from './support/trading212';
 
@@ -517,56 +518,6 @@ async function discardImport(c: Context) {
 async function settle(page: Page) {
   await expect(page.locator('main h1, main h2').first()).toBeVisible({ timeout: 15_000 });
   await page.waitForLoadState('networkidle');
-}
-
-/**
- * axe sometimes blends a dialog opened inside another dialog with a modal
- * backdrop that is not over it (seen on the reconciliation review inside a
- * correction: 1.99:1 reported, about 5:1 on screen). A colour-contrast hit
- * whose every node sits in a nested open dialog is measured again from the
- * rendered pixels: the element's most common colour against the pixel that
- * contrasts most with it, which is its text. It stays a failure below 4.5:1.
- */
-async function withRenderedContrast(page: Page, violations: AxeViolation[], notes: string[]): Promise<AxeViolation[]> {
-  const kept: AxeViolation[] = [];
-  for (const violation of violations) {
-    if (violation.id !== 'color-contrast' || violation.nodes !== violation.targets.length) { kept.push(violation); continue; }
-    const ratios: number[] = [];
-    for (const target of violation.targets) {
-      const element = page.locator(target).first();
-      const nested = await element.evaluate((node) => !!node.closest('dialog[open]')?.parentElement?.closest('dialog[open]')).catch(() => false);
-      if (!nested) break;
-      await page.mouse.move(0, 0);
-      const png = (await element.screenshot({ animations: 'disabled' })).toString('base64');
-      ratios.push(await page.evaluate(async (data) => {
-        const image = new Image();
-        image.src = `data:image/png;base64,${data}`;
-        await image.decode();
-        const canvas = document.createElement('canvas');
-        canvas.width = image.width; canvas.height = image.height;
-        const context = canvas.getContext('2d')!;
-        context.drawImage(image, 0, 0);
-        const pixels = context.getImageData(0, 0, image.width, image.height).data;
-        const counts = new Map<number, number>();
-        for (let i = 0; i < pixels.length; i += 4) {
-          const key = (pixels[i] << 16) | (pixels[i + 1] << 8) | pixels[i + 2];
-          counts.set(key, (counts.get(key) ?? 0) + 1);
-        }
-        const lum = (key: number) => [16, 8, 0].map((shift) => ((key >> shift) & 255) / 255)
-          .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
-          .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
-        const background = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-        const ratio = (a: number, b: number) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
-        return Math.max(...[...counts.keys()].map((key) => ratio(key, background)));
-      }, png));
-    }
-    if (ratios.length !== violation.targets.length || ratios.some((ratio) => ratio < 4.5)) {
-      kept.push({ ...violation, summary: `${violation.summary ?? ''} (rendered: ${ratios.map((r) => r.toFixed(2)).join(', ') || 'not nested'})` });
-    } else {
-      notes.push(`axe color-contrast in a nested dialog re-measured from pixels: ${ratios.map((r) => `${r.toFixed(2)}:1`).join(', ')}`);
-    }
-  }
-  return kept;
 }
 
 function describeViolations(violations: AxeViolation[]): string {

@@ -228,9 +228,9 @@ below is execution order, not a chain of hard dependencies.
    #345–#347
    (P3 contract/tooling gaps) and #351 (P3 direct-step duplicate detection)
    are fixed. #352 (P2 full-suite FX test isolation) is fixed in its own
-   worker project, and its full-suite acceptance now passes. #348 (P2) retains the demonstrated
-   nested-dialog contrast-oracle gap: a black border can hide low-contrast text
-   from the screenshot fallback. Additional audit #349 covers runtime API
+   worker project, and its full-suite acceptance now passes. #348 (P2) is fixed: the
+   nested-dialog contrast fallback now measures rendered text against its own
+   background, and a black border or icon can no longer hide low-contrast text. Additional audit #349 covers runtime API
    response-schema conformance beyond verified route/client parity; #350 (P3)
    records missing HTTP 413 responses on capped JSON operations. The shared
    reference register #266 is delivered, with
