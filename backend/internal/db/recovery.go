@@ -71,6 +71,14 @@ func (r *RecoveryRepository) ResetOwnerPasswordAndRevokeSessions(ctx context.Con
 	if err != nil {
 		return fmt.Errorf("read revoked owner session rows: %w", err)
 	}
+	tokensRevokedResult, err := tx.ExecContext(ctx, `UPDATE personal_access_tokens SET revoked_at = ? WHERE revoked_at IS NULL`, params.RevokedAt)
+	if err != nil {
+		return fmt.Errorf("revoke owner API credentials: %w", err)
+	}
+	tokensRevoked, err := tokensRevokedResult.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("count revoked API credentials: %w", err)
+	}
 
 	var mfaStatus string
 	if err := tx.QueryRowContext(ctx, `
@@ -103,7 +111,8 @@ func (r *RecoveryRepository) ResetOwnerPasswordAndRevokeSessions(ctx context.Con
 		SessionsRevoked   int64  `json:"sessions_revoked"`
 		PreviousMFAStatus string `json:"previous_mfa_status,omitempty"`
 		BackupWritten     bool   `json:"backup_written"`
-	}{sessionsRevoked, mfaStatus, params.BackupWritten})
+		TokensRevoked     int64  `json:"tokens_revoked"`
+	}{sessionsRevoked, mfaStatus, params.BackupWritten, tokensRevoked})
 	if err != nil {
 		return fmt.Errorf("encode owner recovery event metadata: %w", err)
 	}

@@ -94,6 +94,9 @@ func authenticatedSessionID(r *http.Request) int64 {
 }
 
 func authenticatedOwner(w http.ResponseWriter, r *http.Request, logger *slog.Logger, authService *app.AuthService) (app.Owner, bool) {
+	if owner, ok := r.Context().Value(personalAccessTokenOwnerKey{}).(app.Owner); ok {
+		return owner, true
+	}
 	if authService == nil {
 		writeAPIError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return app.Owner{}, false

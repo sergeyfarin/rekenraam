@@ -1,0 +1,3 @@
+# Structural schema validation; optional format validators are inventoried.
+PyYAML==6.0.1
+jsonschema==4.10.3

@@ -1,0 +1,53 @@
+source,method,enrichment_owner,disposition
+backend/internal/app,buy/buyWithPostWrite,internal receipt / pure conversion,Trading 212 / CSV / crypto commit identity
+backend/internal/app,optionalTransaction,internal receipt / pure conversion,enriched journal-free basis result
+backend/internal/app,sell/sellWithPostWrite,internal receipt / pure conversion,Trading 212 / CSV / crypto commit identity
+backend/internal/app,writeOffTrade,internal receipt / pure conversion,WriteOff public boundary
+backend/internal/app/import_dividend_review.go,ReviewImportDividend,enrichOne,hydrated transaction response
+backend/internal/app/investment_basis_resolution.go,ReplaceTransferBasisResolution,enrichRecords,hydrated transaction response
+backend/internal/app/investment_basis_resolution.go,ResolveTransferBasis,enrichRecords,hydrated transaction response
+backend/internal/app/investment_basis_resolution.go,ReverseTransferBasisResolution,enrichRecords,hydrated transaction response
+backend/internal/app/investment_buy_replacement.go,replaceBuyWithPostWriteOrigin,enrichRecords,hydrated transaction response
+backend/internal/app/investment_buy_reversal.go,ReverseBuy,enrichOne,hydrated transaction response
+backend/internal/app/investment_capital_return.go,CapitalReturn,enrichOne,hydrated transaction response
+backend/internal/app/investment_capital_return.go,ReplaceCapitalReturn,enrichRecords,hydrated transaction response
+backend/internal/app/investment_capital_return.go,ReverseCapitalReturn,enrichOne,hydrated transaction response
+backend/internal/app/investment_cash_in_lieu.go,CashInLieu,enrichOne,hydrated transaction response
+backend/internal/app/investment_cash_stock_merger.go,CashStockMerger,enrichOne,hydrated transaction response
+backend/internal/app/investment_cash_stock_merger_correction.go,ReplaceCashStockMerger,enrichRecords,hydrated transaction response
+backend/internal/app/investment_cash_stock_merger_correction.go,ReverseCashStockMerger,enrichOne,hydrated transaction response
+backend/internal/app/investment_dividend_correction.go,ReplaceDividend,enrichRecords,hydrated transaction response
+backend/internal/app/investment_dividend_correction.go,ReverseDividend,enrichOne,hydrated transaction response
+backend/internal/app/investment_payment_in_lieu.go,ReplacePaymentInLieu,enrichRecords,hydrated transaction response
+backend/internal/app/investment_payment_in_lieu.go,ReversePaymentInLieu,enrichOne,hydrated transaction response
+backend/internal/app/investment_payment_in_lieu.go,paymentInLieu,enrichOne,hydrated transaction response
+backend/internal/app/investment_reinvestment_correction.go,ReplaceReinvestedDividend,enrichRecords,hydrated transaction response
+backend/internal/app/investment_reinvestment_correction.go,ReverseReinvestedDividend,enrichOne,hydrated transaction response
+backend/internal/app/investment_sale_replacement.go,replaceDisposal,enrichRecords,hydrated transaction response
+backend/internal/app/investment_sale_reversal.go,reverseDisposal,enrichOne,hydrated transaction response
+backend/internal/app/investment_share_exchange.go,ShareExchange,enrichOne,hydrated transaction response
+backend/internal/app/investment_share_exchange_correction.go,ReplaceShareExchange,enrichRecords,hydrated transaction response
+backend/internal/app/investment_share_exchange_correction.go,ReverseShareExchange,enrichOne,hydrated transaction response
+backend/internal/app/investment_short.go,ShortCover,enrichOne,hydrated transaction response
+backend/internal/app/investment_short.go,ShortSale,enrichOne,hydrated transaction response
+backend/internal/app/investment_short_correction.go,ReplaceShortSale,enrichRecords,hydrated transaction response
+backend/internal/app/investment_short_correction.go,ReverseShortSale,enrichOne,hydrated transaction response
+backend/internal/app/investment_spin_off.go,SpinOff,enrichOne,hydrated transaction response
+backend/internal/app/investment_spin_off_correction.go,ReplaceSpinOff,enrichRecords,hydrated transaction response
+backend/internal/app/investment_spin_off_correction.go,ReverseSpinOff,enrichOne,hydrated transaction response
+backend/internal/app/investment_split.go,Split,enrichOne,hydrated transaction response
+backend/internal/app/investment_split_correction.go,ReplaceSplit,enrichRecords,hydrated transaction response
+backend/internal/app/investment_split_correction.go,ReverseSplitWithIdentity,enrichOne,hydrated transaction response
+backend/internal/app/investment_transfer_correction.go,ReplaceTransfer,enrichRecords,hydrated transaction response
+backend/internal/app/investment_transfer_correction.go,ReplaceTransferIn,enrichRecords,hydrated transaction response
+backend/internal/app/investment_transfer_correction.go,ReverseTransfer,enrichOne,hydrated transaction response
+backend/internal/app/investment_transfer_in.go,ExternalTransferIn,enrichOne,hydrated transaction response
+backend/internal/app/investment_transfer_internal.go,InternalTransfer,enrichOne,hydrated transaction response
+backend/internal/app/investment_transfer_out.go,ExternalTransferOut,enrichOne,hydrated transaction response
+backend/internal/app/investment_transfer_out.go,ReplaceTransferOut,enrichRecords,hydrated transaction response
+backend/internal/app/investments.go,Buy,enrichOne,hydrated transaction response
+backend/internal/app/investments.go,ReinvestedDividend,enrichOne,hydrated transaction response
+backend/internal/app/investments.go,Sell,enrichOne,hydrated transaction response
+backend/internal/app/investments.go,WriteOff,enrichOne,hydrated transaction response
+backend/internal/app/investments.go,dividend,enrichOne,hydrated transaction response
+backend/internal/app/reconciliation.go,ChangePostingReconciliationStatus,enrichRecords,hydrated transaction response

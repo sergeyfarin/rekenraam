@@ -1,0 +1,37 @@
+{
+  "audit_issue": 357,
+  "finding_fixed": 359,
+  "additional_audit": 360,
+  "date": "2026-10-20",
+  "baseline": "a14901585cd353f514cf9dc54a85f8f1dd0ecc07",
+  "fix": "89951c9adfd1c18dc6b0a8ddf3ea5e6ba3551a9b",
+  "external_fixture_source": "c709b913142067d1ee60ec0414470748bf592d7b",
+  "worktree_clean": true,
+  "backend_gate_source": "3a19d65d5b9e08dfe5e5c75ab57c7f88b7aab85f",
+  "backend_inputs_identical_at_fixture_source": true,
+  "app_image": "sha256:c21ab0bf54da24f92edf1377e3291f8202f7c5ddacc6d3cce3dadf2aece544af",
+  "proxy_image": "sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b",
+  "registered_patterns": 333,
+  "grants": 25,
+  "concrete_method_paths_including_HEAD": 427,
+  "direct_token_route_probes": 1281,
+  "valid_cookie_csrf_origin_fallback_probes": 1181,
+  "route_case_count": 2462,
+  "total_external_cases": 2550,
+  "scope_denial_body_checked_except_HEAD": true,
+  "browser_executions": {
+    "proxy_deploy": 8,
+    "restart_same_key": 1,
+    "restart_rotated_key": 1,
+    "restart_missing_key": 1,
+    "PAT_privacy": 1
+  },
+  "validation": {
+    "backend_format_vet_race": "passed",
+    "production_image_build": "passed",
+    "HTTPS_client_backup_restore_recovery": "passed",
+    "real_Chromium_bfcache": "passed"
+  },
+  "private_fixture_removed": true,
+  "owner_deployment_not_verified": 336
+}

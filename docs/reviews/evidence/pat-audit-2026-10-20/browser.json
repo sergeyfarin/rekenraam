@@ -1,0 +1,12 @@
+{
+  "status": "passed",
+  "viewport": "390x844",
+  "actualBackForwardCacheRestore": true,
+  "localSessionCacheStorageSecretAbsent": true,
+  "historyDOMSecretAbsent": true,
+  "signedOutTabSecretAbsent": true,
+  "logoutPreservesSeparateBearerCredential": true,
+  "tabVisibilitySignal": "dispatched-headless-event",
+  "sensitiveResponseNoStore": true,
+  "anonymousForceCacheStatus": 401
+}

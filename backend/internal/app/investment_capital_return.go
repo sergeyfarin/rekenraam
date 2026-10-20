@@ -194,7 +194,11 @@ func (s *InvestmentService) CapitalReturn(ctx context.Context, input CapitalRetu
 	if err != nil {
 		return CapitalReturnResult{}, mapCapitalReturnError(err)
 	}
-	return CapitalReturnResult{Transaction: toTransaction(transaction), Effects: toCapitalReturnEffects(result.Effects)}, nil
+	enriched, err := s.transactionService.enrichOne(ctx, toTransaction(transaction))
+	if err != nil {
+		return CapitalReturnResult{}, err
+	}
+	return CapitalReturnResult{Transaction: enriched, Effects: toCapitalReturnEffects(result.Effects)}, nil
 }
 
 func toCapitalReturnEffects(effects []db.CapitalReturnEffect) []CapitalReturnEffect {
@@ -261,7 +265,7 @@ func (s *InvestmentService) ReverseCapitalReturn(ctx context.Context, input Reve
 	if err != nil {
 		return Transaction{}, mapCapitalReturnCorrectionError(err)
 	}
-	return toTransaction(record), nil
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 func (s *InvestmentService) ReverseCapitalReturnReconciliationImpact(ctx context.Context, input ReverseInvestmentCapitalReturnInput) (ReconciliationImpact, error) {
@@ -397,7 +401,11 @@ func (s *InvestmentService) ReplaceCapitalReturn(ctx context.Context, input Repl
 	if err != nil {
 		return ReplaceCapitalReturnResult{}, mapCapitalReturnCorrectionError(err)
 	}
-	return ReplaceCapitalReturnResult{Inverse: toTransaction(record.Inverse), Replacement: CapitalReturnResult{Transaction: toTransaction(record.Replacement), Effects: toCapitalReturnEffects(result.Effects)}, CorrectedTransactionID: operation.TransactionID}, nil
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceCapitalReturnResult{}, err
+	}
+	return ReplaceCapitalReturnResult{Inverse: enriched[0], Replacement: CapitalReturnResult{Transaction: enriched[1], Effects: toCapitalReturnEffects(result.Effects)}, CorrectedTransactionID: operation.TransactionID}, nil
 }
 
 func (s *InvestmentService) PreviewCapitalReturnReplacement(ctx context.Context, input ReplaceInvestmentCapitalReturnInput) (CapitalReturnPreview, error) {

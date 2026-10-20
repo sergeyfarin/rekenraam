@@ -1,0 +1,9 @@
+--- FAIL: TestAuthExpiryAuditReservationRolloverProbe (0.41s)
+    auth_expiry_rollover_probe_test.go:30:
+            Error Trace:    backend/internal/app/auth_expiry_rollover_probe_test.go:30
+            Error:          Expected error with "rate limited" in chain but got nil.
+            Test:           TestAuthExpiryAuditReservationRolloverProbe
+            Messages:       old reservation release must not refund a new window's place
+FAIL
+FAIL    rekenraam/backend/internal/app  0.422s
+FAIL

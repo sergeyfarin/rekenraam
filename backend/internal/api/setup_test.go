@@ -415,7 +415,7 @@ func newTestInstanceOnDatabase(t *testing.T, database *sql.DB, databaseURL strin
 		Forecast:    forecastService,
 		Budget:      budgetService,
 	}, options)
-	return testInstance{handler: handler, investment: investmentService, backup: backupService}
+	return testInstance{handler: captureContractAudit(t, handler), investment: investmentService, backup: backupService}
 }
 
 func setSameOrigin(req *http.Request) {

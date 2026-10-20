@@ -89,7 +89,7 @@ func (s *InvestmentService) ReverseShortSale(ctx context.Context, input ReverseI
 	if err != nil {
 		return Transaction{}, mapShortSaleCorrectionError(err)
 	}
-	return toTransaction(record), nil
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 func (s *InvestmentService) ReverseShortSaleReconciliationImpact(ctx context.Context, input ReverseInvestmentBuyInput) (ReconciliationImpact, error) {
@@ -117,9 +117,13 @@ func (s *InvestmentService) ReplaceShortSale(ctx context.Context, input ReplaceI
 		return ReplaceInvestmentBuyResult{}, mapShortSaleCorrectionError(err)
 	}
 	lotID := record.Lot.ID
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceInvestmentBuyResult{}, err
+	}
 	return ReplaceInvestmentBuyResult{
-		Inverse:                toTransaction(record.Inverse),
-		Replacement:            InvestmentTradeResult{Transaction: toTransaction(record.Replacement), LotID: &lotID},
+		Inverse:                enriched[0],
+		Replacement:            InvestmentTradeResult{Transaction: enriched[1], LotID: &lotID},
 		CorrectedTransactionID: prepared.Operation.TransactionID,
 	}, nil
 }

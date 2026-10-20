@@ -56,20 +56,26 @@ func TestOverlappingPasswordFailuresAreAllCounted(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	now := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
-	_, service := newAuthEventTestService(t, now)
+	database, service := newAuthEventTestService(t, now)
 	// No client address, so the username counter is the only scope: a lost
 	// update there cannot be masked by the address counter.
 	wrong := LoginInput{Username: "owner", Password: "wrong-password"}
 
-	// The second failure runs at the first clock read of the first one.
-	service.now = func() time.Time {
-		service.now = func() time.Time { return now }
-		_, err := service.Login(ctx, wrong)
-		require.ErrorIs(t, err, ErrInvalidCredentials)
-		return now
+	// Queue both real consumers before admitting either. Decision clocks now
+	// run under the writer lock, where a recursive service call would deadlock.
+	connection, err := database.Conn(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = connection.Close() })
+	before := database.Stats().WaitCount
+	results := make(chan error, 2)
+	for range 2 {
+		go func() { _, err := service.Login(ctx, wrong); results <- err }()
 	}
-	_, err := service.Login(ctx, wrong)
-	require.ErrorIs(t, err, ErrInvalidCredentials)
+	require.Eventually(t, func() bool { return database.Stats().WaitCount >= before+2 }, 5*time.Second, time.Millisecond)
+	require.NoError(t, connection.Close())
+	for range 2 {
+		require.ErrorIs(t, <-results, ErrInvalidCredentials)
+	}
 	for range loginThrottleMaxFailures - 2 {
 		_, err := service.Login(ctx, wrong)
 		require.Error(t, err)

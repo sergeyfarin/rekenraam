@@ -1,0 +1,212 @@
+{
+  "date": "2026-10-20",
+  "baseline": "18c16d0f722a56bee3e0d7e0eb729ed8a6c573be",
+  "platform": "linux/amd64",
+  "driver": "github.com/mattn/go-sqlite3 v1.14.52",
+  "engine": {
+    "compile_options": [
+      "ATOMIC_INTRINSICS=1",
+      "COMPILER=gcc-13.3.0",
+      "DEFAULT_AUTOVACUUM",
+      "DEFAULT_CACHE_SIZE=-2000",
+      "DEFAULT_FILE_FORMAT=4",
+      "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+      "DEFAULT_MMAP_SIZE=0",
+      "DEFAULT_PAGE_SIZE=4096",
+      "DEFAULT_PCACHE_INITSZ=20",
+      "DEFAULT_RECURSIVE_TRIGGERS",
+      "DEFAULT_SECTOR_SIZE=4096",
+      "DEFAULT_SYNCHRONOUS=2",
+      "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+      "DEFAULT_WAL_SYNCHRONOUS=1",
+      "DEFAULT_WORKER_THREADS=0",
+      "DIRECT_OVERFLOW_READ",
+      "ENABLE_FTS3",
+      "ENABLE_FTS3_PARENTHESIS",
+      "ENABLE_FTS5",
+      "ENABLE_RTREE",
+      "ENABLE_UPDATE_DELETE_LIMIT",
+      "MALLOC_SOFT_LIMIT=1024",
+      "MAX_ATTACHED=10",
+      "MAX_COLUMN=2000",
+      "MAX_COMPOUND_SELECT=500",
+      "MAX_DEFAULT_PAGE_SIZE=8192",
+      "MAX_EXPR_DEPTH=1000",
+      "MAX_FUNCTION_ARG=1000",
+      "MAX_LENGTH=1000000000",
+      "MAX_LIKE_PATTERN_LENGTH=50000",
+      "MAX_MMAP_SIZE=0x7fff0000",
+      "MAX_PAGE_COUNT=0xfffffffe",
+      "MAX_PAGE_SIZE=65536",
+      "MAX_SQL_LENGTH=1000000000",
+      "MAX_TRIGGER_DEPTH=1000",
+      "MAX_VARIABLE_NUMBER=32766",
+      "MAX_VDBE_OP=250000000",
+      "MAX_WORKER_THREADS=8",
+      "MUTEX_PTHREADS",
+      "OMIT_DEPRECATED",
+      "SYSTEM_MALLOC",
+      "TEMP_STORE=1",
+      "THREADSAFE=1"
+    ],
+    "source_id": "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc",
+    "version": "3.53.4"
+  },
+  "source_authentication": {
+    "published_upstream_sha3_256": "67f423e9ebbbdc473cbc4772c872ee6b89f31fde4ed0279a5c25d5f65c043a16",
+    "bundled_file_sha256": "eb023455154c8da14a9920dbe44f4f9e732871ef8d8a058cafb84d18d6a2de00",
+    "stripped_bundled_equals_official_release": true,
+    "difference": "Only outer USE_LIBSQLITE3 conditional wrapper; no engine-code diff"
+  },
+  "inventory": {
+    "upstream_cve_ids": 54,
+    "debian_advisory_ids": 70,
+    "union_advisory_ids": 89,
+    "additional_non_cve_entries": 5,
+    "total_matrix_rows": 94,
+    "classification_counts": {
+      "fixed-before-admitted-source": 60,
+      "feature-excluded": 14,
+      "development-snapshot-excluded": 1,
+      "different-component": 9,
+      "unverified-disputed-claim": 7,
+      "reproduced-native-defect": 2,
+      "version-excluded": 1
+    }
+  },
+  "sources": [
+    {
+      "file": "debian-sqlite3.html",
+      "sha256": "afa0856e046855fb0812b44f4fef45256130da710bddac34f998774044615e40"
+    },
+    {
+      "file": "upstream-changes.html",
+      "sha256": "50e63c6da18d2efd035d0f66d98098384fb4d64119ee578dda5b5aadfdddaf6b"
+    },
+    {
+      "file": "upstream-cves.html",
+      "sha256": "0ef51a811fdc3dcfcd86692736190db83ef78073892fbe2d89029cbc57ade3a5"
+    },
+    {
+      "file": "upstream-security.html",
+      "sha256": "b9034bba326f3984cf9e8d018445d9b2551c2f19141e1ae807cb56d1da881ebd"
+    },
+    {
+      "file": "sqlite-amalgamation-3530400.zip",
+      "sha256": "1e71ddf93849c6a6ecf58b827c0692073d2dd7ee40196158068f7b29f422e87d"
+    }
+  ],
+  "debian_only_snapshot_hashes": {
+    "CVE-2013-7443": "3de22c65032ae01b8e59a4c44841a4ca95a056fde4f39b899d199e6c4490e3c6",
+    "CVE-2015-3414": "24a2567d1f59d3438371d11ed39f7a87f64a829ec74ca984f78b7a76b4458992",
+    "CVE-2015-3415": "a313480f11606021a9d1196371672dbf185750a435aad986d4c236b019a4d988",
+    "CVE-2015-3416": "32be3196611bf3b6c2fb43763eb67c5968d59c34c295a5bcde700cb5b7c1be6f",
+    "CVE-2016-6153": "7c7214d480045069a22993841cab813760474b4531b1f3f78d4df39a0520e133",
+    "CVE-2017-10989": "f76497b378169abb669fdd50cbd7beb847d7ae29486db90bcff878fe00d877d6",
+    "CVE-2017-13685": "153465d5f8f68c6b4af85d14e96f4cc403eeb4fc5693363eafda064f115fef2d",
+    "CVE-2017-15286": "dfa8f5c38f05cb1e90727e931a8629735c4b79052d531021fffaea756a727913",
+    "CVE-2017-2513": "ae872d61eaf615eb5de019f616ddb7689d6bfb3e7a78b03e98f08b67b6bc2e03",
+    "CVE-2017-2518": "1110625db22bc1e0f57204d4a81f7c50b9240190b2fe0fcc95fd4df163e21464",
+    "CVE-2017-2519": "bc1e96860fdb54c3c88b7e8da8f4f021539f6441c5b5955529618c4631ac021d",
+    "CVE-2017-2520": "2436d085b3bd47441c0b16b78100adbd6da8738a6cad92ed8a3510ae5ee4efbf",
+    "CVE-2018-20346": "98401920e3d86b1194a9232df38963615e94660d0b27fcc0536e39de3dde1f33",
+    "CVE-2018-20505": "a2f26923dfcc9262f21eb7ae09dd125fef4dfe76ca001298dbcabf2faa0379d7",
+    "CVE-2018-20506": "93a9f08f48fabcaa0bc53e0f7a3111be63fbd2126515a3e7f53effb08054a555",
+    "CVE-2018-8740": "f62efdb2e6b99e46036e93953fc2e03db062eaf5c05333f31ab242cf0d0094be",
+    "CVE-2019-16168": "fc99a95bbc9af66679aa56f7c1987b45a75afcff8ed7318fae4cbc6fd082616a",
+    "CVE-2019-19242": "0c22d92331337d0746ec2d59eadda424f643596662cc2616dc5631fd92f34b6f",
+    "CVE-2019-19244": "95d0f4a1103bd682e920177fff563014bede0d7a95ade93ee47a308de4be4908",
+    "CVE-2019-19603": "b64ff32343426146648e7974f111eec38b2f403f0c4dea9e72e552b0aa0b6fd3",
+    "CVE-2019-19645": "a44fcef642a788c239532cefbcb26f1e3bc70e4283da96309203707c3eabb81c",
+    "CVE-2019-19880": "e936a5460da0240ec66bbfde0a939535f584ef579476d90cbfc367452f07c2f4",
+    "CVE-2019-5018": "dede48a49d82ca6257e3393181b223bbcecffd33c2623310bb1d844b9a4ed559",
+    "CVE-2019-5827": "41c36164674ded21a5a72ebcf40811eeba4d3813645ff3b83026926be190f3b4",
+    "CVE-2019-8457": "236605f44ccede3846264e9f60947b6a44598a96c8e48969a3d715e69add6084",
+    "CVE-2019-9936": "83198bbd3dfa01a3aeaf8cd71c206cceb45c768b9cb1ea707a72e8f362d7735b",
+    "CVE-2019-9937": "c048e011791820ae1703064b1b43400ec1f0fbfa99e3ee01b02a2a58e4df943f",
+    "CVE-2020-24736": "3ea21a59851a675a72f118a1bb582b3c0082e0c34e210392ffe14d159dbe3728",
+    "CVE-2020-35525": "d13c9f4ff2ad240e1d792f929f421d23eaea84ab995161a972ef6852cd17ed68",
+    "CVE-2020-35527": "5930c9ea5d746294e2d5b971e53584883661c6ca08f78e1719246a4b69b59ea6",
+    "CVE-2025-71316": "8a74ab1d157ea6007a811dd163228e71232b150436d5952f38eaf5ee6b2989e0",
+    "CVE-2026-39113": "8cd9cd0a48bebf55d77f95f47e886a022ec3b484c9b95333a07885d9ad070c3c",
+    "CVE-2026-50812": "cdb5b4675f45adfb8bf1de3ac0388ac052368ec2cf75ebed80a0f60413f10016",
+    "CVE-2026-50813": "245ae024f8e37e95aa504643607253bc2b67f848abb05e829030c17df147f57c",
+    "TEMP-0566326-9A899F": "611f64065256dc11da52173c97668b6484de189e4e386f988085c08f35da5791"
+  },
+  "native_bug_probe": {
+    "application_expression_index_keys": 1,
+    "index_count_actual": 0,
+    "index_count_expected": 1,
+    "json_rendered": "[31,2]",
+    "json_valid_actual": 0,
+    "json_valid_expected": 1,
+    "not_indexed_control": 1,
+    "source_id": "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc",
+    "update_actual": "old",
+    "update_expected": "new",
+    "version": "3.53.4"
+  },
+  "upstream_driver_release": {
+    "latest_tag": "v1.14.52",
+    "published_at": "2026-09-05T04:18:57Z",
+    "checked_date": "2026-10-20",
+    "fixed_engine": "3.54.1",
+    "follow_up": 356
+  },
+  "findings": {
+    "application_defect_fixed": 355,
+    "native_dependency_follow_up": 356,
+    "confirmed_application_memory_exploit": false
+  },
+  "limits": [
+    "Go race detector does not instrument native C",
+    "Seven upstream-disputed claims remain unverified; no blanket immunity asserted",
+    "No ASAN/UBSAN/fuzz or all-platform certification",
+    "Operator-supplied SQLite backup is not sandboxed SQL; cancellation is honored but CLI has no default wall-clock limit"
+  ],
+  "validation": {
+    "backend_shared_gate": "passed: formatting, vet, full race; unchanged helper packages may use cache",
+    "backend_results": [
+      "ok  \trekenraam/backend/cmd/rekenraam\t74.398s",
+      "ok  \trekenraam/backend/internal/api\t112.642s",
+      "ok  \trekenraam/backend/internal/app\t198.510s",
+      "ok  \trekenraam/backend/internal/appruntime\t4.877s",
+      "ok  \trekenraam/backend/internal/config\t(cached)",
+      "ok  \trekenraam/backend/internal/db\t118.212s",
+      "ok  \trekenraam/backend/internal/exact\t(cached)",
+      "?   \trekenraam/backend/internal/lockfile\t[no test files]",
+      "ok  \trekenraam/backend/internal/marketdata\t(cached)",
+      "ok  \trekenraam/backend/internal/onlinesource/trading212\t(cached)",
+      "ok  \trekenraam/backend/internal/recur\t(cached)",
+      "ok  \trekenraam/backend/internal/secretbox\t(cached)",
+      "ok  \trekenraam/backend/internal/testdb\t5.962s",
+      "ok  \trekenraam/backend/internal/totp\t(cached)",
+      "ok  \trekenraam/backend/internal/web\t1.032s",
+      "ok  \trekenraam/backend/migrations\t(cached)"
+    ],
+    "frontend_shared_gate": "passed: generated types, catalogs, Svelte diagnostics, unit cases",
+    "catalog_cases": 66,
+    "frontend_unit_cases": 691,
+    "svelte_errors": 0,
+    "svelte_warnings": 0,
+    "nul_before_http_statuses": [
+      500,
+      500,
+      500
+    ],
+    "nul_after": "3 named HTTP 400 VALIDATION_FAILED controls pass",
+    "backup_refusal_cases": 5,
+    "backup_refusal_consumers": [
+      "verify-backup",
+      "restore"
+    ],
+    "extension_connection_paths": [
+      "writer",
+      "reader",
+      "auxiliary",
+      "writer replacement",
+      "reader replacement",
+      "auxiliary replacement"
+    ]
+  }
+}

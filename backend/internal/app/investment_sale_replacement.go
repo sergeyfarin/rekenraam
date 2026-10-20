@@ -67,10 +67,14 @@ func (s *InvestmentService) replaceDisposal(ctx context.Context, input ReplaceIn
 		return ReplaceInvestmentSaleResult{}, family.mapError(mapReplaceSaleError(err, prepared.Operation.OperationID))
 	}
 	committedDecision := toDisposalDecision(decision)
+	enriched, err := s.transactionService.enrichRecords(ctx, inverse, replacementRecord)
+	if err != nil {
+		return ReplaceInvestmentSaleResult{}, err
+	}
 	return ReplaceInvestmentSaleResult{
 		CorrectedTransactionID: prepared.Operation.TransactionID,
-		Inverse:                toTransaction(inverse),
-		Replacement: InvestmentTradeResult{Transaction: toTransaction(replacementRecord),
+		Inverse:                enriched[0],
+		Replacement: InvestmentTradeResult{Transaction: enriched[1],
 			Allocations: toInvestmentLotDisposals(disposals), DisposalDecision: &committedDecision},
 	}, nil
 }

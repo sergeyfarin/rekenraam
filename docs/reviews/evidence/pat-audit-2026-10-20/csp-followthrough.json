@@ -1,0 +1,71 @@
+{
+  "finding": 361,
+  "fix": "06c29263beacf233e6c30029aeb4216a00df11d7",
+  "production_policy": "style-src 'self'",
+  "policy_unchanged": true,
+  "contrast_threshold": 4.5,
+  "before_source": "a34460fb02d175101f998dda6e0243f4c27f1eb0",
+  "before_CSP_controls": {
+    "readable": "no glyph measurement; failed as expected",
+    "low_contrast": "no glyph measurement; failed as expected"
+  },
+  "after_CSP_controls": {
+    "expected_ratios": {
+      "readable": 12.63,
+      "low_contrast": 2.85
+    },
+    "ratios_matched": true,
+    "low_contrast_retained": true,
+    "original_styles_restored": true
+  },
+  "focused_controls_and_subviews_passed": 13,
+  "real_subview_configurations": {
+    "dark-390": {
+      "axe": "pass",
+      "fits": "pass",
+      "closes": "pass"
+    },
+    "dark-desktop": {
+      "axe": "pass",
+      "fits": "pass",
+      "closes": "pass"
+    },
+    "de-390": {
+      "axe": "pass",
+      "fits": "pass",
+      "closes": "pass"
+    },
+    "de-desktop": {
+      "axe": "pass",
+      "fits": "pass",
+      "closes": "pass"
+    },
+    "light-390": {
+      "axe": "pass",
+      "fits": "pass",
+      "closes": "pass"
+    },
+    "light-desktop": {
+      "axe": "pass",
+      "fits": "pass",
+      "closes": "pass"
+    },
+    "ru-390": {
+      "axe": "pass",
+      "fits": "pass",
+      "closes": "pass"
+    },
+    "ru-desktop": {
+      "axe": "pass",
+      "fits": "pass",
+      "closes": "pass"
+    }
+  },
+  "fresh_single_binary_build": "passed",
+  "shared_smoke": "363 passed (21.7m)",
+  "shared_smoke_workers": 3,
+  "shared_smoke_command": "E2E_SKIP_BUILD=1 E2E_WORKERS=3 ./scripts/test-e2e-smoke.sh",
+  "preceding_CI_failure": "https://github.com/sergeyfarin/rekenraam/actions/runs/39419119037",
+  "preceding_CI_residual": "light-desktop correct buy: reconciliation confirm; rendered: .bg-warning: no text pixels",
+  "no_production_frontend_backend_input_changes_in_fix": true
+}

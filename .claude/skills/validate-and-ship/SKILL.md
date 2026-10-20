@@ -67,6 +67,22 @@ non-trivial diff (yours or reviewed):
    types end-to-end; a plain `bool` made every rename silently disable
    auto-refresh.
 3. **TOCTOU guard races** — check + insert in separate statements/transactions.
+   Expiry clocks sampled before pool/SQLite writer waits also go stale (#359):
+   acquire write admission before sampling final token/session guards. Keep
+   `TestPersonalAccessTokenAuditExpiryWhileWaitingForDatabase`,
+   `TestPersonalAccessTokenAuditExpiryWhileWaitingForSQLiteWriter` and
+   `TestPersonalAccessTokenAuditManagementSessionExpiresWhileQueued` green.
+   Session/device reads check their returned deadline with a fresh clock, without
+   taking a writer lock (#362). MFA consumption and throttle decisions acquire
+   SQLite write admission before sampling time (#363/#364); the final MFA session
+   insert also pins the consumed challenge against disable (#365). Keep
+   `TestAuthExpiryAudit*` green. Reservations pin persisted generation identity
+   (#366): failure, refund and
+   success reset must never affect a replacement/missing generation, including
+   same-timestamp recreation. Keep `TestAuthExpiryAuditReservationRolloverProbe`,
+   `TestThrottleRollover*`, `TestThrottleReset*` and the migration-preservation
+   control green. Count verified guesses through real consumers, not just status
+   codes; an older generation may finish after rollover.
 4. **Split-transaction crash holes** — a row and its idempotency marker written
    in different transactions (T-06, T-26 — both closed; the pattern recurs).
 5. **Cursor boundaries** — `<=` vs `<`, resume token vs incremental boundary
@@ -633,6 +649,46 @@ non-trivial diff (yours or reviewed):
     only. Measure overflow at desktop too, and pin hovered pairs. Interactive
     sub-views (dialogs, forms, panels, import review) are swept by
     `subview-sweep.spec.ts`; add new ones to its list.
+
+56. **Empty data bypassing a native parser negative control** — native text
+    parsers may treat embedded NUL as end-of-input even when Go strings and
+    SQL bindings retain it. Transaction search rejects NUL before quoting its
+    literal FTS phrase (#355). Exercise parser refusals against a **populated**
+    index: an empty FTS table returned 200 without reaching the failing parser.
+    Named regression: `TestNativeSQLiteAuditSearchRejectsNULBeforeFTS`.
+
+57. **CSP-blocked browser measurement** — a screenshot helper's inline
+    stylesheet passed isolated controls but production `style-src 'self'`
+    blocked it, leaving no measured glyphs (#361). Run readable and deliberate
+    low-contrast controls under the real policy. The rendered-contrast helper
+    uses CSSOM property writes and restores the original styles; keep its
+    4.5:1 threshold and text-only border/icon controls. Named cases:
+    `rendered-contrast.spec.ts` and the real `subview-sweep.spec.ts`.
+
+58. **Generated types mistaken for runtime schema evidence** — OpenAPI 3.1
+    ignored `nullable: true`, setup omitted implemented-step enum members,
+    posting tags emitted null arrays, and spending disclosed stale role aliases
+    (#367–#369). Use explicit null unions, normalize empty response collections,
+    and check actual HTTP JSON against resolved schemas. The bounded
+    `scripts/audit-api-contract.py` audit retains #350's exact status gap;
+    #370's enrichment exception is removed after its repair. Generation alone
+    cannot prove requiredness, enum or nullability conformity.
+
+59. **Mutation journals bypassing display enrichment** — investment and
+    reconciliation responses converted raw records directly, losing account
+    class, names, commodity codes and symbols (#370). Use the shared owner for
+    singles and a two-lookup batch for compound results. Compare real HTTP
+    mutation postings with canonical GETs, including journal-free/null results.
+    Inject display read failures after COMMIT and preserve the saved operation
+    exactly once. Internal import receipts need IDs, not display metadata;
+    leave their commit outcome independent from optional enrichment reads.
+
+60. **Test harness exception disclosure** — a localhost provider stub returned
+    parser input excerpts and implementation diagnostics through `String(err)`
+    (#373, CodeQL alert #84). Keep caught exceptions out of HTTP responses,
+    including development helpers. `pnpm --dir e2e run test:stubs` exercises
+    malformed JSON, account encoding and provider transformation failures;
+    both shared E2E wrappers run it before browser journeys.
 
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.

@@ -21,6 +21,7 @@ type AuthenticatedUserRecord struct {
 	SessionID int64
 	ID        int64
 	Username  string
+	ExpiresAt string
 }
 
 type CreateSessionParams struct {
@@ -76,6 +77,7 @@ type LoginThrottleRecord struct {
 	FailedAttempts int
 	BlockedUntil   sql.NullString
 	UpdatedAt      string
+	Generation     string
 }
 
 type UpsertLoginThrottleParams struct {
@@ -84,6 +86,7 @@ type UpsertLoginThrottleParams struct {
 	FailedAttempts int
 	BlockedUntil   *string
 	UpdatedAt      string
+	Generation     string
 }
 
 func NewAuthRepository(database *sql.DB) *AuthRepository {
@@ -134,23 +137,25 @@ func (r *AuthRepository) ReadOwnerCredentialsByID(ctx context.Context, userID in
 	return record, nil
 }
 
-// ThrottleScopeKey names one login_throttles row.
+// ThrottleScopeKey pins one generation of a login_throttles row (#366).
 type ThrottleScopeKey struct {
-	ScopeType string
-	ScopeKey  string
+	ScopeType  string
+	ScopeKey   string
+	Generation string
 }
 
 // CompleteLoginParams is everything a verified sign-in writes. Device is the
 // approved device to extend, or NewDevice the one to create; at most one is
 // set.
 type CompleteLoginParams struct {
-	Session         CreateSessionParams
-	ClearThrottles  []ThrottleScopeKey
-	RefundThrottles []ThrottleScopeKey
-	TouchDeviceID   int64
-	DeviceUsedAt    string
-	DeviceExpiresAt string
-	NewDevice       *CreateTrustedDeviceParams
+	Session          CreateSessionParams
+	ClearThrottles   []ThrottleScopeKey
+	RefundThrottles  []ThrottleScopeKey
+	TouchDeviceID    int64
+	DeviceUsedAt     string
+	DeviceExpiresAt  string
+	NewDevice        *CreateTrustedDeviceParams
+	MFAChallengeHash string
 }
 
 // CompleteLogin writes the session, settles the attempt's throttle places and
@@ -166,22 +171,32 @@ func (r *AuthRepository) CompleteLogin(ctx context.Context, params CompleteLogin
 
 	result, err := tx.ExecContext(ctx, `
 		INSERT INTO auth_sessions (user_id, token_hash, created_at, expires_at, revoked_at)
-		VALUES (?, ?, ?, ?, NULL)
-	`, params.Session.UserID, params.Session.TokenHash, params.Session.CreatedAt, params.Session.ExpiresAt)
+		SELECT ?, ?, ?, ?, NULL
+		WHERE ? = '' OR EXISTS (
+			SELECT 1 FROM login_mfa_challenges c JOIN user_mfa_totp m ON m.user_id=c.user_id
+			WHERE c.token_hash=? AND c.user_id=? AND c.consumed_at IS NOT NULL AND m.status='active'
+		)
+	`, params.Session.UserID, params.Session.TokenHash, params.Session.CreatedAt, params.Session.ExpiresAt,
+		params.MFAChallengeHash, params.MFAChallengeHash, params.Session.UserID)
 	if err != nil {
 		return 0, fmt.Errorf("insert auth session: %w", err)
+	}
+	if rows, err := result.RowsAffected(); err != nil {
+		return 0, fmt.Errorf("read inserted auth session rows: %w", err)
+	} else if rows != 1 {
+		return 0, ErrNotFound
 	}
 	sessionID, err := result.LastInsertId()
 	if err != nil {
 		return 0, fmt.Errorf("read auth session id: %w", err)
 	}
 	for _, scope := range params.ClearThrottles {
-		if err := deleteLoginThrottleExec(ctx, tx, scope.ScopeType, scope.ScopeKey); err != nil {
+		if err := deleteLoginThrottleExec(ctx, tx, scope); err != nil {
 			return 0, err
 		}
 	}
 	for _, scope := range params.RefundThrottles {
-		if err := refundLoginAttemptExec(ctx, tx, scope.ScopeType, scope.ScopeKey); err != nil {
+		if err := refundLoginAttemptExec(ctx, tx, scope); err != nil {
 			return 0, err
 		}
 	}
@@ -211,13 +226,13 @@ func (r *AuthRepository) CompleteLogin(ctx context.Context, params CompleteLogin
 func (r *AuthRepository) ReadSessionUser(ctx context.Context, tokenHash string, now string) (AuthenticatedUserRecord, error) {
 	var record AuthenticatedUserRecord
 	if err := r.database.QueryRowContext(ctx, `
-		SELECT auth_sessions.id, users.id, users.username
+		SELECT auth_sessions.id, users.id, users.username, auth_sessions.expires_at
 		FROM auth_sessions
 		JOIN users ON users.id = auth_sessions.user_id
 		WHERE auth_sessions.token_hash = ?
 		  AND auth_sessions.revoked_at IS NULL
 		  AND auth_sessions.expires_at > ?
-	`, tokenHash, now).Scan(&record.SessionID, &record.ID, &record.Username); err != nil {
+	`, tokenHash, now).Scan(&record.SessionID, &record.ID, &record.Username, &record.ExpiresAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return AuthenticatedUserRecord{}, ErrNotFound
 		}
@@ -291,12 +306,17 @@ func (r *AuthRepository) UpdateLoginThrottle(ctx context.Context, scopeType stri
 	defer rollbackTx(ctx, tx)
 
 	var record LoginThrottleRecord
+	// A deferred transaction has not acquired SQLite's writer yet. Establish
+	// admission before reading the row or sampling a decision clock (#364).
+	if _, err := tx.ExecContext(ctx, `UPDATE login_throttles SET updated_at=updated_at WHERE 0`); err != nil {
+		return fmt.Errorf("acquire login throttle admission: %w", err)
+	}
 	found := true
 	if err := tx.QueryRowContext(ctx, `
-		SELECT scope_type, scope_key, failed_attempts, blocked_until, updated_at
+		SELECT scope_type, scope_key, failed_attempts, blocked_until, updated_at, generation
 		FROM login_throttles
 		WHERE scope_type = ? AND scope_key = ?
-	`, scopeType, scopeKey).Scan(&record.ScopeType, &record.ScopeKey, &record.FailedAttempts, &record.BlockedUntil, &record.UpdatedAt); err != nil {
+	`, scopeType, scopeKey).Scan(&record.ScopeType, &record.ScopeKey, &record.FailedAttempts, &record.BlockedUntil, &record.UpdatedAt, &record.Generation); err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("read login throttle: %w", err)
 		}
@@ -308,13 +328,14 @@ func (r *AuthRepository) UpdateLoginThrottle(ctx context.Context, scopeType stri
 	}
 	if next != nil {
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO login_throttles (scope_type, scope_key, failed_attempts, blocked_until, updated_at)
-			VALUES (?, ?, ?, ?, ?)
+			INSERT INTO login_throttles (scope_type, scope_key, failed_attempts, blocked_until, updated_at, generation)
+			VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(scope_type, scope_key) DO UPDATE SET
 				failed_attempts = excluded.failed_attempts,
 				blocked_until = excluded.blocked_until,
-				updated_at = excluded.updated_at
-		`, scopeType, scopeKey, next.FailedAttempts, next.BlockedUntil, next.UpdatedAt); err != nil {
+				updated_at = excluded.updated_at,
+				generation = excluded.generation
+		`, scopeType, scopeKey, next.FailedAttempts, next.BlockedUntil, next.UpdatedAt, next.Generation); err != nil {
 			return fmt.Errorf("upsert login throttle: %w", err)
 		}
 	}
@@ -327,17 +348,17 @@ func (r *AuthRepository) UpdateLoginThrottle(ctx context.Context, scopeType stri
 
 // RefundLoginAttempt gives back one admitted attempt's place. A blocked row
 // is left alone: a block is never shortened by an attempt that settled after
-// it.
-func (r *AuthRepository) RefundLoginAttempt(ctx context.Context, scopeType string, scopeKey string) error {
-	return refundLoginAttemptExec(ctx, r.database, scopeType, scopeKey)
+// it. A replacement generation is never refunded.
+func (r *AuthRepository) RefundLoginAttempt(ctx context.Context, scope ThrottleScopeKey) error {
+	return refundLoginAttemptExec(ctx, r.database, scope)
 }
 
-func refundLoginAttemptExec(ctx context.Context, exec execContexter, scopeType string, scopeKey string) error {
+func refundLoginAttemptExec(ctx context.Context, exec execContexter, scope ThrottleScopeKey) error {
 	if _, err := exec.ExecContext(ctx, `
 		UPDATE login_throttles
 		SET failed_attempts = MAX(failed_attempts - 1, 0)
-		WHERE scope_type = ? AND scope_key = ? AND blocked_until IS NULL
-	`, scopeType, scopeKey); err != nil {
+		WHERE scope_type = ? AND scope_key = ? AND generation = ? AND blocked_until IS NULL
+	`, scope.ScopeType, scope.ScopeKey, scope.Generation); err != nil {
 		return fmt.Errorf("refund login attempt: %w", err)
 	}
 
@@ -423,7 +444,7 @@ func (r *AuthRepository) DeleteAuthenticationEventsBefore(ctx context.Context, c
 	result, err := r.database.ExecContext(ctx, `
 		DELETE FROM authentication_events
 		WHERE occurred_at < ?
-		  AND event_type IN ('login_succeeded', 'login_failed', 'login_blocked', 'logout')
+		  AND event_type IN ('login_succeeded', 'login_failed', 'login_blocked', 'logout', 'token_authenticated', 'token_denied')
 	`, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("delete authentication events: %w", err)
@@ -588,12 +609,12 @@ func (r *AuthRepository) DeleteExpiredOrRevokedTrustedDevices(ctx context.Contex
 	return rowsAffected, nil
 }
 
-func (r *AuthRepository) DeleteLoginThrottle(ctx context.Context, scopeType string, scopeKey string) error {
-	return deleteLoginThrottleExec(ctx, r.database, scopeType, scopeKey)
+func (r *AuthRepository) DeleteLoginThrottle(ctx context.Context, scope ThrottleScopeKey) error {
+	return deleteLoginThrottleExec(ctx, r.database, scope)
 }
 
-func deleteLoginThrottleExec(ctx context.Context, exec execContexter, scopeType string, scopeKey string) error {
-	if _, err := exec.ExecContext(ctx, `DELETE FROM login_throttles WHERE scope_type = ? AND scope_key = ?`, scopeType, scopeKey); err != nil {
+func deleteLoginThrottleExec(ctx context.Context, exec execContexter, scope ThrottleScopeKey) error {
+	if _, err := exec.ExecContext(ctx, `DELETE FROM login_throttles WHERE scope_type = ? AND scope_key = ? AND generation = ?`, scope.ScopeType, scope.ScopeKey, scope.Generation); err != nil {
 		return fmt.Errorf("delete login throttle: %w", err)
 	}
 

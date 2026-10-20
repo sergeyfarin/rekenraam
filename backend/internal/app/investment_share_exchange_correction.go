@@ -72,7 +72,7 @@ func (s *InvestmentService) ReverseShareExchange(ctx context.Context, input Reve
 	if err != nil {
 		return Transaction{}, mapShareExchangeCorrectionError(err)
 	}
-	return toTransaction(record), nil
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 // ReverseShareExchangeReconciliationImpact runs the reversal writer and rolls
@@ -172,7 +172,11 @@ func (s *InvestmentService) ReplaceShareExchange(ctx context.Context, input Repl
 	if err != nil {
 		return ReplaceShareExchangeResult{}, err
 	}
-	return ReplaceShareExchangeResult{Inverse: toTransaction(record.Inverse), Replacement: toTransaction(record.Replacement),
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceShareExchangeResult{}, err
+	}
+	return ReplaceShareExchangeResult{Inverse: enriched[0], Replacement: enriched[1],
 		Plan: plan, CorrectedTransactionID: operation.TransactionID}, nil
 }
 

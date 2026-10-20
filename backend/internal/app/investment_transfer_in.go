@@ -183,5 +183,9 @@ func (s *InvestmentService) ExternalTransferIn(ctx context.Context, input Extern
 	if err != nil {
 		return InvestmentTradeResult{}, mapInvestmentOpeningWriteError(err, "external investment transfer")
 	}
-	return InvestmentTradeResult{Transaction: toTransaction(transaction), LotID: &lot.ID}, nil
+	enriched, err := s.transactionService.enrichOne(ctx, toTransaction(transaction))
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	return InvestmentTradeResult{Transaction: enriched, LotID: &lot.ID}, nil
 }

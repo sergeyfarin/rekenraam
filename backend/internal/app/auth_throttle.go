@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/google/uuid"
+
 	"rekenraam/backend/internal/db"
 )
 
@@ -17,14 +19,16 @@ import (
 // the failure after the hash let every request that read the counter early
 // verify a guess: sixteen parallel attempts got sixteen guesses against a
 // budget of five. Now the places in flight count against the budget, so the
-// guesses verified in a window never exceed it, whatever the interleaving.
+// guesses admitted within a generation never exceed its budget. Older
+// generations may finish after rollover; successful resets admit a fresh budget.
 //
 // A failure keeps its place; a success or an attempt that never reached a
 // verdict gives it back. A place a crashed process never settled counts as a
-// failure and ages out with the window.
+// failure and ages out with the window. Settlement only affects the generation
+// that admitted it (#366); rollover and successful reset supersede old places.
 type throttleReservation struct {
 	service *AuthService
-	scopes  []loginThrottleScope
+	scopes  []db.ThrottleScopeKey
 	settled bool
 }
 
@@ -33,7 +37,7 @@ type throttleReservation struct {
 func (s *AuthService) reserveAttempt(ctx context.Context, scopes []loginThrottleScope) (*throttleReservation, error) {
 	reservation := &throttleReservation{service: s}
 	for _, scope := range scopes {
-		retryAfter, err := s.reserveScope(ctx, scope)
+		generation, retryAfter, err := s.reserveScope(ctx, scope)
 		if err == nil && retryAfter > 0 {
 			err = RateLimitError{RetryAfter: retryAfter}
 		}
@@ -41,7 +45,7 @@ func (s *AuthService) reserveAttempt(ctx context.Context, scopes []loginThrottle
 			reservation.release(ctx)
 			return nil, err
 		}
-		reservation.scopes = append(reservation.scopes, scope)
+		reservation.scopes = append(reservation.scopes, db.ThrottleScopeKey{ScopeType: scope.ScopeType, ScopeKey: scope.ScopeKey, Generation: generation})
 	}
 
 	return reservation, nil
@@ -49,13 +53,17 @@ func (s *AuthService) reserveAttempt(ctx context.Context, scopes []loginThrottle
 
 // reserveScope returns a positive wait when the scope cannot admit another
 // attempt.
-func (s *AuthService) reserveScope(ctx context.Context, scope loginThrottleScope) (time.Duration, error) {
-	now := s.now().UTC()
+func (s *AuthService) reserveScope(ctx context.Context, scope loginThrottleScope) (string, time.Duration, error) {
 	var retryAfter time.Duration
+	generation := uuid.NewString()
 	err := s.repository.UpdateLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey, func(current db.LoginThrottleRecord, found bool) (*db.UpsertLoginThrottleParams, error) {
+		now := s.now().UTC()
 		attempts := 0
 		if found {
 			attempts = current.FailedAttempts
+			if current.Generation != "" {
+				generation = current.Generation
+			}
 			if current.BlockedUntil.Valid {
 				blockedUntil, err := time.Parse(time.RFC3339, current.BlockedUntil.String)
 				if err != nil {
@@ -66,6 +74,7 @@ func (s *AuthService) reserveScope(ctx context.Context, scope loginThrottleScope
 					return nil, nil
 				}
 				attempts = 0
+				generation = uuid.NewString()
 			} else if attempts >= loginThrottleMaxFailures {
 				// Every place is held by an attempt still in flight, or by one
 				// a crashed process never settled; the latter expire.
@@ -78,6 +87,7 @@ func (s *AuthService) reserveScope(ctx context.Context, scope loginThrottleScope
 					return nil, nil
 				}
 				attempts = 0
+				generation = uuid.NewString()
 			}
 		}
 
@@ -86,13 +96,14 @@ func (s *AuthService) reserveScope(ctx context.Context, scope loginThrottleScope
 			ScopeKey:       scope.ScopeKey,
 			FailedAttempts: attempts + 1,
 			UpdatedAt:      now.Format(time.RFC3339),
+			Generation:     generation,
 		}, nil
 	})
 	if err != nil {
-		return 0, fmt.Errorf("reserve login attempt: %w", err)
+		return "", 0, fmt.Errorf("reserve login attempt: %w", err)
 	}
 
-	return retryAfter, nil
+	return generation, retryAfter, nil
 }
 
 // fail settles the attempt as a failure. Its place stays counted; the failure
@@ -102,31 +113,29 @@ func (r *throttleReservation) fail(ctx context.Context) (time.Duration, error) {
 	r.settled = true
 	var longest time.Duration
 	for _, scope := range r.scopes {
-		now := r.service.now().UTC()
 		var retryAfter time.Duration
 		err := r.service.repository.UpdateLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey, func(current db.LoginThrottleRecord, found bool) (*db.UpsertLoginThrottleParams, error) {
-			// A missing row was cleared by a success while this attempt was
-			// in flight; the failure still counts.
-			attempts := 1
-			if found {
-				if current.BlockedUntil.Valid {
-					blockedUntil, err := time.Parse(time.RFC3339, current.BlockedUntil.String)
-					if err != nil {
-						return nil, fmt.Errorf("parse login throttle blocked_until: %w", err)
-					}
-					if blockedUntil.After(now) {
-						retryAfter = blockedUntil.Sub(now)
-						return nil, nil
-					}
-				} else {
-					attempts = max(current.FailedAttempts, 1)
-				}
+			now := r.service.now().UTC()
+			// A success/reset or rollover supersedes this reservation. Never
+			// recreate a missing row or charge a replacement generation.
+			if !found || current.Generation != scope.Generation {
+				return nil, nil
 			}
+			if current.BlockedUntil.Valid {
+				blockedUntil, err := time.Parse(time.RFC3339, current.BlockedUntil.String)
+				if err != nil {
+					return nil, fmt.Errorf("parse login throttle blocked_until: %w", err)
+				}
+				retryAfter = max(blockedUntil.Sub(now), 0)
+				return nil, nil
+			}
+			attempts := current.FailedAttempts
 			next := &db.UpsertLoginThrottleParams{
 				ScopeType:      scope.ScopeType,
 				ScopeKey:       scope.ScopeKey,
 				FailedAttempts: attempts,
 				UpdatedAt:      now.Format(time.RFC3339),
+				Generation:     scope.Generation,
 			}
 			if attempts >= loginThrottleMaxFailures {
 				blocked := now.Add(loginThrottleWindow).Format(time.RFC3339)
@@ -151,12 +160,12 @@ func (r *throttleReservation) clear(ctx context.Context) error {
 	r.settled = true
 	clears, refunds := r.successSettlement()
 	for _, scope := range clears {
-		if err := r.service.repository.DeleteLoginThrottle(ctx, scope.ScopeType, scope.ScopeKey); err != nil {
+		if err := r.service.repository.DeleteLoginThrottle(ctx, scope); err != nil {
 			return fmt.Errorf("clear login throttle: %w", err)
 		}
 	}
 	for _, scope := range refunds {
-		if err := r.service.repository.RefundLoginAttempt(ctx, scope.ScopeType, scope.ScopeKey); err != nil {
+		if err := r.service.repository.RefundLoginAttempt(ctx, scope); err != nil {
 			return fmt.Errorf("refund login attempt: %w", err)
 		}
 	}
@@ -170,12 +179,11 @@ func (r *throttleReservation) clear(ctx context.Context) error {
 // un-block an attacker sharing a NAT address with the owner.
 func (r *throttleReservation) successSettlement() (clears []db.ThrottleScopeKey, refunds []db.ThrottleScopeKey) {
 	for _, scope := range r.scopes {
-		key := db.ThrottleScopeKey{ScopeType: scope.ScopeType, ScopeKey: scope.ScopeKey}
 		if scope.ScopeType == throttleScopeClientIP {
-			refunds = append(refunds, key)
+			refunds = append(refunds, scope)
 			continue
 		}
-		clears = append(clears, key)
+		clears = append(clears, scope)
 	}
 
 	return clears, refunds
@@ -191,7 +199,7 @@ func (r *throttleReservation) release(ctx context.Context) {
 	}
 	r.settled = true
 	for _, scope := range r.scopes {
-		if err := r.service.repository.RefundLoginAttempt(ctx, scope.ScopeType, scope.ScopeKey); err != nil && r.service.logger != nil {
+		if err := r.service.repository.RefundLoginAttempt(ctx, scope); err != nil && r.service.logger != nil {
 			r.service.logger.WarnContext(ctx, "release login attempt", slog.String("scope_type", scope.ScopeType), slog.Any("err", err))
 		}
 	}

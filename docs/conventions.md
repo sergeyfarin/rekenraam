@@ -462,12 +462,22 @@ has actual installations, its migration files are immutable.
 
 - Real endpoints live under `/api/v1`.
 - DTOs stay near HTTP handlers.
+- Transaction-returning services enrich posting display fields through the
+  shared batch owner before DTO conversion, including inverse/replacement and
+  reconciliation batches. Use one account and one commodity lookup per batch.
+  Internal import receipts that consume only durable IDs do not fetch optional
+  response display data. A response lookup failure after commit returns the
+  sanitized internal error without replaying the write; refresh canonical reads
+  before deciding whether to submit another mutation (#370).
 - Business rules belong in application services.
 - Database access belongs behind repository-style functions or methods.
 - Error responses should be structured, consistent, and safe for user display.
 - Error response shape is a JSON envelope: `{"error": {"code": "STABLE_CODE", "message": "human-readable detail"}}`. The `code` field is a stable uppercase string that the frontend translation layer keys off of. Never return raw Go error strings to the client.
 - Initial API error codes are `VALIDATION_FAILED`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `CSRF_INVALID`, `RATE_LIMITED`, `RESOURCE_BUSY`, `LEDGER_OVERFLOW`, `SETUP_REQUIRED`, `SETUP_ALREADY_COMPLETE`, and `INTERNAL_ERROR`.
 - Public request and response shapes should be documented in OpenAPI as endpoints become real.
+- The checked contract is OpenAPI 3.1. Express null with a type union such as
+  `type: [string, 'null']`, not the obsolete `nullable` annotation. Requiredness
+  and nullability are separate: an optional property may still reject null.
 - Stable `/api/v1` endpoints are OpenAPI-first. `api/openapi/openapi.yaml` is the checked source of truth, handler changes and OpenAPI changes land together, and frontend API types must be generated from the checked OpenAPI artifact once frontend API client code lands.
 - Page-level and reusable-component read models should be backend-composed when a screen would otherwise issue repeated per-row/per-card requests. Prefer one request per page, or at most one request per shareable component, with the backend preparing the JSON shape needed by that surface.
 - Date fields in request and response bodies use ISO 8601 (`YYYY-MM-DD`) for calendar dates and RFC 3339 for timestamps, consistent with the data layer convention.
@@ -477,13 +487,60 @@ has actual installations, its migration files are immutable.
 
 ## Authentication And Session Security
 
+- Personal-access tokens follow [ADR 0018](adrs/0018-personal-access-token-boundary.md)
+  and the [bounded contract](plans/personal-access-tokens-plan.md) (#334).
+  Authorize exact method/registered-route pairs, never prefixes or wildcard
+  grants. Supplied Authorization always selects token authentication without
+  cookie fallback. The first grants are read-only `ledger:read` and
+  `reports:read`; token administration is session-only. Creation shares MFA's
+  password-confirmation budget and rechecks session/hash in its transaction.
+  Sample token/management-session expiry after acquiring the pool connection
+  and SQLite write admission; deferred `BeginTx` alone does not eliminate
+  writer-lock waits (#359).
+  Recovery revokes tokens atomically with sessions. GET/HEAD token-use events
+  and last-use timestamps are the explicit ADR 0018 security-bookkeeping
+  exception to durable read purity. They never change financial data or grants.
+
 - Username validation requires: non-empty after trimming, at most 64 bytes, no control characters (Unicode < U+0020 or U+007F). These constraints apply at both owner creation and login. OpenAPI schemas for `CreateOwnerRequest` and `LoginRequest` must document the same limits.
-- Any feature that changes the owner password must revoke all existing sessions atomically in the same database transaction. The `recover-owner` command demonstrates the required pattern. Do not implement a "change password" endpoint that updates the hash without revoking sessions.
-- Revocation cutoff (#267): a revoking change cuts off every attempt that has not yet committed its session. `recover-owner` holds the server's database lock and refuses while the server runs, so no request that verified the old password can insert a session after the reset (#286). Disabling MFA deletes outstanding challenges and regenerating recovery codes replaces the old set in one transaction, so an in-flight sign-in that already proved its password still fails on its second factor. A request already authenticated by a session before logout or device revocation may finish; the next request on that session is refused. Enabling MFA does not revoke existing sessions, so a password-only sign-in that read the inactive state just before activation may still finish.
+- Any feature that changes the owner password must revoke all existing sessions
+  and personal-access tokens atomically in the same database transaction. The
+  `recover-owner` command demonstrates the required pattern.
+- Expiry admission (#360): browser sessions and approved-device throttle selection
+  check persisted deadlines against a fresh clock after their reads. These reads
+  remain read-only and usable alongside a WAL writer. An already admitted request
+  may finish after session expiry/logout, and an admitted device attempt retains
+  its selected throttle scopes while it finishes. MFA challenge consumption and
+  TOTP use/activation check deadlines after acquiring SQLite write admission;
+  deferred `BeginTx` alone is insufficient. Challenge expiry is exclusive at
+  consumption; a consumed challenge may finish after expiry. The matched TOTP
+  step must still lie within the configured skew window at its consuming write.
+  Throttle reservation and failure decisions sample their clocks after writer
+  admission too. Each scope reservation pins its persisted random generation
+  (#366). An exhausted in-flight window or expired block starts a fresh
+  generation; deletion/recreation never reuses an identity, even at the same
+  timestamp. Refunds, failures and successful resets affect only the admitted
+  generation. A superseded attempt may finish, retaining its normal verdict
+  and event, but never debits, refunds, resets or recreates a replacement or
+  missing row. A late failure cannot restart an expired block. Counts and
+  deadlines survive restart and migration 0020. The bound is on admissions
+  within a generation: old guesses may finish after rollover, and intentional
+  successful resets admit a fresh budget. It is not a rolling bound on verdict
+  timestamps across generations.
+- Revocation cutoff (#267/#365): MFA disable deletes challenges, and the final
+  session insertion checks that its consumed challenge still exists with an active
+  enrollment. Disable therefore cuts off attempts whose session has not committed,
+  even after factor/challenge consumption. `recover-owner` holds the server's
+  database lock and refuses while the server runs (#286); recovery deletes the
+  enrollment/challenges and atomically revokes sessions and PATs. Regenerating
+  recovery codes invalidates the old unspent set; a factor already consumed before
+  regeneration remains proved. Logout/device revocation does not cancel a request
+  or device attempt already admitted, and revoked devices are never renewed.
+  Enabling MFA does not revoke sessions; a password-only sign-in that read the
+  inactive state just before activation may finish.
 - A sign-in writes its session, throttle settlement and device approval in one transaction; a rejected attempt leaves no session (#287). The authentication-event row is written afterwards and best-effort, so a failed log write never turns into a lockout.
-- Account-security changes are attributed authentication events (#288): MFA enrollment start, activation, disable, recovery-code regeneration, approved-device revocation and `recover-owner` each append one `authentication_events` row naming the user, the session, the proxy-aware client IP and the request id (the CLI has none of the last three and records `origin = cli_recovery`). They live there rather than in `audit_events`, which is book-scoped ledger provenance with no client address, so one timeline shows the sign-in that created a session next to the changes made from it. Each is written in the same transaction as the change: unlike a sign-in, a change that cannot be recorded is simply retried, and recovery's event shares the reset's database and commit, so it adds no lockout. A sign-in records the second factor that completed it (`totp` or `recovery_code`). Events never carry passwords, tokens, MFA secrets or recovery codes; non-secret context goes in `metadata_json`. Retention prunes only sign-in attempts and logouts; account-security events are kept. A new security-relevant transition adds an event type here, not a log line.
-- Login throttle scopes use `username` and `client_ip` as independent scope keys. The `username` throttle is cleared on successful login; the `client_ip` throttle is intentionally retained (a success only gives back its own place). Every throttle scope, including approved-device and `reauth_session`, admits each attempt atomically before any verifier runs and counts attempts still in flight against the budget, so verified guesses per window never exceed it under parallel requests (#285). Never check the counter and record the failure as separate statements. A failure keeps its place; a success or an attempt with no verdict (password correct but MFA owed, internal error) gives it back; a place never settled by a crashed process expires with the window. When multi-user support is added, confirm that throttle scope keys remain globally unique and cannot be confused across user classes.
-- MFA-settings reauthentication (enroll, activate, disable, regenerate recovery codes) spends a `reauth_session` throttle scope keyed by the authenticated session id: five wrong passwords or activation codes, shared across all four operations, block that session for fifteen minutes (#262). The place is reserved before any verifier runs, so correct input is refused while blocked and nothing is mutated. Success clears the session's scope. The scope is never owner- or IP-wide, so a stolen session cannot lock the owner out of their settings; the owner signs in again for a fresh session. It never spends or clears the sign-in scopes.
+- Account-security changes are attributed authentication events (#288): MFA enrollment start, activation, disable, recovery-code regeneration, approved-device revocation and `recover-owner` each append one `authentication_events` row naming the user, the session, the proxy-aware client IP and the request id (the CLI has none of the last three and records `origin = cli_recovery`). They live there rather than in `audit_events`, which is book-scoped ledger provenance with no client address, so one timeline shows the sign-in that created a session next to the changes made from it. Each is written in the same transaction as the change: unlike a sign-in, a change that cannot be recorded is simply retried, and recovery's event shares the reset's database and commit, so it adds no lockout. A sign-in records the second factor that completed it (`totp` or `recovery_code`). Events never carry passwords, tokens, MFA secrets or recovery codes; non-secret context goes in `metadata_json`. Retention prunes sign-in attempts, logouts and token-use/refusal events after 90 days; account-security lifecycle events are kept. A new security-relevant transition adds an event type here, not a log line.
+- Login throttle scopes use `username` and `client_ip` as independent scope keys. The admitted `username` generation is cleared on successful login; the `client_ip` throttle is intentionally retained (a success only gives back its own place). Every throttle scope, including approved-device and `reauth_session`, admits each attempt atomically before any verifier runs and counts attempts still in flight against the budget, so parallel requests cannot admit more guesses than that generation permits (#285/#366). Never check the counter and record the failure as separate statements. A failure keeps its place; a success or an attempt with no verdict (password correct but MFA owed, internal error) gives it back; a place never settled by a crashed process expires with the window. When multi-user support is added, confirm that throttle scope keys remain globally unique and cannot be confused across user classes.
+- MFA-settings reauthentication (enroll, activate, disable, regenerate recovery codes) and personal-access-token creation spend a `reauth_session` throttle scope keyed by the authenticated session id: five wrong passwords or activation codes, shared across these operations, block that session for fifteen minutes (#262/#334). The place is reserved before any verifier runs, so correct input is refused while blocked and nothing is mutated. Success clears the admitted session generation. The scope is never owner- or IP-wide, so a stolen session cannot lock the owner out of their settings; the owner signs in again for a fresh session. It never spends or clears the sign-in scopes.
 - `429 Too Many Requests` responses from the login endpoint must include a `Retry-After` header with the remaining wait in seconds. The blocked-until time is known at the point the error is returned; derive `Retry-After` from it rather than from a fixed constant.
 - Login-created session lifetime is configurable with `SESSION_LIFETIME_HOURS` (default `720`, must be a positive integer number of hours). Password and completed-MFA login cookies must use the same lifetime as the persisted session. Successful approved-device reuse renews its browser cookie as well as its database expiry, without creating a new device identity. Owner setup sessions use the product default unless setup is deliberately made configurable too.
 - Expired and revoked `auth_sessions` rows are deleted at server startup and then once every 24 hours where `revoked_at IS NOT NULL OR expires_at <= now`. The index `auth_sessions_expires_revoked_idx` exists to support this.
@@ -626,7 +683,8 @@ has actual installations, its migration files are immutable.
 - Session tokens are opaque random values. Store only token hashes in SQLite.
 - Session cookies use `HttpOnly`, `SameSite=Strict`, `Path=/`, and no `Domain`. Use `Secure` whenever the app is served over HTTPS. HTTPS deployments should use a `__Host-` prefixed cookie name once auth implementation lands.
 - CSRF protection for mutating API requests uses SameSite cookies as a baseline plus server-side `Origin` validation and a session-bound or signed CSRF token sent in a custom header such as `X-CSRF-Token`.
-- `GET`, `HEAD`, and `OPTIONS` endpoints must not mutate durable state.
+- `GET`, `HEAD`, and `OPTIONS` endpoints must not mutate durable application
+  state, except ADR 0018’s token authentication-event and last-use bookkeeping.
 - Password hashing uses **Argon2id** via `golang.org/x/crypto/argon2`. Store hashes in a self-describing format, such as PHC string format, with algorithm and parameters. Start from the OWASP minimum profile of 19 MiB memory, 2 iterations, and parallelism 1, then tune if local hardware requires it. Never store plaintext or reversibly encrypted passwords.
 - Owner passwords must be at least 12 Unicode characters and at most 1024 bytes. Apply the same policy to owner setup and local owner recovery; login may accept existing shorter passwords only if such hashes were created by an older build.
 - `REKENRAAM_SECRET_KEY` encrypts reusable online provider credentials **and the MFA shared secret** at rest. It must be base64 for exactly 32 random bytes, must live in operator configuration or a deployment secret manager, must never be committed, and must be backed up with the SQLite database.

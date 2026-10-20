@@ -70,7 +70,7 @@ func (s *InvestmentService) ReverseTransfer(ctx context.Context, input ReverseIn
 	if err != nil {
 		return Transaction{}, mapTransferCorrectionError(err)
 	}
-	return toTransaction(record), nil
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 // ReverseTransferReconciliationImpact runs the reversal writer and rolls back.
@@ -247,9 +247,13 @@ func (s *InvestmentService) ReplaceTransfer(ctx context.Context, input ReplaceIn
 	if err != nil {
 		return ReplaceInvestmentTransferResult{}, mapTransferReplacementError(err)
 	}
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceInvestmentTransferResult{}, err
+	}
 	return ReplaceInvestmentTransferResult{
-		Inverse: toTransaction(record.Inverse),
-		Replacement: InternalTransferResult{Transaction: toTransaction(record.Replacement),
+		Inverse: enriched[0],
+		Replacement: InternalTransferResult{Transaction: enriched[1],
 			Plan: toInternalTransferPlan(record.Result), DestinationLotIDs: record.Result.DestinationLotIDs},
 		CorrectedTransactionID: prepared.operation.TransactionID,
 	}, nil
@@ -389,9 +393,13 @@ func (s *InvestmentService) ReplaceTransferIn(ctx context.Context, input Replace
 		return ReplaceInvestmentTransferInResult{}, mapTransferCorrectionError(err)
 	}
 	lotID := record.Lot.ID
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceInvestmentTransferInResult{}, err
+	}
 	return ReplaceInvestmentTransferInResult{
-		Inverse:                toTransaction(record.Inverse),
-		Replacement:            InvestmentTradeResult{Transaction: toTransaction(record.Replacement), LotID: &lotID},
+		Inverse:                enriched[0],
+		Replacement:            InvestmentTradeResult{Transaction: enriched[1], LotID: &lotID},
 		CorrectedTransactionID: prepared.operation.TransactionID,
 	}, nil
 }

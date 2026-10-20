@@ -31,7 +31,7 @@ func (s *InvestmentService) ReverseBuy(ctx context.Context, input ReverseInvestm
 	if err != nil {
 		return Transaction{}, mapBuyReplacementError(err)
 	}
-	return toTransaction(record), nil
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 // ReverseBuyReconciliationImpact runs the actual reversal writer and its

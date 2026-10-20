@@ -351,15 +351,11 @@ func (s *InvestmentService) ReplacePaymentInLieu(ctx context.Context, input Repl
 	if err != nil {
 		return ReplaceInvestmentPaymentInLieuResult{}, mapPaymentInLieuError(err)
 	}
-	inverseTransaction, err := s.transactionService.enrichOne(ctx, toTransaction(record.Inverse))
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
 	if err != nil {
 		return ReplaceInvestmentPaymentInLieuResult{}, err
 	}
-	replacementTransaction, err := s.transactionService.enrichOne(ctx, toTransaction(record.Replacement))
-	if err != nil {
-		return ReplaceInvestmentPaymentInLieuResult{}, err
-	}
-	return ReplaceInvestmentPaymentInLieuResult{Inverse: inverseTransaction, Replacement: replacementTransaction,
+	return ReplaceInvestmentPaymentInLieuResult{Inverse: enriched[0], Replacement: enriched[1],
 		CorrectedTransactionID: operation.TransactionID}, nil
 }
 

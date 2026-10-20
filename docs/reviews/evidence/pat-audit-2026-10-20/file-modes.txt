@@ -1,0 +1,6 @@
+600 /app/data/rekenraam.sqlite
+600 /app/data/rekenraam.sqlite-shm
+600 /app/data/rekenraam.sqlite-wal
+700 /app/data/rekenraam.sqlite.before-restore-20261020T115837Z
+700 /app/data/rekenraam.sqlite.before-restore-20261020T115839Z
+600 /app/data/rekenraam.sqlite.lock

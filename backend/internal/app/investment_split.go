@@ -238,9 +238,13 @@ func (s *InvestmentService) Split(ctx context.Context, input InvestmentSplitInpu
 	if err != nil {
 		return InvestmentSplitResult{}, mapInvestmentSplitError(err)
 	}
+	enriched, err := s.transactionService.enrichOne(ctx, toTransaction(transaction))
+	if err != nil {
+		return InvestmentSplitResult{}, err
+	}
 	return InvestmentSplitResult{
 		OperationID: committed.OperationID,
-		Transaction: toTransaction(transaction),
+		Transaction: enriched,
 		Plan:        toInvestmentSplitPlan(split.RatioNumerator, split.RatioDenominator, committed),
 	}, nil
 }

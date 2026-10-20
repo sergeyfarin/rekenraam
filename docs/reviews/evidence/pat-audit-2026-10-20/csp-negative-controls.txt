@@ -1,0 +1,6 @@
+Running 2 tests using 1 worker
+  ✘  1 [app] › playwright/rendered-contrast.spec.ts:63:3 › rendered text measurement respects production style CSP (#333) (376ms)
+  ✘  2 [app] › playwright/rendered-contrast.spec.ts:63:3 › rendered text measurement respects production style CSP (#999) (330ms)
+    Received has value: undefined
+    Received has value: undefined
+  2 failed

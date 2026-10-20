@@ -65,3 +65,16 @@ post:
         application/json:
           schema:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: >-
+        Internal server error. A display lookup can fail after the correction
+        commits; refresh the canonical transaction/correction-chain reads before
+        deciding whether to submit another write. This status does not promise
+        that the financial operation was rolled back.
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

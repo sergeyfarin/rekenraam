@@ -1,8 +1,21 @@
 get:
+  security:
+    - CookieSession: []
+    - PersonalAccessToken: []
+  x-personal-access-token-scope: "ledger:read"
   summary: Read an institution
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/InstitutionID"
   responses:
+    "403":
+      description: Personal-access token does not grant this scope
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "200":
       description: Institution
       headers:

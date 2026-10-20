@@ -84,7 +84,7 @@ func (s *InvestmentService) reverseDisposal(ctx context.Context, input ReverseIn
 	if err != nil {
 		return Transaction{}, family.mapError(mapReverseSaleError(err))
 	}
-	return toTransaction(record), nil
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 // ReverseSaleReconciliationImpact runs the actual reversal writer and its

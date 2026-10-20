@@ -76,7 +76,7 @@ func TestSecurityChangeIsRolledBackWhenItsEventCannotBeWritten(t *testing.T) {
 	database, repository := newMFATestRepository(t)
 	enrollPendingMFA(t, repository)
 	require.NoError(t, repository.ActivateMFATOTPWithRecoveryCodes(
-		ctx, 1, "sealed-secret", "2026-08-01T00:05:00Z", 42, []string{"hash-a"}, securityTestEvent("mfa_activated"),
+		ctx, 1, "sealed-secret", "2026-08-01T00:05:00Z", 42, []string{"hash-a"}, securityTestEvent("mfa_activated"), func() error { return nil },
 	))
 
 	invalid := securityTestEvent("not_an_event_type")

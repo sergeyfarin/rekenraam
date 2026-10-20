@@ -82,7 +82,7 @@ func (s *InvestmentService) ReverseCashStockMerger(ctx context.Context, input Re
 	if err != nil {
 		return Transaction{}, mapCashStockMergerCorrectionError(err)
 	}
-	return toTransaction(record), nil
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 // ReverseCashStockMergerReconciliationImpact runs the reversal writer and
@@ -183,7 +183,11 @@ func (s *InvestmentService) ReplaceCashStockMerger(ctx context.Context, input Re
 	if err != nil {
 		return ReplaceCashStockMergerResult{}, err
 	}
-	return ReplaceCashStockMergerResult{Inverse: toTransaction(record.Inverse), Replacement: toTransaction(record.Replacement),
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceCashStockMergerResult{}, err
+	}
+	return ReplaceCashStockMergerResult{Inverse: enriched[0], Replacement: enriched[1],
 		Plan: plan, CorrectedTransactionID: operation.TransactionID}, nil
 }
 

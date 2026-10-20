@@ -146,3 +146,18 @@ These notes record what the audit observed. Nothing here was refactored, and
   catalog gate was run for that copy change.
 - Not verified: a real proxy or multi-process deployment (#268), and
   native-language review of the new recovery-panel sentence.
+
+
+## Follow-up expiry and final-session audit — 2026-10-20
+
+[#360](https://github.com/sergeyfarin/rekenraam/issues/360) completed the
+[adjacent expiry-admission audit](authentication-expiry-audit-2026-10-20.md).
+Actual queued service consumers confirmed session/device expiry (#362), MFA
+challenge/TOTP writer deadlines (#363), stale throttle admission clocks (#364),
+and MFA disable after challenge consumption but before session insertion (#365).
+These bounded defects are fixed. The prior audit's earlier-stage controls did
+not prove those boundaries. Pure session reads remain read-only. A separate
+reservation-window settlement defect is confirmed and remains open as
+[#366](https://github.com/sergeyfarin/rekenraam/issues/366), including its
+additional login/settings concurrency audit. The dated report separates that
+component-level probe from demonstrated HTTP exposure.

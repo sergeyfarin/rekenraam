@@ -1,0 +1,597 @@
+{
+  "date": "2026-10-20",
+  "baseline": "244db3b48b79ee09d229ef1a8e951fb2692f3dd0",
+  "platform": "linux/amd64",
+  "scanner": "Trivy 0.69.3",
+  "scanner_image": "aquasec/trivy@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c",
+  "database": {
+    "Version": 2,
+    "NextUpdate": "2026-10-21T01:16:59.036595078Z",
+    "UpdatedAt": "2026-10-20T01:16:59.036595599Z",
+    "DownloadedAt": "2026-10-20T06:13:31.679268734Z"
+  },
+  "image_manifest": "sha256:787f5bcce2a3fa85fdbff145a4eacae99772a9081bba4e5497a13c97034a89c2",
+  "image_config": "sha256:1753eec1cdd5dc95dc7fcd72fbee401721bcc49007c30c64d052e6d34a283628",
+  "scan_sha256": "f99cc48caf6c5832a9dbbc2336130efc1ea0c7308c9763fc2c7677761327b26a",
+  "image_tar_sha256": "64e5d6835d7696bacc3663868b20fa4618015f43d32f4bdb443e49e1fd24c94a",
+  "binary_sha256": "74e0948c52b7bc814bd1009254a7d7908f9e32e2e59fff22a03f84c76e277a3a",
+  "meaning": "Package/advisory inventory and bounded engineering assessment; no confirmed app exploit, blanket immunity, or owner release acceptance inferred.",
+  "results": [
+    {
+      "target": "/image.tar (debian 13.7)",
+      "class": "os-pkgs",
+      "rows": 281,
+      "unique_advisories": 132,
+      "severity": {
+        "LOW": 142,
+        "HIGH": 47,
+        "MEDIUM": 91,
+        "UNKNOWN": 1
+      }
+    },
+    {
+      "target": "app/rekenraam",
+      "class": "lang-pkgs",
+      "rows": 1,
+      "unique_advisories": 1,
+      "severity": {
+        "UNKNOWN": 1
+      }
+    }
+  ],
+  "inventory_delta_from_2026_10_18": {
+    "added": 0,
+    "removed": 0,
+    "comparison": "class/package/installed-version/advisory"
+  },
+  "advertised_fixed_rows": 0,
+  "classification_counts": {
+    "utility": 90,
+    "health-only": 121,
+    "unloaded-library": 24,
+    "unused-interface": 26,
+    "conditional-hardening-risk": 8,
+    "privilege-precondition-absent": 4,
+    "service-absent": 2,
+    "architecture-precondition-absent": 2,
+    "package-not-imported": 1,
+    "different-engine": 4
+  },
+  "source_groups": [
+    {
+      "source": "acl",
+      "rows": 2,
+      "packages": [
+        "libacl1=2.3.2-2+b1"
+      ],
+      "severity": {
+        "HIGH": 1,
+        "MEDIUM": 1
+      }
+    },
+    {
+      "source": "apt",
+      "rows": 2,
+      "packages": [
+        "apt=3.0.3",
+        "libapt-pkg7.0=3.0.3"
+      ],
+      "severity": {
+        "LOW": 2
+      }
+    },
+    {
+      "source": "attr",
+      "rows": 1,
+      "packages": [
+        "libattr1=1:2.5.2-3"
+      ],
+      "severity": {
+        "MEDIUM": 1
+      }
+    },
+    {
+      "source": "bash",
+      "rows": 1,
+      "packages": [
+        "bash=5.2.37-2+b10"
+      ],
+      "severity": {
+        "LOW": 1
+      }
+    },
+    {
+      "source": "bzip2",
+      "rows": 1,
+      "packages": [
+        "libbz2-1.0=1.0.8-6"
+      ],
+      "severity": {
+        "MEDIUM": 1
+      }
+    },
+    {
+      "source": "coreutils",
+      "rows": 4,
+      "packages": [
+        "coreutils=9.7-3"
+      ],
+      "severity": {
+        "LOW": 4
+      }
+    },
+    {
+      "source": "curl",
+      "rows": 78,
+      "packages": [
+        "curl=8.14.1-2+deb13u7",
+        "libcurl4t64=8.14.1-2+deb13u7"
+      ],
+      "severity": {
+        "HIGH": 4,
+        "MEDIUM": 20,
+        "LOW": 54
+      }
+    },
+    {
+      "source": "cyrus-sasl2",
+      "rows": 2,
+      "packages": [
+        "libsasl2-2=2.1.28+dfsg1-9",
+        "libsasl2-modules-db=2.1.28+dfsg1-9"
+      ],
+      "severity": {
+        "MEDIUM": 2
+      }
+    },
+    {
+      "source": "dash",
+      "rows": 2,
+      "packages": [
+        "dash=0.5.12-12"
+      ],
+      "severity": {
+        "LOW": 2
+      }
+    },
+    {
+      "source": "diffutils",
+      "rows": 1,
+      "packages": [
+        "diffutils=1:3.10-4"
+      ],
+      "severity": {
+        "LOW": 1
+      }
+    },
+    {
+      "source": "gcc-14",
+      "rows": 6,
+      "packages": [
+        "gcc-14-base=14.2.0-19",
+        "libgcc-s1=14.2.0-19",
+        "libstdc++6=14.2.0-19"
+      ],
+      "severity": {
+        "MEDIUM": 6
+      }
+    },
+    {
+      "source": "glibc",
+      "rows": 42,
+      "packages": [
+        "libc-bin=2.41-12+deb13u4",
+        "libc6=2.41-12+deb13u4"
+      ],
+      "severity": {
+        "MEDIUM": 26,
+        "LOW": 16
+      }
+    },
+    {
+      "source": "gnutls28",
+      "rows": 7,
+      "packages": [
+        "libgnutls30t64=3.8.9-3+deb13u4"
+      ],
+      "severity": {
+        "LOW": 7
+      }
+    },
+    {
+      "source": "golang.org/x/crypto",
+      "rows": 1,
+      "packages": [
+        "golang.org/x/crypto=v0.58.0"
+      ],
+      "severity": {
+        "UNKNOWN": 1
+      }
+    },
+    {
+      "source": "krb5",
+      "rows": 24,
+      "packages": [
+        "libgssapi-krb5-2=1.21.3-5+deb13u1",
+        "libk5crypto3=1.21.3-5+deb13u1",
+        "libkrb5-3=1.21.3-5+deb13u1",
+        "libkrb5support0=1.21.3-5+deb13u1"
+      ],
+      "severity": {
+        "MEDIUM": 8,
+        "LOW": 16
+      }
+    },
+    {
+      "source": "ncurses",
+      "rows": 6,
+      "packages": [
+        "libtinfo6=6.5+20250216-2",
+        "ncurses-base=6.5+20250216-2",
+        "ncurses-bin=6.5+20250216-2"
+      ],
+      "severity": {
+        "HIGH": 3,
+        "LOW": 3
+      }
+    },
+    {
+      "source": "nghttp2",
+      "rows": 1,
+      "packages": [
+        "libnghttp2-14=1.64.0-1.1+deb13u1"
+      ],
+      "severity": {
+        "MEDIUM": 1
+      }
+    },
+    {
+      "source": "openldap",
+      "rows": 5,
+      "packages": [
+        "libldap2=2.6.10+dfsg-1"
+      ],
+      "severity": {
+        "LOW": 5
+      }
+    },
+    {
+      "source": "p11-kit",
+      "rows": 2,
+      "packages": [
+        "libp11-kit0=0.25.5-3"
+      ],
+      "severity": {
+        "MEDIUM": 2
+      }
+    },
+    {
+      "source": "pam",
+      "rows": 4,
+      "packages": [
+        "libpam-modules-bin=1.7.0-5",
+        "libpam-modules=1.7.0-5",
+        "libpam-runtime=1.7.0-5",
+        "libpam0g=1.7.0-5"
+      ],
+      "severity": {
+        "MEDIUM": 4
+      }
+    },
+    {
+      "source": "perl",
+      "rows": 4,
+      "packages": [
+        "perl-base=5.40.1-6+deb13u1"
+      ],
+      "severity": {
+        "HIGH": 1,
+        "MEDIUM": 1,
+        "LOW": 1,
+        "UNKNOWN": 1
+      }
+    },
+    {
+      "source": "shadow",
+      "rows": 6,
+      "packages": [
+        "login.defs=1:4.17.4-2",
+        "passwd=1:4.17.4-2"
+      ],
+      "severity": {
+        "LOW": 6
+      }
+    },
+    {
+      "source": "sqlite3",
+      "rows": 4,
+      "packages": [
+        "libsqlite3-0=3.46.1-7+deb13u2"
+      ],
+      "severity": {
+        "MEDIUM": 2,
+        "LOW": 2
+      }
+    },
+    {
+      "source": "systemd",
+      "rows": 14,
+      "packages": [
+        "libsystemd0=257.13-1~deb13u1",
+        "libudev1=257.13-1~deb13u1"
+      ],
+      "severity": {
+        "HIGH": 2,
+        "MEDIUM": 2,
+        "LOW": 10
+      }
+    },
+    {
+      "source": "sysvinit",
+      "rows": 1,
+      "packages": [
+        "sysvinit-utils=3.14-4"
+      ],
+      "severity": {
+        "LOW": 1
+      }
+    },
+    {
+      "source": "tar",
+      "rows": 5,
+      "packages": [
+        "tar=1.35+dfsg-3.1"
+      ],
+      "severity": {
+        "MEDIUM": 3,
+        "LOW": 2
+      }
+    },
+    {
+      "source": "util-linux",
+      "rows": 54,
+      "packages": [
+        "bsdutils=1:2.41.5-0+deb13u1",
+        "libblkid1=2.41.5-0+deb13u1",
+        "liblastlog2-2=2.41.5-0+deb13u1",
+        "libmount1=2.41.5-0+deb13u1",
+        "libsmartcols1=2.41.5-0+deb13u1",
+        "libuuid1=2.41.5-0+deb13u1",
+        "login=1:4.16.0-2+really2.41.5-0+deb13u1",
+        "mount=2.41.5-0+deb13u1",
+        "util-linux=2.41.5-0+deb13u1"
+      ],
+      "severity": {
+        "HIGH": 36,
+        "MEDIUM": 9,
+        "LOW": 9
+      }
+    },
+    {
+      "source": "zlib",
+      "rows": 2,
+      "packages": [
+        "zlib1g=1:1.3.dfsg+really1.3.1-1+b1"
+      ],
+      "severity": {
+        "MEDIUM": 2
+      }
+    }
+  ],
+  "runtime": {
+    "needed": [
+      "libm.so.6",
+      "libc.so.6"
+    ],
+    "loaded_shared_objects": [
+      "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+      "/usr/lib/x86_64-linux-gnu/libc.so.6",
+      "/usr/lib/x86_64-linux-gnu/libm.so.6"
+    ],
+    "process_status": {
+      "Uid": "10001\t10001\t10001\t10001",
+      "Gid": "10001\t10001\t10001\t10001",
+      "CapPrm": "0000000000000000",
+      "CapEff": "0000000000000000",
+      "CapBnd": "0000000000000000",
+      "NoNewPrivs": "1",
+      "Seccomp": "2"
+    },
+    "rpath_runpath": [],
+    "build_tags": [
+      "fts5",
+      "netgo",
+      "osusergo"
+    ],
+    "imported_symbols": [
+      "__errno_location",
+      "__gmon_start__",
+      "__libc_start_main",
+      "abort",
+      "access",
+      "clearenv",
+      "close",
+      "dlclose",
+      "dlerror",
+      "dlopen",
+      "dlsym",
+      "fchmod",
+      "fchown",
+      "fcntl64",
+      "fprintf",
+      "fputc",
+      "free",
+      "fstat64",
+      "fsync",
+      "ftruncate64",
+      "fwrite",
+      "getcwd",
+      "getenv",
+      "geteuid",
+      "getpid",
+      "gettimeofday",
+      "localtime",
+      "log",
+      "lstat64",
+      "malloc",
+      "memchr",
+      "memcmp",
+      "memcpy",
+      "memmove",
+      "memset",
+      "mkdir",
+      "mmap",
+      "mmap64",
+      "mremap",
+      "munmap",
+      "nanosleep",
+      "open64",
+      "pread64",
+      "pthread_attr_destroy",
+      "pthread_attr_getstack",
+      "pthread_attr_getstacksize",
+      "pthread_attr_init",
+      "pthread_attr_setdetachstate",
+      "pthread_cond_broadcast",
+      "pthread_cond_wait",
+      "pthread_create",
+      "pthread_getattr_np",
+      "pthread_join",
+      "pthread_key_create",
+      "pthread_mutex_destroy",
+      "pthread_mutex_init",
+      "pthread_mutex_lock",
+      "pthread_mutex_trylock",
+      "pthread_mutex_unlock",
+      "pthread_mutexattr_destroy",
+      "pthread_mutexattr_init",
+      "pthread_mutexattr_settype",
+      "pthread_self",
+      "pthread_setspecific",
+      "pthread_sigmask",
+      "pwrite64",
+      "qsort",
+      "read",
+      "readlink",
+      "realloc",
+      "rmdir",
+      "setegid",
+      "setenv",
+      "seteuid",
+      "setgid",
+      "setgroups",
+      "setregid",
+      "setresgid",
+      "setresuid",
+      "setreuid",
+      "setuid",
+      "sigaction",
+      "sigaddset",
+      "sigemptyset",
+      "sigfillset",
+      "sigismember",
+      "stat64",
+      "stderr",
+      "strchr",
+      "strcmp",
+      "strcspn",
+      "strerror",
+      "strlen",
+      "strncmp",
+      "strrchr",
+      "strspn",
+      "sysconf",
+      "time",
+      "unlink",
+      "unsetenv",
+      "utimes",
+      "vfprintf",
+      "write"
+    ],
+    "absent_interfaces_checked": [
+      "fopen",
+      "fopen64",
+      "strfmon",
+      "strfmon_l",
+      "tdelete",
+      "tsearch",
+      "ns_printrrf",
+      "ns_printrr",
+      "fp_nquery",
+      "wordexp",
+      "wordfree",
+      "iconv",
+      "getaddrinfo",
+      "gethostbyname",
+      "res_query",
+      "glob",
+      "regcomp",
+      "regexec",
+      "strncasecmp"
+    ],
+    "healthcheck": [
+      "CMD",
+      "curl",
+      "--fail",
+      "--silent",
+      "http://127.0.0.1:16888/healthz"
+    ],
+    "healthcheck_timeout_seconds": 5,
+    "app_file_mode": "0755",
+    "dependency_closure_absent": [
+      "golang.org/x/crypto/openpgp",
+      "net/cgo",
+      "os/user"
+    ],
+    "production_go_package_count": 272
+  },
+  "bundled_sqlite": {
+    "compile_options": [
+      "ATOMIC_INTRINSICS=1",
+      "COMPILER=gcc-13.3.0",
+      "DEFAULT_AUTOVACUUM",
+      "DEFAULT_CACHE_SIZE=-2000",
+      "DEFAULT_FILE_FORMAT=4",
+      "DEFAULT_JOURNAL_SIZE_LIMIT=-1",
+      "DEFAULT_MMAP_SIZE=0",
+      "DEFAULT_PAGE_SIZE=4096",
+      "DEFAULT_PCACHE_INITSZ=20",
+      "DEFAULT_RECURSIVE_TRIGGERS",
+      "DEFAULT_SECTOR_SIZE=4096",
+      "DEFAULT_SYNCHRONOUS=2",
+      "DEFAULT_WAL_AUTOCHECKPOINT=1000",
+      "DEFAULT_WAL_SYNCHRONOUS=1",
+      "DEFAULT_WORKER_THREADS=0",
+      "DIRECT_OVERFLOW_READ",
+      "ENABLE_FTS3",
+      "ENABLE_FTS3_PARENTHESIS",
+      "ENABLE_FTS5",
+      "ENABLE_RTREE",
+      "ENABLE_UPDATE_DELETE_LIMIT",
+      "MALLOC_SOFT_LIMIT=1024",
+      "MAX_ATTACHED=10",
+      "MAX_COLUMN=2000",
+      "MAX_COMPOUND_SELECT=500",
+      "MAX_DEFAULT_PAGE_SIZE=8192",
+      "MAX_EXPR_DEPTH=1000",
+      "MAX_FUNCTION_ARG=1000",
+      "MAX_LENGTH=1000000000",
+      "MAX_LIKE_PATTERN_LENGTH=50000",
+      "MAX_MMAP_SIZE=0x7fff0000",
+      "MAX_PAGE_COUNT=0xfffffffe",
+      "MAX_PAGE_SIZE=65536",
+      "MAX_SQL_LENGTH=1000000000",
+      "MAX_TRIGGER_DEPTH=1000",
+      "MAX_VARIABLE_NUMBER=32766",
+      "MAX_VDBE_OP=250000000",
+      "MAX_WORKER_THREADS=8",
+      "MUTEX_PTHREADS",
+      "OMIT_DEPRECATED",
+      "SYSTEM_MALLOC",
+      "TEMP_STORE=1",
+      "THREADSAFE=1"
+    ],
+    "source_id": "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc",
+    "version": "3.53.4"
+  }
+}

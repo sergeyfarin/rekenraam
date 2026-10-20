@@ -1,5 +1,12 @@
 # Deployment, upgrades and release-readiness audit — 2026-10-18
 
+**2026-10-20 residual-review update:** [#337's dated
+follow-up](runtime-image-advisory-audit-2026-10-20.md) rescans the current image
+and classifies all residual rows. Engineering review is complete; #337 remains
+blocked on owner release disposition. Release stays on hold; additional #354
+owns bundled native SQLite advisory coverage. The original evidence below is
+unchanged.
+
 **Complete:** bounded audit [#279](https://github.com/sergeyfarin/rekenraam/issues/279)
 under [#260](https://github.com/sergeyfarin/rekenraam/issues/260). This report
 records candidate deployment evidence, not permission to release or announce.

@@ -4,6 +4,272 @@
  */
 
 export interface paths {
+    "/api/v1/auth/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List owner personal-access tokens without credential material
+         * @description Owner session only. Descending ID cursor pagination includes expired and revoked history, 50 rows per page.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Credential metadata only */
+                200: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PersonalAccessTokenList"];
+                    };
+                };
+                /** @description Invalid cursor */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Owner session required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Bearer authentication is forbidden */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create a scoped read-only personal-access token
+         * @description Owner session, Origin, CSRF and current password required. Shares the MFA settings reauthentication budget. At most 50 unexpired/unrevoked tokens. Returns the plaintext once with Cache-Control no-store. Token credentials cannot invoke this operation, even with an owner cookie.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreatePersonalAccessTokenRequest"];
+                };
+            };
+            responses: {
+                /** @description Credential created and recorded atomically */
+                201: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CreatePersonalAccessTokenResponse"];
+                    };
+                };
+                /** @description Invalid input or active credential limit */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Session expired or password confirmation failed */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or Origin invalid; Bearer credential forbidden */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Request body too large */
+                413: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Session reauthentication budget exhausted */
+                429: {
+                    headers: {
+                        /** @description Seconds until this session may confirm again. */
+                        "Retry-After"?: number;
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an owner personal-access token
+         * @description Owner session, Origin and CSRF required. Retains credential history and records an event atomically. A previously authenticated read may finish; later use is denied.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header: {
+                    "X-CSRF-Token": string;
+                };
+                path: {
+                    token_id: number;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Credential revoked */
+                204: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid ID */
+                400: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Owner session required */
+                401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description CSRF or Origin invalid; Bearer credential forbidden */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Credential absent or already revoked */
+                404: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pricing/quotes/refresh": {
         parameters: {
             query?: never;
@@ -3509,6 +3775,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Book not found */
                 404: {
                     headers: {
@@ -3576,6 +3852,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -3625,6 +3911,16 @@ export interface paths {
                 };
                 /** @description Authentication is required */
                 401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
@@ -3886,6 +4182,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -4025,6 +4331,16 @@ export interface paths {
                 };
                 /** @description Authentication is required */
                 401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
@@ -4471,6 +4787,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Institution not found */
                 404: {
                     headers: {
@@ -4608,6 +4934,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -4727,6 +5063,16 @@ export interface paths {
                 };
                 /** @description Authentication is required */
                 401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
@@ -5305,6 +5651,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Account not found */
                 404: {
                     headers: {
@@ -5371,6 +5727,16 @@ export interface paths {
                 /** @description Authentication is required */
                 401: {
                     headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -5645,6 +6011,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         put?: never;
@@ -5705,6 +6081,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         put?: never;
@@ -5757,6 +6143,16 @@ export interface paths {
                 /** @description Authentication is required */
                 401: {
                     headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -5828,6 +6224,16 @@ export interface paths {
                 /** @description Authentication is required */
                 401: {
                     headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -5914,6 +6320,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Report arithmetic exceeded exact quantity limits */
                 422: {
                     headers: {
@@ -5994,6 +6410,16 @@ export interface paths {
                 /** @description Authentication is required */
                 401: {
                     headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -6833,6 +7259,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -6972,6 +7408,16 @@ export interface paths {
                 };
                 /** @description Authentication is required */
                 401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
@@ -7456,6 +7902,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -7595,6 +8051,16 @@ export interface paths {
                 };
                 /** @description Authentication is required */
                 401: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
                     headers: {
                         "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
@@ -7966,6 +8432,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         put?: never;
@@ -8069,6 +8545,16 @@ export interface paths {
                 /** @description Authentication is required */
                 401: {
                     headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -8344,6 +8830,7 @@ export interface paths {
                     /** @description Filter to transactions with a posting in this commodity or a cash-dividend operation fact naming it as the paying instrument. Includes linked correction journals, gross income and withholding. */
                     commodity_id?: number;
                     payee_id?: number;
+                    /** @description Literal free-text phrase; FTS operators are not interpreted. NUL (U+0000) is rejected with HTTP 400 VALIDATION_FAILED. */
                     q?: string;
                     status?: components["schemas"]["TransactionStatus"];
                     kind?: components["schemas"]["TransactionKind"];
@@ -8384,6 +8871,16 @@ export interface paths {
                 /** @description Authentication is required */
                 401: {
                     headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -8508,6 +9005,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         put?: never;
@@ -8549,6 +9056,16 @@ export interface paths {
                 /** @description Authentication is required */
                 401: {
                     headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Personal-access token does not grant this scope */
+                403: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
                         [name: string]: unknown;
                     };
                     content: {
@@ -21115,6 +21632,16 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                /** @description Internal server error. A display lookup can fail after the correction commits; refresh the canonical transaction/correction-chain reads before deciding whether to submit another write. This status does not promise that the financial operation was rolled back. */
+                500: {
+                    headers: {
+                        "X-Request-ID": components["headers"]["XRequestID"];
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -26541,6 +27068,40 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        CreatePersonalAccessTokenResponse: {
+            /** @description Returned only by successful creation. Never persisted by the browser or returned by listing. */
+            token: string;
+            credential: components["schemas"]["PersonalAccessToken"];
+        };
+        CreatePersonalAccessTokenRequest: {
+            /** @description Trimmed nonblank name, at most 80 UTF-8 bytes, no control characters. Do not paste secrets here. */
+            name: string;
+            password: string;
+            scopes: ("ledger:read" | "reports:read")[];
+            /**
+             * @description Absolute expiry; omission defaults to 30 days. Nonexpiring tokens are unsupported.
+             * @default 30
+             */
+            expires_in_days: number;
+        };
+        PersonalAccessTokenList: {
+            tokens: components["schemas"]["PersonalAccessToken"][];
+            next_cursor: string | null;
+        };
+        PersonalAccessToken: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            scopes: ("ledger:read" | "reports:read")[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** Format: date-time */
+            revoked_at: string | null;
+            /** Format: date-time */
+            last_used_at: string | null;
+        };
         BudgetAmount: {
             /** Format: int64 */
             commodity_id: number;
@@ -27223,7 +27784,7 @@ export interface components {
             current_step?: "owner" | "book" | "currencies" | "system_accounts" | "categories";
             /** @enum {string} */
             install_state: "fresh" | "configured" | "recovery_required";
-            implemented_steps: ("owner" | "book" | "currencies")[];
+            implemented_steps: ("owner" | "book" | "currencies" | "system_accounts" | "categories")[];
             /** @enum {string} */
             blocking_step?: "owner";
             steps: components["schemas"]["SetupStep"][];
@@ -29742,14 +30303,14 @@ export interface components {
              * @description Sign-in attempts and logout are pruned after 90 days. The account-security changes (MFA enrollment, activation, disable, recovery-code regeneration, approved-device revocation and owner recovery) are kept, and each is written in the same transaction as the change it records.
              * @enum {string}
              */
-            event_type: "login_succeeded" | "login_failed" | "login_blocked" | "logout" | "mfa_enrollment_started" | "mfa_activated" | "mfa_disabled" | "mfa_recovery_codes_regenerated" | "trusted_device_revoked" | "owner_access_recovered";
+            event_type: "login_succeeded" | "login_failed" | "login_blocked" | "logout" | "mfa_enrollment_started" | "mfa_activated" | "mfa_disabled" | "mfa_recovery_codes_regenerated" | "trusted_device_revoked" | "owner_access_recovered" | "token_created" | "token_revoked" | "token_authenticated" | "token_denied";
             /** @enum {string} */
             outcome: "success" | "failure";
             /**
              * @description Where the event came from. `cli_recovery` is the `recover-owner` command, which has no session, client address or request id.
              * @enum {string}
              */
-            origin: "browser_api" | "cli_recovery";
+            origin: "browser_api" | "cli_recovery" | "personal_access_token";
             /** @description The username that was attempted or changed. */
             username?: string;
             /**
@@ -29765,7 +30326,7 @@ export interface components {
             /** @description Proxy-aware client address as resolved by the API layer. */
             client_ip?: string;
             /** @enum {string} */
-            failure_reason?: "unknown_user" | "invalid_credentials" | "rate_limited" | "mfa_invalid" | "mfa_challenge_expired" | "mfa_authenticator_unavailable";
+            failure_reason?: "invalid_token" | "insufficient_scope" | "unknown_user" | "invalid_credentials" | "rate_limited" | "mfa_invalid" | "mfa_challenge_expired" | "mfa_authenticator_unavailable";
             request_id?: string;
             /**
              * @description On `login_succeeded`, the second factor that completed the sign-in. Absent for a password-only sign-in and for sign-ins recorded before the factor was tracked.
@@ -29774,6 +30335,18 @@ export interface components {
             second_factor?: "totp" | "recovery_code";
             /** @description Non-secret context for an account-security change. */
             metadata?: {
+                /**
+                 * Format: int64
+                 * @description Credential identity, never its secret or digest.
+                 */
+                token_id?: number;
+                /** @enum {string} */
+                required_scope?: "ledger:read" | "reports:read";
+                /**
+                 * Format: int64
+                 * @description Credentials revoked by owner recovery.
+                 */
+                tokens_revoked?: number;
                 /**
                  * Format: int64
                  * @description The approved device a `trusted_device_revoked` event revoked.

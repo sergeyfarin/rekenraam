@@ -1,0 +1,421 @@
+--- FAIL: TestThrottleRolloverExpiredBlockAndLateFailure (0.83s)
+    auth_throttle_rollover_test.go:333:
+            Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:333
+            Error:          Not equal:
+                            expected: []string{"client_ip:203.0.113.41:0:2026-10-20T12:15:00Z:2026-10-20T12:00:00Z:", "username:owner:0:2026-10-20T12:15:00Z:2026-10-20T12:00:00Z:"}
+                            actual  : []string{"client_ip:203.0.113.41:1::2026-10-20T12:15:00Z:", "username:owner:1::2026-10-20T12:15:00Z:"}
+
+                            Diff:
+                            --- Expected
+                            +++ Actual
+                            @@ -1,4 +1,4 @@
+                             ([]string) (len=2) {
+                            - (string) (len=67) "client_ip:203.0.113.41:0:2026-10-20T12:15:00Z:2026-10-20T12:00:00Z:",
+                            - (string) (len=59) "username:owner:0:2026-10-20T12:15:00Z:2026-10-20T12:00:00Z:"
+                            + (string) (len=47) "client_ip:203.0.113.41:1::2026-10-20T12:15:00Z:",
+                            + (string) (len=39) "username:owner:1::2026-10-20T12:15:00Z:"
+                             }
+            Test:           TestThrottleRolloverExpiredBlockAndLateFailure
+            Messages:       late failure cannot resurrect an expired block
+--- FAIL: TestAuthExpiryAuditReservationRolloverProbe (0.85s)
+    auth_throttle_rollover_test.go:39:
+            Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:39
+            Error:          Expected error with "rate limited" in chain but got nil.
+            Test:           TestAuthExpiryAuditReservationRolloverProbe
+            Messages:       old reservation release must not refund a new window's place
+--- FAIL: TestThrottleResetRealConsumersDoNotResurrectMissingRows (0.00s)
+    --- FAIL: TestThrottleResetRealConsumersDoNotResurrectMissingRows/login/success=false (0.59s)
+        auth_throttle_rollover_test.go:393:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:393
+                Error:          Should be empty, but was [client_ip:203.0.113.43:1::2026-10-20T12:00:00Z: username:owner:1::2026-10-20T12:00:00Z:]
+                Test:           TestThrottleResetRealConsumersDoNotResurrectMissingRows/login/success=false
+    --- FAIL: TestThrottleResetRealConsumersDoNotResurrectMissingRows/settings/success=false (0.44s)
+        auth_throttle_rollover_test.go:393:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:393
+                Error:          Should be empty, but was [reauth_session:1:1::2026-10-20T12:00:00Z:]
+                Test:           TestThrottleResetRealConsumersDoNotResurrectMissingRows/settings/success=false
+--- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset (0.00s)
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/username/failure (0.23s)
+        auth_throttle_rollover_test.go:291:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:291
+                Error:          Should be empty, but was [username:isolated:1::2026-10-20T12:00:00Z:]
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/username/failure
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/reauth_session/release (0.28s)
+        auth_throttle_rollover_test.go:304:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:304
+                Error:          Not equal:
+                                expected: []string{"reauth_session:isolated:5::2026-10-20T12:00:00Z:"}
+                                actual  : []string{"reauth_session:isolated:4::2026-10-20T12:00:00Z:"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,3 @@
+                                 ([]string) (len=1) {
+                                - (string) (len=48) "reauth_session:isolated:5::2026-10-20T12:00:00Z:"
+                                + (string) (len=48) "reauth_session:isolated:4::2026-10-20T12:00:00Z:"
+                                 }
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/reauth_session/release
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/reauth_session/failure (0.19s)
+        auth_throttle_rollover_test.go:291:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:291
+                Error:          Should be empty, but was [reauth_session:isolated:1::2026-10-20T12:00:00Z:]
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/reauth_session/failure
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/reauth_session/success (0.25s)
+        auth_throttle_rollover_test.go:304:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:304
+                Error:          Not equal:
+                                expected: []string{"reauth_session:isolated:5::2026-10-20T12:00:00Z:"}
+                                actual  : []string{}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,2 @@
+                                -([]string) (len=1) {
+                                - (string) (len=48) "reauth_session:isolated:5::2026-10-20T12:00:00Z:"
+                                +([]string) {
+                                 }
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/reauth_session/success
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/trusted_device/release (0.22s)
+        auth_throttle_rollover_test.go:304:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:304
+                Error:          Not equal:
+                                expected: []string{"trusted_device:isolated:5::2026-10-20T12:00:00Z:"}
+                                actual  : []string{"trusted_device:isolated:4::2026-10-20T12:00:00Z:"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,3 @@
+                                 ([]string) (len=1) {
+                                - (string) (len=48) "trusted_device:isolated:5::2026-10-20T12:00:00Z:"
+                                + (string) (len=48) "trusted_device:isolated:4::2026-10-20T12:00:00Z:"
+                                 }
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/trusted_device/release
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/trusted_device/failure (0.25s)
+        auth_throttle_rollover_test.go:291:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:291
+                Error:          Should be empty, but was [trusted_device:isolated:1::2026-10-20T12:00:00Z:]
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/trusted_device/failure
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/client_ip/failure (0.24s)
+        auth_throttle_rollover_test.go:291:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:291
+                Error:          Should be empty, but was [client_ip:isolated:1::2026-10-20T12:00:00Z:]
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/client_ip/failure
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/trusted_device/success (0.37s)
+        auth_throttle_rollover_test.go:304:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:304
+                Error:          Not equal:
+                                expected: []string{"trusted_device:isolated:5::2026-10-20T12:00:00Z:"}
+                                actual  : []string{}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,2 @@
+                                -([]string) (len=1) {
+                                - (string) (len=48) "trusted_device:isolated:5::2026-10-20T12:00:00Z:"
+                                +([]string) {
+                                 }
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/trusted_device/success
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/client_ip/release (0.33s)
+        auth_throttle_rollover_test.go:304:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:304
+                Error:          Not equal:
+                                expected: []string{"client_ip:isolated:5::2026-10-20T12:00:00Z:"}
+                                actual  : []string{"client_ip:isolated:4::2026-10-20T12:00:00Z:"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,3 @@
+                                 ([]string) (len=1) {
+                                - (string) (len=43) "client_ip:isolated:5::2026-10-20T12:00:00Z:"
+                                + (string) (len=43) "client_ip:isolated:4::2026-10-20T12:00:00Z:"
+                                 }
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/client_ip/release
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/username/release (0.32s)
+        auth_throttle_rollover_test.go:304:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:304
+                Error:          Not equal:
+                                expected: []string{"username:isolated:5::2026-10-20T12:00:00Z:"}
+                                actual  : []string{"username:isolated:4::2026-10-20T12:00:00Z:"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,3 @@
+                                 ([]string) (len=1) {
+                                - (string) (len=42) "username:isolated:5::2026-10-20T12:00:00Z:"
+                                + (string) (len=42) "username:isolated:4::2026-10-20T12:00:00Z:"
+                                 }
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/username/release
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/username/success (0.27s)
+        auth_throttle_rollover_test.go:304:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:304
+                Error:          Not equal:
+                                expected: []string{"username:isolated:5::2026-10-20T12:00:00Z:"}
+                                actual  : []string{}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,2 @@
+                                -([]string) (len=1) {
+                                - (string) (len=42) "username:isolated:5::2026-10-20T12:00:00Z:"
+                                +([]string) {
+                                 }
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/username/success
+    --- FAIL: TestThrottleRolloverMissingRowsAndSuccessReset/client_ip/success (0.36s)
+        auth_throttle_rollover_test.go:304:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:304
+                Error:          Not equal:
+                                expected: []string{"client_ip:isolated:5::2026-10-20T12:00:00Z:"}
+                                actual  : []string{"client_ip:isolated:4::2026-10-20T12:00:00Z:"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,3 @@
+                                 ([]string) (len=1) {
+                                - (string) (len=43) "client_ip:isolated:5::2026-10-20T12:00:00Z:"
+                                + (string) (len=43) "client_ip:isolated:4::2026-10-20T12:00:00Z:"
+                                 }
+                Test:           TestThrottleRolloverMissingRowsAndSuccessReset/client_ip/success
+--- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget (0.00s)
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/settings/failure (1.73s)
+        auth_throttle_rollover_test.go:237:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:237
+                Error:          Target error should be in err chain:
+                                expected: "invalid credentials"
+                                in chain: "rate limited"
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/settings/failure
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/login/failure (1.94s)
+        auth_throttle_rollover_test.go:237:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:237
+                Error:          Target error should be in err chain:
+                                expected: "invalid credentials"
+                                in chain: "rate limited"
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/login/failure
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/device/failure (2.16s)
+        auth_throttle_rollover_test.go:237:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:237
+                Error:          Target error should be in err chain:
+                                expected: "invalid credentials"
+                                in chain: "rate limited"
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/device/failure
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/activation/failure (1.60s)
+        auth_throttle_rollover_test.go:235:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:235
+                Error:          Target error should be in err chain:
+                                expected: "multi-factor code is invalid"
+                                in chain: "rate limited"
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/activation/failure
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/mfa_code/failure (1.64s)
+        auth_throttle_rollover_test.go:235:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:235
+                Error:          Target error should be in err chain:
+                                expected: "multi-factor code is invalid"
+                                in chain: "rate limited"
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/mfa_code/failure
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/settings/success (2.52s)
+        auth_throttle_rollover_test.go:239:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:239
+                Error:          Not equal:
+                                expected: []string{"reauth_session:1:5::2026-10-20T12:15:00Z:"}
+                                actual  : []string{}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,2 @@
+                                -([]string) (len=1) {
+                                - (string) (len=41) "reauth_session:1:5::2026-10-20T12:15:00Z:"
+                                +([]string) {
+                                 }
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/settings/success
+                Messages:       a late verdict must leave every replacement row unchanged
+        auth_throttle_rollover_test.go:240:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:240
+                Error:          Target error should be in err chain:
+                                expected: "rate limited"
+                                in chain: "invalid credentials"
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/settings/success
+                Messages:       sixth replacement guess must be refused before verification
+        auth_throttle_rollover_test.go:249:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:249
+                Error:          Not equal:
+                                expected: 5
+                                actual  : 6
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/settings/success
+                Messages:       exactly five replacement password guesses verified, regardless of returned statuses
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/login/success (2.63s)
+        auth_throttle_rollover_test.go:239:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:239
+                Error:          Not equal:
+                                expected: []string{"client_ip:203.0.113.40:5::2026-10-20T12:15:00Z:", "username:owner:5::2026-10-20T12:15:00Z:"}
+                                actual  : []string{"client_ip:203.0.113.40:4::2026-10-20T12:15:00Z:"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,4 +1,3 @@
+                                -([]string) (len=2) {
+                                - (string) (len=47) "client_ip:203.0.113.40:5::2026-10-20T12:15:00Z:",
+                                - (string) (len=39) "username:owner:5::2026-10-20T12:15:00Z:"
+                                +([]string) (len=1) {
+                                + (string) (len=47) "client_ip:203.0.113.40:4::2026-10-20T12:15:00Z:"
+                                 }
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/login/success
+                Messages:       a late verdict must leave every replacement row unchanged
+        auth_throttle_rollover_test.go:249:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:249
+                Error:          Not equal:
+                                expected: 5
+                                actual  : 6
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/login/success
+                Messages:       exactly five replacement password guesses verified, regardless of returned statuses
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/mfa_code/success (2.86s)
+        auth_throttle_rollover_test.go:239:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:239
+                Error:          Not equal:
+                                expected: []string{"client_ip:203.0.113.40:5::2026-10-20T12:15:00Z:", "username:owner:5::2026-10-20T12:15:00Z:"}
+                                actual  : []string{"client_ip:203.0.113.40:4::2026-10-20T12:15:00Z:", "username:owner:4::2026-10-20T12:15:00Z:"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,4 +1,4 @@
+                                 ([]string) (len=2) {
+                                - (string) (len=47) "client_ip:203.0.113.40:5::2026-10-20T12:15:00Z:",
+                                - (string) (len=39) "username:owner:5::2026-10-20T12:15:00Z:"
+                                + (string) (len=47) "client_ip:203.0.113.40:4::2026-10-20T12:15:00Z:",
+                                + (string) (len=39) "username:owner:4::2026-10-20T12:15:00Z:"
+                                 }
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/mfa_code/success
+                Messages:       a late verdict must leave every replacement row unchanged
+        auth_throttle_rollover_test.go:249:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:249
+                Error:          Not equal:
+                                expected: 5
+                                actual  : 6
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/mfa_code/success
+                Messages:       exactly five replacement password guesses verified, regardless of returned statuses
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/mfa_password_release/success (3.00s)
+        auth_throttle_rollover_test.go:239:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:239
+                Error:          Not equal:
+                                expected: []string{"client_ip:203.0.113.40:5::2026-10-20T12:15:00Z:", "username:owner:5::2026-10-20T12:15:00Z:"}
+                                actual  : []string{"client_ip:203.0.113.40:4::2026-10-20T12:15:00Z:", "username:owner:4::2026-10-20T12:15:00Z:"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,4 +1,4 @@
+                                 ([]string) (len=2) {
+                                - (string) (len=47) "client_ip:203.0.113.40:5::2026-10-20T12:15:00Z:",
+                                - (string) (len=39) "username:owner:5::2026-10-20T12:15:00Z:"
+                                + (string) (len=47) "client_ip:203.0.113.40:4::2026-10-20T12:15:00Z:",
+                                + (string) (len=39) "username:owner:4::2026-10-20T12:15:00Z:"
+                                 }
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/mfa_password_release/success
+                Messages:       a late verdict must leave every replacement row unchanged
+        auth_throttle_rollover_test.go:249:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:249
+                Error:          Not equal:
+                                expected: 5
+                                actual  : 6
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/mfa_password_release/success
+                Messages:       exactly five replacement password guesses verified, regardless of returned statuses
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/activation/success (2.26s)
+        auth_throttle_rollover_test.go:239:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:239
+                Error:          Not equal:
+                                expected: []string{"reauth_session:1:5::2026-10-20T12:15:00Z:"}
+                                actual  : []string{}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,2 @@
+                                -([]string) (len=1) {
+                                - (string) (len=41) "reauth_session:1:5::2026-10-20T12:15:00Z:"
+                                +([]string) {
+                                 }
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/activation/success
+                Messages:       a late verdict must leave every replacement row unchanged
+        auth_throttle_rollover_test.go:240:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:240
+                Error:          Target error should be in err chain:
+                                expected: "rate limited"
+                                in chain: "invalid credentials"
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/activation/success
+                Messages:       sixth replacement guess must be refused before verification
+        auth_throttle_rollover_test.go:249:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:249
+                Error:          Not equal:
+                                expected: 5
+                                actual  : 6
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/activation/success
+                Messages:       exactly five replacement password guesses verified, regardless of returned statuses
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/internal_error_release/success (1.62s)
+        auth_throttle_rollover_test.go:239:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:239
+                Error:          Not equal:
+                                expected: []string{"client_ip:203.0.113.40:5::2026-10-20T12:15:00Z:", "username:owner:5::2026-10-20T12:15:00Z:"}
+                                actual  : []string{"client_ip:203.0.113.40:4::2026-10-20T12:15:00Z:", "username:owner:4::2026-10-20T12:15:00Z:"}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,4 +1,4 @@
+                                 ([]string) (len=2) {
+                                - (string) (len=47) "client_ip:203.0.113.40:5::2026-10-20T12:15:00Z:",
+                                - (string) (len=39) "username:owner:5::2026-10-20T12:15:00Z:"
+                                + (string) (len=47) "client_ip:203.0.113.40:4::2026-10-20T12:15:00Z:",
+                                + (string) (len=39) "username:owner:4::2026-10-20T12:15:00Z:"
+                                 }
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/internal_error_release/success
+                Messages:       a late verdict must leave every replacement row unchanged
+        auth_throttle_rollover_test.go:249:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:249
+                Error:          Not equal:
+                                expected: 5
+                                actual  : 6
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/internal_error_release/success
+                Messages:       exactly five replacement password guesses verified, regardless of returned statuses
+    --- FAIL: TestThrottleRolloverRealConsumersPreserveReplacementBudget/device/success (1.09s)
+        auth_throttle_rollover_test.go:239:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:239
+                Error:          Not equal:
+                                expected: []string{"trusted_device:1:5::2026-10-20T12:15:00Z:"}
+                                actual  : []string{}
+
+                                Diff:
+                                --- Expected
+                                +++ Actual
+                                @@ -1,3 +1,2 @@
+                                -([]string) (len=1) {
+                                - (string) (len=41) "trusted_device:1:5::2026-10-20T12:15:00Z:"
+                                +([]string) {
+                                 }
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/device/success
+                Messages:       a late verdict must leave every replacement row unchanged
+        auth_throttle_rollover_test.go:240:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:240
+                Error:          Target error should be in err chain:
+                                expected: "rate limited"
+                                in chain: "invalid credentials"
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/device/success
+                Messages:       sixth replacement guess must be refused before verification
+        auth_throttle_rollover_test.go:249:
+                Error Trace:    backend/internal/app/auth_throttle_rollover_test.go:249
+                Error:          Not equal:
+                                expected: 5
+                                actual  : 6
+                Test:           TestThrottleRolloverRealConsumersPreserveReplacementBudget/device/success
+                Messages:       exactly five replacement password guesses verified, regardless of returned statuses
+FAIL
+FAIL    rekenraam/backend/internal/app  3.634s
+FAIL

@@ -46,6 +46,20 @@ candidate drill, not an installed-release compatibility claim. The
 [2026-10-18 report](reviews/deployment-audit-2026-10-18.md) records image builds,
 scan results and limits.
 
+The [2026-10-20 runtime-image review](reviews/runtime-image-advisory-audit-2026-10-20.md)
+records a fresh image/DB scan, actual ELF/process/health-check boundaries,
+the complete package/version/advisory matrix, a repeated Compose drill and
+the owner-disposition blocker on #337. Its reproduction section separates the
+networked database download from the network-disabled exported-tar scan.
+The [bundled native SQLite review (#354)](reviews/native-sqlite-advisory-audit-2026-10-20.md)
+authenticates source/compile options and exercises real search/JSON/verify/restore
+consumers. Its reproduction section includes the named native audit tests and
+the independent upstream-bug probe retained for driver-admission follow-up #356.
+The [#356 prerequisite recheck](reviews/sqlite-driver-upgrade-blocker-2026-10-20.md)
+adds an isolated C admission probe: it fails on official 3.53.4 and passes on
+official 3.54.1. A released Go driver carrying those fixes is still required;
+the production module pin remains unchanged.
+
 ### Install
 
 ```sh
@@ -74,6 +88,28 @@ development host, so the frontend port is the only required forward. Use an
 HTTPS reverse proxy for direct access from phones or other LAN clients.
 
 ### Backend Validation
+
+The bounded runtime OpenAPI audit (#349) reuses named synthetic HTTP consumers:
+
+```sh
+python3 scripts/audit-api-contract.py --output /tmp/rekenraam-api-audit
+python3 scripts/audit-api-contract.py --output /tmp/rekenraam-api-controls --controls-only
+```
+
+It requires Python 3.10+, PyYAML and jsonschema (recorded versions: 6.0.1 and
+4.10.3). Use an isolated environment if these are not installed:
+`python3 -m venv /tmp/rekenraam-api-venv`, then
+`/tmp/rekenraam-api-venv/bin/pip install -r scripts/requirements-api-audit.txt`.
+Run the script with that environment's Python. CSV/JSON output lists all declared
+operations, sampled statuses, required root fields, actual response shapes,
+schema failures, exact consumer names and retained limits. Raw synthetic bodies
+are deleted with the private temporary directory. `--strict` also fails for
+known #350 discrepancies; #370's exception is removed after its repair.
+The default fails for new discrepancies and
+failed sensitivity controls. This is a deliberate audit, not a new CI gate or
+complete endpoint certification. Format checks depend on installed optional
+format validators; `summary.json` records the asserted formats. In particular,
+the recorded system environment has no RFC 3339 `date-time` checker.
 
 The minimum Go toolchain is 1.27.2, declared in `backend/go.mod`. This patch
 fixes the standard-library vulnerabilities reported by the 2026-10-09
@@ -409,6 +445,12 @@ suite. This is what CI runs on every push:
 ./scripts/test-e2e-smoke.sh
 ```
 
+Both E2E wrappers first run `pnpm --dir e2e run test:stubs`, which can also be
+run alone. These Node HTTP tests launch the provider stub on a temporary
+localhost port and verify that malformed input and provider transformations
+return a fixed generic 500 JSON response without exception diagnostics, with
+normal provider requests still working afterward (CodeQL alert #84).
+
 Run the release preflight when preparing a release:
 
 ```sh
@@ -541,8 +583,7 @@ downgrade so payer/tax evidence is not lost. Bundle schema 13 adds
 
 Forward migration `0015_closing_day_postings.sql` (#292, 2026-10-17)
 recreates the `posting_versions_account_version_valid` trigger so a closed
-account version accepts postings dated on its `closed_on`. No data changes;
-the head schema version is 15.
+account version accepts postings dated on its `closed_on`. No data changes.
 
 Forward migration `0014_authentication_security_events.sql` (#288, 2026-10-17)
 rebuilds `authentication_events` to accept account-security event types and
@@ -595,6 +636,22 @@ The e2e database resets itself on every self-managed run and needs no manual res
   and a rebuild that re-points the wrong foreign key or rescales a coefficient
   leaves every row count identical. Widen the seed before writing a migration
   that touches something it does not cover.
+
+Forward migration `0019_personal_access_tokens.sql` (#334) preserves the existing
+baseline and all authentication-event columns while adding hash-only API
+credentials and token event types. No reset is needed; bundle schema stays 15
+because credentials are excluded from ledger exports. Native backups retain
+hashes/lifecycle state. Downgrade refuses credential rows or token event history;
+use a verified pre-upgrade backup for rollback.
+
+Forward migration `0020_throttle_generations.sql` (#366) adds persisted random
+identities to throttle windows without resetting counters/deadlines. Reservations
+carry that identity through every failure, release and success reset, so an old
+attempt cannot affect a replacement or recreate a cleared budget. Upgrade and
+restart preserve identities; local down/up assigns fresh ones while preserving
+budgets. No reset is needed; ledger bundle schema stays 15. The head schema is
+20. Production rollback still restores the verified pre-upgrade backup and
+previous binary; a down migration is only a local development control.
 
 ## Work Tracking
 

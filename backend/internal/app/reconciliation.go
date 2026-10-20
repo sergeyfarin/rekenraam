@@ -452,7 +452,7 @@ func (s *TransactionService) ChangePostingReconciliationStatus(ctx context.Conte
 	if err != nil {
 		return nil, mapTransactionDBError(err)
 	}
-	return toTransactions(records), nil
+	return s.enrichRecords(ctx, records...)
 }
 
 func reconciliationTotals(session db.ReconciliationSessionRecord, selected []db.ReconciliationPostingRecord) (BalanceQuantity, BalanceQuantity, error) {

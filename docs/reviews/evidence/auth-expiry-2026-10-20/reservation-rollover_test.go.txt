@@ -1,0 +1,31 @@
+// Evidence for #366, intentionally outside the passing test suite.
+// Copy into internal/app only for the documented expected-failure probe.
+package app
+
+import (
+	"context"
+	"github.com/stretchr/testify/require"
+	"testing"
+)
+
+func TestAuthExpiryAuditReservationRolloverProbe(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	_, service := newAuthEventTestService(t, expiryAuditStart)
+	clock := expiryAuditClock(service)
+	scopes := []loginThrottleScope{{ScopeType: throttleScopeUsername, ScopeKey: "owner"}}
+	old := make([]*throttleReservation, 0, loginThrottleMaxFailures)
+	for range loginThrottleMaxFailures {
+		r, err := service.reserveAttempt(ctx, scopes)
+		require.NoError(t, err)
+		old = append(old, r)
+	}
+	clock.Store(expiryAuditStart.Add(loginThrottleWindow).Unix())
+	for range loginThrottleMaxFailures {
+		_, err := service.reserveAttempt(ctx, scopes)
+		require.NoError(t, err)
+	}
+	old[0].release(ctx)
+	_, err := service.reserveAttempt(ctx, scopes)
+	require.ErrorIs(t, err, ErrRateLimited, "old reservation release must not refund a new window's place")
+}

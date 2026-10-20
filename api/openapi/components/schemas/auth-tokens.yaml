@@ -1,0 +1,80 @@
+PersonalAccessToken:
+  type: object
+  additionalProperties: false
+  required: [id, name, scopes, created_at, expires_at, revoked_at, last_used_at]
+  properties:
+    id:
+      type: integer
+      format: int64
+    name:
+      type: string
+      maxLength: 80
+    scopes:
+      type: array
+      minItems: 1
+      maxItems: 2
+      uniqueItems: true
+      items:
+        type: string
+        enum: ["ledger:read", "reports:read"]
+    created_at:
+      type: string
+      format: date-time
+    expires_at:
+      type: string
+      format: date-time
+    revoked_at:
+      type: [string, "null"]
+      format: date-time
+    last_used_at:
+      type: [string, "null"]
+      format: date-time
+PersonalAccessTokenList:
+  type: object
+  required: [tokens, next_cursor]
+  properties:
+    tokens:
+      type: array
+      items:
+        $ref: "../../openapi.yaml#/components/schemas/PersonalAccessToken"
+    next_cursor:
+      type: [string, "null"]
+CreatePersonalAccessTokenRequest:
+  type: object
+  additionalProperties: false
+  required: [name, password, scopes]
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 80
+      description: Trimmed nonblank name, at most 80 UTF-8 bytes, no control characters. Do not paste secrets here.
+    password:
+      type: string
+      minLength: 1
+      maxLength: 1024
+      writeOnly: true
+    scopes:
+      type: array
+      minItems: 1
+      maxItems: 2
+      uniqueItems: true
+      items:
+        type: string
+        enum: ["ledger:read", "reports:read"]
+    expires_in_days:
+      type: integer
+      minimum: 1
+      maximum: 365
+      default: 30
+      description: Absolute expiry; omission defaults to 30 days. Nonexpiring tokens are unsupported.
+CreatePersonalAccessTokenResponse:
+  type: object
+  required: [token, credential]
+  properties:
+    token:
+      type: string
+      pattern: '^rr_pat_[A-Za-z0-9_-]{43}$'
+      description: Returned only by successful creation. Never persisted by the browser or returned by listing.
+    credential:
+      $ref: "../../openapi.yaml#/components/schemas/PersonalAccessToken"

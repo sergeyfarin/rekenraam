@@ -1183,11 +1183,21 @@ func (s *InvestmentService) SaveDividendDefault(ctx context.Context, input Divid
 }
 
 func (s *InvestmentService) Buy(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
-	return s.buy(ctx, input, nil)
+	result, err := s.buy(ctx, input, nil)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	result.Transaction, err = s.transactionService.enrichOne(ctx, result.Transaction)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	return result, nil
 }
 
 // buyWithPostWrite is used by imports that must persist an idempotency marker
-// inside the same transaction as the trade and its lot.
+// inside the same transaction as the trade and its lot. Its internal receipt
+// only supplies durable IDs, so optional response enrichment cannot turn an
+// already committed import into a reported financial failure.
 func (s *InvestmentService) buyWithPostWrite(ctx context.Context, input InvestmentTradeInput, postWrite func(*sql.Tx, int64) error) (InvestmentTradeResult, error) {
 	return s.buy(ctx, input, postWrite)
 }
@@ -1503,7 +1513,15 @@ func (s *InvestmentService) PreviewSell(ctx context.Context, input InvestmentTra
 
 func (s *InvestmentService) Sell(ctx context.Context, input InvestmentTradeInput) (InvestmentTradeResult, error) {
 	input.WriteOff = false
-	return s.sell(ctx, input, nil)
+	result, err := s.sell(ctx, input, nil)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	result.Transaction, err = s.transactionService.enrichOne(ctx, result.Transaction)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	return result, nil
 }
 
 // writeOffTrade is the shared disposal engine a write-off runs through: the
@@ -1548,7 +1566,15 @@ func (s *InvestmentService) WriteOff(ctx context.Context, input InvestmentWriteO
 	trade.Status = input.Status
 	trade.ReconciliationOverride = input.ReconciliationOverride
 	trade.GainImpactAcknowledgement = input.GainImpactAcknowledgement
-	return s.writeOffTrade(ctx, trade)
+	result, err := s.writeOffTrade(ctx, trade)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	result.Transaction, err = s.transactionService.enrichOne(ctx, result.Transaction)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	return result, nil
 }
 
 // PreviewWriteOff reports which lots a write-off would consume and the loss
@@ -2034,7 +2060,11 @@ func (s *InvestmentService) ReinvestedDividend(ctx context.Context, input Reinve
 	if err != nil {
 		return InvestmentTradeResult{}, mapInvestmentOpeningWriteError(err, "reinvested dividend")
 	}
-	return InvestmentTradeResult{Transaction: toTransaction(transactionRecord), LotID: &lot.ID}, nil
+	transaction, err := s.transactionService.enrichOne(ctx, toTransaction(transactionRecord))
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
 }
 
 func (s *InvestmentService) prepareReinvestmentWrite(ctx context.Context, input ReinvestedDividendInput) (db.CreateTransactionParams, db.CreateInvestmentLotParams, error) {

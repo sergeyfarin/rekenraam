@@ -1,0 +1,763 @@
+{
+  "registered_patterns": 333,
+  "independent_grants": 25,
+  "cases": [
+    {
+      "case": "financial-seed",
+      "expected_coefficients": [
+        "-2500",
+        "2500"
+      ],
+      "scale": 2,
+      "pass": true
+    },
+    {
+      "case": "financial-all-route-refusals",
+      "expected_coefficients": [
+        "-2500",
+        "2500"
+      ],
+      "scale": 2,
+      "pass": true
+    },
+    {
+      "case": "path:GET:/api/v1/%61ccounts",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/%61ccounts",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts/%31",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts/%31",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts%2f1",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts%2f1",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts/../auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts/../auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts//../auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts//../auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/%61uth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/%61uth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/auth%2ftokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/auth%2ftokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts/%2e%2e/auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts/%2e%2e/auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts/1%2f..%2f..%2fauth%2ftokens",
+      "status": 400,
+      "expected_statuses": [
+        400
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts/1%2f..%2f..%2fauth%2ftokens",
+      "status": 400,
+      "expected_statuses": [
+        400
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts%2f../auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts%2f../auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts/../accounts",
+      "status": 307,
+      "expected_statuses": [
+        307
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts/../accounts",
+      "status": 307,
+      "expected_statuses": [
+        307
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1//accounts",
+      "status": 307,
+      "expected_statuses": [
+        307
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1//accounts",
+      "status": 307,
+      "expected_statuses": [
+        307
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts/",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts/",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts;ignored=/api/v1/auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts;ignored=/api/v1/auth/tokens",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/ACCOUNTS",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/ACCOUNTS",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/accounts%00",
+      "status": 403,
+      "expected_statuses": [
+        400,
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/accounts%00",
+      "status": 403,
+      "expected_statuses": [
+        400,
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/api/v1/not-added-yet",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/api/v1/not-added-yet",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:GET:/app/settings/security",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "path:HEAD:/app/settings/security",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "header:proxy:0",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:direct:0",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:proxy:1",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:direct:1",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:proxy:2",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:direct:2",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:proxy:3",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:direct:3",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:proxy:4",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:direct:4",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:proxy:5",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:direct:5",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:proxy:6",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:direct:6",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:proxy:7",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "header:direct:7",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "case-insensitive-bearer-with-tab",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "token-is-not-a-session-cookie",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "json-token-does-not-authenticate",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "url-token-does-not-authenticate",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "method:OPTIONS:accounts",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "method:TRACE:accounts",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "method:PATCH:accounts",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "method:POST:accounts",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "method:PUT:accounts",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "method:DELETE:accounts",
+      "status": 403,
+      "expected_statuses": [
+        403
+      ]
+    },
+    {
+      "case": "trusted-proxy",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "attribution:trusted-proxy",
+      "client_ip": "172.31.68.1",
+      "request_id": "b5234879-1be5-4f97-93ef-829e5a8eb54c",
+      "pass": true
+    },
+    {
+      "case": "untrusted-direct-peer",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "attribution:untrusted-direct-peer",
+      "client_ip": "172.31.68.1",
+      "request_id": "93a86f1c-1b78-403a-9f13-38ff14684451",
+      "pass": true
+    },
+    {
+      "case": "redirect:same-origin:unsafe-forwarding=False",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "case": "redirect:cross-origin:unsafe-forwarding=False",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "case": "redirect:cross-origin:unsafe-forwarding=True",
+      "status": 418,
+      "pass": true
+    },
+    {
+      "case": "exports:before-restore",
+      "formats": 3,
+      "inspected_members": 54,
+      "credentials_absent": true
+    },
+    {
+      "case": "storage:before-revocation",
+      "token_rows": 3,
+      "plaintext_absent": true,
+      "hashes_verified": 3
+    },
+    {
+      "case": "revoked-before-restore",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "storage:after-revocation",
+      "token_rows": 3,
+      "plaintext_absent": true,
+      "hashes_verified": 3
+    },
+    {
+      "case": "financial-restored-before-revocation",
+      "expected_coefficients": [
+        "-2500",
+        "2500"
+      ],
+      "scale": 2,
+      "pass": true
+    },
+    {
+      "case": "old-backup-restores-then-valid-token",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "financial-restored-after-revocation",
+      "expected_coefficients": [
+        "-2500",
+        "2500"
+      ],
+      "scale": 2,
+      "pass": true
+    },
+    {
+      "case": "later-backup-preserves-revocation",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "unrevoked-token-survives-native-restore-without-key",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "exports:after-restore",
+      "formats": 3,
+      "inspected_members": 54,
+      "credentials_absent": true
+    },
+    {
+      "case": "recovery-revokes:ledger",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "recovery-revokes:report",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "recovery-revokes:both",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "recovery-revokes-carried-session",
+      "status": 401,
+      "expected_statuses": [
+        401
+      ]
+    },
+    {
+      "case": "recovered-owner-signs-in",
+      "status": 200,
+      "expected_statuses": [
+        200
+      ]
+    },
+    {
+      "case": "financial-owner-recovered",
+      "expected_coefficients": [
+        "-2500",
+        "2500"
+      ],
+      "scale": 2,
+      "pass": true
+    },
+    {
+      "case": "logs",
+      "plaintext_absent": true,
+      "digest_absent": true,
+      "redaction_observed": true,
+      "leaky_control_detected": true
+    }
+  ],
+  "commands": [
+    {
+      "command": [
+        "exec",
+        "-T",
+        "rekenraam",
+        "/app/rekenraam",
+        "verify-backup",
+        "--from",
+        "/app/data/backups/rekenraam-manual-20261020T115708Z-2ef9048e.sqlite"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cp",
+        "rekenraam:/app/data/backups/rekenraam-manual-20261020T115708Z-2ef9048e.sqlite",
+        "/tmp/tmp.gYG4VDoz93/before-revocation.sqlite"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "exec",
+        "-T",
+        "rekenraam",
+        "/app/rekenraam",
+        "verify-backup",
+        "--from",
+        "/app/data/backups/rekenraam-manual-20261020T115737Z-9a423d0e.sqlite"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cp",
+        "rekenraam:/app/data/backups/rekenraam-manual-20261020T115737Z-9a423d0e.sqlite",
+        "/tmp/tmp.gYG4VDoz93/after-revocation.sqlite"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "stop",
+        "rekenraam"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "run",
+        "--rm",
+        "--no-deps",
+        "-T",
+        "rekenraam",
+        "restore",
+        "--from",
+        "/app/data/backups/rekenraam-manual-20261020T115708Z-2ef9048e.sqlite"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "up",
+        "-d",
+        "--no-deps",
+        "rekenraam"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "stop",
+        "rekenraam"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "run",
+        "--rm",
+        "--no-deps",
+        "-T",
+        "rekenraam",
+        "restore",
+        "--from",
+        "/app/data/backups/rekenraam-manual-20261020T115737Z-9a423d0e.sqlite"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "up",
+        "-d",
+        "--no-deps",
+        "rekenraam"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "stop",
+        "rekenraam"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "run",
+        "--rm",
+        "--no-deps",
+        "-T",
+        "rekenraam",
+        "recover-owner",
+        "--password-stdin",
+        "--backup-path",
+        "/app/data/pat-audit-recovery.sqlite"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "up",
+        "-d",
+        "--no-deps",
+        "rekenraam"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "logs",
+        "--no-color",
+        "rekenraam",
+        "proxy"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "route_case_count": 2462,
+  "status": "passed"
+}

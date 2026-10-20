@@ -153,7 +153,11 @@ func (s *InvestmentService) ResolveTransferBasis(ctx context.Context, input Reso
 	if err != nil {
 		return nil, mapTransferCorrectionError(err)
 	}
-	return optionalTransaction(transaction), nil
+	enriched, err := s.transactionService.enrichRecords(ctx, transaction)
+	if err != nil {
+		return nil, err
+	}
+	return optionalTransaction(enriched[0]), nil
 }
 
 var (
@@ -276,7 +280,11 @@ func (s *InvestmentService) ReverseTransferBasisResolution(ctx context.Context, 
 	if err != nil {
 		return nil, mapBasisResolutionCorrectionError(err)
 	}
-	return optionalTransaction(record), nil
+	enriched, err := s.transactionService.enrichRecords(ctx, record)
+	if err != nil {
+		return nil, err
+	}
+	return optionalTransaction(enriched[0]), nil
 }
 
 func (s *InvestmentService) ReverseTransferBasisResolutionImpact(ctx context.Context, input CorrectTransferBasisResolutionInput) (ReconciliationImpact, error) {
@@ -380,7 +388,11 @@ func (s *InvestmentService) ReplaceTransferBasisResolution(ctx context.Context, 
 	if err != nil {
 		return ReplaceTransferBasisResolutionResult{}, mapBasisResolutionCorrectionError(err)
 	}
-	return ReplaceTransferBasisResolutionResult{Inverse: optionalTransaction(record.Inverse), Replacement: optionalTransaction(record.Replacement),
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceTransferBasisResolutionResult{}, err
+	}
+	return ReplaceTransferBasisResolutionResult{Inverse: optionalTransaction(enriched[0]), Replacement: optionalTransaction(enriched[1]),
 		TransferTransactionID: operation.TransferTransactionID}, nil
 }
 
@@ -409,11 +421,11 @@ func mapBasisResolutionCorrectionError(err error) error {
 }
 
 // optionalTransaction is a journal a command may not post: nil for the zero
-// record a journal-free command returns.
-func optionalTransaction(record db.TransactionRecord) *Transaction {
-	if record.ID == 0 {
+// transaction a journal-free command returns. Posted transactions are enriched
+// before this pure optional-value conversion.
+func optionalTransaction(transaction Transaction) *Transaction {
+	if transaction.ID == 0 {
 		return nil
 	}
-	transaction := toTransaction(record)
 	return &transaction
 }

@@ -131,6 +131,10 @@ AuthenticationEventResponse:
         - mfa_recovery_codes_regenerated
         - trusted_device_revoked
         - owner_access_recovered
+        - token_created
+        - token_revoked
+        - token_authenticated
+        - token_denied
     outcome:
       type: string
       enum:
@@ -144,6 +148,7 @@ AuthenticationEventResponse:
       enum:
         - browser_api
         - cli_recovery
+        - personal_access_token
     username:
       type: string
       description: The username that was attempted or changed.
@@ -164,6 +169,8 @@ AuthenticationEventResponse:
     failure_reason:
       type: string
       enum:
+        - invalid_token
+        - insufficient_scope
         - unknown_user
         - invalid_credentials
         - rate_limited
@@ -186,6 +193,17 @@ AuthenticationEventResponse:
       description: Non-secret context for an account-security change.
       additionalProperties: false
       properties:
+        token_id:
+          type: integer
+          format: int64
+          description: Credential identity, never its secret or digest.
+        required_scope:
+          type: string
+          enum: ["ledger:read", "reports:read"]
+        tokens_revoked:
+          type: integer
+          format: int64
+          description: Credentials revoked by owner recovery.
         trusted_device_id:
           type: integer
           format: int64

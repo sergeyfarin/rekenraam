@@ -269,7 +269,11 @@ func (s *InvestmentService) SpinOff(ctx context.Context, input SpinOffInput) (Sp
 	if err != nil {
 		return SpinOffResult{}, err
 	}
-	return SpinOffResult{Transaction: toTransaction(transaction), Plan: out}, nil
+	enriched, err := s.transactionService.enrichOne(ctx, toTransaction(transaction))
+	if err != nil {
+		return SpinOffResult{}, err
+	}
+	return SpinOffResult{Transaction: enriched, Plan: out}, nil
 }
 
 // spinOffPlanOf totals the links per cost currency, in first-seen order,

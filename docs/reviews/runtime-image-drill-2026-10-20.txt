@@ -1,0 +1,25 @@
+Evidence directory: disposable private temporary directory (not published)
+image: rekenraam-audit279-old:00fdbd8f sha256:41de5282c50ed65ce2eda7a6707b12d38be829d303346e4e7fc6b9ea770bc25e
+image: rekenraam-audit337:2026-10-20 sha256:787f5bcce2a3fa85fdbff145a4eacae99772a9081bba4e5497a13c97034a89c2
+healthy: rekenraam-audit337:2026-10-20
+fresh current Compose install: healthy, setup ready, embedded shell served
+healthy: rekenraam-audit279-old:00fdbd8f
+old exact two-row ledger: -25.00 / +25.00
+old self-check passed
+old ['backup:          <synthetic-backup>', 'size:            1634304 bytes', 'integrity:       ok (integrity_check and foreign_key_check)', 'schema version:  14 (this build knows 14)']
+container security: non-root, read-only, caps dropped, no-new-privileges
+700 10001:10001 /app/data
+600 10001:10001 /app/data/rekenraam.sqlite
+600 10001:10001 /app/data/rekenraam.sqlite-wal
+600 10001:10001 /app/data/rekenraam.sqlite-shm
+
+restart exact two-row ledger: -25.00 / +25.00
+healthy: rekenraam-audit337:2026-10-20
+head exact two-row ledger: -25.00 / +25.00
+head self-check passed
+head ['backup:          <synthetic-backup>', 'size:            1662976 bytes', 'integrity:       ok (integrity_check and foreign_key_check)', 'schema version:  18 (this build knows 18)']
+old binary refuses newer-schema backup
+healthy: rekenraam-audit279-old:00fdbd8f
+rollback exact two-row ledger: -25.00 / +25.00
+rollback self-check passed
+PASS: fresh install, seed, verified backup, restart, 14->18 upgrade, newer refusal, restore rollback

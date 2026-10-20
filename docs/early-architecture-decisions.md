@@ -175,6 +175,10 @@ Early default:
 - Early password recovery is operator-controlled and local; no unauthenticated browser or email reset flow is included in the first implementation.
 - Hash passwords with Argon2id using self-describing stored hashes and upgradeable parameters.
 - Use same-origin browser sessions with `HttpOnly` cookies, hashed session tokens in SQLite, and CSRF protection on mutating API requests.
+- ADR 0018 adds separate scoped, hash-only, expiring owner API tokens (#334).
+  Their exact read-only grants and lifecycle are defined in the
+  [token contract](plans/personal-access-tokens-plan.md); browser-session
+  management and CSRF boundaries remain in force.
 - Public deployments require HTTPS. Localhost development may use HTTP. LAN/private deployments should use HTTPS through a reverse proxy; the app does not terminate TLS itself.
 
 Multi-user households, sharing, and book permissions can be added later. Avoid names that imply there can only ever be one global user or one global book.

@@ -1,0 +1,69 @@
+delete:
+  summary: Revoke an owner personal-access token
+  description: Owner session, Origin and CSRF required. Retains credential history and records an event atomically. A previously authenticated read may finish; later use is denied.
+  security:
+    - CookieSession: []
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+    - in: path
+      name: token_id
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+  responses:
+    "204":
+      description: Credential revoked
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+    "400":
+      description: Invalid ID
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Owner session required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: CSRF or Origin invalid; Bearer credential forbidden
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "404":
+      description: Credential absent or already revoked
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

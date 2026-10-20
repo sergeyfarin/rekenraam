@@ -1,0 +1,15 @@
+
+== numbered-file collisions (migrations, ADRs)
+
+== generated OpenAPI client drift
+
+== duplicate paragraphs in Markdown docs
+
+== duplicate GitHub workflows
+
+== colliding work-item IDs
+
+== tests lost relative to the merged sides
+  skipped: HEAD is not a merge and no merge is in progress; pass the merged refs to compare
+
+post-merge audit: clean

@@ -1,0 +1,88 @@
+--- FAIL: TestAuthExpiryAuditThrottlePoolBoundary (0.00s)
+    --- FAIL: TestAuthExpiryAuditThrottlePoolBoundary/settings (0.76s)
+        auth_expiry_audit_test.go:233:
+                Error Trace:    backend/internal/app/auth_expiry_audit_test.go:233
+                Error:          Received unexpected error:
+                                rate limited
+                Test:           TestAuthExpiryAuditThrottlePoolBoundary/settings
+                Messages:       a block ending exactly at admission no longer blocks the owner
+    --- FAIL: TestAuthExpiryAuditThrottlePoolBoundary/login (0.79s)
+        auth_expiry_audit_test.go:233:
+                Error Trace:    backend/internal/app/auth_expiry_audit_test.go:233
+                Error:          Received unexpected error:
+                                rate limited
+                Test:           TestAuthExpiryAuditThrottlePoolBoundary/login
+                Messages:       a block ending exactly at admission no longer blocks the owner
+--- FAIL: TestAuthExpiryAuditThrottleWriterAdmission (0.84s)
+    auth_expiry_audit_test.go:291:
+            Error Trace:    backend/internal/app/auth_expiry_audit_test.go:291
+            Error:          Target error should be in err chain:
+                            expected: "invalid credentials"
+                            in chain: "reserve login attempt: upsert login throttle: database is locked"
+                                "upsert login throttle: database is locked"
+                                "database is locked"
+            Test:           TestAuthExpiryAuditThrottleWriterAdmission
+--- FAIL: TestAuthExpiryAuditSessionPoolAdmission (0.89s)
+    auth_expiry_audit_test.go:111:
+            Error Trace:    backend/internal/app/auth_expiry_audit_test.go:111
+            Error:          Should be false
+            Test:           TestAuthExpiryAuditSessionPoolAdmission
+            Messages:       expiry is exclusive even when the read queued before the deadline
+--- FAIL: TestAuthExpiryAuditTrustedDevicePoolAdmission (1.00s)
+    auth_expiry_audit_test.go:134:
+            Error Trace:    backend/internal/app/auth_expiry_audit_test.go:134
+            Error:          Expected error with "rate limited" in chain but got nil.
+            Test:           TestAuthExpiryAuditTrustedDevicePoolAdmission
+            Messages:       an expired device cannot select the private throttle budget
+--- FAIL: TestAuthExpiryAuditExpiredChallengeWithEventFailure (1.06s)
+    auth_expiry_audit_test.go:339:
+            Error Trace:    backend/internal/app/auth_expiry_audit_test.go:339
+            Error:          Expected error with "multi-factor challenge is invalid or expired" in chain but got nil.
+            Test:           TestAuthExpiryAuditExpiredChallengeWithEventFailure
+--- FAIL: TestAuthExpiryAuditDisableBeforeSessionCommit (1.14s)
+    auth_expiry_audit_test.go:276:
+            Error Trace:    backend/internal/app/auth_expiry_audit_test.go:276
+            Error:          Expected error with "multi-factor challenge is invalid or expired" in chain but got nil.
+            Test:           TestAuthExpiryAuditDisableBeforeSessionCommit
+            Messages:       disable cuts off the attempt before its session commits
+--- FAIL: TestAuthExpiryAuditTOTPWriterAdmission (0.00s)
+    --- FAIL: TestAuthExpiryAuditTOTPWriterAdmission/activate (0.24s)
+        auth_expiry_audit_test.go:206:
+                Error Trace:    backend/internal/app/auth_expiry_audit_test.go:206
+                Error:          Expected error with "multi-factor code is invalid" in chain but got nil.
+                Test:           TestAuthExpiryAuditTOTPWriterAdmission/activate
+                Messages:       a code outside the skew window at writer admission must not authenticate
+    --- FAIL: TestAuthExpiryAuditTOTPWriterAdmission/login (0.40s)
+        auth_expiry_audit_test.go:206:
+                Error Trace:    backend/internal/app/auth_expiry_audit_test.go:206
+                Error:          Expected error with "multi-factor code is invalid" in chain but got nil.
+                Test:           TestAuthExpiryAuditTOTPWriterAdmission/login
+                Messages:       a code outside the skew window at writer admission must not authenticate
+--- FAIL: TestAuthExpiryAuditMFAChallengeAdmission (0.00s)
+    --- FAIL: TestAuthExpiryAuditMFAChallengeAdmission/pool (0.39s)
+        auth_expiry_audit_test.go:159:
+                Error Trace:    backend/internal/app/auth_expiry_audit_test.go:159
+                                            backend/internal/app/auth_expiry_audit_test.go:35
+                                            /home/coder/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.2.linux-amd64/src/runtime/asm_amd64.s:1264
+                Error:          Should be true
+                Test:           TestAuthExpiryAuditMFAChallengeAdmission/pool
+                Messages:       refused challenge discloses no session
+        auth_expiry_audit_test.go:167:
+                Error Trace:    backend/internal/app/auth_expiry_audit_test.go:167
+                Error:          Expected error with "multi-factor challenge is invalid or expired" in chain but got nil.
+                Test:           TestAuthExpiryAuditMFAChallengeAdmission/pool
+    --- FAIL: TestAuthExpiryAuditMFAChallengeAdmission/writer (0.34s)
+        auth_expiry_audit_test.go:159:
+                Error Trace:    backend/internal/app/auth_expiry_audit_test.go:159
+                                            backend/internal/app/auth_expiry_audit_test.go:72
+                                            /home/coder/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.2.linux-amd64/src/runtime/asm_amd64.s:1264
+                Error:          Should be true
+                Test:           TestAuthExpiryAuditMFAChallengeAdmission/writer
+                Messages:       refused challenge discloses no session
+        auth_expiry_audit_test.go:167:
+                Error Trace:    backend/internal/app/auth_expiry_audit_test.go:167
+                Error:          Expected error with "multi-factor challenge is invalid or expired" in chain but got nil.
+                Test:           TestAuthExpiryAuditMFAChallengeAdmission/writer
+FAIL
+FAIL    rekenraam/backend/internal/app  1.377s
+FAIL

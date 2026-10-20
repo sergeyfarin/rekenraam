@@ -111,6 +111,10 @@ func (s *TransactionService) listParams(ctx context.Context, input ListTransacti
 	if dateBasis != "transaction" && dateBasis != "entry" {
 		return db.ListTransactionsParams{}, ValidationError{Message: "date basis is invalid"}
 	}
+	query := strings.TrimSpace(input.Query)
+	if strings.ContainsRune(query, '\x00') {
+		return db.ListTransactionsParams{}, ValidationError{Message: "search query must not contain NUL"}
+	}
 
 	limit := input.Limit
 	if limit <= 0 {
@@ -130,7 +134,7 @@ func (s *TransactionService) listParams(ctx context.Context, input ListTransacti
 		ExcludeDraft:      status == "",
 		Kind:              kind,
 		NeedsReview:       input.NeedsReview,
-		Query:             strings.TrimSpace(input.Query),
+		Query:             query,
 		AfterDate:         afterDate,
 		BeforeDate:        beforeDate,
 		CursorDate:        cursorDate,

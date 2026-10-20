@@ -24,9 +24,8 @@ BookResponse:
       description: User-visible book name.
       maxLength: 200
     default_currency_commodity_id:
-      type: integer
+      type: [integer, 'null']
       format: int64
-      nullable: true
       description: Default currency preference for new currency-sensitive UI and accounts. It is not a reporting/base currency.
     created_at:
       type: string

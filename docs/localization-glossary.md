@@ -170,6 +170,12 @@ translations keep that.
 
 ## Mechanics that constrain wording
 
+Personal-access-token management (#334) uses “Personal access tokens” / “Tokens
+de acceso personal” / “Jetons d’accès personnels” / “Persoonlijke toegangstokens” /
+“Persönliche Zugriffstoken” / “Персональные токены доступа” in en/es/fr/nl/de/ru.
+Scope labels describe readable data; they do not imply write permission. These
+translations retain the existing native-review status (#102).
+
 - **Russian brings a three-form plural rule** (1 / 2–4 / 5+) and Cyrillic. Any
   message that counts things needs checking against it rather than assuming the
   two-form Latin behaviour; the current catalogs avoid bare counted nouns for

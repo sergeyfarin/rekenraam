@@ -408,8 +408,7 @@ GetImportBatchResponse:
       items:
         $ref: "../../openapi.yaml#/components/schemas/ParseWarning"
     next_cursor:
-      type: string
-      nullable: true
+      type: [string, 'null']
 ListImportBatchesResponse:
   type: object
   required:
@@ -421,8 +420,7 @@ ListImportBatchesResponse:
       items:
         $ref: "../../openapi.yaml#/components/schemas/ImportBatchResponse"
     next_cursor:
-      type: string
-      nullable: true
+      type: [string, 'null']
 RowResolutionPatch:
   type: object
   required:

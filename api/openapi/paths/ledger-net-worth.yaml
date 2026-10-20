@@ -1,4 +1,8 @@
 get:
+  security:
+    - CookieSession: []
+    - PersonalAccessToken: []
+  x-personal-access-token-scope: "reports:read"
   summary: Read net worth totals
   parameters:
     - in: query
@@ -12,6 +16,15 @@ get:
       schema:
         $ref: "../openapi.yaml#/components/schemas/LedgerStatus"
   responses:
+    "403":
+      description: Personal-access token does not grant this scope
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "200":
       description: Net worth totals grouped by commodity
       content:

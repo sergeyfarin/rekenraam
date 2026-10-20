@@ -260,7 +260,11 @@ func (s *InvestmentService) ShareExchange(ctx context.Context, input ShareExchan
 	if err != nil {
 		return ShareExchangeResult{}, err
 	}
-	return ShareExchangeResult{Transaction: toTransaction(transaction), Plan: out}, nil
+	enriched, err := s.transactionService.enrichOne(ctx, toTransaction(transaction))
+	if err != nil {
+		return ShareExchangeResult{}, err
+	}
+	return ShareExchangeResult{Transaction: enriched, Plan: out}, nil
 }
 
 func toShareExchangePlan(exchange db.CreateShareExchangeParams, plan db.ShareExchangePlan) (ShareExchangePlan, error) {

@@ -215,11 +215,26 @@ below is execution order, not a chain of hard dependencies.
    builds, candidate migration 14→18, verified-backup rollback and the focused
    release preflight pass. #332's private build-context exposure and #338's
    stale upgrade-evidence references are fixed. Available Debian updates are
-   applied; residual image-advisory review is additional audit #337. Owner
+   applied; #337's residual image-advisory engineering review is complete
+   ([evidence](reviews/runtime-image-advisory-audit-2026-10-20.md)), with no
+   reproduced application exploit. #337 remains **blocked on owner release
+   disposition**; release is on hold. Additional audit #354 is complete
+   ([evidence](reviews/native-sqlite-advisory-audit-2026-10-20.md)): #355's NUL
+   search refusal is fixed; #356 retains two reproduced upstream engine
+   correctness defects, blocked on a released driver carrying their fixes
+   ([prerequisite recheck](reviews/sqlite-driver-upgrade-blocker-2026-10-20.md)).
+   No affected financial application consumer was reproduced. Owner
    deployment/household evidence is additional audit #336, blocked on actual
-   owner evidence. Release gaps now have issues: signing #333 (owner decision),
-   PATs #334 and adoption assets #335. These remain release gates, not a claim
-   that the synthetic deployment is ready to announce.
+   owner evidence. Release gaps now have issues: signing #333 (owner decision)
+   and adoption assets #335. PATs #334 now ship the bounded read-only
+   ledger/report credential contract (ADR 0018); independent adversarial,
+   proxy-leakage and restored-credential audit #357 is complete
+   ([evidence](reviews/personal-access-token-audit-2026-10-20.md)); #359's
+   queued-expiry guard is fixed. Adjacent expiry-admission audit #360 is complete
+   ([evidence](reviews/authentication-expiry-audit-2026-10-20.md)); #362–#365 are
+   fixed. Reservation-window repair and focused consumer audit #366 are complete
+   ([evidence](reviews/throttle-reservation-audit-2026-10-20.md)).
+   The retained gates and owner evidence still govern public announcement.
    Architecture/quality #280 has been executed
    ([evidence](reviews/architecture-quality-audit-2026-10-19.md)); #344 resolves
    the initial browser failures. All four shared gates pass at `af233abb`:
@@ -230,9 +245,19 @@ below is execution order, not a chain of hard dependencies.
    are fixed. #352 (P2 full-suite FX test isolation) is fixed in its own
    worker project, and its full-suite acceptance now passes. #348 (P2) is fixed: the
    nested-dialog contrast fallback now measures rendered text against its own
-   background, and a black border or icon can no longer hide low-contrast text. Additional audit #349 covers runtime API
-   response-schema conformance beyond verified route/client parity; #350 (P3)
-   records missing HTTP 413 responses on capped JSON operations. The shared
+   background, and a black border or icon can no longer hide low-contrast text.
+   #361 fixes the helper's production-CSP coverage gap, with readable and
+   low-contrast controls under the unchanged policy. Additional audit #349 is
+   complete ([evidence](reviews/runtime-api-contract-audit-2026-10-20.md)):
+   425 real responses sample 80 of 332 declared operations, with eight schema
+   sensitivity controls and all unverified operations/statuses inventoried.
+   #367–#369 fix null unions, setup/exclusion disclosure and empty tag arrays.
+   #370 is fixed ([delivery and producer inventory](reviews/mutation-response-enrichment-2026-10-20.md)):
+   investment/correction/reconciliation transaction responses now use the shared
+   batch enrichment owner, with post-commit failure and internal-import receipt
+   controls. The expanded schema sample covers 1,108 responses / 165 operations;
+   #371/#372 are fixed. #350 (P3 capped-JSON HTTP 413 declarations) remains
+   explicit; universal conformity is not claimed. The shared
    reference register #266 is delivered, with
    [evidence](reviews/reference-book-audit-2026-10-17.md); #281 is fixed.
    Fix confirmed integrity/security defects before affected feature slices.
@@ -443,12 +468,21 @@ runtime-image advisory triage remains #337. These are dated, bounded checks.
    #102 catalog parity and its regression gate are delivered. Assign native
    reviewers and record terminology sign-off before describing those catalogs
    as complete; see the [review packet](reviews/localization-native-review-2026-10-13.md).
-4. **Personal-access tokens — open, #334** (added 2026-08-05, review §3f). The
-   typed OpenAPI surface is the foundation for an ecosystem, but session
-   cookie + CSRF header auth supplies no dedicated scoped credential for
-   scripts, tools or community clients. Announcement is the moment of maximum developer attention.
-   Required shape: hashed at rest, scoped, expiring by default, revocable,
-   and emitting authentication events.
+4. ✅ **Personal-access tokens — #334** (delivered 2026-10-20). Dedicated
+   read-only `ledger:read` and `reports:read` credentials are hash-only,
+   scoped by exact route, expiring by default, revocable and emitting
+   attributed authentication events. Owner management includes password
+   confirmation and one-time disclosure. [Contract](plans/personal-access-tokens-plan.md),
+   ADR 0018. No write/export/settings/backup grant exists. Independent
+   adversarial/proxy/restore audit #357 is complete with #359 fixed
+   ([evidence](reviews/personal-access-token-audit-2026-10-20.md)). Adjacent
+   expiry-clock audit #360 is complete with #362–#365 fixed
+   ([evidence](reviews/authentication-expiry-audit-2026-10-20.md)); reservation
+   settlement repair/audit #366 is complete
+   ([evidence](reviews/throttle-reservation-audit-2026-10-20.md)). Actual owner
+   deployment #336 retains its evidence requirements. This delivery is not public-release sign-off.
+   [Dated delivery evidence](reviews/personal-access-tokens-delivery-2026-10-20.md)
+   records the 16 browser cases, shared gates and fixed selector finding #358.
 5. ◐ Produce signed release binaries with reproducibility notes (#333).
    **Reproducibility rechecked 2026-10-12** (#195): native SQLite uses
    `-trimpath`, CGO and a pinned bundled engine. Identical Go/C toolchain,

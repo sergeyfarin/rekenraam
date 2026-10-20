@@ -292,7 +292,11 @@ func (s *InvestmentService) CashStockMerger(ctx context.Context, input CashStock
 	if err != nil {
 		return CashStockMergerResult{}, err
 	}
-	return CashStockMergerResult{Transaction: toTransaction(transaction), Plan: out}, nil
+	enriched, err := s.transactionService.enrichOne(ctx, toTransaction(transaction))
+	if err != nil {
+		return CashStockMergerResult{}, err
+	}
+	return CashStockMergerResult{Transaction: enriched, Plan: out}, nil
 }
 
 func toCashStockMergerPlan(merger db.CreateCashStockMergerParams, plan db.CashStockMergerPlan) (CashStockMergerPlan, error) {

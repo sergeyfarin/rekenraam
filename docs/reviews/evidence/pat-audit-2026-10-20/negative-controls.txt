@@ -1,0 +1,20 @@
+357-expiry-negative.log (a1490158; filtered/redacted failure evidence):
+--- FAIL: TestPersonalAccessTokenAuditExpiryWhileWaitingForDatabase (0.54s)
+                Error:          Expected error with "invalid personal access token" in chain but got nil.
+                Messages:       a queued request must use a fresh expiry check after acquiring the database
+
+357-management-negative.log (a1490158; filtered/redacted failure evidence):
+--- FAIL: TestPersonalAccessTokenAuditManagementSessionExpiresWhileQueued (0.00s)
+    --- FAIL: TestPersonalAccessTokenAuditManagementSessionExpiresWhileQueued/revoke (0.67s)
+                Error:          An error is expected but got nil.
+                Messages:       an expired management session cannot change credentials after its wait
+    --- FAIL: TestPersonalAccessTokenAuditManagementSessionExpiresWhileQueued/create (0.72s)
+                Error:          Should be empty, but was [REDACTED_PAT]
+                Messages:       refused creation cannot disclose a token
+                Error:          An error is expected but got nil.
+                Messages:       an expired management session cannot change credentials after its wait
+
+357-sqlite-expiry-negative.log (intermediate pool-only fix; filtered/redacted failure evidence):
+--- FAIL: TestPersonalAccessTokenAuditExpiryWhileWaitingForSQLiteWriter (0.55s)
+                Error:          Expected error with "invalid personal access token" in chain but got nil.
+                Messages:       SQLite busy waiting must not freeze the expiry clock

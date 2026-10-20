@@ -158,6 +158,12 @@ These apply across all feature phases.
 - Public VPS deployments must assume an untrusted network.
 - Forwarded proxy headers must be ignored unless the deployment explicitly enables trusted proxy handling and limits trusted peers to an allowlisted proxy CIDR set.
 - All privileged operations must require authentication.
+- Scripts and tools may use single-owner personal-access tokens with independent
+  read-only ledger/report scopes, hash-only storage, one-time plaintext
+  disclosure, bounded default expiry, revocation and attributed security events
+  (#334, ADR 0018). Management requires an owner browser session; creation also
+  confirms the password. No financial mutation, settings or backup grant exists.
+  The [token contract](plans/personal-access-tokens-plan.md) owns exact routes.
 - Session, audit, and request attribution should be designed in from the first real user flows.
 
 ### Frontend Quality

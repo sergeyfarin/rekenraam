@@ -1,4 +1,8 @@
 get:
+  security:
+    - CookieSession: []
+    - PersonalAccessToken: []
+  x-personal-access-token-scope: "ledger:read"
   summary: List transactions
   parameters:
     - in: query
@@ -25,6 +29,7 @@ get:
         format: int64
     - in: query
       name: q
+      description: Literal free-text phrase; FTS operators are not interpreted. NUL (U+0000) is rejected with HTTP 400 VALIDATION_FAILED.
       schema:
         type: string
     - in: query
@@ -82,6 +87,15 @@ get:
       schema:
         type: string
   responses:
+    "403":
+      description: Personal-access token does not grant this scope
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "200":
       description: Transactions
       content:

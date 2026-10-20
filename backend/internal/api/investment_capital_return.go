@@ -200,7 +200,8 @@ func toCapitalReturnTerms(terms *app.CapitalReturnInput) *capitalReturnRequest {
 	return &capitalReturnRequest{HoldingAccountID: terms.HoldingAccountID, CommodityID: terms.CommodityID,
 		CashAccountID: terms.CashAccountID, CurrencyID: terms.CurrencyID, EffectiveOn: terms.EffectiveOn, PaymentOn: terms.PaymentOn,
 		AmountValue: terms.AmountValue, AmountScale: terms.AmountScale, SourceEvidence: json.RawMessage(terms.SourceEvidenceJSON),
-		Memo: terms.Memo, EntitledLotIDs: terms.EntitledLotIDs, LotEntitlements: entitlements}
+		reconciliationOverrideFields: reconciliationOverrideFields{ReconciliationOverrideCheckpointIDs: []int64{}},
+		Memo:                         terms.Memo, EntitledLotIDs: terms.EntitledLotIDs, LotEntitlements: entitlements}
 }
 
 type capitalReturnReplacementRequest struct {

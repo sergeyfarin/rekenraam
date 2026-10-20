@@ -3,6 +3,10 @@ info:
   title: Rekenraam API
   version: 0.0.0
 paths:
+  /api/v1/auth/tokens:
+    $ref: "./paths/auth-tokens.yaml"
+  /api/v1/auth/tokens/{token_id}:
+    $ref: "./paths/auth-token.yaml"
   /api/v1/pricing/quotes/refresh:
     $ref: "./paths/pricing-quotes-refresh.yaml"
   /api/v1/budgets/month:
@@ -585,6 +589,23 @@ paths:
     $ref: "./paths/investments-operation-cash-in-lieu-lots.yaml"
 
 components:
+  securitySchemes:
+    CookieSession:
+      type: apiKey
+      in: cookie
+      name: __Host-rekenraam_session
+      description: Owner browser session; loopback HTTP uses rekenraam_session. Mutations require Origin and X-CSRF-Token.
+    PersonalAccessToken:
+      type: http
+      scheme: bearer
+      bearerFormat: rr_pat_ followed by 43 base64url characters
+      description: >-
+        Read-only scoped owner API credential. Supported operations declare
+        x-personal-access-token-scope. All other routes refuse Bearer access,
+        including token management. Any Authorization header selects this
+        authentication method without cookie fallback. Invalid/expired/revoked
+        tokens return 401; missing scope returns 403. See
+        docs/plans/personal-access-tokens-plan.md for the exact allowlist.
   headers:
     XRequestID:
       description: Server-generated request identifier for this response.
@@ -691,6 +712,14 @@ components:
         type: integer
         format: int64
   schemas:
+    CreatePersonalAccessTokenResponse:
+      $ref: "./components/schemas/auth-tokens.yaml#/CreatePersonalAccessTokenResponse"
+    CreatePersonalAccessTokenRequest:
+      $ref: "./components/schemas/auth-tokens.yaml#/CreatePersonalAccessTokenRequest"
+    PersonalAccessTokenList:
+      $ref: "./components/schemas/auth-tokens.yaml#/PersonalAccessTokenList"
+    PersonalAccessToken:
+      $ref: "./components/schemas/auth-tokens.yaml#/PersonalAccessToken"
     BudgetAmount:
       $ref: "./components/schemas/budgets.yaml#/BudgetAmount"
     BudgetCategoryAmount:

@@ -195,7 +195,7 @@ func TestOwnerRecoveryIsRecordedAsOneCLIEvent(t *testing.T) {
 	assert.Nil(t, event.AuthSessionID, "the CLI has no session")
 	assert.Empty(t, event.ClientIP, "the CLI has no client address")
 	assert.Equal(t, now.Format(time.RFC3339), event.OccurredAt)
-	assert.JSONEq(t, `{"sessions_revoked":1,"previous_mfa_status":"active","backup_written":true}`, event.MetadataJSON)
+	assert.JSONEq(t, `{"sessions_revoked":1,"previous_mfa_status":"active","backup_written":true,"tokens_revoked":0}`, event.MetadataJSON)
 	assert.NotContains(t, event.MetadataJSON, "/backups", "the record says a backup exists, not where")
 }
 

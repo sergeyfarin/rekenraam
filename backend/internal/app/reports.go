@@ -189,6 +189,13 @@ func (s *TransactionService) Spending(ctx context.Context, input SpendingInput) 
 		return SpendingResult{}, err
 	}
 
+	// The repository excludes every system account from category postings.
+	// Disclose the actual catalog, rather than obsolete role aliases.
+	excludedSystemRoles := make([]string, 0, len(systemAccountSpecs))
+	for _, spec := range systemAccountSpecs {
+		excludedSystemRoles = append(excludedSystemRoles, spec.Role)
+	}
+
 	return SpendingResult{
 		StartDate:           startDate,
 		EndDate:             endDate,
@@ -200,7 +207,7 @@ func (s *TransactionService) Spending(ctx context.Context, input SpendingInput) 
 		Groups:              groups,
 		CommodityTotals:     commodityTotals,
 		RankingCommodityID:  rankingCommodityID,
-		ExcludedSystemRoles: []string{"commodity_trading", "transfer_clearing", "opening_balances", "fx_gain_loss"},
+		ExcludedSystemRoles: excludedSystemRoles,
 		GroupingPolicy:      "direct_postings",
 		ConvertedTotal:      convertedTotal,
 		Valuation:           s.valuationCoverage(ctx, rates),

@@ -75,9 +75,13 @@ func (s *InvestmentService) replaceBuyWithPostWriteOrigin(ctx context.Context, i
 		return ReplaceInvestmentBuyResult{}, mapBuyReplacementError(err)
 	}
 	lotID := record.Lot.ID
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceInvestmentBuyResult{}, err
+	}
 	return ReplaceInvestmentBuyResult{
-		Inverse:                toTransaction(record.Inverse),
-		Replacement:            InvestmentTradeResult{Transaction: toTransaction(record.Replacement), LotID: &lotID},
+		Inverse:                enriched[0],
+		Replacement:            InvestmentTradeResult{Transaction: enriched[1], LotID: &lotID},
 		CorrectedTransactionID: prepared.Operation.TransactionID,
 	}, nil
 }

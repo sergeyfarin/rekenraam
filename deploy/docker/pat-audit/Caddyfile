@@ -1,0 +1,30 @@
+# #357 only: enable real access logging and controlled redirect recipients.
+# Authorization/cookies retain Caddy's default redaction. Never echo credentials.
+rekenraam.test {
+	tls internal
+	log {
+		output stdout
+		format json
+	}
+	respond /pat-audit/away "Disposable audit document" 200
+	redir /pat-audit/same-origin /api/v1/accounts 307
+	redir /pat-audit/cross-origin https://collector.rekenraam.test:8443/pat-audit/recipient 302
+	reverse_proxy rekenraam:16888 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
+
+# A controlled second origin on the same private proxy. The status alone says
+# whether a client forwarded credentials; the value is never returned or saved.
+collector.rekenraam.test {
+	tls internal
+	log {
+		output stdout
+		format json
+	}
+	@credential header Authorization *
+	respond @credential "credential-forwarded" 418
+	respond "no-credential" 200
+}

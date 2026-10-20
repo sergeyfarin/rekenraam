@@ -230,6 +230,17 @@ func (s *TransactionService) enrichOne(ctx context.Context, txn Transaction) (Tr
 	return slice[0], nil
 }
 
+// enrichRecords hydrates every journal of a committed mutation in one batch.
+// A failed lookup returns an error without retrying or rolling back the saved
+// operation. Callers refresh canonical reads before submitting another write.
+func (s *TransactionService) enrichRecords(ctx context.Context, records ...db.TransactionRecord) ([]Transaction, error) {
+	transactions := toTransactions(records)
+	if err := s.enrichPostings(ctx, transactions); err != nil {
+		return nil, fmt.Errorf("load committed transaction response: %w", err)
+	}
+	return transactions, nil
+}
+
 // enrichPostings performs one bulk account lookup and one bulk commodity lookup
 // across all postings in the given transactions, then fills the enriched fields
 // on each Posting in memory. It must be called before any response path returns

@@ -1,4 +1,8 @@
 get:
+  security:
+    - CookieSession: []
+    - PersonalAccessToken: []
+  x-personal-access-token-scope: "reports:read"
   summary: Read net worth over time
   description: >
     Assets less liabilities at each calendar bucket end, from posted ledger
@@ -80,6 +84,15 @@ get:
         minimum: 0
         maximum: 365
   responses:
+    "403":
+      description: Personal-access token does not grant this scope
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "200":
       description: Exact net worth totals at each calendar bucket end, grouped by commodity
       content:

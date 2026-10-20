@@ -100,11 +100,11 @@ const server = createServer(async (req, res) => {
       default:
         return send(res, 404, { error: 'not found' });
     }
-  } catch (err) {
-    send(res, 500, { error: String(err) });
+  } catch {
+    send(res, 500, { error: 'internal server error' });
   }
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`trading212 stub listening on http://127.0.0.1:${port}${apiPrefix}`);
+  console.log(`trading212 stub listening on http://127.0.0.1:${server.address().port}${apiPrefix}`);
 });

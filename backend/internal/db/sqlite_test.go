@@ -133,7 +133,7 @@ func TestMigrateAppliesEmbeddedMigrations(t *testing.T) {
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{"book", "categories", "currencies", "owner", "system_accounts"}, stepKeys)
 	assert.Equal(t, []string{"id", "user_id", "token_hash", "created_at", "expires_at", "revoked_at"}, readTableColumns(t, database, "auth_sessions"))
-	assert.Equal(t, []string{"scope_type", "scope_key", "failed_attempts", "blocked_until", "updated_at"}, readTableColumns(t, database, "login_throttles"))
+	assert.Equal(t, []string{"scope_type", "scope_key", "failed_attempts", "blocked_until", "updated_at", "generation"}, readTableColumns(t, database, "login_throttles"))
 	assert.Contains(t, readTableColumns(t, database, "setup_steps"), "completed_audit_event_id")
 	assert.Subset(t, readTableColumns(t, database, "audit_events"), []string{
 		"id",
@@ -289,6 +289,10 @@ func TestMigrateSeededBaselineMatchesFreshSchema(t *testing.T) {
 	// #255 adds empty payment-in-lieu entitlement facts.
 	assert.Equal(t, "0", after["count:investment_payment_in_lieu_facts"])
 	delete(after, "count:investment_payment_in_lieu_facts")
+	// #334 creates an empty credential store, preserving all seeded financial
+	// figures and security history. No pre-existing credential can be invented.
+	assert.Equal(t, "0", after["count:personal_access_tokens"])
+	delete(after, "count:personal_access_tokens")
 	delete(before, "count:goose_db_version")
 	delete(after, "count:goose_db_version")
 
@@ -1269,7 +1273,7 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 
 	version, err := EmbeddedMigrationVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(18), version, "the head preserves fresh FX demand beside scan continuations and retries")
+	assert.Equal(t, int64(20), version, "the head fences throttle window settlements")
 
 	ctx := context.Background()
 	database, err := Open(ctx, SQLiteFileURL(filepath.Join(t.TempDir(), "schema.sqlite")))
@@ -1298,11 +1302,13 @@ func TestMigrationsProduceTheExpectedSchema(t *testing.T) {
 		objectCounts[kind]++
 	}
 	assert.Equal(t, map[string]int{
-		"index":   118,
-		"table":   116,
+		"index":   119,
+		"table":   117,
 		"trigger": 160,
 		"view":    15,
 	}, objectCounts, "the migrated head must retain every schema object")
+	assert.Equal(t, "table", objects["personal_access_tokens"])
+	assert.Equal(t, "index", objects["personal_access_tokens_owner_idx"])
 	assert.Equal(t, "table", objects["investment_gains_runs"])
 	assert.Equal(t, "index", objects["investment_event_suggestions_generated_idx"])
 	assert.Equal(t, "index", objects["investment_event_suggestions_linked_idx"])

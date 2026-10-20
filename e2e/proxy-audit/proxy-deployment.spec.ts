@@ -180,7 +180,7 @@ test.describe.serial('deploy phase', () => {
     await page.goto('/app/settings/security');
     await expect(page.getByText('Off', { exact: true })).toBeVisible();
     await expect(page.getByText(/needs REKENRAAM_SECRET_KEY/)).toHaveCount(0);
-    await page.getByLabel('Your password').fill(OWNER_PASSWORD);
+    await page.getByLabel('Your password', { exact: true }).fill(OWNER_PASSWORD);
     await page.getByRole('button', { name: 'Set up' }).click();
     state.secret = secretFromOTPAuthURI(await page.getByText(/^otpauth:\/\//).innerText());
     state.lastStep = currentStep() - 1;

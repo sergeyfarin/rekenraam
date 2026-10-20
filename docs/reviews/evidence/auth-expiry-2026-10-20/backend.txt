@@ -1,0 +1,16 @@
+ok      rekenraam/backend/cmd/rekenraam 75.142s
+ok      rekenraam/backend/internal/api  119.507s
+ok      rekenraam/backend/internal/app  218.696s
+ok      rekenraam/backend/internal/appruntime   5.754s
+ok      rekenraam/backend/internal/config   (cached)
+ok      rekenraam/backend/internal/db   122.029s
+ok      rekenraam/backend/internal/exact    (cached)
+?       rekenraam/backend/internal/lockfile [no test files]
+ok      rekenraam/backend/internal/marketdata   (cached)
+ok      rekenraam/backend/internal/onlinesource/trading212  (cached)
+ok      rekenraam/backend/internal/recur    (cached)
+ok      rekenraam/backend/internal/secretbox    (cached)
+ok      rekenraam/backend/internal/testdb   6.706s
+ok      rekenraam/backend/internal/totp (cached)
+ok      rekenraam/backend/internal/web  1.042s
+ok      rekenraam/backend/migrations    (cached)

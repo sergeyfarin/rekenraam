@@ -13,8 +13,7 @@ LedgerExportAttachments:
     included:
       type: boolean
     directory:
-      type: string
-      nullable: true
+      type: [string, 'null']
     reason:
       type: string
 LedgerExportTotals:

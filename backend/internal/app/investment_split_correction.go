@@ -79,7 +79,11 @@ func (s *InvestmentService) ReverseSplitWithIdentity(ctx context.Context, input 
 	if err != nil {
 		return InvestmentSplitReversalResult{}, mapSplitCorrectionError(err)
 	}
-	return InvestmentSplitReversalResult{Transaction: toTransaction(record), CorrectedOperationID: operation.OperationID,
+	transaction, err := s.transactionService.enrichOne(ctx, toTransaction(record))
+	if err != nil {
+		return InvestmentSplitReversalResult{}, err
+	}
+	return InvestmentSplitReversalResult{Transaction: transaction, CorrectedOperationID: operation.OperationID,
 		CorrectedTransactionID: operation.TransactionID}, nil
 }
 
@@ -201,8 +205,12 @@ func (s *InvestmentService) ReplaceSplit(ctx context.Context, input ReplaceInves
 	if err != nil {
 		return ReplaceInvestmentSplitResult{}, mapSplitCorrectionError(err)
 	}
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceInvestmentSplitResult{}, err
+	}
 	return ReplaceInvestmentSplitResult{
-		Inverse: toTransaction(record.Inverse), Replacement: toTransaction(record.Replacement),
+		Inverse: enriched[0], Replacement: enriched[1],
 		Plan:                   toInvestmentSplitPlan(plan.RatioNumerator, plan.RatioDenominator, record.Plan),
 		CorrectedTransactionID: operation.TransactionID, CorrectedOperationID: operation.OperationID, OperationID: record.Plan.OperationID,
 	}, nil

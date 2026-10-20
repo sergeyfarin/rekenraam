@@ -175,7 +175,14 @@ func (s *InvestmentService) CashInLieu(ctx context.Context, input CashInLieuInpu
 	if errors.Is(err, db.ErrCashInLieuSplitUnavailable) {
 		return InvestmentTradeResult{}, ErrCashInLieuSplitNotFound
 	}
-	return result, err
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	result.Transaction, err = s.transactionService.enrichOne(ctx, result.Transaction)
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	return result, nil
 }
 
 // ReverseCashInLieu posts the inverse of a cash in lieu's journal and removes

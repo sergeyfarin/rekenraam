@@ -22,7 +22,12 @@ func TestMFAEnrollmentCannotOverwriteAnActivation(t *testing.T) {
 	require.NoError(t, err)
 	// The clock is the existing service seam immediately before enrollment writes.
 	// A second request activates after the first request read pending state.
+	calls := 0
 	service.now = func() time.Time {
+		calls++
+		if calls == 1 {
+			return now
+		} // throttle clock owns the transaction
 		service.now = func() time.Time { return now }
 		_, err := service.ActivateTOTP(ctx, ActivateMFAInput{UserID: 1, SessionID: 1, Code: code})
 		require.NoError(t, err)
@@ -50,7 +55,12 @@ func TestMFAActivationMustProveCurrentPendingSecret(t *testing.T) {
 	code, err := totp.Code(initial.Secret, totp.Step(now)-1)
 	require.NoError(t, err)
 	// Another request replaces the pending secret after this activation read it.
+	calls := 0
 	service.now = func() time.Time {
+		calls++
+		if calls == 1 {
+			return now
+		} // throttle clock owns the transaction
 		service.now = func() time.Time { return now }
 		replacement, err := service.BeginTOTPEnrollment(ctx, input)
 		require.NoError(t, err)

@@ -210,7 +210,11 @@ func (s *InvestmentService) ExternalTransferOut(ctx context.Context, input Exter
 	if err != nil {
 		return ExternalTransferOutResult{}, mapInternalTransferError(err)
 	}
-	return ExternalTransferOutResult{Transaction: toTransaction(transaction), Plan: toExternalTransferOutPlan(result)}, nil
+	enriched, err := s.transactionService.enrichOne(ctx, toTransaction(transaction))
+	if err != nil {
+		return ExternalTransferOutResult{}, err
+	}
+	return ExternalTransferOutResult{Transaction: enriched, Plan: toExternalTransferOutPlan(result)}, nil
 }
 
 func toExternalTransferOutPlan(result db.ExternalTransferOutResult) ExternalTransferOutPlan {
@@ -274,9 +278,13 @@ func (s *InvestmentService) ReplaceTransferOut(ctx context.Context, input Replac
 	if err != nil {
 		return ReplaceInvestmentTransferOutResult{}, mapTransferReplacementError(err)
 	}
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceInvestmentTransferOutResult{}, err
+	}
 	return ReplaceInvestmentTransferOutResult{
-		Inverse: toTransaction(record.Inverse),
-		Replacement: ExternalTransferOutResult{Transaction: toTransaction(record.Replacement),
+		Inverse: enriched[0],
+		Replacement: ExternalTransferOutResult{Transaction: enriched[1],
 			Plan: toExternalTransferOutPlan(record.Result)},
 		CorrectedTransactionID: prepared.operation.TransactionID,
 	}, nil

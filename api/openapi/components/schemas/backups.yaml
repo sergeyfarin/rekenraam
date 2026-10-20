@@ -29,8 +29,7 @@ BackupPolicy:
       type: integer
       minimum: 1
     retention_max_age_days:
-      type: integer
-      nullable: true
+      type: [integer, 'null']
       minimum: 1
     updated_at:
       type: string
@@ -163,6 +162,5 @@ BackupPolicyRequest:
       type: integer
       minimum: 1
     retention_max_age_days:
-      type: integer
-      nullable: true
+      type: [integer, 'null']
       minimum: 1

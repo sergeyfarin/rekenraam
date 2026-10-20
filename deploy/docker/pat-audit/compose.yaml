@@ -1,0 +1,5 @@
+# Layer after the existing disposable proxy fixture; production image unchanged.
+services:
+    proxy:
+        volumes:
+            - ./pat-audit/Caddyfile:/etc/caddy/Caddyfile:ro

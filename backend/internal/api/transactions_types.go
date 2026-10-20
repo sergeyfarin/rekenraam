@@ -286,6 +286,10 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 	for _, entry := range transaction.JournalEntries {
 		postings := make([]postingResponse, 0, len(entry.Postings))
 		for _, posting := range entry.Postings {
+			tagIDs := posting.TagIDs
+			if tagIDs == nil {
+				tagIDs = []int64{}
+			}
 			postings = append(postings, postingResponse{
 				ID:                   posting.ID,
 				PostingLineID:        posting.PostingLineID,
@@ -300,7 +304,7 @@ func toTransactionResponse(transaction app.Transaction) transactionResponse {
 				ReconciliationStatus: posting.ReconciliationStatus,
 				ClearedOn:            posting.ClearedOn,
 				Metadata:             json.RawMessage(posting.MetadataJSON),
-				TagIDs:               posting.TagIDs,
+				TagIDs:               tagIDs,
 				AccountName:          posting.AccountName,
 				AccountCode:          posting.AccountCode,
 				AccountSystemRole:    posting.AccountSystemRole,
@@ -370,6 +374,14 @@ func toTransactionResponses(transactions []app.Transaction) []transactionRespons
 func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accountRegisterEntryResponse {
 	responses := make([]accountRegisterEntryResponse, 0, len(entries))
 	for _, entry := range entries {
+		tagIDs := entry.Posting.TagIDs
+		if tagIDs == nil {
+			tagIDs = []int64{}
+		}
+		transactionTagIDs := entry.TransactionTagIDs
+		if transactionTagIDs == nil {
+			transactionTagIDs = []int64{}
+		}
 		responses = append(responses, accountRegisterEntryResponse{
 			TransactionID:             entry.TransactionID,
 			BookID:                    entry.BookID,
@@ -385,7 +397,7 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 			VersionID:                 entry.VersionID,
 			VersionSeq:                entry.VersionSeq,
 			SupersedesVersionID:       entry.SupersedesVersionID,
-			TransactionTagIDs:         entry.TransactionTagIDs,
+			TransactionTagIDs:         transactionTagIDs,
 			JournalEntryID:            entry.JournalEntryID,
 			EntrySeq:                  entry.EntrySeq,
 			EntryDate:                 entry.EntryDate,
@@ -405,7 +417,7 @@ func toAccountRegisterEntryResponses(entries []app.AccountRegisterEntry) []accou
 				ReconciliationStatus: entry.Posting.ReconciliationStatus,
 				ClearedOn:            entry.Posting.ClearedOn,
 				Metadata:             json.RawMessage(entry.Posting.MetadataJSON),
-				TagIDs:               entry.Posting.TagIDs,
+				TagIDs:               tagIDs,
 				AccountName:          entry.Posting.AccountName,
 				AccountCode:          entry.Posting.AccountCode,
 				AccountSystemRole:    entry.Posting.AccountSystemRole,

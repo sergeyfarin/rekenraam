@@ -1,0 +1,65 @@
+/* Synthetic diagnostic for #356; compile with an official SQLite amalgamation.
+ * --check-fixed returns failure until both independent results are correct.
+ * This is not a production driver, migration or application test replacement.
+ */
+#include "sqlite3.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static void require_ok(sqlite3 *db, int code) {
+  if (code != SQLITE_OK) {
+    fprintf(stderr, "SQLite diagnostic failed: %s\n", sqlite3_errmsg(db));
+    exit(2);
+  }
+}
+
+static int scalar(sqlite3 *db, const char *query) {
+  sqlite3_stmt *statement = NULL;
+  require_ok(db, sqlite3_prepare_v2(db, query, -1, &statement, NULL));
+  if (sqlite3_step(statement) != SQLITE_ROW) {
+    fprintf(stderr, "SQLite diagnostic expected a row: %s\n", sqlite3_errmsg(db));
+    exit(2);
+  }
+  int value = sqlite3_column_int(statement, 0);
+  require_ok(db, sqlite3_finalize(statement));
+  return value;
+}
+
+int main(int argc, char **argv) {
+  int check_fixed = argc == 2 && strcmp(argv[1], "--check-fixed") == 0;
+  if (argc != 1 && !check_fixed) {
+    fprintf(stderr, "usage: engine-admission-probe [--check-fixed]\n");
+    return 2;
+  }
+  sqlite3 *db = NULL;
+  require_ok(db, sqlite3_open(":memory:", &db));
+  int valid = scalar(db,
+      "SELECT json_valid(json_set('[0x1F]', '$[1]', 2))");
+  require_ok(db, sqlite3_exec(db,
+      "CREATE TABLE t(a INT,b); INSERT INTO t VALUES(0,'old');"
+      "CREATE INDEX i ON t(a+1)", NULL, NULL, NULL));
+  int indexed = scalar(db,
+      "SELECT count(*) FROM (SELECT 1), t "
+      "WHERE a+1 = (SELECT 1) AND a = 0");
+  int plain = scalar(db,
+      "SELECT count(*) FROM (SELECT 1), t NOT INDEXED "
+      "WHERE a+1 = (SELECT 1) AND a = 0");
+  require_ok(db, sqlite3_exec(db,
+      "UPDATE t SET b = 'new' FROM (SELECT 1) "
+      "WHERE a+1 = (SELECT 1) AND a = 0", NULL, NULL, NULL));
+  int updated = scalar(db, "SELECT count(*) FROM t WHERE b='new'");
+  printf("{\"version\":\"%s\",\"source_id\":\"%s\","
+      "\"json_valid_actual\":%d,\"json_valid_expected\":1,"
+      "\"index_count_actual\":%d,\"index_count_expected\":1,"
+      "\"not_indexed_control\":%d,\"updated_rows_actual\":%d,"
+      "\"updated_rows_expected\":1,\"compile_options\":[",
+      sqlite3_libversion(), sqlite3_sourceid(), valid, indexed, plain, updated);
+  for (int i = 0; sqlite3_compileoption_get(i) != NULL; ++i) {
+    /* Official SQLite option strings contain no JSON quote/control bytes. */
+    printf("%s\"%s\"", i == 0 ? "" : ",", sqlite3_compileoption_get(i));
+  }
+  puts("]}");
+  require_ok(db, sqlite3_close(db));
+  return check_fixed && (valid != 1 || indexed != 1 || plain != 1 || updated != 1);
+}

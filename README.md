@@ -6,6 +6,11 @@ budgets, recurring transactions, investments, and backups. The Go backend serves
 a static SvelteKit frontend from one binary; SQLite is the primary database.
 Docker Compose runs the same app shape.
 
+Scripts and tools can use read-only personal access tokens created under
+Settings → Security. See the [token contract](docs/plans/personal-access-tokens-plan.md)
+for grants, expiry and revocation, and the [deployment guidance](docs/deployment-security.md)
+for HTTPS and credential handling.
+
 The app is still a pre-release candidate. Investment buy, sell, dividend,
 reinvestment, write-off, native correction, in-kind transfers, basis actions,
 and named short sale/cover workflows ship within R16's agreed scope. Provider
@@ -40,14 +45,24 @@ Do not apply that reset to a database containing data you need to keep.
 ```sh
 ./scripts/test-backend.sh      # Go formatting, vet, race tests (2 packages, 5m/package)
 ./scripts/test-frontend.sh     # catalog parity, generated API types, Svelte checks, unit tests
-./scripts/test-e2e-smoke.sh    # integrated browser smoke suite
+./scripts/test-e2e-smoke.sh    # provider stub HTTP tests + integrated browser smoke suite
 pnpm build                     # static frontend + embedded Go binary
 ```
 
 The build writes `dist/rekenraam`. Use `./scripts/test-e2e.sh` for the full
 browser suite and `pnpm test:release-preflight` for the serial release journeys.
+Run `pnpm --dir e2e run test:stubs` for just the provider stub HTTP regressions.
+For the deliberate runtime OpenAPI audit, run
+`python3 scripts/audit-api-contract.py --output /tmp/rekenraam-api-audit`;
+[setup, sensitivity controls and retained findings](docs/developer-workflow.md#backend-validation)
+are documented separately from the shared gates.
 Commands, test scope, and environment settings are in the
 [developer workflow](docs/developer-workflow.md).
+The [runtime-image audit](docs/reviews/runtime-image-advisory-audit-2026-10-20.md)
+and [bundled SQLite review](docs/reviews/native-sqlite-advisory-audit-2026-10-20.md)
+record advisory evidence, retained findings and release-disposition limits.
+The [SQLite upgrade prerequisite check](docs/reviews/sqlite-driver-upgrade-blocker-2026-10-20.md)
+records the fixed-engine diagnostic and the still-missing released driver.
 
 SQLite uses `github.com/mattn/go-sqlite3` with bundled C source (ADR 0014).
 Financial writes use WAL with FULL commit durability consistently in runtime

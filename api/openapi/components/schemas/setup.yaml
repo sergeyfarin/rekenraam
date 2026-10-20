@@ -49,6 +49,8 @@ SetupStatusResponse:
           - owner
           - book
           - currencies
+          - system_accounts
+          - categories
     blocking_step:
       type: string
       enum:

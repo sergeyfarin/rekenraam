@@ -231,7 +231,11 @@ func (s *InvestmentService) InternalTransfer(ctx context.Context, input Internal
 	if err != nil {
 		return InternalTransferResult{}, mapInternalTransferError(err)
 	}
-	return InternalTransferResult{Transaction: toTransaction(transaction), Plan: toInternalTransferPlan(result),
+	enriched, err := s.transactionService.enrichOne(ctx, toTransaction(transaction))
+	if err != nil {
+		return InternalTransferResult{}, err
+	}
+	return InternalTransferResult{Transaction: enriched, Plan: toInternalTransferPlan(result),
 		DestinationLotIDs: result.DestinationLotIDs}, nil
 }
 

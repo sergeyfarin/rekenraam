@@ -296,3 +296,14 @@ passed. The complete local acceptance now passes at `af233abb`; main CI evidence
 is recorded on the issue. Human language, actual owner deployment/key custody/household acceptance,
 release signing/PAT/demo work and image-advisory disposition remain outside this
 bounded area; the umbrella must name them rather than infer all-app readiness.
+
+
+## Runtime contract follow-up — 2026-10-20
+
+Additional audit #349 is complete with a [dated response/status matrix and
+sensitivity controls](runtime-api-contract-audit-2026-10-20.md): 425 real
+responses sample 80 of 332 current declared operations; 252 operations and
+unobserved statuses remain explicitly unverified. #367–#369 repair null
+unions, setup/exclusion disclosure and empty tag arrays. #350 and #370 remain
+open. This supplements the earlier route/client-parity evidence without
+claiming universal runtime conformity or changing its historical gate SHA.

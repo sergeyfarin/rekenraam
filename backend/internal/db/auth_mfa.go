@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // ErrMFARecoveryCodeUsed distinguishes "this code exists but has already been
@@ -43,9 +44,10 @@ type CreateMFAChallengeParams struct {
 }
 
 type MFAChallengeRecord struct {
-	ID       int64
-	UserID   int64
-	ClientIP string
+	ID        int64
+	UserID    int64
+	ClientIP  string
+	ExpiresAt string
 }
 
 // ReadMFATOTP returns the user's enrollment, pending or active.
@@ -113,13 +115,19 @@ func (r *AuthRepository) UpsertMFATOTP(ctx context.Context, params UpsertMFATOTP
 // owner locked to a single authenticator with no way back in, and a retry
 // would be refused as already active. The activation event is appended in the
 // same transaction (#288).
-func (r *AuthRepository) ActivateMFATOTPWithRecoveryCodes(ctx context.Context, userID int64, secretCiphertext string, activatedAt string, usedStep int64, codeHashes []string, event AuthenticationEventParams) error {
+func (r *AuthRepository) ActivateMFATOTPWithRecoveryCodes(ctx context.Context, userID int64, secretCiphertext string, activatedAt string, usedStep int64, codeHashes []string, event AuthenticationEventParams, admit func() error) error {
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin mfa activation transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if _, err := tx.ExecContext(ctx, `UPDATE user_mfa_totp SET last_used_step=last_used_step WHERE 0`); err != nil {
+		return fmt.Errorf("acquire mfa activation admission: %w", err)
+	}
+	if err := admit(); err != nil {
+		return err
+	}
 	if err := activateMFATOTPTx(ctx, tx, userID, secretCiphertext, activatedAt, usedStep); err != nil {
 		return err
 	}
@@ -159,20 +167,35 @@ func activateMFATOTPTx(ctx context.Context, tx *sql.Tx, userID int64, secretCiph
 // RecordMFATOTPUse advances the replay counter. The WHERE clause makes the
 // check-and-set atomic: two concurrent logins presenting the same code cannot
 // both pass, because only one UPDATE can move the counter past that step.
-func (r *AuthRepository) RecordMFATOTPUse(ctx context.Context, userID int64, usedStep int64) (bool, error) {
-	result, err := r.database.ExecContext(ctx, `
+func (r *AuthRepository) RecordMFATOTPUse(ctx context.Context, userID int64, usedStep int64, secretCiphertext string, admit func() error) (bool, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("begin mfa code use: %w", err)
+	}
+	defer rollbackTx(ctx, tx)
+	if _, err := tx.ExecContext(ctx, `UPDATE user_mfa_totp SET last_used_step=last_used_step WHERE 0`); err != nil {
+		return false, fmt.Errorf("acquire mfa code admission: %w", err)
+	}
+	if err := admit(); err != nil {
+		return false, err
+	}
+	result, err := tx.ExecContext(ctx, `
 		UPDATE user_mfa_totp
 		SET last_used_step = ?
 		WHERE user_id = ?
 		  AND status = 'active'
+		  AND secret_ciphertext = ?
 		  AND (last_used_step IS NULL OR last_used_step < ?)
-	`, usedStep, userID, usedStep)
+	`, usedStep, userID, secretCiphertext, usedStep)
 	if err != nil {
 		return false, fmt.Errorf("record mfa totp use: %w", err)
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return false, fmt.Errorf("read mfa totp use rows: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("commit mfa code use: %w", err)
 	}
 
 	return rowsAffected == 1, nil
@@ -325,10 +348,10 @@ func (r *AuthRepository) CreateMFAChallenge(ctx context.Context, params CreateMF
 func (r *AuthRepository) ReadMFAChallenge(ctx context.Context, tokenHash string, now string) (MFAChallengeRecord, error) {
 	var record MFAChallengeRecord
 	if err := r.database.QueryRowContext(ctx, `
-		SELECT id, user_id, client_ip
+		SELECT id, user_id, client_ip, expires_at
 		FROM login_mfa_challenges
 		WHERE token_hash = ? AND consumed_at IS NULL AND expires_at > ?
-	`, tokenHash, now).Scan(&record.ID, &record.UserID, &record.ClientIP); err != nil {
+	`, tokenHash, now).Scan(&record.ID, &record.UserID, &record.ClientIP, &record.ExpiresAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return MFAChallengeRecord{}, ErrNotFound
 		}
@@ -341,18 +364,30 @@ func (r *AuthRepository) ReadMFAChallenge(ctx context.Context, tokenHash string,
 // ConsumeMFAChallenge marks a challenge spent. It reports whether it won: a
 // challenge is single-use, so a replayed one must not produce a second
 // session.
-func (r *AuthRepository) ConsumeMFAChallenge(ctx context.Context, challengeID int64, consumedAt string) (bool, error) {
-	result, err := r.database.ExecContext(ctx, `
+func (r *AuthRepository) ConsumeMFAChallenge(ctx context.Context, challengeID int64, clock func() time.Time) (bool, error) {
+	tx, err := r.database.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("begin mfa challenge consumption: %w", err)
+	}
+	defer rollbackTx(ctx, tx)
+	if _, err := tx.ExecContext(ctx, `UPDATE login_mfa_challenges SET consumed_at=consumed_at WHERE 0`); err != nil {
+		return false, fmt.Errorf("acquire mfa challenge admission: %w", err)
+	}
+	consumedAt := clock().UTC().Format(time.RFC3339)
+	result, err := tx.ExecContext(ctx, `
 		UPDATE login_mfa_challenges
 		SET consumed_at = ?
-		WHERE id = ? AND consumed_at IS NULL
-	`, consumedAt, challengeID)
+		WHERE id = ? AND consumed_at IS NULL AND expires_at > ?
+	`, consumedAt, challengeID, consumedAt)
 	if err != nil {
 		return false, fmt.Errorf("consume mfa challenge: %w", err)
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return false, fmt.Errorf("read consumed mfa challenge rows: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("commit mfa challenge consumption: %w", err)
 	}
 
 	return rowsAffected == 1, nil

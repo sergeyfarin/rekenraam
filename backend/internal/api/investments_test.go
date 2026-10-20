@@ -81,6 +81,9 @@ func doInvestmentRequest(t *testing.T, handler http.Handler, sessionCookie *http
 	res := httptest.NewRecorder()
 	handler.ServeHTTP(res, req)
 	require.Equal(t, wantStatus, res.Code, res.Body.String())
+	if method == http.MethodPost && res.Code >= 200 && res.Code < 300 {
+		assertMutationPostingsMatchRead(t, handler, sessionCookie, res)
+	}
 	return res
 }
 

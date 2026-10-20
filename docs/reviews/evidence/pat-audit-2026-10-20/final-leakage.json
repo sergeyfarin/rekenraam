@@ -1,0 +1,10 @@
+{
+  "plaintext_absent": true,
+  "files": [
+    "live.sqlite",
+    "live.sqlite-shm",
+    "live.sqlite-wal",
+    "final-logs.txt"
+  ],
+  "live_files_are_not_backups": true
+}

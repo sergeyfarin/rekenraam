@@ -81,4 +81,7 @@ func TestCapitalReturnReplacementAPIPreviewMatchesCommitAndFencesKind(t *testing
 	require.True(t, chain.CanReplaceCapitalReturn)
 	require.Equal(t, replaced.Replacement.Transaction.ID, *chain.EffectiveTransactionID)
 	require.Equal(t, request.LotEntitlements, chain.EffectiveCapitalReturn.LotEntitlements)
+	require.NotNil(t, chain.EffectiveCapitalReturn.ReconciliationOverrideCheckpointIDs, "correction terms must encode an empty array, not null")
+	require.Empty(t, chain.EffectiveCapitalReturn.ReconciliationOverrideCheckpointIDs)
+	require.False(t, chain.EffectiveCapitalReturn.ReconciliationOverride)
 }

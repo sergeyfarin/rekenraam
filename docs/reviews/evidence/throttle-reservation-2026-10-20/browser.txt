@@ -1,0 +1,29 @@
+[WebServer] (node:2810407) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 16 tests using 2 workers
+
+(node:2810436) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:2810437) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 [bootstrap] › playwright/auth.spec.ts:4:1 › bootstraps the owner account, signs out, and signs back in (1.6s)
+  ✓   2 [app] › playwright/mfa.spec.ts:69:3 › two-factor authentication journey › enrolls and activates an authenticator, and shows recovery codes once (1.9s)
+  ✓   3 [bootstrap] › playwright/auth.spec.ts:32:1 › shows translated feedback for wrong owner password (539ms)
+  ✓   4 [app] › playwright/mfa.spec.ts:107:3 › two-factor authentication journey › challenges a correct password for an authenticator code (910ms)
+(node:2811126) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   5 [app] › playwright/mfa.spec.ts:129:3 › two-factor authentication journey › accepts a recovery code once and then refuses it (1.1s)
+  ✓   6 [app] › playwright/personal-access-tokens.spec.ts:17:3 › [acceptance] personal access tokens show once, enforce scope and revoke on a light phone (3.5s)
+  ✓   7 [app] › playwright/personal-access-tokens.spec.ts:17:3 › [acceptance] personal access tokens show once, enforce scope and revoke on a dark phone (2.9s)
+  ✓   8 [app] › playwright/personal-access-tokens.spec.ts:80:1 › [acceptance] token metadata loading and failure states recover without retaining passwords (2.3s)
+  ✓   9 [app] › playwright/personal-access-tokens.spec.ts:103:1 › [acceptance] hiding a document scrubs its one-time token before browser history can retain it (1.3s)
+  ✓  10 [app] › playwright/personal-access-tokens.spec.ts:128:1 › [acceptance] a delayed creation response cannot restore a token after document hiding (969ms)
+  ✓  11 [app] › playwright/personal-access-tokens.spec.ts:158:3 › [acceptance] read-only token permissions render in en on a phone (854ms)
+  ✓  12 [app] › playwright/personal-access-tokens.spec.ts:158:3 › [acceptance] read-only token permissions render in es on a phone (784ms)
+  ✓  13 [app] › playwright/personal-access-tokens.spec.ts:158:3 › [acceptance] read-only token permissions render in fr on a phone (631ms)
+  ✓  14 [app] › playwright/personal-access-tokens.spec.ts:158:3 › [acceptance] read-only token permissions render in nl on a phone (871ms)
+  ✓  15 [app] › playwright/personal-access-tokens.spec.ts:158:3 › [acceptance] read-only token permissions render in de on a phone (784ms)
+  ✓  16 [app] › playwright/personal-access-tokens.spec.ts:158:3 › [acceptance] read-only token permissions render in ru on a phone (660ms)
+
+  16 passed (21.6s)

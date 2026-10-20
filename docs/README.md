@@ -52,6 +52,15 @@ or sequencing change.
 
 ## Initiative and design references
 
+[ADR 0018](adrs/0018-personal-access-token-boundary.md) and the
+[personal-access-token contract](plans/personal-access-tokens-plan.md) define
+#334's read-only owner API grants, credential lifecycle and security events.
+The [2026-10-20 delivery evidence](reviews/personal-access-tokens-delivery-2026-10-20.md)
+records its service/API/browser acceptance. The [independent audit](reviews/personal-access-token-audit-2026-10-20.md)
+completes #357 with queued-expiry finding #359 fixed and reproducible
+HTTPS/client/native-restore/browser evidence; adjacent expiry audit #360 and
+actual owner deployment #336 remain separate.
+
 [ADR 0017](adrs/0017-provider-independent-features-and-incomplete-data.md) defines
 provider-independent features, explicit incomplete attribution and manual repair.
 The [2026-10-15 review](reviews/provider-independence-review-2026-10-15.md) audits
@@ -101,6 +110,14 @@ records #274's real-worker recovery and browser evidence, corrected findings
 #314/#316, and the publication-gap finding #315. Its
 [follow-up delivery](reviews/fx-coverage-progress-fix-2026-10-18.md) corrects
 starvation with durable scan progress and independent failed-date retries.
+
+The [runtime API contract audit](reviews/runtime-api-contract-audit-2026-10-20.md)
+records #349's bounded response/status matrix and schema sensitivity controls,
+small fixes #367–#369 and the original retained findings #350/#370.
+[#370's delivery](reviews/mutation-response-enrichment-2026-10-20.md) repairs
+posting enrichment, fixes #371/#372 and expands the schema evidence to 165
+operations; #350 remains open. The audits' explicit unverified
+operations/statuses prevent treating the sample as universal conformity.
 
 Earlier strategic proposal:
 [2026-09-09 product direction, AI and privacy](reviews/product-direction-ai-privacy-2026-09-09.md).

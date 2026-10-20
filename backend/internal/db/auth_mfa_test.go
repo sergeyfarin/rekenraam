@@ -68,7 +68,7 @@ func TestActivateMFATOTPWithRecoveryCodesTurnsMFAOnAndStoresTheCodes(t *testing.
 
 	require.NoError(t, repository.ActivateMFATOTPWithRecoveryCodes(
 		context.Background(), 1, "sealed-secret", "2026-08-01T00:05:00Z", 42,
-		[]string{"hash-a", "hash-b", "hash-c"}, securityTestEvent("mfa_activated"),
+		[]string{"hash-a", "hash-b", "hash-c"}, securityTestEvent("mfa_activated"), func() error { return nil },
 	))
 
 	assert.Equal(t, "active", readMFAStatus(t, database))
@@ -86,7 +86,7 @@ func TestActivateMFATOTPWithRecoveryCodesLeavesTheEnrollmentPendingWhenCodesFail
 
 	err := repository.ActivateMFATOTPWithRecoveryCodes(
 		context.Background(), 1, "sealed-secret", "2026-08-01T00:05:00Z", 42,
-		[]string{"hash-a", "hash-a"}, securityTestEvent("mfa_activated"),
+		[]string{"hash-a", "hash-a"}, securityTestEvent("mfa_activated"), func() error { return nil },
 	)
 
 	require.Error(t, err)
@@ -103,11 +103,11 @@ func TestActivateMFATOTPWithRecoveryCodesCanBeRetriedAfterAFailure(t *testing.T)
 
 	require.Error(t, repository.ActivateMFATOTPWithRecoveryCodes(
 		context.Background(), 1, "sealed-secret", "2026-08-01T00:05:00Z", 42,
-		[]string{"hash-a", "hash-a"}, securityTestEvent("mfa_activated"),
+		[]string{"hash-a", "hash-a"}, securityTestEvent("mfa_activated"), func() error { return nil },
 	))
 	require.NoError(t, repository.ActivateMFATOTPWithRecoveryCodes(
 		context.Background(), 1, "sealed-secret", "2026-08-01T00:06:00Z", 43,
-		[]string{"hash-a", "hash-b"}, securityTestEvent("mfa_activated"),
+		[]string{"hash-a", "hash-b"}, securityTestEvent("mfa_activated"), func() error { return nil },
 	))
 
 	assert.Equal(t, "active", readMFAStatus(t, database))
@@ -122,11 +122,11 @@ func TestActivateMFATOTPWithRecoveryCodesRejectsAnAlreadyActiveEnrollment(t *tes
 	enrollPendingMFA(t, repository)
 
 	require.NoError(t, repository.ActivateMFATOTPWithRecoveryCodes(
-		context.Background(), 1, "sealed-secret", "2026-08-01T00:05:00Z", 42, []string{"hash-a"}, securityTestEvent("mfa_activated"),
+		context.Background(), 1, "sealed-secret", "2026-08-01T00:05:00Z", 42, []string{"hash-a"}, securityTestEvent("mfa_activated"), func() error { return nil },
 	))
 
 	err := repository.ActivateMFATOTPWithRecoveryCodes(
-		context.Background(), 1, "sealed-secret", "2026-08-01T00:06:00Z", 43, []string{"hash-b"}, securityTestEvent("mfa_activated"),
+		context.Background(), 1, "sealed-secret", "2026-08-01T00:06:00Z", 43, []string{"hash-b"}, securityTestEvent("mfa_activated"), func() error { return nil },
 	)
 
 	require.ErrorIs(t, err, ErrNotFound)

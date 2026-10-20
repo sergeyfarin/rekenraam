@@ -1,4 +1,8 @@
 get:
+  security:
+    - CookieSession: []
+    - PersonalAccessToken: []
+  x-personal-access-token-scope: "ledger:read"
   summary: List soft-deleted transactions (Trash)
   description: >
     Returns soft-deleted transactions ordered by deletion recency (deleted_at DESC, id DESC).
@@ -19,6 +23,15 @@ get:
         type: string
       description: Opaque deletion-time cursor returned by a previous response.
   responses:
+    "403":
+      description: Personal-access token does not grant this scope
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "200":
       description: Deleted transactions page
       content:

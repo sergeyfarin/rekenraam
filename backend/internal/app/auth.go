@@ -240,6 +240,11 @@ func (s *AuthService) Session(ctx context.Context, token string) (SessionStatus,
 
 		return SessionStatus{}, fmt.Errorf("read session user: %w", err)
 	}
+	// The query may have waited for the pool. Admission uses the clock after
+	// the read, without taking a SQLite writer lock for a session lookup.
+	if !authDeadlineOpen(userRecord.ExpiresAt, s.now()) {
+		return SessionStatus{Authenticated: false}, nil
+	}
 
 	return SessionStatus{
 		Authenticated: true,
@@ -388,7 +393,8 @@ type completeLoginInput struct {
 	DeviceTrusted bool
 	// SecondFactor is the factor that completed an MFA sign-in, empty for a
 	// password-only one.
-	SecondFactor string
+	SecondFactor     string
+	MFAChallengeHash string
 }
 
 func (s *AuthService) completeLogin(ctx context.Context, input completeLoginInput) (LoginResult, error) {
@@ -407,8 +413,9 @@ func (s *AuthService) completeLogin(ctx context.Context, input completeLoginInpu
 			CreatedAt: createdAt,
 			ExpiresAt: sessionExpiresAt(now, s.sessionLifetime),
 		},
-		ClearThrottles:  clears,
-		RefundThrottles: refunds,
+		ClearThrottles:   clears,
+		RefundThrottles:  refunds,
+		MFAChallengeHash: input.MFAChallengeHash,
 	}
 	// Approve the device only now, after every factor actually verified.
 	trustedDeviceToken := ""
@@ -434,6 +441,9 @@ func (s *AuthService) completeLogin(ctx context.Context, input completeLoginInpu
 	// One transaction (#287): a rejected attempt leaves no session behind.
 	sessionID, err := s.repository.CompleteLogin(ctx, params)
 	if err != nil {
+		if input.MFAChallengeHash != "" && errors.Is(err, db.ErrNotFound) {
+			return LoginResult{}, ErrMFAChallengeInvalid
+		}
 		return LoginResult{}, fmt.Errorf("persist auth session: %w", err)
 	}
 	input.Reservation.settled = true
@@ -795,8 +805,16 @@ func (s *AuthService) resolveTrustedDevice(ctx context.Context, token string, us
 	if err != nil || credentials.ID != device.UserID {
 		return db.TrustedDeviceRecord{}, false
 	}
+	if !authDeadlineOpen(device.ExpiresAt, s.now()) {
+		return db.TrustedDeviceRecord{}, false
+	}
 
 	return device, true
+}
+
+func authDeadlineOpen(deadline string, now time.Time) bool {
+	expires, err := time.Parse(time.RFC3339, deadline)
+	return err == nil && now.Before(expires)
 }
 
 // loginThrottleScopesForAttempt is the S-04 fix. A single-owner app publishes

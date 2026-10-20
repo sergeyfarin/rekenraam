@@ -1,0 +1,146 @@
+get:
+  summary: List owner personal-access tokens without credential material
+  description: Owner session only. Descending ID cursor pagination includes expired and revoked history, 50 rows per page.
+  security:
+    - CookieSession: []
+  parameters:
+    - in: query
+      name: cursor
+      schema:
+        type: string
+  responses:
+    "200":
+      description: Credential metadata only
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/PersonalAccessTokenList"
+    "400":
+      description: Invalid cursor
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Owner session required
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: Bearer authentication is forbidden
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+post:
+  summary: Create a scoped read-only personal-access token
+  description: >-
+    Owner session, Origin, CSRF and current password required. Shares the MFA
+    settings reauthentication budget. At most 50 unexpired/unrevoked tokens.
+    Returns the plaintext once with Cache-Control no-store. Token credentials
+    cannot invoke this operation, even with an owner cookie.
+  security:
+    - CookieSession: []
+  parameters:
+    - in: header
+      name: X-CSRF-Token
+      required: true
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../openapi.yaml#/components/schemas/CreatePersonalAccessTokenRequest"
+  responses:
+    "201":
+      description: Credential created and recorded atomically
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/CreatePersonalAccessTokenResponse"
+    "400":
+      description: Invalid input or active credential limit
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "401":
+      description: Session expired or password confirmation failed
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "403":
+      description: CSRF or Origin invalid; Bearer credential forbidden
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "413":
+      description: Request body too large
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "429":
+      description: Session reauthentication budget exhausted
+      headers:
+        Retry-After:
+          description: Seconds until this session may confirm again.
+          schema:
+            type: integer
+            minimum: 1
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
+    "500":
+      description: Internal server error
+      headers:
+        X-Request-ID:
+          $ref: "../openapi.yaml#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"

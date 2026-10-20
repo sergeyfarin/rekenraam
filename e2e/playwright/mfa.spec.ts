@@ -76,7 +76,7 @@ test.describe.serial('two-factor authentication journey', () => {
     await expect(page.getByText('Off', { exact: true })).toBeVisible();
     await expect(page.getByText(/needs REKENRAAM_SECRET_KEY/)).toHaveCount(0);
 
-    await page.getByLabel('Your password').fill(OWNER_PASSWORD);
+    await page.getByLabel('Your password', { exact: true }).fill(OWNER_PASSWORD);
     await page.getByRole('button', { name: 'Set up' }).click();
 
     await expect(page.getByRole('heading', { name: 'Add this to your authenticator app' })).toBeVisible();

@@ -46,5 +46,5 @@ func NewHandler(logger *slog.Logger, webHandler http.Handler, services Services,
 	})
 	mux.Handle("/", webHandler)
 
-	return withRequestID(withSecurityHeaders(options, withRequestLogging(logger, withRecovery(logger, mux))))
+	return withRequestID(withSecurityHeaders(options, withRequestLogging(logger, withRecovery(logger, withPersonalAccessToken(logger, services.Auth, options, mux)))))
 }

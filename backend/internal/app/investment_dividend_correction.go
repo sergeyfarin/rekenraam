@@ -100,15 +100,11 @@ func (s *InvestmentService) ReplaceDividend(ctx context.Context, input ReplaceIn
 	if err != nil {
 		return ReplaceInvestmentDividendResult{}, mapDividendCorrectionError(err)
 	}
-	inverseTransaction, err := s.transactionService.enrichOne(ctx, toTransaction(record.Inverse))
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
 	if err != nil {
 		return ReplaceInvestmentDividendResult{}, err
 	}
-	replacementTransaction, err := s.transactionService.enrichOne(ctx, toTransaction(record.Replacement))
-	if err != nil {
-		return ReplaceInvestmentDividendResult{}, err
-	}
-	return ReplaceInvestmentDividendResult{Inverse: inverseTransaction, Replacement: replacementTransaction,
+	return ReplaceInvestmentDividendResult{Inverse: enriched[0], Replacement: enriched[1],
 		CorrectedTransactionID: operation.TransactionID}, nil
 }
 

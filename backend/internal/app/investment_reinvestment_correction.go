@@ -59,7 +59,7 @@ func (s *InvestmentService) ReverseReinvestedDividend(ctx context.Context, input
 	if err != nil {
 		return Transaction{}, mapReinvestmentCorrectionError(err)
 	}
-	return toTransaction(record), nil
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 // ReverseReinvestedDividendReconciliationImpact runs the reversal writer and
@@ -108,9 +108,13 @@ func (s *InvestmentService) ReplaceReinvestedDividend(ctx context.Context, input
 		return ReplaceReinvestedDividendResult{}, mapReinvestmentCorrectionError(err)
 	}
 	lotID := record.Lot.ID
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceReinvestedDividendResult{}, err
+	}
 	return ReplaceReinvestedDividendResult{
-		Inverse:                toTransaction(record.Inverse),
-		Replacement:            InvestmentTradeResult{Transaction: toTransaction(record.Replacement), LotID: &lotID},
+		Inverse:                enriched[0],
+		Replacement:            InvestmentTradeResult{Transaction: enriched[1], LotID: &lotID},
 		CorrectedTransactionID: prepared.Operation.TransactionID,
 	}, nil
 }

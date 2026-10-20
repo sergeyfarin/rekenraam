@@ -23,8 +23,6 @@ import type { AxeViolation } from './a11y';
 /** WCAG AA for normal text. Large text's 3:1 is not applied: nodes are not sized here. */
 export const MINIMUM_TEXT_CONTRAST = 4.5;
 
-const PROBE = 'data-rendered-contrast-probe';
-
 export type TextContrast = { ratio: number; text: string; background: string; glyphPixels: number };
 
 /** The text-only contrast of the node `selector` names, or null when it renders no text pixels. */
@@ -32,22 +30,36 @@ export async function renderedTextContrast(page: Page, selector: string): Promis
   const element = page.locator(selector).first();
   await page.mouse.move(0, 0);
   const rendered = (await element.screenshot({ animations: 'disabled' })).toString('base64');
-  // Only the node's own text: its children keep their fill, as an icon or a
-  // border keeps its colour.
-  await element.evaluate((node, probe) => {
-    const style = document.createElement('style');
-    style.setAttribute(probe, '');
-    style.textContent = `[${probe}]{-webkit-text-fill-color:transparent!important}[${probe}] *{-webkit-text-fill-color:initial!important}`;
-    document.head.append(style);
-    node.setAttribute(probe, '');
-  }, PROBE);
+  // CSSOM property writes work under production style-src 'self'; an inline
+  // stylesheet is blocked (#361). Preserve each descendant's actual fill so
+  // only the target's own glyphs differ, never its child text/icons/borders.
+  const saved = await element.evaluateHandle((node) => {
+    const nodes = [node, ...node.querySelectorAll<HTMLElement | SVGElement>('*')];
+    const styles = nodes.map((item) => ({
+      item,
+      hadStyle: item.hasAttribute('style'),
+      value: item.style.getPropertyValue('-webkit-text-fill-color'),
+      priority: item.style.getPropertyPriority('-webkit-text-fill-color'),
+      computed: getComputedStyle(item).getPropertyValue('-webkit-text-fill-color')
+    }));
+    styles.forEach(({ item, computed }, index) => item.style.setProperty('-webkit-text-fill-color', index === 0 ? 'transparent' : computed, 'important'));
+    return styles;
+  });
   let blank: string;
   try {
     blank = (await element.screenshot({ animations: 'disabled' })).toString('base64');
   } finally {
-    await page.evaluate((probe) => {
-      document.querySelectorAll(`[${probe}]`).forEach((node) => (node.tagName === 'STYLE' ? node.remove() : node.removeAttribute(probe)));
-    }, PROBE);
+    try {
+      await saved.evaluate((styles) => {
+        styles.forEach(({ item, value, priority, hadStyle }) => {
+          if (value) item.style.setProperty('-webkit-text-fill-color', value, priority);
+          else item.style.removeProperty('-webkit-text-fill-color');
+          if (!hadStyle && item.getAttribute('style') === '') item.removeAttribute('style');
+        });
+      });
+    } finally {
+      await saved.dispose();
+    }
   }
   return page.evaluate(async ([withText, withoutText]) => {
     const pixelsOf = async (data: string) => {

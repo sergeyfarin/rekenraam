@@ -39,7 +39,11 @@ func (s *InvestmentService) ShortSale(ctx context.Context, input InvestmentTrade
 	if err != nil {
 		return InvestmentTradeResult{}, shortDependency(mapInvestmentOpeningWriteError(err, "short sale"))
 	}
-	return InvestmentTradeResult{Transaction: toTransaction(transactionRecord), LotID: &lot.ID}, nil
+	transaction, err := s.transactionService.enrichOne(ctx, toTransaction(transactionRecord))
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	return InvestmentTradeResult{Transaction: transaction, LotID: &lot.ID}, nil
 }
 
 // ShortCover buys back borrowed units and closes short lots.
@@ -54,7 +58,11 @@ func (s *InvestmentService) ShortCover(ctx context.Context, input InvestmentTrad
 		return InvestmentTradeResult{}, mapShortCoverWriteError(err)
 	}
 	committed := toDisposalDecision(decision)
-	return InvestmentTradeResult{Transaction: toTransaction(transactionRecord), Allocations: toInvestmentLotDisposals(disposals), DisposalDecision: &committed}, nil
+	transaction, err := s.transactionService.enrichOne(ctx, toTransaction(transactionRecord))
+	if err != nil {
+		return InvestmentTradeResult{}, err
+	}
+	return InvestmentTradeResult{Transaction: transaction, Allocations: toInvestmentLotDisposals(disposals), DisposalDecision: &committed}, nil
 }
 
 // PreviewShortCover runs the complete cover writer and rolls back, returning

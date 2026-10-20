@@ -247,7 +247,14 @@ func (s *AuthService) ActivateTOTP(ctx context.Context, input ActivateMFAInput) 
 	event := s.securityEvent(authEventMFAActivated, input.UserID, input.SessionID, input.ClientIP, input.RequestID)
 	if err := s.repository.ActivateMFATOTPWithRecoveryCodes(
 		ctx, input.UserID, record.SecretCiphertext, event.OccurredAt, int64(step), hashes, event,
+		func() error { return s.admitTOTPStep(step) },
 	); err != nil {
+		if errors.Is(err, ErrMFACodeInvalid) {
+			return nil, s.failReauth(ctx, reservation, ErrMFACodeInvalid, db.AuthenticationEventParams{
+				EventType: authEventLoginFailed, Outcome: "failure", UserID: input.UserID,
+				ClientIP: input.ClientIP, FailureReason: authFailureMFAInvalid, RequestID: input.RequestID,
+			})
+		}
 		if errors.Is(err, db.ErrNotFound) {
 			return nil, ErrMFANotEnrolled
 		}
@@ -344,6 +351,13 @@ func (s *AuthService) CompleteLoginMFA(ctx context.Context, input CompleteMFALog
 		}
 		return LoginResult{}, fmt.Errorf("read mfa challenge: %w", err)
 	}
+	if !authDeadlineOpen(challenge.ExpiresAt, s.now()) {
+		s.recordAuthEvent(ctx, db.AuthenticationEventParams{
+			EventType: authEventLoginFailed, Outcome: "failure",
+			ClientIP: input.ClientIP, FailureReason: authFailureMFAExpired, RequestID: input.RequestID,
+		})
+		return LoginResult{}, ErrMFAChallengeInvalid
+	}
 
 	credentials, err := s.repository.ReadOwnerCredentialsByID(ctx, challenge.UserID)
 	if err != nil {
@@ -367,7 +381,7 @@ func (s *AuthService) CompleteLoginMFA(ctx context.Context, input CompleteMFALog
 	}
 	defer reservation.release(ctx)
 
-	secondFactor, err := s.verifySecondFactor(ctx, credentials.ID, code, now, input.ClientIP)
+	secondFactor, err := s.verifySecondFactor(ctx, credentials.ID, code, input.ClientIP)
 	if errors.Is(err, ErrMFAAuthenticatorUnavailable) {
 		// Not a guess: no authenticator code could have verified, so charging
 		// it would only burn the budget the owner needs for a recovery code.
@@ -401,7 +415,7 @@ func (s *AuthService) CompleteLoginMFA(ctx context.Context, input CompleteMFALog
 	// Spend the challenge only after the code passed, and treat losing the
 	// race as an invalid challenge: two requests must never mint two sessions
 	// from one password verification.
-	consumed, err := s.repository.ConsumeMFAChallenge(ctx, challenge.ID, now.Format(time.RFC3339))
+	consumed, err := s.repository.ConsumeMFAChallenge(ctx, challenge.ID, s.now)
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("consume mfa challenge: %w", err)
 	}
@@ -410,14 +424,15 @@ func (s *AuthService) CompleteLoginMFA(ctx context.Context, input CompleteMFALog
 	}
 
 	return s.completeLogin(ctx, completeLoginInput{
-		UserID:        credentials.ID,
-		Username:      credentials.Username,
-		ClientIP:      input.ClientIP,
-		RequestID:     input.RequestID,
-		Reservation:   reservation,
-		TrustedDevice: trustedDevice,
-		DeviceTrusted: deviceTrusted,
-		SecondFactor:  secondFactor,
+		UserID:           credentials.ID,
+		Username:         credentials.Username,
+		ClientIP:         input.ClientIP,
+		RequestID:        input.RequestID,
+		Reservation:      reservation,
+		TrustedDevice:    trustedDevice,
+		DeviceTrusted:    deviceTrusted,
+		SecondFactor:     secondFactor,
+		MFAChallengeHash: hashSessionToken(challengeToken),
 	})
 }
 
@@ -431,7 +446,7 @@ func (s *AuthService) CompleteLoginMFA(ctx context.Context, input CompleteMFALog
 // a recovery code, so no verifier could have accepted it, and the caller must
 // not treat it as a wrong guess (#290). The recovery lookup still runs first,
 // so the timing matches every other attempt.
-func (s *AuthService) verifySecondFactor(ctx context.Context, userID int64, code string, now time.Time, clientIP string) (string, error) {
+func (s *AuthService) verifySecondFactor(ctx context.Context, userID int64, code string, clientIP string) (string, error) {
 	record, err := s.repository.ReadMFATOTP(ctx, userID)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
@@ -453,10 +468,13 @@ func (s *AuthService) verifySecondFactor(ctx context.Context, userID int64, code
 		if s.logger != nil {
 			s.logger.WarnContext(ctx, "mfa secret could not be opened; only recovery codes can be used", slog.Any("err", err))
 		}
-	} else if step, ok := totp.Validate(secret, code, now, mfaClockSkewSteps); ok {
+	} else if step, ok := totp.Validate(secret, code, s.now().UTC(), mfaClockSkewSteps); ok {
 		// A code is valid for its whole step, so the counter must move past it
 		// or the same code works again until it expires.
-		fresh, err := s.repository.RecordMFATOTPUse(ctx, userID, int64(step))
+		fresh, err := s.repository.RecordMFATOTPUse(ctx, userID, int64(step), record.SecretCiphertext, func() error { return s.admitTOTPStep(step) })
+		if errors.Is(err, ErrMFACodeInvalid) {
+			return "", nil
+		}
 		if err != nil {
 			return "", fmt.Errorf("record mfa code use: %w", err)
 		}
@@ -466,7 +484,7 @@ func (s *AuthService) verifySecondFactor(ctx context.Context, userID int64, code
 		return secondFactorTOTP, nil
 	}
 
-	err = s.repository.ConsumeMFARecoveryCode(ctx, userID, hashRecoveryCode(code), now.Format(time.RFC3339), clientIP)
+	err = s.repository.ConsumeMFARecoveryCode(ctx, userID, hashRecoveryCode(code), s.now().UTC().Format(time.RFC3339), clientIP)
 	switch {
 	case err == nil:
 		return secondFactorRecoveryCode, nil
@@ -478,6 +496,16 @@ func (s *AuthService) verifySecondFactor(ctx context.Context, userID int64, code
 	default:
 		return "", fmt.Errorf("consume mfa recovery code: %w", err)
 	}
+}
+
+// admitTOTPStep runs while the repository owns SQLite write admission. The
+// matched step must still be in the skew window when it is actually spent.
+func (s *AuthService) admitTOTPStep(step uint64) error {
+	current := totp.Step(s.now().UTC())
+	if step > current+mfaClockSkewSteps || (current > mfaClockSkewSteps && step < current-mfaClockSkewSteps) {
+		return ErrMFACodeInvalid
+	}
+	return nil
 }
 
 // mfaChallengeFor issues the half-authenticated token handed back when a

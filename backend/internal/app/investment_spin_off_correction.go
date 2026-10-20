@@ -74,7 +74,7 @@ func (s *InvestmentService) ReverseSpinOff(ctx context.Context, input ReverseSpi
 	if err != nil {
 		return Transaction{}, mapSpinOffCorrectionError(err)
 	}
-	return toTransaction(record), nil
+	return s.transactionService.enrichOne(ctx, toTransaction(record))
 }
 
 // ReverseSpinOffReconciliationImpact runs the reversal writer and rolls back:
@@ -175,7 +175,11 @@ func (s *InvestmentService) ReplaceSpinOff(ctx context.Context, input ReplaceSpi
 	if err != nil {
 		return ReplaceSpinOffResult{}, err
 	}
-	return ReplaceSpinOffResult{Inverse: toTransaction(record.Inverse), Replacement: toTransaction(record.Replacement),
+	enriched, err := s.transactionService.enrichRecords(ctx, record.Inverse, record.Replacement)
+	if err != nil {
+		return ReplaceSpinOffResult{}, err
+	}
+	return ReplaceSpinOffResult{Inverse: enriched[0], Replacement: enriched[1],
 		Plan: plan, CorrectedTransactionID: operation.TransactionID}, nil
 }
 

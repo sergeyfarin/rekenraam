@@ -977,7 +977,9 @@ Minimum query parameters:
 - `account_id` optional
 - `payee_id` optional
 - `q` optional free-text search over `payee_name`, `description`, and external
-  reference hints
+  reference hints. Treat it as a literal FTS phrase rather than caller-supplied
+  FTS grammar; reject NUL (U+0000) with HTTP 400 `VALIDATION_FAILED` before the
+  native parser (#355).
 - `status` optional, one of `draft`, `posted`, `voided`
 - `kind` optional, one of the `transaction_kind` values
 - `after_date` optional, inclusive `YYYY-MM-DD` filter on `transaction_date`

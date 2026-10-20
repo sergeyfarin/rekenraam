@@ -171,6 +171,19 @@ factor: an approved device still has to present a code.
 
 ## Secrets and data files
 
+Personal-access tokens (#334) are managed at **Settings → Security**. Create a
+named token, choose its read permissions and lifetime, confirm your password,
+then save the plaintext when it is shown once. Default expiry is 30 days;
+the maximum is 365 days. Use `Authorization: Bearer <token>` over HTTPS with
+the [explicitly granted read endpoints](plans/personal-access-tokens-plan.md).
+No financial-write, backup, export, settings or token-management grant exists.
+Tokens store only SHA-256 hashes and do not need `REKENRAAM_SECRET_KEY`.
+Never put tokens in URLs or configure proxy logs to capture Authorization.
+Revoke unwanted tokens here; `recover-owner` revokes all tokens with sessions.
+Restoring an older backup restores its credential state, so revoke tokens after
+restoring an untrusted snapshot. [ADR 0018](adrs/0018-personal-access-token-boundary.md)
+records the exact authentication and event-bookkeeping boundary.
+
 `REKENRAAM_SECRET_KEY` encrypts stored online-provider credentials **and the
 MFA shared secret**. It is a
 base64 value for exactly 32 random bytes:
@@ -230,8 +243,19 @@ The Docker build context admits only the source inputs used by the Dockerfile.
 generated dependencies/output, so these do not reach a remote builder. The
 runtime stage applies available Debian package updates before installing its
 utilities. Rebuild regularly; this does not mean the image has no advisories.
-The [2026-10-18 audit](reviews/deployment-audit-2026-10-18.md) records the scan
-and the remaining advisory review in #337.
+The [2026-10-20 image review](reviews/runtime-image-advisory-audit-2026-10-20.md)
+classifies the current residual inventory against the actual app linkage and
+fixed loopback health check. No application exploit was reproduced; this is
+not a zero-advisory or blanket safety claim. **Release is on hold and #337
+is blocked on the owner's explicit disposition of the recorded inventory and
+limits.** The separate [bundled SQLite review
+(#354)](reviews/native-sqlite-advisory-audit-2026-10-20.md) is complete: malformed
+search refusal #355 is fixed; two reproduced upstream correctness defects are
+retained in #356, blocked on a released driver carrying their fixes. No affected
+application financial consumer or native memory exploit was reproduced.
+Debian-package and Go-module scans alone do not establish native-engine status.
+The [2026-10-18 deployment audit](reviews/deployment-audit-2026-10-18.md)
+retains the original package-update evidence.
 
 ## Backups
 

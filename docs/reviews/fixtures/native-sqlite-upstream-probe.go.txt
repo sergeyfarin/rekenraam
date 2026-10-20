@@ -1,0 +1,47 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/url"
+	"os"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+func main() {
+	database, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	defer database.Close()
+	database.SetMaxOpenConns(1)
+	var version, source, rendered string
+	var valid, indexed, plain int
+	check := func(err error) {
+		if err != nil {
+			panic(err)
+		}
+	}
+	check(database.QueryRow("SELECT sqlite_version(),sqlite_source_id()").Scan(&version, &source))
+	check(database.QueryRow(`SELECT json_set('[0x1F]', '$[1]', 2), json_valid(json_set('[0x1F]', '$[1]', 2))`).Scan(&rendered, &valid))
+	_, err = database.Exec(`CREATE TABLE t(a INT,b); INSERT INTO t VALUES(0,'old'); CREATE INDEX i ON t(a+1)`)
+	check(err)
+	check(database.QueryRow(`SELECT count(*) FROM (SELECT 1), t WHERE a+1 = (SELECT 1) AND a = 0`).Scan(&indexed))
+	check(database.QueryRow(`SELECT count(*) FROM (SELECT 1), t NOT INDEXED WHERE a+1 = (SELECT 1) AND a = 0`).Scan(&plain))
+	_, err = database.Exec(`UPDATE t SET b = 'new' FROM (SELECT 1) WHERE a+1 = (SELECT 1) AND a = 0`)
+	check(err)
+	var updated string
+	check(database.QueryRow(`SELECT b FROM t`).Scan(&updated))
+	result := map[string]any{"version": version, "source_id": source, "json_rendered": rendered, "json_valid_actual": valid, "json_valid_expected": 1, "index_count_actual": indexed, "index_count_expected": 1, "not_indexed_control": plain, "update_actual": updated, "update_expected": "new"}
+	if len(os.Args) == 2 {
+		uri := (&url.URL{Scheme: "file", Path: os.Args[1], RawQuery: "mode=ro"}).String()
+		schema, err := sql.Open("sqlite3", uri)
+		check(err)
+		defer schema.Close()
+		var expressions int
+		check(schema.QueryRow(`SELECT count(*) FROM sqlite_schema s JOIN pragma_index_xinfo(s.name) x WHERE s.type='index' AND x.cid=-2`).Scan(&expressions))
+		result["application_expression_index_keys"] = expressions
+	}
+	check(json.NewEncoder(os.Stdout).Encode(result))
+}

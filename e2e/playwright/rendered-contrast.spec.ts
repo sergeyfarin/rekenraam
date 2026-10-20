@@ -58,3 +58,27 @@ test('a contrast finding outside a nested dialog is never re-measured', async ({
   expect(kept).toHaveLength(1);
   expect(kept[0].summary).toContain('not nested');
 });
+
+for (const [color, ratio] of [['#333', 12.63], ['#999', 2.85]] as const) {
+  test(`rendered text measurement respects production style CSP (${color})`, async ({ page }) => {
+    await nestedDialog(page, color);
+    // Apply the real app's style policy after the fixture's own CSS has
+    // loaded. Subsequent injected styles must obey it, as on the real page.
+    await page.evaluate(() => {
+      const policy = document.createElement('meta');
+      policy.httpEquiv = 'Content-Security-Policy';
+      policy.content = "style-src 'self'";
+      document.head.append(policy);
+    });
+    const before = await page.locator('#probe').evaluate((node) => [node, ...node.querySelectorAll('*')].map((element) => element.getAttribute('style')));
+    const contrast = await renderedTextContrast(page, '#probe');
+    expect(contrast?.glyphPixels).toBeGreaterThan(0);
+    expect(contrast!.ratio).toBeCloseTo(ratio, 1);
+    const after = await page.locator('#probe').evaluate((node) => [node, ...node.querySelectorAll('*')].map((element) => element.getAttribute('style')));
+    expect(after).toEqual(before);
+    const finding = { id: 'color-contrast', help: 'contrast', nodes: 1, targets: ['#probe'], summary: 'axe: nested background' };
+    const notes: string[] = [];
+    const kept = await withRenderedContrast(page, [finding], notes);
+    expect(kept).toHaveLength(ratio >= 4.5 ? 0 : 1);
+  });
+}
