@@ -17,10 +17,10 @@
   let {
     kind,
     className = 'size-4'
-  } = $props<{
+  }: {
     kind: AccountKind;
     className?: string;
-  }>();
+  } = $props();
 </script>
 
 {#if kind === 'cash'}

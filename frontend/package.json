@@ -20,7 +20,7 @@
         "@inlang/plugin-m-function-matcher": "2.3.4",
         "@inlang/plugin-message-format": "4.5.4",
         "@internationalized/date": "3.12.4",
-        "@lucide/svelte": "1.58.0",
+        "@lucide/svelte": "1.60.0",
         "@sveltejs/adapter-static": "4.0.0",
         "@sveltejs/kit": "3.1.0",
         "@sveltejs/vite-plugin-svelte": "7.3.1",
@@ -42,8 +42,8 @@
         "vitest": "5.0.5"
     },
     "dependencies": {
-        "@inlang/paraglide-js": "2.29.0",
-        "@tanstack/svelte-query": "6.3.3",
+        "@inlang/paraglide-js": "2.29.1",
+        "@tanstack/svelte-query": "6.3.5",
         "@tanstack/svelte-table": "9.3.1",
         "date-fns": "4.4.0",
         "minisearch": "7.2.0",

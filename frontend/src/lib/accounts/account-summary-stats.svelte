@@ -1,11 +1,11 @@
 <script lang="ts">
   import { m } from '#lib/paraglide/messages.js';
 
-  let { activeCount, closedCount, visibleCount } = $props<{
+  let { activeCount, closedCount, visibleCount }: {
     activeCount: number;
     closedCount: number;
     visibleCount: number;
-  }>();
+  } = $props();
 </script>
 
 <div class="grid grid-cols-3 overflow-hidden rounded-[var(--radius-panel)] border border-border bg-border sm:min-w-80">

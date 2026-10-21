@@ -38,7 +38,7 @@
     onSaved,
     onCancel,
     onQuickInstitution
-  } = $props<{
+  }: {
     mode: AccountEditorMode;
     account?: AccountResponse;
     accounts: AccountResponse[];
@@ -50,7 +50,7 @@
     onSaved: () => Promise<void> | void;
     onCancel: () => void;
     onQuickInstitution: () => void;
-  }>();
+  } = $props();
 
   const inputClass =
     'mt-1.5 h-10 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted hover:bg-control-hover focus:border-accent disabled:cursor-not-allowed disabled:opacity-70';

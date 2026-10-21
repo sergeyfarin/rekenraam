@@ -52,7 +52,7 @@
     institutionAccountCounts,
     allAccountChildCounts,
     actionPendingKey
-  } = $props<{
+  }: {
     accounts: AccountResponse[];
     institutions: InstitutionResponse[];
     currenciesByID: ReadonlyMap<number, CurrencyResponse>;
@@ -68,7 +68,7 @@
     institutionAccountCounts: ReadonlyMap<number, number>;
     allAccountChildCounts: ReadonlyMap<number, number>;
     actionPendingKey: string;
-  }>();
+  } = $props();
 
   const collator = $derived(new Intl.Collator(getLocale(), { sensitivity: 'base', numeric: true }));
   const accountTreeRoots = $derived.by(() => buildInstitutionRoots(accounts, institutions));
@@ -267,10 +267,11 @@
 
         <div class="flex min-w-0 items-center justify-start gap-1 lg:justify-end">
           {#if root.institution}
+            {@const institution = root.institution}
             <button
               type="button"
               class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
-              onclick={() => onEditInstitution(root.institution)}
+              onclick={() => onEditInstitution(institution)}
               aria-label={m.institutions_action_edit({ name: root.institution.name })}
               title={m.institutions_action_edit({ name: root.institution.name })}
             >
@@ -279,7 +280,7 @@
             <button
               type="button"
               class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-danger/30 bg-danger-soft text-danger transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              onclick={() => onDeleteInstitution(root.institution)}
+              onclick={() => onDeleteInstitution(institution)}
               disabled={(institutionAccountCounts.get(root.institution.id) ?? 0) > 0 || actionPendingKey === `institution-delete:${root.institution.id}`}
               aria-label={m.institutions_action_delete({ name: root.institution.name })}
               title={m.institutions_action_delete({ name: root.institution.name })}

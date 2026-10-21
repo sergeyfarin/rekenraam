@@ -6,10 +6,10 @@
   let {
     tone = 'neutral',
     children
-  } = $props<{
+  }: {
     tone?: Tone;
     children?: Snippet;
-  }>();
+  } = $props();
 </script>
 
 <span

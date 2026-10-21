@@ -11,7 +11,7 @@
     collapseLabel,
     onToggle,
     children
-  } = $props<{
+  }: {
     depth?: number;
     expandable?: boolean;
     expanded?: boolean;
@@ -19,7 +19,7 @@
     collapseLabel: string;
     onToggle: () => void;
     children?: Snippet;
-  }>();
+  } = $props();
 
   const boundedDepth = $derived(Math.max(0, Math.min(depth, 6)));
   const toggleLabel = $derived(expanded ? collapseLabel : expandLabel);

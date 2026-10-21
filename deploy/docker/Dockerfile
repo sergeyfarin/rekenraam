@@ -10,7 +10,7 @@ COPY api ./api
 WORKDIR /src/frontend
 RUN pnpm run build
 
-FROM golang:1.27.2-trixie AS backend
+FROM golang:1.27.3-trixie AS backend
 WORKDIR /src
 COPY backend ./backend
 COPY scripts/native-sqlite-env.sh ./scripts/native-sqlite-env.sh

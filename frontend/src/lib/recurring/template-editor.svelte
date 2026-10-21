@@ -9,10 +9,10 @@
   import type { TransactionRequest } from '#lib/api/transactions.ts';
   import { templateValues, templatePatch, weekdayLabel, displayDate } from './recurring-model';
 
-  let { template, today, csrfToken, onSaved, onCancel, onPendingChange } = $props<{
+  let { template, today, csrfToken, onSaved, onCancel, onPendingChange }: {
     template?: RecurringTemplate; today: string; csrfToken: string;
     onSaved: () => Promise<void>; onCancel: () => void; onPendingChange: (pending:boolean) => void;
-  }>();
+  } = $props();
   // The enclosing keyed dialog gives each editor one initial snapshot. Query
   // refreshes must never overwrite an in-progress form.
   const initial = untrack(() => templateValues(template, today));

@@ -7,11 +7,11 @@
     query = $bindable(''),
     statusFilter = $bindable<StatusFilter>('active'),
     accountTypeFilter = $bindable<AccountTypeFilter>('all')
-  } = $props<{
+  }: {
     query: string;
     statusFilter: StatusFilter;
     accountTypeFilter: AccountTypeFilter;
-  }>();
+  } = $props();
 
   const controlClass =
     'mt-1.5 h-10 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted hover:bg-control-hover focus:border-accent';

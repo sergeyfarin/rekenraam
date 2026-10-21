@@ -17,12 +17,12 @@
     resolutions,
     csrfToken,
     onresolve
-  } = $props<{
+  }: {
     rows: ImportStagedRow[];
     resolutions: Map<number, ImportResolution>;
     csrfToken: string;
     onresolve: (rowIDs: number[], payee: PayeeResponse) => void;
-  }>();
+  } = $props();
 
   const queryClient = useQueryClient();
   const payeesQuery = createQuery(() => ({ ...payeesQueryOptions(), retry: false }));

@@ -19,13 +19,13 @@
     csrfToken,
     onSaved,
     onCancel
-  } = $props<{
+  }: {
     mode: InstitutionEditorMode;
     institution?: InstitutionResponse;
     csrfToken?: string;
     onSaved: (institution: InstitutionResponse) => Promise<void> | void;
     onCancel: () => void;
-  }>();
+  } = $props();
 
   const inputClass =
     'mt-1.5 h-10 w-full rounded-[var(--radius-control)] border border-border bg-control px-3 text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted hover:bg-control-hover focus:border-accent';

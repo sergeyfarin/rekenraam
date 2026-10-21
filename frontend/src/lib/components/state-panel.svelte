@@ -7,13 +7,13 @@
     copy,
     alert = false,
     children
-  } = $props<{
+  }: {
     title: string;
     copy: string;
     /** An error state: announce the title and copy (not the retry controls). */
     alert?: boolean;
     children?: Snippet;
-  }>();
+  } = $props();
 </script>
 
 <Panel>

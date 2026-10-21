@@ -6,12 +6,12 @@
     title,
     copy,
     children
-  } = $props<{
+  }: {
     eyebrow?: string;
     title: string;
     copy?: string;
     children?: Snippet;
-  }>();
+  } = $props();
 </script>
 
 <header class="border-b border-border bg-background/92 px-4 py-4 sm:px-6 lg:px-8">

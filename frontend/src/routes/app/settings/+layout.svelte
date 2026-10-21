@@ -9,7 +9,7 @@
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import { m } from '#lib/paraglide/messages.js';
 
-  let { children } = $props<{ children?: Snippet }>();
+  let { children }: { children?: Snippet } = $props();
 
   const pathname = $derived(page.url.pathname);
 

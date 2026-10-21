@@ -93,7 +93,7 @@
     saveTemplate,
     onPendingChange,
     preservePostings = false
-  } = $props<{
+  }: {
     mode: EditorMode;
     transaction?: TransactionResponse;
     csrfToken?: string;
@@ -107,7 +107,7 @@
     preservePostings?: boolean;
     onPendingChange?: (pending: boolean) => void;
     onCancel: () => void;
-  }>();
+  } = $props();
 
   // A save refused because the transaction changed elsewhere reloads it here,
   // so the form shows the newer version instead of re-sending a stale one

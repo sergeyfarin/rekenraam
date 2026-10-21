@@ -8,11 +8,11 @@
     padding = 'md',
     variant = 'default',
     children
-  } = $props<{
+  }: {
     padding?: Padding;
     variant?: Variant;
     children?: Snippet;
-  }>();
+  } = $props();
 
   const paddingClass = $derived.by(() => {
     switch (padding) {

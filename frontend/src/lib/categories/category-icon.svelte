@@ -28,10 +28,10 @@
   let {
     icon = 'tags',
     className = 'size-4'
-  } = $props<{
+  }: {
     icon?: CategoryIconName | string;
     className?: string;
-  }>();
+  } = $props();
 </script>
 
 {#if icon === 'banknote'}
