@@ -1,0 +1,15 @@
+{
+  "ref": "13d15eabd68ed2d3b6177512c9c8fe56c528bbf0",
+  "originalFiles": 562,
+  "components": 153,
+  "scriptBlocks": 154,
+  "projections": 405,
+  "svelteCompiler": "5.57.2",
+  "goPositive": true,
+  "goNegative": true,
+  "webPositiveFormats": [
+    "markup",
+    "typescript"
+  ],
+  "webNegative": true
+}

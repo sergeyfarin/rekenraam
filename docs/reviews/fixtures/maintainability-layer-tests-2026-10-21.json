@@ -1,0 +1,327 @@
+{
+  "backend": [
+    {
+      "passed": [
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningPreservesExactMoney/smoothing_is_exact_rational_arithmetic"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningAllocationIsExact"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/unknown_model"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/history_without_the_model"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/categories_without_the_model"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/patterns_without_the_model"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/model_without_confirmed_history"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/unparseable_history_date"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/unsupported_pattern"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/duplicate_override"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/override_outside_the_selected_categories"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/non-positive_category"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/too_many_categories"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/the_model_off_keeps_its_pre-M3_meaning"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/an_absent_override_defaults_to_weekly"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation/only_expense_accounts_may_be_selected"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningOptionValidation"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningPreservesExactMoney/coefficients_beyond_2^53_survive_selection"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningPreservesExactMoney/mixed_posted_scales_share_one_exact_level"
+        },
+        {
+          "elapsed": 0.01,
+          "package": "rekenraam/backend/internal/app",
+          "test": "TestForecastLearningPreservesExactMoney"
+        },
+        {
+          "elapsed": 1.052,
+          "package": "rekenraam/backend/internal/app",
+          "test": null
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/history_without_the_model"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/category_without_the_model"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/pattern_without_the_model"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/unknown_model"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/model_without_confirmed_history"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/malformed_history_date"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/pattern_without_a_colon"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/pattern_without_a_pattern"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/pattern_without_a_category"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/unsupported_pattern"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/negative_category"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions/still_unknown_parameter"
+        },
+        {
+          "elapsed": 1.32,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastLearningAPIRejectsOrphanAndInvalidOptions"
+        },
+        {
+          "elapsed": 0.18,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestForecastAPIRequiresOwnerAndIsReadOnly"
+        },
+        {
+          "elapsed": 0.09,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency/whole_period"
+        },
+        {
+          "elapsed": 0.08,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency/only_first_gain"
+        },
+        {
+          "elapsed": 0.08,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency/loss_only"
+        },
+        {
+          "elapsed": 0.79,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestFinancialGainsHTTPPreservesScaleAndSumsOneTotalPerCurrency"
+        },
+        {
+          "elapsed": 0.35,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestInvestmentMoneyAboveJavaScriptSafeIntegerRoundTripsAsStrings"
+        },
+        {
+          "elapsed": 3.691,
+          "package": "rekenraam/backend/internal/api",
+          "test": null
+        }
+      ],
+      "selection": "existing-focused"
+    },
+    {
+      "passed": [
+        {
+          "elapsed": 0.02,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestMaintainabilityForecastCalendarAdmissionProbe/2026-02-28"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestMaintainabilityForecastCalendarAdmissionProbe/2026-02-29"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestMaintainabilityForecastCalendarAdmissionProbe/2026-02-31"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestMaintainabilityForecastCalendarAdmissionProbe/2026-04-31"
+        },
+        {
+          "elapsed": 0.02,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestMaintainabilityForecastCalendarAdmissionProbe/2024-02-29"
+        },
+        {
+          "elapsed": 0,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestMaintainabilityForecastCalendarAdmissionProbe/2026-13-01"
+        },
+        {
+          "elapsed": 1.27,
+          "package": "rekenraam/backend/internal/api",
+          "test": "TestMaintainabilityForecastCalendarAdmissionProbe"
+        },
+        {
+          "elapsed": 2.319,
+          "package": "rekenraam/backend/internal/api",
+          "test": null
+        }
+      ],
+      "selection": "disposable-calendar-http-probe"
+    }
+  ],
+  "backend_race": true,
+  "frontend": [
+    {
+      "files": [
+        {
+          "file": "frontend/src/lib/dates/calendar-date.test.ts",
+          "tests": 1
+        },
+        {
+          "file": "frontend/src/lib/forecast/forecast-model.test.ts",
+          "tests": 16
+        },
+        {
+          "file": "frontend/src/lib/money/amount.test.ts",
+          "tests": 99
+        },
+        {
+          "file": "frontend/src/lib/money/format.test.ts",
+          "tests": 45
+        },
+        {
+          "file": "frontend/src/lib/investments/form-amounts.test.ts",
+          "tests": 39
+        },
+        {
+          "file": "frontend/src/lib/investments/internal-transfer-amounts.test.ts",
+          "tests": 5
+        },
+        {
+          "file": "frontend/src/lib/investments/trade-economics.test.ts",
+          "tests": 4
+        },
+        {
+          "file": "frontend/src/lib/pricing/form.test.ts",
+          "tests": 3
+        },
+        {
+          "file": "frontend/src/lib/reports/report-series.test.ts",
+          "tests": 8
+        },
+        {
+          "file": "frontend/src/lib/reports/spending.test.ts",
+          "tests": 23
+        }
+      ],
+      "passed": 243,
+      "total": 243
+    },
+    {
+      "files": [
+        {
+          "file": "frontend/src/lib/investments/basis-provenance.test.ts",
+          "tests": 4
+        },
+        {
+          "file": "frontend/src/lib/investments/provider-dividend.test.ts",
+          "tests": 5
+        },
+        {
+          "file": "frontend/src/lib/investments/split-ratio.test.ts",
+          "tests": 29
+        }
+      ],
+      "passed": 38,
+      "total": 38
+    }
+  ],
+  "source_sha": "13d15eabd68ed2d3b6177512c9c8fe56c528bbf0"
+}

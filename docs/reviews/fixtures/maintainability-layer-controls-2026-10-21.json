@@ -1,0 +1,47 @@
+{
+  "ref": "13d15eabd68ed2d3b6177512c9c8fe56c528bbf0",
+  "typescript": "6.0.3",
+  "svelte": "5.57.2",
+  "synthetic": {
+    "tsAndSvelteAliasedQueries": 2,
+    "apiCalls": 4,
+    "numericIncludingTemplate": 2,
+    "arithmeticOperators": 1,
+    "repeatedComponents": 1,
+    "realTransportCalls": 2,
+    "commentStringTransportCalls": 0,
+    "loopContexts": true
+  },
+  "forecastCalendarProbe": [
+    {
+      "date": "2026-02-28",
+      "forecastAccepts": true,
+      "calendarValid": true
+    },
+    {
+      "date": "2026-02-29",
+      "forecastAccepts": true,
+      "calendarValid": false
+    },
+    {
+      "date": "2026-02-31",
+      "forecastAccepts": true,
+      "calendarValid": false
+    },
+    {
+      "date": "2026-04-31",
+      "forecastAccepts": true,
+      "calendarValid": false
+    },
+    {
+      "date": "2024-02-29",
+      "forecastAccepts": true,
+      "calendarValid": true
+    },
+    {
+      "date": "2026-13-01",
+      "forecastAccepts": false,
+      "calendarValid": false
+    }
+  ]
+}

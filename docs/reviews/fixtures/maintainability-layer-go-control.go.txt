@@ -1,0 +1,18 @@
+package api
+
+import (
+	sqlalias "database/sql"
+	ex "rekenraam/backend/internal/exact"
+	"strconv"
+)
+
+// Parser-only control: imports and receiver types need not resolve.
+func probe() {
+	ex.NewScaledInt()
+	tx.QueryContext(ctx, "synthetic query")
+	strconv.ParseFloat("1", 64)
+	float64(1)
+	_ = 1 + 2
+	_ = "QueryContext() ex.NewScaledInt()"
+	// ex.NewScaledInt()
+}

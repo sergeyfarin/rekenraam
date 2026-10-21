@@ -1,0 +1,92 @@
+{
+  "compiled_runtime_go_files": 309,
+  "counts": {
+    "abstraction": {
+      "data-carrier-not-configuration": 1,
+      "retain-boundary-no-measured-cost": 21,
+      "unreferenced-declaration-inventory": 3
+    },
+    "deadcode": {
+      "test-root-reachable": 55,
+      "unreachable-runtime-helper": 6,
+      "unreachable-test-helper": 2
+    },
+    "knip": {
+      "in-file-reference-export-visibility": 137,
+      "production-only-surface": 15,
+      "unreferenced-export": 41,
+      "unreferenced-type": 35
+    }
+  },
+  "deadcode_go_build_version": "go1.27.0",
+  "package_loading_go_version": "go1.27.2",
+  "deadcode_module": "golang.org/x/tools@v0.51.0",
+  "excluded_platform_files": [
+    "backend/internal/app/backup_space_other.go",
+    "backend/internal/lockfile/lockfile_other.go"
+  ],
+  "go_production_unreachable": 61,
+  "go_test_view_unreachable": 8,
+  "knip": "6.42.1",
+  "limitations": [
+    "Go RTA is for one platform/tag set; alternate-platform functions are not certified.",
+    "A production-unreachable function may be required by tests; reachability does not measure correctness or performance.",
+    "Knip exports mean external visibility, not necessarily an unused implementation.",
+    "The Svelte compiler plugin keeps imports and template dynamic imports, not all component-local execution; it can conservatively retain imports.",
+    "The type index counts named Go interface and Option(s)-struct references and member-reference owners, not dynamic call counts or all anonymous/callback options.",
+    "Generated frontend context and frozen dependencies are supplied for resolution; generated files are excluded from findings."
+  ],
+  "module_packages": 16,
+  "node": "v24.21.0",
+  "platform": {
+    "CGO_ENABLED": "1",
+    "GOARCH": "amd64",
+    "GOOS": "linux",
+    "tags": [
+      "fts5",
+      "netgo",
+      "osusergo"
+    ]
+  },
+  "runtime_source_manifest": "maintainability-clone-inputs-2026-10-21.json",
+  "source_sha": "13d15eabd68ed2d3b6177512c9c8fe56c528bbf0",
+  "tool_sha256": {
+    "deadcode-pinned": "0ef0a2e0c6e17c05343c66139fa04c823f26d7086aabdeef4d4b70668d2c66f2",
+    "go-abstractions-pinned": "3d45981d48f21cfe19540cd78d8fc4f2e0fe86bc9fc136330a0fd5af191d9c3c"
+  },
+  "type_index": {
+    "definitions": 25,
+    "member_reference_sites": 141,
+    "named_interfaces": 20,
+    "options_named_structs": 5,
+    "total_rows": 546,
+    "type_reference_sites": 380
+  },
+  "web_views": {
+    "context": {
+      "exports": 139,
+      "files": 0,
+      "types": 74,
+      "unresolved": 0
+    },
+    "default": {
+      "exports": 139,
+      "files": 5,
+      "types": 74,
+      "unresolved": 0
+    },
+    "ignore_in_file_references": {
+      "exports": 41,
+      "files": 0,
+      "types": 35,
+      "unresolved": 0
+    },
+    "production": {
+      "exports": 150,
+      "files": 0,
+      "types": 75,
+      "unresolved": 0
+    }
+  },
+  "working_head": "809613f3655c035b334b9083220eebbde5179afd"
+}

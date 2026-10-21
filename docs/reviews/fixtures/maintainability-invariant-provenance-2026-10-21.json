@@ -1,0 +1,24 @@
+{
+  "frontend_files": 40,
+  "frontend_lexical_sites": 169,
+  "go_site_kinds": {
+    "call": 834,
+    "definition": 105,
+    "reference": 367
+  },
+  "go_sites": 1306,
+  "limitations": [
+    "Go names are syntactic, not type-resolved: Parse/Int64 and references can be unrelated.",
+    "Frontend matches are lexical call-shaped sites, not semantic enforcement.",
+    "SQL rows are Up source declarations; later migrations can replace triggers.",
+    "Only the selected gate names are indexed; this is not an exhaustive call graph."
+  ],
+  "runtime_go_files": 311,
+  "runtime_go_functions": 3336,
+  "selected_gate_names": 101,
+  "source_sha": "13d15eabd68ed2d3b6177512c9c8fe56c528bbf0",
+  "up_migration_files": 20,
+  "up_migration_files_with_triggers": 14,
+  "up_trigger_declarations": 177,
+  "working_head": "4ff4a01047143817f8e8d08205e4c5d174147ba8"
+}

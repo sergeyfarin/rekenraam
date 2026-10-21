@@ -1,0 +1,102 @@
+[
+	{
+		"Initial": "rekenraam/backend/cmd/rekenraam.main",
+		"Kind": "dynamic",
+		"Position": {
+			"File": "cmd/rekenraam/main.go",
+			"Line": 13,
+			"Col": 2
+		},
+		"Callee": "rekenraam/backend/cmd/rekenraam.runServe$2"
+	},
+	{
+		"Kind": "static",
+		"Position": {
+			"File": "cmd/rekenraam/command.go",
+			"Line": 73,
+			"Col": 44
+		},
+		"Callee": "net/http.Server.ListenAndServe"
+	},
+	{
+		"Kind": "static",
+		"Position": {
+			"File": "/home/coder/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.2.linux-amd64/src/net/http/server.go",
+			"Line": 3485,
+			"Col": 16
+		},
+		"Callee": "net/http.Server.Serve"
+	},
+	{
+		"Kind": "static",
+		"Position": {
+			"File": "/home/coder/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.2.linux-amd64/src/net/http/server.go",
+			"Line": 3604,
+			"Col": 3
+		},
+		"Callee": "net/http.conn.serve"
+	},
+	{
+		"Kind": "static",
+		"Position": {
+			"File": "/home/coder/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.2.linux-amd64/src/net/http/server.go",
+			"Line": 2157,
+			"Col": 36
+		},
+		"Callee": "net/http.serverHandler.ServeHTTP"
+	},
+	{
+		"Kind": "dynamic",
+		"Position": {
+			"File": "/home/coder/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.2.linux-amd64/src/net/http/server.go",
+			"Line": 3436,
+			"Col": 19
+		},
+		"Callee": "net/http.HandlerFunc.ServeHTTP"
+	},
+	{
+		"Kind": "dynamic",
+		"Position": {
+			"File": "/home/coder/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.2.linux-amd64/src/net/http/server.go",
+			"Line": 2358,
+			"Col": 3
+		},
+		"Callee": "rekenraam/backend/internal/api.createInvestmentGainsRun$1"
+	},
+	{
+		"Kind": "static",
+		"Position": {
+			"File": "internal/api/investment_gains_runs.go",
+			"Line": 38,
+			"Col": 41
+		},
+		"Callee": "rekenraam/backend/internal/app.InvestmentService.CreateGainsRun"
+	},
+	{
+		"Kind": "static",
+		"Position": {
+			"File": "internal/app/investment_gains_runs.go",
+			"Line": 77,
+			"Col": 42
+		},
+		"Callee": "rekenraam/backend/internal/app.InvestmentService.GainsStatement"
+	},
+	{
+		"Kind": "static",
+		"Position": {
+			"File": "internal/app/investment_gains_statement.go",
+			"Line": 120,
+			"Col": 61
+		},
+		"Callee": "rekenraam/backend/internal/db.InvestmentRepository.DatedPositionsWithGains"
+	},
+	{
+		"Kind": "static",
+		"Position": {
+			"File": "internal/db/investment_dated_valuation.go",
+			"Line": 36,
+			"Col": 23
+		},
+		"Callee": "rekenraam/backend/internal/db.valuePositions"
+	}
+]

@@ -1,0 +1,654 @@
+[
+	{
+		"Name": "api",
+		"Path": "rekenraam/backend/internal/api",
+		"Funcs": [
+			{
+				"Name": "RegisterRoutes",
+				"Position": {
+					"File": "internal/api/health.go",
+					"Line": 15,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "rawJSONString",
+				"Position": {
+					"File": "internal/api/imports.go",
+					"Line": 1220,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	},
+	{
+		"Name": "app",
+		"Path": "rekenraam/backend/internal/app",
+		"Funcs": [
+			{
+				"Name": "NewAuthService",
+				"Position": {
+					"File": "internal/app/auth.go",
+					"Line": 208,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "BackupService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/backups.go",
+					"Line": 100,
+					"Col": 25
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "BudgetService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/budgets.go",
+					"Line": 81,
+					"Col": 25
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "CategoryService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/categories.go",
+					"Line": 154,
+					"Col": 27
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "CurrencyService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/currencies.go",
+					"Line": 124,
+					"Col": 27
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ExportService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/exports.go",
+					"Line": 37,
+					"Col": 25
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ForecastService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/forecast.go",
+					"Line": 231,
+					"Col": 27
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ForecastLearningBaselines",
+				"Position": {
+					"File": "internal/app/forecast_learning.go",
+					"Line": 400,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ForecastLearningSeasonalBaselines",
+				"Position": {
+					"File": "internal/app/forecast_learning.go",
+					"Line": 414,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "parseQIF",
+				"Position": {
+					"File": "internal/app/import_qif.go",
+					"Line": 121,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ImportService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/import_service.go",
+					"Line": 97,
+					"Col": 25
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.AlternativeGainsProjection",
+				"Position": {
+					"File": "internal/app/investment_alternative_gains.go",
+					"Line": 31,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.ReplaceCashInLieuReconciliationImpact",
+				"Position": {
+					"File": "internal/app/investment_cash_in_lieu.go",
+					"Line": 256,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.PreviewCashStockMergerReconciliationImpact",
+				"Position": {
+					"File": "internal/app/investment_cash_stock_merger.go",
+					"Line": 270,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.SetGainsReadStageForTest",
+				"Position": {
+					"File": "internal/app/investment_gains_read.go",
+					"Line": 35,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "mergeInvestmentCorrectionImpacts",
+				"Position": {
+					"File": "internal/app/investment_sale_replacement.go",
+					"Line": 166,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.PreviewShareExchangeReconciliationImpact",
+				"Position": {
+					"File": "internal/app/investment_share_exchange.go",
+					"Line": 239,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.PreviewSpinOffReconciliationImpact",
+				"Position": {
+					"File": "internal/app/investment_spin_off.go",
+					"Line": 247,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.ReverseSplit",
+				"Position": {
+					"File": "internal/app/investment_split_correction.go",
+					"Line": 68,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/investments.go",
+					"Line": 799,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.reinvestedDividendPlan",
+				"Position": {
+					"File": "internal/app/investments.go",
+					"Line": 1975,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.AcceptSuggestion",
+				"Position": {
+					"File": "internal/app/investments.go",
+					"Line": 2198,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentService.ListUnrealizedGains",
+				"Position": {
+					"File": "internal/app/investments.go",
+					"Line": 3278,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "PricingService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/pricing.go",
+					"Line": 226,
+					"Col": 26
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "RecurringService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/recurring.go",
+					"Line": 81,
+					"Col": 28
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "SelfCheckService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/self_check.go",
+					"Line": 103,
+					"Col": 28
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	},
+	{
+		"Name": "db",
+		"Path": "rekenraam/backend/internal/db",
+		"Funcs": [
+			{
+				"Name": "BackgroundWorkRepository.CompleteBackgroundWorkAndEnqueue",
+				"Position": {
+					"File": "internal/db/background_work.go",
+					"Line": 191,
+					"Col": 36
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "CommodityRepository.CurrentCurrencyByID",
+				"Position": {
+					"File": "internal/db/commodities.go",
+					"Line": 186,
+					"Col": 31
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ForecastRepository.LoadSnapshot",
+				"Position": {
+					"File": "internal/db/forecast.go",
+					"Line": 229,
+					"Col": 30
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ForecastRepository.LoadLearningSnapshot",
+				"Position": {
+					"File": "internal/db/forecast_learning.go",
+					"Line": 54,
+					"Col": 30
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ImportRepository.UpdateImportStagedRowResolution",
+				"Position": {
+					"File": "internal/db/imports.go",
+					"Line": 1395,
+					"Col": 28
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ImportRepository.CreateCommitIdentity",
+				"Position": {
+					"File": "internal/db/imports.go",
+					"Line": 1658,
+					"Col": 28
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "ImportRepository.CountStagedRowsByCommitStatus",
+				"Position": {
+					"File": "internal/db/imports.go",
+					"Line": 1755,
+					"Col": 28
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.InvestmentReplayClosure",
+				"Position": {
+					"File": "internal/db/investment_replay_closure.go",
+					"Line": 39,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.ListInvestmentReplayIntents",
+				"Position": {
+					"File": "internal/db/investment_replay_intents.go",
+					"Line": 143,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.ReplaceSale",
+				"Position": {
+					"File": "internal/db/investment_sale_replacement.go",
+					"Line": 13,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.SimulateSaleReplacement",
+				"Position": {
+					"File": "internal/db/investment_sale_replacement_simulation.go",
+					"Line": 15,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.DisposeLots",
+				"Position": {
+					"File": "internal/db/investments.go",
+					"Line": 1225,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.SimulateDisposeLots",
+				"Position": {
+					"File": "internal/db/investments.go",
+					"Line": 1247,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "disposeLotsTx",
+				"Position": {
+					"File": "internal/db/investments.go",
+					"Line": 1287,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.CreateTransactionAndDisposeLots",
+				"Position": {
+					"File": "internal/db/investments.go",
+					"Line": 2024,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.CreateTransactionAndDisposeLotsWithPostWrite",
+				"Position": {
+					"File": "internal/db/investments.go",
+					"Line": 2036,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.SaveAutomationRule",
+				"Position": {
+					"File": "internal/db/investments.go",
+					"Line": 2643,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "InvestmentRepository.PositionsWithGains",
+				"Position": {
+					"File": "internal/db/investments.go",
+					"Line": 3627,
+					"Col": 32
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "requirePositionBasisRangeTx",
+				"Position": {
+					"File": "internal/db/investments.go",
+					"Line": 3771,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "TransactionRepository.LedgerPostingsInRange",
+				"Position": {
+					"File": "internal/db/ledger.go",
+					"Line": 230,
+					"Col": 33
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "PayeeRepository.PayeeNamesByID",
+				"Position": {
+					"File": "internal/db/payees.go",
+					"Line": 126,
+					"Col": 27
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "PricingRepository.PriceObservationByID",
+				"Position": {
+					"File": "internal/db/pricing.go",
+					"Line": 752,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "PricingRepository.ScheduledRefreshRunExistsOnDate",
+				"Position": {
+					"File": "internal/db/pricing.go",
+					"Line": 1130,
+					"Col": 29
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "RecurringRepository.CreateRecurringOccurrence",
+				"Position": {
+					"File": "internal/db/recurring.go",
+					"Line": 597,
+					"Col": 31
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "RecurringRepository.RecurringOccurrenceByID",
+				"Position": {
+					"File": "internal/db/recurring.go",
+					"Line": 619,
+					"Col": 31
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "RecurringRepository.ListRecurringOccurrences",
+				"Position": {
+					"File": "internal/db/recurring.go",
+					"Line": 672,
+					"Col": 31
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "DecodeRegisterCursor",
+				"Position": {
+					"File": "internal/db/transactions_read.go",
+					"Line": 865,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	},
+	{
+		"Name": "exact",
+		"Path": "rekenraam/backend/internal/exact",
+		"Funcs": [
+			{
+				"Name": "MustParse",
+				"Position": {
+					"File": "internal/exact/coefficient.go",
+					"Line": 43,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	},
+	{
+		"Name": "lockfile",
+		"Path": "rekenraam/backend/internal/lockfile",
+		"Funcs": [
+			{
+				"Name": "CheckAvailable",
+				"Position": {
+					"File": "internal/lockfile/lockfile.go",
+					"Line": 98,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	},
+	{
+		"Name": "trading212",
+		"Path": "rekenraam/backend/internal/onlinesource/trading212",
+		"Funcs": [
+			{
+				"Name": "SetMaxPagesForTest",
+				"Position": {
+					"File": "internal/onlinesource/trading212/fetcher.go",
+					"Line": 57,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	},
+	{
+		"Name": "testdb",
+		"Path": "rekenraam/backend/internal/testdb",
+		"Funcs": [
+			{
+				"Name": "Open",
+				"Position": {
+					"File": "internal/testdb/testdb.go",
+					"Line": 25,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "migratedTemplate",
+				"Position": {
+					"File": "internal/testdb/testdb.go",
+					"Line": 52,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "buildTemplate",
+				"Position": {
+					"File": "internal/testdb/testdb.go",
+					"Line": 59,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	}
+]

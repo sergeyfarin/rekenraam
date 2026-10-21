@@ -1,0 +1,665 @@
+kind,file,line,type_kind,declaration_file,type,owner,expression
+definition,backend/internal/api/server.go,11,options-struct,backend/internal/api/server.go,HandlerOptions,,"struct {
+	TrustProxyHeaders bool
+	TrustedProxyCIDRs []netip.Prefix
+	SetupToken        string
+}"
+definition,backend/internal/app/forecast_learning_overlay.go,61,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,,"struct {
+	AccountID       int64
+	Name            string
+	Code            string
+	BuiltinLabelKey string
+	ParentAccountID *int64
+}"
+definition,backend/internal/app/import_adapter.go,8,interface,backend/internal/app/import_adapter.go,SourceAdapter,,"interface {
+	// Kind returns the format/source identifier (e.g. ""qif"", ""csv"", ""ofx"").
+	Kind() string
+	// Detect reports the adapter's confidence that it can handle this input
+	// (sniff extension / magic bytes / headers) so the UI can auto-suggest.
+	Detect(input RawInput) Confidence
+	// Parse turns raw input + an optional provider profile into staged rows.
+	// It MUST NOT touch the ledger; it only emits canonical rows + warnings.
+	Parse(ctx context.Context, input RawInput, profile *ImportProfile) (ParseResult, error)
+}"
+definition,backend/internal/app/import_connections.go,28,interface,backend/internal/app/import_connections.go,ConnectionProber,,"interface {
+	// Probe returns nil if the key is valid, ErrProviderUnauthorized if the
+	// provider rejects it, or another error for transient failures.
+	// configJSON is the connection's non-secret provider config; sourceKind
+	// selects which provider's prober logic applies.
+	Probe(ctx context.Context, sourceKind string, apiKey string, configJSON string) error
+}"
+definition,backend/internal/app/import_qif.go,54,options-struct,backend/internal/app/import_qif.go,qifOptions,,"struct {
+	// dateOrder is the profile's date_layout; dateOrderAuto means detect it
+	// from the file.
+	dateOrder dateOrder
+	// decimalSeparator is the profile's decimal_separator; 0 means detect it
+	// per amount.
+	decimalSeparator rune
+}"
+definition,backend/internal/app/investments.go,50,interface,backend/internal/app/investments.go,InstrumentSearchProvider,,"interface {
+	SearchInstruments(ctx context.Context, query string) ([]InstrumentSearchCandidate, error)
+}"
+definition,backend/internal/app/investments.go,54,interface,backend/internal/app/investments.go,DividendProvider,,"interface {
+	FetchDividends(ctx context.Context, request CorporateEventProviderRequest) ([]ProviderInvestmentEvent, error)
+}"
+definition,backend/internal/app/investments.go,58,interface,backend/internal/app/investments.go,CorporateActionProvider,,"interface {
+	FetchCorporateActions(ctx context.Context, request CorporateEventProviderRequest) ([]ProviderInvestmentEvent, error)
+}"
+definition,backend/internal/app/transactions_types.go,395,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,,"struct {
+	// OwnerUserID resolves a blank transaction date; explicit transaction or
+	// journal-entry dates are independent of owner preferences.
+	OwnerUserID   int64
+	DefaultStatus string
+	// ForcedStatus, when non-empty, is the status that will actually be
+	// persisted regardless of what the request body's Status field says — used
+	// by the update path, where the transaction's current lifecycle state (not
+	// the request) decides whether the write stays ""draft"" or becomes
+	// ""posted"". Balance validation always runs against this final status, not
+	// whatever the caller claimed, so a request cannot dodge validateBalanced
+	// by naming a different status than the one that will actually land.
+	ForcedStatus     string
+	ExistingLineKeys map[string]bool
+	ExistingPostings map[string]existingPostingState
+	// AllowSubledgerManagedPostings lifts the guard that keeps generic
+	// transaction writes out of accounts the investment subledger owns (T-96).
+	// Only InvestmentService sets it, through
+	// prepareInvestmentTransactionForWrite. It lives on this unexported options
+	// struct rather than on CreateTransactionInput so that the exemption cannot
+	// be reached from the API layer by populating a request field.
+	AllowSubledgerManagedPostings bool
+	// WriterGuardsCheckpoints marks a journal headed for the investment
+	// writer, whose combined guard nets every journal of the command at each
+	// checkpoint boundary (T-120 #135). Rejecting the journal alone up front
+	// would refuse an inverse that its replacement cancels.
+	WriterGuardsCheckpoints bool
+	// AccountRuleDependencies, when non-nil, collects the accounts whose
+	// versions this spec's posting checks were decided against, so the write
+	// can refuse the spec if one of them is restructured before it commits
+	// (T-100). Only the paths that go on to write set it; previews and
+	// template validation leave it nil.
+	AccountRuleDependencies *accountRuleDependencies
+}"
+definition,backend/internal/db/accounts.go,1093,interface,backend/internal/db/accounts.go,rowQueryer,,"interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}"
+definition,backend/internal/db/backup_online.go,167,interface,backend/internal/db/backup_online.go,backupPageCopier,,"interface {
+	Step(int) (bool, error)
+	Remaining() int
+	PageCount() int
+	Finish() error
+}"
+definition,backend/internal/db/backup_online.go,21,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,,"struct {
+	// PagesPerStep is how much is copied between yields. Smaller steps hold
+	// the source lock for shorter periods.
+	PagesPerStep int32
+	// Deadline bounds the whole copy.
+	Deadline time.Duration
+}"
+definition,backend/internal/db/commodities.go,542,interface,backend/internal/db/commodities.go,rowScanner,,"interface {
+	Scan(dest ...any) error
+}"
+definition,backend/internal/db/import_short_link.go,66,interface,backend/internal/db/import_short_link.go,shortLinkScanner,,"interface {
+	Scan(dest ...any) error
+}"
+definition,backend/internal/db/imports.go,1351,interface,backend/internal/db/imports.go,importStagedRowScanner,,"interface {
+	Scan(dest ...any) error
+}"
+definition,backend/internal/db/imports.go,1581,interface,backend/internal/db/imports.go,execContexter,,"interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}"
+definition,backend/internal/db/imports.go,980,interface,backend/internal/db/imports.go,queryRowContexter,,"interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}"
+definition,backend/internal/db/investment_sale_reversal.go,59,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,,"interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}"
+definition,backend/internal/db/investment_split_correction.go,47,interface,backend/internal/db/investment_split_correction.go,splitOperationReader,,"interface {
+	saleOperationReader
+	queryer
+}"
+definition,backend/internal/db/investment_transfer_correction.go,59,interface,backend/internal/db/investment_transfer_correction.go,transferOperationReader,,"interface {
+	saleOperationReader
+	queryer
+}"
+definition,backend/internal/db/transactions_read.go,266,interface,backend/internal/db/transactions_read.go,queryer,,"interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}"
+definition,backend/internal/marketdata/dividends.go,17,interface,backend/internal/marketdata/dividends.go,DividendProvider,,"interface {
+	Provider
+	FetchDividends(context.Context, DividendRequest) ([]DividendObservation, error)
+}"
+definition,backend/internal/marketdata/prices.go,22,interface,backend/internal/marketdata/prices.go,PriceProvider,,"interface {
+	Provider
+	FetchPrices(context.Context, PriceRequest) ([]PriceObservation, error)
+}"
+definition,backend/internal/marketdata/types.go,25,interface,backend/internal/marketdata/types.go,Provider,,"interface {
+	Code() string
+	Name() string
+	Capabilities() ProviderCapabilities
+}"
+definition,backend/internal/marketdata/types.go,31,interface,backend/internal/marketdata/types.go,FXRateProvider,,"interface {
+	Provider
+	FetchFXRates(ctx context.Context, request FXRateRequest) ([]FXRateObservation, error)
+}"
+member-reference,backend/internal/api/auth.go,503,options-struct,backend/internal/api/server.go,HandlerOptions,loginClientIP,TrustedProxyCIDRs
+member-reference,backend/internal/api/auth.go,545,options-struct,backend/internal/api/server.go,HandlerOptions,shouldTrustProxyHeaders,TrustProxyHeaders
+member-reference,backend/internal/api/auth.go,545,options-struct,backend/internal/api/server.go,HandlerOptions,shouldTrustProxyHeaders,TrustedProxyCIDRs
+member-reference,backend/internal/api/auth.go,554,options-struct,backend/internal/api/server.go,HandlerOptions,shouldTrustProxyHeaders,TrustedProxyCIDRs
+member-reference,backend/internal/api/forecast.go,643,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,toForecastLearnedSpendingResponse,AccountID
+member-reference,backend/internal/api/forecast.go,643,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,toForecastLearnedSpendingResponse,Code
+member-reference,backend/internal/api/forecast.go,643,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,toForecastLearnedSpendingResponse,Name
+member-reference,backend/internal/api/forecast.go,644,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,toForecastLearnedSpendingResponse,BuiltinLabelKey
+member-reference,backend/internal/api/forecast.go,644,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,toForecastLearnedSpendingResponse,ParentAccountID
+member-reference,backend/internal/api/setup.go,68,options-struct,backend/internal/api/server.go,HandlerOptions,createOwner,SetupToken
+member-reference,backend/internal/app/forecast_learning_overlay_test.go,460,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,TestForecastLearningOverlayListsCategoryOptions,AccountID
+member-reference,backend/internal/app/import_adapter.go,31,interface,backend/internal/app/import_adapter.go,SourceAdapter,newAdapterRegistry,Kind
+member-reference,backend/internal/app/import_adapter.go,40,interface,backend/internal/app/import_adapter.go,SourceAdapter,*adapterRegistry.detect,Detect
+member-reference,backend/internal/app/import_connections.go,141,interface,backend/internal/app/import_connections.go,ConnectionProber,*ImportConnectionService.CreateImportConnection,Probe
+member-reference,backend/internal/app/import_connections.go,255,interface,backend/internal/app/import_connections.go,ConnectionProber,*ImportConnectionService.UpdateImportConnection,Probe
+member-reference,backend/internal/app/import_fetch_worker.go,407,interface,backend/internal/app/import_adapter.go,SourceAdapter,*ImportService.runTrading212Fetch,Parse
+member-reference,backend/internal/app/import_qif.go,304,options-struct,backend/internal/app/import_qif.go,qifOptions,normalizeQIFRecords,dateOrder
+member-reference,backend/internal/app/import_qif.go,317,options-struct,backend/internal/app/import_qif.go,qifOptions,normalizeQIFRecords,decimalSeparator
+member-reference,backend/internal/app/import_qif.go,85,options-struct,backend/internal/app/import_qif.go,qifOptions,qifOptionsFromProfile,dateOrder
+member-reference,backend/internal/app/import_qif.go,90,options-struct,backend/internal/app/import_qif.go,qifOptions,qifOptionsFromProfile,decimalSeparator
+member-reference,backend/internal/app/import_qif.go,92,options-struct,backend/internal/app/import_qif.go,qifOptions,qifOptionsFromProfile,decimalSeparator
+member-reference,backend/internal/app/import_service.go,128,interface,backend/internal/app/import_adapter.go,SourceAdapter,*ImportService.StartImport,Kind
+member-reference,backend/internal/app/import_service.go,133,interface,backend/internal/app/import_adapter.go,SourceAdapter,*ImportService.StartImport,Parse
+member-reference,backend/internal/app/import_service.go,141,interface,backend/internal/app/import_adapter.go,SourceAdapter,*ImportService.StartImport,Kind
+member-reference,backend/internal/app/import_service.go,161,interface,backend/internal/app/import_adapter.go,SourceAdapter,*ImportService.StartImport,Kind
+member-reference,backend/internal/app/import_service.go,215,interface,backend/internal/app/import_adapter.go,SourceAdapter,*ImportService.CreateImportProfile,Kind
+member-reference,backend/internal/app/investment_dividend_events.go,189,interface,backend/internal/marketdata/dividends.go,DividendProvider,*PricingService.stageDividendEvents,FetchDividends
+member-reference,backend/internal/app/pricing_quotes.go,164,interface,backend/internal/marketdata/prices.go,PriceProvider,*PricingService.fetchAndStoreQuote,FetchPrices
+member-reference,backend/internal/app/pricing_refresh.go,268,interface,backend/internal/marketdata/types.go,FXRateProvider,*PricingService.fetchAndStoreDirectFX,Capabilities
+member-reference,backend/internal/app/pricing_refresh.go,271,interface,backend/internal/marketdata/types.go,FXRateProvider,*PricingService.fetchAndStoreDirectFX,FetchFXRates
+member-reference,backend/internal/app/transactions_reconciliation.go,51,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.reconciliationImpactForCreate,OwnerUserID
+member-reference,backend/internal/app/transactions_reconciliation.go,52,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.reconciliationImpactForCreate,DefaultStatus
+member-reference,backend/internal/app/transactions_validate.go,155,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanTransactionSpec,ForcedStatus
+member-reference,backend/internal/app/transactions_validate.go,156,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanTransactionSpec,ForcedStatus
+member-reference,backend/internal/app/transactions_validate.go,159,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanTransactionSpec,DefaultStatus
+member-reference,backend/internal/app/transactions_validate.go,182,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanTransactionSpec,OwnerUserID
+member-reference,backend/internal/app/transactions_validate.go,450,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanPosting,AccountRuleDependencies
+member-reference,backend/internal/app/transactions_validate.go,463,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanPosting,AllowSubledgerManagedPostings
+member-reference,backend/internal/app/transactions_validate.go,502,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanPosting,ExistingLineKeys
+member-reference,backend/internal/app/transactions_validate.go,502,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanPosting,ExistingLineKeys
+member-reference,backend/internal/app/transactions_validate.go,509,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanPosting,ExistingPostings
+member-reference,backend/internal/app/transactions_write.go,107,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransactionForWriteWithOptions,AccountRuleDependencies
+member-reference,backend/internal/app/transactions_write.go,108,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransactionForWriteWithOptions,AccountRuleDependencies
+member-reference,backend/internal/app/transactions_write.go,114,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransactionForWriteWithOptions,AccountRuleDependencies
+member-reference,backend/internal/app/transactions_write.go,122,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransactionForWriteWithOptions,WriterGuardsCheckpoints
+member-reference,backend/internal/app/transactions_write.go,156,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransaction,OwnerUserID
+member-reference,backend/internal/app/transactions_write.go,157,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransaction,DefaultStatus
+member-reference,backend/internal/db/accounts.go,1099,interface,backend/internal/db/accounts.go,rowQueryer,accountHasPostings,QueryRowContext
+member-reference,backend/internal/db/accounts.go,1460,interface,backend/internal/db/commodities.go,rowScanner,scanAccountRecord,Scan
+member-reference,backend/internal/db/auth.go,357,interface,backend/internal/db/imports.go,execContexter,refundLoginAttemptExec,ExecContext
+member-reference,backend/internal/db/auth.go,390,interface,backend/internal/db/imports.go,execContexter,insertAuthenticationEvent,ExecContext
+member-reference,backend/internal/db/auth.go,506,interface,backend/internal/db/imports.go,execContexter,createTrustedDeviceExec,ExecContext
+member-reference,backend/internal/db/auth.go,617,interface,backend/internal/db/imports.go,execContexter,deleteLoginThrottleExec,ExecContext
+member-reference,backend/internal/db/backup_online.go,124,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,OnlineBackupSQLiteDatabase,PagesPerStep
+member-reference,backend/internal/db/backup_online.go,176,interface,backend/internal/db/backup_online.go,backupPageCopier,copyBackupPages,Finish
+member-reference,backend/internal/db/backup_online.go,184,interface,backend/internal/db/backup_online.go,backupPageCopier,copyBackupPages,Remaining
+member-reference,backend/internal/db/backup_online.go,185,interface,backend/internal/db/backup_online.go,backupPageCopier,copyBackupPages,Step
+member-reference,backend/internal/db/backup_online.go,190,interface,backend/internal/db/backup_online.go,backupPageCopier,copyBackupPages,PageCount
+member-reference,backend/internal/db/backup_online.go,195,interface,backend/internal/db/backup_online.go,backupPageCopier,copyBackupPages,Remaining
+member-reference,backend/internal/db/backup_online.go,55,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,OnlineBackupSQLiteDatabase,PagesPerStep
+member-reference,backend/internal/db/backup_online.go,56,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,OnlineBackupSQLiteDatabase,PagesPerStep
+member-reference,backend/internal/db/backup_online.go,58,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,OnlineBackupSQLiteDatabase,Deadline
+member-reference,backend/internal/db/backup_online.go,59,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,OnlineBackupSQLiteDatabase,Deadline
+member-reference,backend/internal/db/backup_online.go,73,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,OnlineBackupSQLiteDatabase,Deadline
+member-reference,backend/internal/db/commodities.go,548,interface,backend/internal/db/commodities.go,rowScanner,scanCommodityRecord,Scan
+member-reference,backend/internal/db/import_connections.go,109,interface,backend/internal/db/commodities.go,rowScanner,scanImportConnectionRow,Scan
+member-reference,backend/internal/db/import_short_link.go,119,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,shortLinkCandidateQuery,QueryRowContext
+member-reference,backend/internal/db/import_short_link.go,72,interface,backend/internal/db/import_short_link.go,shortLinkScanner,scanShortLinkCandidate,Scan
+member-reference,backend/internal/db/import_source_revisions.go,82,interface,backend/internal/db/accounts.go,rowQueryer,checkSourceRevision,QueryRowContext
+member-reference,backend/internal/db/imports.go,1359,interface,backend/internal/db/imports.go,importStagedRowScanner,scanImportStagedRow,Scan
+member-reference,backend/internal/db/imports.go,1587,interface,backend/internal/db/imports.go,execContexter,commitImportStagedRowExec,ExecContext
+member-reference,backend/internal/db/imports.go,1601,interface,backend/internal/db/imports.go,execContexter,commitImportStagedRowExec,QueryRowContext
+member-reference,backend/internal/db/imports.go,674,interface,backend/internal/db/transactions_read.go,queryer,listImportRules,QueryContext
+member-reference,backend/internal/db/imports.go,706,interface,backend/internal/db/transactions_read.go,queryer,listImportRules,QueryContext
+member-reference,backend/internal/db/imports.go,986,interface,backend/internal/db/imports.go,queryRowContexter,hasInFlightFetch,QueryRowContext
+member-reference,backend/internal/db/institutions.go,507,interface,backend/internal/db/commodities.go,rowScanner,scanInstitutionRecord,Scan
+member-reference,backend/internal/db/investment_basis_resolution.go,229,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,basisResolutionOperationQuery,QueryRowContext
+member-reference,backend/internal/db/investment_basis_resolution.go,59,interface,backend/internal/db/transactions_read.go,queryer,unknownTransferBasisQuery,QueryContext
+member-reference,backend/internal/db/investment_buy_replacement.go,43,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,buyOperationByTransactionIDQuery,QueryRowContext
+member-reference,backend/internal/db/investment_capital_return.go,481,interface,backend/internal/db/transactions_read.go,queryer,capitalReturnIntentsQuery,QueryContext
+member-reference,backend/internal/db/investment_capital_return.go,536,interface,backend/internal/db/transactions_read.go,queryer,effectiveCapitalReturnEffectsQuery,QueryContext
+member-reference,backend/internal/db/investment_capital_return.go,556,interface,backend/internal/db/transactions_read.go,queryer,effectiveCapitalReturnEffectsQuery,QueryContext
+member-reference,backend/internal/db/investment_capital_return.go,654,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,capitalReturnOperationByTransactionIDQuery,QueryRowContext
+member-reference,backend/internal/db/investment_capital_return.go,765,interface,backend/internal/db/transactions_read.go,queryer,capitalReturnEntitlementsQuery,QueryContext
+member-reference,backend/internal/db/investment_cash_stock_merger_correction.go,63,interface,backend/internal/db/investment_transfer_correction.go,transferOperationReader,cashStockMergerOperationByTransactionIDQuery,QueryRowContext
+member-reference,backend/internal/db/investment_dividend_correction.go,33,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,dividendOperationByTransactionIDQuery,QueryRowContext
+member-reference,backend/internal/db/investment_effective_movements.go,165,interface,backend/internal/db/transactions_read.go,queryer,effectiveMovementProvenance,QueryContext
+member-reference,backend/internal/db/investment_effective_movements.go,247,interface,backend/internal/db/transactions_read.go,queryer,effectiveEventMovements,QueryContext
+member-reference,backend/internal/db/investment_effective_movements.go,287,interface,backend/internal/db/transactions_read.go,queryer,revisedDisposalMovements,QueryContext
+member-reference,backend/internal/db/investment_effective_movements.go,337,interface,backend/internal/db/transactions_read.go,queryer,revisedSplitMovements,QueryContext
+member-reference,backend/internal/db/investment_effective_movements.go,376,interface,backend/internal/db/transactions_read.go,queryer,revisedTransferLinkMovements,QueryContext
+member-reference,backend/internal/db/investment_effective_movements.go,447,interface,backend/internal/db/transactions_read.go,queryer,revisedPooledTransferMovements,QueryContext
+member-reference,backend/internal/db/investment_effective_movements.go,510,interface,backend/internal/db/transactions_read.go,queryer,revisedCapitalReturnMovements,QueryContext
+member-reference,backend/internal/db/investment_import_lineage.go,13,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,investmentOperationHasImportedLineageQuery,QueryRowContext
+member-reference,backend/internal/db/investment_import_lineage.go,37,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,investmentOperationHasCommittedSourceQuery,QueryRowContext
+member-reference,backend/internal/db/investment_payment_in_lieu.go,214,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,paymentInLieuOperationByTransactionIDQuery,QueryRowContext
+member-reference,backend/internal/db/investment_replay_closure.go,89,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayClosureQuery,QueryContext
+member-reference,backend/internal/db/investment_replay_intents.go,163,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayIntentsQuery,QueryContext
+member-reference,backend/internal/db/investment_replay_intents.go,223,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayIntentsQuery,QueryContext
+member-reference,backend/internal/db/investment_replay_intents.go,279,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayIntentsQuery,QueryContext
+member-reference,backend/internal/db/investment_replay_intents.go,443,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayIntentsQuery,QueryContext
+member-reference,backend/internal/db/investment_replay_intents.go,606,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayPooledLotIntentsQuery,QueryContext
+member-reference,backend/internal/db/investment_replay_intents.go,653,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayPooledLotIntentsQuery,QueryContext
+member-reference,backend/internal/db/investment_replay_intents.go,712,interface,backend/internal/db/transactions_read.go,queryer,transferRevisionDepletionsQuery,QueryContext
+member-reference,backend/internal/db/investment_replay_intents.go,752,interface,backend/internal/db/transactions_read.go,queryer,investmentReplaySplitIntentsQuery,QueryContext
+member-reference,backend/internal/db/investment_replay_intents.go,824,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayOrderOperationIDsQuery,QueryContext
+member-reference,backend/internal/db/investment_sale_reversal.go,66,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,saleOperationByIDQuery,QueryRowContext
+member-reference,backend/internal/db/investment_share_exchange_correction.go,49,interface,backend/internal/db/investment_transfer_correction.go,transferOperationReader,shareExchangeOperationByTransactionIDQuery,QueryRowContext
+member-reference,backend/internal/db/investment_spin_off_correction.go,53,interface,backend/internal/db/investment_transfer_correction.go,transferOperationReader,spinOffOperationByTransactionIDQuery,QueryRowContext
+member-reference,backend/internal/db/investment_split.go,435,interface,backend/internal/db/transactions_read.go,queryer,effectiveSplitEffectsQuery,QueryContext
+member-reference,backend/internal/db/investment_split.go,462,interface,backend/internal/db/transactions_read.go,queryer,effectiveSplitEffectsQuery,QueryContext
+member-reference,backend/internal/db/investment_split_correction.go,64,interface,backend/internal/db/investment_split_correction.go,splitOperationReader,splitOperationQuery,QueryRowContext
+member-reference,backend/internal/db/investment_split_correction.go,87,interface,backend/internal/db/investment_split_correction.go,splitOperationReader,splitOperationQuery,QueryContext
+member-reference,backend/internal/db/investment_transfer_correction.go,109,interface,backend/internal/db/transactions_read.go,queryer,transferBridgeTotalQuery,QueryContext
+member-reference,backend/internal/db/investment_transfer_correction.go,68,interface,backend/internal/db/investment_transfer_correction.go,transferOperationReader,transferOperationByTransactionIDQuery,QueryRowContext
+member-reference,backend/internal/db/investments.go,2858,interface,backend/internal/db/commodities.go,rowScanner,scanInvestmentInstrumentRecord,Scan
+member-reference,backend/internal/db/investments.go,2894,interface,backend/internal/db/commodities.go,rowScanner,scanCostBasisProfileRow,Scan
+member-reference,backend/internal/db/investments.go,2933,interface,backend/internal/db/commodities.go,rowScanner,scanDividendDefaultRow,Scan
+member-reference,backend/internal/db/investments.go,2986,interface,backend/internal/db/commodities.go,rowScanner,scanInvestmentLotRow,Scan
+member-reference,backend/internal/db/pricing.go,1333,interface,backend/internal/db/commodities.go,rowScanner,scanPriceObservationRow,Scan
+member-reference,backend/internal/db/pricing.go,1373,interface,backend/internal/db/commodities.go,rowScanner,scanPricingPolicyRow,Scan
+member-reference,backend/internal/db/pricing.go,1400,interface,backend/internal/db/commodities.go,rowScanner,scanPricingSourceAssignmentRow,Scan
+member-reference,backend/internal/db/reconciliation.go,1160,interface,backend/internal/db/transactions_read.go,queryer,reconciliationCandidates,QueryContext
+member-reference,backend/internal/db/reconciliation.go,1237,interface,backend/internal/db/transactions_read.go,queryer,reconciliationSessionPostings,QueryContext
+member-reference,backend/internal/db/reconciliation.go,1268,interface,backend/internal/db/transactions_read.go,queryer,currentReconciliationPostingsByID,QueryContext
+member-reference,backend/internal/db/reconciliation.go,1305,interface,backend/internal/db/transactions_read.go,queryer,currentAccountPostingsByID,QueryContext
+member-reference,backend/internal/db/recurring.go,398,interface,backend/internal/db/transactions_read.go,queryer,listRecurringTemplates,QueryContext
+member-reference,backend/internal/db/recurring.go,450,interface,backend/internal/db/transactions_read.go,queryer,listRecurringTemplates,QueryContext
+member-reference,backend/internal/db/recurring.go,478,interface,backend/internal/db/transactions_read.go,queryer,listRecurringTemplates,QueryContext
+member-reference,backend/internal/db/recurring.go,499,interface,backend/internal/db/transactions_read.go,queryer,listRecurringTemplates,QueryContext
+member-reference,backend/internal/db/tags.go,415,interface,backend/internal/db/commodities.go,rowScanner,scanTagRecord,Scan
+member-reference,backend/internal/db/transactions_read.go,289,interface,backend/internal/db/transactions_read.go,queryer,transactionTagIDs,QueryContext
+member-reference,backend/internal/db/transactions_read.go,316,interface,backend/internal/db/transactions_read.go,queryer,journalEntriesForVersion,QueryContext
+member-reference,backend/internal/db/transactions_read.go,351,interface,backend/internal/db/transactions_read.go,queryer,postingsForJournalEntry,QueryContext
+member-reference,backend/internal/db/transactions_read.go,403,interface,backend/internal/db/transactions_read.go,queryer,postingTagIDs,QueryContext
+member-reference,backend/internal/marketdata/dividends_test.go,33,interface,backend/internal/marketdata/dividends.go,DividendProvider,TestTwelveDataDividendsFixtureWireSemantics,FetchDividends
+member-reference,backend/internal/marketdata/prices_test.go,144,interface,backend/internal/marketdata/prices.go,PriceProvider,TestRegistryOwnsAllPriceProviders,Capabilities
+member-reference,backend/internal/marketdata/providers_test.go,308,interface,backend/internal/marketdata/types.go,FXRateProvider,TestDefaultRegistryContainsBuiltInFXProviders,Capabilities
+member-reference,backend/internal/marketdata/registry_base_url_test.go,34,interface,backend/internal/marketdata/types.go,FXRateProvider,TestDefaultRegistryAtSendsEveryProviderToTheOverrideHost,FetchFXRates
+member-reference,backend/internal/marketdata/registry_base_url_test.go,41,interface,backend/internal/marketdata/prices.go,PriceProvider,TestDefaultRegistryAtSendsEveryProviderToTheOverrideHost,FetchPrices
+member-reference,backend/internal/marketdata/types.go,103,interface,backend/internal/marketdata/types.go,Provider,*Registry.Register,Code
+type-reference,backend/cmd/rekenraam/restore_test.go,186,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,sealedBackupOf,OnlineBackupOptions
+type-reference,backend/cmd/rekenraam/restore_test.go,38,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,backupOf,OnlineBackupOptions
+type-reference,backend/internal/api/accounts.go,155,options-struct,backend/internal/api/server.go,HandlerOptions,createAccount,HandlerOptions
+type-reference,backend/internal/api/accounts.go,203,options-struct,backend/internal/api/server.go,HandlerOptions,updateAccount,HandlerOptions
+type-reference,backend/internal/api/accounts.go,257,options-struct,backend/internal/api/server.go,HandlerOptions,closeAccount,HandlerOptions
+type-reference,backend/internal/api/accounts.go,272,options-struct,backend/internal/api/server.go,HandlerOptions,reopenAccount,HandlerOptions
+type-reference,backend/internal/api/accounts.go,287,options-struct,backend/internal/api/server.go,HandlerOptions,archiveAccount,HandlerOptions
+type-reference,backend/internal/api/accounts.go,302,options-struct,backend/internal/api/server.go,HandlerOptions,restoreAccount,HandlerOptions
+type-reference,backend/internal/api/accounts.go,317,options-struct,backend/internal/api/server.go,HandlerOptions,deleteAccount,HandlerOptions
+type-reference,backend/internal/api/accounts.go,341,options-struct,backend/internal/api/server.go,HandlerOptions,accountLifecycleMutation,HandlerOptions
+type-reference,backend/internal/api/accounts.go,369,options-struct,backend/internal/api/server.go,HandlerOptions,completeSystemAccountsSetup,HandlerOptions
+type-reference,backend/internal/api/auth.go,116,options-struct,backend/internal/api/server.go,HandlerOptions,writeLoginCookies,HandlerOptions
+type-reference,backend/internal/api/auth.go,127,options-struct,backend/internal/api/server.go,HandlerOptions,logout,HandlerOptions
+type-reference,backend/internal/api/auth.go,249,options-struct,backend/internal/api/server.go,HandlerOptions,writeTrustedDeviceCookie,HandlerOptions
+type-reference,backend/internal/api/auth.go,261,options-struct,backend/internal/api/server.go,HandlerOptions,requestTrustedDeviceCookieName,HandlerOptions
+type-reference,backend/internal/api/auth.go,291,options-struct,backend/internal/api/server.go,HandlerOptions,revokeTrustedDevice,HandlerOptions
+type-reference,backend/internal/api/auth.go,359,options-struct,backend/internal/api/server.go,HandlerOptions,clearSessionCookie,HandlerOptions
+type-reference,backend/internal/api/auth.go,381,options-struct,backend/internal/api/server.go,HandlerOptions,requestUsesHTTPS,HandlerOptions
+type-reference,backend/internal/api/auth.go,394,options-struct,backend/internal/api/server.go,HandlerOptions,requireSameOrigin,HandlerOptions
+type-reference,backend/internal/api/auth.go,405,options-struct,backend/internal/api/server.go,HandlerOptions,requireAuthenticatedMutation,HandlerOptions
+type-reference,backend/internal/api/auth.go,445,options-struct,backend/internal/api/server.go,HandlerOptions,originMatchesRequest,HandlerOptions
+type-reference,backend/internal/api/auth.go,467,options-struct,backend/internal/api/server.go,HandlerOptions,requestOrigin,HandlerOptions
+type-reference,backend/internal/api/auth.go,471,options-struct,backend/internal/api/server.go,HandlerOptions,requestOriginForHost,HandlerOptions
+type-reference,backend/internal/api/auth.go,501,options-struct,backend/internal/api/server.go,HandlerOptions,loginClientIP,HandlerOptions
+type-reference,backend/internal/api/auth.go,544,options-struct,backend/internal/api/server.go,HandlerOptions,shouldTrustProxyHeaders,HandlerOptions
+type-reference,backend/internal/api/auth.go,78,options-struct,backend/internal/api/server.go,HandlerOptions,login,HandlerOptions
+type-reference,backend/internal/api/auth_cookie_policy_test.go,32,options-struct,backend/internal/api/server.go,HandlerOptions,cookiePolicyHandler,HandlerOptions
+type-reference,backend/internal/api/auth_login_proxy_test.go,139,options-struct,backend/internal/api/server.go,HandlerOptions,TestLoginIgnoresForwardedClientIPHeadersWhenPeerNotAllowlisted,HandlerOptions
+type-reference,backend/internal/api/auth_login_proxy_test.go,47,options-struct,backend/internal/api/server.go,HandlerOptions,TestLoginUsesForwardedClientIPHeadersWhenTrusted,HandlerOptions
+type-reference,backend/internal/api/auth_login_proxy_test.go,77,options-struct,backend/internal/api/server.go,HandlerOptions,TestLoginUsesForwardedClientIPHeadersWhenTrusted,HandlerOptions
+type-reference,backend/internal/api/auth_login_proxy_test.go,96,options-struct,backend/internal/api/server.go,HandlerOptions,TestLoginUsesRightmostUntrustedForwardedClientIPWhenTrusted,HandlerOptions
+type-reference,backend/internal/api/auth_login_state_test.go,173,options-struct,backend/internal/api/server.go,HandlerOptions,TestLoginSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS,HandlerOptions
+type-reference,backend/internal/api/auth_mfa.go,121,options-struct,backend/internal/api/server.go,HandlerOptions,disableMFA,HandlerOptions
+type-reference,backend/internal/api/auth_mfa.go,146,options-struct,backend/internal/api/server.go,HandlerOptions,regenerateMFARecoveryCodes,HandlerOptions
+type-reference,backend/internal/api/auth_mfa.go,176,options-struct,backend/internal/api/server.go,HandlerOptions,completeLoginMFA,HandlerOptions
+type-reference,backend/internal/api/auth_mfa.go,218,options-struct,backend/internal/api/server.go,HandlerOptions,writeMFAChallengeCookie,HandlerOptions
+type-reference,backend/internal/api/auth_mfa.go,230,options-struct,backend/internal/api/server.go,HandlerOptions,clearMFAChallengeCookie,HandlerOptions
+type-reference,backend/internal/api/auth_mfa.go,238,options-struct,backend/internal/api/server.go,HandlerOptions,requestMFAChallengeCookieName,HandlerOptions
+type-reference,backend/internal/api/auth_mfa.go,66,options-struct,backend/internal/api/server.go,HandlerOptions,enrollMFATOTP,HandlerOptions
+type-reference,backend/internal/api/auth_mfa.go,95,options-struct,backend/internal/api/server.go,HandlerOptions,activateMFATOTP,HandlerOptions
+type-reference,backend/internal/api/auth_test.go,230,options-struct,backend/internal/api/server.go,HandlerOptions,TestLogoutAcceptsTrustedForwardedOrigin,HandlerOptions
+type-reference,backend/internal/api/auth_test.go,42,options-struct,backend/internal/api/server.go,HandlerOptions,newAuthHandlerForDatabase,HandlerOptions
+type-reference,backend/internal/api/auth_test.go,45,options-struct,backend/internal/api/server.go,HandlerOptions,newAuthHandlerForDatabaseWithOptions,HandlerOptions
+type-reference,backend/internal/api/auth_tokens.go,101,options-struct,backend/internal/api/server.go,HandlerOptions,createPersonalAccessToken,HandlerOptions
+type-reference,backend/internal/api/auth_tokens.go,143,options-struct,backend/internal/api/server.go,HandlerOptions,revokePersonalAccessToken,HandlerOptions
+type-reference,backend/internal/api/auth_tokens.go,47,options-struct,backend/internal/api/server.go,HandlerOptions,withPersonalAccessToken,HandlerOptions
+type-reference,backend/internal/api/backups.go,156,options-struct,backend/internal/api/server.go,HandlerOptions,saveBackupPolicy,HandlerOptions
+type-reference,backend/internal/api/backups.go,214,options-struct,backend/internal/api/server.go,HandlerOptions,requestBackup,HandlerOptions
+type-reference,backend/internal/api/backups.go,233,options-struct,backend/internal/api/server.go,HandlerOptions,retryBackupRun,HandlerOptions
+type-reference,backend/internal/api/books.go,47,options-struct,backend/internal/api/server.go,HandlerOptions,createBook,HandlerOptions
+type-reference,backend/internal/api/budgets.go,117,options-struct,backend/internal/api/server.go,HandlerOptions,setBudgetTarget,HandlerOptions
+type-reference,backend/internal/api/budgets.go,153,options-struct,backend/internal/api/server.go,HandlerOptions,setBudgetTreatment,HandlerOptions
+type-reference,backend/internal/api/categories.go,119,options-struct,backend/internal/api/server.go,HandlerOptions,createCategory,HandlerOptions
+type-reference,backend/internal/api/categories.go,155,options-struct,backend/internal/api/server.go,HandlerOptions,updateCategory,HandlerOptions
+type-reference,backend/internal/api/categories.go,199,options-struct,backend/internal/api/server.go,HandlerOptions,disableCategory,HandlerOptions
+type-reference,backend/internal/api/categories.go,213,options-struct,backend/internal/api/server.go,HandlerOptions,restoreCategory,HandlerOptions
+type-reference,backend/internal/api/categories.go,227,options-struct,backend/internal/api/server.go,HandlerOptions,categoryLifecycleMutation,HandlerOptions
+type-reference,backend/internal/api/categories.go,255,options-struct,backend/internal/api/server.go,HandlerOptions,deleteCategory,HandlerOptions
+type-reference,backend/internal/api/categories.go,283,options-struct,backend/internal/api/server.go,HandlerOptions,completeCategoriesSetup,HandlerOptions
+type-reference,backend/internal/api/currencies.go,127,options-struct,backend/internal/api/server.go,HandlerOptions,completeCurrencySetup,HandlerOptions
+type-reference,backend/internal/api/currencies.go,162,options-struct,backend/internal/api/server.go,HandlerOptions,setDefaultCurrency,HandlerOptions
+type-reference,backend/internal/api/currencies.go,96,options-struct,backend/internal/api/server.go,HandlerOptions,createCurrency,HandlerOptions
+type-reference,backend/internal/api/health.go,16,options-struct,backend/internal/api/server.go,HandlerOptions,RegisterRoutes,HandlerOptions
+type-reference,backend/internal/api/health.go,19,options-struct,backend/internal/api/server.go,HandlerOptions,RegisterRoutesWithAuth,HandlerOptions
+type-reference,backend/internal/api/import_connections.go,139,options-struct,backend/internal/api/server.go,HandlerOptions,refreshImportConnection,HandlerOptions
+type-reference,backend/internal/api/import_connections.go,166,options-struct,backend/internal/api/server.go,HandlerOptions,deleteImportConnection,HandlerOptions
+type-reference,backend/internal/api/import_connections.go,69,options-struct,backend/internal/api/server.go,HandlerOptions,createImportConnection,HandlerOptions
+type-reference,backend/internal/api/import_connections.go,99,options-struct,backend/internal/api/server.go,HandlerOptions,updateImportConnection,HandlerOptions
+type-reference,backend/internal/api/import_connections_test.go,108,options-struct,backend/internal/api/server.go,HandlerOptions,newImportConnectionsTestHandlerWith,HandlerOptions
+type-reference,backend/internal/api/import_connections_test.go,42,interface,backend/internal/app/import_connections.go,ConnectionProber,newImportConnectionsTestHandler,ConnectionProber
+type-reference,backend/internal/api/import_connections_test.go,50,interface,backend/internal/app/import_connections.go,ConnectionProber,newImportConnectionsTestHandlerWith,ConnectionProber
+type-reference,backend/internal/api/import_dividend_review.go,52,options-struct,backend/internal/api/server.go,HandlerOptions,reviewImportDividend,HandlerOptions
+type-reference,backend/internal/api/imports.go,1290,options-struct,backend/internal/api/server.go,HandlerOptions,linkImportSplit,HandlerOptions
+type-reference,backend/internal/api/imports.go,1413,options-struct,backend/internal/api/server.go,HandlerOptions,linkImportShort,HandlerOptions
+type-reference,backend/internal/api/imports.go,249,options-struct,backend/internal/api/server.go,HandlerOptions,startImport,HandlerOptions
+type-reference,backend/internal/api/imports.go,330,options-struct,backend/internal/api/server.go,HandlerOptions,analyzeCSVImport,HandlerOptions
+type-reference,backend/internal/api/imports.go,440,options-struct,backend/internal/api/server.go,HandlerOptions,createImportProfile,HandlerOptions
+type-reference,backend/internal/api/imports.go,460,options-struct,backend/internal/api/server.go,HandlerOptions,updateImportProfile,HandlerOptions
+type-reference,backend/internal/api/imports.go,484,options-struct,backend/internal/api/server.go,HandlerOptions,deleteImportProfile,HandlerOptions
+type-reference,backend/internal/api/imports.go,520,options-struct,backend/internal/api/server.go,HandlerOptions,createImportRule,HandlerOptions
+type-reference,backend/internal/api/imports.go,552,options-struct,backend/internal/api/server.go,HandlerOptions,updateImportRule,HandlerOptions
+type-reference,backend/internal/api/imports.go,581,options-struct,backend/internal/api/server.go,HandlerOptions,deleteImportRule,HandlerOptions
+type-reference,backend/internal/api/imports.go,641,options-struct,backend/internal/api/server.go,HandlerOptions,patchImportBatch,HandlerOptions
+type-reference,backend/internal/api/imports.go,736,options-struct,backend/internal/api/server.go,HandlerOptions,commitImportBatch,HandlerOptions
+type-reference,backend/internal/api/imports.go,840,options-struct,backend/internal/api/server.go,HandlerOptions,correctTrading212Buy,HandlerOptions
+type-reference,backend/internal/api/imports.go,921,options-struct,backend/internal/api/server.go,HandlerOptions,correctTrading212Sale,HandlerOptions
+type-reference,backend/internal/api/imports.go,965,options-struct,backend/internal/api/server.go,HandlerOptions,discardImportBatch,HandlerOptions
+type-reference,backend/internal/api/institutions.go,119,options-struct,backend/internal/api/server.go,HandlerOptions,createInstitution,HandlerOptions
+type-reference,backend/internal/api/institutions.go,157,options-struct,backend/internal/api/server.go,HandlerOptions,updateInstitution,HandlerOptions
+type-reference,backend/internal/api/institutions.go,201,options-struct,backend/internal/api/server.go,HandlerOptions,archiveInstitution,HandlerOptions
+type-reference,backend/internal/api/institutions.go,215,options-struct,backend/internal/api/server.go,HandlerOptions,restoreInstitution,HandlerOptions
+type-reference,backend/internal/api/institutions.go,229,options-struct,backend/internal/api/server.go,HandlerOptions,deleteInstitution,HandlerOptions
+type-reference,backend/internal/api/institutions.go,253,options-struct,backend/internal/api/server.go,HandlerOptions,institutionLifecycleMutation,HandlerOptions
+type-reference,backend/internal/api/investment_basis_resolution.go,178,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentBasisResolution,HandlerOptions
+type-reference,backend/internal/api/investment_basis_resolution.go,226,options-struct,backend/internal/api/server.go,HandlerOptions,reverseInvestmentBasisResolution,HandlerOptions
+type-reference,backend/internal/api/investment_basis_resolution.go,59,options-struct,backend/internal/api/server.go,HandlerOptions,resolveInvestmentTransferBasis,HandlerOptions
+type-reference,backend/internal/api/investment_capital_return.go,148,options-struct,backend/internal/api/server.go,HandlerOptions,reverseCapitalReturn,HandlerOptions
+type-reference,backend/internal/api/investment_capital_return.go,229,options-struct,backend/internal/api/server.go,HandlerOptions,replaceCapitalReturn,HandlerOptions
+type-reference,backend/internal/api/investment_capital_return.go,97,options-struct,backend/internal/api/server.go,HandlerOptions,capitalReturn,HandlerOptions
+type-reference,backend/internal/api/investment_cash_in_lieu.go,123,options-struct,backend/internal/api/server.go,HandlerOptions,replaceCashInLieu,HandlerOptions
+type-reference,backend/internal/api/investment_cash_in_lieu.go,167,options-struct,backend/internal/api/server.go,HandlerOptions,reverseCashInLieu,HandlerOptions
+type-reference,backend/internal/api/investment_cash_in_lieu.go,62,options-struct,backend/internal/api/server.go,HandlerOptions,cashInLieu,HandlerOptions
+type-reference,backend/internal/api/investment_cash_stock_merger.go,141,options-struct,backend/internal/api/server.go,HandlerOptions,cashStockMerger,HandlerOptions
+type-reference,backend/internal/api/investment_cash_stock_merger.go,282,options-struct,backend/internal/api/server.go,HandlerOptions,reverseCashStockMerger,HandlerOptions
+type-reference,backend/internal/api/investment_cash_stock_merger.go,336,options-struct,backend/internal/api/server.go,HandlerOptions,replaceCashStockMerger,HandlerOptions
+type-reference,backend/internal/api/investment_dividend_corrections.go,140,options-struct,backend/internal/api/server.go,HandlerOptions,reverseInvestmentReinvestedDividend,HandlerOptions
+type-reference,backend/internal/api/investment_dividend_corrections.go,184,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentReinvestedDividend,HandlerOptions
+type-reference,backend/internal/api/investment_dividend_corrections.go,48,options-struct,backend/internal/api/server.go,HandlerOptions,reverseInvestmentDividend,HandlerOptions
+type-reference,backend/internal/api/investment_dividend_corrections.go,91,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentDividend,HandlerOptions
+type-reference,backend/internal/api/investment_gains_consistency_test.go,45,options-struct,backend/internal/api/server.go,HandlerOptions,TestLiveGainsAPICorrectionBetweenCompositionStages,HandlerOptions
+type-reference,backend/internal/api/investment_gains_consistency_test.go,88,options-struct,backend/internal/api/server.go,HandlerOptions,TestLiveStatementAPIObservationWithdrawalBetweenNativeAndReporting,HandlerOptions
+type-reference,backend/internal/api/investment_gains_runs.go,27,options-struct,backend/internal/api/server.go,HandlerOptions,createInvestmentGainsRun,HandlerOptions
+type-reference,backend/internal/api/investment_payment_in_lieu.go,134,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentPaymentInLieu,HandlerOptions
+type-reference,backend/internal/api/investment_payment_in_lieu.go,51,options-struct,backend/internal/api/server.go,HandlerOptions,createPaymentInLieu,HandlerOptions
+type-reference,backend/internal/api/investment_payment_in_lieu.go,91,options-struct,backend/internal/api/server.go,HandlerOptions,reverseInvestmentPaymentInLieu,HandlerOptions
+type-reference,backend/internal/api/investment_share_exchange.go,163,options-struct,backend/internal/api/server.go,HandlerOptions,shareExchange,HandlerOptions
+type-reference,backend/internal/api/investment_share_exchange.go,254,options-struct,backend/internal/api/server.go,HandlerOptions,reverseShareExchange,HandlerOptions
+type-reference,backend/internal/api/investment_share_exchange.go,308,options-struct,backend/internal/api/server.go,HandlerOptions,replaceShareExchange,HandlerOptions
+type-reference,backend/internal/api/investment_short_corrections.go,110,options-struct,backend/internal/api/server.go,HandlerOptions,replaceShortSaleHandler,HandlerOptions
+type-reference,backend/internal/api/investment_short_corrections.go,153,options-struct,backend/internal/api/server.go,HandlerOptions,replaceShortCoverHandler,HandlerOptions
+type-reference,backend/internal/api/investment_short_corrections.go,18,options-struct,backend/internal/api/server.go,HandlerOptions,reverseShortOperation,HandlerOptions
+type-reference,backend/internal/api/investment_short_corrections.go,70,options-struct,backend/internal/api/server.go,HandlerOptions,reverseShortSaleHandler,HandlerOptions
+type-reference,backend/internal/api/investment_short_corrections.go,90,options-struct,backend/internal/api/server.go,HandlerOptions,reverseShortCoverHandler,HandlerOptions
+type-reference,backend/internal/api/investment_spin_off.go,184,options-struct,backend/internal/api/server.go,HandlerOptions,spinOff,HandlerOptions
+type-reference,backend/internal/api/investment_spin_off.go,282,options-struct,backend/internal/api/server.go,HandlerOptions,reverseSpinOff,HandlerOptions
+type-reference,backend/internal/api/investment_spin_off.go,336,options-struct,backend/internal/api/server.go,HandlerOptions,replaceSpinOff,HandlerOptions
+type-reference,backend/internal/api/investment_transfer_out.go,104,options-struct,backend/internal/api/server.go,HandlerOptions,externalTransferOut,HandlerOptions
+type-reference,backend/internal/api/investment_transfer_out.go,204,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentTransferOut,HandlerOptions
+type-reference,backend/internal/api/investments.go,1031,options-struct,backend/internal/api/server.go,HandlerOptions,buyInvestment,HandlerOptions
+type-reference,backend/internal/api/investments.go,1035,options-struct,backend/internal/api/server.go,HandlerOptions,sellInvestment,HandlerOptions
+type-reference,backend/internal/api/investments.go,1068,options-struct,backend/internal/api/server.go,HandlerOptions,externalTransferIn,HandlerOptions
+type-reference,backend/internal/api/investments.go,1169,options-struct,backend/internal/api/server.go,HandlerOptions,internalTransfer,HandlerOptions
+type-reference,backend/internal/api/investments.go,1312,options-struct,backend/internal/api/server.go,HandlerOptions,reverseInvestmentSale,HandlerOptions
+type-reference,backend/internal/api/investments.go,1366,options-struct,backend/internal/api/server.go,HandlerOptions,reverseInvestmentBuy,HandlerOptions
+type-reference,backend/internal/api/investments.go,1420,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentSale,HandlerOptions
+type-reference,backend/internal/api/investments.go,1481,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentBuy,HandlerOptions
+type-reference,backend/internal/api/investments.go,1550,options-struct,backend/internal/api/server.go,HandlerOptions,shortSaleInvestment,HandlerOptions
+type-reference,backend/internal/api/investments.go,1554,options-struct,backend/internal/api/server.go,HandlerOptions,shortCoverInvestment,HandlerOptions
+type-reference,backend/internal/api/investments.go,1616,options-struct,backend/internal/api/server.go,HandlerOptions,writeOffInvestment,HandlerOptions
+type-reference,backend/internal/api/investments.go,1729,options-struct,backend/internal/api/server.go,HandlerOptions,investmentTradeMutation,HandlerOptions
+type-reference,backend/internal/api/investments.go,1761,options-struct,backend/internal/api/server.go,HandlerOptions,createDividend,HandlerOptions
+type-reference,backend/internal/api/investments.go,1781,options-struct,backend/internal/api/server.go,HandlerOptions,createReinvestedDividend,HandlerOptions
+type-reference,backend/internal/api/investments.go,1865,options-struct,backend/internal/api/server.go,HandlerOptions,acceptInvestmentEventSuggestion,HandlerOptions
+type-reference,backend/internal/api/investments.go,1869,options-struct,backend/internal/api/server.go,HandlerOptions,ignoreInvestmentEventSuggestion,HandlerOptions
+type-reference,backend/internal/api/investments.go,1873,options-struct,backend/internal/api/server.go,HandlerOptions,linkInvestmentEventSuggestion,HandlerOptions
+type-reference,backend/internal/api/investments.go,1892,options-struct,backend/internal/api/server.go,HandlerOptions,queueDividendEventFetch,HandlerOptions
+type-reference,backend/internal/api/investments.go,1912,options-struct,backend/internal/api/server.go,HandlerOptions,eventSuggestionStatusMutation,HandlerOptions
+type-reference,backend/internal/api/investments.go,1963,options-struct,backend/internal/api/server.go,HandlerOptions,saveInvestmentAutomationRules,HandlerOptions
+type-reference,backend/internal/api/investments.go,2831,options-struct,backend/internal/api/server.go,HandlerOptions,investmentSplit,HandlerOptions
+type-reference,backend/internal/api/investments.go,2956,options-struct,backend/internal/api/server.go,HandlerOptions,reverseInvestmentSplit,HandlerOptions
+type-reference,backend/internal/api/investments.go,3010,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentSplit,HandlerOptions
+type-reference,backend/internal/api/investments.go,3241,options-struct,backend/internal/api/server.go,HandlerOptions,reverseInvestmentWriteOff,HandlerOptions
+type-reference,backend/internal/api/investments.go,3295,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentWriteOff,HandlerOptions
+type-reference,backend/internal/api/investments.go,3356,options-struct,backend/internal/api/server.go,HandlerOptions,reverseInvestmentTransfer,HandlerOptions
+type-reference,backend/internal/api/investments.go,3439,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentTransfer,HandlerOptions
+type-reference,backend/internal/api/investments.go,3534,options-struct,backend/internal/api/server.go,HandlerOptions,replaceInvestmentTransferIn,HandlerOptions
+type-reference,backend/internal/api/investments.go,834,options-struct,backend/internal/api/server.go,HandlerOptions,createInvestmentInstrument,HandlerOptions
+type-reference,backend/internal/api/investments.go,872,options-struct,backend/internal/api/server.go,HandlerOptions,updateInvestmentInstrument,HandlerOptions
+type-reference,backend/internal/api/investments.go,896,options-struct,backend/internal/api/server.go,HandlerOptions,createHoldingAccount,HandlerOptions
+type-reference,backend/internal/api/investments.go,937,options-struct,backend/internal/api/server.go,HandlerOptions,saveCostBasisProfile,HandlerOptions
+type-reference,backend/internal/api/investments.go,991,options-struct,backend/internal/api/server.go,HandlerOptions,saveDividendDefault,HandlerOptions
+type-reference,backend/internal/api/middleware.go,85,options-struct,backend/internal/api/server.go,HandlerOptions,withSecurityHeaders,HandlerOptions
+type-reference,backend/internal/api/middleware_test.go,111,options-struct,backend/internal/api/server.go,HandlerOptions,TestSecurityMiddlewareDisablesAuthResponseCaching,HandlerOptions
+type-reference,backend/internal/api/middleware_test.go,128,options-struct,backend/internal/api/server.go,HandlerOptions,TestSecurityMiddlewareSetsHSTSOnlyForHTTPS,HandlerOptions
+type-reference,backend/internal/api/middleware_test.go,25,options-struct,backend/internal/api/server.go,HandlerOptions,TestMiddlewareAddsRequestIDAndLogsRequest,HandlerOptions
+type-reference,backend/internal/api/middleware_test.go,82,options-struct,backend/internal/api/server.go,HandlerOptions,TestRecoveryMiddlewareReturnsAPIErrorEnvelope,HandlerOptions
+type-reference,backend/internal/api/payees.go,133,options-struct,backend/internal/api/server.go,HandlerOptions,updatePayee,HandlerOptions
+type-reference,backend/internal/api/payees.go,182,options-struct,backend/internal/api/server.go,HandlerOptions,archivePayee,HandlerOptions
+type-reference,backend/internal/api/payees.go,196,options-struct,backend/internal/api/server.go,HandlerOptions,restorePayee,HandlerOptions
+type-reference,backend/internal/api/payees.go,210,options-struct,backend/internal/api/server.go,HandlerOptions,payeeLifecycleMutation,HandlerOptions
+type-reference,backend/internal/api/payees.go,94,options-struct,backend/internal/api/server.go,HandlerOptions,createPayee,HandlerOptions
+type-reference,backend/internal/api/personal_access_token_audit_test.go,47,options-struct,backend/internal/api/server.go,HandlerOptions,TestPersonalAccessTokenAuditInFlightCutoff,HandlerOptions
+type-reference,backend/internal/api/pricing.go,277,options-struct,backend/internal/api/server.go,HandlerOptions,voidPrice,HandlerOptions
+type-reference,backend/internal/api/pricing.go,304,options-struct,backend/internal/api/server.go,HandlerOptions,createPrice,HandlerOptions
+type-reference,backend/internal/api/pricing.go,357,options-struct,backend/internal/api/server.go,HandlerOptions,savePricingPolicy,HandlerOptions
+type-reference,backend/internal/api/pricing.go,399,options-struct,backend/internal/api/server.go,HandlerOptions,savePricingSourceAssignment,HandlerOptions
+type-reference,backend/internal/api/pricing.go,436,options-struct,backend/internal/api/server.go,HandlerOptions,runPricingRefresh,HandlerOptions
+type-reference,backend/internal/api/pricing.go,499,options-struct,backend/internal/api/server.go,HandlerOptions,retryPricingBackgroundWork,HandlerOptions
+type-reference,backend/internal/api/pricing_management.go,147,options-struct,backend/internal/api/server.go,HandlerOptions,writeManualPrice,HandlerOptions
+type-reference,backend/internal/api/pricing_quotes.go,13,options-struct,backend/internal/api/server.go,HandlerOptions,queueQuoteRefresh,HandlerOptions
+type-reference,backend/internal/api/reconciliation.go,150,options-struct,backend/internal/api/server.go,HandlerOptions,updateReconciliationSelection,HandlerOptions
+type-reference,backend/internal/api/reconciliation.go,154,options-struct,backend/internal/api/server.go,HandlerOptions,previewReconciliation,HandlerOptions
+type-reference,backend/internal/api/reconciliation.go,158,options-struct,backend/internal/api/server.go,HandlerOptions,reconciliationSelectionMutation,HandlerOptions
+type-reference,backend/internal/api/reconciliation.go,199,options-struct,backend/internal/api/server.go,HandlerOptions,finishReconciliation,HandlerOptions
+type-reference,backend/internal/api/reconciliation.go,230,options-struct,backend/internal/api/server.go,HandlerOptions,voidReconciliation,HandlerOptions
+type-reference,backend/internal/api/reconciliation.go,290,options-struct,backend/internal/api/server.go,HandlerOptions,voidReconciliationCheckpoint,HandlerOptions
+type-reference,backend/internal/api/reconciliation.go,321,options-struct,backend/internal/api/server.go,HandlerOptions,changePostingReconciliationStatus,HandlerOptions
+type-reference,backend/internal/api/reconciliation.go,95,options-struct,backend/internal/api/server.go,HandlerOptions,startReconciliation,HandlerOptions
+type-reference,backend/internal/api/recovery_audit_test.go,53,options-struct,backend/internal/api/server.go,HandlerOptions,seedRecoveryAuditBook,HandlerOptions
+type-reference,backend/internal/api/recovery_audit_test.go,99,options-struct,backend/internal/api/server.go,HandlerOptions,restoreOntoFreshInstance,HandlerOptions
+type-reference,backend/internal/api/recurring.go,181,options-struct,backend/internal/api/server.go,HandlerOptions,mutateRecurringTemplate,HandlerOptions
+type-reference,backend/internal/api/recurring_review.go,142,options-struct,backend/internal/api/server.go,HandlerOptions,reviewRecurringOccurrence,HandlerOptions
+type-reference,backend/internal/api/recurring_review.go,228,options-struct,backend/internal/api/server.go,HandlerOptions,runRecurringNow,HandlerOptions
+type-reference,backend/internal/api/self_check.go,103,options-struct,backend/internal/api/server.go,HandlerOptions,runSelfCheck,HandlerOptions
+type-reference,backend/internal/api/server.go,41,options-struct,backend/internal/api/server.go,HandlerOptions,NewHandler,HandlerOptions
+type-reference,backend/internal/api/settings.go,57,options-struct,backend/internal/api/server.go,HandlerOptions,saveUserPreferences,HandlerOptions
+type-reference,backend/internal/api/setup.go,151,options-struct,backend/internal/api/server.go,HandlerOptions,writeSessionCookie,HandlerOptions
+type-reference,backend/internal/api/setup.go,163,options-struct,backend/internal/api/server.go,HandlerOptions,requestSessionCookieName,HandlerOptions
+type-reference,backend/internal/api/setup.go,66,options-struct,backend/internal/api/server.go,HandlerOptions,createOwner,HandlerOptions
+type-reference,backend/internal/api/setup_test.go,103,options-struct,backend/internal/api/server.go,HandlerOptions,TestCreateOwnerRequiresConfiguredSetupToken,HandlerOptions
+type-reference,backend/internal/api/setup_test.go,139,options-struct,backend/internal/api/server.go,HandlerOptions,TestCreateOwnerSetsSecureSessionCookieWhenTrustedProxyReportsHTTPS,HandlerOptions
+type-reference,backend/internal/api/setup_test.go,303,options-struct,backend/internal/api/server.go,HandlerOptions,newSetupTestHandler,HandlerOptions
+type-reference,backend/internal/api/setup_test.go,306,options-struct,backend/internal/api/server.go,HandlerOptions,newSetupTestHandlerWithOptions,HandlerOptions
+type-reference,backend/internal/api/setup_test.go,312,options-struct,backend/internal/api/server.go,HandlerOptions,newSetupTestHandlerWithInvestment,HandlerOptions
+type-reference,backend/internal/api/setup_test.go,328,options-struct,backend/internal/api/server.go,HandlerOptions,newTestInstanceOnDatabase,HandlerOptions
+type-reference,backend/internal/api/tags.go,120,options-struct,backend/internal/api/server.go,HandlerOptions,updateTag,HandlerOptions
+type-reference,backend/internal/api/tags.go,160,options-struct,backend/internal/api/server.go,HandlerOptions,archiveTag,HandlerOptions
+type-reference,backend/internal/api/tags.go,172,options-struct,backend/internal/api/server.go,HandlerOptions,restoreTag,HandlerOptions
+type-reference,backend/internal/api/tags.go,184,options-struct,backend/internal/api/server.go,HandlerOptions,tagLifecycleMutation,HandlerOptions
+type-reference,backend/internal/api/tags.go,86,options-struct,backend/internal/api/server.go,HandlerOptions,createTag,HandlerOptions
+type-reference,backend/internal/api/transactions_move.go,100,options-struct,backend/internal/api/server.go,HandlerOptions,placeTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_move.go,151,options-struct,backend/internal/api/server.go,HandlerOptions,movePostingToDay,HandlerOptions
+type-reference,backend/internal/api/transactions_move.go,17,options-struct,backend/internal/api/server.go,HandlerOptions,moveTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_move.go,48,options-struct,backend/internal/api/server.go,HandlerOptions,movePosting,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,11,options-struct,backend/internal/api/server.go,HandlerOptions,createTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,141,options-struct,backend/internal/api/server.go,HandlerOptions,voidTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,183,options-struct,backend/internal/api/server.go,HandlerOptions,unvoidTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,187,options-struct,backend/internal/api/server.go,HandlerOptions,softDeleteTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,191,options-struct,backend/internal/api/server.go,HandlerOptions,restoreTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,195,options-struct,backend/internal/api/server.go,HandlerOptions,transactionLifecycleHandler,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,230,options-struct,backend/internal/api/server.go,HandlerOptions,correctTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,266,options-struct,backend/internal/api/server.go,HandlerOptions,deleteDraftTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,292,options-struct,backend/internal/api/server.go,HandlerOptions,approveTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,49,options-struct,backend/internal/api/server.go,HandlerOptions,updateTransaction,HandlerOptions
+type-reference,backend/internal/api/transactions_write.go,99,options-struct,backend/internal/api/server.go,HandlerOptions,postTransaction,HandlerOptions
+type-reference,backend/internal/app/backup_test.go,750,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestPruningFailureStillLeavesASelfCheckBehind,OnlineBackupOptions
+type-reference,backend/internal/app/backup_worker.go,239,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,*BackupService.produceBackup,OnlineBackupOptions
+type-reference,backend/internal/app/forecast_learning_overlay.go,161,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,<package-declaration>,ForecastLearningOption
+type-reference,backend/internal/app/forecast_learning_overlay.go,346,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,*forecastLearningBuild.categoryOptions,ForecastLearningOption
+type-reference,backend/internal/app/forecast_learning_overlay.go,355,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,*forecastLearningBuild.categoryOptions,ForecastLearningOption
+type-reference,backend/internal/app/forecast_learning_overlay.go,358,options-struct,backend/internal/app/forecast_learning_overlay.go,ForecastLearningOption,*forecastLearningBuild.categoryOptions,ForecastLearningOption
+type-reference,backend/internal/app/import_adapter.go,21,interface,backend/internal/app/import_adapter.go,SourceAdapter,<package-declaration>,SourceAdapter
+type-reference,backend/internal/app/import_adapter.go,22,interface,backend/internal/app/import_adapter.go,SourceAdapter,<package-declaration>,SourceAdapter
+type-reference,backend/internal/app/import_adapter.go,25,interface,backend/internal/app/import_adapter.go,SourceAdapter,newAdapterRegistry,SourceAdapter
+type-reference,backend/internal/app/import_adapter.go,28,interface,backend/internal/app/import_adapter.go,SourceAdapter,newAdapterRegistry,SourceAdapter
+type-reference,backend/internal/app/import_adapter.go,36,interface,backend/internal/app/import_adapter.go,SourceAdapter,*adapterRegistry.detect,SourceAdapter
+type-reference,backend/internal/app/import_adapter.go,37,interface,backend/internal/app/import_adapter.go,SourceAdapter,*adapterRegistry.detect,SourceAdapter
+type-reference,backend/internal/app/import_adapter.go,49,interface,backend/internal/app/import_adapter.go,SourceAdapter,*adapterRegistry.byKindName,SourceAdapter
+type-reference,backend/internal/app/import_connections.go,47,interface,backend/internal/app/import_connections.go,ConnectionProber,<package-declaration>,ConnectionProber
+type-reference,backend/internal/app/import_connections.go,55,interface,backend/internal/app/import_connections.go,ConnectionProber,NewImportConnectionService,ConnectionProber
+type-reference,backend/internal/app/import_connections_test.go,46,interface,backend/internal/app/import_connections.go,ConnectionProber,newTestConnectionService,ConnectionProber
+type-reference,backend/internal/app/import_dividend_review.go,446,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*ImportService.prepareImportDividendRepair,cleanTransactionOptions
+type-reference,backend/internal/app/import_qif.go,122,options-struct,backend/internal/app/import_qif.go,qifOptions,parseQIF,qifOptions
+type-reference,backend/internal/app/import_qif.go,125,options-struct,backend/internal/app/import_qif.go,qifOptions,parseQIFWithOptions,qifOptions
+type-reference,backend/internal/app/import_qif.go,303,options-struct,backend/internal/app/import_qif.go,qifOptions,normalizeQIFRecords,qifOptions
+type-reference,backend/internal/app/import_qif.go,70,options-struct,backend/internal/app/import_qif.go,qifOptions,qifOptionsFromProfile,qifOptions
+type-reference,backend/internal/app/import_qif.go,71,options-struct,backend/internal/app/import_qif.go,qifOptions,qifOptionsFromProfile,qifOptions
+type-reference,backend/internal/app/import_qif.go,78,options-struct,backend/internal/app/import_qif.go,qifOptions,qifOptionsFromProfile,qifOptions
+type-reference,backend/internal/app/import_qif.go,83,options-struct,backend/internal/app/import_qif.go,qifOptions,qifOptionsFromProfile,qifOptions
+type-reference,backend/internal/app/import_qif.go,94,options-struct,backend/internal/app/import_qif.go,qifOptions,qifOptionsFromProfile,qifOptions
+type-reference,backend/internal/app/investment_basis_provenance_correction_test.go,261,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestProvenanceCorrectionImmutableHistoryExportsAndSurvivesRestore,OnlineBackupOptions
+type-reference,backend/internal/app/investment_basis_resolution_zero_test.go,261,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestKnownZeroResolutionExportsAndSurvivesRestore,OnlineBackupOptions
+type-reference,backend/internal/app/investment_diagnostic_audit_test.go,143,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestInvestmentDiagnosticAuditResolutionLifecycleAndRestore,OnlineBackupOptions
+type-reference,backend/internal/app/investment_operations_audit_test.go,98,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestInvestmentAuditCommandRegisterAndRestoredExport,OnlineBackupOptions
+type-reference,backend/internal/app/investment_split_operation_test.go,190,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestSplitOperationCorrectionsExportAndRestoreBothJournalShapes,OnlineBackupOptions
+type-reference,backend/internal/app/investment_split_zero_test.go,35,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestJournalFreeSplitExportsAndSurvivesRestore,OnlineBackupOptions
+type-reference,backend/internal/app/investment_unknown_non_sale_test.go,437,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestUnknownNonSaleExportResolutionAndRestoreRetainOriginalNulls,OnlineBackupOptions
+type-reference,backend/internal/app/investment_write_off_currency_test.go,243,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestWriteOffReplacementPinsOrChangesCurrencyAndExportsOriginalEvidence,OnlineBackupOptions
+type-reference,backend/internal/app/recurring.go,399,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*RecurringService.cleanTemplate,cleanTransactionOptions
+type-reference,backend/internal/app/restore_test.go,164,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestRestoreDrillMatchesSourceTrialBalance,OnlineBackupOptions
+type-reference,backend/internal/app/restore_test.go,220,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestRestorePreservesUncheckpointedWALContent,OnlineBackupOptions
+type-reference,backend/internal/app/restore_test.go,399,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestSealedDataDecryptsAfterRestoreWithRetainedKey,OnlineBackupOptions
+type-reference,backend/internal/app/restore_test.go,449,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestConsecutiveRestoresEachKeepTheirOwnSafetyCopy,OnlineBackupOptions
+type-reference,backend/internal/app/transactions_checkpoint_boundary_test.go,230,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,TestWritePathsEnforceTheCheckpointBoundaryInTheRepository,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_reconciliation.go,137,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.ReconciliationImpactForPost,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_reconciliation.go,15,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.ReconciliationImpactForCreate,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_reconciliation.go,30,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.investmentReconciliationImpactForCreate,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_reconciliation.go,47,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.reconciliationImpactForCreate,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_reconciliation.go,95,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.ReconciliationImpactForUpdate,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_stale_version_test.go,194,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,TestStaleDraftPromotionIsRefused,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_stale_version_test.go,290,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,currentSpec,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_stale_version_test.go,35,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,preparedMetadataEdit,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_validate.go,150,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanTransactionSpec,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_validate.go,314,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanJournalEntry,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_validate.go,418,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.cleanPosting,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_write.go,100,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransactionForWriteWithOptions,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_write.go,147,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransaction,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_write.go,238,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.UpdateTransaction,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_write.go,71,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransactionForWrite,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_write.go,80,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareCreateTransactionForWriteCarrying,cleanTransactionOptions
+type-reference,backend/internal/app/transactions_write.go,93,options-struct,backend/internal/app/transactions_types.go,cleanTransactionOptions,*TransactionService.prepareInvestmentTransactionForWrite,cleanTransactionOptions
+type-reference,backend/internal/appruntime/runtime.go,157,options-struct,backend/internal/api/server.go,HandlerOptions,openWith,HandlerOptions
+type-reference,backend/internal/db/accounts.go,1097,interface,backend/internal/db/accounts.go,rowQueryer,accountHasPostings,rowQueryer
+type-reference,backend/internal/db/accounts.go,1458,interface,backend/internal/db/commodities.go,rowScanner,scanAccountRecord,rowScanner
+type-reference,backend/internal/db/auth.go,356,interface,backend/internal/db/imports.go,execContexter,refundLoginAttemptExec,execContexter
+type-reference,backend/internal/db/auth.go,381,interface,backend/internal/db/imports.go,execContexter,insertAuthenticationEvent,execContexter
+type-reference,backend/internal/db/auth.go,505,interface,backend/internal/db/imports.go,execContexter,createTrustedDeviceExec,execContexter
+type-reference,backend/internal/db/auth.go,616,interface,backend/internal/db/imports.go,execContexter,deleteLoginThrottleExec,execContexter
+type-reference,backend/internal/db/backup_online.go,174,interface,backend/internal/db/backup_online.go,backupPageCopier,copyBackupPages,backupPageCopier
+type-reference,backend/internal/db/backup_online.go,50,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,OnlineBackupSQLiteDatabase,OnlineBackupOptions
+type-reference,backend/internal/db/backup_online_test.go,26,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestNativeOnlineBackupContentionCancelsAndCleansUp,OnlineBackupOptions
+type-reference,backend/internal/db/backup_online_test.go,35,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestNativeOnlineBackupContentionCancelsAndCleansUp,OnlineBackupOptions
+type-reference,backend/internal/db/commodities.go,546,interface,backend/internal/db/commodities.go,rowScanner,scanCommodityRecord,rowScanner
+type-reference,backend/internal/db/import_connections.go,106,interface,backend/internal/db/commodities.go,rowScanner,scanImportConnectionRow,rowScanner
+type-reference,backend/internal/db/import_short_link.go,118,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,shortLinkCandidateQuery,saleOperationReader
+type-reference,backend/internal/db/import_short_link.go,70,interface,backend/internal/db/import_short_link.go,shortLinkScanner,scanShortLinkCandidate,shortLinkScanner
+type-reference,backend/internal/db/import_source_revisions.go,78,interface,backend/internal/db/accounts.go,rowQueryer,checkSourceRevision,rowQueryer
+type-reference,backend/internal/db/imports.go,1355,interface,backend/internal/db/imports.go,importStagedRowScanner,scanImportStagedRow,importStagedRowScanner
+type-reference,backend/internal/db/imports.go,1586,interface,backend/internal/db/imports.go,execContexter,commitImportStagedRowExec,execContexter
+type-reference,backend/internal/db/imports.go,650,interface,backend/internal/db/transactions_read.go,queryer,listImportRules,queryer
+type-reference,backend/internal/db/imports.go,984,interface,backend/internal/db/imports.go,queryRowContexter,hasInFlightFetch,queryRowContexter
+type-reference,backend/internal/db/institutions.go,506,interface,backend/internal/db/commodities.go,rowScanner,scanInstitutionRecord,rowScanner
+type-reference,backend/internal/db/investment_basis_resolution.go,221,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,effectiveTransferBasisResolutionQuery,saleOperationReader
+type-reference,backend/internal/db/investment_basis_resolution.go,226,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,basisResolutionOperationQuery,saleOperationReader
+type-reference,backend/internal/db/investment_basis_resolution.go,58,interface,backend/internal/db/transactions_read.go,queryer,unknownTransferBasisQuery,queryer
+type-reference,backend/internal/db/investment_buy_replacement.go,40,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,buyOperationByTransactionIDQuery,saleOperationReader
+type-reference,backend/internal/db/investment_capital_return.go,480,interface,backend/internal/db/transactions_read.go,queryer,capitalReturnIntentsQuery,queryer
+type-reference,backend/internal/db/investment_capital_return.go,530,interface,backend/internal/db/transactions_read.go,queryer,effectiveCapitalReturnEffectsQuery,queryer
+type-reference,backend/internal/db/investment_capital_return.go,651,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,capitalReturnOperationByTransactionIDQuery,saleOperationReader
+type-reference,backend/internal/db/investment_capital_return.go,764,interface,backend/internal/db/transactions_read.go,queryer,capitalReturnEntitlementsQuery,queryer
+type-reference,backend/internal/db/investment_cash_stock_merger_correction.go,60,interface,backend/internal/db/investment_transfer_correction.go,transferOperationReader,cashStockMergerOperationByTransactionIDQuery,transferOperationReader
+type-reference,backend/internal/db/investment_dividend_correction.go,30,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,dividendOperationByTransactionIDQuery,saleOperationReader
+type-reference,backend/internal/db/investment_effective_movements.go,104,interface,backend/internal/db/transactions_read.go,queryer,EffectiveLotMovements,queryer
+type-reference,backend/internal/db/investment_effective_movements.go,105,interface,backend/internal/db/transactions_read.go,queryer,EffectiveLotMovements,queryer
+type-reference,backend/internal/db/investment_effective_movements.go,146,interface,backend/internal/db/transactions_read.go,queryer,effectiveMovementProvenance,queryer
+type-reference,backend/internal/db/investment_effective_movements.go,246,interface,backend/internal/db/transactions_read.go,queryer,effectiveEventMovements,queryer
+type-reference,backend/internal/db/investment_effective_movements.go,286,interface,backend/internal/db/transactions_read.go,queryer,revisedDisposalMovements,queryer
+type-reference,backend/internal/db/investment_effective_movements.go,336,interface,backend/internal/db/transactions_read.go,queryer,revisedSplitMovements,queryer
+type-reference,backend/internal/db/investment_effective_movements.go,375,interface,backend/internal/db/transactions_read.go,queryer,revisedTransferLinkMovements,queryer
+type-reference,backend/internal/db/investment_effective_movements.go,446,interface,backend/internal/db/transactions_read.go,queryer,revisedPooledTransferMovements,queryer
+type-reference,backend/internal/db/investment_effective_movements.go,509,interface,backend/internal/db/transactions_read.go,queryer,revisedCapitalReturnMovements,queryer
+type-reference,backend/internal/db/investment_gains_runs.go,99,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,*InvestmentRepository.gainsSnapshot,OnlineBackupOptions
+type-reference,backend/internal/db/investment_import_lineage.go,11,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,investmentOperationHasImportedLineageQuery,saleOperationReader
+type-reference,backend/internal/db/investment_import_lineage.go,35,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,investmentOperationHasCommittedSourceQuery,saleOperationReader
+type-reference,backend/internal/db/investment_payment_in_lieu.go,211,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,paymentInLieuOperationByTransactionIDQuery,saleOperationReader
+type-reference,backend/internal/db/investment_replay_closure.go,64,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayClosureQuery,queryer
+type-reference,backend/internal/db/investment_replay_intents.go,159,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayIntentsQuery,queryer
+type-reference,backend/internal/db/investment_replay_intents.go,605,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayPooledLotIntentsQuery,queryer
+type-reference,backend/internal/db/investment_replay_intents.go,711,interface,backend/internal/db/transactions_read.go,queryer,transferRevisionDepletionsQuery,queryer
+type-reference,backend/internal/db/investment_replay_intents.go,751,interface,backend/internal/db/transactions_read.go,queryer,investmentReplaySplitIntentsQuery,queryer
+type-reference,backend/internal/db/investment_replay_intents.go,823,interface,backend/internal/db/transactions_read.go,queryer,investmentReplayOrderOperationIDsQuery,queryer
+type-reference,backend/internal/db/investment_sale_reversal.go,63,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,saleOperationByIDQuery,saleOperationReader
+type-reference,backend/internal/db/investment_share_exchange_correction.go,46,interface,backend/internal/db/investment_transfer_correction.go,transferOperationReader,shareExchangeOperationByTransactionIDQuery,transferOperationReader
+type-reference,backend/internal/db/investment_short_positions.go,36,interface,backend/internal/db/transactions_read.go,queryer,shortLotQuantityEvents,queryer
+type-reference,backend/internal/db/investment_spin_off_correction.go,50,interface,backend/internal/db/investment_transfer_correction.go,transferOperationReader,spinOffOperationByTransactionIDQuery,transferOperationReader
+type-reference,backend/internal/db/investment_split.go,432,interface,backend/internal/db/transactions_read.go,queryer,effectiveSplitEffectsQuery,queryer
+type-reference,backend/internal/db/investment_split_correction.go,48,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,<package-declaration>,saleOperationReader
+type-reference,backend/internal/db/investment_split_correction.go,49,interface,backend/internal/db/transactions_read.go,queryer,<package-declaration>,queryer
+type-reference,backend/internal/db/investment_split_correction.go,56,interface,backend/internal/db/investment_split_correction.go,splitOperationReader,splitOperationByTransactionIDQuery,splitOperationReader
+type-reference,backend/internal/db/investment_split_correction.go,61,interface,backend/internal/db/investment_split_correction.go,splitOperationReader,splitOperationQuery,splitOperationReader
+type-reference,backend/internal/db/investment_transfer_correction.go,108,interface,backend/internal/db/transactions_read.go,queryer,transferBridgeTotalQuery,queryer
+type-reference,backend/internal/db/investment_transfer_correction.go,60,interface,backend/internal/db/investment_sale_reversal.go,saleOperationReader,<package-declaration>,saleOperationReader
+type-reference,backend/internal/db/investment_transfer_correction.go,61,interface,backend/internal/db/transactions_read.go,queryer,<package-declaration>,queryer
+type-reference,backend/internal/db/investment_transfer_correction.go,64,interface,backend/internal/db/investment_transfer_correction.go,transferOperationReader,transferOperationByTransactionIDQuery,transferOperationReader
+type-reference,backend/internal/db/investments.go,2856,interface,backend/internal/db/commodities.go,rowScanner,scanInvestmentInstrumentRecord,rowScanner
+type-reference,backend/internal/db/investments.go,2891,interface,backend/internal/db/commodities.go,rowScanner,scanCostBasisProfileRow,rowScanner
+type-reference,backend/internal/db/investments.go,2931,interface,backend/internal/db/commodities.go,rowScanner,scanDividendDefaultRow,rowScanner
+type-reference,backend/internal/db/investments.go,2983,interface,backend/internal/db/commodities.go,rowScanner,scanInvestmentLotRow,rowScanner
+type-reference,backend/internal/db/pricing.go,1329,interface,backend/internal/db/commodities.go,rowScanner,scanPriceObservationRow,rowScanner
+type-reference,backend/internal/db/pricing.go,1369,interface,backend/internal/db/commodities.go,rowScanner,scanPricingPolicyRow,rowScanner
+type-reference,backend/internal/db/pricing.go,1398,interface,backend/internal/db/commodities.go,rowScanner,scanPricingSourceAssignmentRow,rowScanner
+type-reference,backend/internal/db/reconciliation.go,1127,interface,backend/internal/db/transactions_read.go,queryer,loadReconciliationSessionChildren,queryer
+type-reference,backend/internal/db/reconciliation.go,1159,interface,backend/internal/db/transactions_read.go,queryer,reconciliationCandidates,queryer
+type-reference,backend/internal/db/reconciliation.go,1236,interface,backend/internal/db/transactions_read.go,queryer,reconciliationSessionPostings,queryer
+type-reference,backend/internal/db/reconciliation.go,1258,interface,backend/internal/db/transactions_read.go,queryer,currentReconciliationPostingsByID,queryer
+type-reference,backend/internal/db/reconciliation.go,1295,interface,backend/internal/db/transactions_read.go,queryer,currentAccountPostingsByID,queryer
+type-reference,backend/internal/db/recurring.go,384,interface,backend/internal/db/transactions_read.go,queryer,listRecurringTemplates,queryer
+type-reference,backend/internal/db/sqlite_native_test.go,206,options-struct,backend/internal/db/backup_online.go,OnlineBackupOptions,TestNativeSQLiteURIPunctuationAndBackup,OnlineBackupOptions
+type-reference,backend/internal/db/tags.go,414,interface,backend/internal/db/commodities.go,rowScanner,scanTagRecord,rowScanner
+type-reference,backend/internal/db/transactions_read.go,270,interface,backend/internal/db/transactions_read.go,queryer,loadTransactionChildrenQuery,queryer
+type-reference,backend/internal/db/transactions_read.go,288,interface,backend/internal/db/transactions_read.go,queryer,transactionTagIDs,queryer
+type-reference,backend/internal/db/transactions_read.go,315,interface,backend/internal/db/transactions_read.go,queryer,journalEntriesForVersion,queryer
+type-reference,backend/internal/db/transactions_read.go,350,interface,backend/internal/db/transactions_read.go,queryer,postingsForJournalEntry,queryer
+type-reference,backend/internal/db/transactions_read.go,402,interface,backend/internal/db/transactions_read.go,queryer,postingTagIDs,queryer
+type-reference,backend/internal/marketdata/dividends.go,18,interface,backend/internal/marketdata/types.go,Provider,<package-declaration>,Provider
+type-reference,backend/internal/marketdata/dividends.go,47,interface,backend/internal/marketdata/dividends.go,DividendProvider,*Registry.DividendProvider,DividendProvider
+type-reference,backend/internal/marketdata/dividends.go,52,interface,backend/internal/marketdata/dividends.go,DividendProvider,*Registry.DividendProvider,DividendProvider
+type-reference,backend/internal/marketdata/prices.go,23,interface,backend/internal/marketdata/types.go,Provider,<package-declaration>,Provider
+type-reference,backend/internal/marketdata/prices.go,47,interface,backend/internal/marketdata/prices.go,PriceProvider,*Registry.PriceProvider,PriceProvider
+type-reference,backend/internal/marketdata/prices.go,52,interface,backend/internal/marketdata/prices.go,PriceProvider,*Registry.PriceProvider,PriceProvider
+type-reference,backend/internal/marketdata/registry_base_url_test.go,30,interface,backend/internal/marketdata/types.go,FXRateProvider,TestDefaultRegistryAtSendsEveryProviderToTheOverrideHost,FXRateProvider
+type-reference,backend/internal/marketdata/registry_base_url_test.go,39,interface,backend/internal/marketdata/prices.go,PriceProvider,TestDefaultRegistryAtSendsEveryProviderToTheOverrideHost,PriceProvider
+type-reference,backend/internal/marketdata/types.go,106,interface,backend/internal/marketdata/types.go,Provider,*Registry.Provider,Provider
+type-reference,backend/internal/marketdata/types.go,111,interface,backend/internal/marketdata/types.go,FXRateProvider,*Registry.FXRateProvider,FXRateProvider
+type-reference,backend/internal/marketdata/types.go,116,interface,backend/internal/marketdata/types.go,FXRateProvider,*Registry.FXRateProvider,FXRateProvider
+type-reference,backend/internal/marketdata/types.go,32,interface,backend/internal/marketdata/types.go,Provider,<package-declaration>,Provider
+type-reference,backend/internal/marketdata/types.go,62,interface,backend/internal/marketdata/types.go,Provider,<package-declaration>,Provider
+type-reference,backend/internal/marketdata/types.go,65,interface,backend/internal/marketdata/types.go,Provider,NewRegistry,Provider
+type-reference,backend/internal/marketdata/types.go,66,interface,backend/internal/marketdata/types.go,Provider,NewRegistry,Provider
+type-reference,backend/internal/marketdata/types.go,99,interface,backend/internal/marketdata/types.go,Provider,*Registry.Register,Provider

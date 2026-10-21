@@ -1,0 +1,28 @@
+package api
+
+import (
+ "encoding/json"
+ "net/http"
+ "testing"
+ "github.com/stretchr/testify/require"
+)
+
+// Audit-only real HTTP consumer; copied into a disposable baseline checkout.
+func TestMaintainabilityForecastCalendarAdmissionProbe(t *testing.T) {
+ fixture := newForecastAPIFixture(t)
+ for _, tc := range []struct { date string; status int }{
+  {"2026-02-28", http.StatusOK}, {"2026-02-29", http.StatusBadRequest},
+  {"2026-02-31", http.StatusBadRequest}, {"2026-04-31", http.StatusBadRequest},
+  {"2024-02-29", http.StatusOK}, {"2026-13-01", http.StatusBadRequest},
+ } {
+  t.Run(tc.date, func(t *testing.T) {
+   response := forecastRequest(t, fixture.handler, fixture.session,
+    "/api/v1/forecasts/balances?spending_model=adaptive_v1&history_complete_from="+tc.date, tc.status)
+   if tc.status == http.StatusBadRequest {
+    var body struct { Error struct { Code string } }
+    require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+    require.Equal(t, "VALIDATION_FAILED", body.Error.Code)
+   }
+  })
+ }
+}

@@ -1,0 +1,18 @@
+{
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.{mjs,ts}"],
+      "project": ["scripts/**/*.{mjs,ts}"]
+    },
+    "frontend": {
+      "entry": ["src/routes/**/+*.{svelte,ts}!", "static/theme-init.js!", "src/**/*.test.ts", "vite.config.ts"],
+      "project": ["src/**/*.{ts,svelte}!", "!src/**/*.test.ts!", "vite/**/*.{js,ts}", "vite.config.ts", "static/theme-init.js!"],
+      "ignore": ["src/lib/paraglide/**", "src/lib/api/schema.d.ts"],
+      "paths": {"#lib/*": ["./src/lib/*"]}
+    },
+    "e2e": {
+      "entry": ["*.config.ts", "playwright/**/*.spec.ts", "proxy-audit/**/*.spec.ts", "proxy-audit/totp-code.ts", "stubs/*.test.mjs", "stubs/providers.mjs"],
+      "project": ["**/*.{ts,mjs}"]
+    }
+  }
+}

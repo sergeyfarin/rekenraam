@@ -1,0 +1,99 @@
+{
+  "frontend_files": 251,
+  "go_control": {
+    "api-arithmetic": 1,
+    "exact-package-call": 1,
+    "float-call": 1,
+    "float-cast": 1,
+    "import": 2,
+    "sql-shaped-call": 1
+  },
+  "go_scanner_version": "go version go1.27.0 linux/amd64",
+  "go_site_kinds": {
+    "api-arithmetic": 32,
+    "exact-package-call": 581,
+    "float-cast": 2,
+    "import": 484,
+    "numeric-method-name": 304,
+    "sql-shaped-call": 951
+  },
+  "limitations": [
+    "Syntactic imports, selectors and arithmetic; no full type/data-flow or runtime request-count proof.",
+    "API imports include pure helpers, query options and error constructors; they are not all requests.",
+    "Component reachability follows statically named imports only; dynamic components and aliases can require manual tracing.",
+    "Nested Svelte/TS function scopes are navigation labels, not a complete call graph.",
+    "Operator signals can include unevaluated syntax such as negative type literals, not just runtime arithmetic.",
+    "Only runtime TS/Svelte and Go inputs are scanned; tests, generated code, CSS and archives are excluded."
+  ],
+  "loop_site_kinds": {
+    "api-import-call": 21,
+    "arithmetic": 84,
+    "calendar-helper-call": 11,
+    "component": 91,
+    "numeric-date": 35
+  },
+  "node_version": "v24.21.0",
+  "query_files": 79,
+  "repeated_component_query_paths": [
+    {
+      "component": "ForecastEvents",
+      "file": "frontend/src/lib/forecast/forecast-screen.svelte",
+      "line": 488,
+      "queries": [
+        "frontend/src/lib/forecast/forecast-events.svelte"
+      ]
+    },
+    {
+      "component": "ProviderPaymentInLieuCompletion",
+      "file": "frontend/src/lib/investments/event-suggestions.svelte",
+      "line": 330,
+      "queries": [
+        "frontend/src/lib/investments/provider-payment-in-lieu-completion.svelte"
+      ]
+    },
+    {
+      "component": "ProviderDividendCompletion",
+      "file": "frontend/src/lib/investments/event-suggestions.svelte",
+      "line": 334,
+      "queries": [
+        "frontend/src/lib/investments/provider-dividend-completion.svelte"
+      ]
+    },
+    {
+      "component": "SplitLinkPanel",
+      "file": "frontend/src/routes/app/import/+page.svelte",
+      "line": 1847,
+      "queries": [
+        "frontend/src/lib/imports/split-link-panel.svelte"
+      ]
+    },
+    {
+      "component": "ShortLinkPanel",
+      "file": "frontend/src/routes/app/import/+page.svelte",
+      "line": 1856,
+      "queries": [
+        "frontend/src/lib/imports/short-link-panel.svelte"
+      ]
+    }
+  ],
+  "runtime_go_files": 311,
+  "sha256": {
+    "maintainability-go-layers-2026-10-21.csv": "f09eb54fd9a0049a9b5d0e8935e980d620b2c89b10755e3e946aa70a3187a160",
+    "maintainability-web-layers-2026-10-21.csv": "febb88600aef31ef3dfa47d57cb79444759a156a62d12f0a3b97494671ff889c"
+  },
+  "source_sha": "13d15eabd68ed2d3b6177512c9c8fe56c528bbf0",
+  "svelte": "5.57.2",
+  "svelte_files": 153,
+  "typescript": "6.0.3",
+  "typescript_files": 98,
+  "web_site_kinds": {
+    "api-import-call": 1024,
+    "arithmetic": 241,
+    "calendar-helper-call": 41,
+    "component": 739,
+    "numeric-date": 243,
+    "query": 208,
+    "transport": 275
+  },
+  "working_head": "6cb8b044c19a2860397ce802a93b00ea0d58eb10"
+}

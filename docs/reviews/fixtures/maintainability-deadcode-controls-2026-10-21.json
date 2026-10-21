@@ -1,0 +1,10 @@
+{
+  "go_comment_string_negative": true,
+  "go_dynamic_interface_live": true,
+  "go_test_root_difference": true,
+  "named_types_exclude_generic_parameters": true,
+  "web_local_export_visibility_distinguished": true,
+  "web_route_and_imported_helper_live": true,
+  "web_unused_ts_and_svelte_files": true,
+  "web_unused_type": true
+}

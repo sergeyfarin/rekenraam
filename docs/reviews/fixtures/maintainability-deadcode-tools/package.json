@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "devDependencies": {
+    "knip": "6.42.1"
+  }
+}

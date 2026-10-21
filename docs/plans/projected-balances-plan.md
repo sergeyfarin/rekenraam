@@ -20,6 +20,16 @@ seasonality (for example July–August travel). That companion specifies opt-in
 models, history/quality/resource gates and final R10 acceptance. Core and
 learning acceptance are complete.
 
+Maintainability follow-up (2026-10-21): the
+[#284 layer/date review](../reviews/maintainability-layers-2026-10-21.md) confirms
+that the frontend's `history_complete_from` regex + `Date.parse` accepts some
+impossible calendar dates, while the backend strictly refuses them.
+[#380](https://github.com/sergeyfarin/rekenraam/issues/380), P3, owns reuse of
+`isCalendarDate` in URL/form admission and the browser invalid-link regression.
+This is a bounded frontend admission defect; core forecast arithmetic and the
+read-only contract remain unchanged. The historical R10 acceptance is not a
+claim that this later-discovered gap is fixed.
+
 Navigation: [decisions](#3-financial-and-date-decisions) ·
 [backend algorithm](#4-backend-read-model-and-algorithm) ·
 [API contract](#5-http-contract-openapi-first-in-slice-3) ·

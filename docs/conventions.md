@@ -623,7 +623,9 @@ has actual installations, its migration files are immutable.
   pick the right one rather than growing inline math: `format.ts` for anything a user
   only reads, `amount.ts` (`formatLedgerAmount`) for anything that must round-trip
   back into an editable input unchanged. `format.test.ts` pins the difference.
-- Backend money arithmetic uses **`shopspring/decimal`**. All canonical balance and report calculations happen in Go, not in the browser.
+- Backend money arithmetic uses the shared `internal/exact` coefficient and
+  `ScaledInt` helpers over arbitrary-precision integers (ADR 0009). All canonical
+  balance and report calculations happen in Go, not in the browser.
 - Report calculations must be backend-composed read models with explicit filter
   contracts. Reuse the same report semantics across full report pages,
   account-detail summaries, category/payee drill-downs, and future

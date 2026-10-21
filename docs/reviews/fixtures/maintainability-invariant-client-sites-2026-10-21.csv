@@ -1,0 +1,170 @@
+file,line,symbol,kind,source
+frontend/src/lib/dates/owner-date-context.ts,11,useOwnerToday,lexical-call,export function useOwnerToday(): () => string {
+frontend/src/lib/imports/dividend-review-row.svelte,34,checkpointOverride,lexical-call,"return { resolution, expected_transaction_version_id: review.expected_transaction_version_id, reason, reconciliation_override: false, ...checkpointOverride(reviewed) };"
+frontend/src/lib/imports/dividend-review-row.svelte,46,isStaleImpactRefusal,lexical-call,"const current = isStaleImpactRefusal(err) ? await importDividendReviewImpact(review, request()) : null;"
+frontend/src/lib/investments/basis-resolution-form.svelte,133,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) return false;
+frontend/src/lib/investments/basis-resolution-form.svelte,142,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/basis-resolution-form.svelte,153,isStaleImpactRefusal,lexical-call,"if (!isStaleImpactRefusal(error) || !(await reviewImpact(payload, true))) formError = error;"
+frontend/src/lib/investments/basis-resolution-form.svelte,166,gainAcknowledgement,lexical-call,"await commit(payload, impacts, gainAcknowledgement(gainImpact));"
+frontend/src/lib/investments/buy-form.svelte,42,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/buy-form.svelte,266,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) return false;
+frontend/src/lib/investments/buy-form.svelte,276,isStaleImpactRefusal,lexical-call,if (!isStaleImpactRefusal(err)) return false;
+frontend/src/lib/investments/buy-form.svelte,288,gainAcknowledgement,lexical-call,"await submitBuy(payload, impacts, correctionReason, gainAcknowledgement(gainImpact));"
+frontend/src/lib/investments/buy-form.svelte,306,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/buy-form.svelte,312,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/capital-return-form.svelte,35,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/capital-return-form.svelte,102,coefficientSign,lexical-call,coefficientSign(position.quantity_value) > 0 && holdingIDs.has(position.account_id)));
+frontend/src/lib/investments/capital-return-form.svelte,152,parseMagnitude,lexical-call,"const quantity = parseMagnitude(text, { maxScale: 24 });"
+frontend/src/lib/investments/capital-return-form.svelte,233,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(preview.gainImpact);
+frontend/src/lib/investments/capital-return-form.svelte,236,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/capital-return-form.svelte,241,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/capital-return-form.svelte,247,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(error) && preview) {
+frontend/src/lib/investments/capital-return-form.svelte,250,impactNeedsReview,lexical-call,"if (preview && impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/capital-return-form.svelte,267,impactNeedsReview,lexical-call,"if (impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/capital-return-form.svelte,392,coefficientSign,lexical-call,: coefficientSign(effect.excess_value) > 0
+frontend/src/lib/investments/capital-return-form.svelte,400,coefficientSign,lexical-call,{#if preview.effects.some((effect) => effect.excess_value !== null && coefficientSign(effect.excess_value) > 0)}
+frontend/src/lib/investments/cash-and-stock-merger-form.svelte,37,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/cash-and-stock-merger-form.svelte,126,coefficientSign,lexical-call,if (position.position_side !== 'long' || coefficientSign(position.quantity_value) <= 0) continue;
+frontend/src/lib/investments/cash-and-stock-merger-form.svelte,208,coefficientSign,lexical-call,if (!cash.ok || coefficientSign(cash.field.value) <= 0) {
+frontend/src/lib/investments/cash-and-stock-merger-form.svelte,280,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(preview.gainImpact);
+frontend/src/lib/investments/cash-and-stock-merger-form.svelte,282,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/cash-and-stock-merger-form.svelte,304,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(error) && preview) {
+frontend/src/lib/investments/cash-and-stock-merger-form.svelte,307,impactNeedsReview,lexical-call,"if (preview && impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/cash-and-stock-merger-form.svelte,324,impactNeedsReview,lexical-call,"if (impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/cash-in-lieu-form.svelte,85,parseMagnitude,lexical-call,"const q=parseMagnitude(quantity,{maxScale:24});"
+frontend/src/lib/investments/cash-in-lieu-form.svelte,110,gainAcknowledgement,lexical-call,const acknowledgement=gainAcknowledgement(gainImpact);
+frontend/src/lib/investments/cash-in-lieu-form.svelte,111,checkpointOverride,lexical-call,"const guards={...checkpointOverride(reviewed),gain_impact_acknowledgement:acknowledgement || undefined};"
+frontend/src/lib/investments/cash-in-lieu-form.svelte,116,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(error) && preview) {
+frontend/src/lib/investments/cash-in-lieu-form.svelte,117,impactNeedsReview,lexical-call,try {await runPreview(preview.payload);reviewing=!!preview && impactNeedsReview(preview.result.impact);gainRefreshed=reviewing;}
+frontend/src/lib/investments/cash-in-lieu-form.svelte,124,impactNeedsReview,lexical-call,if (impactNeedsReview(preview.result.impact)) {gainRefreshed=false;reviewing=true;} else void commit([]);
+frontend/src/lib/investments/dividend-correction-form.svelte,184,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) return false;
+frontend/src/lib/investments/dividend-correction-form.svelte,191,checkpointOverride,lexical-call,"const body = { reason: reason.trim(), ...checkpointOverride(reviewed) };"
+frontend/src/lib/investments/dividend-correction-form.svelte,205,isStaleImpactRefusal,lexical-call,"if (!isStaleImpactRefusal(error) || !(await reviewImpact(target, true))) formError = error;"
+frontend/src/lib/investments/dividend-correction-form.svelte,218,gainAcknowledgement,lexical-call,"await commit(target, impacts, gainAcknowledgement(gainImpact));"
+frontend/src/lib/investments/dividend-form.svelte,42,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/dividend-form.svelte,314,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) return false;
+frontend/src/lib/investments/dividend-form.svelte,326,isStaleImpactRefusal,lexical-call,"if (!isStaleImpactRefusal(err) || !lastReinvestment || !(await reviewReinvestment(lastReinvestment, true))) {"
+frontend/src/lib/investments/dividend-form.svelte,344,checkpointOverride,lexical-call,"await recordDividend({ ...target.payload, ...checkpointOverride(impacts) }, csrfToken);"
+frontend/src/lib/investments/dividend-form.svelte,347,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(err) && (await reviewCash(target.payload))) return;
+frontend/src/lib/investments/dividend-form.svelte,351,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(gainImpact);
+frontend/src/lib/investments/dividend-form.svelte,355,checkpointOverride,lexical-call,"...checkpointOverride(impacts),"
+frontend/src/lib/investments/external-transfer-in-form.svelte,147,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) return false;
+frontend/src/lib/investments/external-transfer-in-form.svelte,157,isStaleImpactRefusal,lexical-call,"if (!isStaleImpactRefusal(error) || !(await reviewImpact(payload, true))) formError = error;"
+frontend/src/lib/investments/external-transfer-in-form.svelte,169,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(gainImpact);
+frontend/src/lib/investments/external-transfer-in-form.svelte,173,checkpointOverride,lexical-call,"...checkpointOverride(impacts),"
+frontend/src/lib/investments/external-transfer-out-form.svelte,35,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/external-transfer-out-form.svelte,88,coefficientSign,lexical-call,position.position_side === 'long' && coefficientSign(position.quantity_value) > 0 &&
+frontend/src/lib/investments/external-transfer-out-form.svelte,207,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(preview.gainImpact);
+frontend/src/lib/investments/external-transfer-out-form.svelte,210,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/external-transfer-out-form.svelte,226,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(error) && preview) {
+frontend/src/lib/investments/external-transfer-out-form.svelte,229,impactNeedsReview,lexical-call,"if (preview && impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/external-transfer-out-form.svelte,246,impactNeedsReview,lexical-call,"if (impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/external-transfer-out-form.svelte,373,coefficientSign,lexical-call,"<p class=""text-xs text-muted"" role=""note"">{coefficientSign(preview.plan.basis_value) === 0"
+frontend/src/lib/investments/form-amounts.ts,50,parseMagnitude,lexical-call,"export function parseMagnitude(input: string, options: { maxScale?: number } = {}): FieldResult<ScaledAmount> {"
+frontend/src/lib/investments/form-amounts.ts,66,parseMagnitude,lexical-call,"const parsed = parseMagnitude(input, options);"
+frontend/src/lib/investments/form-amounts.ts,103,parseMagnitude,lexical-call,"const quantity = parseMagnitude(input.quantityStr, { maxScale: input.quantityMaxScale });"
+frontend/src/lib/investments/form-amounts.ts,125,parseMagnitude,lexical-call,"const quantity = parseMagnitude(input.quantityStr, { maxScale: input.quantityMaxScale });"
+frontend/src/lib/investments/form-amounts.ts,175,parseMagnitude,lexical-call,"const parsed = parseMagnitude(input.quantityStr, { maxScale: input.quantityMaxScale });"
+frontend/src/lib/investments/gain-impact.ts,81,impactNeedsReview,lexical-call,export function impactNeedsReview(impact: {
+frontend/src/lib/investments/gain-impact.ts,89,gainAcknowledgement,lexical-call,export function gainAcknowledgement(impact: GainImpact | null | undefined): string {
+frontend/src/lib/investments/gain-impact.ts,96,isStaleImpactRefusal,lexical-call,export function isStaleImpactRefusal(error: unknown): boolean {
+frontend/src/lib/investments/gain-impact.ts,108,checkpointOverride,lexical-call,export function checkpointOverride(impacts: ReviewedCheckpoints) {
+frontend/src/lib/investments/gains-report.svelte,29,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/gains-report.svelte,117,coefficientSign,lexical-call,const sign = coefficientSign(value);
+frontend/src/lib/investments/gains-statement.svelte,27,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/gains-statement.svelte,62,coefficientSign,lexical-call,const sign = coefficientSign(value);
+frontend/src/lib/investments/instruments-panel.svelte,13,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/internal-transfer-amounts.ts,24,parseMagnitude,lexical-call,"const parsed = parseMagnitude(draft.quantity, { maxScale });"
+frontend/src/lib/investments/internal-transfer-amounts.ts,47,parseMagnitude,lexical-call,"const parsed = parseMagnitude(draft, { maxScale });"
+frontend/src/lib/investments/internal-transfer-form.svelte,35,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/internal-transfer-form.svelte,88,coefficientSign,lexical-call,position.position_side === 'long' && coefficientSign(position.quantity_value) > 0 &&
+frontend/src/lib/investments/internal-transfer-form.svelte,204,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(preview.gainImpact);
+frontend/src/lib/investments/internal-transfer-form.svelte,207,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/internal-transfer-form.svelte,223,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(error) && preview) {
+frontend/src/lib/investments/internal-transfer-form.svelte,226,impactNeedsReview,lexical-call,"if (preview && impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/internal-transfer-form.svelte,243,impactNeedsReview,lexical-call,"if (impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/investments-screen.svelte,109,coefficientSign,lexical-call,const openPositions = $derived(positions.filter((p) => coefficientSign(p.quantity_value) !== 0));
+frontend/src/lib/investments/payment-in-lieu-form.svelte,49,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/payment-in-lieu-form.svelte,174,checkpointOverride,lexical-call,"{ reason: reason.trim(), replacement: payload, ...checkpointOverride(reviewed) }, csrfToken);"
+frontend/src/lib/investments/payment-in-lieu-form.svelte,176,checkpointOverride,lexical-call,"await recordPaymentInLieu({ ...payload, ...checkpointOverride(reviewed) }, csrfToken);"
+frontend/src/lib/investments/payment-in-lieu-form.svelte,193,isStaleImpactRefusal,lexical-call,if (!isStaleImpactRefusal(error) || !(await reviewImpact(payload))) formError = error;
+frontend/src/lib/investments/provider-dividend-completion.svelte,161,checkpointOverride,lexical-call,"await post({ ...completion, ...checkpointOverride(impacts) });"
+frontend/src/lib/investments/provider-dividend-completion.svelte,165,isStaleImpactRefusal,lexical-call,if (!isStaleImpactRefusal(err) || !(await reviewImpact(completion))) formError = err;
+frontend/src/lib/investments/provider-payment-in-lieu-completion.svelte,159,checkpointOverride,lexical-call,"await post({ ...completion, ...checkpointOverride(impacts) });"
+frontend/src/lib/investments/provider-payment-in-lieu-completion.svelte,163,isStaleImpactRefusal,lexical-call,if (!isStaleImpactRefusal(err) || !(await reviewImpact(completion))) formError = err;
+frontend/src/lib/investments/sell-form.svelte,50,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/sell-form.svelte,376,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) return false;
+frontend/src/lib/investments/sell-form.svelte,386,isStaleImpactRefusal,lexical-call,"if (!isStaleImpactRefusal(err) || !(await reviewImpact(payload, correctionReason, true))) formError = err;"
+frontend/src/lib/investments/sell-form.svelte,400,gainAcknowledgement,lexical-call,"await submitSell(payload, impacts, correctionReason, gainAcknowledgement(gainImpact));"
+frontend/src/lib/investments/sell-form.svelte,411,checkpointOverride,lexical-call,"reason: correctionReason, ...checkpointOverride(reviewed),"
+frontend/src/lib/investments/sell-form.svelte,420,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/sell-form.svelte,725,coefficientSign,lexical-call,"<span class=""text-right font-mono {coefficientSign(preview.realized_gain) >= 0 ? 'text-foreground' : 'text-danger'}"">"
+frontend/src/lib/investments/sell-form.svelte,726,coefficientSign,lexical-call,"{coefficientSign(preview.realized_gain) >= 0 ? '+' : ''}{formatGain(preview.realized_gain, preview.realized_gain_scale)}"
+frontend/src/lib/investments/share-exchange-form.svelte,36,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/share-exchange-form.svelte,112,coefficientSign,lexical-call,if (position.position_side !== 'long' || coefficientSign(position.quantity_value) <= 0) continue;
+frontend/src/lib/investments/share-exchange-form.svelte,225,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(preview.gainImpact);
+frontend/src/lib/investments/share-exchange-form.svelte,227,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/share-exchange-form.svelte,248,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(error) && preview) {
+frontend/src/lib/investments/share-exchange-form.svelte,251,impactNeedsReview,lexical-call,"if (preview && impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/share-exchange-form.svelte,268,impactNeedsReview,lexical-call,"if (impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/short-trade-form.svelte,55,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/short-trade-form.svelte,294,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) return false;
+frontend/src/lib/investments/short-trade-form.svelte,302,isStaleImpactRefusal,lexical-call,"if (!isStaleImpactRefusal(err) || !(await reviewImpact(payload, true))) formError = err;"
+frontend/src/lib/investments/short-trade-form.svelte,315,gainAcknowledgement,lexical-call,"await submit(payload, impacts, gainAcknowledgement(gainImpact));"
+frontend/src/lib/investments/short-trade-form.svelte,325,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/short-trade-form.svelte,493,coefficientSign,lexical-call,"<span class=""text-right font-mono {coefficientSign(preview.realized_gain) >= 0 ? 'text-foreground' : 'text-danger'}"""
+frontend/src/lib/investments/short-trade-form.svelte,495,coefficientSign,lexical-call,"{coefficientSign(preview.realized_gain) >= 0 ? '+' : ''}{formatScaledValue(preview.realized_gain, preview.realized_gain_scale, locale)}"
+frontend/src/lib/investments/spin-off-form.svelte,36,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/spin-off-form.svelte,117,coefficientSign,lexical-call,if (position.position_side !== 'long' || coefficientSign(position.quantity_value) <= 0) continue;
+frontend/src/lib/investments/spin-off-form.svelte,243,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(preview.gainImpact);
+frontend/src/lib/investments/spin-off-form.svelte,245,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/spin-off-form.svelte,267,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(error) && preview) {
+frontend/src/lib/investments/spin-off-form.svelte,270,impactNeedsReview,lexical-call,"if (preview && impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/spin-off-form.svelte,287,impactNeedsReview,lexical-call,"if (impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/split-activity.svelte,59,checkpointOverride,lexical-call,"...checkpointOverride(impact.affected_checkpoints),"
+frontend/src/lib/investments/split-activity.svelte,60,gainAcknowledgement,lexical-call,"gain_impact_acknowledgement:gainAcknowledgement(impact.gain_impact)},csrfToken);"
+frontend/src/lib/investments/split-activity.svelte,64,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(failure)) {
+frontend/src/lib/investments/split-activity.svelte,75,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) await commitReversal();
+frontend/src/lib/investments/split-activity.svelte,134,impactNeedsReview,lexical-call,{#if impact && impactNeedsReview(impact)}
+frontend/src/lib/investments/split-form.svelte,36,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/investments/split-form.svelte,102,coefficientSign,lexical-call,if (position.position_side !== 'long' || coefficientSign(position.quantity_value) <= 0) continue;
+frontend/src/lib/investments/split-form.svelte,202,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(preview.gainImpact);
+frontend/src/lib/investments/split-form.svelte,204,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/split-form.svelte,225,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(error) && preview) {
+frontend/src/lib/investments/split-form.svelte,228,impactNeedsReview,lexical-call,"if (preview && impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/split-form.svelte,245,impactNeedsReview,lexical-call,"if (impactNeedsReview({ affected_checkpoints: preview.impacts, gain_impact: preview.gainImpact })) {"
+frontend/src/lib/investments/trade-economics.ts,70,parseMagnitude,lexical-call,const quantity = parseMagnitude(draft.quantity);
+frontend/src/lib/investments/transfer-correction-form.svelte,115,parseMagnitude,lexical-call,const parsed = parseMagnitude(pooledQuantity);
+frontend/src/lib/investments/transfer-correction-form.svelte,127,parseMagnitude,lexical-call,const parsed = parseMagnitude(draft);
+frontend/src/lib/investments/transfer-correction-form.svelte,163,impactNeedsReview,lexical-call,if (!impactNeedsReview(preview.impact)) return false;
+frontend/src/lib/investments/transfer-correction-form.svelte,171,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/transfer-correction-form.svelte,188,isStaleImpactRefusal,lexical-call,"if (!isStaleImpactRefusal(error) || !(await reviewImpact(payload, true))) formError = error;"
+frontend/src/lib/investments/transfer-correction-form.svelte,201,gainAcknowledgement,lexical-call,"await commit(payload, impacts, gainAcknowledgement(gainImpact));"
+frontend/src/lib/investments/transfer-in-correction-form.svelte,142,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) return false;
+frontend/src/lib/investments/transfer-in-correction-form.svelte,151,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/transfer-in-correction-form.svelte,161,isStaleImpactRefusal,lexical-call,"if (!isStaleImpactRefusal(error) || !(await reviewImpact(payload, true))) formError = error;"
+frontend/src/lib/investments/transfer-in-correction-form.svelte,174,gainAcknowledgement,lexical-call,"await commit(payload, impacts, gainAcknowledgement(gainImpact));"
+frontend/src/lib/investments/write-off-correction-form.svelte,119,parseMagnitude,lexical-call,const quantity = parseMagnitude(quantityStr);
+frontend/src/lib/investments/write-off-correction-form.svelte,158,impactNeedsReview,lexical-call,if (!impactNeedsReview(impact)) return false;
+frontend/src/lib/investments/write-off-correction-form.svelte,167,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/write-off-correction-form.svelte,177,isStaleImpactRefusal,lexical-call,"if (!isStaleImpactRefusal(error) || !(await reviewImpact(payload, true))) formError = error;"
+frontend/src/lib/investments/write-off-correction-form.svelte,190,gainAcknowledgement,lexical-call,"await commit(payload, impacts, gainAcknowledgement(gainImpact));"
+frontend/src/lib/investments/write-off-form.svelte,73,coefficientSign,lexical-call,coefficientSign(holding.quantity_value) > 0 && accounts.some(account => account.id === holding.account_id)));
+frontend/src/lib/investments/write-off-form.svelte,113,parseMagnitude,lexical-call,"const parsed = parseMagnitude(quantity, { maxScale: instrument.quantity_scale });"
+frontend/src/lib/investments/write-off-form.svelte,114,coefficientSign,lexical-call,if (!parsed.ok || coefficientSign(parsed.field.value) <= 0) {
+frontend/src/lib/investments/write-off-form.svelte,165,checkpointOverride,lexical-call,"...checkpointOverride(reviewed),"
+frontend/src/lib/investments/write-off-form.svelte,166,gainAcknowledgement,lexical-call,gain_impact_acknowledgement: gainAcknowledgement(gainImpact) || undefined
+frontend/src/lib/investments/write-off-form.svelte,171,isStaleImpactRefusal,lexical-call,if (isStaleImpactRefusal(error)) {
+frontend/src/lib/investments/write-off-form.svelte,174,impactNeedsReview,lexical-call,reviewing = !!preview && impactNeedsReview(preview.impact);
+frontend/src/lib/investments/write-off-form.svelte,182,impactNeedsReview,lexical-call,if (impactNeedsReview(preview.impact)) { gainRefreshed = false; reviewing = true; }
+frontend/src/lib/money/amount.ts,143,coefficientSign,lexical-call,export function coefficientSign(value: string): -1 | 0 | 1 {
+frontend/src/lib/pricing/pricing-screen.svelte,17,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/reports/reports-screen.svelte,52,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/lib/transactions/investment-correction-section.svelte,275,impactNeedsReview,lexical-call,if (!impactNeedsReview(preview)) return false;
+frontend/src/lib/transactions/investment-correction-section.svelte,285,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(gainImpact);
+frontend/src/lib/transactions/investment-correction-section.svelte,288,checkpointOverride,lexical-call,"...checkpointOverride(impacts),"
+frontend/src/lib/transactions/investment-correction-section.svelte,354,isStaleImpactRefusal,lexical-call,if (!isStaleImpactRefusal(error) || !(await previewReversal(true))) actionError = error;
+frontend/src/lib/transactions/transaction-editor.svelte,64,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();
+frontend/src/routes/app/import/+page.svelte,609,gainAcknowledgement,lexical-call,const acknowledgement = gainAcknowledgement(sourceCorrectionImpact.gain_impact);
+frontend/src/routes/app/import/+page.svelte,613,checkpointOverride,lexical-call,"...(sourceCorrectionOverride ? checkpointOverride(sourceCorrectionImpact.affected_checkpoints) : {}),"
+frontend/src/routes/app/settings/currencies/+page.svelte,41,useOwnerToday,lexical-call,const ownerToday = useOwnerToday();

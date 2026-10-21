@@ -145,15 +145,32 @@ below is execution order, not a chain of hard dependencies.
 2. **Rank evidence-gated refactoring candidates in
    [#284](https://github.com/sergeyfarin/rekenraam/issues/284) — current.** The
    [first slice](reviews/maintainability-audit-2026-10-21.md) records the fixed-SHA
-   input reconciliation, history measurements and provisional shortlist. Complete
-   duplication/dead-code scans, the invariant and test-ownership inventories,
-   layer/fan-out checks and final investment/reporting dispositions. Use the
+   input reconciliation, history measurements and provisional shortlist. The
+   [second slice](reviews/maintainability-duplication-2026-10-21.md) delivers Go
+   and frontend runtime clone scans with bounded triage. The
+   [third slice](reviews/maintainability-invariants-2026-10-21.md) maps 34 named
+   invariant groups and narrows consolidation around existing shared owners.
+   The [fourth slice](reviews/maintainability-layers-2026-10-21.md) reviews layer,
+   frontend arithmetic/date and request-composition boundaries, adding bounded
+   total/leaf ownership candidates. The
+   [fifth slice](reviews/maintainability-reachability-2026-10-21.md) delivers
+   Go production/test reachability, frontend file/export triage and 25 named
+   Go abstraction dispositions. Complete test-ownership/duplication inventories
+   and final investment/reporting
+   dispositions. Use the
    measured duplication, change amplification and repeated invariant enforcement
    to publish a ranked list with
    the rejected candidates; each accepted refactor gets its own issue and
    preserves behavior. Refactoring only to change style or file length is
    out of scope. R13 specification can proceed in parallel, but R13
    implementation waits for #284's investment/reporting dispositions.
+   The separate P3 payment-density audit
+   [#379](https://github.com/sergeyfarin/rekenraam/issues/379) measures an
+   untested investment-command workload; it is not an accepted optimization
+   or a blanket R13 prerequisite.
+   [#380](https://github.com/sergeyfarin/rekenraam/issues/380), P3, separately
+   fixes confirmed forecast calendar-date admission; it is not a blanket
+   R13 prerequisite either.
 3. **Specify R13 [#119](https://github.com/sergeyfarin/rekenraam/issues/119).**
    Use the delivered R18 valuation contracts; resolve portfolio scope,
    external-flow classification, return equations, numerical failure states,

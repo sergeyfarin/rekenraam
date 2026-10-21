@@ -1,0 +1,44 @@
+{
+  "dupl": {
+    "binary_sha256": "c1196d7627aeff22a88f310ed305b23185b4fd083a130e183906a83e7135e91a",
+    "files": 311,
+    "go": "go1.27.0",
+    "groups": 30,
+    "module": "github.com/golangci/dupl",
+    "module_sum": "h1:CbTB8KpqnViI6lIXxp03Oclc4VFHi3K4BWC1TacsZ+A=",
+    "occurrences": 75,
+    "stderr": "",
+    "threshold_ast_nodes": 150,
+    "version": "v0.0.0-20260401084720-c99c5cf5c202"
+  },
+  "jscpd": {
+    "markup_pairs": 8,
+    "markup_sources": 153,
+    "max_lines": 100000,
+    "max_size": "2mb",
+    "min_lines": 5,
+    "min_tokens": 100,
+    "mode": "mild",
+    "node": "v24.21.0",
+    "original_files": 251,
+    "pnpm": "12.11.2",
+    "stderr": "",
+    "tokenizer": "4.0.1",
+    "typescript_pairs": 49,
+    "typescript_sources": 252,
+    "version": "4.0.5"
+  },
+  "ref": "13d15eabd68ed2d3b6177512c9c8fe56c528bbf0",
+  "triage": {
+    "frontend": {
+      "candidate": 11,
+      "inventory": 6,
+      "retain": 40
+    },
+    "go": {
+      "candidate": 1,
+      "inventory": 2,
+      "retain": 27
+    }
+  }
+}

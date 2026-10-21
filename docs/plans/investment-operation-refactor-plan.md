@@ -699,6 +699,11 @@ correction, reversal and backdating; #176 provider import.
   strand it is refused with the payment named
   (`INVESTMENT_PAYMENT_IN_LIEU_DEPENDENCY`, #257). ADR 0013's *Payment-In-Lieu Refinement* records
   why it is expensed rather than folded into opening proceeds.
+  The [#284 ownership inventory](../reviews/maintainability-invariants-2026-10-21.md)
+  confirms that the shared writer checks effective payments before and after
+  command effects. [#379](https://github.com/sergeyfarin/rekenraam/issues/379)
+  separately measures payment-dense admission cost with entitlement and rollback
+  controls before proposing any optimization; it changes no financial contract.
 - **Classification.** Net worth and self-check classify a negative countable
   balance as a named short only up to the quantity of short lots open on that
   date in that account; any further negative quantity remains an

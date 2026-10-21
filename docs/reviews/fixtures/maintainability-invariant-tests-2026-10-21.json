@@ -1,0 +1,244 @@
+{
+  "race": true,
+  "selections": [
+    {
+      "packages": [
+        {
+          "Action": "pass",
+          "Elapsed": 10.884,
+          "Package": "rekenraam/backend/internal/app"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 28.981,
+          "Package": "rekenraam/backend/internal/db"
+        }
+      ],
+      "selection": "invariant-tests",
+      "tests": [
+        {
+          "Action": "pass",
+          "Elapsed": 1.98,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAccountStructureChangeIsRefusedWhenAPostingCommitsFirst"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.09,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestUnknownProjectedBasisDoesNotBecomeZeroGain"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.16,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditReservationRolloverProbe"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.2,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestPaymentInLieuEntitlementIsRecheckedInsideTheWrite"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.45,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditSessionPoolAdmission"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.75,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestHistoricalDisposalDecisionSurvivesAccountAndGlobalDefaultChanges"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.84,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestNamedShortCountsARevisedCoverOnItsDate"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.86,
+          "Package": "rekenraam/backend/internal/db",
+          "Test": "TestEffectiveHistoryReadersUseTheOwner"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 1.03,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditThrottleWriterAdmission"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 3.11,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditTrustedDeviceAdmittedBeforeExpiry"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 3.16,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditDisableBeforeSessionCommit"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0.96,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestShortSaleReversalRechecksPaymentInLieuDependencyInsideTheWrite"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 3.33,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestEveryLifecycleWriteRefusesASupersededVersion"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0.6,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestUnentitledPaymentInLieuDoesNotBlockUnrelatedCommands"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0.93,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditTrustedDevicePoolAdmission"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 1.26,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditExpiredChallengeWithEventFailure"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestImportedDividendRepairWriterPinsVersionAndSourceEligibility"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 1.75,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditConcurrentChallengeIsSingleUse"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 1.1,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestUnexplainedNegativeUnitBesideARevisedCoverIsFlagged"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditThrottlePoolBoundary"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestThrottleResetRealConsumersDoNotResurrectMissingRows"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditTOTPWriterAdmission"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditMFAChallengeAdmission"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestAuthExpiryAuditMFAPositiveWriterControls"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0.01,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestThrottleRolloverRealConsumersPreserveReplacementBudget"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 15.63,
+          "Package": "rekenraam/backend/internal/db",
+          "Test": "TestExactNumberColumnChecks"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 27.93,
+          "Package": "rekenraam/backend/internal/db",
+          "Test": "TestInvariant_ConservationAcrossMethodsAndScenarios"
+        }
+      ]
+    },
+    {
+      "packages": [
+        {
+          "Action": "pass",
+          "Elapsed": 3.826,
+          "Package": "rekenraam/backend/internal/app"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 3.976,
+          "Package": "rekenraam/backend/internal/api"
+        }
+      ],
+      "selection": "invariant-consumer-tests",
+      "tests": [
+        {
+          "Action": "pass",
+          "Elapsed": 2.04,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestLiveGainsSuccessFailureAndCancellationLeaveFinancialAuditAndRunRowsUnchanged"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.14,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestPersonalAccessTokenAuditExpiryWhileWaitingForDatabase"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.22,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestPersonalAccessTokenAuditExpiryWhileWaitingForSQLiteWriter"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 0,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestPersonalAccessTokenAuditManagementSessionExpiresWhileQueued"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.75,
+          "Package": "rekenraam/backend/internal/app",
+          "Test": "TestLiveStatementBoundariesDisposalsIncomeAndFXShareEffectiveHistory"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.5,
+          "Package": "rekenraam/backend/internal/api",
+          "Test": "TestPersonalAccessTokenAPIReadScopesAndDefaultDeny"
+        },
+        {
+          "Action": "pass",
+          "Elapsed": 2.93,
+          "Package": "rekenraam/backend/internal/api",
+          "Test": "TestReferenceBookProducesItsRegister"
+        }
+      ]
+    }
+  ],
+  "source_sha": "13d15eabd68ed2d3b6177512c9c8fe56c528bbf0"
+}

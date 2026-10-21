@@ -1,0 +1,4688 @@
+{
+  "frontend": [
+    {
+      "path": "frontend/src/lib/accounts/account-editor.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/account-editor.svelte.script1.ts",
+          "sha256": "d8dc4d9cefcef73feaea848a5e7add80a452764192f663b1d7183bc0243f9152"
+        },
+        {
+          "path": "frontend/src/lib/accounts/account-editor.svelte.markup.html",
+          "sha256": "e2afc08d2d55a96e3d8ea1585229821761a9ccad8d6efa3c6385b7c753fcd91f"
+        }
+      ],
+      "sha256": "ebb612caded412e56b475f9166d1a652f8745f4fb65967202cd3ceba5e999b64"
+    },
+    {
+      "path": "frontend/src/lib/accounts/account-filter-bar.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/account-filter-bar.svelte.script1.ts",
+          "sha256": "9a407b187a49b7b7dfe2b77f8f3a7a13622ab5beb488dfe233e6b86f65d9e273"
+        },
+        {
+          "path": "frontend/src/lib/accounts/account-filter-bar.svelte.markup.html",
+          "sha256": "213256e3cae283de67da3f0269d637d0b131c1ab6c9500d841b0784269493bc5"
+        }
+      ],
+      "sha256": "21abb3eb605a9e6037f39fb3dbe1c8b077cb949ae2167f9289ef78e3909a084a"
+    },
+    {
+      "path": "frontend/src/lib/accounts/account-kind-icon.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/account-kind-icon.svelte.script1.ts",
+          "sha256": "a8ba68cc51284c73308acc856de7fa4960a8b2115b1c26fca0029fd807118197"
+        },
+        {
+          "path": "frontend/src/lib/accounts/account-kind-icon.svelte.markup.html",
+          "sha256": "13faad975fdf208f8430fea5180dc3f993892ba0dfe25fe020c2ce9eb8b2fed1"
+        }
+      ],
+      "sha256": "3a6ccc9256f8771ddd5b8a7b163f00abfa5d2d948ca1ed758244c012d1fc1cac"
+    },
+    {
+      "path": "frontend/src/lib/accounts/account-labels.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/account-labels.ts",
+          "sha256": "f153793a46f22d97a3d2bade611cc9abde22c3295e84de0e5a950c91423e90b5"
+        }
+      ],
+      "sha256": "f153793a46f22d97a3d2bade611cc9abde22c3295e84de0e5a950c91423e90b5"
+    },
+    {
+      "path": "frontend/src/lib/accounts/account-list-options.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/account-list-options.ts",
+          "sha256": "a2b7853b24a91ec6295c5cf791315c042e3de0e0eee4a345f39cc933b710137d"
+        }
+      ],
+      "sha256": "a2b7853b24a91ec6295c5cf791315c042e3de0e0eee4a345f39cc933b710137d"
+    },
+    {
+      "path": "frontend/src/lib/accounts/account-list-screen.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/account-list-screen.svelte.script1.ts",
+          "sha256": "b3380d8ae18a64dec8f0480c9a1dfbe1e79f8322abc574563e80e8dbe87d6b04"
+        },
+        {
+          "path": "frontend/src/lib/accounts/account-list-screen.svelte.markup.html",
+          "sha256": "84a4d12b2f1b34cdb4355b90249c12ed55ed0278be446264f254d5676cc5e85f"
+        }
+      ],
+      "sha256": "08e55330419df13b762b6efa7fea365eb36c4169e717935bd81f51d765cb17b6"
+    },
+    {
+      "path": "frontend/src/lib/accounts/account-summary-stats.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/account-summary-stats.svelte.script1.ts",
+          "sha256": "68a7e4047e76818fb66df5d931f288208bad843a7252dff4961c004402c4c79b"
+        },
+        {
+          "path": "frontend/src/lib/accounts/account-summary-stats.svelte.markup.html",
+          "sha256": "61189fa7c4d101afbd892eef23a61d38046eddd2694ea375c1e86342e7148bcf"
+        }
+      ],
+      "sha256": "6f247e543041a9f7db82a45c528aba20fb65dd666d2f342d88ecca8e07cfa567"
+    },
+    {
+      "path": "frontend/src/lib/accounts/account-tree-section.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/account-tree-section.svelte.script1.ts",
+          "sha256": "42a5636eabfce91ee2a9f8a96057f668cab48eee902164513ddaf3a357285ea2"
+        },
+        {
+          "path": "frontend/src/lib/accounts/account-tree-section.svelte.markup.html",
+          "sha256": "8f1e5007b9ed938d2804e14a86837cb8b8afb2bf9e0587a447c4f73a7a8d4e22"
+        }
+      ],
+      "sha256": "6aa029e880f3265b0cfc48ee16339346e42992274b4609f55fa538c8f38db91f"
+    },
+    {
+      "path": "frontend/src/lib/accounts/institution-editor.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/institution-editor.svelte.script1.ts",
+          "sha256": "e5b6780cd7cb7204ea5283a540aebdf339fa6f5a9b9b0b18530713e635092287"
+        },
+        {
+          "path": "frontend/src/lib/accounts/institution-editor.svelte.markup.html",
+          "sha256": "0e61b769f6d6ed7eff27c5bfda0d5ad7b30a0c548aca54ca8af0debd71dee499"
+        }
+      ],
+      "sha256": "a29504c13685cc842ccafc4c7440eed26680cbd774c76cb85053efeaed309266"
+    },
+    {
+      "path": "frontend/src/lib/accounts/subledger-accounts.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/accounts/subledger-accounts.ts",
+          "sha256": "35dba3032118d877753e7d3a3b91e9c0ef23cdddef5e5430f0eeefa0450c685a"
+        }
+      ],
+      "sha256": "35dba3032118d877753e7d3a3b91e9c0ef23cdddef5e5430f0eeefa0450c685a"
+    },
+    {
+      "path": "frontend/src/lib/api-error-messages.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api-error-messages.ts",
+          "sha256": "578ee2c856af61b0c088fb012567a7b5003d384f7899a262130361d66b91d812"
+        }
+      ],
+      "sha256": "578ee2c856af61b0c088fb012567a7b5003d384f7899a262130361d66b91d812"
+    },
+    {
+      "path": "frontend/src/lib/api/accounts.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/accounts.ts",
+          "sha256": "3770c7929912ce01b57a0d505e67236f65e974490210c9c925598fbde4aa8dbb"
+        }
+      ],
+      "sha256": "3770c7929912ce01b57a0d505e67236f65e974490210c9c925598fbde4aa8dbb"
+    },
+    {
+      "path": "frontend/src/lib/api/auth-tokens.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/auth-tokens.ts",
+          "sha256": "311bb3dec7dba431c36348c69334a6643298625a2bd4610022386e8f93d6df02"
+        }
+      ],
+      "sha256": "311bb3dec7dba431c36348c69334a6643298625a2bd4610022386e8f93d6df02"
+    },
+    {
+      "path": "frontend/src/lib/api/auth.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/auth.ts",
+          "sha256": "6f7b74ee27cf233b3353d8b3f8f66bbb29b418be146e2f58ea5452d011116561"
+        }
+      ],
+      "sha256": "6f7b74ee27cf233b3353d8b3f8f66bbb29b418be146e2f58ea5452d011116561"
+    },
+    {
+      "path": "frontend/src/lib/api/books.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/books.ts",
+          "sha256": "3453b927dbc9fb637b759dc87cf44a71fc7cfd26aa7e5120669619d588675847"
+        }
+      ],
+      "sha256": "3453b927dbc9fb637b759dc87cf44a71fc7cfd26aa7e5120669619d588675847"
+    },
+    {
+      "path": "frontend/src/lib/api/budgets.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/budgets.ts",
+          "sha256": "51e2f51abaed3238bec889eab88500146d7b5492be77d10f1375f39d394dc600"
+        }
+      ],
+      "sha256": "51e2f51abaed3238bec889eab88500146d7b5492be77d10f1375f39d394dc600"
+    },
+    {
+      "path": "frontend/src/lib/api/categories.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/categories.ts",
+          "sha256": "a08d770b42ab2045e3e5a07844523e8e70ae631157710f9fec2876e2cc47383b"
+        }
+      ],
+      "sha256": "a08d770b42ab2045e3e5a07844523e8e70ae631157710f9fec2876e2cc47383b"
+    },
+    {
+      "path": "frontend/src/lib/api/client.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/client.ts",
+          "sha256": "8698052512aac8b5b8b25f3a76fb36b9cbde24cc62f562ea33d6b91a531fc257"
+        }
+      ],
+      "sha256": "8698052512aac8b5b8b25f3a76fb36b9cbde24cc62f562ea33d6b91a531fc257"
+    },
+    {
+      "path": "frontend/src/lib/api/connections.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/connections.ts",
+          "sha256": "e76d862aa9f9782645d8d79e2173df070016744afe326f71d13fa22e4730dd66"
+        }
+      ],
+      "sha256": "e76d862aa9f9782645d8d79e2173df070016744afe326f71d13fa22e4730dd66"
+    },
+    {
+      "path": "frontend/src/lib/api/currencies.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/currencies.ts",
+          "sha256": "39212602d7bb2cadc8b2f11898653c5d1bf27a73563dd1f794d89454f56cfad3"
+        }
+      ],
+      "sha256": "39212602d7bb2cadc8b2f11898653c5d1bf27a73563dd1f794d89454f56cfad3"
+    },
+    {
+      "path": "frontend/src/lib/api/forecast.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/forecast.ts",
+          "sha256": "5506fa63bf56cbb37fff99b4a49739c1d3e5776456460dd1d057a358b41a2b3d"
+        }
+      ],
+      "sha256": "5506fa63bf56cbb37fff99b4a49739c1d3e5776456460dd1d057a358b41a2b3d"
+    },
+    {
+      "path": "frontend/src/lib/api/health.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/health.ts",
+          "sha256": "f24851c9037cfbd2190780acf82a780607c669cf1281408b1bb82a4266725bb5"
+        }
+      ],
+      "sha256": "f24851c9037cfbd2190780acf82a780607c669cf1281408b1bb82a4266725bb5"
+    },
+    {
+      "path": "frontend/src/lib/api/import-rules.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/import-rules.ts",
+          "sha256": "368fd891c1b16b8ff9971f436324892eaa0b7e76b4fbde7749adeab92b2b12c1"
+        }
+      ],
+      "sha256": "368fd891c1b16b8ff9971f436324892eaa0b7e76b4fbde7749adeab92b2b12c1"
+    },
+    {
+      "path": "frontend/src/lib/api/imports.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/imports.ts",
+          "sha256": "cc297624196783eb196a03f66a6c503b1dd69458748f5a50e5ec95e2d1cd6fa2"
+        }
+      ],
+      "sha256": "cc297624196783eb196a03f66a6c503b1dd69458748f5a50e5ec95e2d1cd6fa2"
+    },
+    {
+      "path": "frontend/src/lib/api/institutions.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/institutions.ts",
+          "sha256": "32e01ecdcfc6fa693159d718c8b93904d629fd8af54e920e20d92ac3d8a3c4a3"
+        }
+      ],
+      "sha256": "32e01ecdcfc6fa693159d718c8b93904d629fd8af54e920e20d92ac3d8a3c4a3"
+    },
+    {
+      "path": "frontend/src/lib/api/instruments.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/instruments.ts",
+          "sha256": "8d3025f97eeaf397a632d60e5a573c34c82da7b99499310f5ba99b35a887e3c7"
+        }
+      ],
+      "sha256": "8d3025f97eeaf397a632d60e5a573c34c82da7b99499310f5ba99b35a887e3c7"
+    },
+    {
+      "path": "frontend/src/lib/api/investments.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/investments.ts",
+          "sha256": "f57b4c500371dc1c6b2759826ff72669f01f977ea9f58341c63b3b3e2bb26878"
+        }
+      ],
+      "sha256": "f57b4c500371dc1c6b2759826ff72669f01f977ea9f58341c63b3b3e2bb26878"
+    },
+    {
+      "path": "frontend/src/lib/api/ledger.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/ledger.ts",
+          "sha256": "70f026cb121e983718fd1dfcb5290d26408dc0de4d7cf9f019eb843287260466"
+        }
+      ],
+      "sha256": "70f026cb121e983718fd1dfcb5290d26408dc0de4d7cf9f019eb843287260466"
+    },
+    {
+      "path": "frontend/src/lib/api/maintenance.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/maintenance.ts",
+          "sha256": "a2f3cbd3f64cbe0521a4df1951106807a01f7091a3d489d00dbe039d18bc3a45"
+        }
+      ],
+      "sha256": "a2f3cbd3f64cbe0521a4df1951106807a01f7091a3d489d00dbe039d18bc3a45"
+    },
+    {
+      "path": "frontend/src/lib/api/payees.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/payees.ts",
+          "sha256": "fbc296e3773a94019d4799a075dcdac7db3d8cca6ae3279ddae81422f793bd6b"
+        }
+      ],
+      "sha256": "fbc296e3773a94019d4799a075dcdac7db3d8cca6ae3279ddae81422f793bd6b"
+    },
+    {
+      "path": "frontend/src/lib/api/price-management.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/price-management.ts",
+          "sha256": "5a42380fe029403c56cd88df94bfb14c6ac704140313a11019700b7a4ed38b6a"
+        }
+      ],
+      "sha256": "5a42380fe029403c56cd88df94bfb14c6ac704140313a11019700b7a4ed38b6a"
+    },
+    {
+      "path": "frontend/src/lib/api/pricing.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/pricing.ts",
+          "sha256": "a3c77a90873b71a5bb38e1c837480d9566730537e2ea8275aaac93dbac5171af"
+        }
+      ],
+      "sha256": "a3c77a90873b71a5bb38e1c837480d9566730537e2ea8275aaac93dbac5171af"
+    },
+    {
+      "path": "frontend/src/lib/api/reconciliation.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/reconciliation.ts",
+          "sha256": "ede5a20aebd83e0d030a9e0e773f2d4c6ffe3323cba881f21febda29e069298e"
+        }
+      ],
+      "sha256": "ede5a20aebd83e0d030a9e0e773f2d4c6ffe3323cba881f21febda29e069298e"
+    },
+    {
+      "path": "frontend/src/lib/api/recurring.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/recurring.ts",
+          "sha256": "d5bbb1e61788e1e699627944141fc3917cc84c471ea98a5722ff62d7439eacbc"
+        }
+      ],
+      "sha256": "d5bbb1e61788e1e699627944141fc3917cc84c471ea98a5722ff62d7439eacbc"
+    },
+    {
+      "path": "frontend/src/lib/api/reports.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/reports.ts",
+          "sha256": "d40e0bbe8ba636c17e4eb4d8b897dd2736b0be779fc1cb99d86944edda238422"
+        }
+      ],
+      "sha256": "d40e0bbe8ba636c17e4eb4d8b897dd2736b0be779fc1cb99d86944edda238422"
+    },
+    {
+      "path": "frontend/src/lib/api/settings.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/settings.ts",
+          "sha256": "f86bf95fc359d60675e7f238d8aa32d5eddfcf921da3743f5b0c4f830e6d20ad"
+        }
+      ],
+      "sha256": "f86bf95fc359d60675e7f238d8aa32d5eddfcf921da3743f5b0c4f830e6d20ad"
+    },
+    {
+      "path": "frontend/src/lib/api/setup.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/setup.ts",
+          "sha256": "368d10798914ffb09e7b529e5019707f4296c7770599c2b516184d0a8f807514"
+        }
+      ],
+      "sha256": "368d10798914ffb09e7b529e5019707f4296c7770599c2b516184d0a8f807514"
+    },
+    {
+      "path": "frontend/src/lib/api/tags.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/tags.ts",
+          "sha256": "da2ace433a51d9efd0550ff8f9620ae2bfb8e32d7b73cf568b3a129a0ff0d693"
+        }
+      ],
+      "sha256": "da2ace433a51d9efd0550ff8f9620ae2bfb8e32d7b73cf568b3a129a0ff0d693"
+    },
+    {
+      "path": "frontend/src/lib/api/transactions.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/api/transactions.ts",
+          "sha256": "7ec920b8296b2499d4ac3383ac88cfe8266026e58ec9753e09512cf4881566ea"
+        }
+      ],
+      "sha256": "7ec920b8296b2499d4ac3383ac88cfe8266026e58ec9753e09512cf4881566ea"
+    },
+    {
+      "path": "frontend/src/lib/budgets/budget-url-filters.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/budgets/budget-url-filters.ts",
+          "sha256": "75446959b1347f51f1c15b087ba670a22f486e96a205d26c8b4386a24bd23fe4"
+        }
+      ],
+      "sha256": "75446959b1347f51f1c15b087ba670a22f486e96a205d26c8b4386a24bd23fe4"
+    },
+    {
+      "path": "frontend/src/lib/budgets/budgets-screen.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/budgets/budgets-screen.svelte.script1.ts",
+          "sha256": "52475be9b1c5483582294cf3ac2e855124f849f8f2108c1d48d6b7bf1a434570"
+        },
+        {
+          "path": "frontend/src/lib/budgets/budgets-screen.svelte.markup.html",
+          "sha256": "54d421e3d6bd31b866d03d1a283c669c5e50addfd2f9fc2a8a2542ad8f5b506a"
+        }
+      ],
+      "sha256": "7ad977aa9cb2cd437c4ed21ba6a40d33d2cea1761b9b9cecad16c8340fe2e995"
+    },
+    {
+      "path": "frontend/src/lib/categories/category-editor.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/categories/category-editor.svelte.script1.ts",
+          "sha256": "71924dec39dcc912bc77a43609627a315bb2a2ebf74708b383e7d9e482de9567"
+        },
+        {
+          "path": "frontend/src/lib/categories/category-editor.svelte.markup.html",
+          "sha256": "07b17aac30f291d1b36705c3c61675723b60e932c32f3fbda0039daaf253acf1"
+        }
+      ],
+      "sha256": "3b85cef47fb9760d8614299b451c59864ffd635eae8f41ede758f4b45ca41e92"
+    },
+    {
+      "path": "frontend/src/lib/categories/category-icon.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/categories/category-icon.svelte.script1.ts",
+          "sha256": "804c11193806ecd9fcf8b972c48e01e350987957554bbd99a177d89966863d03"
+        },
+        {
+          "path": "frontend/src/lib/categories/category-icon.svelte.markup.html",
+          "sha256": "6ab5c30afb67f3789257f4cd54c4b2afec440e004c608bafd709128673f39d6c"
+        }
+      ],
+      "sha256": "164bc91c189b1723167b53eeae048711f2b7bf894fdf4554a7bce242d2c50789"
+    },
+    {
+      "path": "frontend/src/lib/categories/category-icons.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/categories/category-icons.ts",
+          "sha256": "2eb718e444047c6500a26f471806c5d8b4fcf32e36e598acac403e52bc56cb36"
+        }
+      ],
+      "sha256": "2eb718e444047c6500a26f471806c5d8b4fcf32e36e598acac403e52bc56cb36"
+    },
+    {
+      "path": "frontend/src/lib/categories/category-labels.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/categories/category-labels.ts",
+          "sha256": "61f4f8894737b1ac76ba4d1a8274c09a6e2dc766359e33a5871a2f948bc9a8b9"
+        }
+      ],
+      "sha256": "61f4f8894737b1ac76ba4d1a8274c09a6e2dc766359e33a5871a2f948bc9a8b9"
+    },
+    {
+      "path": "frontend/src/lib/categories/category-list-screen.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/categories/category-list-screen.svelte.script1.ts",
+          "sha256": "5c49cae58f13475460a4979bcfbb00abb59dbaea19b82af3c93f7422e1611f13"
+        },
+        {
+          "path": "frontend/src/lib/categories/category-list-screen.svelte.markup.html",
+          "sha256": "3a38a99f44b11b8ac5e72b491915897190786ea88eb1fea00acc84b32d58c089"
+        }
+      ],
+      "sha256": "c61f3bd6c399d7058d2d4db28742cb13301a082ff73f1bc1fd5175fbc1398b38"
+    },
+    {
+      "path": "frontend/src/lib/components/api-form-error.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/api-form-error.svelte.script1.ts",
+          "sha256": "4f6d81f751f33b2dc226f24d14141d01ac9a824470a5da01afce6295e3fe2f54"
+        },
+        {
+          "path": "frontend/src/lib/components/api-form-error.svelte.markup.html",
+          "sha256": "55ad34d4d746319bf470640c61402c0cd998564dfeba31eb5a76cc742332bb5d"
+        }
+      ],
+      "sha256": "843f484244caa54223390a66692253959f250a1ec65e7e23cef01c1b481a603f"
+    },
+    {
+      "path": "frontend/src/lib/components/modal-dialog.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/modal-dialog.svelte.script1.ts",
+          "sha256": "a7b90d2a4c25d08e9163c53c40a340de4c62a4bddd3eae6bbe8a317419c9cb34"
+        },
+        {
+          "path": "frontend/src/lib/components/modal-dialog.svelte.markup.html",
+          "sha256": "5b5dd157724e34ea385a061a4af9be5d397a853d838256ffebc2884d91f5d786"
+        }
+      ],
+      "sha256": "22529021efd4b772e74451a1dc88f81f16da5edb454b2abc1dfd44d0925f9813"
+    },
+    {
+      "path": "frontend/src/lib/components/modal-focus.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/modal-focus.ts",
+          "sha256": "d6454c2cd262b51d2768993fb4cff0a5d6d5f1adc52642a4f82ee9b8947a413f"
+        }
+      ],
+      "sha256": "d6454c2cd262b51d2768993fb4cff0a5d6d5f1adc52642a4f82ee9b8947a413f"
+    },
+    {
+      "path": "frontend/src/lib/components/page-header.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/page-header.svelte.script1.ts",
+          "sha256": "139e87e43a32d62d2f08dc7b20641e7b136d7e902609ba0c863ae99887643f25"
+        },
+        {
+          "path": "frontend/src/lib/components/page-header.svelte.markup.html",
+          "sha256": "60432b24c133579631fe7183d841680e1456827d9021d895051418907801a222"
+        }
+      ],
+      "sha256": "435f9bbc6c877bbf14bef3ec9d53e9cbc8cfcf6d78aed12a468c9abb85747a7c"
+    },
+    {
+      "path": "frontend/src/lib/components/panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/panel.svelte.script1.ts",
+          "sha256": "4b5a106a47db9c98bbb36a74e2f67d88b3738a1f0836a3146891c96bbbe6ebca"
+        },
+        {
+          "path": "frontend/src/lib/components/panel.svelte.markup.html",
+          "sha256": "0236eb2cd0bb9a2db1fa92a1f3bdfb22e38fb4c9ed9b9d374c4b73abd4b0495a"
+        }
+      ],
+      "sha256": "278b1cc1faa2b4e40227031d6ab7d90a91366cfac930e26f5d19034183095302"
+    },
+    {
+      "path": "frontend/src/lib/components/state-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/state-panel.svelte.script1.ts",
+          "sha256": "6e13daf1d29b6759b4fe1924fdab6b4605a4cff7d6ed5234d64595dc289ddef2"
+        },
+        {
+          "path": "frontend/src/lib/components/state-panel.svelte.markup.html",
+          "sha256": "4ea4f0a3c47f66c84fa545bc9b5213ccac853c29e4906fb6c3b001b1cb7d3c1a"
+        }
+      ],
+      "sha256": "c22cefb337e599ade27f47e0678fbed6f71b4fe16333726cc1a2dd092ed9f965"
+    },
+    {
+      "path": "frontend/src/lib/components/status-badge.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/status-badge.svelte.script1.ts",
+          "sha256": "e39b276a1c03b197641af27918172b019109a39992d1d595e90a29545cd8e0d3"
+        },
+        {
+          "path": "frontend/src/lib/components/status-badge.svelte.markup.html",
+          "sha256": "da464169026272ebab740948073a7d8d62844df9fbd1923306a79f9c365895eb"
+        }
+      ],
+      "sha256": "d34f9009922c1dd8b099742614fddda79cd679a6ba4552f71afc9745940ee5cf"
+    },
+    {
+      "path": "frontend/src/lib/components/theme-toggle.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/theme-toggle.svelte.script1.ts",
+          "sha256": "49ef207a7a139c0eb3ec6eafe26d2f6c51fd5f1fa81e24d4dcbfcee20596f279"
+        },
+        {
+          "path": "frontend/src/lib/components/theme-toggle.svelte.markup.html",
+          "sha256": "2d0474b223f95da8b703363bf01ff5996c3451d1b09111afd99da90c37760376"
+        }
+      ],
+      "sha256": "3494fe8cdb59258b2cd79230b944bdebb2bc072b2d68b1688d2d2053ae14e144"
+    },
+    {
+      "path": "frontend/src/lib/components/top-bar.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/top-bar.svelte.script1.ts",
+          "sha256": "fd51b641b7062fd414f0daec4fbfeba597c0d75483cc9bcf087b4374d9d6f6ad"
+        },
+        {
+          "path": "frontend/src/lib/components/top-bar.svelte.markup.html",
+          "sha256": "8d7e608f96d36d379fa1d1c33c0fbb10ddd3542c1e7744eb85498d2c62c45a8b"
+        }
+      ],
+      "sha256": "cdde2e4b37931d78ad5470b9c0478999618217c3b2fda20fb8418a953e140e4f"
+    },
+    {
+      "path": "frontend/src/lib/components/tree-name-cell.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/components/tree-name-cell.svelte.script1.ts",
+          "sha256": "bf02939e571ab69bbe491b0c0bc2369771d309a9a308aa438fb0619c6fce1856"
+        },
+        {
+          "path": "frontend/src/lib/components/tree-name-cell.svelte.markup.html",
+          "sha256": "ad7d136a516728a73ac0a9bac55e1fdda4d6e3b8c8c41ec49bddb91e764d87fc"
+        }
+      ],
+      "sha256": "8a3b223207095fa29f13878409a742bf5d6e02a37f78d4679cf0e576028a7fd0"
+    },
+    {
+      "path": "frontend/src/lib/dates/calendar-date.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/dates/calendar-date.ts",
+          "sha256": "258880ffd24c1a3aa162fbe01a9c152ef46c20ef6e0be7bca59fdf9e98b61070"
+        }
+      ],
+      "sha256": "258880ffd24c1a3aa162fbe01a9c152ef46c20ef6e0be7bca59fdf9e98b61070"
+    },
+    {
+      "path": "frontend/src/lib/dates/owner-date-context.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/dates/owner-date-context.ts",
+          "sha256": "4e5bee870fdcb0cfae1e454ab0f636275aebcd3f34624fefbd260ddc90305f6a"
+        }
+      ],
+      "sha256": "4e5bee870fdcb0cfae1e454ab0f636275aebcd3f34624fefbd260ddc90305f6a"
+    },
+    {
+      "path": "frontend/src/lib/dates/owner-date.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/dates/owner-date.ts",
+          "sha256": "6cf2f6b926ed7c8d8a071a0b04693aef781da206658f4369b7069902461af37f"
+        }
+      ],
+      "sha256": "6cf2f6b926ed7c8d8a071a0b04693aef781da206658f4369b7069902461af37f"
+    },
+    {
+      "path": "frontend/src/lib/forecast/forecast-chart.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/forecast/forecast-chart.svelte.script1.ts",
+          "sha256": "75004b33ed810cb7b93235d99c9ac53f25b0dc09e51a0f138016ac00a10a5179"
+        },
+        {
+          "path": "frontend/src/lib/forecast/forecast-chart.svelte.markup.html",
+          "sha256": "eae8b0d94b2c0c001c5d0ca470949c024bda0c72a437b0fa77dab15f3ab6f133"
+        }
+      ],
+      "sha256": "c898d16f1e479f2953b000ae605b6f79a85bb11ec149a97bf243570ba158e6d0"
+    },
+    {
+      "path": "frontend/src/lib/forecast/forecast-events.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/forecast/forecast-events.svelte.script1.ts",
+          "sha256": "7498b5ae55e5af4a4dd5de20bf9f62b5acfe63cab5eff63456b19bb7a43d2d1d"
+        },
+        {
+          "path": "frontend/src/lib/forecast/forecast-events.svelte.markup.html",
+          "sha256": "490a467d5eb49e3dc8d9be3177e64a291c8c4df84bb94c51a1a88d59c85a03b8"
+        }
+      ],
+      "sha256": "57c06c6a7aceefb55bf3d1ba080c6d33b4f264a83b987ff2c7b5fc9e68b305c0"
+    },
+    {
+      "path": "frontend/src/lib/forecast/forecast-learning.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/forecast/forecast-learning.svelte.script1.ts",
+          "sha256": "da54b17ce07c5d20c94c8d6a1ae6c4e838ab612c5bd493a7614d7e260385c81f"
+        },
+        {
+          "path": "frontend/src/lib/forecast/forecast-learning.svelte.markup.html",
+          "sha256": "5bdc18baef828270d58ca002af80d2b5e7a39660cdefcd936f4b0a00ad019817"
+        }
+      ],
+      "sha256": "c1121597e15466f5c5edd6e0bd3fab351ce085253f7dd5fe024dc814c6bb5ad8"
+    },
+    {
+      "path": "frontend/src/lib/forecast/forecast-model.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/forecast/forecast-model.ts",
+          "sha256": "1416c9b0ed8914e3957e227e21a00b79b10850773c495b5f57f73bc3c09e99a7"
+        }
+      ],
+      "sha256": "1416c9b0ed8914e3957e227e21a00b79b10850773c495b5f57f73bc3c09e99a7"
+    },
+    {
+      "path": "frontend/src/lib/forecast/forecast-screen.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/forecast/forecast-screen.svelte.script1.ts",
+          "sha256": "08d4f8ad4d549c09a0f8f5a9c32df6ab2216a67bbde95e2d7bd84a4abcf98236"
+        },
+        {
+          "path": "frontend/src/lib/forecast/forecast-screen.svelte.markup.html",
+          "sha256": "71fd79c1334108fb3c006a62de47086df132c64cc379b3695f3c322580e8b734"
+        }
+      ],
+      "sha256": "5075a8cf62153da4ca478bf7f265e31349cafaf69171814b1c48c7e0a1238386"
+    },
+    {
+      "path": "frontend/src/lib/form-errors.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/form-errors.ts",
+          "sha256": "fd0a6005fb9e8d84303e2440fd98375453ec6210b65b86b1a751b97059f06a21"
+        }
+      ],
+      "sha256": "fd0a6005fb9e8d84303e2440fd98375453ec6210b65b86b1a751b97059f06a21"
+    },
+    {
+      "path": "frontend/src/lib/imports/crypto-csv.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/crypto-csv.ts",
+          "sha256": "2a733ed7496323adc68bfa71fa8a310178d791e36d35cf1c84c59593caef90b4"
+        }
+      ],
+      "sha256": "2a733ed7496323adc68bfa71fa8a310178d791e36d35cf1c84c59593caef90b4"
+    },
+    {
+      "path": "frontend/src/lib/imports/csv-investment-mapping.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/csv-investment-mapping.svelte.script1.ts",
+          "sha256": "a3a11e6e00ffcd0cee5d4d63f60624bb4e0258a4d4459b7e5a4f0bbf003f30ad"
+        },
+        {
+          "path": "frontend/src/lib/imports/csv-investment-mapping.svelte.markup.html",
+          "sha256": "9a53e13cce6d37effc0722fb8f349f97e564d4fd84181160c2dfa2cdd7cfc4ae"
+        }
+      ],
+      "sha256": "33ac48e1371e09e3a9d3d0f76e396ed47625aa0172b0b169f15d83649e8f60aa"
+    },
+    {
+      "path": "frontend/src/lib/imports/csv-investment-review.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/csv-investment-review.svelte.script1.ts",
+          "sha256": "d70eb04ffdec96a1e7ff878875ec81c2992e33755fc30c873b204a0baf60079d"
+        },
+        {
+          "path": "frontend/src/lib/imports/csv-investment-review.svelte.markup.html",
+          "sha256": "6f5017a3f8027ca3d40f77cc982eea6ac08b3bd70f1b242d848f76e8e94d0297"
+        }
+      ],
+      "sha256": "7f565ff80dae238c04420db9fda9d24ddfdcaa813ac3dbe84048730c5c587173"
+    },
+    {
+      "path": "frontend/src/lib/imports/csv-investment-row.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/csv-investment-row.svelte.script1.ts",
+          "sha256": "12cbcd3e2c8e8d5118ba9caddfcb1c2714050cbc34ae9e91dd1c09941e8058d4"
+        },
+        {
+          "path": "frontend/src/lib/imports/csv-investment-row.svelte.markup.html",
+          "sha256": "1081ed66dd15e205af4fac7cff15bd480f4acbc38ad13d89a112cb7881cf08af"
+        }
+      ],
+      "sha256": "c7973bf93eb3dca6ed466609b0b74bee4151e4e8ca2d085afa1541ee494d1279"
+    },
+    {
+      "path": "frontend/src/lib/imports/csv-investment.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/csv-investment.ts",
+          "sha256": "857ed49b4f5c96a9df911a1595c54833ddaedf6942b0aa7814d78fb789c97cda"
+        }
+      ],
+      "sha256": "857ed49b4f5c96a9df911a1595c54833ddaedf6942b0aa7814d78fb789c97cda"
+    },
+    {
+      "path": "frontend/src/lib/imports/csv-profile.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/csv-profile.ts",
+          "sha256": "fea22e904305b4a9a7038fe393bfe0f597d6bf130c43033b840c3e6819be27c8"
+        }
+      ],
+      "sha256": "fea22e904305b4a9a7038fe393bfe0f597d6bf130c43033b840c3e6819be27c8"
+    },
+    {
+      "path": "frontend/src/lib/imports/dividend-review-row.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/dividend-review-row.svelte.script1.ts",
+          "sha256": "c8ea567509d27274d8b6d2bd322c22d032bf2928d91e5c40cf393d4ad8b28f45"
+        },
+        {
+          "path": "frontend/src/lib/imports/dividend-review-row.svelte.markup.html",
+          "sha256": "196f6ceffa88d985f15be664ab04b088c284a8663d3639e6408babce40fa9b5c"
+        }
+      ],
+      "sha256": "2655fbed00d8b4ee17770054cfd48ec1e9dc5fff0a9faa2a35761b6d4f6608fd"
+    },
+    {
+      "path": "frontend/src/lib/imports/dividend-review.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/dividend-review.svelte.script1.ts",
+          "sha256": "5dc2c09d4f164d80732304aceb460711b78f4cb80270cb5dcabcf27aac49e8b6"
+        },
+        {
+          "path": "frontend/src/lib/imports/dividend-review.svelte.markup.html",
+          "sha256": "5eb48027a22d43efc89f445c1537a1278bc73a0e1302e715de92b2ddfc66cce9"
+        }
+      ],
+      "sha256": "28dde35d5c0acb4dac7a36e4633845c0470f5255e4c5e34a7dca7a90011fe26f"
+    },
+    {
+      "path": "frontend/src/lib/imports/import-rules-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/import-rules-panel.svelte.script1.ts",
+          "sha256": "b6053f46e75c6f3cc86b3f73817444efe3bbb91bfe9762f441ea992f150412b4"
+        },
+        {
+          "path": "frontend/src/lib/imports/import-rules-panel.svelte.markup.html",
+          "sha256": "1e4ae8940c43cdcfef5017790d569779440658dac8fcc92e409c0226af0943eb"
+        }
+      ],
+      "sha256": "986c924f0708f4afd95f8b585bcd3baa0f003247a528d6aa7e91b3dd5ab6b4a5"
+    },
+    {
+      "path": "frontend/src/lib/imports/investment-income-fields.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/investment-income-fields.svelte.script1.ts",
+          "sha256": "493c1e8da93738a8827083bd62eaae0bbf9023d35113516d560f728fb1fc019f"
+        },
+        {
+          "path": "frontend/src/lib/imports/investment-income-fields.svelte.markup.html",
+          "sha256": "d338de19da0dd15afe83bcb7fbaa9fe7d21754b601711581d5e912d3cfd81a80"
+        }
+      ],
+      "sha256": "d4c7647b3cb0ae31b97febe820ae7d2b24a4f978b3c5c50013d28ba24d30aa2c"
+    },
+    {
+      "path": "frontend/src/lib/imports/payee-resolution-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/payee-resolution-panel.svelte.script1.ts",
+          "sha256": "e33d4fc14618ecbdbfe97441e8909e1710a19adff80d25576ea9e958e2992dad"
+        },
+        {
+          "path": "frontend/src/lib/imports/payee-resolution-panel.svelte.markup.html",
+          "sha256": "16e85f88e6949949b613b03d1e6639b21d1e8a6be447892f96ccdb1a1eb09149"
+        }
+      ],
+      "sha256": "e361dd627dd8ed36970b4761470c90176ae062d20fd0199c0f7e00ad5abb50fa"
+    },
+    {
+      "path": "frontend/src/lib/imports/payee-resolution.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/payee-resolution.ts",
+          "sha256": "f40aabd43a5eadbcc940a2c2cf8ffc18595f7293aed33028c2a7d6a5484661ec"
+        }
+      ],
+      "sha256": "f40aabd43a5eadbcc940a2c2cf8ffc18595f7293aed33028c2a7d6a5484661ec"
+    },
+    {
+      "path": "frontend/src/lib/imports/short-link-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/short-link-panel.svelte.script1.ts",
+          "sha256": "679ce9cd15ecafbe39799aafcc33fb6813df316294858562e68e873701e6e7a9"
+        },
+        {
+          "path": "frontend/src/lib/imports/short-link-panel.svelte.markup.html",
+          "sha256": "c5e8b05674462a6d816f78e3dc3c9686e3d52b2d8c981d316d032884d4208d69"
+        }
+      ],
+      "sha256": "6a496314e342aa3a9c23b7e7191447dc6ed60ba170e83c9cb233a57b8e219db8"
+    },
+    {
+      "path": "frontend/src/lib/imports/source-correction.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/source-correction.ts",
+          "sha256": "fed56f32bae92227f460859a3a789f92620ae282ee0f1473f2356f883fa3d2dc"
+        }
+      ],
+      "sha256": "fed56f32bae92227f460859a3a789f92620ae282ee0f1473f2356f883fa3d2dc"
+    },
+    {
+      "path": "frontend/src/lib/imports/split-link-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/split-link-panel.svelte.script1.ts",
+          "sha256": "8334c006db5b2deec0507df67e9644422d6d8c9ea977e76ad8311d5a76fefb4b"
+        },
+        {
+          "path": "frontend/src/lib/imports/split-link-panel.svelte.markup.html",
+          "sha256": "0437dbdb714cb51087fe9aa7b9c680ac7be638dda90987eecb224eaf26253309"
+        }
+      ],
+      "sha256": "883cfa5a07c940055691f08cf844e777228227758a8739f0d1f933673d950a17"
+    },
+    {
+      "path": "frontend/src/lib/imports/text-encodings.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/imports/text-encodings.ts",
+          "sha256": "433d74c388f25469ea486570bc10783c4620a489d3beeb0c1509897df4eed847"
+        }
+      ],
+      "sha256": "433d74c388f25469ea486570bc10783c4620a489d3beeb0c1509897df4eed847"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/auth-origin.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/auth-origin.ts",
+          "sha256": "6f508afca382b6bba15c4d488567d6ef80a6e7d533d60e334992f55c96e942b5"
+        }
+      ],
+      "sha256": "6f508afca382b6bba15c4d488567d6ef80a6e7d533d60e334992f55c96e942b5"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/authenticated-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/authenticated-panel.svelte.script1.ts",
+          "sha256": "6f9519b1702194d7df03dd096d3c8df8d2213c27c64e3881bc7b12f64e5aebfd"
+        },
+        {
+          "path": "frontend/src/lib/install-gate/authenticated-panel.svelte.markup.html",
+          "sha256": "4f5122c7b35eab25c31dc678c75217b99e4e02770d6a930578f83f22496669c2"
+        }
+      ],
+      "sha256": "103b022f00c8fb18c4595f5dea6e45cb313dc95b8eb955b1a7737f9a489f9793"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/currency-options.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/currency-options.ts",
+          "sha256": "8eed19c1c4f5c226efeb5f7cd21d0f8502b1bca10946adb98aecb3d9ae82269c"
+        }
+      ],
+      "sha256": "8eed19c1c4f5c226efeb5f7cd21d0f8502b1bca10946adb98aecb3d9ae82269c"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/currency-setup-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/currency-setup-form.svelte.script1.ts",
+          "sha256": "bc18aa6b091e35ef0885792899fd8b37fa456bbc8655ca714fbc889e4c2fd437"
+        },
+        {
+          "path": "frontend/src/lib/install-gate/currency-setup-form.svelte.markup.html",
+          "sha256": "5df037ac4558bffff560887b7da4bcaec463f37fb9943bb1165271a0ca1fd132"
+        }
+      ],
+      "sha256": "f03207858bf68f7f1ab8bfa183d621d1b6bea7722ab92b4e2a775875c37942df"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/install-gate-copy.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/install-gate-copy.ts",
+          "sha256": "3fd01c09e19f73da8dbdab924df6ed6252e2c761383e148205ffe5b9499476fa"
+        }
+      ],
+      "sha256": "3fd01c09e19f73da8dbdab924df6ed6252e2c761383e148205ffe5b9499476fa"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/install-gate-hero.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/install-gate-hero.svelte.script1.ts",
+          "sha256": "b0b52aa327fada2708345c341df94a61d47ef4c752775be2468d9f30b999426f"
+        },
+        {
+          "path": "frontend/src/lib/install-gate/install-gate-hero.svelte.markup.html",
+          "sha256": "1046edfc7005ed856406352bfb67cf2e98dac8e3355d91f214e1764b4cfa031f"
+        }
+      ],
+      "sha256": "5f0d1fb23694ddf0d59b21003ca50d981de9c340d9a77b5775fd06e532bff430"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/install-gate-state.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/install-gate-state.ts",
+          "sha256": "d0e7b3b10e58c36fc3bf6ee9da93c286eff8c46c8bcbe88ea6d25b8006ec1226"
+        }
+      ],
+      "sha256": "d0e7b3b10e58c36fc3bf6ee9da93c286eff8c46c8bcbe88ea6d25b8006ec1226"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/install-gate.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/install-gate.svelte.script1.ts",
+          "sha256": "60dd381816d99c40f0c69d5fc67678e592ac0e8ef6d9936f1dedc75c7bdad4ee"
+        },
+        {
+          "path": "frontend/src/lib/install-gate/install-gate.svelte.markup.html",
+          "sha256": "5713f4ab48e2e8b4a837f1a888dd66ac17c67e1caa853dc219396d1104b5129e"
+        }
+      ],
+      "sha256": "50cd5af907b2126be7ffd1fea92a6bc1c52ead6d05d494e1a8c1657ffe9aa0cf"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/login-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/login-form.svelte.script1.ts",
+          "sha256": "757f04478115acb34dd97d2dd718a148ab441e6c1bebcae9acdf6eab6a446eb1"
+        },
+        {
+          "path": "frontend/src/lib/install-gate/login-form.svelte.markup.html",
+          "sha256": "1166d234f225861bdedb92f232ca4bae92166f8f0952d5ceb2ffabd311482880"
+        }
+      ],
+      "sha256": "c5e02e674786586e3b37198b3ffa2330882dee73b92967462aa96324f1d5aa5e"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/mfa-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/mfa-form.svelte.script1.ts",
+          "sha256": "e37f6c12cb38d4cb8630c0f78bf3bb0342aba8311777b71d910d680dfc135650"
+        },
+        {
+          "path": "frontend/src/lib/install-gate/mfa-form.svelte.markup.html",
+          "sha256": "81cc48f44037f1fb0e59a4e685a1a5355cc127d11d10846e20b89fb8d746e4e8"
+        }
+      ],
+      "sha256": "61581069a62a917fc0357472fc0fb4bd4284a2e635f7746c046142505ba80d74"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/owner-setup-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/owner-setup-form.svelte.script1.ts",
+          "sha256": "21b8e2ad4e08fdc1c76edb19bf39f3260b2b244c136cc27696f544718b9ee3fc"
+        },
+        {
+          "path": "frontend/src/lib/install-gate/owner-setup-form.svelte.markup.html",
+          "sha256": "0cf7f64bada86e12231d2546cf85a38630ed8d6abf41b4eb4bcdb9e9b67d1632"
+        }
+      ],
+      "sha256": "2cc9bd274acfbed30d90f194dfc481cfead0fb9316d58215a546387dbc619354"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/recovery-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/recovery-panel.svelte.script1.ts",
+          "sha256": "09385c022265fc86ee6a29d99c66a300f88974df452ad9c01a2e1c363f8c8978"
+        },
+        {
+          "path": "frontend/src/lib/install-gate/recovery-panel.svelte.markup.html",
+          "sha256": "c524a25fbc5bd7483c7a6cc7045065a781e686e718fe852743fdbeb05aaa2c2c"
+        }
+      ],
+      "sha256": "ca420c6076ac7277e2ae713116b0e3b5e1483b91b9b0cac24a18a2f82b277ae9"
+    },
+    {
+      "path": "frontend/src/lib/install-gate/workspace-preparing-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/install-gate/workspace-preparing-panel.svelte.script1.ts",
+          "sha256": "45b184d77cdf36689b368dbd7c538cfb4ea49e1ac1ff8d7da73b759c672daf99"
+        },
+        {
+          "path": "frontend/src/lib/install-gate/workspace-preparing-panel.svelte.markup.html",
+          "sha256": "4a34bc166ee380fcb7a053a7571652bb742c0d487d18d8e0092b98c870325638"
+        }
+      ],
+      "sha256": "83ab9f054aadd413673d18fb8897e67606a3291a460111e8cdde85a1e825e28d"
+    },
+    {
+      "path": "frontend/src/lib/investments/alternative-gains.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/alternative-gains.svelte.script1.ts",
+          "sha256": "c01b0b007ef7fd17647123f54977a08c8cc0d921680d5d1757e42107ae6372cc"
+        },
+        {
+          "path": "frontend/src/lib/investments/alternative-gains.svelte.markup.html",
+          "sha256": "e2d1d0703ff575d7fb0b27f9a7f5a97dcb3ee747e0eb28730bb2fd3a3e9f78a6"
+        }
+      ],
+      "sha256": "5fd5978cb92dc2b4a917b632d999c836d711eacc072f87ababeb25f74f954fa2"
+    },
+    {
+      "path": "frontend/src/lib/investments/basis-provenance-summary.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/basis-provenance-summary.svelte.script1.ts",
+          "sha256": "eb5bb7d69d4c19709c7c0ee12e556bbb8d2cb4339d7c5fbb3199047d1d65511b"
+        },
+        {
+          "path": "frontend/src/lib/investments/basis-provenance-summary.svelte.markup.html",
+          "sha256": "23eb0721d7195790e5f75798b630133025470c7bd0f386af215528d170a9ed3b"
+        }
+      ],
+      "sha256": "774745bdebf26d0af552341121221bfceaa046fd81ab8185aec44e9dab985ab8"
+    },
+    {
+      "path": "frontend/src/lib/investments/basis-provenance.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/basis-provenance.ts",
+          "sha256": "322cdb51a4a27f5550c2730bb552db66356ffc1fd26fb5e26da33e8f34b962e9"
+        }
+      ],
+      "sha256": "322cdb51a4a27f5550c2730bb552db66356ffc1fd26fb5e26da33e8f34b962e9"
+    },
+    {
+      "path": "frontend/src/lib/investments/basis-resolution-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/basis-resolution-form.svelte.script1.ts",
+          "sha256": "9faabaed4f3fb37b0431b8025e0172b8b65a15a8f4da9e1bbf3b36537939d36d"
+        },
+        {
+          "path": "frontend/src/lib/investments/basis-resolution-form.svelte.markup.html",
+          "sha256": "ea76575d07cfd6ba0db205cddbcd8a96021ead08de3a201d3c6e2f54a67d90b5"
+        }
+      ],
+      "sha256": "599702052b32fcbad445dd20c7020b7d28fddfd3a5263ad86a2768e216666222"
+    },
+    {
+      "path": "frontend/src/lib/investments/buy-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/buy-form.svelte.script1.ts",
+          "sha256": "c73ce0858b5b7cea3b033a75ad12c98fce1a5993958f09d612e355240bbe5192"
+        },
+        {
+          "path": "frontend/src/lib/investments/buy-form.svelte.markup.html",
+          "sha256": "4316834ba395775a23d506fb820269305e79a44a1a817d06a80e97a9f6e9ac73"
+        }
+      ],
+      "sha256": "95949dd14b59c9f2b694b9a923fa6d7c85aba82731b32f3b66a252c6ada29fa7"
+    },
+    {
+      "path": "frontend/src/lib/investments/capital-return-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/capital-return-form.svelte.script1.ts",
+          "sha256": "6378b0e8d169ced1cc48ab6672a626d3889435b0d1b07113ee17a490a5468a73"
+        },
+        {
+          "path": "frontend/src/lib/investments/capital-return-form.svelte.markup.html",
+          "sha256": "9db660764ddc5be9d2b7b9741b8c4b7d40ec8233c0520010a2478cf2e1de654c"
+        }
+      ],
+      "sha256": "d67bce35f23e8af588437a1a3da7c3438df03d35e690a926a17921ec86c1c796"
+    },
+    {
+      "path": "frontend/src/lib/investments/capital-return-summary.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/capital-return-summary.svelte.script1.ts",
+          "sha256": "fc416d9c41d19fe2193fbc1cca15b80de3b434e6471f542ed85f2401d5aa15d5"
+        },
+        {
+          "path": "frontend/src/lib/investments/capital-return-summary.svelte.markup.html",
+          "sha256": "0b1d8602515abed186107807749c7c8ccd62ff91672ffda693c70af87855ff58"
+        }
+      ],
+      "sha256": "830a0fd883f9a86f37fa5927613fb5dc3bd13fd1cd844a70eddaac60738520a0"
+    },
+    {
+      "path": "frontend/src/lib/investments/cash-and-stock-merger-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/cash-and-stock-merger-form.svelte.script1.ts",
+          "sha256": "cafcfca2a7ad3e14820d4eceeae31304405f4521dbf8014be2a05cccf204ff0a"
+        },
+        {
+          "path": "frontend/src/lib/investments/cash-and-stock-merger-form.svelte.markup.html",
+          "sha256": "f68affb0c9dbeceaee83ac4c7c99d88d01264680f85382f20af3798d68e22003"
+        }
+      ],
+      "sha256": "080bba7569be2bee99a02e3f2181bfb48a4e1790bdad1c0606c5200ecb3903a2"
+    },
+    {
+      "path": "frontend/src/lib/investments/cash-and-stock-merger-summary.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/cash-and-stock-merger-summary.svelte.script1.ts",
+          "sha256": "45c995c31ae952e4cba86ff42f2f8864d53d3089ea07cba19777cb2b60cc6452"
+        },
+        {
+          "path": "frontend/src/lib/investments/cash-and-stock-merger-summary.svelte.markup.html",
+          "sha256": "bf2363e927b2f643794a2f8cf44f161c8ba3abdeff3d2f438cf4d5a6cfc4d67f"
+        }
+      ],
+      "sha256": "2b64d8b0e632e25149be303631b276dbcc6271b65073d1efbcebd859c2342419"
+    },
+    {
+      "path": "frontend/src/lib/investments/cash-in-lieu-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/cash-in-lieu-form.svelte.script1.ts",
+          "sha256": "65f2a155b5d218c13523991bce0e54471cba4029d593386ad35b61eda3e804ab"
+        },
+        {
+          "path": "frontend/src/lib/investments/cash-in-lieu-form.svelte.markup.html",
+          "sha256": "5a0fe04970cd231b7a8b0904939118ce6c4254c8a09a6b849f5360def18ffe1c"
+        }
+      ],
+      "sha256": "8a5b8dbe7d4df8d948a28b6e8c067f28473dd7a299918b454f1e9674aadb289d"
+    },
+    {
+      "path": "frontend/src/lib/investments/dividend-correction-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/dividend-correction-form.svelte.script1.ts",
+          "sha256": "48f3a3a9e881b4c732650a02031271f512fedfd32dc2a4bfa2caa1ee7a9b3f53"
+        },
+        {
+          "path": "frontend/src/lib/investments/dividend-correction-form.svelte.markup.html",
+          "sha256": "fa8581f170a07f871489e5166465b705684385c1ead759eb65f187e27fcb4f4f"
+        }
+      ],
+      "sha256": "57a874ef9392cf94d823f0dd8d66cc6cb8f7475c693975d8b2a2784cedc78ae4"
+    },
+    {
+      "path": "frontend/src/lib/investments/dividend-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/dividend-form.svelte.script1.ts",
+          "sha256": "632cf359d4be35d521aec3dbf40ec41d1599d428283ad1f76806a9bed12c8f24"
+        },
+        {
+          "path": "frontend/src/lib/investments/dividend-form.svelte.markup.html",
+          "sha256": "d6eaa09472a9c2a30065b5d5a95d1ac3a8439b52fa133eec9ffb590099ba8e9f"
+        }
+      ],
+      "sha256": "2ccd92d2f8519a4c223117179d642733dc17ffe730ccb17c05f70b5b93cf73b9"
+    },
+    {
+      "path": "frontend/src/lib/investments/event-suggestions.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/event-suggestions.svelte.script1.ts",
+          "sha256": "7e34d42fa0487b3dc652b1839e5334dd24031b91cc5f233cf03d37ab3465eacd"
+        },
+        {
+          "path": "frontend/src/lib/investments/event-suggestions.svelte.markup.html",
+          "sha256": "c658cc09a9683e17a3f3e9bc004ab5ec8df941003c7cb9119203c9b8179c16da"
+        }
+      ],
+      "sha256": "56d6d72945b13dfb068fab40f49ea1c73dac52114ef15e3cfb76309955e34c00"
+    },
+    {
+      "path": "frontend/src/lib/investments/external-transfer-in-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/external-transfer-in-form.svelte.script1.ts",
+          "sha256": "2ee79616eb2b5a36c10b6e353f87ec336401d3b6c36a0401252a234424c88ad4"
+        },
+        {
+          "path": "frontend/src/lib/investments/external-transfer-in-form.svelte.markup.html",
+          "sha256": "099cc4afcacf7640b72f42f1d147005883af599691b4a64a5da4efb3d9f04da2"
+        }
+      ],
+      "sha256": "1eea541dd03729c0b1e2d1e43d23171f195a375814cd06e9ea504196df2ff4db"
+    },
+    {
+      "path": "frontend/src/lib/investments/external-transfer-out-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/external-transfer-out-form.svelte.script1.ts",
+          "sha256": "7d6c9fdc2c77ea5a53ca112e314dd135a0cd62996a63930f9d225775cd62b124"
+        },
+        {
+          "path": "frontend/src/lib/investments/external-transfer-out-form.svelte.markup.html",
+          "sha256": "52ed23ffa4eafa868abed9ec7292f7f93817dda76b64f4def14ae5b27246c883"
+        }
+      ],
+      "sha256": "04509ea43f5c48ddb2330cb2a624d6a0336834470b1cb41dcd6d3a221297be91"
+    },
+    {
+      "path": "frontend/src/lib/investments/form-amounts.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/form-amounts.ts",
+          "sha256": "c0f2d2dd8c2b634b88eb5c62c36b3ae334452184b0dc6236d09c42063432e100"
+        }
+      ],
+      "sha256": "c0f2d2dd8c2b634b88eb5c62c36b3ae334452184b0dc6236d09c42063432e100"
+    },
+    {
+      "path": "frontend/src/lib/investments/gain-impact-list.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/gain-impact-list.svelte.script1.ts",
+          "sha256": "c1a1e5e1f2a36c501e71b40b1e34b2d95d2d3272d5b39a268f238a04fa9cdc93"
+        },
+        {
+          "path": "frontend/src/lib/investments/gain-impact-list.svelte.markup.html",
+          "sha256": "00b04878babe6f9fe02d415a84716803f1f08eb294a91f9a818af2293786cb25"
+        }
+      ],
+      "sha256": "138686a1a54490de95137c05a3b0df517d318c02c7ac47324c7394d139765599"
+    },
+    {
+      "path": "frontend/src/lib/investments/gain-impact.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/gain-impact.ts",
+          "sha256": "c379dec540a8e34135e29115db93605edce10d43abf669a6172e97c6ab961e6e"
+        }
+      ],
+      "sha256": "c379dec540a8e34135e29115db93605edce10d43abf669a6172e97c6ab961e6e"
+    },
+    {
+      "path": "frontend/src/lib/investments/gains-fx-view.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/gains-fx-view.svelte.script1.ts",
+          "sha256": "1223004149ba46f2866fc3e74cc465b9b5bd6f1e0b22c52271f964c5a504175e"
+        },
+        {
+          "path": "frontend/src/lib/investments/gains-fx-view.svelte.markup.html",
+          "sha256": "61b8fc1ab283a69809a4ac256e2c90be288bf307965bfd73d1f1c02be298bfa7"
+        }
+      ],
+      "sha256": "6b1b39ab42ef02f23f2d2f99eb50806b285490eff9a83a5845907544d0858b3b"
+    },
+    {
+      "path": "frontend/src/lib/investments/gains-report.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/gains-report.svelte.script1.ts",
+          "sha256": "4d51b6ac13215f06fdf28e33f579d50e39002fbb10de16ca858a5cd73308d11d"
+        },
+        {
+          "path": "frontend/src/lib/investments/gains-report.svelte.markup.html",
+          "sha256": "f92ccf494ca2cb43906cd86f4d34b136c579b1c3d66df1dbfe1024c168446ddb"
+        }
+      ],
+      "sha256": "1ccd4c30e6684e1c52052d55efc24e28354c25b9533d4f6c61f165801c1711bb"
+    },
+    {
+      "path": "frontend/src/lib/investments/gains-runs.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/gains-runs.svelte.script1.ts",
+          "sha256": "7d1151cb9b721fb28b45e73868dd507f72c4fc8b90a6fe63a51290e55cd893c4"
+        },
+        {
+          "path": "frontend/src/lib/investments/gains-runs.svelte.markup.html",
+          "sha256": "12aab2d93d5df6bbd17616b6d3254e58e2687738a5d5460ca9e955dcb6439b45"
+        }
+      ],
+      "sha256": "4b39f2bab1f4844eb929f721dfefd59e32181f8821fe29c1cc34ef75a5210ab1"
+    },
+    {
+      "path": "frontend/src/lib/investments/gains-statement.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/gains-statement.svelte.script1.ts",
+          "sha256": "91f08784ab2607cc59a66c185c71fe846f37f601266bab3a9dd290b8716be2fc"
+        },
+        {
+          "path": "frontend/src/lib/investments/gains-statement.svelte.markup.html",
+          "sha256": "b1055b59aa3c7cb1f99d0ce7838f41cc236f9000f2e4b8ef4dbb944d0f65a99f"
+        }
+      ],
+      "sha256": "8b147b72228d3bc51d6c436e89b5ae4d3b9d97d46927045d4d7cfa91272b97b1"
+    },
+    {
+      "path": "frontend/src/lib/investments/income-coverage.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/income-coverage.svelte.script1.ts",
+          "sha256": "6d4dd0d1535b1ed6a40dd2854e8b6ad2fdcfec9799a2a2d68d895665e0f7b32c"
+        },
+        {
+          "path": "frontend/src/lib/investments/income-coverage.svelte.markup.html",
+          "sha256": "9cd68cbb1feefffa68fc31ce2e719e1ae9d273b7874a6e2540d2aba07eb05ad5"
+        }
+      ],
+      "sha256": "408e86e049518950a97b940174f1cf7ee0b7d5c69c1e3164631747f59e572f13"
+    },
+    {
+      "path": "frontend/src/lib/investments/income-coverage.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/income-coverage.ts",
+          "sha256": "1d0f5f595d444c476712ffd87ca6633b65684479a793ec954698a7f17f789434"
+        }
+      ],
+      "sha256": "1d0f5f595d444c476712ffd87ca6633b65684479a793ec954698a7f17f789434"
+    },
+    {
+      "path": "frontend/src/lib/investments/instrument-activity.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/instrument-activity.svelte.script1.ts",
+          "sha256": "438c8bf03210f0dce69fbe1ae9328ec47a601052eca7a19d5f981809ee29536a"
+        },
+        {
+          "path": "frontend/src/lib/investments/instrument-activity.svelte.markup.html",
+          "sha256": "843c04c06b1d79d88f38cf61c468d941396aa04e6f0a3c663f43d7f04460bb23"
+        }
+      ],
+      "sha256": "e02740043d9acf94696a8f828ac20325b2fcef31d76f6e15a9888dfd9a304048"
+    },
+    {
+      "path": "frontend/src/lib/investments/instrument-activity.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/instrument-activity.ts",
+          "sha256": "5fbb730e7b561b2bf7330993dc99a80b8fb49eab1967dc7758c57095980899dd"
+        }
+      ],
+      "sha256": "5fbb730e7b561b2bf7330993dc99a80b8fb49eab1967dc7758c57095980899dd"
+    },
+    {
+      "path": "frontend/src/lib/investments/instrument-income-summary.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/instrument-income-summary.svelte.script1.ts",
+          "sha256": "137ada8b8ed531c389584c3ac8eaa715f858bc729712728b0bc67d050531976d"
+        },
+        {
+          "path": "frontend/src/lib/investments/instrument-income-summary.svelte.markup.html",
+          "sha256": "970ccb72e58d1287f2f54c8f0061d476e980ff9c311f36150604b3383aab2eca"
+        }
+      ],
+      "sha256": "dc57f0980daa1bc06af2caaadf2daaeb6147f962def4742ed6252b0cdf6929ac"
+    },
+    {
+      "path": "frontend/src/lib/investments/instruments-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/instruments-panel.svelte.script1.ts",
+          "sha256": "52a0a507fadc60daf1d6c72ed289aeec5670f614875fc22e876a357283bbeeb2"
+        },
+        {
+          "path": "frontend/src/lib/investments/instruments-panel.svelte.markup.html",
+          "sha256": "54d110dd25045ed2071a408174867b445e9f3e56ee8ebdaade329392fb812743"
+        }
+      ],
+      "sha256": "5e79d93e9a432ee9c5d2efaeb294f71a8bb67c35c8c401ed541917a4c167108a"
+    },
+    {
+      "path": "frontend/src/lib/investments/internal-transfer-amounts.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/internal-transfer-amounts.ts",
+          "sha256": "8f6790023949c4b6f54a562526aef2139559c94ccd11ad4a56b961cb496251f1"
+        }
+      ],
+      "sha256": "8f6790023949c4b6f54a562526aef2139559c94ccd11ad4a56b961cb496251f1"
+    },
+    {
+      "path": "frontend/src/lib/investments/internal-transfer-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/internal-transfer-form.svelte.script1.ts",
+          "sha256": "9ca490f1134f7e2cd592857d41e2ac3764d9ac963a6bf98b7582778eb209e04f"
+        },
+        {
+          "path": "frontend/src/lib/investments/internal-transfer-form.svelte.markup.html",
+          "sha256": "b2319b48c2aa69a5cbfd8fad5c680880dd9c1e97da392871e9a50057769e52db"
+        }
+      ],
+      "sha256": "efc841b8dbe4f08eeb51399f0c58fe5b58e10cca691fc927c56b2fab5cd02209"
+    },
+    {
+      "path": "frontend/src/lib/investments/invalidate.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/invalidate.ts",
+          "sha256": "ac7330e4fd13d9d7595e8b79ea619c3579bef0d8b0c02990fd6484d402ceff76"
+        }
+      ],
+      "sha256": "ac7330e4fd13d9d7595e8b79ea619c3579bef0d8b0c02990fd6484d402ceff76"
+    },
+    {
+      "path": "frontend/src/lib/investments/investment-entry.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/investment-entry.svelte.script1.ts",
+          "sha256": "18eb7c1527dd196979471d268f4ebca5f64a09bd6f9db5640dbf5ad4310d1e2d"
+        },
+        {
+          "path": "frontend/src/lib/investments/investment-entry.svelte.markup.html",
+          "sha256": "6343236a5ee935ae8ced9a366ff58b2de64e7765b6ccb1ad94879cbb49260bb9"
+        }
+      ],
+      "sha256": "63d2f2891ee57748a551737e17d2da8d50ea3df34d1cdbd66dc1b67c151a1ccc"
+    },
+    {
+      "path": "frontend/src/lib/investments/investment-labels.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/investment-labels.ts",
+          "sha256": "5a0db4edf34ce13de9a7745057ee13cd1d45897225c780fbd07450c1333a6ef9"
+        }
+      ],
+      "sha256": "5a0db4edf34ce13de9a7745057ee13cd1d45897225c780fbd07450c1333a6ef9"
+    },
+    {
+      "path": "frontend/src/lib/investments/investment-prefill.svelte.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/investment-prefill.svelte.ts",
+          "sha256": "028736821e81d9b0dfb42810f10615eab1a69538465438c5a65aab0de1690004"
+        }
+      ],
+      "sha256": "028736821e81d9b0dfb42810f10615eab1a69538465438c5a65aab0de1690004"
+    },
+    {
+      "path": "frontend/src/lib/investments/investment-prefill.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/investment-prefill.ts",
+          "sha256": "de35762f1301d1a4592501a92971b1d43274d8232f6603d260276c962eeaab85"
+        }
+      ],
+      "sha256": "de35762f1301d1a4592501a92971b1d43274d8232f6603d260276c962eeaab85"
+    },
+    {
+      "path": "frontend/src/lib/investments/investments-screen.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/investments-screen.svelte.script1.ts",
+          "sha256": "cee801ee23b4e850111f02d47178ee3921b58ae1e6f714ecc8f69f0fdb9ab6ea"
+        },
+        {
+          "path": "frontend/src/lib/investments/investments-screen.svelte.markup.html",
+          "sha256": "7dbd9054b0a61e7b985e1749bdb83fa436729fb74171ed432caa79accfd6e8e8"
+        }
+      ],
+      "sha256": "b8f29ed29adc24f30799378f2ba759196d8ab6c4c038a895c63e5990c79e2a2f"
+    },
+    {
+      "path": "frontend/src/lib/investments/payment-in-lieu-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/payment-in-lieu-form.svelte.script1.ts",
+          "sha256": "64ce0a8812350be5fb4418b1ac29962fabef81e64d363627428457f3f0bf8ed1"
+        },
+        {
+          "path": "frontend/src/lib/investments/payment-in-lieu-form.svelte.markup.html",
+          "sha256": "04fdcd7e3267f89655fcca41c41c89e8a2d10cf1d8c95b4b492236914043b35a"
+        }
+      ],
+      "sha256": "99633b8a5f8a3d8f920e2261fa3abf650463454afaffafa2439d84cf3455ad62"
+    },
+    {
+      "path": "frontend/src/lib/investments/position-side-badge.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/position-side-badge.svelte.script1.ts",
+          "sha256": "12fd3fc8c1ccf537170a6aac7eaaade135d25326d5fb0e6ef89b7ba8b24b2a99"
+        },
+        {
+          "path": "frontend/src/lib/investments/position-side-badge.svelte.markup.html",
+          "sha256": "1398776cefb53914919adab23dd9ef596ccb5471f2f53b4fe7cb02c4465a6b6e"
+        }
+      ],
+      "sha256": "99efbcf3068fa83500052a5cb4b06fe212eefa15a12ed6346ef5498a88bb64ba"
+    },
+    {
+      "path": "frontend/src/lib/investments/provider-dividend-completion.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/provider-dividend-completion.svelte.script1.ts",
+          "sha256": "2be9e9790be139a6bf1932c1d9ada17c4d35eb1fb927601dc52925bb15d29c1b"
+        },
+        {
+          "path": "frontend/src/lib/investments/provider-dividend-completion.svelte.markup.html",
+          "sha256": "335ce884ef4326355d117a66b14e344b30c3e029afe3c2d8d0c4bdcc6d7975a0"
+        }
+      ],
+      "sha256": "2f0387c369dbeaf17205d5b66fb093d38382cc07bf51e54699b14fd0281b8616"
+    },
+    {
+      "path": "frontend/src/lib/investments/provider-dividend.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/provider-dividend.ts",
+          "sha256": "50af8c533d5ecba039982a0172829f3f91f795329ab9e55f564702196dac8709"
+        }
+      ],
+      "sha256": "50af8c533d5ecba039982a0172829f3f91f795329ab9e55f564702196dac8709"
+    },
+    {
+      "path": "frontend/src/lib/investments/provider-payment-in-lieu-completion.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/provider-payment-in-lieu-completion.svelte.script1.ts",
+          "sha256": "0e2c889fb503bdce55a59cacecfcd7083b4d2dfe385c5b9b52336cc83e2138cb"
+        },
+        {
+          "path": "frontend/src/lib/investments/provider-payment-in-lieu-completion.svelte.markup.html",
+          "sha256": "0d934ca370aeecaa6bcfeb622fb8b3ae507fa7bf4fbcd05bc56ecf13b874db08"
+        }
+      ],
+      "sha256": "b9a0054ad9406be318212c6ead029dbe15768bcb9f040c6cc6d5347772969b81"
+    },
+    {
+      "path": "frontend/src/lib/investments/reconciliation-confirm.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/reconciliation-confirm.svelte.script1.ts",
+          "sha256": "9b6d3c00b4a24f6714fe7a47475251ca6e4da67dbe24c7b2f387def75a7f87ef"
+        },
+        {
+          "path": "frontend/src/lib/investments/reconciliation-confirm.svelte.markup.html",
+          "sha256": "e9fb88651a510be5093ba7cb4082f0c8b10c48b7f164e17173dbadb6398efeff"
+        }
+      ],
+      "sha256": "be8aeb39854cea5401a393a953b8523d4c1a8d304992d37e5c1e08fb860e1868"
+    },
+    {
+      "path": "frontend/src/lib/investments/save-gains-run.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/save-gains-run.svelte.script1.ts",
+          "sha256": "18cbf804ee3c39f975f1e655ed6e8a67af5d9cee18beaeeea238bb99065b9ff7"
+        },
+        {
+          "path": "frontend/src/lib/investments/save-gains-run.svelte.markup.html",
+          "sha256": "f107797fc92d964f14a4ecb3a076ae37d2037261fcbeb94c3c0df8afbc822b85"
+        }
+      ],
+      "sha256": "aa00509a17b3726e7e9fb47aa6234d3949ac651a7d8f3c65e4c5520f40c1c1ad"
+    },
+    {
+      "path": "frontend/src/lib/investments/sell-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/sell-form.svelte.script1.ts",
+          "sha256": "665adb3830c031b6655dd0f19801d6ff55f4fe00880ef7650c5dba05ea2238a9"
+        },
+        {
+          "path": "frontend/src/lib/investments/sell-form.svelte.markup.html",
+          "sha256": "4dd07fec636725054c157fa9b6e8bb604ef42214192bfd4d6782c770c12c915b"
+        }
+      ],
+      "sha256": "1b972921813d7bca8a6d944f4fe6affd0a1cdfe49c52ac1edf4fbd0e008bb077"
+    },
+    {
+      "path": "frontend/src/lib/investments/share-exchange-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/share-exchange-form.svelte.script1.ts",
+          "sha256": "d915490c829ded8e786d774f06d09aa0f5eb0eccbcb22e26412c705098b144f4"
+        },
+        {
+          "path": "frontend/src/lib/investments/share-exchange-form.svelte.markup.html",
+          "sha256": "1e6d1fce86fe84816a502193335a43a831c01290fa221234748a1a5c27891fd6"
+        }
+      ],
+      "sha256": "f14ba27aae053a0cad12fde498b0789db1b6418176159077ae11e2ae39627af5"
+    },
+    {
+      "path": "frontend/src/lib/investments/share-exchange-summary.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/share-exchange-summary.svelte.script1.ts",
+          "sha256": "84d18181d0a18ed6bef5ca0600a3e838ba40683c73ddc14d4df7e1efdbe73f00"
+        },
+        {
+          "path": "frontend/src/lib/investments/share-exchange-summary.svelte.markup.html",
+          "sha256": "471f94e4f8877291b4c6233dfccc952e7d03ce93d0c776aabd3039639e02d8d9"
+        }
+      ],
+      "sha256": "851961b657e245601480107300f7e3120f298a749c0c518b15bcaad11cf331a0"
+    },
+    {
+      "path": "frontend/src/lib/investments/short-trade-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/short-trade-form.svelte.script1.ts",
+          "sha256": "30b88ffecc1c203a6956e0b589d1ca2396d4ae59a43dc6c54ecbebcb62a3897a"
+        },
+        {
+          "path": "frontend/src/lib/investments/short-trade-form.svelte.markup.html",
+          "sha256": "56e14194489c276b13ad3bfcb69b476f821993158c092fcd22c089d5ea93e7a8"
+        }
+      ],
+      "sha256": "d3815ce0298f43993684f8d425706e93bcbf71808f72d9d32dea4f3506b5f2a5"
+    },
+    {
+      "path": "frontend/src/lib/investments/source-evidence.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/source-evidence.ts",
+          "sha256": "04505e04932ea6d3ba4f7b60e658cf6904c341717246f30be3299ef879bbcf3f"
+        }
+      ],
+      "sha256": "04505e04932ea6d3ba4f7b60e658cf6904c341717246f30be3299ef879bbcf3f"
+    },
+    {
+      "path": "frontend/src/lib/investments/spin-off-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/spin-off-form.svelte.script1.ts",
+          "sha256": "6ad47156474d6a2e63dcf6e983c2479dc8c49bde9c35cd0520561cefb66f9bfe"
+        },
+        {
+          "path": "frontend/src/lib/investments/spin-off-form.svelte.markup.html",
+          "sha256": "515c1963b676da59101c402fe83b508d94fea6d0f88c8f692cb6cea5309b71c8"
+        }
+      ],
+      "sha256": "234f5f871f4f8e1db069d0abd46ade2beebe094741d654e326ad46cb782b2e65"
+    },
+    {
+      "path": "frontend/src/lib/investments/spin-off-summary.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/spin-off-summary.svelte.script1.ts",
+          "sha256": "7b95ef9f1dda00cf485ab0c819647879bf2aafaa0e76de680f984224ddfbffd7"
+        },
+        {
+          "path": "frontend/src/lib/investments/spin-off-summary.svelte.markup.html",
+          "sha256": "2e686c9c34e5019f346601afc03dab052b263237de01f26dc7ea83b33d5fb1dd"
+        }
+      ],
+      "sha256": "dcc1ae38baf2570a1567e0852c48ee331f84d1d2b2a19d62c0dd5181416524bf"
+    },
+    {
+      "path": "frontend/src/lib/investments/split-activity.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/split-activity.svelte.script1.ts",
+          "sha256": "74cbbf7109cbe1810c179c907a8b75fd3d1af3ea95af1d44c153a66d6c9a8b70"
+        },
+        {
+          "path": "frontend/src/lib/investments/split-activity.svelte.markup.html",
+          "sha256": "10cca87c1b6c245a4320a8ec04582214233083ba7295e6672739d87b86b1c036"
+        }
+      ],
+      "sha256": "93fee709f1ea93ad25c59708f7b4fc4f227d7e2f45b1e8a5dc56a0075118dd53"
+    },
+    {
+      "path": "frontend/src/lib/investments/split-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/split-form.svelte.script1.ts",
+          "sha256": "596325d7e3c3e424427d375f5107fc0054a78b9e1b2a4af0447ac714907cf0ef"
+        },
+        {
+          "path": "frontend/src/lib/investments/split-form.svelte.markup.html",
+          "sha256": "63e4f6305bd35f1f5c26bb8902930cacf34c87b3a204ae678ce74f790e24f793"
+        }
+      ],
+      "sha256": "68728c8d4150b5e24dd4f74b298ab4bd33e4b57030dda717c7132f6985b74d6c"
+    },
+    {
+      "path": "frontend/src/lib/investments/split-ratio.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/split-ratio.ts",
+          "sha256": "88796430e8013c900cd31d6e15c14bb95862dae40fd44d06febe2e03d6f5b890"
+        }
+      ],
+      "sha256": "88796430e8013c900cd31d6e15c14bb95862dae40fd44d06febe2e03d6f5b890"
+    },
+    {
+      "path": "frontend/src/lib/investments/trade-economics-fields.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/trade-economics-fields.svelte.script1.ts",
+          "sha256": "fd675852aeca00ec38caa19b7fdec27f62d01ed5960763e5528dfd08fa1ff213"
+        },
+        {
+          "path": "frontend/src/lib/investments/trade-economics-fields.svelte.markup.html",
+          "sha256": "2af0564941209f5d32c46a7a129f0b6bb2e7e011bcd8e47080e20a63b8c401a7"
+        }
+      ],
+      "sha256": "94262765c53de0097c9ae18faad5318365c3771cfe225bf781588f91aedf057f"
+    },
+    {
+      "path": "frontend/src/lib/investments/trade-economics.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/trade-economics.ts",
+          "sha256": "9f2223004d90323cc2ae4ac1699c306bfc3ff63d0833f7ace39420ea3afb5764"
+        }
+      ],
+      "sha256": "9f2223004d90323cc2ae4ac1699c306bfc3ff63d0833f7ace39420ea3afb5764"
+    },
+    {
+      "path": "frontend/src/lib/investments/transfer-correction-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/transfer-correction-form.svelte.script1.ts",
+          "sha256": "6c37e41b9b19e7f605b2f4be691bdbd521cd5d568f05fad641dddcfe6b0a0cb4"
+        },
+        {
+          "path": "frontend/src/lib/investments/transfer-correction-form.svelte.markup.html",
+          "sha256": "48d6726ebfd331b8c11aafcda9b2d1f8bd11f02c81bd76637e48566da8c4624b"
+        }
+      ],
+      "sha256": "a0234655c4ce2f1c00f1f3d60fcf3163d83ef14130eb84cf422d18f20890c147"
+    },
+    {
+      "path": "frontend/src/lib/investments/transfer-in-correction-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/transfer-in-correction-form.svelte.script1.ts",
+          "sha256": "aff82231cfff6df82387350d8b1efcfb247fbec9fda2466bb4f5ede7ece339fe"
+        },
+        {
+          "path": "frontend/src/lib/investments/transfer-in-correction-form.svelte.markup.html",
+          "sha256": "3fe70249f1a245945d105331361d8b0b7d033ce6eb33a6c6fb1a0399400e9715"
+        }
+      ],
+      "sha256": "1ddcc6c57c2f4232aec2432757a8c966e4f03ada5e6bc4fa11c61b785c22cc20"
+    },
+    {
+      "path": "frontend/src/lib/investments/write-off-correction-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/write-off-correction-form.svelte.script1.ts",
+          "sha256": "dc266dc2065a457d224b9c340346f6a27d7cc7af53e2cccc803fac5d58e75494"
+        },
+        {
+          "path": "frontend/src/lib/investments/write-off-correction-form.svelte.markup.html",
+          "sha256": "c0d72f204c1cc6a1ad1d77506e3a56d3c58bc00aed88695fe83faced96d51421"
+        }
+      ],
+      "sha256": "bdac1807d2856fea856fd556d526b842ed220289133d49df0ac7c4ab766299f5"
+    },
+    {
+      "path": "frontend/src/lib/investments/write-off-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/investments/write-off-form.svelte.script1.ts",
+          "sha256": "e36d2bc77200ee68ec9700b64e156a86bf53bee99392581d5fbfcffdbef4bed2"
+        },
+        {
+          "path": "frontend/src/lib/investments/write-off-form.svelte.markup.html",
+          "sha256": "3a37043d52f906775641fbb5f34cddd88aa216f13f12092cbc8041f6ef7bef33"
+        }
+      ],
+      "sha256": "93322dca875b9b521c164e48dba7775c2935cd99e556b5768331084e24fa9deb"
+    },
+    {
+      "path": "frontend/src/lib/money/amount.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/money/amount.ts",
+          "sha256": "7e77292b3eab9b93711cd6541606bda0072ce43fe242432774c1f05ee07dd560"
+        }
+      ],
+      "sha256": "7e77292b3eab9b93711cd6541606bda0072ce43fe242432774c1f05ee07dd560"
+    },
+    {
+      "path": "frontend/src/lib/money/format.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/money/format.ts",
+          "sha256": "7f5a8b04d7ffcb322ed1cc4a3d43cc931c1cf5347553a71846a72f93e0393d4c"
+        }
+      ],
+      "sha256": "7f5a8b04d7ffcb322ed1cc4a3d43cc931c1cf5347553a71846a72f93e0393d4c"
+    },
+    {
+      "path": "frontend/src/lib/pricing/form.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/pricing/form.ts",
+          "sha256": "13cf2dfa7a6a500b4037c7673751b6a4cea9acc049facb5b7eb319b5f035a1b6"
+        }
+      ],
+      "sha256": "13cf2dfa7a6a500b4037c7673751b6a4cea9acc049facb5b7eb319b5f035a1b6"
+    },
+    {
+      "path": "frontend/src/lib/pricing/price-detail.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/pricing/price-detail.svelte.script1.ts",
+          "sha256": "31dbd20e0fcdf0946db331a87701fae9d9c583ac3fb182899336151aac663ad6"
+        },
+        {
+          "path": "frontend/src/lib/pricing/price-detail.svelte.markup.html",
+          "sha256": "33619c27be1cc73f4f5a6a4702722cc8496774dde09cc00249802d320499fa34"
+        }
+      ],
+      "sha256": "56ed258e8f831765aa72d13efc4f05b0b1fdca2df70fc6f7c9e34d52135d3935"
+    },
+    {
+      "path": "frontend/src/lib/pricing/price-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/pricing/price-form.svelte.script1.ts",
+          "sha256": "2022619eb3afa9249dba40c34c403b1d2f68082242672123aeb6051175227480"
+        },
+        {
+          "path": "frontend/src/lib/pricing/price-form.svelte.markup.html",
+          "sha256": "d5db173a6dead5723e8f09785ed6ccc4be11b51c63893fb3cabe23ffb1464783"
+        }
+      ],
+      "sha256": "e4aea1e21757f00192fd9354a134b56ea98636a297c06af10ac900bb14d5062f"
+    },
+    {
+      "path": "frontend/src/lib/pricing/pricing-screen.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/pricing/pricing-screen.svelte.script1.ts",
+          "sha256": "67beede3e990caed9455fb93ae78bbbd4b28e89496229f6f98fb4f25b9bc704d"
+        },
+        {
+          "path": "frontend/src/lib/pricing/pricing-screen.svelte.markup.html",
+          "sha256": "819a6bbd27533456517b2ba19d0b672e9d85387980a40a4f82020578f11a5dce"
+        }
+      ],
+      "sha256": "257ba529ad1d1c7f70814bc395ce9cedc54d9cefaf0682a4daeb2c022ad53b07"
+    },
+    {
+      "path": "frontend/src/lib/query-client.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/query-client.ts",
+          "sha256": "c4dc9b860df253ef855714e5a3560bb46a4cbdc8a41b5a59b06d4efbeeec30c2"
+        }
+      ],
+      "sha256": "c4dc9b860df253ef855714e5a3560bb46a4cbdc8a41b5a59b06d4efbeeec30c2"
+    },
+    {
+      "path": "frontend/src/lib/reconcile/checkpoint-chain.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reconcile/checkpoint-chain.ts",
+          "sha256": "fe5b19ab073249fb98d6a20cdc71157a8d46078e7dec6692b4c28f58aedc6c92"
+        }
+      ],
+      "sha256": "fe5b19ab073249fb98d6a20cdc71157a8d46078e7dec6692b4c28f58aedc6c92"
+    },
+    {
+      "path": "frontend/src/lib/reconcile/reconcile-checkpoints.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reconcile/reconcile-checkpoints.svelte.script1.ts",
+          "sha256": "ee5c2a8153137a42af2a9ce5f32c71c5b591fa5764083a0b0db7f79b3afb2544"
+        },
+        {
+          "path": "frontend/src/lib/reconcile/reconcile-checkpoints.svelte.markup.html",
+          "sha256": "9e3daace450eb1b1fcf4692740e355acd94d930eb5029ea5de70a22c05c44040"
+        }
+      ],
+      "sha256": "141774ee175f79b91678d35bb83c691920c57b08593a57df320e617b15b0a1e2"
+    },
+    {
+      "path": "frontend/src/lib/reconcile/reconcile-session.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reconcile/reconcile-session.svelte.script1.ts",
+          "sha256": "2a50e1df4ca73db88fbea124086780e315ddfc96ab2e78cb6b628f8b467fd062"
+        },
+        {
+          "path": "frontend/src/lib/reconcile/reconcile-session.svelte.markup.html",
+          "sha256": "5a276ed6a2752cc16ecc811070db1d193b23def1fe15aa74517adeb93ea5026d"
+        }
+      ],
+      "sha256": "8e5ba260ae9ffa8e4fee63a32b0b63b8250edacc16c7f2bede34886f36205d46"
+    },
+    {
+      "path": "frontend/src/lib/reconcile/reconcile-start-form.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reconcile/reconcile-start-form.svelte.script1.ts",
+          "sha256": "c027bf49c9a92deb62c19c9762b51040509c0f6e64647b63afecfecebbc0323c"
+        },
+        {
+          "path": "frontend/src/lib/reconcile/reconcile-start-form.svelte.markup.html",
+          "sha256": "c1144f9ac306aa481614a67b331873daeff552381f84146473c1faeb0fecea0b"
+        }
+      ],
+      "sha256": "81b409bca9ec5e54a06579220d282864a8751be2759ac1ddcfc64320919de39c"
+    },
+    {
+      "path": "frontend/src/lib/reconcile/statement-balance.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reconcile/statement-balance.ts",
+          "sha256": "571e090b5a61d4c1fe9d3055f54d6592438907544ca0209e4b4fd7ef9d4dae30"
+        }
+      ],
+      "sha256": "571e090b5a61d4c1fe9d3055f54d6592438907544ca0209e4b4fd7ef9d4dae30"
+    },
+    {
+      "path": "frontend/src/lib/record-code.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/record-code.ts",
+          "sha256": "e8e638ac5602afe490d58aa321aa8ff8c6b289ff149e4f763f433eb458fc9d10"
+        }
+      ],
+      "sha256": "e8e638ac5602afe490d58aa321aa8ff8c6b289ff149e4f763f433eb458fc9d10"
+    },
+    {
+      "path": "frontend/src/lib/recurring/recurring-model.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/recurring/recurring-model.ts",
+          "sha256": "d87044049c23cc15f8348fcd3cc12ee90893715f77c07df42e44d2c824fafaad"
+        }
+      ],
+      "sha256": "d87044049c23cc15f8348fcd3cc12ee90893715f77c07df42e44d2c824fafaad"
+    },
+    {
+      "path": "frontend/src/lib/recurring/recurring-screen.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/recurring/recurring-screen.svelte.script1.ts",
+          "sha256": "c68ba660b7b183fa1dd4e3b6c1398a8ac0204af1b0c48014565b417965b85df7"
+        },
+        {
+          "path": "frontend/src/lib/recurring/recurring-screen.svelte.markup.html",
+          "sha256": "345876f943263754237d4cace8991adabec4995db718ddce465956d6b6bf1c39"
+        }
+      ],
+      "sha256": "54b4e87e63527f62092f5526d7beb52fd6d645ab3efec76879110aa7c657e41c"
+    },
+    {
+      "path": "frontend/src/lib/recurring/template-editor.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/recurring/template-editor.svelte.script1.ts",
+          "sha256": "8a8c92204646ede7c403cac59bc8c8cb60570ab49a83c7ac5d324b080e7d7c55"
+        },
+        {
+          "path": "frontend/src/lib/recurring/template-editor.svelte.markup.html",
+          "sha256": "5eb99be0aa6fa627296bd1701ff6ba46d8f6fca608e347c254254bff7cea3104"
+        }
+      ],
+      "sha256": "37fc91267c72eae3035dfc9218db7de91b20e1fba1b06da81e54e60acd3a1527"
+    },
+    {
+      "path": "frontend/src/lib/reports/bucket-column-chart.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/bucket-column-chart.svelte.script1.ts",
+          "sha256": "192c7fcec033404974a9df3c5b32fa49ac8c18ec2d9d75d20cd2a7f7ca832d49"
+        },
+        {
+          "path": "frontend/src/lib/reports/bucket-column-chart.svelte.markup.html",
+          "sha256": "41d921f20e06c08fb50cb3b4959263f84aba51f2cc50a868b5fd89c3209e8c5d"
+        }
+      ],
+      "sha256": "e6178f00272b91ffd9509d90858858845aac8a8f2db8f650625c31ab7314d336"
+    },
+    {
+      "path": "frontend/src/lib/reports/cashflow-view.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/cashflow-view.svelte.script1.ts",
+          "sha256": "9eac9528e5228e35ae098dd1192ba9895eb2ae3aa0187299bdb3a2289f7764eb"
+        },
+        {
+          "path": "frontend/src/lib/reports/cashflow-view.svelte.markup.html",
+          "sha256": "842611b7688e86fd4606f7814ec0af86581787192a30106153c751ae02e75442"
+        }
+      ],
+      "sha256": "272d623ee696958a7f18b14ab548baba37a2924d5334b0d87fb85d18d4c8528f"
+    },
+    {
+      "path": "frontend/src/lib/reports/cashflow.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/cashflow.ts",
+          "sha256": "8efe5d406d35389772d5aff64114c70ed195eb4cbb9dfe4f5d5c0e4520841ad9"
+        }
+      ],
+      "sha256": "8efe5d406d35389772d5aff64114c70ed195eb4cbb9dfe4f5d5c0e4520841ad9"
+    },
+    {
+      "path": "frontend/src/lib/reports/commodity-labels.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/commodity-labels.ts",
+          "sha256": "a7d60cc97e0cbf9464447068cfb3af1e3155d3c6aaa942618f70abef05b6bd2d"
+        }
+      ],
+      "sha256": "a7d60cc97e0cbf9464447068cfb3af1e3155d3c6aaa942618f70abef05b6bd2d"
+    },
+    {
+      "path": "frontend/src/lib/reports/net-worth.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/net-worth.ts",
+          "sha256": "294113479814344da24fb1b0b1dbf32df1f481d8a7ea3a777631e6ca7a86ab82"
+        }
+      ],
+      "sha256": "294113479814344da24fb1b0b1dbf32df1f481d8a7ea3a777631e6ca7a86ab82"
+    },
+    {
+      "path": "frontend/src/lib/reports/report-csv.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/report-csv.ts",
+          "sha256": "22adb9defc4d3280320c80fe326cdfbde3601a896beaf1150b5760c090a0d1bd"
+        }
+      ],
+      "sha256": "22adb9defc4d3280320c80fe326cdfbde3601a896beaf1150b5760c090a0d1bd"
+    },
+    {
+      "path": "frontend/src/lib/reports/report-error.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/report-error.ts",
+          "sha256": "26de90589cff54e135e390ad1b5f8559e58a2a9a3f5136a527dfcbb7b4a6bb3b"
+        }
+      ],
+      "sha256": "26de90589cff54e135e390ad1b5f8559e58a2a9a3f5136a527dfcbb7b4a6bb3b"
+    },
+    {
+      "path": "frontend/src/lib/reports/report-filter-controls.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/report-filter-controls.svelte.script1.ts",
+          "sha256": "19e62f399a4aa5cd6d6acf30634e748fa5144822467888498900372445def6e5"
+        },
+        {
+          "path": "frontend/src/lib/reports/report-filter-controls.svelte.markup.html",
+          "sha256": "07b93b449774afcab55671ac4c230221b7249f1780b8b3524c4d3842acc914b6"
+        }
+      ],
+      "sha256": "92fa89f152941b5a6f9cbf84e34ae923e7a0c8848241b2d93b7b9af53cd72fbc"
+    },
+    {
+      "path": "frontend/src/lib/reports/report-filter-select.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/report-filter-select.svelte.script1.ts",
+          "sha256": "f44df4af802af0d45ebac7010c5f73a10d6e1ce4e9381fe5f23d5861f205afd6"
+        },
+        {
+          "path": "frontend/src/lib/reports/report-filter-select.svelte.markup.html",
+          "sha256": "ba77dc6eda50bfa9f852cf177f873b081e6b67d6d1d50edb48dc8c32f2a4bda1"
+        }
+      ],
+      "sha256": "0f154152e16b1c58b2c4cc630871fbe86bda9cd9f575a816870209c7663709f2"
+    },
+    {
+      "path": "frontend/src/lib/reports/report-filters.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/report-filters.ts",
+          "sha256": "cd547507f5ee227013ec99d8e3d0270f425a0e4e00cb0ba76e9b68f4a85a1c39"
+        }
+      ],
+      "sha256": "cd547507f5ee227013ec99d8e3d0270f425a0e4e00cb0ba76e9b68f4a85a1c39"
+    },
+    {
+      "path": "frontend/src/lib/reports/report-range.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/report-range.ts",
+          "sha256": "e52822ae0db32bd71e664e7424238283b52f084c61e21e22d25e8542221ba6e1"
+        }
+      ],
+      "sha256": "e52822ae0db32bd71e664e7424238283b52f084c61e21e22d25e8542221ba6e1"
+    },
+    {
+      "path": "frontend/src/lib/reports/report-series.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/report-series.ts",
+          "sha256": "a41aa6f6363441cabff1e4b9586fbe59164460fce4082cd1fc2a2b60c2b33749"
+        }
+      ],
+      "sha256": "a41aa6f6363441cabff1e4b9586fbe59164460fce4082cd1fc2a2b60c2b33749"
+    },
+    {
+      "path": "frontend/src/lib/reports/reporting-currency-select.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/reporting-currency-select.svelte.script1.ts",
+          "sha256": "d472b556a20fbb102635093b86ded1baf6dad1be033088b5b3594db8c86324db"
+        },
+        {
+          "path": "frontend/src/lib/reports/reporting-currency-select.svelte.markup.html",
+          "sha256": "f604fa9a8d7d59cd1825661799fef34ea86931dc83db5a6c35747d93ea394a48"
+        }
+      ],
+      "sha256": "4e1557c04482574f60ad147c240744a4b3bbd2e5dfcc8e7049b5f3bc0988fc63"
+    },
+    {
+      "path": "frontend/src/lib/reports/reporting-currency.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/reporting-currency.ts",
+          "sha256": "bf07c744d0675dc124932b688c4dc0606f22c6994ac1aaaa507b6deb09063f8b"
+        }
+      ],
+      "sha256": "bf07c744d0675dc124932b688c4dc0606f22c6994ac1aaaa507b6deb09063f8b"
+    },
+    {
+      "path": "frontend/src/lib/reports/reports-screen.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/reports-screen.svelte.script1.ts",
+          "sha256": "2ae0919dd24a05c6f38e389a079bd42fee4ff478e5e1c0f357d22302da6e46f4"
+        },
+        {
+          "path": "frontend/src/lib/reports/reports-screen.svelte.markup.html",
+          "sha256": "d999e46a4346bf614fbafee08e64486370ab92084dfb9e816a6e41cb7436615b"
+        }
+      ],
+      "sha256": "c6caabc2e588e6e10ad182f8275267ce0060cf50c9523356732b4b2ad1ba3dc7"
+    },
+    {
+      "path": "frontend/src/lib/reports/spending-bar-chart.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/spending-bar-chart.svelte.script1.ts",
+          "sha256": "d22dfbc05b65e938cf287432b8fd304cc455c0baab3c262c703688bae6506078"
+        },
+        {
+          "path": "frontend/src/lib/reports/spending-bar-chart.svelte.markup.html",
+          "sha256": "0dda4054f1970e69cc860a0798bbb2752fe37d618676587b5f026d179bca2682"
+        }
+      ],
+      "sha256": "46be8b5f41f0874f193e29cdf9094f166b534c8842ae258d9ebced97ea552b11"
+    },
+    {
+      "path": "frontend/src/lib/reports/spending-view.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/spending-view.svelte.script1.ts",
+          "sha256": "644e0fde61873ab02a811438f7dc1d3836a771ebf74ed80668b7e9e1c1a9c439"
+        },
+        {
+          "path": "frontend/src/lib/reports/spending-view.svelte.markup.html",
+          "sha256": "dec6de65598884fa33a11264911dde10710efa68b3fb187f4dbabb20e31e0cda"
+        }
+      ],
+      "sha256": "0f6fe0de05a996eee0b5e53f2f602e2ec033bd1bd4316aab5b6d149e6c502219"
+    },
+    {
+      "path": "frontend/src/lib/reports/spending.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/spending.ts",
+          "sha256": "59f000856ae8d39088014922705d0de4aaa418ad75c36f14750f5c8575c05c29"
+        }
+      ],
+      "sha256": "59f000856ae8d39088014922705d0de4aaa418ad75c36f14750f5c8575c05c29"
+    },
+    {
+      "path": "frontend/src/lib/reports/valuation-notice.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/reports/valuation-notice.svelte.script1.ts",
+          "sha256": "52f3c8e36d0ef553c1c00c8993c1b6a91177b702efe16141a17cb2cbc0d81903"
+        },
+        {
+          "path": "frontend/src/lib/reports/valuation-notice.svelte.markup.html",
+          "sha256": "054328f2c65a94fb38734df5e24f974ce252f44c983e66f00844fdf681b6b76a"
+        }
+      ],
+      "sha256": "1253adc97ede577147bd6a8da6e8b9bda1bf28aefde685625f3e677edbd599c1"
+    },
+    {
+      "path": "frontend/src/lib/settings/appearance-settings.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/settings/appearance-settings.svelte.script1.ts",
+          "sha256": "9354c220c2dee11f52f9c5bd6eb598e1b01b082a3a6f3f4c8bae71b71b9c3feb"
+        },
+        {
+          "path": "frontend/src/lib/settings/appearance-settings.svelte.markup.html",
+          "sha256": "a1b1ae68b7cfdc845f60ea885fa731273610f27eb61e9e9e7948389d9b3dfe23"
+        }
+      ],
+      "sha256": "fbac45612566619eaaf1729e9921f8d0b851a5812400762de9c7da81d886e2eb"
+    },
+    {
+      "path": "frontend/src/lib/settings/data-settings.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/settings/data-settings.svelte.script1.ts",
+          "sha256": "8a6fa430713bfb32e6cdc15080af64b87cbb769ae7a361749b5faedaf7f4a3e5"
+        },
+        {
+          "path": "frontend/src/lib/settings/data-settings.svelte.markup.html",
+          "sha256": "4dd5aac4fee3c0214fd618fa8f514333ef5ce57ad22f952ffd4a5913bca12299"
+        }
+      ],
+      "sha256": "58fa4ebe40497021fd1e9e9896650de39b7dea90076fdf1e4f89393fb1be6b19"
+    },
+    {
+      "path": "frontend/src/lib/settings/language-settings.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/settings/language-settings.svelte.script1.ts",
+          "sha256": "c0dd963014f791c8dbd0480e46c0b542f54b99d70d436e90db0502cb717fe8b9"
+        },
+        {
+          "path": "frontend/src/lib/settings/language-settings.svelte.markup.html",
+          "sha256": "e60e39719349973f8d1b5b4236a7f77a712f7c9996eb11912642dc9efe7474b0"
+        }
+      ],
+      "sha256": "27cef67fdd9373458c0e1bc8df2d3f66330c93cb6f8ecf160e3abcbbc5ba6295"
+    },
+    {
+      "path": "frontend/src/lib/settings/locales.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/settings/locales.ts",
+          "sha256": "a31a9317a8d4572b95c8e1184df41c830278f26b0b7e9b814923a2a91104121b"
+        }
+      ],
+      "sha256": "a31a9317a8d4572b95c8e1184df41c830278f26b0b7e9b814923a2a91104121b"
+    },
+    {
+      "path": "frontend/src/lib/settings/personal-access-tokens.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/settings/personal-access-tokens.svelte.script1.ts",
+          "sha256": "bd5a04b16a53a28282e4734dd5f1750b06613815969077ba2fcf6d5761bc5e43"
+        },
+        {
+          "path": "frontend/src/lib/settings/personal-access-tokens.svelte.markup.html",
+          "sha256": "df1237735e73d31ee47e69869d3d1f7bab014ac799f7e1103b146c771e310f7c"
+        }
+      ],
+      "sha256": "7697da28ce6a83dcbc9a141a73580245bc1cb1cf6b42c951a121f16d39f172c1"
+    },
+    {
+      "path": "frontend/src/lib/settings/security-settings.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/settings/security-settings.svelte.script1.ts",
+          "sha256": "8990ef8032b9ac20bd131945f60413ec9928562dcebb25bf1f3e95d7d770abc5"
+        },
+        {
+          "path": "frontend/src/lib/settings/security-settings.svelte.markup.html",
+          "sha256": "03911d7da0f4d684229b2efa80e76b42704fc69324cb06d0ed456f3b224ec5bd"
+        }
+      ],
+      "sha256": "6a4cac8ff4ef5a854c2c36a45ec6e00c4be6c6a1454faa3852124ba35e4307c4"
+    },
+    {
+      "path": "frontend/src/lib/theme.svelte.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/theme.svelte.ts",
+          "sha256": "dbafd892f6004ca70dfdd26c54d5adf2d6930a64702952cc9460142f006c877f"
+        }
+      ],
+      "sha256": "dbafd892f6004ca70dfdd26c54d5adf2d6930a64702952cc9460142f006c877f"
+    },
+    {
+      "path": "frontend/src/lib/transactions/account-register.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/account-register.svelte.script1.ts",
+          "sha256": "28ad14120dd451b80afb242b86839d49d0cb6059216e041dfc6c29848a25d278"
+        },
+        {
+          "path": "frontend/src/lib/transactions/account-register.svelte.markup.html",
+          "sha256": "549bbecc79d426b4a7c8ecf8bc04cca3e709876b156dbfc595204d00073efa5e"
+        }
+      ],
+      "sha256": "d2e89983beff384668bc81d6a109edb627e26f4bee869b19ff0e4fd4fb52ed1c"
+    },
+    {
+      "path": "frontend/src/lib/transactions/category-amount.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/category-amount.ts",
+          "sha256": "210f0a12b7ba0f3ae47f73936f6bf1e283e5e2a450567b4b5c0b52379ebce0d5"
+        }
+      ],
+      "sha256": "210f0a12b7ba0f3ae47f73936f6bf1e283e5e2a450567b4b5c0b52379ebce0d5"
+    },
+    {
+      "path": "frontend/src/lib/transactions/category-transactions.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/category-transactions.svelte.script1.ts",
+          "sha256": "2201aceff88732a32ecd1dceedc9559018877cc0b06ef7da89fce0e6dd9d0408"
+        },
+        {
+          "path": "frontend/src/lib/transactions/category-transactions.svelte.markup.html",
+          "sha256": "4a7a0841dea189a0c302e7a5e5730addc2cbc1966b69cf8e5f49fc39f477fdb6"
+        }
+      ],
+      "sha256": "2286d7269f67f0a254ab9e85847777a8533ec4d437206556e45a43d39c3e2bb1"
+    },
+    {
+      "path": "frontend/src/lib/transactions/correction-chain-note.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/correction-chain-note.svelte.script1.ts",
+          "sha256": "2e266b7a2431860b4523c052f311ce70f6c334d4c4fe583ccad0faa3f5df4f27"
+        },
+        {
+          "path": "frontend/src/lib/transactions/correction-chain-note.svelte.markup.html",
+          "sha256": "df95ec5a8904ab6ab809e2229b9ff5b8065d13340f3af3f2d15db7243020d943"
+        }
+      ],
+      "sha256": "c8a9f7cc5ee34166e549b29936aacf1e9b3a3d3643b2e409ec8257f9cefa12c0"
+    },
+    {
+      "path": "frontend/src/lib/transactions/correction-chain.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/correction-chain.ts",
+          "sha256": "216d133c177168fd0837029e745aae62ca9520519fcc75eacd5d9ecc6772952a"
+        }
+      ],
+      "sha256": "216d133c177168fd0837029e745aae62ca9520519fcc75eacd5d9ecc6772952a"
+    },
+    {
+      "path": "frontend/src/lib/transactions/entry-account.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/entry-account.ts",
+          "sha256": "61356eed123363dba92d6557be25e375f5720ce8eae7cd38f03ec86bfe0f68a5"
+        }
+      ],
+      "sha256": "61356eed123363dba92d6557be25e375f5720ce8eae7cd38f03ec86bfe0f68a5"
+    },
+    {
+      "path": "frontend/src/lib/transactions/investment-correction-section.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/investment-correction-section.svelte.script1.ts",
+          "sha256": "a4b225bc35059c6e9652810b60a827534708c4436665749648fd1007e30601c2"
+        },
+        {
+          "path": "frontend/src/lib/transactions/investment-correction-section.svelte.markup.html",
+          "sha256": "f0bb1544584f4da537c9dcdbc3f6a712c6dccba7ff726666fe636667f092adb4"
+        }
+      ],
+      "sha256": "59e63f271fee41a53cff93b08ba216661e68fe3ec691caa113122fe5bb36b665"
+    },
+    {
+      "path": "frontend/src/lib/transactions/payee-matching.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/payee-matching.ts",
+          "sha256": "ec9737f56367accc70f18c8d7ef1f72fc0f85fc8c9081fb300846da072d9c847"
+        }
+      ],
+      "sha256": "ec9737f56367accc70f18c8d7ef1f72fc0f85fc8c9081fb300846da072d9c847"
+    },
+    {
+      "path": "frontend/src/lib/transactions/posted-on.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/posted-on.ts",
+          "sha256": "712201eedbd6eaabb70c870855871aca9d2691c4ece6d87c70dca32d0a27b7f3"
+        }
+      ],
+      "sha256": "712201eedbd6eaabb70c870855871aca9d2691c4ece6d87c70dca32d0a27b7f3"
+    },
+    {
+      "path": "frontend/src/lib/transactions/reorder-arrows.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/reorder-arrows.svelte.script1.ts",
+          "sha256": "361af4f0ed773bd797e8e1d9765669ce3b096ca218acc9d6faeb493919ce8826"
+        },
+        {
+          "path": "frontend/src/lib/transactions/reorder-arrows.svelte.markup.html",
+          "sha256": "4a3df4095350d1ad88e71baea69345262e9cedbc1593c4ee8c6d0037b5155549"
+        }
+      ],
+      "sha256": "3b5c8237c789298803f2f8ea2bc4d553af5dc25e524527a03a7d32f975b274f2"
+    },
+    {
+      "path": "frontend/src/lib/transactions/reorder-bar.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/reorder-bar.svelte.script1.ts",
+          "sha256": "fe9b617e10a531f066ca10cb8b1ee6f861f40fd62a2b9960c636a328bbc25566"
+        },
+        {
+          "path": "frontend/src/lib/transactions/reorder-bar.svelte.markup.html",
+          "sha256": "b5e29d449d85e774f14f7b394abf0491727d1af32f340f564e6e0a2522996d52"
+        }
+      ],
+      "sha256": "ae1e3c62ea63fcaf86c5c9c00bd610a8fb64ef26793b1c37c73411dfb3ce127a"
+    },
+    {
+      "path": "frontend/src/lib/transactions/reorder-mode.svelte.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/reorder-mode.svelte.ts",
+          "sha256": "903438703287daf0ee81d97c618837a2a0bf17ee7f5e328c82ca5952a5234ab9"
+        }
+      ],
+      "sha256": "903438703287daf0ee81d97c618837a2a0bf17ee7f5e328c82ca5952a5234ab9"
+    },
+    {
+      "path": "frontend/src/lib/transactions/reorder.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/reorder.ts",
+          "sha256": "d9ccc4c2bc25f5678c8d1b0607cd9fabebd2c3720bc30387da1df8a1ee4f6577"
+        }
+      ],
+      "sha256": "d9ccc4c2bc25f5678c8d1b0607cd9fabebd2c3720bc30387da1df8a1ee4f6577"
+    },
+    {
+      "path": "frontend/src/lib/transactions/row-action.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/row-action.ts",
+          "sha256": "cd985ef5451779457ec27fa3d830a543fd2ce7701fbaf28fd38ec6f11f1c36b5"
+        }
+      ],
+      "sha256": "cd985ef5451779457ec27fa3d830a543fd2ce7701fbaf28fd38ec6f11f1c36b5"
+    },
+    {
+      "path": "frontend/src/lib/transactions/system-label.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/system-label.ts",
+          "sha256": "5bf339aef305483138654c48b8784eb0246dcc320ba21ba927d245ab9a17ea12"
+        }
+      ],
+      "sha256": "5bf339aef305483138654c48b8784eb0246dcc320ba21ba927d245ab9a17ea12"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-detail-panel.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-detail-panel.svelte.script1.ts",
+          "sha256": "45f316186d9864209309984e369a8a9e1754e97144e778af7472ea6815095810"
+        },
+        {
+          "path": "frontend/src/lib/transactions/transaction-detail-panel.svelte.markup.html",
+          "sha256": "a71931a08f10e814fc9f2b29e4ebee2e8abc27b8d7e060935f8b0b9a8e89b9ea"
+        }
+      ],
+      "sha256": "9e8c7159e347231a00df32788ae76859bd3334aec1b81ad51871b88ea83bff54"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-editor.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-editor.svelte.script1.ts",
+          "sha256": "2653f353b5e71c94b573c7b5009a243883f355bc6d309af0120976fb964e9f96"
+        },
+        {
+          "path": "frontend/src/lib/transactions/transaction-editor.svelte.markup.html",
+          "sha256": "3779b6a0ab18126716c95b29ad0669448a1ff2efecc22be6cd7761c09f6ca509"
+        }
+      ],
+      "sha256": "b3ee4ba956ba132b872300bb1e1fccc2778c58ffda787d36a0f2731e1e36e359"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-filter-bar.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-filter-bar.svelte.script1.ts",
+          "sha256": "2f2d38635b57d703c4229ed3bdc5e189d4438d31083516633728e9e8e15ec676"
+        },
+        {
+          "path": "frontend/src/lib/transactions/transaction-filter-bar.svelte.markup.html",
+          "sha256": "d0dc6216650e093f97fc9d9b2776a17880294cf786c3bd3c3170874fa08fccd3"
+        }
+      ],
+      "sha256": "831466646782b27e962c31b01a3874e0fbed4997f6ec2d66d3d7d82acede2f30"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-labels.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-labels.ts",
+          "sha256": "80192d1e5f1ac04708d167f82f5395ede9863c028e536f2d6697b39c337c6a98"
+        }
+      ],
+      "sha256": "80192d1e5f1ac04708d167f82f5395ede9863c028e536f2d6697b39c337c6a98"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-list.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-list.svelte.script1.ts",
+          "sha256": "7436c13e89921abd6b59a20f14f2fec239f4cb4219fed6cd3a728049e53dd7eb"
+        },
+        {
+          "path": "frontend/src/lib/transactions/transaction-list.svelte.markup.html",
+          "sha256": "2c6310ee3b4c5ba39da0037e52ca748331e4a2ad276f16a9e65a4c0e3a5f7002"
+        }
+      ],
+      "sha256": "14ce6db333d845eef1177d94c683e2db01119f2005e1275d6ac81ed9d3697b03"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-row-actions.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-row-actions.svelte.script1.ts",
+          "sha256": "3f6cf798597d9119cda24a1ad523794a3d072b7a31dabec602b3ec9529faf9e7"
+        },
+        {
+          "path": "frontend/src/lib/transactions/transaction-row-actions.svelte.markup.html",
+          "sha256": "b0e7e17d55dcd0562c1634bcb9e14e52ee430f56b72f888eb4ec9176df7763c2"
+        }
+      ],
+      "sha256": "82bfdfd5a64ac8d84e76c4a59d7e09a7af840bcc5fea3b76d6686ce3d3a37d79"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-table-types.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-table-types.ts",
+          "sha256": "362eabd7db6b20ccf92ffda9284186a32048cc0001fb8d9f1ae9708d692ca8c3"
+        }
+      ],
+      "sha256": "362eabd7db6b20ccf92ffda9284186a32048cc0001fb8d9f1ae9708d692ca8c3"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-table.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-table.svelte.script1.ts",
+          "sha256": "0eb80a42ebe42738e5217932b1aab5d73e507dedcbd87ab85778c923673d8321"
+        },
+        {
+          "path": "frontend/src/lib/transactions/transaction-table.svelte.markup.html",
+          "sha256": "c986739c0a2881ddc5d3f4c0a05ee7399769931d368f5ab2dfd79bc20287202c"
+        }
+      ],
+      "sha256": "7d885dd42d272a1519918dcd0415e107ffd6b3de84d280e22c3e85aac4c2669d"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-title.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-title.ts",
+          "sha256": "010ae08f24ad123d9d7b931edbc4e208a2875d7618e3c0da0077d0bb68e6b752"
+        }
+      ],
+      "sha256": "010ae08f24ad123d9d7b931edbc4e208a2875d7618e3c0da0077d0bb68e6b752"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-url-filters.ts",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-url-filters.ts",
+          "sha256": "822377522e8f8c68c121f943282004465b4dbd75a4535697d090027acab4bb87"
+        }
+      ],
+      "sha256": "822377522e8f8c68c121f943282004465b4dbd75a4535697d090027acab4bb87"
+    },
+    {
+      "path": "frontend/src/lib/transactions/transaction-workspace.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/transactions/transaction-workspace.svelte.script1.ts",
+          "sha256": "8c4e5926bdb11b4d3b28113b5f377bf03f087b4cbbeab31bf028b058a310ad22"
+        },
+        {
+          "path": "frontend/src/lib/transactions/transaction-workspace.svelte.script2.ts",
+          "sha256": "5e3f34f14146d91c415390be25b82a3ee7e44ec856bd7b2675790506a274ea0d"
+        },
+        {
+          "path": "frontend/src/lib/transactions/transaction-workspace.svelte.markup.html",
+          "sha256": "835b6c62e5ef85a8ae7d61c6b81571810573acb21d0848f0ab42f1db6ddaeddd"
+        }
+      ],
+      "sha256": "b449bfc9a4913bdf41261e73c4f595a94f8a14ca3ddec89e95e73fd9eda20740"
+    },
+    {
+      "path": "frontend/src/lib/valuation/observation-status.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/lib/valuation/observation-status.svelte.script1.ts",
+          "sha256": "d2b78efc2315866da7d594c85a46dfc89c8c1ffa4219ea9b71727b50d063b1b2"
+        },
+        {
+          "path": "frontend/src/lib/valuation/observation-status.svelte.markup.html",
+          "sha256": "ffe3f1292c2be40f99c645e3195d09e964d23170bcd1b03b8d1e9a33e54a8e98"
+        }
+      ],
+      "sha256": "c1c23763a54accc0e58cab8c15c1bdc99a0d47fa1e5008ebbbb95863009f4da2"
+    },
+    {
+      "path": "frontend/src/routes/+error.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/+error.svelte.script1.ts",
+          "sha256": "7364334d8feae45f74ff98c602eb820d3a4a11423f7b4e2accb98ad243c507d7"
+        },
+        {
+          "path": "frontend/src/routes/+error.svelte.markup.html",
+          "sha256": "70495fad911b6e75f5042e8292e4c33765275f5031f072bcf9eaa95d813c9e78"
+        }
+      ],
+      "sha256": "a5e958a786bf88b4a857684458f7e43010822172c76eddbcbe4fb49dfcb31b8e"
+    },
+    {
+      "path": "frontend/src/routes/+layout.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/+layout.svelte.script1.ts",
+          "sha256": "43d00175889980b4e38524e5c23ce1ab854886112c16c5f41560f27d571f1fb9"
+        },
+        {
+          "path": "frontend/src/routes/+layout.svelte.markup.html",
+          "sha256": "ca2007ed532ee45d120fc77c8ae6c9eb3b21dc3293fb474a029117182fbb6552"
+        }
+      ],
+      "sha256": "ff8a5002073af9bd4f9aaaab282e85f3c40faa5534adcc17c06558c5ea59c761"
+    },
+    {
+      "path": "frontend/src/routes/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/+page.svelte.script1.ts",
+          "sha256": "9d044e181ec363206c4baf1cd6a5675de458843eb0bdcc23d1697d91cfb03fba"
+        },
+        {
+          "path": "frontend/src/routes/+page.svelte.markup.html",
+          "sha256": "34f256433fe48f6ff1f227e8301bf188e238726dae3e893a1f09f8ecb0f00c90"
+        }
+      ],
+      "sha256": "3505decc403f6e3d452567ea664b5db2d01ba0743aed4535833eb35c812caef4"
+    },
+    {
+      "path": "frontend/src/routes/app/+layout.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/+layout.svelte.script1.ts",
+          "sha256": "c0c3cf349dc8fe623e88d3fb089075508b3d03f0aa25b3751dd1663c8780a7bb"
+        },
+        {
+          "path": "frontend/src/routes/app/+layout.svelte.markup.html",
+          "sha256": "77dbc8d94fd06cedcfd96d2248b14809ddec7599b9526ed420425823d97543e5"
+        }
+      ],
+      "sha256": "ca731bb9af28c51bf7012f8c506e407c601fed52af3d59d6c4ea045752e29e81"
+    },
+    {
+      "path": "frontend/src/routes/app/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/+page.svelte.script1.ts",
+          "sha256": "14b46b4c2a908b0ddda7c576db7e3c82610c1e30e90bf1027ce28aea72c511ec"
+        },
+        {
+          "path": "frontend/src/routes/app/+page.svelte.markup.html",
+          "sha256": "d4f3967076dc2d0782b70d7fa1a9586b9fedee78615a6dfac4266dd63a936440"
+        }
+      ],
+      "sha256": "f595af095c7d6c3dfbb54fec861bca1f2cd8d6267e30a74d7809c61accd36a38"
+    },
+    {
+      "path": "frontend/src/routes/app/accounts/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/accounts/+page.svelte.script1.ts",
+          "sha256": "d5f6a874ae1848867571a0dab68bd1c543cd1b60301492af3aa5c024cd832c2d"
+        },
+        {
+          "path": "frontend/src/routes/app/accounts/+page.svelte.markup.html",
+          "sha256": "5711350d11a1b9ceed8351c220ee0c7b1a63808e253c093d0716fcb762fa6085"
+        }
+      ],
+      "sha256": "580524bfb4c7c6437fa348a3217a90f82648f949554f1d142a075af4e6ad1ba5"
+    },
+    {
+      "path": "frontend/src/routes/app/accounts/[id]/register/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/accounts/[id]/register/+page.svelte.script1.ts",
+          "sha256": "00ef9f8620a4efc48592b96f6bcf3b8b8a7c9aca589862d084bd92df6f6b8a85"
+        },
+        {
+          "path": "frontend/src/routes/app/accounts/[id]/register/+page.svelte.markup.html",
+          "sha256": "a320d904b886e88631b1cbfd53687b0bb63b8109ec0c2b1a0603b0871689b8d1"
+        }
+      ],
+      "sha256": "01e89bad55e82f49dd4ff9e10e7d3ed726cbda84958c422b3e995ccb27512fcc"
+    },
+    {
+      "path": "frontend/src/routes/app/budgets/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/budgets/+page.svelte.script1.ts",
+          "sha256": "20abaed7d9bacf53ab4cc4c816cbddb345f185d72ac99eb12d4c21118680a8d1"
+        },
+        {
+          "path": "frontend/src/routes/app/budgets/+page.svelte.markup.html",
+          "sha256": "253dc95f7c984e2bae5dc7613b8293ba883bab6aa41a38b908095c27e653a760"
+        }
+      ],
+      "sha256": "0f02a2c4e597676ab99dab9da24942c1d34042f186a72f3db3b0675fd764ef82"
+    },
+    {
+      "path": "frontend/src/routes/app/categories/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/categories/+page.svelte.script1.ts",
+          "sha256": "fd3a344a1373fadff49bb0a317ac4d3b1991412c9a9744d49386aa924998e897"
+        },
+        {
+          "path": "frontend/src/routes/app/categories/+page.svelte.markup.html",
+          "sha256": "d6e4972c88b68acc993fd0b408c04eff20d14651aaac078f6bc4fce58afceaf9"
+        }
+      ],
+      "sha256": "c0ebfb0e58d02a9de5a41efb2bc1536657ebc2efe89f542bc7075b1f9d851d44"
+    },
+    {
+      "path": "frontend/src/routes/app/categories/[id]/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/categories/[id]/+page.svelte.script1.ts",
+          "sha256": "57ae7903121de04f9d288e7478f1b912534384c01159de1407360823e1571457"
+        },
+        {
+          "path": "frontend/src/routes/app/categories/[id]/+page.svelte.markup.html",
+          "sha256": "6cd665c0021dc1f049b79ea222e34fa707fa9f2ff4243c083a2f0fedcd6df1a8"
+        }
+      ],
+      "sha256": "5db42ea5509ae84d8f927f8e925ce8b65b56028c513515c2c2162fca7162056c"
+    },
+    {
+      "path": "frontend/src/routes/app/forecast/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/forecast/+page.svelte.script1.ts",
+          "sha256": "9b11a79d7d4ae45f3829177a4fdd5ce5224b61402686938f270a7f8c66572172"
+        },
+        {
+          "path": "frontend/src/routes/app/forecast/+page.svelte.markup.html",
+          "sha256": "c496ac2770831983f063d8dd9dc32b1a55e037a154df8278accb771b9eb11120"
+        }
+      ],
+      "sha256": "d3c07609409970703a160bb3f5d7c32b3203cec618d031c0f3910917a196d57d"
+    },
+    {
+      "path": "frontend/src/routes/app/import/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/import/+page.svelte.script1.ts",
+          "sha256": "8b0acf44a5ef61540b019d9efa420bb9db75e562cba1c6dfc030a0b5c99cc872"
+        },
+        {
+          "path": "frontend/src/routes/app/import/+page.svelte.markup.html",
+          "sha256": "de290a3174acd4cba280772e549c3ea979f049e6f312a2f1c9f7a13105135bf0"
+        }
+      ],
+      "sha256": "7b284acd48378da7926aba6c7c1fe272623e33172e239b504191f231c8497017"
+    },
+    {
+      "path": "frontend/src/routes/app/import/dividends/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/import/dividends/+page.svelte.script1.ts",
+          "sha256": "0b5ec44c41dce30260158a65b7882f0eeaae6979b04f20db9b2681fe680b2473"
+        },
+        {
+          "path": "frontend/src/routes/app/import/dividends/+page.svelte.markup.html",
+          "sha256": "ac9d83dbfd8541253fdffa8c25a0558644315668c8691dae94c758a8440af64f"
+        }
+      ],
+      "sha256": "2e4bd8016164d0848446df9b4766c780f2fe9f33a17b502937f86ad896ae27f0"
+    },
+    {
+      "path": "frontend/src/routes/app/investments/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/investments/+page.svelte.script1.ts",
+          "sha256": "65667ffd30705f84362e37ffaa86033cc6a031499bf2711ceeecbbcc17b3be6e"
+        },
+        {
+          "path": "frontend/src/routes/app/investments/+page.svelte.markup.html",
+          "sha256": "0030f391c582487d1fac5b4770fe98f1aab0e0b29c48b8961f5f22af4c4289fb"
+        }
+      ],
+      "sha256": "8bd687414b268ff0e931496b646aa1b56c2d5d04750c6af5b07f4fdfb86db689"
+    },
+    {
+      "path": "frontend/src/routes/app/investments/income/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/investments/income/+page.svelte.script1.ts",
+          "sha256": "20d87716611038ac0f268a2d79218412af38188ad4b68f6dd3387ff6cf45cf4a"
+        },
+        {
+          "path": "frontend/src/routes/app/investments/income/+page.svelte.markup.html",
+          "sha256": "5a5bf1f936929a3ee3b4fea07d8c93df0c8d602cacf56b6b8e118cd634f3b1d1"
+        }
+      ],
+      "sha256": "1ae91af1b151d378262c3197839713a154813122d193da45c39024b3bde6618f"
+    },
+    {
+      "path": "frontend/src/routes/app/investments/instruments/[id]/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/investments/instruments/[id]/+page.svelte.script1.ts",
+          "sha256": "86ed02c004971fae52bbf1521466647fd36667e3c37b978d49e25cf7eff5489c"
+        },
+        {
+          "path": "frontend/src/routes/app/investments/instruments/[id]/+page.svelte.markup.html",
+          "sha256": "2ad0ea405d24b6876e717120bda0511c865f4643ea6dbeb772650e2aae80291f"
+        }
+      ],
+      "sha256": "c9bdf5bac7088782d6b32c6b8c9ac418aacb9172d22ce592c243b5cb1f262307"
+    },
+    {
+      "path": "frontend/src/routes/app/pricing/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/pricing/+page.svelte.script1.ts",
+          "sha256": "43ff909a5b8dfc2a5ff1d7a6a8ed1c185cc150f425d5716456911ad5b177c156"
+        },
+        {
+          "path": "frontend/src/routes/app/pricing/+page.svelte.markup.html",
+          "sha256": "1f7d17e59e663433fa44aac2bfa79bd025cf77d63af6921227b800ad8bcb139f"
+        }
+      ],
+      "sha256": "6b8925d6218ea4c4e3f4eee0f8da9204e782fb989e66b8667369c7ad2f62a263"
+    },
+    {
+      "path": "frontend/src/routes/app/reconcile/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/reconcile/+page.svelte.script1.ts",
+          "sha256": "7f48cdf445001afd4ef407fb383bc4bb387463973540236787d3e2b46ec83e05"
+        },
+        {
+          "path": "frontend/src/routes/app/reconcile/+page.svelte.markup.html",
+          "sha256": "194747b8f13ed81a4dbb3e7cdbaabaa600c48c7bd6dc4d904ded1af7139ed2dd"
+        }
+      ],
+      "sha256": "410281e36752ad09b3c79881760efbb25e1b488c3d9fcc4932fe6486bbb9da12"
+    },
+    {
+      "path": "frontend/src/routes/app/recurring/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/recurring/+page.svelte.script1.ts",
+          "sha256": "64f9a6db5669c60e2267aad2606b2e469dbea31f4b20964a92e53a6c6542982d"
+        },
+        {
+          "path": "frontend/src/routes/app/recurring/+page.svelte.markup.html",
+          "sha256": "fa336ea1cd67852f895348c9703ffaedef3ba50af31cdfb0095246d1573f5139"
+        }
+      ],
+      "sha256": "ce1448d7dddef90a90448c1a437c48ba3c4d105dd0e3a1511ccad78df18018b7"
+    },
+    {
+      "path": "frontend/src/routes/app/reports/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/reports/+page.svelte.script1.ts",
+          "sha256": "622d863fde8342b22efdfea42166a05fc0ba856997c3982c220227793554c85d"
+        },
+        {
+          "path": "frontend/src/routes/app/reports/+page.svelte.markup.html",
+          "sha256": "0696ee7b9e5fde88ccd86ee46812a830a136838ec0bed12c7e0c83194c1d7bd5"
+        }
+      ],
+      "sha256": "1f36607a0ad5b1236b63efde80e8510d79aae1a16d2d2676e1280280abfd59f3"
+    },
+    {
+      "path": "frontend/src/routes/app/settings/+layout.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/settings/+layout.svelte.script1.ts",
+          "sha256": "3509c4c36cb4f522ff6cc19bc878737d6b1e9eff98ea5796b70b9ee9b9ebace4"
+        },
+        {
+          "path": "frontend/src/routes/app/settings/+layout.svelte.markup.html",
+          "sha256": "c984f07a6bf108d676930f322c7ca8727b372f0a7d6f1365c928e451bd30ad9a"
+        }
+      ],
+      "sha256": "94c988b42aee5316a558b9c6ba1d98e59089e096a1c23a7ee1950f1ac3e67ec7"
+    },
+    {
+      "path": "frontend/src/routes/app/settings/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/settings/+page.svelte.script1.ts",
+          "sha256": "47a7bfc22987f42c9611938c84cddaa0e3d27dc65ddeaf1619971c3ad73fb85d"
+        },
+        {
+          "path": "frontend/src/routes/app/settings/+page.svelte.markup.html",
+          "sha256": "08b379ed03ab2f7bff92641ef618a092ca5da4239edcca5e41c6ff39b84fd844"
+        }
+      ],
+      "sha256": "759cf5cff0170a294dc3279989d3d9fc37807a861b2003fda2dd63c0aefd4abc"
+    },
+    {
+      "path": "frontend/src/routes/app/settings/appearance/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/settings/appearance/+page.svelte.script1.ts",
+          "sha256": "736d5047ceb62deb488582fa801d9ea61bcf1e67e4ea4bb173a20eeb17f42267"
+        },
+        {
+          "path": "frontend/src/routes/app/settings/appearance/+page.svelte.markup.html",
+          "sha256": "d38879e61d0de4c69a4b68615657cb8b3826eec206af490b432ecb9c3c559c41"
+        }
+      ],
+      "sha256": "40eaf0309d15785bad3f41ff7eb8e0a6a69492b8d7a7fa285fdb5f08f773808d"
+    },
+    {
+      "path": "frontend/src/routes/app/settings/currencies/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/settings/currencies/+page.svelte.script1.ts",
+          "sha256": "ac54053d012399125c5af756fd8bb2554ae3ac3a94b2eda4b4e1cb4ae63d5371"
+        },
+        {
+          "path": "frontend/src/routes/app/settings/currencies/+page.svelte.markup.html",
+          "sha256": "c4ce958e155f8ae772a92c8609424cbc49d8c10e852a46ea5b950999724c999c"
+        }
+      ],
+      "sha256": "4187cd394b40ffc8603b5ea20a1c32aaa87981a589017c2258af83efd52d03f1"
+    },
+    {
+      "path": "frontend/src/routes/app/settings/data/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/settings/data/+page.svelte.script1.ts",
+          "sha256": "627b70b0c4bf0776ca74aa6acff5a94413697e1febb27449d549322e50fb5596"
+        },
+        {
+          "path": "frontend/src/routes/app/settings/data/+page.svelte.markup.html",
+          "sha256": "0f18a164eff80f126fd3f8bd8884d3ecdc8ce9eb7aa0e6ca066ec7cda441a628"
+        }
+      ],
+      "sha256": "bea91ca6772e93ccd302a097ccb55d4e4ac2d965c6e20c29404ffe99cf73736b"
+    },
+    {
+      "path": "frontend/src/routes/app/settings/language/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/settings/language/+page.svelte.script1.ts",
+          "sha256": "e1cff04e8c9ac7c89f8e9fb67a055647cbe752a6af0bbfb444f9b6f5656ac340"
+        },
+        {
+          "path": "frontend/src/routes/app/settings/language/+page.svelte.markup.html",
+          "sha256": "005dc09bf852d3fef9622e4f5dbd50fa226b45228fb38fb8daed38c4dfe01baf"
+        }
+      ],
+      "sha256": "22ca508ac6a6c632b200dfed3a6da7b13649697aaff3f50ec2c1bf63972ff964"
+    },
+    {
+      "path": "frontend/src/routes/app/settings/security/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/settings/security/+page.svelte.script1.ts",
+          "sha256": "82b32a7c1086ea39b4b2fa588cd7352a44450847175e6fd370371e081bc4081a"
+        },
+        {
+          "path": "frontend/src/routes/app/settings/security/+page.svelte.markup.html",
+          "sha256": "d51eaefb16a1c1e490cbd2514aa98cb701febe0d12cf77490d29be3d30029d39"
+        }
+      ],
+      "sha256": "a50ed480bc9b629b70545d9065315457cd9a4bcde6e1a8894b7e5f3b3d2bd896"
+    },
+    {
+      "path": "frontend/src/routes/app/settings/trash/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/settings/trash/+page.svelte.script1.ts",
+          "sha256": "6427aefe13b2562a447d879efcd9053fe633e3c1878c8e865e0e28a9a270558c"
+        },
+        {
+          "path": "frontend/src/routes/app/settings/trash/+page.svelte.markup.html",
+          "sha256": "b544f6bfb4f661daed6d00f257638014b86a4f4fa1ddf7cbb28d85194ca4fc98"
+        }
+      ],
+      "sha256": "cae41c82d80c2ded47ff7f7794f4fdb16a7af80d0785ed46c446d6dd6c3fc3d1"
+    },
+    {
+      "path": "frontend/src/routes/app/transactions/+page.svelte",
+      "projections": [
+        {
+          "path": "frontend/src/routes/app/transactions/+page.svelte.script1.ts",
+          "sha256": "b539266113c08fa7ce4ce598ce1a67ffb27b7aa0e2acb408c2bff5b03eee6702"
+        },
+        {
+          "path": "frontend/src/routes/app/transactions/+page.svelte.markup.html",
+          "sha256": "82bdf74506a4e1cc24ff84192e93bd2a34fc3ed1c187b1567421222e9e330585"
+        }
+      ],
+      "sha256": "3fb6634366b567e988367dbc0db03eb2940332fedea933797d4443241acc5a6e"
+    }
+  ],
+  "go": [
+    {
+      "path": "backend/cmd/rekenraam/command.go",
+      "projections": [],
+      "sha256": "639ed68458f1e27251bfd11b6e8d646859aef69352e3009bb04db4ae0e8dfd0e"
+    },
+    {
+      "path": "backend/cmd/rekenraam/main.go",
+      "projections": [],
+      "sha256": "f94cb63a2dce7ee5bfbc4607e66f403568f9c8e95e983ef191faf4bca7c4d59f"
+    },
+    {
+      "path": "backend/cmd/rekenraam/restore.go",
+      "projections": [],
+      "sha256": "3dc68be251a8612947a6479122b766d359e7b98dc39e9dcf87d81454a751bd7a"
+    },
+    {
+      "path": "backend/internal/api/accounts.go",
+      "projections": [],
+      "sha256": "de30899c25be086297ef33c54b41c1134ec228e684f86c8ad65b035698fa386b"
+    },
+    {
+      "path": "backend/internal/api/auth.go",
+      "projections": [],
+      "sha256": "7c8a6c5cdd0e40100eacd25d3a18eff484a66887ad6d6fe7df22bf42c9ed43ad"
+    },
+    {
+      "path": "backend/internal/api/auth_mfa.go",
+      "projections": [],
+      "sha256": "22579397c0b46f988ccbb26b62de0e1532d9855d59d94c369d99dddf81297be3"
+    },
+    {
+      "path": "backend/internal/api/auth_tokens.go",
+      "projections": [],
+      "sha256": "c636fa6cdfa51368d70f5ed602102c880c47d3b0db3bb4ae9f0266e85c7ebe35"
+    },
+    {
+      "path": "backend/internal/api/backups.go",
+      "projections": [],
+      "sha256": "635ac55855fd428b8e4bc9d52b087343b43fa560f6b12eed690e7a5228d45d7d"
+    },
+    {
+      "path": "backend/internal/api/books.go",
+      "projections": [],
+      "sha256": "da608ef00648776c73fb3df6a52bd042f97e98dd51a5b453d0c8158b3902b03d"
+    },
+    {
+      "path": "backend/internal/api/budgets.go",
+      "projections": [],
+      "sha256": "34d11259c88527957b9fe1e74a948de125cc084b219d954283303bc9cdd84c30"
+    },
+    {
+      "path": "backend/internal/api/categories.go",
+      "projections": [],
+      "sha256": "362c47439da54d3b9cda6ee9ca15f75473abb235afd4bf6796fdf7ac46874ebb"
+    },
+    {
+      "path": "backend/internal/api/currencies.go",
+      "projections": [],
+      "sha256": "21c7edae452910c3afa539193ddb2b259f8738c00c5f8af2258bfec25df6bebf"
+    },
+    {
+      "path": "backend/internal/api/exports.go",
+      "projections": [],
+      "sha256": "6c232207c843a8720f936afa66ff02432b829b33c68e34411c927cf870a5f33e"
+    },
+    {
+      "path": "backend/internal/api/forecast.go",
+      "projections": [],
+      "sha256": "79d7938636775e6f5af508c43477c3b3b1a65ceaca3cea9cd1051f22cfecb494"
+    },
+    {
+      "path": "backend/internal/api/health.go",
+      "projections": [],
+      "sha256": "88ae25824a072dd20a68d72a8b562aeb8736b0959c6eb8318bae56d95086fde3"
+    },
+    {
+      "path": "backend/internal/api/import_connections.go",
+      "projections": [],
+      "sha256": "7856c31cf3717bdaf30e064d8f1e3c1d8b3145e07dbc58ae568ec32997dde612"
+    },
+    {
+      "path": "backend/internal/api/import_dividend_review.go",
+      "projections": [],
+      "sha256": "775d69cbb9cc2334ba5e29c5fdb9bd2513b159b0090938f7f99fce86e3e97def"
+    },
+    {
+      "path": "backend/internal/api/imports.go",
+      "projections": [],
+      "sha256": "8f47f0feb3b36adf239714c2a8bf0b42ddd23a42ab31ed1b6427e3520afa3f6b"
+    },
+    {
+      "path": "backend/internal/api/institutions.go",
+      "projections": [],
+      "sha256": "667dded502b7d8b4ccfc2c188ef514faeb0393ad7f32fb76ae58515843ddc3e8"
+    },
+    {
+      "path": "backend/internal/api/investment_basis_resolution.go",
+      "projections": [],
+      "sha256": "6cb776bec974e8a8f13635eddeb3c333ad2dc9927ef99967f93275333ce1c484"
+    },
+    {
+      "path": "backend/internal/api/investment_capital_return.go",
+      "projections": [],
+      "sha256": "8efd844d3c395a0fe9f5384851d38b71636bb61be3e19551bdab5ca03b8a2563"
+    },
+    {
+      "path": "backend/internal/api/investment_capital_return_reads.go",
+      "projections": [],
+      "sha256": "60609010b0fc4832b3cc522b92395458543ba739afb8428d646d5cf0ce9eed19"
+    },
+    {
+      "path": "backend/internal/api/investment_cash_in_lieu.go",
+      "projections": [],
+      "sha256": "a20f49cabfaae4d7e5003bac260670cb7d5eb2c5f6ddf5ba72e516e7b3bf4431"
+    },
+    {
+      "path": "backend/internal/api/investment_cash_stock_merger.go",
+      "projections": [],
+      "sha256": "beffa1b2e45d9bb5f1485c4eb7842eaa4f90217ec24221302ded0125362056ed"
+    },
+    {
+      "path": "backend/internal/api/investment_dated_holdings.go",
+      "projections": [],
+      "sha256": "f63ae594eabc97dfcf3ba53c51717b4d1249cc3c6bc5e621ad565ff83e7dd6fb"
+    },
+    {
+      "path": "backend/internal/api/investment_dividend_corrections.go",
+      "projections": [],
+      "sha256": "1dfc46ef26e6e6574132c07ff418e54ffcd9d6f2abfee595a4f7e4339192addd"
+    },
+    {
+      "path": "backend/internal/api/investment_dividend_coverage.go",
+      "projections": [],
+      "sha256": "607cee1363c8cbda7abfc7b027841284c847894228ee5b441fb2e1a8b32ced4b"
+    },
+    {
+      "path": "backend/internal/api/investment_gain_impact.go",
+      "projections": [],
+      "sha256": "baac5fc30bd7fd9c0af8d7835d2f641de253714414115cf7a008b8b32e6cfa05"
+    },
+    {
+      "path": "backend/internal/api/investment_gains_fx.go",
+      "projections": [],
+      "sha256": "b7384a39ded81ca02352f32497f96a57f0c7ab4cfe3fff7c9afce52b4ff35838"
+    },
+    {
+      "path": "backend/internal/api/investment_gains_runs.go",
+      "projections": [],
+      "sha256": "b76e22190aaffcacc1f3f3bacab19cdbf08dd4a8c9f6d24c712b16705c25dd8b"
+    },
+    {
+      "path": "backend/internal/api/investment_gains_statement.go",
+      "projections": [],
+      "sha256": "4cc2ae3954bda93720819eb771cdd72dd4ece691e9be61b8ffdf2a9966e381cc"
+    },
+    {
+      "path": "backend/internal/api/investment_payment_in_lieu.go",
+      "projections": [],
+      "sha256": "d33b46792b9c0daafa217a17cd2ef1a0c16335b13237b615d5dc49fe6271c013"
+    },
+    {
+      "path": "backend/internal/api/investment_share_exchange.go",
+      "projections": [],
+      "sha256": "c92498a3cb10cb7a3c66eb7d5f3210e2b4c1ed110026aee173266c8aa0f550eb"
+    },
+    {
+      "path": "backend/internal/api/investment_short_corrections.go",
+      "projections": [],
+      "sha256": "485b693ec3e99f5294b3ae5f4ad5e6c15e49fa9e13de08526a649dd414ec3d84"
+    },
+    {
+      "path": "backend/internal/api/investment_spin_off.go",
+      "projections": [],
+      "sha256": "ff7bf0565b80ebf1a624178238898ae74b08f66c575adc10b93f94f741745262"
+    },
+    {
+      "path": "backend/internal/api/investment_split_read.go",
+      "projections": [],
+      "sha256": "4b4b6ea25926ab90883e9a39d19a9df51473b41493546775aba78082f1769cad"
+    },
+    {
+      "path": "backend/internal/api/investment_transfer_out.go",
+      "projections": [],
+      "sha256": "ae56172e268296514fbb27e607f62dbaf34b34678079b715b76b8f6f8ff43383"
+    },
+    {
+      "path": "backend/internal/api/investments.go",
+      "projections": [],
+      "sha256": "873013c4a26e2201e8565914ca4d70e984ee2cc17914e02b3a357fbc0a9ebfbd"
+    },
+    {
+      "path": "backend/internal/api/ledger.go",
+      "projections": [],
+      "sha256": "15f807d046aba19472c2ba63c1cbeba126540c583493b6130dae2688356c8d9f"
+    },
+    {
+      "path": "backend/internal/api/middleware.go",
+      "projections": [],
+      "sha256": "0ae55643fd44ecb7d05d2faa246a476e7393c2eb8945bacdca0a1f7b956cad77"
+    },
+    {
+      "path": "backend/internal/api/money_coefficient.go",
+      "projections": [],
+      "sha256": "dd869d912c3f194f81e643a990dc7d853cba8933e0ffba21918bdb9ac6463e37"
+    },
+    {
+      "path": "backend/internal/api/payees.go",
+      "projections": [],
+      "sha256": "5ab2c4f6d32e279bfbed9a971b84edd67edced5e5b63085f42f5c78c87c6bafe"
+    },
+    {
+      "path": "backend/internal/api/pricing.go",
+      "projections": [],
+      "sha256": "ff0d162f2c9abff8094f140abde93c828f8bc8acdc0d62589148a26e80eedfcc"
+    },
+    {
+      "path": "backend/internal/api/pricing_management.go",
+      "projections": [],
+      "sha256": "2d3c85528a40ef6c7ac1f5e81ac14ad201e74056e68e9842e52f16a3074b338b"
+    },
+    {
+      "path": "backend/internal/api/pricing_quotes.go",
+      "projections": [],
+      "sha256": "82fa746b5d9bccb97fc641f80f8a8e31dfc2dedb7e2814654e368e066aed520b"
+    },
+    {
+      "path": "backend/internal/api/reconciliation.go",
+      "projections": [],
+      "sha256": "a85daeb3a3be0d08cb5d6bd25dca5efe1ff453f2405ab25b68bc3ff69b5e119a"
+    },
+    {
+      "path": "backend/internal/api/recurring.go",
+      "projections": [],
+      "sha256": "cbbdab1d89c2ffee113b2e3ef41ae91be1efeda9e9487505090f1cd8be8f89d0"
+    },
+    {
+      "path": "backend/internal/api/recurring_review.go",
+      "projections": [],
+      "sha256": "8bbfc9ef3095ef416b7e26dae2f7aa1dca6fe14fc5ff15df09e6904c9ddb63c5"
+    },
+    {
+      "path": "backend/internal/api/reports.go",
+      "projections": [],
+      "sha256": "a8c7d5a58daabdfe98d88cffc21b5456b824db81fab657ffecefb192e80f628f"
+    },
+    {
+      "path": "backend/internal/api/self_check.go",
+      "projections": [],
+      "sha256": "041e4450edb8d730e04e1e645c1eecbf1b459cf067c83c3e934410c62b43fb23"
+    },
+    {
+      "path": "backend/internal/api/server.go",
+      "projections": [],
+      "sha256": "ca84535e1362a8969e49b86b81e79215ebefb344fe0f5c969ea64e6e6f193339"
+    },
+    {
+      "path": "backend/internal/api/settings.go",
+      "projections": [],
+      "sha256": "08a00d60edda89d366571aca01298a22623b2fd62860e0dbfd488f10c7a8b644"
+    },
+    {
+      "path": "backend/internal/api/setup.go",
+      "projections": [],
+      "sha256": "4c5d9e5a8a9d39e3f04f3aaca8fd12d6c7ffe931fbd98fb538dd5bb2eb589afc"
+    },
+    {
+      "path": "backend/internal/api/tags.go",
+      "projections": [],
+      "sha256": "30f808834d2acd7d118d855efde64d0adfdd7e0e7021b83f8dbfa4fcb24aa81f"
+    },
+    {
+      "path": "backend/internal/api/transactions_errors.go",
+      "projections": [],
+      "sha256": "8288b651f391f104d4408628ebf4e92d4b18a3d9c3d0206d4a7b1b3b19550ba1"
+    },
+    {
+      "path": "backend/internal/api/transactions_move.go",
+      "projections": [],
+      "sha256": "b766724ed8a95cc1fd361be7ad8ccd2ec5db5f709c3ffcb7af407ba174b3732a"
+    },
+    {
+      "path": "backend/internal/api/transactions_read.go",
+      "projections": [],
+      "sha256": "090ba72a674d95f12125058bb73215ed18139ad74da4c35e60d6fa7374dc38cd"
+    },
+    {
+      "path": "backend/internal/api/transactions_reconciliation.go",
+      "projections": [],
+      "sha256": "5472d3dcb153e3ee7f5b8248530c30874d8341221f0a042ead9714cd97dc9204"
+    },
+    {
+      "path": "backend/internal/api/transactions_types.go",
+      "projections": [],
+      "sha256": "cca359a0c13ff03cd4eaa5fce2bd87d634cfa8e4b8dbb55562b0fb31f7990b60"
+    },
+    {
+      "path": "backend/internal/api/transactions_write.go",
+      "projections": [],
+      "sha256": "14ccd90d337bef88eb84e23f49807beea316f15f6fbd565e1643c66a69254ea4"
+    },
+    {
+      "path": "backend/internal/app/accounts.go",
+      "projections": [],
+      "sha256": "bdfa1053d970b058e7bc1ca912fe2a68f89411ac3bf88aee1ab289febb9244a2"
+    },
+    {
+      "path": "backend/internal/app/auth.go",
+      "projections": [],
+      "sha256": "e8ae305ed87f33b06f4186342f655ae3d2f3096dedcd742bfd2e69a5bd9ba8e1"
+    },
+    {
+      "path": "backend/internal/app/auth_mfa.go",
+      "projections": [],
+      "sha256": "931d193f90c24bc2c6e1a474a2a2366327ee38c156ffcc03a61a17ea59ef4b62"
+    },
+    {
+      "path": "backend/internal/app/auth_throttle.go",
+      "projections": [],
+      "sha256": "9997b56a902696e21a0fda9d2bfcfb1195fb23698cebb4e77663a8cbb9d54941"
+    },
+    {
+      "path": "backend/internal/app/auth_tokens.go",
+      "projections": [],
+      "sha256": "a65c45acb1e079a03db0c5c18accd6d047557f145745659e644cf790bedddf8f"
+    },
+    {
+      "path": "backend/internal/app/backup_scheduler.go",
+      "projections": [],
+      "sha256": "450418882af8793e53dfbd30ff705d90711ddf5f21b45ab5b3f2f0a8878b0d03"
+    },
+    {
+      "path": "backend/internal/app/backup_space_other.go",
+      "projections": [],
+      "sha256": "8a0e3e8391a351d37d138d11cf9a9013afe47eddb9285913e6278bc1003c804d"
+    },
+    {
+      "path": "backend/internal/app/backup_space_unix.go",
+      "projections": [],
+      "sha256": "04f70c1f2475eaa4f1beb3a276f377c4028c2d166b20a4b49a270db57bf9546c"
+    },
+    {
+      "path": "backend/internal/app/backup_worker.go",
+      "projections": [],
+      "sha256": "6ea882d0c3e593f4583047953a5e116bf9de7700acedde13bec093f42964a1e7"
+    },
+    {
+      "path": "backend/internal/app/backups.go",
+      "projections": [],
+      "sha256": "ccaff702e4898551c8fca685c44462f4345edfd3ba9a1fc426be31a1860cbf16"
+    },
+    {
+      "path": "backend/internal/app/books.go",
+      "projections": [],
+      "sha256": "1c18e145ed2ccb3f0d2fe7998d0846fa4891d8f9bce066adc009895214577ab4"
+    },
+    {
+      "path": "backend/internal/app/budgets.go",
+      "projections": [],
+      "sha256": "1a15224f10a5f06173d29e3ab9222ea6d1276344a559d4b8f9e2118146f7118b"
+    },
+    {
+      "path": "backend/internal/app/cashflow.go",
+      "projections": [],
+      "sha256": "3da9365d06bef3792ac669624e47690df77d00c258387ddcce784b4eab884f38"
+    },
+    {
+      "path": "backend/internal/app/categories.go",
+      "projections": [],
+      "sha256": "815f711d44d368a8c159ff1f4831087959d63f899e74a915c589ad78ab9de701"
+    },
+    {
+      "path": "backend/internal/app/checkpoint_override.go",
+      "projections": [],
+      "sha256": "061e3f91ae863300b61fe7f20821d97a99c203507422e47835a1c9b640ee8118"
+    },
+    {
+      "path": "backend/internal/app/currencies.go",
+      "projections": [],
+      "sha256": "6fe5c76f6ad87ac1d23ecf5c3bf9011cc4e58cee79b6c5fd6c63236b1e3ce2dc"
+    },
+    {
+      "path": "backend/internal/app/currency_catalog.go",
+      "projections": [],
+      "sha256": "f9687606c35bd19cddb2c1d9b5b9fca09df48af7217ec02b6ea662b503a718c0"
+    },
+    {
+      "path": "backend/internal/app/exports.go",
+      "projections": [],
+      "sha256": "864abe3b5feb1a1e41a8e6a741ba51b9499f4ae74b735d7f9d6db0de7ed25e95"
+    },
+    {
+      "path": "backend/internal/app/exports_bundle.go",
+      "projections": [],
+      "sha256": "5527c66f502440c926cba71f047b8386f14e871b96a0e43763696ecb07258061"
+    },
+    {
+      "path": "backend/internal/app/exports_qif.go",
+      "projections": [],
+      "sha256": "b1fe4a66960d11fadd9541343318501d62c9f2a263be42cd300e6a38f3f8832e"
+    },
+    {
+      "path": "backend/internal/app/forecast.go",
+      "projections": [],
+      "sha256": "f6a53c49d6b334fd96566990dd167c98b2b6fb25e70335a406e84d5fcbe14312"
+    },
+    {
+      "path": "backend/internal/app/forecast_events.go",
+      "projections": [],
+      "sha256": "97d3994087f96d11641d62515fd80a39aada0db7e2d9e8078f0ff9b16677a62d"
+    },
+    {
+      "path": "backend/internal/app/forecast_inputs.go",
+      "projections": [],
+      "sha256": "dda9943b780018c1512b989cea5eaeb535e52ecff7ecf1d1200ac67872fb9b44"
+    },
+    {
+      "path": "backend/internal/app/forecast_learning.go",
+      "projections": [],
+      "sha256": "11b392b888cb9eeefd17231eab65ee475cdf0ae0c44553f24ec3ab424e96d520"
+    },
+    {
+      "path": "backend/internal/app/forecast_learning_model.go",
+      "projections": [],
+      "sha256": "77564286eee2af19d6cbb31e31bdfc5b0ff05b92dd4af3d9a0e274f336c7669a"
+    },
+    {
+      "path": "backend/internal/app/forecast_learning_overlay.go",
+      "projections": [],
+      "sha256": "e3f9f3e853e46479a79b698ae4da15afa0c5d5b55baa37891bee3740d68f3d47"
+    },
+    {
+      "path": "backend/internal/app/forecast_projection.go",
+      "projections": [],
+      "sha256": "2c3f7f3786fdd98e93c6f31a7a7721fabf04bf6c3ed1535dc69d906e7ede13fc"
+    },
+    {
+      "path": "backend/internal/app/forecast_rates.go",
+      "projections": [],
+      "sha256": "1b3e3277d43de48caa6181656541dbdb5b3c304abc91b0994b5b8cc2968c54a8"
+    },
+    {
+      "path": "backend/internal/app/import_adapter.go",
+      "projections": [],
+      "sha256": "b421233be97cadc0309f47b5c4363112a91e3359957d1f79b67f6839fc3d5853"
+    },
+    {
+      "path": "backend/internal/app/import_connections.go",
+      "projections": [],
+      "sha256": "fa224628d9552e2539be275d0d5534c9f4145944378d3fc0dbf987fd94eb58e5"
+    },
+    {
+      "path": "backend/internal/app/import_crypto_csv.go",
+      "projections": [],
+      "sha256": "4c9021a8a3625a36cc150bb543ed630de9058103b57392defabe09fbb711a006"
+    },
+    {
+      "path": "backend/internal/app/import_csv.go",
+      "projections": [],
+      "sha256": "782fe81ff687220ec516130d2c51e3e315560d15264847ae0b495298e49928b2"
+    },
+    {
+      "path": "backend/internal/app/import_csv_investment.go",
+      "projections": [],
+      "sha256": "f4ab37818e6d0a5beaf75d727b271b16ecc1c1d137ec944bce49a6831e4bf7e6"
+    },
+    {
+      "path": "backend/internal/app/import_dividend_review.go",
+      "projections": [],
+      "sha256": "d2317ebe9b070a1ddf00739f6f05feed66d337927f4834754e1b2aa39b6b9a96"
+    },
+    {
+      "path": "backend/internal/app/import_fetch_worker.go",
+      "projections": [],
+      "sha256": "c1ff770d1dd7d4d9cc2939b2aaee28d0e6880176c7ef05d14d04872f216d778b"
+    },
+    {
+      "path": "backend/internal/app/import_locale.go",
+      "projections": [],
+      "sha256": "dabc16cb1a6c4d2491e460691e7d2ab1439ce73cec441ea3a197871cd87b4b39"
+    },
+    {
+      "path": "backend/internal/app/import_qif.go",
+      "projections": [],
+      "sha256": "65696bf5e3367c292ac000b8c3f0eef40b02d4b2a45d2938ea5f12831c9075bf"
+    },
+    {
+      "path": "backend/internal/app/import_scheduler.go",
+      "projections": [],
+      "sha256": "9c75424382bacf764af6d42b9f64a473e4db05ae1ada2c66458f3be37b5db9e2"
+    },
+    {
+      "path": "backend/internal/app/import_service.go",
+      "projections": [],
+      "sha256": "4ee6aaa90bb6fe0b2b1ff1bddda5c69218fc81fdf6212f2df254298e798fe9b9"
+    },
+    {
+      "path": "backend/internal/app/import_source_buy_correction.go",
+      "projections": [],
+      "sha256": "c252ed1ac359f40a66f8a12a0aac860d265d34a89df845aa4eea6963507e4cac"
+    },
+    {
+      "path": "backend/internal/app/import_source_sale_correction.go",
+      "projections": [],
+      "sha256": "ad1cd79592be6181659dc94878f8e39bfcd801d237578a14cf62a2e7df11c40f"
+    },
+    {
+      "path": "backend/internal/app/import_source_trade_correction.go",
+      "projections": [],
+      "sha256": "db1b56010b209b1c5a742870bd5fdfe8d8851a756b865ec678e36feecb9e0386"
+    },
+    {
+      "path": "backend/internal/app/import_text_encoding.go",
+      "projections": [],
+      "sha256": "721a69bd384c6409d4a6d189283e4d0dba340819e16b7d4307ae51a2fac75a67"
+    },
+    {
+      "path": "backend/internal/app/import_trading212.go",
+      "projections": [],
+      "sha256": "1e0c1b3f1cdae266c43f51ac8f76d518d60255af6d5a584f45d839b4c773a65d"
+    },
+    {
+      "path": "backend/internal/app/import_trading212_invest.go",
+      "projections": [],
+      "sha256": "812a3e49886babbda715036b23213816967876781e6174c428b2374bdb202cc0"
+    },
+    {
+      "path": "backend/internal/app/import_trading212_short.go",
+      "projections": [],
+      "sha256": "2a894c8846051e799671725259217450167abc25d4e35e3ec4fd7353e260a57c"
+    },
+    {
+      "path": "backend/internal/app/import_trading212_split.go",
+      "projections": [],
+      "sha256": "b3f3f2781fe68b320520884782a81a17474b09ae8fc0381068a1a71ba6f23ed0"
+    },
+    {
+      "path": "backend/internal/app/import_types.go",
+      "projections": [],
+      "sha256": "bd9d30591c72086f368c0423640d96ad5f658ee79ee4ca77a58416a6de64e616"
+    },
+    {
+      "path": "backend/internal/app/institutions.go",
+      "projections": [],
+      "sha256": "e436367d7002702ec7465393eb90fa0827fe3c75b796aa8e4876729ef4c22ba4"
+    },
+    {
+      "path": "backend/internal/app/investment_alternative_gains.go",
+      "projections": [],
+      "sha256": "4cbe50fccdaf5bdc582d4cf510c6531a5e1af953edd7f29cd79770ac41b3cafe"
+    },
+    {
+      "path": "backend/internal/app/investment_basis_provenance.go",
+      "projections": [],
+      "sha256": "6c0b06f2d16596c6ef0a40d719e2ed5c6dedf8477c03f1c3e24f92491fa90cf2"
+    },
+    {
+      "path": "backend/internal/app/investment_basis_resolution.go",
+      "projections": [],
+      "sha256": "c04899005ce6b77142039cf78fc689495e3999c3c38598f19141402ce2d3b711"
+    },
+    {
+      "path": "backend/internal/app/investment_buy_replacement.go",
+      "projections": [],
+      "sha256": "7e1ac3f2b3a83d78b0f7a98709e43e4d535685b4eea03e905774b12fcff56ec5"
+    },
+    {
+      "path": "backend/internal/app/investment_buy_reversal.go",
+      "projections": [],
+      "sha256": "f820f0f384a308aad42d83534c75fa3eadf954c1726fe29e1813d93f7c2d1b0e"
+    },
+    {
+      "path": "backend/internal/app/investment_capital_return.go",
+      "projections": [],
+      "sha256": "bee7ec5038644c0371713385482794222daaa9f46409ac9852a82140eae2f8fc"
+    },
+    {
+      "path": "backend/internal/app/investment_capital_return_reads.go",
+      "projections": [],
+      "sha256": "215c1e4de3428ad0df85bbfd04c484c9b144aad9b79c24cc22e561a5eced299c"
+    },
+    {
+      "path": "backend/internal/app/investment_cash_in_lieu.go",
+      "projections": [],
+      "sha256": "aec32f7dd90775119cb4999bfa55daf15af775f5d7fca53cfb421a87fe678f01"
+    },
+    {
+      "path": "backend/internal/app/investment_cash_stock_merger.go",
+      "projections": [],
+      "sha256": "1137ba5018318b7635e82a1aa313681808166e31436e186c4bb88295e102897c"
+    },
+    {
+      "path": "backend/internal/app/investment_cash_stock_merger_correction.go",
+      "projections": [],
+      "sha256": "661b39f4a09d5094dc6e5b1a9a50d2201a91687cdb6db1025af47921d26afef1"
+    },
+    {
+      "path": "backend/internal/app/investment_correction_chain.go",
+      "projections": [],
+      "sha256": "859bdd48a0c4f79cda2a0f23c8bcdc5349a5f580eb5a7b0f33144e8774fa3c9f"
+    },
+    {
+      "path": "backend/internal/app/investment_dated_holdings.go",
+      "projections": [],
+      "sha256": "5b21ffa23a82fc0f7c569d26dd24a9f823777c81d516d2a9f762c76375f106dc"
+    },
+    {
+      "path": "backend/internal/app/investment_dividend_correction.go",
+      "projections": [],
+      "sha256": "23924224c005909094de9711c0aab7ffb2da30a30e66a2dedfca73fca09a942b"
+    },
+    {
+      "path": "backend/internal/app/investment_dividend_coverage.go",
+      "projections": [],
+      "sha256": "d43266a8d5bff40eb3e476d439fda8519b29cef02d9ee2027212f8ac2728c0bb"
+    },
+    {
+      "path": "backend/internal/app/investment_dividend_events.go",
+      "projections": [],
+      "sha256": "8d111ef7576b72c7f64d853ee8806bf9c69e9f2383cb9e3446cde0c0e10da12f"
+    },
+    {
+      "path": "backend/internal/app/investment_gains_fx.go",
+      "projections": [],
+      "sha256": "8104bb14d388f4939d08f2e806a32c843fc73045ce67ba5f686c3fffe008cf8f"
+    },
+    {
+      "path": "backend/internal/app/investment_gains_read.go",
+      "projections": [],
+      "sha256": "7a3fa258fe2c7e85da5da5b94fbd8ad8ef7ed1a2e038a7c60fef40919668609f"
+    },
+    {
+      "path": "backend/internal/app/investment_gains_runs.go",
+      "projections": [],
+      "sha256": "92922689c31cc363393a00bbe918211ccf5bc111c8dee003b1d2775773b514bb"
+    },
+    {
+      "path": "backend/internal/app/investment_gains_statement.go",
+      "projections": [],
+      "sha256": "a72ae5c4b9a2cd66ad05d1361d92fd6bca8c5831d9f8ce0675086b90a661b071"
+    },
+    {
+      "path": "backend/internal/app/investment_payment_in_lieu.go",
+      "projections": [],
+      "sha256": "899d364a790162a620fef4c186fde6018dc6923ee4ff506a204b58dfb40d1cf2"
+    },
+    {
+      "path": "backend/internal/app/investment_reinvestment_correction.go",
+      "projections": [],
+      "sha256": "2cb36963878954cd022d53d71c6b0964997e503f5698dd5d39915dfae33189a3"
+    },
+    {
+      "path": "backend/internal/app/investment_sale_replacement.go",
+      "projections": [],
+      "sha256": "837c1050afa8b1944e489457f56bc73b94340aa81b5ddecba8b100237557c80e"
+    },
+    {
+      "path": "backend/internal/app/investment_sale_reversal.go",
+      "projections": [],
+      "sha256": "ad1713184f52c6a9a43e222ea62262d2916f5049a29f28ad65cbf7daec8663a0"
+    },
+    {
+      "path": "backend/internal/app/investment_share_exchange.go",
+      "projections": [],
+      "sha256": "beeb32a0ceddd172cfe8d0431026a3a6ef8c9e0883a1202024d7823f7cce6a08"
+    },
+    {
+      "path": "backend/internal/app/investment_share_exchange_correction.go",
+      "projections": [],
+      "sha256": "9aeeb045caefa410ea78586c9f1a0430bac42903aaad9b00f0a7956788d77276"
+    },
+    {
+      "path": "backend/internal/app/investment_short.go",
+      "projections": [],
+      "sha256": "0b039a44a3c48e083d0fde2daf49b077755a095b8fce3c5a505e9aa813fffaa0"
+    },
+    {
+      "path": "backend/internal/app/investment_short_correction.go",
+      "projections": [],
+      "sha256": "48b5499c703e558c5b950c45baa626d4569a939852357666509bcfcff61744cc"
+    },
+    {
+      "path": "backend/internal/app/investment_source_evidence_edits.go",
+      "projections": [],
+      "sha256": "d2ca696cdac6174cd6c2273178dc94880b5e4198226070c0eade668f015c601c"
+    },
+    {
+      "path": "backend/internal/app/investment_spin_off.go",
+      "projections": [],
+      "sha256": "2fce9dbe8036bea4152eb4dd2af6a4fecc4c92cc203b157c37a94f8abba67435"
+    },
+    {
+      "path": "backend/internal/app/investment_spin_off_correction.go",
+      "projections": [],
+      "sha256": "694cb3d9ca684fa62b9dc5cc477532cb0d171e12c24f6364a1a1d9b23d82181d"
+    },
+    {
+      "path": "backend/internal/app/investment_split.go",
+      "projections": [],
+      "sha256": "bf2d6e7276761e454fc9f441aafe239a8cba7daf44153efd5e80a68b1c27b03d"
+    },
+    {
+      "path": "backend/internal/app/investment_split_correction.go",
+      "projections": [],
+      "sha256": "88293090c56c359e27af460a9e91830c3574e0039da19c0a37edbee2f2b6f7c1"
+    },
+    {
+      "path": "backend/internal/app/investment_split_read.go",
+      "projections": [],
+      "sha256": "55aed12cd78028e086cd014145d582ad82241de1de2d6f0c2420ed49e5c1f874"
+    },
+    {
+      "path": "backend/internal/app/investment_trade_correction_context.go",
+      "projections": [],
+      "sha256": "05ec5f4204bf542e76aa7e81cbfe7facd756e90f2a168c9eedcabc618d10d83f"
+    },
+    {
+      "path": "backend/internal/app/investment_trade_economics.go",
+      "projections": [],
+      "sha256": "2341e61b57f514d8fd6ebe264629cb13be2686794dc9efa0a0ddff82ddf460b9"
+    },
+    {
+      "path": "backend/internal/app/investment_transfer_correction.go",
+      "projections": [],
+      "sha256": "527461df01cf40354e036c0fe8eba455e751c05b8c5cf68bd5ec2ab212dfe45f"
+    },
+    {
+      "path": "backend/internal/app/investment_transfer_in.go",
+      "projections": [],
+      "sha256": "846804e32673e7c68799dff9322d0d83c62c68c3d78a17cd9bef68f1e36d5b0b"
+    },
+    {
+      "path": "backend/internal/app/investment_transfer_internal.go",
+      "projections": [],
+      "sha256": "8036013aa3da48dbe1f4032f47521b00064efa6281b1d1208300fe4292b03c35"
+    },
+    {
+      "path": "backend/internal/app/investment_transfer_out.go",
+      "projections": [],
+      "sha256": "2011a1ce51f3de51718b60b54d92a187fa89276d292a7896286f8500701885d6"
+    },
+    {
+      "path": "backend/internal/app/investment_write_off_correction.go",
+      "projections": [],
+      "sha256": "1db5b2ce3b67218a6341c7cf06b6e23176fc1177b31d81c662e278690595084d"
+    },
+    {
+      "path": "backend/internal/app/investments.go",
+      "projections": [],
+      "sha256": "0e6b1b2e78ce51ded1b7a7b1d2893baa5cde64da010955d41c5d7efc058e9f40"
+    },
+    {
+      "path": "backend/internal/app/investments_roles.go",
+      "projections": [],
+      "sha256": "572414f43f22086adcdb72cba96d68d3c5d5dfdc01708f44a429045b2f30da3e"
+    },
+    {
+      "path": "backend/internal/app/ledger.go",
+      "projections": [],
+      "sha256": "186c755d14fa9d7a7ab8030b12f3383b5e5661f35451aba5bce3abecf5fb49a3"
+    },
+    {
+      "path": "backend/internal/app/payees.go",
+      "projections": [],
+      "sha256": "b2ca56fb43562943d1167b7c72ec98834332177bf1dc9c7e7309f68c782775aa"
+    },
+    {
+      "path": "backend/internal/app/pricing.go",
+      "projections": [],
+      "sha256": "61f9d6a77ad6c8af75f21c90d1295fc8c338db26ba353d6e51c4f037bbdb4eb8"
+    },
+    {
+      "path": "backend/internal/app/pricing_coverage.go",
+      "projections": [],
+      "sha256": "6b349be5d5c57334d6278f17a5bbaee74bf8e82b1d5497b935ab9ab067ee5e4d"
+    },
+    {
+      "path": "backend/internal/app/pricing_management.go",
+      "projections": [],
+      "sha256": "bd9824b7a8bf87399ab54511afbfc1d22a1443b9f0b84baace7e766380598434"
+    },
+    {
+      "path": "backend/internal/app/pricing_quotes.go",
+      "projections": [],
+      "sha256": "cdeefb2a4aed6eeca00807c02fbce52095ea7c44e2df09922800f7151da59c24"
+    },
+    {
+      "path": "backend/internal/app/pricing_refresh.go",
+      "projections": [],
+      "sha256": "abd8111f5ddc9f66a4a5b562c06897a6ec386e1514c548e1b5be84219b4b8eee"
+    },
+    {
+      "path": "backend/internal/app/pricing_scheduler.go",
+      "projections": [],
+      "sha256": "df9015ff7ba45e198176b352cd7ba2c6b22a6f384c3b4c54fd8e820e162053f9"
+    },
+    {
+      "path": "backend/internal/app/pricing_worker.go",
+      "projections": [],
+      "sha256": "31a9c36c8c0446f74dad8066e5f9766a35ee224a08cdefa2c1fcddc07b30c34d"
+    },
+    {
+      "path": "backend/internal/app/reconciliation.go",
+      "projections": [],
+      "sha256": "a0fb0d3478432ac0f3b463af9e26b428af3bf4d1a0c73578208f08889f5b8365"
+    },
+    {
+      "path": "backend/internal/app/recovery.go",
+      "projections": [],
+      "sha256": "5d3b63258288a5d3b2f290995a84b70871a9a69e14efacd516e2651364fa9858"
+    },
+    {
+      "path": "backend/internal/app/recurring.go",
+      "projections": [],
+      "sha256": "c69aea630171dc8c0791c13bb273428200b2178a2fe715a67011b4a51aa51363"
+    },
+    {
+      "path": "backend/internal/app/recurring_generation.go",
+      "projections": [],
+      "sha256": "29d78ea5dcfec0941bc9ec82c89f61a5d58740358a164b19703eb660d210016c"
+    },
+    {
+      "path": "backend/internal/app/recurring_review.go",
+      "projections": [],
+      "sha256": "1b180519b9944bb0cdc017227078850f0383357f8ca559a85445ebf3e8d0bdc1"
+    },
+    {
+      "path": "backend/internal/app/register_correction_chains.go",
+      "projections": [],
+      "sha256": "28f49c10434b117351a3973932e2c2dc8866dfc0362a07e575c72c6a1f36a5d2"
+    },
+    {
+      "path": "backend/internal/app/reports.go",
+      "projections": [],
+      "sha256": "ccf60f8f22d4f4be3d0935d613146de2684a4291ef79f1965cbfabc151cc7dd2"
+    },
+    {
+      "path": "backend/internal/app/self_check.go",
+      "projections": [],
+      "sha256": "213cc9c75a5ae9633d3d976ce5e1eab649d84f51ae3fb9b1e65f4accce073be2"
+    },
+    {
+      "path": "backend/internal/app/settings.go",
+      "projections": [],
+      "sha256": "428a79817808da73310ea8fd83cc2c5111b1070c8c530ae2e4f1c2b97e8c000d"
+    },
+    {
+      "path": "backend/internal/app/setup.go",
+      "projections": [],
+      "sha256": "206cddb719e7b26c7bbb054f79b58e1dcba6c0d64d9716e778bd58ecc397c22e"
+    },
+    {
+      "path": "backend/internal/app/tags.go",
+      "projections": [],
+      "sha256": "cb4e3c181ec0a3c8ce45e6bd4dfd48b290ddb2f5882ce6ce723c431c11922531"
+    },
+    {
+      "path": "backend/internal/app/transactions_move.go",
+      "projections": [],
+      "sha256": "243506ccec5ca413b7b77b4e3a9c4b0448172881175ab5353ce85badf2d965d1"
+    },
+    {
+      "path": "backend/internal/app/transactions_posted_on.go",
+      "projections": [],
+      "sha256": "e0c3dd4198ab8ffdb88d5254546d2f62eaf1a607d0ba407aca1c492c2a22edbc"
+    },
+    {
+      "path": "backend/internal/app/transactions_reconciliation.go",
+      "projections": [],
+      "sha256": "1db19344812b887b7e660393cc21932ad1a739f5b3ee82916ba5d4032e212ad0"
+    },
+    {
+      "path": "backend/internal/app/transactions_service.go",
+      "projections": [],
+      "sha256": "bf6a01ddd0a6cc95f8d57ebd44bc65b2ef9ddd9d95af94c7000537a4924c0753"
+    },
+    {
+      "path": "backend/internal/app/transactions_types.go",
+      "projections": [],
+      "sha256": "e9362f26b42bec7fedacc1ba2a64885dc31311a16f8e534b3fd70e40ee2052e6"
+    },
+    {
+      "path": "backend/internal/app/transactions_validate.go",
+      "projections": [],
+      "sha256": "2866284be8010c7e6fc3aac1b5660370232f98ff2de29b0cd92be328d561c142"
+    },
+    {
+      "path": "backend/internal/app/transactions_write.go",
+      "projections": [],
+      "sha256": "753e95af766b3aae145dd1335ace96f5bee22ebbf74f0c04e15b5cb3513e654b"
+    },
+    {
+      "path": "backend/internal/app/valuation.go",
+      "projections": [],
+      "sha256": "713782f97ce1d1f6a106ec2bd87b4519caa91bac2ca01d83ce52cacd20cb4699"
+    },
+    {
+      "path": "backend/internal/app/version_fields.go",
+      "projections": [],
+      "sha256": "49b127035e54e47f72e8944b04c649ee7539f13c3397916c6e946bd0d5d8377f"
+    },
+    {
+      "path": "backend/internal/appruntime/runtime.go",
+      "projections": [],
+      "sha256": "68e7997c5b72bffce03094fbc3a6fd49f567f7f470e198c70cf5ac630af4d8c1"
+    },
+    {
+      "path": "backend/internal/config/config.go",
+      "projections": [],
+      "sha256": "319f9471a1ac348417870423781b436bfb5e413b2ed9b4f76288bbe7165924dd"
+    },
+    {
+      "path": "backend/internal/db/accounts.go",
+      "projections": [],
+      "sha256": "d6c1c97d1779c5bfe10e535bd40d691fcfc104e8281c615474099c57a6ae834c"
+    },
+    {
+      "path": "backend/internal/db/audit.go",
+      "projections": [],
+      "sha256": "fd6f0ed0493f3a1fda346de896e647109093b718fd9d9428422f435d8b8256e4"
+    },
+    {
+      "path": "backend/internal/db/auth.go",
+      "projections": [],
+      "sha256": "e1b8687a283e4afe91ab0d869bb8ad8cbdb1ad8fbccd10f39c0a458c41556bf0"
+    },
+    {
+      "path": "backend/internal/db/auth_mfa.go",
+      "projections": [],
+      "sha256": "f3f9644ccb59cc31c075356f6bff67ba9cc06879f22049914f92a44e3d082785"
+    },
+    {
+      "path": "backend/internal/db/auth_tokens.go",
+      "projections": [],
+      "sha256": "8c7101e912f45faa75a3e5ad516643679a52bf5bf99878dda6bc423c4e7a1125"
+    },
+    {
+      "path": "backend/internal/db/background_work.go",
+      "projections": [],
+      "sha256": "07b31058fc273fe0c33ef6754218346dc7b57aba4a60838c18db96afdc5f9009"
+    },
+    {
+      "path": "backend/internal/db/backup_online.go",
+      "projections": [],
+      "sha256": "0a3d2269e29fd7c18a4a85b848e696f09af4aed67f04e66729731a515bf3a89c"
+    },
+    {
+      "path": "backend/internal/db/backups.go",
+      "projections": [],
+      "sha256": "025c4d5cd3b3c1e28d6bc2e51a942a0eb7878b103e1e2e593625152cced1011f"
+    },
+    {
+      "path": "backend/internal/db/books.go",
+      "projections": [],
+      "sha256": "6441c21caa636ff4265a1cea79fc78465770ab3566a1c61b65e9120f86f5596c"
+    },
+    {
+      "path": "backend/internal/db/budgets.go",
+      "projections": [],
+      "sha256": "7c8a2a4d7f6fc1814795be518f59a9e89a8f77df5b3e98b461ae5e8556e11f99"
+    },
+    {
+      "path": "backend/internal/db/categories.go",
+      "projections": [],
+      "sha256": "7daab5538bcc4268dcb5df9b98cef223e7a8f22834d4e2324f1fb06a9c1265a3"
+    },
+    {
+      "path": "backend/internal/db/commodities.go",
+      "projections": [],
+      "sha256": "0c677ffab56d4891e165d3df52d36860e0e6ce8a0ddcce6e9e68bb13a5b84576"
+    },
+    {
+      "path": "backend/internal/db/exports.go",
+      "projections": [],
+      "sha256": "69df99165d97ed25bdc5fdfe17ede5fe7e5c97bb47c271e03924bc86700caf58"
+    },
+    {
+      "path": "backend/internal/db/forecast.go",
+      "projections": [],
+      "sha256": "e17b9148063dbb675d382fb0b7d9a3be45e976984cc992cd40dbcd89894d58d3"
+    },
+    {
+      "path": "backend/internal/db/forecast_learning.go",
+      "projections": [],
+      "sha256": "eb3f48a4feefb1e8a1fc4db083fbd17c556b38aec3d67ccb5bff5c3fc1b56bd1"
+    },
+    {
+      "path": "backend/internal/db/import_connections.go",
+      "projections": [],
+      "sha256": "07c48157de546ef2657d23ecb33136aacc30cd6b31f038fab58619fa97920ba1"
+    },
+    {
+      "path": "backend/internal/db/import_dividend_review.go",
+      "projections": [],
+      "sha256": "a7007300a60bc547bae0ab94a2031ba5574cf969d29f24d0af4ded29486e5e3d"
+    },
+    {
+      "path": "backend/internal/db/import_short_link.go",
+      "projections": [],
+      "sha256": "e485d2bfeeaf403f09e232e5227b7d81bfe1449f834dd0841b50ebe8c7c9bc61"
+    },
+    {
+      "path": "backend/internal/db/import_source_revisions.go",
+      "projections": [],
+      "sha256": "885f4f18d1a27ee149989e52f07c22bb1cf0e8bfed194eb1ece5a06c18a0c82c"
+    },
+    {
+      "path": "backend/internal/db/import_split_link.go",
+      "projections": [],
+      "sha256": "39dd2e517a5243bf9650c9d5fa8007a0e5850e657f966215a1eeebea71881684"
+    },
+    {
+      "path": "backend/internal/db/imports.go",
+      "projections": [],
+      "sha256": "6c58720a45d1aacced252c0f1a5695777a93e3705aaf9b31fa1b0a9dc01cedd5"
+    },
+    {
+      "path": "backend/internal/db/institutions.go",
+      "projections": [],
+      "sha256": "48aa64f0fd94eeec5e6949d0abdc5e0bf19a4b5f1e226495c42efb7175db40b5"
+    },
+    {
+      "path": "backend/internal/db/investment_alternative_gains.go",
+      "projections": [],
+      "sha256": "f7c89cea883640cca9146b6d4613b05de192303dcc0d7bacb4449a1d6d694e01"
+    },
+    {
+      "path": "backend/internal/db/investment_basis_provenance.go",
+      "projections": [],
+      "sha256": "3d2d2c6a3848a0bb95815065906a7d03f5bac47e48a2e872fc95a4455d10f5ad"
+    },
+    {
+      "path": "backend/internal/db/investment_basis_resolution.go",
+      "projections": [],
+      "sha256": "26bb5af3419b55a2c8e292ee3ced85c49b1f2382d420f003109803556b6123a8"
+    },
+    {
+      "path": "backend/internal/db/investment_buy_replacement.go",
+      "projections": [],
+      "sha256": "5a01563fda0ad58ab5f7d55b14466c0cabd190089a21361e99b9ce609a2ed7ff"
+    },
+    {
+      "path": "backend/internal/db/investment_buy_reversal.go",
+      "projections": [],
+      "sha256": "4e37c8cd5194c17e76b24c8417799ff2773376b568b4da249df1eb1283e916d4"
+    },
+    {
+      "path": "backend/internal/db/investment_capital_return.go",
+      "projections": [],
+      "sha256": "9e501522f97c3affe93e0628913d85df78185bdd990f70b73f2ae3c6b4eff10c"
+    },
+    {
+      "path": "backend/internal/db/investment_capital_return_reads.go",
+      "projections": [],
+      "sha256": "7f99ae126d85b8242512578ec0dd1968f9aa5cf73f37385d60fe68cf93e19bc9"
+    },
+    {
+      "path": "backend/internal/db/investment_cash_in_lieu.go",
+      "projections": [],
+      "sha256": "0e0b6ba4627c5b42e8efadd16872728510ec07788fc5d9c7bf79c5b386425e4c"
+    },
+    {
+      "path": "backend/internal/db/investment_cash_stock_merger.go",
+      "projections": [],
+      "sha256": "d5deee02606f0bbf834c7b2f2caf872428690a2209374673ec98aba00eb681f2"
+    },
+    {
+      "path": "backend/internal/db/investment_cash_stock_merger_correction.go",
+      "projections": [],
+      "sha256": "90474ab6301eec8e0707d4bdc91c3c8b2cf642d07d09d2d4d215454e8aaa3414"
+    },
+    {
+      "path": "backend/internal/db/investment_correction_chain.go",
+      "projections": [],
+      "sha256": "edc0411d3ddd296f3fc047c23e1310bc38bfb9dd4e0e576d6973419806af9ad2"
+    },
+    {
+      "path": "backend/internal/db/investment_dated_holdings.go",
+      "projections": [],
+      "sha256": "76ba25ba0bc7279c4fc4be9e30fe553e7fa72cae02f62797f5137524add249e3"
+    },
+    {
+      "path": "backend/internal/db/investment_dated_valuation.go",
+      "projections": [],
+      "sha256": "62856c7be273f8db1ac73a4ecd6dd643aef9e4425c9c5f335dc9b9aebef20d25"
+    },
+    {
+      "path": "backend/internal/db/investment_disposal_backdating.go",
+      "projections": [],
+      "sha256": "194c44a7eb68ade7503ca9e43551c9fadf76cfcfe65d4d6ed04acd74d1e7deeb"
+    },
+    {
+      "path": "backend/internal/db/investment_disposal_clearing.go",
+      "projections": [],
+      "sha256": "b1e3394cb84335455e675d5be98113cddbb42d7e48d65cb440e0081eaba40c87"
+    },
+    {
+      "path": "backend/internal/db/investment_dividend_correction.go",
+      "projections": [],
+      "sha256": "46abf41c82270e7d74c772066ae66f5957b076c98726dff1853480242946a169"
+    },
+    {
+      "path": "backend/internal/db/investment_dividend_coverage.go",
+      "projections": [],
+      "sha256": "f603aa5862503c389b36b3afb39ab0e13e3effb1871a4dd1599dfc5e71a799b5"
+    },
+    {
+      "path": "backend/internal/db/investment_effective_movements.go",
+      "projections": [],
+      "sha256": "b1a84ff4b22f24d017519a8525f941036a1364770e3bd5397b5892ed7a797966"
+    },
+    {
+      "path": "backend/internal/db/investment_fee_policy.go",
+      "projections": [],
+      "sha256": "5833f5509279d05d46f7baa9b1f91e496f956fa383a598f9d32bf4e203ed7b48"
+    },
+    {
+      "path": "backend/internal/db/investment_foundation.go",
+      "projections": [],
+      "sha256": "35b7f45f0f1ab66b47f55e4d0f91ab34758893503fe26449bacbb15e5e1cf1c4"
+    },
+    {
+      "path": "backend/internal/db/investment_foundation_export.go",
+      "projections": [],
+      "sha256": "df7f7d08a5636ef8da6ce024204917debd225d335602810affe78e43eb64ae3a"
+    },
+    {
+      "path": "backend/internal/db/investment_gain_impact.go",
+      "projections": [],
+      "sha256": "d6af167d8c3093a392b48e737437599b225f466efbfcdec5556e1271491cc174"
+    },
+    {
+      "path": "backend/internal/db/investment_gains_fx.go",
+      "projections": [],
+      "sha256": "7f6edd4f5039e21302d830bed951f9cbe4145e80ed4a4424c18048879e7bb8f6"
+    },
+    {
+      "path": "backend/internal/db/investment_gains_runs.go",
+      "projections": [],
+      "sha256": "b9c6476ed91c1b0bab59756718b520bd21918bd18515bfbb4bcee1fd09cae2ee"
+    },
+    {
+      "path": "backend/internal/db/investment_import_lineage.go",
+      "projections": [],
+      "sha256": "47f7ba7690b87e102db0c724f23f5a34ce82689f306ab72e14d0430c05b0d607"
+    },
+    {
+      "path": "backend/internal/db/investment_income.go",
+      "projections": [],
+      "sha256": "bf70e43850810bdd2aca6b47e16d931045377bb1b926efb422d0adcce91e2bff"
+    },
+    {
+      "path": "backend/internal/db/investment_operation_kinds.go",
+      "projections": [],
+      "sha256": "3a80e7ed0f3e6e94be020e2bdaa6c52a99d37fcb0724655683e5b0c362641fe3"
+    },
+    {
+      "path": "backend/internal/db/investment_payment_in_lieu.go",
+      "projections": [],
+      "sha256": "3f85c24dc414edfbc8b77ac5a0a48b8da0167de3f274e49c37c2ea0923575ec7"
+    },
+    {
+      "path": "backend/internal/db/investment_position_side.go",
+      "projections": [],
+      "sha256": "cbc85b7d3e297e9125c3d395a60d171c10cf0d77721860d6f7a39cb52193057b"
+    },
+    {
+      "path": "backend/internal/db/investment_projected_basis.go",
+      "projections": [],
+      "sha256": "644436dd7b481def9d256cb254857f12d48ff32a7050a39aaa517d99045da403"
+    },
+    {
+      "path": "backend/internal/db/investment_provider_events.go",
+      "projections": [],
+      "sha256": "e5e41e2cd451ce779667749323cb3827518e9efbbcc84445529b20a2954db424"
+    },
+    {
+      "path": "backend/internal/db/investment_replay_closure.go",
+      "projections": [],
+      "sha256": "fb72a8585f55728d3848c8f4157ea656fc8aa648505447fa4dc8587ffb48aa45"
+    },
+    {
+      "path": "backend/internal/db/investment_replay_intents.go",
+      "projections": [],
+      "sha256": "6e0831c7f83ed03cb05cabce161c129e8a8118d0561f66a03176c69ce681c6d1"
+    },
+    {
+      "path": "backend/internal/db/investment_replay_propagation.go",
+      "projections": [],
+      "sha256": "9e6f5d0ce34ca1b5b90e854a93d50a8da5be375f38ad81787138fbc822681b77"
+    },
+    {
+      "path": "backend/internal/db/investment_replay_revisions.go",
+      "projections": [],
+      "sha256": "fce8d7e71beddb65503e552d71159f159ffa8a4d5a3d9cf6b248e16d8b7a3935"
+    },
+    {
+      "path": "backend/internal/db/investment_replay_simulation.go",
+      "projections": [],
+      "sha256": "4bb22b3ab1f38af47032c0b96878f67816b68378979ab7f25d0a2a2f770b6771"
+    },
+    {
+      "path": "backend/internal/db/investment_sale_replacement.go",
+      "projections": [],
+      "sha256": "6d5193f86640f4dd440e1b899ccd8b6c0e5c6178a9ea606699c523c299ec54e0"
+    },
+    {
+      "path": "backend/internal/db/investment_sale_replacement_simulation.go",
+      "projections": [],
+      "sha256": "a70f2e61cde0796fb013c6fd28b9e3c994c0faf096936424f080e75b0dfd445c"
+    },
+    {
+      "path": "backend/internal/db/investment_sale_reversal.go",
+      "projections": [],
+      "sha256": "88caa6c348445e76677e26ef1b09d5fca6fa1676ddbd5b5232cee931c0430e9e"
+    },
+    {
+      "path": "backend/internal/db/investment_share_exchange.go",
+      "projections": [],
+      "sha256": "fdc05d77d675b378f00945782b9b94e868d3813b3b6e88f12771eb2991ee4cdd"
+    },
+    {
+      "path": "backend/internal/db/investment_share_exchange_correction.go",
+      "projections": [],
+      "sha256": "2239a78c784149a9eb8c352c651020b24b8465d3165f1fac0669bee2a12d7b9b"
+    },
+    {
+      "path": "backend/internal/db/investment_short_positions.go",
+      "projections": [],
+      "sha256": "243455415ad1b916d6dec8c2ae9ba78e1c89c8b39ef8465ddef66d358605a475"
+    },
+    {
+      "path": "backend/internal/db/investment_spin_off.go",
+      "projections": [],
+      "sha256": "c10d7ec490eefa3f5008f7031b8751711b76e7996aa2640f0e8b39d1001879ee"
+    },
+    {
+      "path": "backend/internal/db/investment_spin_off_correction.go",
+      "projections": [],
+      "sha256": "edf1bacd39a2aa4a4f9f4fb69d0aca29e31ac20d12004631c3a4974b3c82d82b"
+    },
+    {
+      "path": "backend/internal/db/investment_split.go",
+      "projections": [],
+      "sha256": "94a11314e831fcc73688eb00b8412dbab42c4e891d73ca4ba58c46c42e456012"
+    },
+    {
+      "path": "backend/internal/db/investment_split_correction.go",
+      "projections": [],
+      "sha256": "dab928eb8a406827df802b4c7b2491e322108399508a2f5b6767f381cc8d687a"
+    },
+    {
+      "path": "backend/internal/db/investment_split_read.go",
+      "projections": [],
+      "sha256": "fc1e316fa6ab15ab5600d9b30bf24ba9785f15c004525c0728a976c3ed41d248"
+    },
+    {
+      "path": "backend/internal/db/investment_trade_correction_context.go",
+      "projections": [],
+      "sha256": "c100437c9974b459040332bae7ff5263060b4a85be685a3a439555ff6790928d"
+    },
+    {
+      "path": "backend/internal/db/investment_transfer_correction.go",
+      "projections": [],
+      "sha256": "161a3f91aa29a14a11d51ca3b475aed66ef3a0dd731c00600bfe348af28adf39"
+    },
+    {
+      "path": "backend/internal/db/investment_transfer_in.go",
+      "projections": [],
+      "sha256": "c89a1b99e4859ac0027e445860a57a897c20d2d2b8a49f5d354d2b5d18f69815"
+    },
+    {
+      "path": "backend/internal/db/investment_transfer_internal.go",
+      "projections": [],
+      "sha256": "a5b224efddef06163acc49b29d41ab2a80b53e2f6186cbd1759a18b21cb1cdeb"
+    },
+    {
+      "path": "backend/internal/db/investment_transfer_out.go",
+      "projections": [],
+      "sha256": "ce09bb348dff2e93191e564d891461692be27fb6778f0ae2b3aaa30cf539283c"
+    },
+    {
+      "path": "backend/internal/db/investment_writer.go",
+      "projections": [],
+      "sha256": "55233ad4179d55d1656d3c3a4615ac3e65a126b1758be77b2b23dd61d62855a2"
+    },
+    {
+      "path": "backend/internal/db/investments.go",
+      "projections": [],
+      "sha256": "fc748ff688811a697aaea0fd51e4454a1c73372b72c239b65fbcf98c034c8387"
+    },
+    {
+      "path": "backend/internal/db/ledger.go",
+      "projections": [],
+      "sha256": "4e6c7dec92832b092300ef5d97e743755068501a53d59d9981c0cab1be944868"
+    },
+    {
+      "path": "backend/internal/db/observation_selection.go",
+      "projections": [],
+      "sha256": "8b8d817a611c48241647025e0a2fa1ea5fc2160206cbef8c805d146c5e289fff"
+    },
+    {
+      "path": "backend/internal/db/payees.go",
+      "projections": [],
+      "sha256": "ffdd67ebf801863c864ed7d3fc5dae3fde911851f409f7da2c5e44e3067a1a53"
+    },
+    {
+      "path": "backend/internal/db/pricing.go",
+      "projections": [],
+      "sha256": "414e398e93f9afddb0e9f158823009e000d22f4284f0f0fd3998c66d54408599"
+    },
+    {
+      "path": "backend/internal/db/pricing_management.go",
+      "projections": [],
+      "sha256": "d873f5d497efa90b6410f7144486143d83de9ff5ea9faed350946142ad7477d9"
+    },
+    {
+      "path": "backend/internal/db/pricing_quotes.go",
+      "projections": [],
+      "sha256": "2c8acc3c9fa7e90f39a19a66f743fbb247c69beae1c484e5054cb338fb354966"
+    },
+    {
+      "path": "backend/internal/db/reconciliation.go",
+      "projections": [],
+      "sha256": "0d30a3a73c5a38e9b6648102d41de259ef90a77f91e69b875e92149b7710aebb"
+    },
+    {
+      "path": "backend/internal/db/reconciliation_netting.go",
+      "projections": [],
+      "sha256": "32d6cc6bedb3cbde4dc285af04ef3a7256325eff73a3ca622486be05cdf322ad"
+    },
+    {
+      "path": "backend/internal/db/recovery.go",
+      "projections": [],
+      "sha256": "badeb400f09bfb77fbcd115a1d27f417d8b49add77a345b7bcce5a8547904f9b"
+    },
+    {
+      "path": "backend/internal/db/recurring.go",
+      "projections": [],
+      "sha256": "c676dc2977fe498e3bb92ad1ec41b54abc2a0e180c3f8848f2d2a2ed00dee498"
+    },
+    {
+      "path": "backend/internal/db/recurring_generation.go",
+      "projections": [],
+      "sha256": "15d91c0c2f777e1465727643ccd557ad76dcd02ce1977bc535478854b652d451"
+    },
+    {
+      "path": "backend/internal/db/recurring_review.go",
+      "projections": [],
+      "sha256": "cc1306c9b55df6e8cecb080bdf1da2705512e80a449b46882c31caa206ddca71"
+    },
+    {
+      "path": "backend/internal/db/register_correction_chains.go",
+      "projections": [],
+      "sha256": "ce61e65fe0e322b0871ec87e0c9e7587ec47e2e58f1748aa236a7d942ef808c4"
+    },
+    {
+      "path": "backend/internal/db/reports.go",
+      "projections": [],
+      "sha256": "6c97b0fe891963f7fc4b0713d7dbd99dfc94b8af591b9e71f3bd27dcd6035d1a"
+    },
+    {
+      "path": "backend/internal/db/restore.go",
+      "projections": [],
+      "sha256": "78829c151d5de2cb0f095460b32db98faddc897bc895b97df72cb7b80916550e"
+    },
+    {
+      "path": "backend/internal/db/self_check.go",
+      "projections": [],
+      "sha256": "db74d6b748806e3db69b37aca1fda3421c3b48b866cb0d973af12bf0e16317de"
+    },
+    {
+      "path": "backend/internal/db/self_check_disposal_clearing.go",
+      "projections": [],
+      "sha256": "7cf948fd840e5efceb6125b5134ab9c880792598ea98fcecb3e2bc89b007cd4f"
+    },
+    {
+      "path": "backend/internal/db/self_check_replay.go",
+      "projections": [],
+      "sha256": "93295562b4a462dba22747763582d5d4fd7ee6946f73325d1be5d84029579bf8"
+    },
+    {
+      "path": "backend/internal/db/self_check_share_exchange.go",
+      "projections": [],
+      "sha256": "9e4cadbda7a9efeed784cfda1620ed16edd735e7b16afc69f9f624f675da1b86"
+    },
+    {
+      "path": "backend/internal/db/settings.go",
+      "projections": [],
+      "sha256": "f363afb99607a688e62bfa753a80e8f782bb6c562ed1e0dc46ffcafd53ce6a4f"
+    },
+    {
+      "path": "backend/internal/db/setup.go",
+      "projections": [],
+      "sha256": "d157f1ec52ed3fa0f882a848473ac3c051e5b252c983578d995b50a20059c586"
+    },
+    {
+      "path": "backend/internal/db/sqlite.go",
+      "projections": [],
+      "sha256": "e19eaf83a085219c75d0eda52ba1a09cad334166ab16f954f27a0c7f37e52fad"
+    },
+    {
+      "path": "backend/internal/db/sqlite_errors.go",
+      "projections": [],
+      "sha256": "3c1797e71973fc1bfc2b2f40e92f7923a5ee16b5b2e8797ed705137017ca74a8"
+    },
+    {
+      "path": "backend/internal/db/tags.go",
+      "projections": [],
+      "sha256": "81c36b562f4c40e86593f11a9b2231c5aba15059b6333bdc841d202af8fa3c39"
+    },
+    {
+      "path": "backend/internal/db/transactions_move.go",
+      "projections": [],
+      "sha256": "cbbd267a237817d12fde0597e37eef2d47eede091ae2b46064538c1c3fbf14f3"
+    },
+    {
+      "path": "backend/internal/db/transactions_read.go",
+      "projections": [],
+      "sha256": "89ee10fb7ecfa1d4a65b54912ad6efa5bfde82481db3418e8d438617c7d7e458"
+    },
+    {
+      "path": "backend/internal/db/transactions_reorder.go",
+      "projections": [],
+      "sha256": "93d7f6744b7e4c7227d1bc287e0fe2d90743ec51e480c3a85a2bda2a5eec7dc6"
+    },
+    {
+      "path": "backend/internal/db/transactions_rules.go",
+      "projections": [],
+      "sha256": "a7db32b42a51992bbdee6a455295c519f8f73436e58490d40b02240f1d27fa8c"
+    },
+    {
+      "path": "backend/internal/db/transactions_types.go",
+      "projections": [],
+      "sha256": "92dc273e204bfde917d5d58cf949ecbd37a35967ba9a7a9f4279834329941e2b"
+    },
+    {
+      "path": "backend/internal/db/transactions_write.go",
+      "projections": [],
+      "sha256": "f7e384ca8c3cc13bfa40daa6d7fd216e21ce7f7e527c1a03ec617ba341f9f39c"
+    },
+    {
+      "path": "backend/internal/exact/coefficient.go",
+      "projections": [],
+      "sha256": "c40edbe0569189ee5b620c8dc93eb16190c9e1bcf3003eb80da7d748d0a5cdac"
+    },
+    {
+      "path": "backend/internal/exact/decimal.go",
+      "projections": [],
+      "sha256": "da68d9c531a6449f0dbcfdaf80960facb09899d7d7160d1b55e2794096eb0379"
+    },
+    {
+      "path": "backend/internal/exact/rate.go",
+      "projections": [],
+      "sha256": "0a88a941b732f974247bb9900f7783da6a5b789894c7729985cb5d04758fac41"
+    },
+    {
+      "path": "backend/internal/exact/scaled.go",
+      "projections": [],
+      "sha256": "be151b23f3171eea573cc907fbfe0cd202e09180504388fff114e62d56360fc7"
+    },
+    {
+      "path": "backend/internal/lockfile/lockfile.go",
+      "projections": [],
+      "sha256": "6ad5ede4e802d079fed920d42d3ca6e35a201cf5fd2e7597ba8186fb210d54c7"
+    },
+    {
+      "path": "backend/internal/lockfile/lockfile_other.go",
+      "projections": [],
+      "sha256": "1484e1375d53885848f3b5aedc96c0c170932875025c8d8ba64cbba82769fb97"
+    },
+    {
+      "path": "backend/internal/lockfile/lockfile_unix.go",
+      "projections": [],
+      "sha256": "21d403744e5a950e7a9e0fc8c64ae1a898de19f04878742620b13fceccec10b9"
+    },
+    {
+      "path": "backend/internal/marketdata/dividends.go",
+      "projections": [],
+      "sha256": "b825b08c01fa9e27d1adb50244bf28af2f5677bf5489fcb06a73cabc29c78052"
+    },
+    {
+      "path": "backend/internal/marketdata/ecb.go",
+      "projections": [],
+      "sha256": "9964180b16ba871fa3443c6e51eb223d44b0bc2a09c4730aafae76db7c4aac12"
+    },
+    {
+      "path": "backend/internal/marketdata/exchangerate_api.go",
+      "projections": [],
+      "sha256": "ffa6c0e604fa4227c0f904b13a16344f315985942687e45d3eab8847ae30e5eb"
+    },
+    {
+      "path": "backend/internal/marketdata/frankfurter.go",
+      "projections": [],
+      "sha256": "6d7476f4d467127dd2111a107c0d93fe29a95ea50154a6c6d99378f9156a372b"
+    },
+    {
+      "path": "backend/internal/marketdata/http.go",
+      "projections": [],
+      "sha256": "7a6db4b27db29ff749221ec96ce7cc14d70d7f7cc69e8b8cab2a8b7e05d55a44"
+    },
+    {
+      "path": "backend/internal/marketdata/open_exchange_rates.go",
+      "projections": [],
+      "sha256": "e08c857b519f305d64ce750ff89fcd812242db608997809a6331ca47e6ace55b"
+    },
+    {
+      "path": "backend/internal/marketdata/prices.go",
+      "projections": [],
+      "sha256": "a0fe737f310478a626bf4c905d4f43fd4aaf138bf39b48b5346d3bb318215598"
+    },
+    {
+      "path": "backend/internal/marketdata/types.go",
+      "projections": [],
+      "sha256": "e502ce241c94102626bfdb3209438f23ca43fe421f1a2d24f051f6e177eca5ab"
+    },
+    {
+      "path": "backend/internal/onlinesource/trading212/fetcher.go",
+      "projections": [],
+      "sha256": "a15ff39d3c99aec04a865c7f1791f361df475f72be2a8ccff3cc221ffb6fa1ac"
+    },
+    {
+      "path": "backend/internal/onlinesource/trading212/types.go",
+      "projections": [],
+      "sha256": "1d8b9cc7219f718986bb3162dd0a2cd2da73bcd97a42e4aaf58e72557d63112c"
+    },
+    {
+      "path": "backend/internal/recur/schedule.go",
+      "projections": [],
+      "sha256": "d677755c1dc2f4b6eb44490c8b8d2ba8924f86d83a9a2206e8d7ee7ada672cb0"
+    },
+    {
+      "path": "backend/internal/secretbox/secretbox.go",
+      "projections": [],
+      "sha256": "039fb21c6f2773f8f14b0548557cb54eb82f2c57754e3ccaac4d3999e3feb17a"
+    },
+    {
+      "path": "backend/internal/testdb/testdb.go",
+      "projections": [],
+      "sha256": "b9f99044a4e097c9458f4499031fb809ad1650e1eebec8385426431b5670190c"
+    },
+    {
+      "path": "backend/internal/totp/totp.go",
+      "projections": [],
+      "sha256": "2d208a7e7fe941d0290d13b145428bef867b3eb8a6df2bd4ee4ffdb0a42722f9"
+    },
+    {
+      "path": "backend/internal/web/static.go",
+      "projections": [],
+      "sha256": "14d63e17271c9dc2d67a4f9b6a92f71581377287aef7b34394521c853e760384"
+    },
+    {
+      "path": "backend/migrations/embed.go",
+      "projections": [],
+      "sha256": "c390b0ed4a2b0a6b8474d5749229faa3400fb521ea38608f07a329306e8a0b2f"
+    }
+  ],
+  "ref": "13d15eabd68ed2d3b6177512c9c8fe56c528bbf0"
+}

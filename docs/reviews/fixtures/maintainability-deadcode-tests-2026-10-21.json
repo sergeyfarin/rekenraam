@@ -1,0 +1,100 @@
+[
+	{
+		"Name": "api",
+		"Path": "rekenraam/backend/internal/api",
+		"Funcs": [
+			{
+				"Name": "rawJSONString",
+				"Position": {
+					"File": "internal/api/imports.go",
+					"Line": 1220,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	},
+	{
+		"Name": "app",
+		"Path": "rekenraam/backend/internal/app",
+		"Funcs": [
+			{
+				"Name": "ExportService.SetNowForTest",
+				"Position": {
+					"File": "internal/app/exports.go",
+					"Line": 37,
+					"Col": 25
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "gap",
+				"Position": {
+					"File": "internal/app/investment_capability_matrix_test.go",
+					"Line": 62,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "mergeInvestmentCorrectionImpacts",
+				"Position": {
+					"File": "internal/app/investment_sale_replacement.go",
+					"Line": 166,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "mustParseTestTime",
+				"Position": {
+					"File": "internal/app/investments_service_test.go",
+					"Line": 1471,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	},
+	{
+		"Name": "db",
+		"Path": "rekenraam/backend/internal/db",
+		"Funcs": [
+			{
+				"Name": "ImportRepository.CountStagedRowsByCommitStatus",
+				"Position": {
+					"File": "internal/db/imports.go",
+					"Line": 1755,
+					"Col": 28
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "requirePositionBasisRangeTx",
+				"Position": {
+					"File": "internal/db/investments.go",
+					"Line": 3771,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			},
+			{
+				"Name": "DecodeRegisterCursor",
+				"Position": {
+					"File": "internal/db/transactions_read.go",
+					"Line": 865,
+					"Col": 6
+				},
+				"Generated": false,
+				"Marker": false
+			}
+		]
+	}
+]
