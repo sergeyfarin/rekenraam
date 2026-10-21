@@ -16,6 +16,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/MFAPasswordRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "204":
       description: Multi-factor authentication disabled
       headers:

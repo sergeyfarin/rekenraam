@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { replaceState } from '$app/navigation';
+  import { page } from '$app/state';
   import { createQuery, createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
   import { addDays, formatISO, parseISO } from 'date-fns';
   import StatePanel from '#lib/components/state-panel.svelte';
@@ -16,6 +18,9 @@
   import { formatQuantity } from '#lib/money/format.ts';
   import { displayDate, scheduleLabel } from './recurring-model';
 
+  // SvelteKit 3 keeps shallow URL changes separate from page.url.
+  const filterURL = $derived(page.shallow?.url ?? page.url);
+
   const session = createQuery(() => authSessionQueryOptions());
   const summary = createQuery(() => recurringSummaryQueryOptions());
   let includeArchived = $state(false);
@@ -27,7 +32,13 @@
   const csrf = $derived(session.data?.csrf_token ?? '');
   type DueItem = RecurringDueResponse['items'][number];
   const items = $derived(due.data?.pages.flatMap(p => p.items) ?? []);
-  let tab = $state<'due' | 'templates'>('due');
+  const tab = $derived(filterURL.searchParams.get('tab') === 'templates' ? 'templates' : 'due');
+  function selectTab(value: 'due' | 'templates') {
+    const url = new URL(filterURL.href);
+    if (value === 'due') url.searchParams.delete('tab');
+    else url.searchParams.set('tab', value);
+    void replaceState(url, page.state);
+  }
   let error = $state<unknown>();
   let notice = $state('');
   let pending = $state(false);
@@ -136,8 +147,8 @@
 <div class="space-y-5 p-4 sm:p-6">
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex gap-2" role="group" aria-label={m.recurring_views()}>
-      <button class={button} aria-pressed={tab === 'due'} onclick={() => tab = 'due'}>{m.recurring_due()}</button>
-      <button class={button} aria-pressed={tab === 'templates'} onclick={() => tab = 'templates'}>{m.recurring_templates()}</button>
+      <button class={button} aria-pressed={tab === 'due'} onclick={() => selectTab('due')}>{m.recurring_due()}</button>
+      <button class={button} aria-pressed={tab === 'templates'} onclick={() => selectTab('templates')}>{m.recurring_templates()}</button>
     </div>
     <div class="flex gap-2">
       <button class={button} disabled={pending} onclick={() => action(async () => { await refresh(); })}>{m.recurring_refresh()}</button>
@@ -203,7 +214,7 @@
             {#if !template.archived_at}
               <button class={button} disabled={pending || !csrf} onclick={() => open({kind:'template',template})}>{m.recurring_edit_template()}</button>
               <button class={button} disabled={pending || !csrf} onclick={() => action(async () => {await updateRecurringTemplate(template.id,{enabled:!template.enabled},csrf);notice=m.recurring_saved();})}>{template.enabled?m.recurring_pause():m.recurring_resume()}</button>
-              <button class={button} disabled={pending || !csrf || !template.enabled} onclick={() => action(async () => {const result=await runRecurringNow(template.id,csrf);notice=m.recurring_run_result({generated:new Intl.NumberFormat(locale).format(result.generated),blocked:new Intl.NumberFormat(locale).format(result.blocked)});tab='due';})}>{m.recurring_run_now()}</button>
+              <button class={button} disabled={pending || !csrf || !template.enabled} onclick={() => action(async () => {const result=await runRecurringNow(template.id,csrf);notice=m.recurring_run_result({generated:new Intl.NumberFormat(locale).format(result.generated),blocked:new Intl.NumberFormat(locale).format(result.blocked)});selectTab('due');})}>{m.recurring_run_now()}</button>
               <button class={button} disabled={pending || !csrf} onclick={() => open({kind:'archive',template})}>{m.recurring_archive()}</button>
             {/if}
             <button class={button} onclick={() => inspecting=inspecting?.id===template.id?undefined:template}>{m.recurring_occurrences()}</button>

@@ -37,6 +37,8 @@ patch:
         schema:
           $ref: "../openapi.yaml#/components/schemas/ReconciliationSelectionRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Reconciliation selection updated
       content:

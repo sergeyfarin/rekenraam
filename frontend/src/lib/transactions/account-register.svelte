@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { replaceState } from '$app/navigation';
+  import { page } from '$app/state';
+  import { parseTransactionFilters, writeTransactionFilters } from './transaction-url-filters.ts';
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
   import { createInfiniteQuery, useQueryClient } from '@tanstack/svelte-query';
@@ -32,6 +35,9 @@
   import type { TransactionWorkspaceActions } from './transaction-workspace.svelte';
   import TransactionRowActions from './transaction-row-actions.svelte';
 
+  // SvelteKit 3 keeps shallow URL changes separate from page.url.
+  const filterURL = $derived(page.shallow?.url ?? page.url);
+
   let {
     accountID,
     csrfToken,
@@ -48,7 +54,20 @@
   } = $props();
 
   // Explicit, never blank: the register shows one lifecycle at a time (#223).
-  let filters = $state<TransactionFilters>({ status: 'posted' });
+  const filters = $derived.by<TransactionFilters>(() => {
+    const parsed = parseTransactionFilters(filterURL.searchParams);
+    return {
+      status: parsed.status === 'voided' ? 'voided' : 'posted',
+      afterDate: parsed.afterDate,
+      beforeDate: parsed.beforeDate
+    };
+  });
+
+  function setFilters(value: TransactionFilters) {
+    const url = new URL(filterURL.href);
+    url.search = writeTransactionFilters(filterURL.searchParams, value).toString();
+    void replaceState(url, page.state);
+  }
 
   const locale = $derived(getLocale());
   const queryClient = useQueryClient();
@@ -150,7 +169,7 @@
 <div class="space-y-4">
   <Panel variant="toolbar">
     <TransactionFilterBar
-      bind:filters
+      bind:filters={() => filters, setFilters}
       show={{ status: true, dateRange: true }}
       singleStatus
     />

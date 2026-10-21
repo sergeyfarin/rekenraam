@@ -24,6 +24,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Return of capital reversed
       content:

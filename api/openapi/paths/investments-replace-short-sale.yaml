@@ -18,6 +18,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReplacementRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Buy replaced and dependent long position replayed
       content:

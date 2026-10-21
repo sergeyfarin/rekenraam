@@ -21,6 +21,8 @@ post:
         schema:
           $ref: '../openapi.yaml#/components/schemas/SkipRecurringOccurrenceRequest'
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "204":
       description: Success
     "400":

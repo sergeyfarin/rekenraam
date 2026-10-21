@@ -70,6 +70,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentSplitRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Split journal, sourced ratio, lot effects and any dependent replay recorded atomically
       content:

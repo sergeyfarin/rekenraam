@@ -7,6 +7,7 @@
  */
 import type { ReadonlyURLSearchParams } from '$app/state';
 import type { TransactionListOptions } from '#lib/api/transactions.ts';
+import { isCalendarDate } from '#lib/dates/calendar-date.ts';
 
 export type TransactionQueryFilters = Pick<
   TransactionListOptions,
@@ -23,8 +24,6 @@ export type TransactionQueryFilters = Pick<
   | 'dateBasis'
 >;
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
 const STATUSES = ['draft', 'posted', 'voided'] as const;
 const KINDS = ['ordinary', 'transfer', 'investment', 'opening_balance', 'adjustment'] as const;
 const CATEGORY_TYPES = ['income', 'expense'] as const;
@@ -37,7 +36,7 @@ function positiveInt(raw: string | null): number | undefined {
 }
 
 function isoDate(raw: string | null): string | undefined {
-  return raw !== null && DATE_PATTERN.test(raw) ? raw : undefined;
+  return raw !== null && isCalendarDate(raw) ? raw : undefined;
 }
 
 function oneOf<T extends readonly string[]>(raw: string | null, allowed: T): T[number] | undefined {

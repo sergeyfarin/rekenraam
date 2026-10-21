@@ -14,6 +14,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/HoldingAccountRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Holding account created
       headers:

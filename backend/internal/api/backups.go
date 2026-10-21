@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -162,8 +161,8 @@ func saveBackupPolicy(logger *slog.Logger, authService *app.AuthService, backupS
 		}
 
 		var request backupPolicyRequest
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			writeAPIError(w, http.StatusBadRequest, "VALIDATION_FAILED", "request body is not valid JSON")
+		if err := decodeJSONBody(r, &request); err != nil {
+			writeDecodeError(w, err)
 			return
 		}
 

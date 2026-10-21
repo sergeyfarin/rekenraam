@@ -57,6 +57,8 @@ patch:
         schema:
           $ref: "../openapi.yaml#/components/schemas/PatchImportBatchRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "204":
       description: Import row resolutions updated
     "400":

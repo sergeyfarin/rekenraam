@@ -13,6 +13,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/TransactionLifecycleWriteRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Transaction hidden but retained for recovery
       content:

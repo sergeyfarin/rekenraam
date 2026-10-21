@@ -471,6 +471,12 @@ has actual installations, its migration files are immutable.
   before deciding whether to submit another mutation (#370).
 - Business rules belong in application services.
 - Database access belongs behind repository-style functions or methods.
+- JSON request consumers use the shared strict decoder with a 1 MiB
+  (1,048,576-byte) body cap, including trailing whitespace; applicable operations
+  declare HTTP 413 / `REQUEST_TOO_LARGE` through the shared OpenAPI response.
+  Optional bodies use the optional decoder. Bodyless operations have no implied
+  JSON cap. Multipart imports retain their separate 50 MiB file / 51 MiB request
+  limits and `IMPORT_UPLOAD_TOO_LARGE`; `/imports` documents both branches.
 - Error responses should be structured, consistent, and safe for user display.
 - Error response shape is a JSON envelope: `{"error": {"code": "STABLE_CODE", "message": "human-readable detail"}}`. The `code` field is a stable uppercase string that the frontend translation layer keys off of. Never return raw Go error strings to the client.
 - Initial API error codes are `VALIDATION_FAILED`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `CSRF_INVALID`, `RATE_LIMITED`, `RESOURCE_BUSY`, `LEDGER_OVERFLOW`, `SETUP_REQUIRED`, `SETUP_ALREADY_COMPLETE`, and `INTERNAL_ERROR`.
@@ -649,6 +655,14 @@ has actual installations, its migration files are immutable.
 - All new frontend files must be **TypeScript** (`.ts`, `.svelte` with `<script lang="ts">`). No JavaScript-only files in `frontend/src`.
 - Component state uses **Svelte 5 runes** (`$state`, `$derived`, `$effect`, `$props`). Cross-component and cross-route shared state uses `$state` in `.svelte.ts` module files. No Svelte 4 stores (`writable`, `readable`, `derived` from `svelte/store`) in new code.
 - Frontend modules import shared code through the `#lib/*` subpath import (declared in `frontend/package.json` `imports`) with an explicit file extension: `#lib/money/amount.ts`, `#lib/components/panel.svelte`, `#lib/paraglide/messages.js`; the generated declaration-only `schema.d.ts` is imported as `#lib/api/schema.js`. Route state comes from `$app/state` (`page.url`, `page.params`), whose URL types are read-only — helpers that read query parameters take `ReadonlyURLSearchParams` and copy before writing. SvelteKit and adapter options live in the `sveltekit({...})` call in `frontend/vite.config.ts`; SvelteKit 3 refuses a `svelte.config.js`.
+- URL-backed selections updated through shallow navigation (`replaceState`)
+  read `page.shallow?.url ?? page.url`: SvelteKit 3 keeps the shallow URL
+  separate from the last full navigation. Replace the current history entry
+  when editing these selections, preserve unrelated query parameters, and
+  verify reload, browser Back and shared links through the real screen (#326).
+  Transaction lists share `transaction-url-filters.ts`; impossible calendar
+  dates are dropped using `isCalendarDate`, rather than checking shape alone
+  (#377). A route's account/category/instrument identity remains authoritative.
 
 ## Design Conventions
 

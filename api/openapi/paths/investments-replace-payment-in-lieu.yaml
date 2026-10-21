@@ -22,6 +22,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentPaymentInLieuReplacementRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Payment in lieu replaced
       content:

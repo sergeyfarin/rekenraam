@@ -19,6 +19,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/ReinvestedDividendRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Reinvested dividend recorded
       headers:

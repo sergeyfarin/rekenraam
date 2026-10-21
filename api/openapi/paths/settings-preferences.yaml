@@ -51,6 +51,8 @@ put:
         schema:
           $ref: "../openapi.yaml#/components/schemas/UserPreferencesRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Saved user preferences.
       content:

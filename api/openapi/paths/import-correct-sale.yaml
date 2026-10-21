@@ -30,6 +30,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CorrectTrading212SaleRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Source revision and investment sale replacement committed
       content:

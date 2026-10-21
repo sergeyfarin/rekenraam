@@ -20,6 +20,8 @@ patch:
         schema:
           $ref: "../openapi.yaml#/components/schemas/UpdateImportRuleRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Rule updated
       content:

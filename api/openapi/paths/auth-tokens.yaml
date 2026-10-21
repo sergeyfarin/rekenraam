@@ -76,6 +76,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CreatePersonalAccessTokenRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Credential created and recorded atomically
       headers:
@@ -105,15 +107,6 @@ post:
             $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
     "403":
       description: CSRF or Origin invalid; Bearer credential forbidden
-      headers:
-        X-Request-ID:
-          $ref: "../openapi.yaml#/components/headers/XRequestID"
-      content:
-        application/json:
-          schema:
-            $ref: "../openapi.yaml#/components/schemas/ErrorResponse"
-    "413":
-      description: Request body too large
       headers:
         X-Request-ID:
           $ref: "../openapi.yaml#/components/headers/XRequestID"

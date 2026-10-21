@@ -57,6 +57,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CreateCurrencyRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Currency created
       headers:

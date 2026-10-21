@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { replaceState } from '$app/navigation';
+  import { page } from '$app/state';
+  import { parseTransactionFilters, writeTransactionFilters } from './transaction-url-filters.ts';
   import { otherPostingDays } from './posted-on';
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
@@ -30,6 +33,9 @@
   import type { TransactionWorkspaceActions } from './transaction-workspace.svelte';
   import TransactionRowActions from './transaction-row-actions.svelte';
 
+  // SvelteKit 3 keeps shallow URL changes separate from page.url.
+  const filterURL = $derived(page.shallow?.url ?? page.url);
+
   let {
     categoryID,
     csrfToken,
@@ -42,7 +48,12 @@
     onRowClick?: (tx: TransactionResponse) => void;
   } = $props();
 
-  let filters = $state<TransactionFilters>({});
+  const filters = $derived(parseTransactionFilters(filterURL.searchParams));
+  function setFilters(value: TransactionFilters) {
+    const url = new URL(filterURL.href);
+    url.search = writeTransactionFilters(filterURL.searchParams, value).toString();
+    void replaceState(url, page.state);
+  }
   const locale = $derived(getLocale());
 
   const query = createInfiniteQuery(() =>
@@ -116,7 +127,7 @@
 <div class="space-y-4">
   <Panel variant="toolbar">
     <TransactionFilterBar
-      bind:filters
+      bind:filters={() => filters, setFilters}
       show={{ status: true, dateRange: true, search: true }}
     />
   </Panel>

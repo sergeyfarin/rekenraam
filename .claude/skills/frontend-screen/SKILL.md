@@ -26,6 +26,9 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   `ReadonlyURLSearchParams`, so URL helpers accept that type and copy via
   `new URLSearchParams(params.toString())` before writing. `goto` takes
   `reset: false` (not `keepFocus`/`noScroll`) to keep scroll and focus.
+  Shallow URL selections (`replaceState`) read `page.shallow?.url ?? page.url`;
+  SvelteKit 3 leaves `page.url` at the last full navigation. Use shared
+  transaction URL helpers and real calendar-date validation (#326/#377).
 - SvelteKit/adapter config lives in `sveltekit({...})` in
   `frontend/vite.config.ts`; there is no `svelte.config.js`.
 

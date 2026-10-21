@@ -31,6 +31,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentBasisResolutionRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Basis resolved and every reached position replayed
       content:

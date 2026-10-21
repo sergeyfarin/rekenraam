@@ -18,6 +18,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReplacementRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Sale replaced and long position rebuilt
       content:

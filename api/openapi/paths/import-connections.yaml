@@ -34,6 +34,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CreateImportConnectionRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: >-
         Connection created. The API key is saved but not verified against the

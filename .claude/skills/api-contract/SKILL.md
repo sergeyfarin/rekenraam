@@ -76,6 +76,10 @@ are generated, never hand-written.
   `x-personal-access-token-scope` in OpenAPI. Supplied Authorization never
   falls back to cookies. Token management remains session + CSRF/Origin only;
   creation additionally confirms the password with the shared MFA budget.
+- JSON body readers use the shared capped strict decoder (including optional
+  bodies); document HTTP 413 through `JSONBodyTooLarge`. The limit is 1 MiB
+  including trailing whitespace (#350/#374/#375). Multipart imports keep their
+  50 MiB file / 51 MiB request limits and distinct error code; `/imports` has both.
 - Mutating browser routes: JSON bodies only (unless explicitly documented,
   e.g. multipart import upload), same-origin validation, and session-bound
   CSRF token — the middleware enforces this; don't route around it.

@@ -1,6 +1,8 @@
 post:
   summary: Record an exact manual observation without changing ledger postings
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     '201':
       description: Record an exact manual observation without changing ledger postings
       content:

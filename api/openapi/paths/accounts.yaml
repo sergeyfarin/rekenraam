@@ -90,6 +90,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/AccountRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Account created
       headers:

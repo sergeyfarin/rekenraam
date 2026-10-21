@@ -202,6 +202,9 @@ func decodeJSONBody(r *http.Request, destination any) error {
 	}
 
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			return errRequestTooLarge
+		}
 		return app.ValidationError{Message: "request body must contain a single JSON object"}
 	}
 

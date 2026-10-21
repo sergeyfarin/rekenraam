@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { replaceState } from '$app/navigation';
+  import { page } from '$app/state';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
   import { budgetMonthQueryOptions, budgetQueryKey, setBudgetTarget, setBudgetTreatment, type BudgetTreatment } from '#lib/api/budgets.ts';
@@ -10,23 +12,36 @@
   import { formatQuantity, joinCommodityAmount } from '#lib/money/format.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import { m } from '#lib/paraglide/messages.js';
+  import { parseBudgetFilters } from './budget-url-filters.ts';
 
-  let month = $state('');
-  let currencyID = $state(0);
+  // SvelteKit 3 keeps shallow URL changes separate from page.url.
+  const filterURL = $derived(page.shallow?.url ?? page.url);
+
+  const linkedFilters = $derived(parseBudgetFilters(filterURL.searchParams));
   let drafts = $state<Record<number, string>>({});
   let savingID = $state<number | null>(null);
   let mutationError = $state<unknown>(undefined);
+  const requestedPeriodStart = $derived(linkedFilters.month ? `${linkedFilters.month}-01` : undefined);
+  const query = createQuery(() => budgetMonthQueryOptions(requestedPeriodStart));
+  const month = $derived(linkedFilters.month || query.data?.period_start.slice(0, 7) || '');
   const periodStart = $derived(month ? `${month}-01` : undefined);
-  const query = createQuery(() => budgetMonthQueryOptions(periodStart));
   const session = createQuery(() => authSessionQueryOptions());
   const client = useQueryClient();
-  const currency = $derived(query.data?.commodities.find((item) => item.id === currencyID) ?? query.data?.commodities[0]);
+  const currency = $derived(query.data?.commodities.find((item) => item.id === linkedFilters.currencyID) ?? query.data?.commodities[0]);
+  const currencyID = $derived(currency?.id ?? 0);
   const rows = $derived(query.data?.categories.filter((item) => item.allows_postings) ?? []);
   const selectedTotals = $derived(query.data?.totals.filter((item) => item.amount.commodity_id === currency?.id) ?? []);
 
-  $effect(() => { if (!currencyID && query.data?.commodities[0]) currencyID = query.data.commodities[0].id; });
-  $effect(() => { if (!month && query.data?.period_start) month = query.data.period_start.slice(0, 7); });
   $effect(() => { month; currencyID; drafts = {}; mutationError = undefined; });
+
+  function setFilters(nextMonth: string, nextCurrencyID: number) {
+    const url = new URL(filterURL.href);
+    if (nextMonth) url.searchParams.set('month', nextMonth);
+    else url.searchParams.delete('month');
+    if (nextCurrencyID) url.searchParams.set('currency_id', String(nextCurrencyID));
+    else url.searchParams.delete('currency_id');
+    void replaceState(url, page.state);
+  }
 
   function amountFor(category: (typeof rows)[number]) {
     return category.amounts.find((amount) => amount.commodity_id === currency?.id);
@@ -48,7 +63,7 @@
     savingID = categoryID; mutationError = undefined;
     try {
       const data = await setBudgetTarget({ categoryID, commodityID: currency.id, periodStart, quantityValue: parsed.value, quantityScale: parsed.scale, csrfToken: session.data.csrf_token });
-      client.setQueryData([...budgetQueryKey, periodStart], data);
+      client.setQueryData([...budgetQueryKey, requestedPeriodStart], data);
       const nextDrafts = { ...drafts };
       delete nextDrafts[categoryID];
       drafts = nextDrafts;
@@ -68,8 +83,8 @@
 <div class="mt-6 space-y-6">
   <Panel>
     <div class="grid gap-4 sm:grid-cols-2">
-      <label class="text-sm font-semibold">{m.budgets_month()}<input class="mt-2 w-full rounded-(--radius-control) border border-border bg-surface px-3 py-2" type="month" bind:value={month} /></label>
-      <label class="text-sm font-semibold">{m.budgets_currency()}<select class="mt-2 w-full rounded-(--radius-control) border border-border bg-surface px-3 py-2" bind:value={currencyID}>{#each query.data?.commodities ?? [] as item}<option value={item.id}>{item.code}</option>{/each}</select></label>
+      <label class="text-sm font-semibold">{m.budgets_month()}<input class="mt-2 w-full rounded-(--radius-control) border border-border bg-surface px-3 py-2" type="month" bind:value={() => month, (value) => setFilters(value, currencyID)} /></label>
+      <label class="text-sm font-semibold">{m.budgets_currency()}<select class="mt-2 w-full rounded-(--radius-control) border border-border bg-surface px-3 py-2" bind:value={() => currencyID, (value) => setFilters(month, value)}>{#each query.data?.commodities ?? [] as item}<option value={item.id}>{item.code}</option>{/each}</select></label>
     </div>
   </Panel>
 

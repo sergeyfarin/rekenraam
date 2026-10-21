@@ -28,6 +28,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CreateImportProfileRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Profile saved
       content:

@@ -18,6 +18,19 @@ data. This is bounded evidence on the states each check reaches. It does not
 certify every state of every screen, a native-language review (#102), or
 release readiness.
 
+## Follow-up — 2026-10-21
+
+[#326](https://github.com/sergeyfarin/rekenraam/issues/326) now carries the
+budget month/currency, recurring tab and all three scoped transaction-list
+filters in the URL. [Delivery evidence](url-selection-delivery-2026-10-21.md)
+records reload, Back and shared-link journeys at desktop and phone width.
+Small adjacent #377 repairs impossible calendar-date links. #378 corrects this
+report's instrument-route fixture: it previously used the instrument ID where
+the route expects the commodity ID, and generic headings did not establish
+that the intended instrument rendered. The corrected sweep requires the seeded
+instrument heading and its activity search control. The original matrix below
+is historical; the delivery report records the repeated bounded audit.
+
 ## Scope and baseline
 
 - Baseline: `605563a823af1c425159dc1f394366a93f445802`, clean working tree.

@@ -23,6 +23,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentBuyReversalRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Buy reversed and dependent position replayed
       content:

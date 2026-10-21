@@ -107,7 +107,7 @@ func newImportConnectionsTestHandlerWith(t *testing.T, prober app.ConnectionProb
 		ImportConnection: connectionService,
 	}, HandlerOptions{})
 
-	return handler, database
+	return captureContractAudit(t, handler), database
 }
 
 // --- Request helpers ---

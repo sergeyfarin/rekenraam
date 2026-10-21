@@ -1,0 +1,10 @@
+control,actual
+required_error_envelope,valid baseline accepted; payload and schema mutations rejected
+error_code_enum,valid baseline accepted; payload and schema mutations rejected
+exact_coefficient_string,valid baseline accepted; payload and schema mutations rejected
+canonical_coefficient_pattern,valid baseline accepted; payload and schema mutations rejected
+explicit_null,valid baseline accepted; payload and schema mutations rejected
+nonnullable_message,valid baseline accepted; payload and schema mutations rejected
+patch_omission,valid baseline accepted; payload and schema mutations rejected
+patch_explicit_null,valid baseline accepted; payload and schema mutations rejected
+json_413_status,valid 413 accepted; removed status rejected

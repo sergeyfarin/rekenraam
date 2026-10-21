@@ -13,6 +13,8 @@ post:
       application/json:
         schema: { $ref: '../openapi.yaml#/components/schemas/ReviewImportDividendRequest' }
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     '200':
       description: Reconciliation impact
       content:

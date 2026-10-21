@@ -26,6 +26,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentWriteOffRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Write-off recorded
       headers:

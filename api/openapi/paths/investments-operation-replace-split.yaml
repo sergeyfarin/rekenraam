@@ -23,6 +23,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentSplitReplacementRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Split replaced and holding replayed
       content:

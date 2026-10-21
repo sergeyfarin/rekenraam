@@ -193,6 +193,11 @@ func TestMFAEndpointsRequireAuthentication(t *testing.T) {
 // shared secret so a test can mint codes like an authenticator app.
 func enrollMFAForSession(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string) string {
 	t.Helper()
+	return enrollMFAForSessionWithClock(t, handler, sessionCookie, csrfToken, time.Now)
+}
+
+func enrollMFAForSessionWithClock(t *testing.T, handler http.Handler, sessionCookie *http.Cookie, csrfToken string, now func() time.Time) string {
+	t.Helper()
 
 	enrollRes := postJSONWithSession(t, handler, sessionCookie, csrfToken,
 		"/api/v1/auth/mfa/totp/enroll", `{"password":"test-password"}`)
@@ -204,10 +209,26 @@ func enrollMFAForSession(t *testing.T, handler http.Handler, sessionCookie *http
 
 	// Activate with the previous step's code so the current one is still
 	// unspent — the replay guard would otherwise reject the login codes.
-	code, err := totp.Code(enrollment.Secret, totp.Step(time.Now().UTC())-1)
-	require.NoError(t, err)
-	activateRes := postJSONWithSession(t, handler, sessionCookie, csrfToken,
-		"/api/v1/auth/mfa/totp/activate", `{"code":"`+code+`"}`)
+	step := totp.Step(now().UTC())
+	var activateRes *httptest.ResponseRecorder
+	for attempt := range 3 {
+		code, err := totp.Code(enrollment.Secret, step-1)
+		require.NoError(t, err)
+		activateRes = postJSONWithSession(t, handler, sessionCookie, csrfToken,
+			"/api/v1/auth/mfa/totp/activate", `{"code":"`+code+`"}`)
+		if activateRes.Code == http.StatusOK {
+			break
+		}
+		freshStep := totp.Step(now().UTC())
+		if activateRes.Code != http.StatusUnauthorized || freshStep <= step || attempt == 2 {
+			require.Equal(t, http.StatusOK, activateRes.Code, activateRes.Body.String())
+		}
+		// A previous-step code is correctly refused once it becomes two
+		// steps old. Refresh only that proven clock-boundary failure, never
+		// an arbitrary refusal; each successful activation still runs once.
+		require.JSONEq(t, `{"error":{"code":"UNAUTHENTICATED","message":"invalid authentication code"}}`, activateRes.Body.String())
+		step = freshStep
+	}
 	require.Equal(t, http.StatusOK, activateRes.Code)
 	var codes mfaRecoveryCodesResponse
 	require.NoError(t, json.NewDecoder(activateRes.Body).Decode(&codes))
@@ -276,4 +297,32 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 	}
 
 	return nil
+}
+
+// #376: the previous-step activation code may expire while the test is queued.
+// Only the fixture's first clock sample is stale; the real auth service retains
+// its production clock and must refuse that genuinely expired code.
+func TestMFAEnrollmentFixtureRefreshesExpiredPreviousStep(t *testing.T) {
+	t.Parallel()
+	handler, _ := newSetupTestHandler(t)
+	cookie, csrf := createOwnerSession(t, handler)
+	activations := 0
+	consumer := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/auth/mfa/totp/activate" {
+			activations++
+		}
+		handler.ServeHTTP(w, r)
+	})
+	samples := 0
+	clock := func() time.Time {
+		samples++
+		if samples == 1 {
+			return time.Now().Add(-totp.Period)
+		}
+		return time.Now()
+	}
+	secret := enrollMFAForSessionWithClock(t, consumer, cookie, csrf, clock)
+	require.NotEmpty(t, secret)
+	require.Equal(t, 2, activations, "one expired-code refusal followed by one fresh-code activation")
+	assert.Equal(t, "active", readMFAStatus(t, handler, cookie).Status)
 }

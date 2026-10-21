@@ -25,6 +25,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/PlaceTransactionRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: The transaction as now placed; invalidated_checkpoint_ids lists any checkpoint the override invalidated
       content:

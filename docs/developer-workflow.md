@@ -103,8 +103,13 @@ It requires Python 3.10+, PyYAML and jsonschema (recorded versions: 6.0.1 and
 Run the script with that environment's Python. CSV/JSON output lists all declared
 operations, sampled statuses, required root fields, actual response shapes,
 schema failures, exact consumer names and retained limits. Raw synthetic bodies
-are deleted with the private temporary directory. `--strict` also fails for
-known #350 discrepancies; #370's exception is removed after its repair.
+are deleted with the private temporary directory. `--strict` fails for any
+discrepancy, including retained findings if later added.
+The #350/#370 exceptions are removed after their repairs. The #350 extension
+exercises every mapped capped operation's 413 branch with known and unknown
+content lengths and checks that refusal performs no SQLite writes. The optional
+`REKENRAAM_BODY_INVENTORY=/tmp/body-operations.csv` environment variable on
+`TestCappedJSONOperationsDeclare413` exports the source-to-contract inventory.
 The default fails for new discrepancies and
 failed sensitivity controls. This is a deliberate audit, not a new CI gate or
 complete endpoint certification. Format checks depend on installed optional

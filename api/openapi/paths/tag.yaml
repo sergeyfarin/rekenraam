@@ -78,6 +78,8 @@ patch:
         schema:
           $ref: "../openapi.yaml#/components/schemas/TagRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Tag updated
       headers:

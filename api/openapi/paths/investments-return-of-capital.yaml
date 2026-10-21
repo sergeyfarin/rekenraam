@@ -23,6 +23,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CapitalReturnRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Receipt, basis action, per-lot effects and audit recorded atomically
       content:

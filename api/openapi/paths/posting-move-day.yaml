@@ -27,6 +27,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/MoveRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Posting moved to the adjacent day; a new transaction version was written
       content:

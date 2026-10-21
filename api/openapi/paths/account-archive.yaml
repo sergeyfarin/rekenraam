@@ -15,6 +15,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/AccountLifecycleRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Account archived
       headers:

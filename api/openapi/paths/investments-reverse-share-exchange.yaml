@@ -25,6 +25,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Exchange reversed and both holdings replayed
       content:

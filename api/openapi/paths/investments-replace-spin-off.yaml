@@ -25,6 +25,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/SpinOffReplacementRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Spin-off replaced and holdings replayed
       content:

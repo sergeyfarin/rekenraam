@@ -29,6 +29,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CashStockMergerReplacementRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Merger replaced and holdings replayed
       content:

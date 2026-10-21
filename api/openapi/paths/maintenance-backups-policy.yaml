@@ -10,6 +10,8 @@ put:
         schema:
           $ref: "../openapi.yaml#/components/schemas/BackupPolicyRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: The saved policy
       content:

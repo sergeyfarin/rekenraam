@@ -35,6 +35,10 @@ TESTS = [
  'TestLoginRejectsNonJSONContentType',
  'TestLogoutRejectsInvalidCSRFToken',
  'TestOversizedJSONRequestUsesDocumentedError',
+ 'TestCappedJSONOperationRefusals',
+ 'TestJSONBodyLimitTrailingWhitespace',
+ 'TestOptionalJSONBodyLimitBoundary',
+ 'TestBackupPolicyStrictJSONRefusals',
  'TestReferenceBookProducesItsRegister',
  'TestTransactionValidationAndLifecycleGuards',
  'TestListDeletedTransactionsCursorPagination',
@@ -190,6 +194,17 @@ def negative_controls(contract):
     damaged = deepcopy(patch)
     damaged['properties']['payee_id'] = {'type': 'integer'}
     check('patch_explicit_null', patch, {'payee_id': None}, {'payee_id': 'invalid'}, damaged)
+    # A correct envelope must not hide a missing operation status declaration.
+    operation = contract['paths']['/api/v1/setup/owner']['post']
+    record = {'status': 413, 'content_type': 'application/json', 'body': base64.b64encode(
+        json.dumps({'error': {'code': 'REQUEST_TOO_LARGE', 'message': 'synthetic control'}}).encode()).decode()}
+    if validate_record(operation, record):
+        raise AssertionError('json_413_status: baseline rejected')
+    damaged = deepcopy(operation)
+    del damaged['responses']['413']
+    if validate_record(damaged, record) != ['undocumented status 413']:
+        raise AssertionError('json_413_status: removed status undetected')
+    controls.append(('json_413_status', 'valid 413 accepted; removed status rejected'))
     return controls
 
 
@@ -231,8 +246,6 @@ def validate_record(operation, record):
 
 def known_issue(key, status, error):
     """Narrow retained findings, never general operation-level exclusions."""
-    if key == ('POST', '/api/v1/setup/owner') and status == 413 and error == 'undocumented status 413':
-        return '#350'
     return ''
 
 

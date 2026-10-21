@@ -45,6 +45,8 @@ post:
         schema:
           $ref: '../openapi.yaml#/components/schemas/CreateRecurringTemplateRequest'
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Success
       content:

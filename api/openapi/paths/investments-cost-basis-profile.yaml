@@ -15,6 +15,8 @@ patch:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CostBasisProfileRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Profile updated
       headers:

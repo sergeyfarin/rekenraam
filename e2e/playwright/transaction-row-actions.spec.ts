@@ -307,6 +307,10 @@ test('the account register shows one lifecycle at a time and never offers a post
   await dialog.getByRole('button', { name: 'Unvoid', exact: true }).click();
   await expect.poll(async () => (await readTransaction(page, voided.id)).status).toBe('posted');
   await page.reload();
+  // #326 keeps the chosen lifecycle on reload. The unvoided row has left it.
+  await expect(status).toHaveValue('voided');
+  await expect(row(page, voidedDescription)).toHaveCount(0);
+  await status.selectOption('posted');
   await expect(status).toHaveValue('posted');
   await expect(row(page, voidedDescription)).toBeVisible();
   await expect(row(page, s.description)).toBeVisible();

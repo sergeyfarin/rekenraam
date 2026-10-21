@@ -33,7 +33,7 @@ const routes: Route[] = [
   { name: 'import', path: () => '/app/import', data: true },
   { name: 'dividend repair', path: () => '/app/import/dividends', data: true },
   { name: 'investments', path: () => '/app/investments', data: true },
-  { name: 'instrument', path: (ids) => `/app/investments/instruments/${ids.get('ref_instrument')}`, data: true },
+  { name: 'instrument', path: (ids) => `/app/investments/instruments/${ids.get('REF')}`, data: true },
   { name: 'income coverage', path: () => '/app/investments/income', data: true },
   { name: 'pricing', path: () => '/app/pricing', data: true },
   { name: 'reports', path: () => '/app/reports?view=net-worth&start_date=2026-01-01&end_date=2026-03-31&bucket=month', data: true },
@@ -67,6 +67,11 @@ async function settle(page: Page, path: string) {
   await expect(page).toHaveURL((url) => url.pathname === new URL(path, url).pathname);
   await expect(page.locator('main h1, main h2').first()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'Sign in to continue' })).toHaveCount(0);
+  // #378: a generic not-found heading cannot certify the seeded instrument.
+  if (path.startsWith('/app/investments/instruments/')) {
+    await expect(page.getByRole('heading', { name: /Reference Corp/ })).toBeVisible();
+    await expect(page.locator('main').getByRole('searchbox')).toBeVisible();
+  }
   await page.waitForLoadState('networkidle');
 }
 

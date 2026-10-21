@@ -16,6 +16,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentSplitReplacementRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Plan and impact computed
       content:

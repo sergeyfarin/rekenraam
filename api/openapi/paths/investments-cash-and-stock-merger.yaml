@@ -33,6 +33,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CashStockMergerRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Merger journal, fact, election, realizations, lot effects, links and cash decision recorded atomically
       content:

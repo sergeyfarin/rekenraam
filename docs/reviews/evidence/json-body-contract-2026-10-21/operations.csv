@@ -1,0 +1,333 @@
+method,path,declared_statuses,observed_statuses,unverified_declared_statuses,disposition
+DELETE,/api/v1/accounts/{account_id},204 400 401 403 404 409,,204 400 401 403 404 409,unverified
+DELETE,/api/v1/auth/tokens/{token_id},204 400 401 403 404 500,,204 400 401 403 404 500,unverified
+DELETE,/api/v1/auth/trusted-devices/{device_id},204 400 401 403 404 500,,204 400 401 403 404 500,unverified
+DELETE,/api/v1/categories/{category_id},204 400 401 403 404 409 500,,204 400 401 403 404 409 500,unverified
+DELETE,/api/v1/import-connections/{connection_id},204 401 403 404 503,,204 401 403 404 503,unverified
+DELETE,/api/v1/import-profiles/{profile_id},204 401 403 404,,204 401 403 404,unverified
+DELETE,/api/v1/import-rules/{rule_id},204 401 403 404,,204 401 403 404,unverified
+DELETE,/api/v1/institutions/{institution_id},204 400 401 403 404 409,,204 400 401 403 404 409,unverified
+DELETE,/api/v1/transactions/{transaction_id},204 401 403 404 409,204 409,401 403 404,sampled conformant
+GET,/api/v1/accounts,200 400 401 403 500,,200 400 401 403 500,unverified
+GET,/api/v1/accounts/{account_id},200 401 403 404,,200 401 403 404,unverified
+GET,/api/v1/accounts/{account_id}/reconciliation-checkpoints,200 400 401,200,400 401,sampled conformant
+GET,/api/v1/accounts/{account_id}/register,200 400 401 403,200,400 401 403,sampled conformant
+GET,/api/v1/accounts/{account_id}/versions,200 401 403 404,,200 401 403 404,unverified
+GET,/api/v1/auth/events,200 400 401 500,,200 400 401 500,unverified
+GET,/api/v1/auth/mfa,200 401 500,,200 401 500,unverified
+GET,/api/v1/auth/session,200 500,200,500,sampled conformant
+GET,/api/v1/auth/tokens,200 400 401 403 500,,200 400 401 403 500,unverified
+GET,/api/v1/auth/trusted-devices,200 401 500,,200 401 500,unverified
+GET,/api/v1/books/current,200 401 403 404 500,,200 401 403 404 500,unverified
+GET,/api/v1/budgets/month,200 400 401 422,200,400 401 422,sampled conformant
+GET,/api/v1/categories,200 400 401 403 500,,200 400 401 403 500,unverified
+GET,/api/v1/categories/{category_id},200 400 401 403 404 500,,200 400 401 403 404 500,unverified
+GET,/api/v1/currencies,200 401 403 500,,200 401 403 500,unverified
+GET,/api/v1/currencies/catalog,200 401 403 500,,200 401 403 500,unverified
+GET,/api/v1/exports/bundle.zip,200 400 401,200,400 401,sampled conformant
+GET,/api/v1/exports/ledger.csv,200 400 401,200 400,401,sampled conformant
+GET,/api/v1/exports/preview,200 400 401,,200 400 401,unverified
+GET,/api/v1/exports/qif,200 400 401 422,200,400 401 422,sampled conformant
+GET,/api/v1/forecasts/balance-events,200 400 401 409 422 503,,200 400 401 409 422 503,unverified
+GET,/api/v1/forecasts/balances,200 400 401 422 503,200,400 401 422 503,sampled conformant
+GET,/api/v1/health,200,,200,unverified
+GET,/api/v1/import-connections,200 401 503,,200 401 503,unverified
+GET,/api/v1/import-dividends,200 400 401,,200 400 401,unverified
+GET,/api/v1/import-profiles,200 401,,200 401,unverified
+GET,/api/v1/import-rules,200 401,,200 401,unverified
+GET,/api/v1/imports,200 401,,200 401,unverified
+GET,/api/v1/imports/{batch_id},200 400 401 404,,200 400 401 404,unverified
+GET,/api/v1/imports/{batch_id}/rows/{row_id}/short-candidates,200 401 404 409 500,,200 401 404 409 500,unverified
+GET,/api/v1/imports/{batch_id}/rows/{row_id}/split-candidates,200 401 404 409 500,,200 401 404 409 500,unverified
+GET,/api/v1/institutions,200 400 401 403 500,,200 400 401 403 500,unverified
+GET,/api/v1/institutions/{institution_id},200 400 401 403 404 500,,200 400 401 403 404 500,unverified
+GET,/api/v1/institutions/{institution_id}/versions,200 400 401 403 404 500,,200 400 401 403 404 500,unverified
+GET,/api/v1/investments/automation-rules,200 401 500,,200 401 500,unverified
+GET,/api/v1/investments/cost-basis-profiles,200 401 500,,200 401 500,unverified
+GET,/api/v1/investments/dated-holdings,200 400 401 404 409 422,,200 400 401 404 409 422,unverified
+GET,/api/v1/investments/dividend-defaults,200 400 401 500,,200 400 401 500,unverified
+GET,/api/v1/investments/event-suggestions,200 401 500,,200 401 500,unverified
+GET,/api/v1/investments/events,200 401 500,,200 401 500,unverified
+GET,/api/v1/investments/gains,200 400 401 409 422 500 503,200,400 401 409 422 500 503,sampled conformant
+GET,/api/v1/investments/gains/runs,200 400 401 500,200,400 401 500,sampled conformant
+GET,/api/v1/investments/gains/runs/{id},200 400 401 404 500,200,400 401 404 500,sampled conformant
+GET,/api/v1/investments/gains/statement,200 400 401 422 500 503,200,400 401 422 500 503,sampled conformant
+GET,/api/v1/investments/income-coverage,200 400 401,,200 400 401,unverified
+GET,/api/v1/investments/instruments,200 401 500,,200 401 500,unverified
+GET,/api/v1/investments/instruments/{instrument_id},200 401 404,,200 401 404,unverified
+GET,/api/v1/investments/lots,200 400 401 500,200,400 401 500,sampled conformant
+GET,/api/v1/investments/operations/{operation_id}/cash-in-lieu-lots,200 400 401 404 409 422,,200 400 401 404 409 422,unverified
+GET,/api/v1/investments/positions,200 401 500,200,401 500,sampled conformant
+GET,/api/v1/investments/search,200 401 500,,200 401 500,unverified
+GET,/api/v1/investments/splits,200 400 401 404 500,200 400 404,401 500,sampled conformant
+GET,/api/v1/investments/transactions/{transaction_id}/cash-in-lieu-lots,200 400 401 404 409 422,,200 400 401 404 409 422,unverified
+GET,/api/v1/investments/transactions/{transaction_id}/correction-chain,200 400 401 404,200 404,400 401,sampled conformant
+GET,/api/v1/investments/transactions/{transaction_id}/trade-correction-context,200 400 401 404,200 401 404,400,sampled conformant
+GET,/api/v1/ledger/account-balances,200 400 401 403,200,400 401 403,sampled conformant
+GET,/api/v1/ledger/category-totals,200 400 401 403,,200 400 401 403,unverified
+GET,/api/v1/ledger/net-worth,200 400 401 403,,200 400 401 403,unverified
+GET,/api/v1/maintenance/backups,200 401,200,401,sampled conformant
+GET,/api/v1/maintenance/self-check,200 401,,200 401,unverified
+GET,/api/v1/payees,200 400 401 403,,200 400 401 403,unverified
+GET,/api/v1/payees/{payee_id},200 401 403 404,,200 401 403 404,unverified
+GET,/api/v1/pricing/history,200 400 401 403 404 409 500,,200 400 401 403 404 409 500,unverified
+GET,/api/v1/pricing/policy,200 401 404 500,,200 401 404 500,unverified
+GET,/api/v1/pricing/prices,200 400 401 500,,200 400 401 500,unverified
+GET,/api/v1/pricing/prices/{price_id}/impact,200 400 401 403 404 409 500,,200 400 401 403 404 409 500,unverified
+GET,/api/v1/pricing/refresh/runs,200 401 500,,200 401 500,unverified
+GET,/api/v1/pricing/source-assignments,200 401 500,200,401 500,sampled conformant
+GET,/api/v1/pricing/source-health,200 401 500,,200 401 500,unverified
+GET,/api/v1/pricing/sources,200 401 500,200,401 500,sampled conformant
+GET,/api/v1/pricing/workspace,200 400 401 403 404 409 500,,200 400 401 403 404 409 500,unverified
+GET,/api/v1/reconciliations/{reconciliation_id},200 401 404,,200 401 404,unverified
+GET,/api/v1/recurring/due,200 400 401 404 409 422 503,,200 400 401 404 409 422 503,unverified
+GET,/api/v1/recurring/summary,200 400 401 503,,200 400 401 503,unverified
+GET,/api/v1/recurring/templates,200 400 401 503,200,400 401 503,sampled conformant
+GET,/api/v1/recurring/templates/{template_id},200 400 401 404 503,200,400 401 404 503,sampled conformant
+GET,/api/v1/recurring/templates/{template_id}/occurrences,200 400 401 404 409 422 503,,200 400 401 404 409 422 503,unverified
+GET,/api/v1/reports/cashflow,200 400 401 403 422,200,400 401 403 422,sampled conformant
+GET,/api/v1/reports/net-worth,200 400 401 403 422,200,400 401 403 422,sampled conformant
+GET,/api/v1/reports/spending,200 400 401 403 422,200,400 401 403 422,sampled conformant
+GET,/api/v1/settings/currencies/page-data,200 401 404 500,,200 401 404 500,unverified
+GET,/api/v1/settings/preferences,200 401 500,,200 401 500,unverified
+GET,/api/v1/setup/status,200 500,200,500,sampled conformant
+GET,/api/v1/tags,200 400 401 403 500,,200 400 401 403 500,unverified
+GET,/api/v1/tags/{tag_id},200 400 401 403 404 500,,200 400 401 403 404 500,unverified
+GET,/api/v1/transactions,200 400 401 403,200,400 401 403,sampled conformant
+GET,/api/v1/transactions/deleted,200 401 403,200,401 403,sampled conformant
+GET,/api/v1/transactions/{transaction_id},200 401 403 404,200 404,401 403,sampled conformant
+GET,/api/v1/transactions/{transaction_id}/post/reconciliation-impact,200 400 401 404 409 422 503,,200 400 401 404 409 422 503,unverified
+GET,/api/v1/transactions/{transaction_id}/restore/reconciliation-impact,200 400 401 404 409 422 503,,200 400 401 404 409 422 503,unverified
+GET,/api/v1/transactions/{transaction_id}/soft-delete/reconciliation-impact,200 400 401 404 409 422 503,,200 400 401 404 409 422 503,unverified
+GET,/api/v1/transactions/{transaction_id}/unvoid/reconciliation-impact,200 400 401 404 409 422 503,,200 400 401 404 409 422 503,unverified
+GET,/api/v1/transactions/{transaction_id}/void/reconciliation-impact,200 400 401 404 409 422 503,,200 400 401 404 409 422 503,unverified
+PATCH,/api/v1/accounts/{account_id},200 400 401 403 404 409 413,413,200 400 401 403 404 409,sampled conformant
+PATCH,/api/v1/categories/{category_id},200 400 401 403 404 409 413 500,413,200 400 401 403 404 409 500,sampled conformant
+PATCH,/api/v1/import-connections/{connection_id},200 400 401 403 404 409 413 502 503,413,200 400 401 403 404 409 502 503,sampled conformant
+PATCH,/api/v1/import-profiles/{profile_id},200 400 401 403 404 413,413,200 400 401 403 404,sampled conformant
+PATCH,/api/v1/import-rules/{rule_id},200 400 401 403 404 413,413,200 400 401 403 404,sampled conformant
+PATCH,/api/v1/imports/{batch_id},204 400 401 403 404 409 413,413,204 400 401 403 404 409,sampled conformant
+PATCH,/api/v1/institutions/{institution_id},200 400 401 403 404 413 500,413,200 400 401 403 404 500,sampled conformant
+PATCH,/api/v1/investments/cost-basis-profiles/{profile_id},200 400 401 403 404 413 500,413,200 400 401 403 404 500,sampled conformant
+PATCH,/api/v1/investments/dividend-defaults/{default_id},200 400 401 403 404 413 500,413,200 400 401 403 404 500,sampled conformant
+PATCH,/api/v1/investments/instruments/{instrument_id},200 400 401 403 404 413 500,413,200 400 401 403 404 500,sampled conformant
+PATCH,/api/v1/payees/{payee_id},200 400 401 403 404 409 413,413,200 400 401 403 404 409,sampled conformant
+PATCH,/api/v1/pricing/source-assignments/{assignment_id},200 400 401 403 404 413 500,200 413,400 401 403 404 500,sampled conformant
+PATCH,/api/v1/reconciliations/{reconciliation_id},200 400 401 403 409 413,200 413,400 401 403 409,sampled conformant
+PATCH,/api/v1/recurring/templates/{template_id},200 400 401 403 404 409 413 422 503,200 409 413,400 401 403 404 422 503,sampled conformant
+PATCH,/api/v1/tags/{tag_id},200 400 401 403 404 409 413 500,413,200 400 401 403 404 409 500,sampled conformant
+PATCH,/api/v1/transactions/{transaction_id},200 400 401 403 404 409 413,400 409 413,200 401 403 404,sampled conformant
+POST,/api/v1/accounts,201 400 401 403 413 500,201 413,400 401 403 500,sampled conformant
+POST,/api/v1/accounts/{account_id}/archive,200 401 403 404 409 413,200 413,401 403 404 409,sampled conformant
+POST,/api/v1/accounts/{account_id}/close,200 400 401 403 404 409 413,200 413,400 401 403 404 409,sampled conformant
+POST,/api/v1/accounts/{account_id}/postings/reconciliation-status,200 400 401 403 409 413,200 413,400 401 403 409,sampled conformant
+POST,/api/v1/accounts/{account_id}/postings/{posting_line_id}/move,200 400 404 409 413,413,200 400 404 409,sampled conformant
+POST,/api/v1/accounts/{account_id}/postings/{posting_line_id}/move-day,200 400 404 409 413,413,200 400 404 409,sampled conformant
+POST,/api/v1/accounts/{account_id}/reconciliations/start,201 400 401 403 413,201 413,400 401 403,sampled conformant
+POST,/api/v1/accounts/{account_id}/reopen,200 401 403 404 409 413,413,200 401 403 404 409,sampled conformant
+POST,/api/v1/accounts/{account_id}/restore,200 401 403 404 409 413,413,200 401 403 404 409,sampled conformant
+POST,/api/v1/auth/login,200 400 401 403 409 413 429 500,400 401 413,200 403 409 429 500,sampled conformant
+POST,/api/v1/auth/login/mfa,200 400 401 403 409 413 429 500 503,413,200 400 401 403 409 429 500 503,sampled conformant
+POST,/api/v1/auth/logout,204 401 403 500,403,204 401 500,sampled conformant
+POST,/api/v1/auth/mfa/disable,204 400 401 403 413 429 500,413,204 400 401 403 429 500,sampled conformant
+POST,/api/v1/auth/mfa/recovery-codes,200 400 401 403 409 413 429 500,413,200 400 401 403 409 429 500,sampled conformant
+POST,/api/v1/auth/mfa/totp/activate,200 400 401 403 409 413 429 500 503,413,200 400 401 403 409 429 500 503,sampled conformant
+POST,/api/v1/auth/mfa/totp/enroll,201 400 401 403 409 413 429 500 503,413,201 400 401 403 409 429 500 503,sampled conformant
+POST,/api/v1/auth/tokens,201 400 401 403 413 429 500,413,201 400 401 403 429 500,sampled conformant
+POST,/api/v1/categories,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/categories/{category_id}/disable,200 400 401 403 404 409 413 500,413,200 400 401 403 404 409 500,sampled conformant
+POST,/api/v1/categories/{category_id}/restore,200 400 401 403 404 409 413 500,413,200 400 401 403 404 409 500,sampled conformant
+POST,/api/v1/currencies,201 400 401 403 404 409 413 500,201 413,400 401 403 404 409 500,sampled conformant
+POST,/api/v1/currencies/{commodity_id}/default,200 400 401 403 404 500,,200 400 401 403 404 500,unverified
+POST,/api/v1/import-connections,201 400 401 403 409 413 502 503,413,201 400 401 403 409 502 503,sampled conformant
+POST,/api/v1/import-connections/{connection_id}/refresh,202 401 403 404 409 503,,202 401 403 404 409 503,unverified
+POST,/api/v1/import-profiles,201 400 401 403 413,413,201 400 401 403,sampled conformant
+POST,/api/v1/import-rules,201 400 401 403 413,413,201 400 401 403,sampled conformant
+POST,/api/v1/imports,201 202 400 401 403 404 409 413 500 503,201 400 413,202 401 403 404 409 500 503,sampled conformant
+POST,/api/v1/imports/analyze,200 400 401 403 413,200 400 413,401 403,sampled conformant
+POST,/api/v1/imports/{batch_id}/commit,200 400 401 403 404 409 413 500,413,200 400 401 403 404 409 500,sampled conformant
+POST,/api/v1/imports/{batch_id}/discard,204 400 401 403 404 409,,204 400 401 403 404 409,unverified
+POST,/api/v1/imports/{batch_id}/preview-commit,200 400 401 404 409,,200 400 401 404 409,unverified
+POST,/api/v1/imports/{batch_id}/rows/{row_id}/correct-buy,201 400 401 403 404 409 413,413,201 400 401 403 404 409,sampled conformant
+POST,/api/v1/imports/{batch_id}/rows/{row_id}/correct-buy/reconciliation-impact,200 400 401 404 409 413,413,200 400 401 404 409,sampled conformant
+POST,/api/v1/imports/{batch_id}/rows/{row_id}/correct-sale,201 400 401 403 404 409 413,413,201 400 401 403 404 409,sampled conformant
+POST,/api/v1/imports/{batch_id}/rows/{row_id}/correct-sale/reconciliation-impact,200 400 401 404 409 413,413,200 400 401 404 409,sampled conformant
+POST,/api/v1/imports/{batch_id}/rows/{row_id}/link-short,204 400 401 403 404 409 413 500,413,204 400 401 403 404 409 500,sampled conformant
+POST,/api/v1/imports/{batch_id}/rows/{row_id}/link-split,204 400 401 403 404 409 413 500,413,204 400 401 403 404 409 500,sampled conformant
+POST,/api/v1/imports/{batch_id}/rows/{row_id}/review-dividend,200 400 401 403 404 409 413 422,413,200 400 401 403 404 409 422,sampled conformant
+POST,/api/v1/imports/{batch_id}/rows/{row_id}/review-dividend/reconciliation-impact,200 400 401 404 409 413 422,413,200 400 401 404 409 422,sampled conformant
+POST,/api/v1/institutions,201 400 401 403 404 413 500,201 413,400 401 403 404 500,sampled conformant
+POST,/api/v1/institutions/{institution_id}/archive,200 400 401 403 404 409 413 500,200 413,400 401 403 404 409 500,sampled conformant
+POST,/api/v1/institutions/{institution_id}/restore,200 400 401 403 404 413 500,413,200 400 401 403 404 500,sampled conformant
+POST,/api/v1/investments/buy,201 400 401 403 409 413 500,201 409 413 500,400 401 403,sampled conformant
+POST,/api/v1/investments/buy/reconciliation-impact,200 400 401 409 413 500,413,200 400 401 409 500,sampled conformant
+POST,/api/v1/investments/cash-and-stock-mergers,201 400 401 403 409 413 422 500,201 413,400 401 403 409 422 500,sampled conformant
+POST,/api/v1/investments/cash-and-stock-mergers/preview,200 400 401 409 413 422 500,413,200 400 401 409 422 500,sampled conformant
+POST,/api/v1/investments/cash-in-lieu,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/cash-in-lieu/preview,200 400 401 409 413 500,200 413,400 401 409 500,sampled conformant
+POST,/api/v1/investments/cost-basis-profiles,201 400 401 403 409 413 500,413,201 400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/dividend,201 400 401 403 413 500,201 413,400 401 403 500,sampled conformant
+POST,/api/v1/investments/dividend-defaults,201 400 401 403 413 500,413,201 400 401 403 500,sampled conformant
+POST,/api/v1/investments/dividend/reconciliation-impact,200 400 401 413 500,413,200 400 401 500,sampled conformant
+POST,/api/v1/investments/event-suggestions/fetch,202 400 401 403 413 500,413,202 400 401 403 500,sampled conformant
+POST,/api/v1/investments/event-suggestions/{suggestion_id}/accept,200 400 401 403 404 409 413 500,413,200 400 401 403 404 409 500,sampled conformant
+POST,/api/v1/investments/event-suggestions/{suggestion_id}/ignore,200 401 403 404 500,,200 401 403 404 500,unverified
+POST,/api/v1/investments/event-suggestions/{suggestion_id}/link,200 400 401 403 404 413 500,413,200 400 401 403 404 500,sampled conformant
+POST,/api/v1/investments/gains/runs,201 400 401 403 413 422 500 503,201 413,400 401 403 422 500 503,sampled conformant
+POST,/api/v1/investments/holding-accounts,201 400 401 403 413 500,201 413,400 401 403 500,sampled conformant
+POST,/api/v1/investments/instruments,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/operations/{operation_id}/replace-split,201 400 401 403 404 409 413 422,201 403 413,400 401 404 409 422,sampled conformant
+POST,/api/v1/investments/operations/{operation_id}/replace-split/preview,200 400 401 404 409 413 422,200 413,400 401 404 409 422,sampled conformant
+POST,/api/v1/investments/operations/{operation_id}/reverse-split,201 400 401 403 404 409 413,201 413,400 401 403 404 409,sampled conformant
+POST,/api/v1/investments/operations/{operation_id}/reverse-split/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/payment-in-lieu,201 400 401 403 409 413 422 500,201 413 422,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/payment-in-lieu/reconciliation-impact,200 400 401 413 422 500,200 413,400 401 422 500,sampled conformant
+POST,/api/v1/investments/reinvested-dividend,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/reinvested-dividend/reconciliation-impact,200 400 401 409 413 500,413,200 400 401 409 500,sampled conformant
+POST,/api/v1/investments/return-of-capital,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/return-of-capital/preview,200 400 401 409 413 500,413,200 400 401 409 500,sampled conformant
+POST,/api/v1/investments/sell,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/sell/preview,200 400 401 409 413 500,413,200 400 401 409 500,sampled conformant
+POST,/api/v1/investments/sell/reconciliation-impact,200 400 401 413 500,413,200 400 401 500,sampled conformant
+POST,/api/v1/investments/share-exchanges,201 400 401 403 409 413 422 500,201 413,400 401 403 409 422 500,sampled conformant
+POST,/api/v1/investments/share-exchanges/preview,200 400 401 409 413 422 500,413,200 400 401 409 422 500,sampled conformant
+POST,/api/v1/investments/short-cover,201 400 401 403 409 413 500,201 409 413,400 401 403 500,sampled conformant
+POST,/api/v1/investments/short-cover/preview,200 400 401 409 413 500,200 413,400 401 409 500,sampled conformant
+POST,/api/v1/investments/short-cover/reconciliation-impact,200 400 401 409 413 500,200 413,400 401 409 500,sampled conformant
+POST,/api/v1/investments/short-sale,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/short-sale/reconciliation-impact,200 400 401 413 500,200 413,400 401 500,sampled conformant
+POST,/api/v1/investments/spin-offs,201 400 401 403 409 413 422 500,201 413,400 401 403 409 422 500,sampled conformant
+POST,/api/v1/investments/spin-offs/preview,200 400 401 409 413 422 500,413,200 400 401 409 422 500,sampled conformant
+POST,/api/v1/investments/splits,201 400 401 403 409 413 422 500,201 413,400 401 403 409 422 500,sampled conformant
+POST,/api/v1/investments/splits/preview,200 400 401 409 413 422 500,413,200 400 401 409 422 500,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-basis-resolution,201 400 401 403 404 409 413,201 409 413,400 401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-basis-resolution/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-buy,201 400 401 403 404 409 413 500,201 403 409 413 500,400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-buy/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-cash-and-stock-merger,201 400 401 403 404 409 413 422,201 400 403 409 413,401 404 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-cash-and-stock-merger/preview,200 400 401 404 409 413 422,200 413,400 401 404 409 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu,201 400 401 403 404 409 413,201 403 409 413,400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-cash-in-lieu/preview,200 400 401 404 409 413 422,200 413,400 401 404 409 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-dividend,201 400 401 403 404 409 413,201 409 413,400 401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-dividend/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-payment-in-lieu,201 400 401 403 404 409 413 422,201 409 413,400 401 403 404 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-payment-in-lieu/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-reinvested-dividend,201 400 401 403 404 409 413,201 409 413,400 401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-reinvested-dividend/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-return-of-capital,201 400 401 403 404 409 413 422,201 403 404 409 413,400 401 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-return-of-capital/preview,200 400 401 404 409 413 422,200 413,400 401 404 409 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-sale,201 400 401 403 404 409 413,201 403 409 413,400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-sale/reconciliation-impact,200 400 401 404 409 413,200 409 413,400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-share-exchange,201 400 401 403 404 409 413 422,201 400 403 409 413,401 404 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-share-exchange/preview,200 400 401 404 409 413 422,200 413,400 401 404 409 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-short-cover,201 400 401 403 404 409 413,413,201 400 401 403 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-short-cover/reconciliation-impact,200 400 401 404 409 413,413,200 400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-short-sale,201 400 401 403 404 409 413,201 409 413,400 401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-short-sale/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-spin-off,201 400 401 403 404 409 413 422,201 400 403 409 413,401 404 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-spin-off/preview,200 400 401 404 409 413 422,200 413,400 401 404 409 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-split,201 400 401 403 404 409 413 422,201 403 413,400 401 404 409 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-split/preview,200 400 401 404 409 413 422,200 413,400 401 404 409 422,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-transfer,201 400 401 403 404 409 413,201 403 404 409 413,400 401,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-transfer-in,201 400 401 403 404 409 413,201 409 413,400 401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-transfer-in/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-transfer-out,201 400 401 403 404 409 413,201 413,400 401 403 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-transfer-out/preview,200 400 401 404 409 413,413,200 400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-transfer/preview,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-write-off,201 400 401 403 404 409 413,201 403 409 413,400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/replace-write-off/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/resolve-basis,201 400 401 403 404 409 413,201 409 413,400 401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/resolve-basis/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-basis-resolution,201 400 401 403 404 409 413,201 409 413,400 401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-basis-resolution/reconciliation-impact,200 400 401 404 409 413,200 404 413,400 401 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-buy,201 400 401 403 404 409 413,201 403 409 413,400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-buy/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-cash-and-stock-merger,201 400 401 403 404 409 413,404 409 413,201 400 401 403,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-cash-and-stock-merger/reconciliation-impact,200 400 401 404 409 413,409 413,200 400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-cash-in-lieu,201 400 401 403 404 409 413,201 403 404 413,400 401 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-cash-in-lieu/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-dividend,201 400 401 403 404 409 413,201 400 409 413,401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-dividend/reconciliation-impact,200 400 401 404 409 413,404 413,200 400 401 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-payment-in-lieu,201 400 401 403 404 409 413,201 413,400 401 403 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-payment-in-lieu/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-reinvested-dividend,201 400 401 403 404 409 413,201 409 413,400 401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-reinvested-dividend/reconciliation-impact,200 400 401 404 409 413,200 404 413,400 401 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-return-of-capital,201 400 401 403 404 409 413,413,201 400 401 403 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-return-of-capital/reconciliation-impact,200 400 401 404 409 413,413,200 400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-sale,201 400 401 403 404 409 413,201 403 404 409 413,400 401,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-sale/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-share-exchange,201 400 401 403 404 409 413,404 409 413,201 400 401 403,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-share-exchange/reconciliation-impact,200 400 401 404 409 413,409 413,200 400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-short-cover,201 400 401 403 404 409 413,201 413,400 401 403 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-short-cover/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-short-sale,201 400 401 403 404 409 413,201 409 413,400 401 403 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-short-sale/reconciliation-impact,200 400 401 404 409 413,409 413,200 400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-spin-off,201 400 401 403 404 409 413,404 409 413,201 400 401 403,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-spin-off/reconciliation-impact,200 400 401 404 409 413,409 413,200 400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-split,201 400 401 403 404 409 413,201 404 409 413,400 401 403,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-split/reconciliation-impact,200 400 401 404 409 413,200 409 413,400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-transfer,201 400 401 403 404 409 413,201 403 409 413,400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-transfer/reconciliation-impact,200 400 401 404 409 413,200 409 413,400 401 404,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-write-off,201 400 401 403 404 409 413,201 413,400 401 403 404 409,sampled conformant
+POST,/api/v1/investments/transactions/{transaction_id}/reverse-write-off/reconciliation-impact,200 400 401 404 409 413,200 413,400 401 404 409,sampled conformant
+POST,/api/v1/investments/transfers/external/in,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/transfers/external/in/reconciliation-impact,200 400 401 413 500,413,200 400 401 500,sampled conformant
+POST,/api/v1/investments/transfers/external/out,201 400 401 403 409 413 500,201 403 413,400 401 409 500,sampled conformant
+POST,/api/v1/investments/transfers/external/out/preview,200 400 401 409 413 500,200 413,400 401 409 500,sampled conformant
+POST,/api/v1/investments/transfers/external/out/reconciliation-impact,200 400 401 413 500,200 413,400 401 500,sampled conformant
+POST,/api/v1/investments/transfers/internal,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/transfers/internal/preview,200 400 401 409 413 500,413,200 400 401 409 500,sampled conformant
+POST,/api/v1/investments/transfers/internal/reconciliation-impact,200 400 401 413 500,413,200 400 401 500,sampled conformant
+POST,/api/v1/investments/write-off,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/investments/write-off/preview,200 400 401 409 413 500,413,200 400 401 409 500,sampled conformant
+POST,/api/v1/investments/write-off/reconciliation-impact,200 400 401 413 500,413,200 400 401 500,sampled conformant
+POST,/api/v1/maintenance/backups,202 401 403,202,401 403,sampled conformant
+POST,/api/v1/maintenance/backups/{run_id}/retry,202 400 401 404,,202 400 401 404,unverified
+POST,/api/v1/maintenance/self-check,200 401 403,,200 401 403,unverified
+POST,/api/v1/payees,201 400 401 403 409 413,201 413,400 401 403 409,sampled conformant
+POST,/api/v1/payees/{payee_id}/archive,200 400 401 403 404 413,413,200 400 401 403 404,sampled conformant
+POST,/api/v1/payees/{payee_id}/restore,200 400 401 403 404 413,413,200 400 401 403 404,sampled conformant
+POST,/api/v1/pricing/background-work/{work_id}/retry,200 400 401 403 404 409 500,,200 400 401 403 404 409 500,unverified
+POST,/api/v1/pricing/manual,201 400 401 403 404 409 413 422 500,201 413,400 401 403 404 409 422 500,sampled conformant
+POST,/api/v1/pricing/prices,201 400 401 403 413 500,201 413,400 401 403 500,sampled conformant
+POST,/api/v1/pricing/prices/{price_id}/correct,201 400 401 403 404 409 413 422 500,413,201 400 401 403 404 409 422 500,sampled conformant
+POST,/api/v1/pricing/prices/{price_id}/void,200 400 401 403 404 409 413 500,413,200 400 401 403 404 409 500,sampled conformant
+POST,/api/v1/pricing/quotes/refresh,202 400 401 403 413 500,413,202 400 401 403 500,sampled conformant
+POST,/api/v1/pricing/refresh/run,201 400 401 403 413 500,413,201 400 401 403 500,sampled conformant
+POST,/api/v1/pricing/source-assignments,201 400 401 403 413 500,201 413,400 401 403 500,sampled conformant
+POST,/api/v1/reconciliation-checkpoints/{checkpoint_id}/void,200 400 401 403 404 413,413,200 400 401 403 404,sampled conformant
+POST,/api/v1/reconciliations/{reconciliation_id}/finish,200 400 401 403 409 413,200 413,400 401 403 409,sampled conformant
+POST,/api/v1/reconciliations/{reconciliation_id}/preview,200 400 401 403 409 413,413,200 400 401 403 409,sampled conformant
+POST,/api/v1/reconciliations/{reconciliation_id}/void,200 400 401 403 413,413,200 400 401 403,sampled conformant
+POST,/api/v1/recurring/preview,200 400 401 413 503,413,200 400 401 503,sampled conformant
+POST,/api/v1/recurring/templates,201 400 401 403 409 413 422 503,201 413,400 401 403 409 422 503,sampled conformant
+POST,/api/v1/recurring/templates/{template_id}/archive,200 400 401 403 404 409 413 422 503,200 413,400 401 403 404 409 422 503,sampled conformant
+POST,/api/v1/recurring/templates/{template_id}/retry,200 400 401 403 404 409 413 422 503,413,200 400 401 403 404 409 422 503,sampled conformant
+POST,/api/v1/recurring/templates/{template_id}/run-now,200 400 401 403 404 409 413 422 503,200 413,400 401 403 404 409 422 503,sampled conformant
+POST,/api/v1/recurring/templates/{template_id}/skip,204 400 401 403 404 409 413 422 503,413,204 400 401 403 404 409 422 503,sampled conformant
+POST,/api/v1/setup/book,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/setup/categories,201 401 403 409 500,,201 401 403 409 500,unverified
+POST,/api/v1/setup/currencies,201 400 413,201 413,400,sampled conformant
+POST,/api/v1/setup/owner,201 400 403 409 413 500,201 403 413,400 409 500,sampled conformant
+POST,/api/v1/setup/system-accounts,201 401 403 409,201,401 403 409,sampled conformant
+POST,/api/v1/tags,201 400 401 403 409 413 500,201 413,400 401 403 409 500,sampled conformant
+POST,/api/v1/tags/{tag_id}/archive,200 400 401 403 404 500,200,400 401 403 404 500,sampled conformant
+POST,/api/v1/tags/{tag_id}/restore,200 400 401 403 404 409 500,,200 400 401 403 404 409 500,unverified
+POST,/api/v1/transactions,201 400 401 403 409 413,201 400 409 413,401 403,sampled conformant
+POST,/api/v1/transactions/reconciliation-impact,200 400 413,413,200 400,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/approve,200 400 404 413,413,200 400 404,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/correct,201 400 401 403 404 413,201 400 413,401 403 404,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/move,200 400 404 413,413,200 400 404,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/place,200 400 401 403 404 409 413,413,200 400 401 403 404 409,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/post,200 400 409 413,200 413,400 409,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/reconciliation-impact,200 400 404 413,413,200 400 404,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/restore,200 400 409 413,413,200 400 409,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/soft-delete,200 400 409 413,200 413,400 409,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/unvoid,200 400 409 413,413,200 400 409,sampled conformant
+POST,/api/v1/transactions/{transaction_id}/void,200 400 409 413,200 413,400 409,sampled conformant
+PUT,/api/v1/budgets/accounts/{account_id},200 400 401 403 404 413,200 413,400 401 403 404,sampled conformant
+PUT,/api/v1/budgets/targets/{category_id}/{commodity_id},200 400 401 403 404 413,200 400 413,401 403 404,sampled conformant
+PUT,/api/v1/investments/automation-rules,200 400 401 403 413 500,413,200 400 401 403 500,sampled conformant
+PUT,/api/v1/maintenance/backups/policy,200 400 401 403 413,200 400 413,401 403,sampled conformant
+PUT,/api/v1/pricing/policy,200 400 401 403 413 500,413,200 400 401 403 500,sampled conformant
+PUT,/api/v1/settings/preferences,200 400 401 403 413 500,413,200 400 401 403 500,sampled conformant

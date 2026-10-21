@@ -20,6 +20,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/MoveRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Posting moved; new versions written for affected transaction(s)
       content:

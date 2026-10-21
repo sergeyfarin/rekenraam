@@ -14,13 +14,14 @@ Other questions have exactly one home each:
 Do not restate shipped detail here; when a focus item ships, delete it and
 record the capability in `implemented.md`.
 
-Last reviewed: 2026-10-17 against local `f35cc723` and live GitHub issue
-searches. The documentation and competitor review is recorded in the
+Last reviewed: 2026-10-21 against local `13d15eab` and live GitHub issue
+state. The documentation and competitor review is recorded in the
 [app-state review and audit brief](reviews/app-state-and-audit-plan-2026-10-17.md).
 R16, R11, R17 and R18 have met their bounded delivery bars. **R13 remains the
 next feature initiative; its calculation contract is not yet implementation-ready.**
-The cross-app audit below is planned, not completed. Earlier milestone detail
-lives in the [completed roadmap record](reviews/completed-roadmap-2026-09-27.md)
+The cross-app engineering audit is delivered; owner/release follow-ups remain
+explicit below. **#284 is the current engineering focus.** Earlier milestone
+detail lives in the [completed roadmap record](reviews/completed-roadmap-2026-09-27.md)
 and the [capability ledger](implemented.md).
 
 ## Slice index
@@ -123,150 +124,32 @@ below is execution order, not a chain of hard dependencies.
 
 ### Current focus
 
-1. **Assess the combined app after the recent deliveries.** Execute the twelve
-   bounded audits in the [audit brief](reviews/app-state-and-audit-plan-2026-10-17.md#proposed-audit-coverage).
-   Start with ledger/reconciliation, investment replay/reporting and recovery;
-   then planning/import integration, frontend journeys and deployment/tooling.
-   Record fresh evidence per area and file scoped findings. Audit execution is
-   tracked in [#260](https://github.com/sergeyfarin/rekenraam/issues/260);
-   the first identity/setup/privacy audit is complete with findings in the
-   [2026-10-17 evidence](reviews/setup-auth-privacy-audit-2026-10-17.md).
-   #261/#262/#263/#264 are corrected. The identity-concurrency follow-up #267
-   is complete ([evidence](reviews/identity-concurrency-audit-2026-10-17.md));
-   its findings #285/#286/#287 are fixed and attribution gap #288 is closed.
-   The proxy/shared-browser follow-up #268 is complete
-   ([evidence](reviews/proxy-browser-privacy-audit-2026-10-17.md)); its
-   key-loss sign-in finding #290 (P3) is fixed.
-   The reference-data audit #269 is complete
-   ([evidence](reviews/reference-data-audit-2026-10-17.md)); its findings
-   #291/#292 (P2) and #293/#294/#295 (P3) are fixed.
-   The ledger/reconciliation audit #270 is complete
-   ([evidence](reviews/ledger-reconciliation-audit-2026-10-17.md)); its
-   finding #296 (P2), its follow-ups #304 (P2) and #305 (P3), and #297/#298
-   (P3) are fixed.
-   The import audit #271 is complete
-   ([evidence](reviews/import-audit-2026-10-17.md)); all its findings,
-   #299 (P2) and #300–#303 (P3), are fixed.
-   Investment part 1 #272 has been executed
-   ([evidence](reviews/investment-operations-1-audit-2026-10-18.md)); the
-   operation matrix and exact-figure checks pass with no new financial defect.
-   #308's diagnostic audit is complete
-   ([evidence](reviews/unresolved-basis-diagnostics-audit-2026-10-18.md)) and
-   #313 shipped its incomplete self-check outcome, so supported unknown basis
-   is now disclosed as incomplete coverage rather than a failure. Its
-   bundle acceptance is met by #277's independent reconstruction, and #272 is
-   closed: the literal import round trip is retired (no importer exists),
-   replaced by figure reconstruction plus the exact native-backup round trip.
-   Investment part 2 #273 is complete
-   ([evidence](reviews/investment-operations-2-audit-2026-10-18.md)); its
-   independent transfer/corporate-action/correction register and replay pass,
-   and every sequence ends in a whole-run self-check assertion.
-   #307/#309/#310/#311/#312 are fixed. Acceptance disposition for #272/#273's
-   "self-check clean" item under #313's contract: clean means **no failed
-   check**. A book whose only gap is supported unknown basis reports
-   `incomplete` with that scope named — not an all-passed run, which such a
-   book cannot honestly produce — and resolved controls pass outright. #308
-   verified exact knowledge transitions, all six deliberate-damage controls
-   and 24 native restore comparisons; #313 re-ran them under the new contract.
-   The prices/FX/durable-work audit #274 is complete
-   ([evidence](reviews/pricing-durable-work-audit-2026-10-18.md)); #314's FX
-   continuation loss and #316's FX transport-error key disclosure are fixed.
-   #315's publication-gap starvation is also fixed
-   ([delivery evidence](reviews/fx-coverage-progress-fix-2026-10-18.md)): durable
-   scan cursors and independent bounded date retries preserve progress and fresh
-   demand. Missing/stale coverage disclosure remains; provider availability is
-   not a completeness guarantee.
-   The reports/R18 audit #275 is complete
-   ([evidence](reviews/reports-r18-audit-2026-10-18.md)); exact reference figures,
-   shipped exports, saved schemas and R13 input readiness are verified. #317 is
-   fixed; #318 resolves the original export-acceptance mismatch with separate
-   checks for shipped downloads and live-only API/browser figures. The
-   original unmet criterion is retained in the audit record; comparison/FX
-   downloads remain outside the saved-run contract. R13 can use the inventory.
-   The planning audit #276 is complete
-   ([evidence](reviews/planning-audit-2026-10-18.md)); #319/#320 are fixed.
-   The recovery audit #277 is complete
-   ([evidence](reviews/recovery-audit-2026-10-18.md)): the #266 restore drill
-   matches the register exactly on a fresh instance, every corruption class is
-   detected, and the bundle reconstructs every ledger and investment figure.
-   That completes #272's bundle evidence. #321/#323 are fixed, and #322 is
-   fixed in bundle schema 15: every bundle id now resolves inside the archive.
-   The frontend audit #278 is complete
-   ([evidence](reviews/frontend-audit-2026-10-18.md)):
-   #324/#325/#328/#329/#330 are fixed, and #327 is fixed: every modal is the
-   shared native `ModalDialog`. #326 (URL state, P3) remains open. Its
-   additional sub-view audit #331 is complete
-   ([evidence](reviews/subview-audit-2026-10-19.md)): 65 dialogs, record
-   forms, panels, import review states and editors pass axe, fit and close in
-   both themes and in de/ru at 1280 and 390 px (five more are unreachable on
-   the book, with reasons). #340 (Categories scrolled
-   sideways at desktop) and #341 (hovered warning buttons under AA) are fixed.
-   #342 is fixed: below `lg` the transaction and lot panels hold focus like a
-   dialog. #339 is fixed: account, version and reconciliation dates are
-   bounded and defaulted by the owner's day. #343 is fixed: blank transaction
-   dates, ledger read dates and undated FX source-assignment lookups also
-   use the owner's day.
-   #344 repairs the shared-book transaction lookup and import/lot overflow;
-   explicit long-option and 24-place quantity fixtures pass before/after checks
-   and the complete browser gate ([evidence](reviews/subview-shared-book-fixes-2026-10-19.md)).
-   Its published main CI / E2E Smoke acceptance is recorded on the issue.
-   The deployment audit #279 is complete
-   ([evidence](reviews/deployment-audit-2026-10-18.md)): fresh native/Compose
-   builds, candidate migration 14→18, verified-backup rollback and the focused
-   release preflight pass. #332's private build-context exposure and #338's
-   stale upgrade-evidence references are fixed. Available Debian updates are
-   applied; #337's residual image-advisory engineering review is complete
-   ([evidence](reviews/runtime-image-advisory-audit-2026-10-20.md)), with no
-   reproduced application exploit. #337 remains **blocked on owner release
-   disposition**; release is on hold. Additional audit #354 is complete
-   ([evidence](reviews/native-sqlite-advisory-audit-2026-10-20.md)): #355's NUL
-   search refusal is fixed; #356 retains two reproduced upstream engine
-   correctness defects, blocked on a released driver carrying their fixes
-   ([prerequisite recheck](reviews/sqlite-driver-upgrade-blocker-2026-10-20.md)).
-   No affected financial application consumer was reproduced. Owner
-   deployment/household evidence is additional audit #336, blocked on actual
-   owner evidence. Release gaps now have issues: signing #333 (owner decision)
-   and adoption assets #335. PATs #334 now ship the bounded read-only
-   ledger/report credential contract (ADR 0018); independent adversarial,
-   proxy-leakage and restored-credential audit #357 is complete
-   ([evidence](reviews/personal-access-token-audit-2026-10-20.md)); #359's
-   queued-expiry guard is fixed. Adjacent expiry-admission audit #360 is complete
-   ([evidence](reviews/authentication-expiry-audit-2026-10-20.md)); #362–#365 are
-   fixed. Reservation-window repair and focused consumer audit #366 are complete
-   ([evidence](reviews/throttle-reservation-audit-2026-10-20.md)).
-   The retained gates and owner evidence still govern public announcement.
-   Architecture/quality #280 has been executed
-   ([evidence](reviews/architecture-quality-audit-2026-10-19.md)); #344 resolves
-   the initial browser failures. All four shared gates pass at `af233abb`:
-   backend race, frontend, structural audit and all 352 browser journeys.
-   #260 can cite that final-gate SHA with the report's explicit retained limits.
-   #345–#347
-   (P3 contract/tooling gaps) and #351 (P3 direct-step duplicate detection)
-   are fixed. #352 (P2 full-suite FX test isolation) is fixed in its own
-   worker project, and its full-suite acceptance now passes. #348 (P2) is fixed: the
-   nested-dialog contrast fallback now measures rendered text against its own
-   background, and a black border or icon can no longer hide low-contrast text.
-   #361 fixes the helper's production-CSP coverage gap, with readable and
-   low-contrast controls under the unchanged policy. Additional audit #349 is
-   complete ([evidence](reviews/runtime-api-contract-audit-2026-10-20.md)):
-   425 real responses sample 80 of 332 declared operations, with eight schema
-   sensitivity controls and all unverified operations/statuses inventoried.
-   #367–#369 fix null unions, setup/exclusion disclosure and empty tag arrays.
-   #370 is fixed ([delivery and producer inventory](reviews/mutation-response-enrichment-2026-10-20.md)):
-   investment/correction/reconciliation transaction responses now use the shared
-   batch enrichment owner, with post-commit failure and internal-import receipt
-   controls. The expanded schema sample covers 1,108 responses / 165 operations;
-   #371/#372 are fixed. #350 (P3 capped-JSON HTTP 413 declarations) remains
-   explicit; universal conformity is not claimed. The shared
-   reference register #266 is delivered, with
-   [evidence](reviews/reference-book-audit-2026-10-17.md); #281 is fixed.
-   Fix confirmed integrity/security defects before affected feature slices.
-   This is a bounded review, not a recurring full-suite gate. Each open
-   sub-audit also records maintainability notes, without fixing them.
+1. **Retain the completed engineering audit and its separate release gates.**
+   [#260](https://github.com/sergeyfarin/rekenraam/issues/260)'s twelve original
+   areas and subsequent engineering audits have delivered their bounded evidence;
+   the issue retains unchecked owner items #336/#337. The
+   [audit brief](reviews/app-state-and-audit-plan-2026-10-17.md) and linked dated
+   reports preserve the scenarios, findings, shared-gate SHAs and explicit limits.
+   #326's URL selections and corrected route evidence are also
+   [delivered](reviews/url-selection-delivery-2026-10-21.md).
+   Remaining follow-ups are signing decisions
+   [#333](https://github.com/sergeyfarin/rekenraam/issues/333), actual owner
+   deployment/household evidence
+   [#336](https://github.com/sergeyfarin/rekenraam/issues/336), owner image-advisory
+   disposition [#337](https://github.com/sergeyfarin/rekenraam/issues/337), and the
+   recorded upstream driver-release prerequisite
+   [#356](https://github.com/sergeyfarin/rekenraam/issues/356).
+   Adoption assets [#335](https://github.com/sergeyfarin/rekenraam/issues/335)
+   remain P3 for later. These retained gates do not block #284; release remains
+   on hold and #260 is not closed by this sequencing update.
 2. **Rank evidence-gated refactoring candidates in
-   [#284](https://github.com/sergeyfarin/rekenraam/issues/284).** After the
-   #260 sub-audits report, measure duplication, change amplification and
-   invariants enforced in more than one place. Publish a ranked list with
+   [#284](https://github.com/sergeyfarin/rekenraam/issues/284) — current.** The
+   [first slice](reviews/maintainability-audit-2026-10-21.md) records the fixed-SHA
+   input reconciliation, history measurements and provisional shortlist. Complete
+   duplication/dead-code scans, the invariant and test-ownership inventories,
+   layer/fan-out checks and final investment/reporting dispositions. Use the
+   measured duplication, change amplification and repeated invariant enforcement
+   to publish a ranked list with
    the rejected candidates; each accepted refactor gets its own issue and
    preserves behavior. Refactoring only to change style or file length is
    out of scope. R13 specification can proceed in parallel, but R13

@@ -22,6 +22,8 @@ post:
         type: string
       description: Session-bound CSRF token for authenticated mutating requests.
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "200":
       description: Suggestion ignored
       headers:

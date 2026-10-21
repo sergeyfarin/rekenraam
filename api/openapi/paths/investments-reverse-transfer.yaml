@@ -30,6 +30,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InvestmentSaleReversalRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Transfer reversed and every moved position replayed
       content:

@@ -63,6 +63,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/PayeeRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Payee created
       content:

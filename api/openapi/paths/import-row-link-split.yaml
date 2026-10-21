@@ -26,6 +26,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/ImportLinkSplitRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "204":
       description: Row linked to the recorded split
     "400":

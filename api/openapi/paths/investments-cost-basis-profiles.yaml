@@ -44,6 +44,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/CostBasisProfileRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Profile created
       headers:

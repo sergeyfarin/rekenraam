@@ -116,8 +116,12 @@ records #349's bounded response/status matrix and schema sensitivity controls,
 small fixes #367–#369 and the original retained findings #350/#370.
 [#370's delivery](reviews/mutation-response-enrichment-2026-10-20.md) repairs
 posting enrichment, fixes #371/#372 and expands the schema evidence to 165
-operations; #350 remains open. The audits' explicit unverified
-operations/statuses prevent treating the sample as universal conformity.
+operations. [#350's delivery](reviews/json-body-contract-2026-10-21.md) documents
+and exercises all 215 capped JSON operations' 413 responses, fixes #374/#375
+and the validation-fixture finding #376, and expands the strict schema sample
+to 1,582 responses across 251 operations with nine sensitivity controls.
+The audits' explicit unverified operations/statuses prevent treating the sample
+as universal conformity.
 
 Earlier strategic proposal:
 [2026-09-09 product direction, AI and privacy](reviews/product-direction-ai-privacy-2026-09-09.md).

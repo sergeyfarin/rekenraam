@@ -30,6 +30,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/ImportLinkShortRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "204":
       description: Row linked to the recorded short operation
     "400":

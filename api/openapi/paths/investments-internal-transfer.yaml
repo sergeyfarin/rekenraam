@@ -21,6 +21,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/InternalTransferRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Balanced transfer and linked destination lots recorded atomically
       content:

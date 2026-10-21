@@ -90,6 +90,13 @@ colour; focus remains on the edited row after saving. All copy is translated in
 the six existing locales and all formatting goes through the shared money/date
 boundaries.
 
+The selected month and currency are carried as `month=YYYY-MM` and
+`currency_id=<id>` in the browser URL (#326). Changes replace the current
+history entry and survive reload, Back and sharing. An absent or invalid month
+keeps the API's owner-local default; an absent or unavailable currency uses the
+first currency returned by the composed read model. These are screen selections;
+the API continues to accept `period_start=YYYY-MM-01` without new query semantics.
+
 ## Delivery slices and acceptance fixtures
 
 1. Migration, repository, exact aggregation and account-treatment history.

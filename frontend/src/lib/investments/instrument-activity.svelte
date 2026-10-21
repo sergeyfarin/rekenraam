@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { replaceState } from '$app/navigation';
+  import { page } from '$app/state';
+  import { parseTransactionFilters, writeTransactionFilters } from '#lib/transactions/transaction-url-filters.ts';
   import { createInfiniteQuery } from '@tanstack/svelte-query';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -18,6 +21,9 @@
   // An instrument's activity (#229): postings and cash-dividend operation
   // facts identify its transactions. One request per page
   // through the commodity filter, never a fetch per holding.
+  // SvelteKit 3 keeps shallow URL changes separate from page.url.
+  const filterURL = $derived(page.shallow?.url ?? page.url);
+
   let {
     commodityID,
     csrfToken,
@@ -28,7 +34,12 @@
     actions: TransactionWorkspaceActions;
   } = $props();
 
-  let filters = $state<TransactionFilters>({});
+  const filters = $derived(parseTransactionFilters(filterURL.searchParams));
+  function setFilters(value: TransactionFilters) {
+    const url = new URL(filterURL.href);
+    url.search = writeTransactionFilters(filterURL.searchParams, value).toString();
+    void replaceState(url, page.state);
+  }
   const locale = $derived(getLocale());
 
   const query = createInfiniteQuery(() =>
@@ -55,7 +66,7 @@
 
 <div class="space-y-4">
   <Panel variant="toolbar">
-    <TransactionFilterBar bind:filters show={{ status: true, dateRange: true, search: true }} />
+    <TransactionFilterBar bind:filters={() => filters, setFilters} show={{ status: true, dateRange: true, search: true }} />
   </Panel>
 
   {#snippet dateCell(tx: TransactionResponse)}

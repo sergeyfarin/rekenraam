@@ -22,6 +22,8 @@ post:
         schema:
           $ref: "../openapi.yaml#/components/schemas/ExternalTransferOutRequest"
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     "201":
       description: Security journal, source depletions, links and bridge journal recorded atomically
       content:

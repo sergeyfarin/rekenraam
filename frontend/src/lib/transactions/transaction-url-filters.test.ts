@@ -32,6 +32,18 @@ describe('parseTransactionFilters', () => {
     expect(filters.beforeDate).toBeUndefined();
   });
 
+  it.each(['2026-02-31', '2026-13-01', '2026-00-10', '2026-04-31'])(
+    'drops the impossible calendar date %s rather than sending a 400', (date) => {
+      const filters = parseTransactionFilters(params(`after_date=${date}&before_date=${date}`));
+      expect(filters.afterDate).toBeUndefined();
+      expect(filters.beforeDate).toBeUndefined();
+    }
+  );
+
+  it('keeps a valid leap day', () => {
+    expect(parseTransactionFilters(params('after_date=2028-02-29')).afterDate).toBe('2028-02-29');
+  });
+
   it('keeps an equal-day range, which is a valid single day', () => {
     const filters = parseTransactionFilters(params('after_date=2026-06-01&before_date=2026-06-01'));
     expect(filters.afterDate).toBe('2026-06-01');

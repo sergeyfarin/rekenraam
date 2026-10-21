@@ -1,6 +1,8 @@
 post:
   summary: Atomically retire reviewed dependencies and append a manual same-pair/date replacement
   responses:
+    "413":
+      $ref: "../openapi.yaml#/components/responses/JSONBodyTooLarge"
     '201':
       description: Atomically retire reviewed dependencies and append a manual same-pair/date replacement
       content:

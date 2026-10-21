@@ -589,6 +589,22 @@ paths:
     $ref: "./paths/investments-operation-cash-in-lieu-lots.yaml"
 
 components:
+  responses:
+    JSONBodyTooLarge:
+      description: >-
+        REQUEST_TOO_LARGE — the JSON request body exceeds 1 MiB (1,048,576 bytes),
+        including trailing whitespace. No application mutation is performed.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/XRequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: REQUEST_TOO_LARGE
+              message: request body must not exceed 1 MB
   securitySchemes:
     CookieSession:
       type: apiKey

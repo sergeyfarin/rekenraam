@@ -138,16 +138,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description Request body too large */
-                413: {
-                    headers: {
-                        "X-Request-ID": components["headers"]["XRequestID"];
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Session reauthentication budget exhausted */
                 429: {
                     headers: {
@@ -334,6 +325,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Failed to queue */
                 500: {
                     headers: {
@@ -493,6 +485,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         post?: never;
@@ -573,6 +566,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         post?: never;
@@ -824,6 +818,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Request failed */
                 503: {
                     headers: {
@@ -991,6 +986,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact quantity overflow */
                 422: {
                     headers: {
@@ -1293,6 +1289,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact quantity overflow */
                 422: {
                     headers: {
@@ -1403,6 +1400,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact quantity overflow */
                 422: {
                     headers: {
@@ -2023,6 +2021,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact quantity overflow */
                 422: {
                     headers: {
@@ -2192,6 +2191,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact quantity overflow */
                 422: {
                     headers: {
@@ -2295,6 +2295,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact quantity overflow */
                 422: {
                     headers: {
@@ -2480,6 +2481,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Too many failed login attempts */
                 429: {
                     headers: {
@@ -2586,6 +2588,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Too many failed attempts */
                 429: {
                     headers: {
@@ -2830,6 +2833,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description This session spent its MFA-settings reauthentication budget (five wrong passwords or activation codes, shared across enrollment, activation, disable, and recovery-code regeneration). Refused before verification, even for correct input, until Retry-After elapses; signing in again starts a new session with its own budget. */
                 429: {
                     headers: {
@@ -2949,6 +2953,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description This session spent its MFA-settings reauthentication budget (five wrong passwords or activation codes, shared across enrollment, activation, disable, and recovery-code regeneration). Refused before verification, even for correct input, until Retry-After elapses; signing in again starts a new session with its own budget. */
                 429: {
                     headers: {
@@ -3056,6 +3061,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description This session spent its MFA-settings reauthentication budget (five wrong passwords or activation codes, shared across enrollment, activation, disable, and recovery-code regeneration). Refused before verification, even for correct input, until Retry-After elapses; signing in again starts a new session with its own budget. */
                 429: {
                     headers: {
@@ -3165,6 +3171,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description This session spent its MFA-settings reauthentication budget (five wrong passwords or activation codes, shared across enrollment, activation, disable, and recovery-code regeneration). Refused before verification, even for correct input, until Retry-After elapses; signing in again starts a new session with its own budget. */
                 429: {
                     headers: {
@@ -3626,6 +3633,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -3720,6 +3728,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -4019,6 +4028,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -4272,6 +4282,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -4522,6 +4533,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -4624,6 +4636,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -4720,6 +4733,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -4870,6 +4884,7 @@ export interface paths {
                     };
                     content?: never;
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -5014,6 +5029,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -5254,6 +5270,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         trace?: never;
@@ -5346,6 +5363,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -5432,6 +5450,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -5518,6 +5537,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -5604,6 +5624,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -5816,6 +5837,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -5954,6 +5976,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -6885,6 +6908,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         post?: never;
@@ -7349,6 +7373,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -7619,6 +7644,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -7724,6 +7750,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -7830,6 +7857,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -7992,6 +8020,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -8175,6 +8204,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -8506,6 +8536,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -8649,6 +8680,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         trace?: never;
@@ -8725,6 +8757,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -8805,6 +8838,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -8954,6 +8988,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9224,6 +9259,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         trace?: never;
@@ -9282,6 +9318,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9344,6 +9381,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9406,6 +9444,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9468,6 +9507,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9530,6 +9570,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9610,6 +9651,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9672,6 +9714,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9734,6 +9777,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9826,6 +9870,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9889,6 +9934,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -9941,6 +9987,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -10104,7 +10151,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
-                /** @description IMPORT_UPLOAD_TOO_LARGE — file or multipart resource limits exceeded; no batch is created */
+                /** @description REQUEST_TOO_LARGE for a JSON request body exceeding 1 MiB (1,048,576 bytes), including trailing whitespace. IMPORT_UPLOAD_TOO_LARGE for multipart files exceeding 50 MiB (52,428,800 bytes), entire multipart requests exceeding 51 MiB (53,477,376 bytes), or excessive multipart resources. Neither refusal creates a batch. */
                 413: {
                     headers: {
                         [name: string]: unknown;
@@ -10327,6 +10374,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -10462,6 +10510,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         trace?: never;
@@ -10556,6 +10605,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -10691,6 +10741,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         trace?: never;
@@ -10835,6 +10886,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         trace?: never;
@@ -10985,6 +11037,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact amount exceeds supported range */
                 422: {
                     headers: {
@@ -11076,6 +11129,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact amount exceeds supported range */
                 422: {
                     headers: {
@@ -11254,6 +11308,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -11432,6 +11487,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -11610,6 +11666,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -11712,6 +11769,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -11794,6 +11852,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -11887,6 +11946,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -11969,6 +12029,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -12168,6 +12229,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Provider rejected the API key */
                 502: {
                     headers: {
@@ -12339,6 +12401,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Provider rejected the new API key */
                 502: {
                     headers: {
@@ -12515,6 +12578,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -12590,6 +12654,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -12714,6 +12779,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         trace?: never;
@@ -12790,6 +12856,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -12870,6 +12937,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -12941,6 +13009,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -13021,6 +13090,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -13316,6 +13386,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Coefficient exceeds stored price range */
                 422: {
                     headers: {
@@ -13530,6 +13601,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Coefficient exceeds stored price range */
                 422: {
                     headers: {
@@ -13686,6 +13758,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -13795,6 +13868,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -13986,6 +14060,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -14112,6 +14187,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -14212,6 +14288,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -14292,6 +14369,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -14706,6 +14784,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -14849,6 +14928,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -14929,6 +15009,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -15193,6 +15274,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -15293,6 +15375,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -15493,6 +15576,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -15593,6 +15677,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -15683,6 +15768,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -15777,6 +15863,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -15879,6 +15966,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -15960,6 +16048,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -16052,6 +16141,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -16133,6 +16223,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -16226,6 +16317,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -16308,6 +16400,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -16400,6 +16493,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -16481,6 +16575,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -16568,6 +16663,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -16642,6 +16738,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -16739,6 +16836,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -16823,6 +16921,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -16907,6 +17006,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -16995,6 +17095,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -17065,6 +17166,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -17155,6 +17257,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -17225,6 +17328,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -17304,6 +17408,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -17394,6 +17499,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -17464,6 +17570,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -17543,6 +17650,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -17822,6 +17930,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -17904,6 +18013,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -17996,6 +18106,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -18077,6 +18188,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact value exceeds supported range */
                 422: {
                     headers: {
@@ -18167,6 +18279,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -18246,6 +18359,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -18336,6 +18450,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -18415,6 +18530,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -18569,6 +18685,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE — a lot's split quantity needs more decimals than the security permits; the split is never rounded */
                 422: {
                     headers: {
@@ -18657,6 +18774,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE */
                 422: {
                     headers: {
@@ -18756,6 +18874,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE — a lot's new quantity needs more decimals than the new instrument permits; the exchange is never rounded */
                 422: {
                     headers: {
@@ -18844,6 +18963,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE */
                 422: {
                     headers: {
@@ -18943,6 +19063,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE — a lot's new quantity needs more decimals than the new instrument permits; never rounded */
                 422: {
                     headers: {
@@ -19031,6 +19152,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE */
                 422: {
                     headers: {
@@ -19130,6 +19252,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE — a lot's new quantity needs more decimals than the new instrument permits; the distribution is never rounded */
                 422: {
                     headers: {
@@ -19218,6 +19341,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE */
                 422: {
                     headers: {
@@ -19465,6 +19589,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -19547,6 +19672,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -19639,6 +19765,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -19720,6 +19847,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -19812,6 +19940,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable at the new instrument's scale (INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE) */
                 422: {
                     headers: {
@@ -19902,6 +20031,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable */
                 422: {
                     headers: {
@@ -20003,6 +20133,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -20084,6 +20215,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -20176,6 +20308,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable at the new instrument's scale (INVESTMENT_SPIN_OFF_FRACTION_UNREPRESENTABLE) */
                 422: {
                     headers: {
@@ -20266,6 +20399,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable */
                 422: {
                     headers: {
@@ -20367,6 +20501,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -20448,6 +20583,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -20540,6 +20676,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable at the new instrument's scale (INVESTMENT_EXCHANGE_FRACTION_UNREPRESENTABLE) */
                 422: {
                     headers: {
@@ -20630,6 +20767,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable */
                 422: {
                     headers: {
@@ -20731,6 +20869,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -20812,6 +20951,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -20904,6 +21044,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Invalid entitlement, unknown basis, or coefficient range exceeded */
                 422: {
                     headers: {
@@ -20994,6 +21135,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Invalid entitlement, unknown basis, or coefficient range exceeded */
                 422: {
                     headers: {
@@ -21095,6 +21237,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable at the security's scale (INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE) */
                 422: {
                     headers: {
@@ -21185,6 +21328,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable */
                 422: {
                     headers: {
@@ -21286,6 +21430,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -21367,6 +21512,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -21459,6 +21605,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -21540,6 +21687,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -21632,6 +21780,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error. A display lookup can fail after the correction commits; refresh the canonical transaction/correction-chain reads before deciding whether to submit another write. This status does not promise that the financial operation was rolled back. */
                 500: {
                     headers: {
@@ -21723,6 +21872,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -21816,6 +21966,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -21898,6 +22049,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -21991,6 +22143,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22073,6 +22226,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22166,6 +22320,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22248,6 +22403,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22341,6 +22497,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22423,6 +22580,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22516,6 +22674,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22598,6 +22757,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22691,6 +22851,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22773,6 +22934,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22866,6 +23028,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -22948,6 +23111,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23041,6 +23205,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23123,6 +23288,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23215,6 +23381,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23296,6 +23463,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23388,6 +23556,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23469,6 +23638,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23561,6 +23731,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23642,6 +23813,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23734,6 +23906,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23815,6 +23988,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23907,6 +24081,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -23988,6 +24163,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -24080,6 +24256,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description The holding is no longer short at the close before the ex-date (INVESTMENT_PAYMENT_IN_LIEU_NOT_SHORT) */
                 422: {
                     headers: {
@@ -24170,6 +24347,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -24262,6 +24440,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -24343,6 +24522,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -24435,6 +24615,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -24516,6 +24697,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -24604,6 +24786,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -24688,6 +24871,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -24772,6 +24956,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -24859,6 +25044,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -24956,6 +25142,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -25040,6 +25227,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -25114,6 +25302,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -25188,6 +25377,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -25285,6 +25475,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description The holding was not short the instrument at the close before the ex-date (INVESTMENT_PAYMENT_IN_LIEU_NOT_SHORT) */
                 422: {
                     headers: {
@@ -25369,6 +25560,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description The holding was not short the instrument at the close before the ex-date */
                 422: {
                     headers: {
@@ -25453,6 +25645,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -25537,6 +25730,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -25760,6 +25954,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -25941,6 +26136,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -26023,6 +26219,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Failed to queue */
                 500: {
                     headers: {
@@ -26146,6 +26343,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Internal server error */
                 500: {
                     headers: {
@@ -26394,6 +26592,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Exact amount exceeds supported precision */
                 422: {
                     headers: {
@@ -26693,6 +26892,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -26774,6 +26974,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
             };
         };
         delete?: never;
@@ -26866,6 +27067,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable at the security's scale (INVESTMENT_SPLIT_FRACTION_UNREPRESENTABLE) */
                 422: {
                     headers: {
@@ -26956,6 +27158,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorResponse"];
                     };
                 };
+                413: components["responses"]["JSONBodyTooLarge"];
                 /** @description Corrected ratio not representable */
                 422: {
                     headers: {
@@ -33526,7 +33729,26 @@ export interface components {
             source_evidence?: Record<string, never>;
         };
     };
-    responses: never;
+    responses: {
+        /** @description REQUEST_TOO_LARGE — the JSON request body exceeds 1 MiB (1,048,576 bytes), including trailing whitespace. No application mutation is performed. */
+        JSONBodyTooLarge: {
+            headers: {
+                "X-Request-ID": components["headers"]["XRequestID"];
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "REQUEST_TOO_LARGE",
+                 *         "message": "request body must not exceed 1 MB"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+    };
     parameters: {
         InstitutionID: number;
         AccountID: number;
@@ -33649,6 +33871,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            413: components["responses"]["JSONBodyTooLarge"];
             /** @description Internal server error */
             500: {
                 headers: {
