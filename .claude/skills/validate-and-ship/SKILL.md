@@ -659,7 +659,10 @@ non-trivial diff (yours or reviewed):
     and the danger/warning confirmation buttons drew foreground text on their
     own fill (1.6:1 dark) (#324). Use only `@theme inline` tokens; text on a
     danger or warning fill is `text-background`. Named check:
-    `src/lib/theme-tokens.test.ts` scans every `.svelte`/`.ts` source.
+    `src/lib/theme-tokens.test.ts` parses every `.svelte`/`.ts` source and
+    reads markup attribute values (not `style`), `class:` directives and
+    string/template literals; CSS, comments and text are skipped, so
+    `border-radius: 0;` is not a colour (#462).
 
 53. **Sweep that audits the sign-in screen** — every Playwright test has its
     own browser context, so a spec that seeds in one test and visits routes in
