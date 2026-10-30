@@ -8,7 +8,7 @@
   import { accountsQueryOptions, type AccountResponse } from '#lib/api/accounts.ts';
   import { currenciesQueryOptions, type CurrencyResponse } from '#lib/api/currencies.ts';
   import { formatEditableAmount } from '#lib/money/amount.ts';
-  import { formatScaledValue } from '#lib/investments/investment-labels.ts';
+  import { costBasisMethodLabel, formatScaledValue } from '#lib/investments/investment-labels.ts';
   import { parseMagnitude, type AmountFieldError } from '#lib/investments/form-amounts.ts';
   import { correctionLotDrafts, parseCorrectionLotChoices, type CorrectionLotDraft } from '#lib/investments/trade-economics.ts';
   import ReconciliationConfirm from '#lib/investments/reconciliation-confirm.svelte';
@@ -75,15 +75,6 @@
   });
   const canSubmit = $derived(!!reason.trim() && !!writeOffReason.trim() && transactionDate !== '' &&
     holdingAccountID !== '' && quantityStr.trim() !== '');
-
-  function methodLabel(value: Method): string {
-    switch (value) {
-      case 'fifo': return m.transactions_investment_replace_method_fifo();
-      case 'lifo': return m.transactions_investment_replace_method_lifo();
-      case 'average_cost': return m.transactions_investment_replace_method_average();
-      case 'specific_lot': return m.transactions_investment_replace_method_specific();
-    }
-  }
 
   function amountErrorMessage(error: AmountFieldError): string {
     switch (error) {
@@ -217,7 +208,7 @@
     <select id="write-off-correction-method" bind:value={method}
       class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground">
       {#each methods as value (value)}
-        <option {value}>{methodLabel(value)}</option>
+        <option {value}>{costBasisMethodLabel(value)}</option>
       {/each}
     </select>
     {#if moved}

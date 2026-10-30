@@ -13,6 +13,7 @@
     type ReconciliationImpactResponse
   } from '#lib/api/investments.ts';
   import { parseMagnitude } from '#lib/investments/form-amounts.ts';
+  import { COST_BASIS_METHODS, costBasisMethodLabel } from '#lib/investments/investment-labels.ts';
   import { parseCorrectionLotChoices } from '#lib/investments/trade-economics.ts';
   import { invalidateInvestmentReads } from '#lib/investments/invalidate.ts';
   import {
@@ -96,14 +97,6 @@
   function clearPreview() { preview = null; formError = undefined; }
   function changeDate() { holdingKey = ''; quantity = ''; quantities = {}; clearPreview(); }
   function changeHolding() { quantity = ''; quantities = {}; clearPreview(); }
-  function methodLabel(value: string): string {
-    switch (value) {
-      case 'fifo': return m.transactions_investment_replace_method_fifo();
-      case 'lifo': return m.transactions_investment_replace_method_lifo();
-      case 'average_cost': return m.transactions_investment_replace_method_average();
-      default: return m.transactions_investment_replace_method_specific();
-    }
-  }
   function money(value: string, scale: number): string {
     return formatExactMoney(value, scale, basisCurrency?.standard_scale ?? 2, locale);
   }
@@ -237,7 +230,7 @@
             <select id="write-off-method" bind:value={method} onchange={() => { quantities = {}; clearPreview(); }}
               class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm">
               <option value={undefined}>{m.investments_cash_in_lieu_default_method()}</option>
-              {#each ['fifo', 'lifo', 'average_cost', 'specific_lot'] as choice}<option value={choice}>{methodLabel(choice)}</option>{/each}
+              {#each COST_BASIS_METHODS as choice (choice)}<option value={choice}>{costBasisMethodLabel(choice)}</option>{/each}
             </select>
           </div>
           {#if method === 'specific_lot'}
@@ -271,7 +264,7 @@
             <p class="text-sm font-semibold">{m.investments_gain_unresolved()}</p>
             <p class="text-xs text-muted">{m.investments_write_off_unresolved_help()}</p>
           {/if}
-          <p class="text-xs text-muted">{m.investments_sell_preview_method()}: {methodLabel(preview.result.cost_basis_method)}</p>
+          <p class="text-xs text-muted">{m.investments_sell_preview_method()}: {costBasisMethodLabel(preview.result.cost_basis_method)}</p>
           <ul class="space-y-1 text-sm">
             {#each preview.result.allocations as allocation (allocation.lot_id)}
               <li>{m.investments_cash_in_lieu_allocation({lot: String(allocation.lot_id), quantity: formatQuantity(allocation.quantity_value, allocation.quantity_scale, locale),

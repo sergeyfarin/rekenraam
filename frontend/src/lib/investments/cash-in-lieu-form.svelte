@@ -9,6 +9,7 @@
     type CashInLieuRequest, type CashInLieuPreviewResponse, type InvestmentTradeCorrectionContextResponse } from '#lib/api/investments.ts';
   import { parseMagnitude, parseMoneyMagnitude } from './form-amounts';
   import { parseCorrectionLotChoices } from './trade-economics';
+  import { COST_BASIS_METHODS, costBasisMethodLabel } from './investment-labels';
   import { compareScaledAmounts, formatEditableAmount } from '#lib/money/amount.ts';
   import { formatExactMoney, formatQuantity } from '#lib/money/format.ts';
   import { invalidateInvestmentReads } from './invalidate';
@@ -66,12 +67,6 @@
   const gainImpact = $derived(preview && hasGainChanges(preview.result.impact.gain_impact) ? preview.result.impact.gain_impact : null);
   const gainRows = $derived(gainImpact ? gainImpactRows(gainImpact.changes,gainImpactCurrency(currencyMap),locale) : []);
 
-  function costBasisMethodLabel(value:string) {
-    if (value==='fifo') return m.transactions_investment_replace_method_fifo();
-    if (value==='lifo') return m.transactions_investment_replace_method_lifo();
-    if (value==='average_cost') return m.transactions_investment_replace_method_average();
-    return m.transactions_investment_replace_method_specific();
-  }
   function clearPreview() {preview=null;formError=undefined;}
   function selectCash() {
     const account=accounts.find(a => a.id===Number(cashAccountID));
@@ -154,7 +149,7 @@
       <div><label for="cil-cash" class="mb-1 block text-sm font-medium text-foreground">{m.investments_capital_return_cash_account()}</label><select id="cil-cash" bind:value={cashAccountID} required onchange={selectCash} class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"><option value="">{m.investments_form_select_account()}</option>{#each cashAccounts as a(a.id)}<option value={String(a.id)}>{a.name}</option>{/each}</select></div>
       <div><label for="cil-currency" class="mb-1 block text-sm font-medium text-foreground">{m.investments_trade_settlement_currency()}</label><select id="cil-currency" bind:value={currencyID} required onchange={clearPreview} class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"><option value="">{m.accounts_field_choose_currency()}</option>{#each currencies as c(c.id)}<option value={String(c.id)}>{c.code}</option>{/each}</select></div>
       <div><label for="cil-proceeds" class="mb-1 block text-sm font-medium text-foreground">{m.investments_cash_in_lieu_proceeds()}</label><input id="cil-proceeds" type="text" inputmode="decimal" bind:value={proceeds} required oninput={clearPreview} class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground" /></div>
-      <div><label for="cil-method" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_cost_basis_method()}</label><select id="cil-method" bind:value={method} onchange={clearPreview} class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"><option value={undefined}>{m.investments_cash_in_lieu_default_method()}</option>{#each ['fifo','lifo','average_cost','specific_lot'] as choice}<option value={choice}>{costBasisMethodLabel(choice)}</option>{/each}</select></div>
+      <div><label for="cil-method" class="mb-1 block text-sm font-medium text-foreground">{m.investments_form_cost_basis_method()}</label><select id="cil-method" bind:value={method} onchange={clearPreview} class="w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"><option value={undefined}>{m.investments_cash_in_lieu_default_method()}</option>{#each COST_BASIS_METHODS as choice (choice)}<option value={choice}>{costBasisMethodLabel(choice)}</option>{/each}</select></div>
       {#if method==='specific_lot'}
         {#if lotsQuery.isPending}<p role="status" class="text-sm text-muted">{m.investments_loading()}</p>
         {:else if lotsQuery.isError}<APIFormError error={lotsQuery.error} />
