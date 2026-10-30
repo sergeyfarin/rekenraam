@@ -44,10 +44,11 @@ type fxRefreshOutcome struct {
 }
 
 type fxRefreshCounters struct {
-	Total     int
-	Succeeded int
-	Failed    int
-	LastError string
+	Total             int
+	Succeeded         int
+	Failed            int
+	LastError         string
+	PersistenceFailed bool
 }
 
 type fxDerivationMetadata struct {
@@ -116,38 +117,30 @@ func (s *PricingService) runFXRefresh(ctx context.Context, ownerUserID int64, so
 			continue
 		}
 		counters.Total++
-		outcome, err := s.refreshFXTargetWithDemand(ctx, ownerUserID, target, policy, sourceID, "", startedAt, demand)
-		if err != nil {
+		outcome, refreshErr := s.refreshFXTargetWithDemand(ctx, ownerUserID, target, policy, sourceID, "", startedAt, demand)
+		itemStatus, itemError := "succeeded", ""
+		if refreshErr != nil {
 			counters.Failed++
+			counters.LastError = refreshErr.Error()
+			itemStatus, itemError = "failed", refreshErr.Error()
+		} else {
+			counters.Succeeded++
+			if outcome.Skipped {
+				itemStatus = "skipped"
+			}
+		}
+		if err := s.recordFXRefreshTargetOutcome(ctx, runRecord.ID, target, itemStatus, outcome, itemError, runSourceID, startedAt); err != nil {
+			// A stored observation is durable evidence even when its item or
+			// health row cannot be written. Stop the sweep, finish the run as
+			// failed, and surface the first persistence error to the caller.
 			counters.LastError = err.Error()
-			_ = s.recordFXRefreshItem(ctx, runRecord.ID, target, "failed", 0, "", err.Error(), startedAt)
-			_ = s.repository.UpsertRefreshState(ctx, db.PricingRefreshStateSpec{
-				BookID:           BookID,
-				BaseCommodityID:  target.Base.ID,
-				QuoteCommodityID: target.Quote.ID,
-				SourceID:         runSourceID,
-				LastAttemptAt:    startedAt.Format(time.RFC3339),
-				LastError:        err.Error(),
-				UpdatedAt:        startedAt.Format(time.RFC3339),
-			})
-			continue
+			counters.PersistenceFailed = true
+			run, finishErr := s.finishFXRefreshRun(ctx, runRecord.ID, counters)
+			if finishErr != nil {
+				return PricingRefreshRun{}, finishErr
+			}
+			return run, err
 		}
-
-		counters.Succeeded++
-		itemStatus := "succeeded"
-		if outcome.Skipped {
-			itemStatus = "skipped"
-		}
-		_ = s.recordFXRefreshItem(ctx, runRecord.ID, target, itemStatus, outcome.Observation.ID, outcome.Observation.ProviderObservationID, "", startedAt)
-		_ = s.repository.UpsertRefreshState(ctx, db.PricingRefreshStateSpec{
-			BookID:           BookID,
-			BaseCommodityID:  target.Base.ID,
-			QuoteCommodityID: target.Quote.ID,
-			SourceID:         outcome.SourceID,
-			LastSuccessDate:  sql.NullString{String: outcome.Observation.ValuationDate, Valid: outcome.Observation.ValuationDate != ""},
-			LastAttemptAt:    startedAt.Format(time.RFC3339),
-			UpdatedAt:        startedAt.Format(time.RFC3339),
-		})
 	}
 
 	return s.finishFXRefreshRun(ctx, runRecord.ID, counters)
@@ -160,7 +153,7 @@ func (s *PricingService) finishFXRefreshRun(ctx context.Context, runID int64, co
 	} else if counters.Failed > 0 {
 		status = "failed"
 	}
-	if counters.Total == 0 && counters.LastError != "" {
+	if counters.PersistenceFailed || (counters.Total == 0 && counters.LastError != "") {
 		status = "failed"
 	}
 
@@ -648,6 +641,34 @@ func (s *PricingService) storeDerivedFXObservation(ctx context.Context, ownerUse
 		return PriceObservation{}, false, err
 	}
 	return toPriceObservation(record), false, nil
+}
+
+// recordFXRefreshTargetOutcome persists one pair's item and source-health
+// evidence, stopping at the first write failure. On provider failure the item
+// and health row still record the failure against the run's source; a
+// successful observation keeps its actual source and success date.
+func (s *PricingService) recordFXRefreshTargetOutcome(ctx context.Context, runID int64, target fxRefreshTarget, itemStatus string, outcome fxRefreshOutcome, itemError string, fallbackSourceID int64, now time.Time) error {
+	state := db.PricingRefreshStateSpec{
+		BookID:           BookID,
+		BaseCommodityID:  target.Base.ID,
+		QuoteCommodityID: target.Quote.ID,
+		SourceID:         outcome.SourceID,
+		LastAttemptAt:    now.Format(time.RFC3339),
+		LastError:        itemError,
+		UpdatedAt:        now.Format(time.RFC3339),
+	}
+	if itemError != "" {
+		state.SourceID = fallbackSourceID
+	} else {
+		state.LastSuccessDate = sql.NullString{String: outcome.Observation.ValuationDate, Valid: outcome.Observation.ValuationDate != ""}
+	}
+	if err := s.recordFXRefreshItem(ctx, runID, target, itemStatus, outcome.Observation.ID, outcome.Observation.ProviderObservationID, itemError, now); err != nil {
+		return fmt.Errorf("record FX refresh item for %s/%s: %w", target.Base.Code, target.Quote.Code, err)
+	}
+	if err := s.repository.UpsertRefreshState(ctx, state); err != nil {
+		return fmt.Errorf("record FX refresh state for %s/%s: %w", target.Base.Code, target.Quote.Code, err)
+	}
+	return nil
 }
 
 func (s *PricingService) recordFXRefreshItem(ctx context.Context, runID int64, target fxRefreshTarget, status string, observationID int64, providerObservationID string, itemError string, now time.Time) error {

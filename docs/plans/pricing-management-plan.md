@@ -123,7 +123,11 @@ and `TestFXFuturePostingDoesNotDeferIndependentCurrentDemand`.
 Provider selection, exact observation storage, the persisted pair/date cursor,
 continuation and bounded retry are unchanged. An unsupported pair remains
 explicit failed work with the pair/date in its error instead of a successful
-empty sweep that implies coverage.
+empty sweep that implies coverage. A refresh run is not reported successful
+when its per-pair item or source-health write fails: the first persistence
+failure stops the sweep, marks the run failed and is returned to the caller.
+Observations already stored remain, while the missing item or health row is
+never fabricated (#469).
 
 Every observation exposes source, quote type and adjustment basis, valuation,
 observation, publication and recording times, manual/derived/approximate flags,
