@@ -36,6 +36,8 @@
   import Plus from '@lucide/svelte/icons/plus';
   import { m } from '#lib/paraglide/messages.js';
   import Panel from '#lib/components/panel.svelte';
+  import PageHeader from '#lib/components/page-header.svelte';
+  import type { Crumb } from '#lib/navigation/routes.ts';
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { phoneModal } from '#lib/components/modal-focus.ts';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
@@ -45,18 +47,25 @@
   import TransactionDetailPanel from './transaction-detail-panel.svelte';
   import TransactionEditor from './transaction-editor.svelte';
   import InvestmentEntry from '#lib/investments/investment-entry.svelte';
+  import { providePageAdd } from './add-transaction.svelte.ts';
 
   // The transaction workspace (#185): one list screen plus the shared side
   // panel for detail, edit, correction, creation and undo of a deletion. The
   // main transactions screen, an account register and a category's
   // transactions all use it, so every screen offers the same actions. The
-  // screen supplies its list and how it offers a new transaction.
+  // screen supplies its list and how it offers a new transaction. A screen
+  // that names a `title` gets the page header with that offer in its action
+  // slot (#459); otherwise the offer ends the toolbar row after `header`.
   let {
+    title,
+    breadcrumbs = [],
     header,
     list,
     create = { kind: 'editor' },
     linkedTransactionID = 0
   }: {
+    title?: string;
+    breadcrumbs?: Crumb[];
     /** Leading content of the toolbar row, such as a back link and title. */
     header?: Snippet;
     list: Snippet<[TransactionWorkspaceActions, string | undefined]>;
@@ -118,6 +127,15 @@
       url.searchParams.delete('create');
       void replaceState(url, page.state);
     }
+  });
+
+  // N and search's Add command open this editor in place. They never replace
+  // an editor that is already open, which may hold unsaved input.
+  $effect(() => {
+    if (create.kind !== 'editor') return;
+    return providePageAdd(() => {
+      if (panel.type !== 'create' && panel.type !== 'edit' && panel.type !== 'correct') panel = { type: 'create' };
+    });
   });
 
   const actions: TransactionWorkspaceActions = {
@@ -202,6 +220,27 @@
   }
 </script>
 
+{#snippet createAction()}
+  {#if create.kind === 'editor'}
+    <button
+      type="button"
+      class="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
+      onclick={() => (panel = { type: 'create' })}
+    >
+      <Plus size={16} aria-hidden="true" />
+      {m.transactions_form_create_title()}
+    </button>
+  {:else if create.kind === 'investment'}
+    <div class="flex max-w-full flex-wrap items-center justify-end gap-2">
+      <InvestmentEntry layout="menu" prefill={create.prefill} />
+    </div>
+  {/if}
+{/snippet}
+
+{#if title}
+  <PageHeader {title} {breadcrumbs} actions={create.kind === 'none' ? undefined : createAction} />
+{/if}
+
 <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
   <div class="min-w-0">
     {#if (loadingTransactionID !== undefined || actionPending) && panel.type === 'none'}
@@ -209,25 +248,14 @@
     {:else if loadError}
       <div class="mb-4"><APIFormError error={loadError} /></div>
     {/if}
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div class="flex min-w-0 flex-wrap items-center gap-3">
-        {@render header?.()}
-      </div>
-      {#if create.kind === 'editor'}
-        <button
-          type="button"
-          class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90"
-          onclick={() => (panel = { type: 'create' })}
-        >
-          <Plus size={16} aria-hidden="true" />
-          {m.transactions_new()}
-        </button>
-      {:else if create.kind === 'investment'}
-        <div class="flex max-w-full flex-wrap items-center justify-end gap-2">
-          <InvestmentEntry layout="menu" prefill={create.prefill} />
+    {#if header || (!title && create.kind !== 'none')}
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 flex-wrap items-center gap-3">
+          {@render header?.()}
         </div>
-      {/if}
-    </div>
+        {#if !title}{@render createAction()}{/if}
+      </div>
+    {/if}
 
     {@render list(actions, csrfToken)}
   </div>

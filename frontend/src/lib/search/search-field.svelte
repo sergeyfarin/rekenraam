@@ -1,12 +1,12 @@
 <script lang="ts">
   import type { Attachment } from 'svelte/attachments';
   import { tick } from 'svelte';
-  import { page } from '$app/state';
   import { beforeNavigate, goto } from '$app/navigation';
   import { createInfiniteQuery } from '@tanstack/svelte-query';
   import Search from '@lucide/svelte/icons/search';
   import X from '@lucide/svelte/icons/x';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
+  import { modalOpen } from '#lib/components/modal-focus.ts';
   import { getSearchCatalog, searchCatalogQueryKey } from '#lib/api/search.ts';
   import { getAPIClientErrorMessage } from '#lib/api-error-messages.ts';
   import { dismissible } from '#lib/navigation/disclosure.ts';
@@ -14,6 +14,7 @@
   import { themeState, setTheme } from '#lib/theme.svelte.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
+  import { addTransaction } from '#lib/transactions/add-transaction.svelte.ts';
   import { searchItems } from './search-items.ts';
   import { createSearchIndex, searchGroups, searchResults, searchShortcut, type SearchResult, type SearchScope } from './search-model.ts';
 
@@ -84,9 +85,6 @@
   }
   function resetSelection() { activeID = undefined; limit = 6; navigationError = false; }
   function changeScope(value: SearchScope) { currentScope = value; resetSelection(); input?.focus(); }
-  function modalOpen() {
-    return document.querySelector('dialog[open]') || (window.matchMedia('(width < 64rem)').matches && document.querySelector('[data-modal-scope]'));
-  }
   async function focusSearch() {
     // Never steal focus out of another modal or phone editor.
     if (modalOpen() && !open) return;
@@ -130,13 +128,7 @@
       if (onSelect) await onSelect(item);
       else if (item.command === 'hide-amounts') setAmountsHidden(!amountPrivacy.hidden);
       else if (item.command === 'theme') setTheme(themeState.name === 'dark' ? 'light' : 'dark');
-      else if (item.command === 'add-transaction') {
-        const currentURL = page.shallow?.url ?? page.url;
-        const target = new URL('/app/ledger/transactions', currentURL.href);
-        if (currentURL.pathname === target.pathname) target.search = currentURL.search;
-        target.searchParams.set('create', 'transaction');
-        await goto(target);
-      }
+      else if (item.command === 'add-transaction') await addTransaction();
       else if (item.href) await goto(item.href);
     } catch { open = true; navigationError = true; await tick(); input?.focus(); }
   }

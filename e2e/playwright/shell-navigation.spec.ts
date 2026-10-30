@@ -145,7 +145,7 @@ test('header, first tab and heading align and shell heights stay fixed', async (
     expect(Math.abs(left - heading!.x)).toBeLessThanOrEqual(1);
     await page.goto('/app/planning/recurring');
     await expect(page.getByRole('heading', { name: 'Recurring', exact: true })).toBeVisible();
-    const controls = await page.locator('main > .space-y-5 > div').first().boundingBox();
+    const controls = await page.locator('main [data-page-width] > .space-y-5 > div').first().boundingBox();
     expect(controls!.x).toBe(heading!.x);
   }
   const media = await page.context().newCDPSession(page);

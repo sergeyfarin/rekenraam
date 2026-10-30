@@ -1026,5 +1026,15 @@
   "attention_backups": "Letzte Sicherung",
   "attention_self_check": "Letzte Hauptbuchprüfung",
   "attention_prices": "Fehlende oder veraltete Preise",
-  "attention_rates": "Fehlende oder veraltete Wechselkurse"
+  "attention_rates": "Fehlende oder veraltete Wechselkurse",
+  "nav_breadcrumb": "Brotkrumennavigation",
+  "keyboard_help_title": "Tastenkürzel",
+  "keyboard_help_search": "Seiten, Konten und Befehle suchen",
+  "keyboard_help_help": "Diese Liste anzeigen",
+  "keyboard_help_escape": "Dialog, Menü oder Bereich schließen",
+  "keyboard_help_note": "Tastenkürzel sind beim Tippen in einem Feld nicht aktiv.",
+  "keyboard_help_close": "Schließen",
+  "keyboard_help_or": "oder",
+  "keyboard_key_ctrl": "Strg",
+  "keyboard_key_escape": "Esc"
 }

@@ -1026,5 +1026,15 @@
   "attention_backups": "Latest backup",
   "attention_self_check": "Latest ledger self-check",
   "attention_prices": "Missing or out-of-date prices",
-  "attention_rates": "Missing or out-of-date exchange rates"
+  "attention_rates": "Missing or out-of-date exchange rates",
+  "nav_breadcrumb": "Breadcrumb",
+  "keyboard_help_title": "Keyboard shortcuts",
+  "keyboard_help_search": "Search pages, accounts and commands",
+  "keyboard_help_help": "Show this list",
+  "keyboard_help_escape": "Close a dialog, menu or panel",
+  "keyboard_help_note": "Shortcuts never act while you type in a field.",
+  "keyboard_help_close": "Close",
+  "keyboard_help_or": "or",
+  "keyboard_key_ctrl": "Ctrl",
+  "keyboard_key_escape": "Esc"
 }

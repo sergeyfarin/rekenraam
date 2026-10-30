@@ -15,7 +15,8 @@
   import PageHeader from '#lib/components/page-header.svelte';
   import Panel from '#lib/components/panel.svelte';
   import AppHeader from '#lib/navigation/app-header.svelte';
-  import { canonicalURL, routeFor, routes, sectionFor } from '#lib/navigation/routes.ts';
+  import KeyboardHelp from '#lib/navigation/keyboard-help.svelte';
+  import { canonicalURL, routeFor, routes, sectionFor, type PageWidth } from '#lib/navigation/routes.ts';
   import { authSessionQueryOptions, logout } from '#lib/api/auth.ts';
   import { setupStatusQueryOptions } from '#lib/api/setup.ts';
   import { APIClientError } from '#lib/api/client.ts';
@@ -81,6 +82,9 @@
   });
   // Settings pages share one heading; the side list beside it names the page.
   const heading = $derived(entry?.section === 'settings' ? m.settings_title() : pageTitle);
+  // The column narrows from the shell's left edge rather than re-centring, so
+  // header, tab row and page keep one left edge at every width (#459).
+  const widths: Record<PageWidth, string> = { narrow: 'max-w-[45rem]', standard: 'max-w-[75rem]', fluid: '' };
 
   const attention = createQuery(() => ({ ...attentionQueryOptions(), enabled: shellState === 'ready' && !shouldRedirectHome }));
   provideAttention(() => attention);
@@ -187,9 +191,12 @@
   />
 
   <main id="main-content" tabindex="-1" class="mx-auto max-w-[100rem] px-4 pb-10 pt-5 outline-none sm:px-6 lg:px-8">
-    {#if !entry?.ownHeader}
-      <PageHeader title={heading} />
-    {/if}
-    {@render children()}
+    <div class={widths[entry?.width ?? 'fluid']} data-page-width={entry?.width ?? 'fluid'}>
+      {#if !entry?.ownHeader}
+        <PageHeader title={heading} />
+      {/if}
+      {@render children()}
+    </div>
   </main>
+  <KeyboardHelp />
 {/if}

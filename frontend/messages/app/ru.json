@@ -1026,5 +1026,15 @@
   "attention_backups": "Последняя резервная копия",
   "attention_self_check": "Последняя проверка книги",
   "attention_prices": "Отсутствующие или устаревшие цены",
-  "attention_rates": "Отсутствующие или устаревшие валютные курсы"
+  "attention_rates": "Отсутствующие или устаревшие валютные курсы",
+  "nav_breadcrumb": "Навигационная цепочка",
+  "keyboard_help_title": "Сочетания клавиш",
+  "keyboard_help_search": "Поиск страниц, счетов и команд",
+  "keyboard_help_help": "Показать этот список",
+  "keyboard_help_escape": "Закрыть диалог, меню или панель",
+  "keyboard_help_note": "Сочетания клавиш не действуют во время ввода в поле.",
+  "keyboard_help_close": "Закрыть",
+  "keyboard_help_or": "или",
+  "keyboard_key_ctrl": "Ctrl",
+  "keyboard_key_escape": "Esc"
 }

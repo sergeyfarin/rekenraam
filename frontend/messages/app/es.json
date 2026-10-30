@@ -1026,5 +1026,15 @@
   "attention_backups": "Última copia de seguridad",
   "attention_self_check": "Última comprobación del libro mayor",
   "attention_prices": "Precios ausentes o desactualizados",
-  "attention_rates": "Tipos de cambio ausentes o desactualizados"
+  "attention_rates": "Tipos de cambio ausentes o desactualizados",
+  "nav_breadcrumb": "Ruta de navegación",
+  "keyboard_help_title": "Atajos de teclado",
+  "keyboard_help_search": "Buscar páginas, cuentas y comandos",
+  "keyboard_help_help": "Mostrar esta lista",
+  "keyboard_help_escape": "Cerrar un diálogo, menú o panel",
+  "keyboard_help_note": "Los atajos no se activan al escribir en un campo.",
+  "keyboard_help_close": "Cerrar",
+  "keyboard_help_or": "o",
+  "keyboard_key_ctrl": "Ctrl",
+  "keyboard_key_escape": "Esc"
 }

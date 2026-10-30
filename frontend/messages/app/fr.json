@@ -1026,5 +1026,15 @@
   "attention_backups": "Dernière sauvegarde",
   "attention_self_check": "Dernière vérification du grand livre",
   "attention_prices": "Prix manquants ou périmés",
-  "attention_rates": "Taux de change manquants ou périmés"
+  "attention_rates": "Taux de change manquants ou périmés",
+  "nav_breadcrumb": "Fil d’Ariane",
+  "keyboard_help_title": "Raccourcis clavier",
+  "keyboard_help_search": "Rechercher des pages, comptes et commandes",
+  "keyboard_help_help": "Afficher cette liste",
+  "keyboard_help_escape": "Fermer une boîte de dialogue, un menu ou un panneau",
+  "keyboard_help_note": "Les raccourcis ne s’activent pas pendant la saisie dans un champ.",
+  "keyboard_help_close": "Fermer",
+  "keyboard_help_or": "ou",
+  "keyboard_key_ctrl": "Ctrl",
+  "keyboard_key_escape": "Échap"
 }

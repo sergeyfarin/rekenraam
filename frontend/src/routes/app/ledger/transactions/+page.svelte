@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
+  import { m } from '#lib/paraglide/messages.js';
   import TransactionList from '#lib/transactions/transaction-list.svelte';
   import TransactionWorkspace, { type TransactionWorkspaceCreate } from '#lib/transactions/transaction-workspace.svelte';
   import { isOrdinaryEntryAccount } from '#lib/transactions/entry-account.ts';
@@ -41,7 +42,7 @@
   });
 </script>
 
-<TransactionWorkspace {create} {linkedTransactionID}>
+<TransactionWorkspace title={m.transactions_page_title()} {create} {linkedTransactionID}>
   {#snippet list(actions, csrfToken)}
     <TransactionList
       {csrfToken}

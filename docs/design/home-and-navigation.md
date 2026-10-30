@@ -443,6 +443,16 @@ standard (about 1200px) for reports, budgets and investments, fluid (up to
 about 1600px) for registers, transactions and import review. `?` opens
 keyboard help.
 
+Delivered in #459 (2026-10-30): the page column narrows from the shell's
+left edge instead of re-centring, because header, tab row and page share one
+left edge at every width (#436); Home may still centre its own top block
+inside that column. *N* and search's *Add transaction* open the current
+page's editor in place, prefilled, when the page has one, never replace an
+editor that is already open, and otherwise open the Transactions editor.
+Register and category titles name the object, with the parent tab as the
+breadcrumb; the *Accounts › Brokerage* and category-tree trails and the
+switcher in the title slot remain #442.
+
 ### Objects
 
 - **Switcher = scoped search.** On a detail page the object's name is a

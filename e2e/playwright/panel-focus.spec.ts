@@ -64,7 +64,7 @@ test.describe('at phone width', () => {
     const panel = page.getByRole('complementary', { name: 'Actions' });
     await expect(panel.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await expectFocusTrapped(page, panel, 'transaction panel', 25);
-    expect(await page.getByRole('button', { name: 'New transaction' }).evaluate((el) => el.closest('[inert]') !== null),
+    expect(await page.getByRole('button', { name: 'Add transaction' }).evaluate((el) => el.closest('[inert]') !== null),
       'the covered page is inert').toBe(true);
     await page.keyboard.press('Escape');
     await expect(panel).toHaveCount(0);

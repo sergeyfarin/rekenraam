@@ -40,7 +40,7 @@ test('[acceptance] a transaction is entered and its statement reconciled at 390 
   await page.goto(`/app/ledger/accounts/${account.id}/register`);
   await expect(page.getByRole('heading', { name: account.name })).toBeVisible();
   await expectNoHorizontalScroll(page);
-  await page.getByRole('button', { name: 'New transaction' }).click();
+  await page.getByRole('button', { name: 'Add transaction' }).click();
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
   await expect(form.getByLabel('Account').locator('option:checked')).toHaveText(account.name);
   await form.getByLabel('Date').fill(day);

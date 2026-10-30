@@ -12,7 +12,7 @@ import { createCashAccount, expectSavedTransaction, readyForLedger } from './sup
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function addForm(page: Page) {
-  await page.getByRole('button', { name: 'New transaction' }).click();
+  await page.getByRole('button', { name: 'Add transaction' }).click();
   await expect(page.getByRole('heading', { name: 'Add transaction' })).toBeVisible();
   return page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
 }

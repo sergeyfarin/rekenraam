@@ -1026,5 +1026,15 @@
   "attention_backups": "Laatste back-up",
   "attention_self_check": "Laatste grootboekcontrole",
   "attention_prices": "Ontbrekende of verouderde prijzen",
-  "attention_rates": "Ontbrekende of verouderde wisselkoersen"
+  "attention_rates": "Ontbrekende of verouderde wisselkoersen",
+  "nav_breadcrumb": "Kruimelpad",
+  "keyboard_help_title": "Sneltoetsen",
+  "keyboard_help_search": "Pagina’s, rekeningen en opdrachten zoeken",
+  "keyboard_help_help": "Deze lijst tonen",
+  "keyboard_help_escape": "Een venster, menu of paneel sluiten",
+  "keyboard_help_note": "Sneltoetsen werken niet tijdens het typen in een veld.",
+  "keyboard_help_close": "Sluiten",
+  "keyboard_help_or": "of",
+  "keyboard_key_ctrl": "Ctrl",
+  "keyboard_key_escape": "Esc"
 }

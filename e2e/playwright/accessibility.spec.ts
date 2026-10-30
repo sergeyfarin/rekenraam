@@ -47,7 +47,7 @@ test('[acceptance] transaction entry is accessible and operable by keyboard', as
   // Entry is a panel on the transactions screen rather than its own route, so
   // the check is of the screen with the form open — which is where a keyboard
   // user actually meets it.
-  const newTransaction = page.getByRole('button', { name: /new transaction/i }).first();
+  const newTransaction = page.getByRole('button', { name: /add transaction/i }).first();
   if (await newTransaction.isVisible().catch(() => false)) {
     await newTransaction.click();
   }

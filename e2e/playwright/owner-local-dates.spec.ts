@@ -22,7 +22,7 @@ test('[acceptance] financial defaults use owner-local today across midnight and 
   await page.clock.setFixedTime(new Date(preferences.updated_at));
   try {
     await page.goto('/app/ledger/transactions');
-    await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+    await page.getByRole('button', { name: 'Add transaction', exact: true }).click();
     const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction', exact: true }) });
     const date = form.getByLabel('Date', { exact: true });
     await expect(date).toHaveValue(today);
@@ -38,7 +38,7 @@ test('[acceptance] financial defaults use owner-local today across midnight and 
     await expect(date).toHaveValue('2020-02-29');
     await expect(form.getByLabel('Description', { exact: true })).toHaveValue('Keep this unsaved entry');
     await form.getByRole('button', { name: 'Cancel', exact: true }).first().click();
-    await page.getByRole('button', { name: 'New transaction', exact: true }).click();
+    await page.getByRole('button', { name: 'Add transaction', exact: true }).click();
     await expect(date).toHaveValue(changed.updated_at.slice(0, 10));
     await apiJSON(page, 'PUT', '/api/v1/settings/preferences', csrfToken, { time_zone: ownerZone });
 

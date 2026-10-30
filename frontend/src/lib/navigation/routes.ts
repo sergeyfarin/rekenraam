@@ -10,6 +10,8 @@ import { m } from '#lib/paraglide/messages.js';
  * `+page.svelte` route is missing from it.
  */
 
+export type PageWidth = 'narrow' | 'standard' | 'fluid';
+
 export type SectionID = 'home' | 'review' | 'ledger' | 'investments' | 'planning' | 'reports' | 'settings';
 
 // Keep static message references so bundling can discard unrelated catalogs.
@@ -49,8 +51,12 @@ export type RouteEntry = {
   icon: RouteIcon;
   /** Localized search terms; shared search consumes these in #457. */
   keywords: readonly TitleKey[];
-  /** Page width policy; applying it is the separate #459 slice. */
-  width: 'narrow' | 'standard' | 'fluid';
+  /**
+   * The page column's width (#459): narrow about 720px for forms, standard
+   * about 1200px, fluid up to the shell's 1600px for registers and lists. The
+   * column keeps the shell's left edge, so a narrow page never re-centres.
+   */
+  width: PageWidth;
   /** The SvelteKit route id: `/app/ledger/accounts/[id]/register`. */
   route: string;
   section: SectionID;
@@ -95,10 +101,10 @@ const definitions: readonly Omit<RouteEntry, 'title' | 'keywords'>[] = [
 
   { route: '/app/ledger', section: 'ledger', titleKey: 'nav_overview', icon: 'landmark', width: 'standard', tab: true },
   { route: '/app/ledger/accounts', section: 'ledger', titleKey: 'accounts_title', icon: 'landmark', width: 'standard', tab: true },
-  { route: '/app/ledger/accounts/[id]/register', section: 'ledger', titleKey: 'accounts_title', icon: 'list', width: 'fluid', parent: '/app/ledger/accounts' },
-  { route: '/app/ledger/transactions', attention: ['transaction_review'], section: 'ledger', titleKey: 'transactions_page_title', icon: 'list', width: 'fluid', tab: true },
+  { route: '/app/ledger/accounts/[id]/register', section: 'ledger', titleKey: 'accounts_title', icon: 'list', width: 'fluid', parent: '/app/ledger/accounts', ownHeader: true },
+  { route: '/app/ledger/transactions', attention: ['transaction_review'], section: 'ledger', titleKey: 'transactions_page_title', icon: 'list', width: 'fluid', tab: true, ownHeader: true },
   { route: '/app/ledger/categories', section: 'ledger', titleKey: 'categories_title', icon: 'tags', width: 'standard', tab: true },
-  { route: '/app/ledger/categories/[id]', section: 'ledger', titleKey: 'categories_title', icon: 'tags', width: 'standard', parent: '/app/ledger/categories' },
+  { route: '/app/ledger/categories/[id]', section: 'ledger', titleKey: 'categories_title', icon: 'tags', width: 'fluid', parent: '/app/ledger/categories', ownHeader: true },
   { route: '/app/ledger/import', attention: ['imports', 'connections'], section: 'ledger', titleKey: 'import_title', icon: 'download', width: 'fluid', tab: true },
   { route: '/app/ledger/import/dividends', section: 'ledger', titleKey: 'import_dividend_title', icon: 'download', width: 'fluid', parent: '/app/ledger/import', ownHeader: true },
   { route: '/app/ledger/reconcile', section: 'ledger', titleKey: 'reconcile_title', icon: 'scan-line', width: 'fluid', tab: true },
@@ -186,6 +192,17 @@ export function sectionTabs(section: SectionID): RouteEntry[] {
 
 export function sectionFor(id: SectionID): Section | undefined {
   return sections.find((section) => section.id === id);
+}
+
+export type Crumb = { label: string; href: string };
+
+/**
+ * A detail page's breadcrumb: the tab it belongs to (*Accounts › Checking*).
+ * The object hierarchy (*Categories › Housing › Energy*) extends it in #442.
+ */
+export function breadcrumbs(entry: RouteEntry | undefined): Crumb[] {
+  const parent = entry?.parent ? routes.find((route) => route.route === entry.parent) : undefined;
+  return parent ? [{ label: parent.title(), href: parent.route }] : [];
 }
 
 /** The tab a page marks current: itself, or the tab it is a detail of. */

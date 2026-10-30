@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { canonicalURL, currentTab, routeFor, routes, sectionTabs, sections, tabHref } from './routes';
+import { breadcrumbs, canonicalURL, currentTab, routeFor, routes, sectionTabs, sections, tabHref } from './routes';
 
 const routesDir = join(import.meta.dirname, '../../routes');
 
@@ -25,6 +25,12 @@ describe('route registry', () => {
     const pages = pageRoutes().sort();
     const registered = routes.map((entry) => entry.route).sort();
     expect(registered).toEqual(pages);
+  });
+
+  it('gives a detail page the tab it belongs to as its breadcrumb', () => {
+    expect(breadcrumbs(routeFor('/app/ledger/accounts/7/register'))).toEqual([{ label: 'Accounts', href: '/app/ledger/accounts' }]);
+    expect(breadcrumbs(routeFor('/app/ledger/categories/3'))).toEqual([{ label: 'Categories', href: '/app/ledger/categories' }]);
+    expect(breadcrumbs(routeFor('/app/ledger/transactions'))).toEqual([]);
   });
 
   it('opens each section on its own first tab', () => {

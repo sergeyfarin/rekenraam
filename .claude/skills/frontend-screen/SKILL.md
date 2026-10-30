@@ -55,6 +55,14 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   fragment and replacing the history entry. Canonical Ledger and Planning paths
   live under `/app/ledger/…` and `/app/planning/…` (#460); internal links and
   browser journeys use those paths. Rules: `docs/conventions.md` → Frontend.
+- **Page header (#459):** `PageHeader` slots are `breadcrumbs`, `heading`
+  (object switcher), `scope` and `actions`. A page's main action is a visible
+  button in `actions`, never only a shortcut; transaction pages pass
+  `title`/`breadcrumbs` to `TransactionWorkspace`, which puts *Add transaction*
+  there. The registry `width` sizes the page column from the shared left edge.
+  Shortcuts: search owns `/` and Ctrl/⌘ K, the shell owns `N` and `?`; none acts
+  in an editable field or under a modal, and every shortcut is listed in
+  `shortcutList()` so `?` help shows it.
 - Shell counts come from `#lib/attention/context.ts`, one composed attention
   query for header, tabs, Home and Review (#458). Unknown/error sources never
   become zero or all-clear. Counting rules live in the design's attention contract.

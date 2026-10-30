@@ -11,7 +11,7 @@ test.describe.serial('release preflight journeys', () => {
     const savings = await createCashAccount(page, csrfToken, `Preflight savings ${suffix}`, currencyID);
 
     await page.goto('/app/ledger/transactions');
-    await page.getByRole('button', { name: 'New transaction' }).click();
+    await page.getByRole('button', { name: 'Add transaction' }).click();
     const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
     await form.getByLabel('Date').fill(todayISO());
     await form.getByLabel('Description').fill(`Preflight transfer ${suffix}`);
@@ -130,7 +130,7 @@ test.describe.serial('release preflight journeys', () => {
     const account = await createCashAccount(page, csrfToken, `Preflight mobile ${suffix}`, currencyID);
 
     await page.goto('/app/ledger/transactions');
-    await page.getByRole('button', { name: 'New transaction' }).click();
+    await page.getByRole('button', { name: 'Add transaction' }).click();
     const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
     await form.getByLabel('Date').fill(todayISO());
     await form.getByLabel('Description').fill(`Preflight mobile entry ${suffix}`);
@@ -145,7 +145,7 @@ test.describe.serial('release preflight journeys', () => {
 
 async function createSimpleTransaction(page: Page, accountID: number, description: string, amount: string) {
   await page.goto('/app/ledger/transactions');
-  await page.getByRole('button', { name: 'New transaction' }).click();
+  await page.getByRole('button', { name: 'Add transaction' }).click();
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
   await form.getByLabel('Date').fill(todayISO());
   await form.getByLabel('Description').fill(description);

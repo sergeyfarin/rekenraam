@@ -160,6 +160,16 @@ const subViews: SubView[] = [
     },
     close: async (c) => { await c.page.keyboard.press('Escape'); }
   },
+  {
+    name: 'keyboard help', group: 'dialog', path: () => '/app',
+    open: async (c) => {
+      await c.page.locator('#main-content').focus();
+      await c.page.keyboard.press('?');
+      const dialog = openDialog(c.page);
+      await expect(dialog).toBeVisible();
+      return dialog;
+    }
+  },
   // ── Transaction lifecycle and reconciliation dialogs ──────────────────
   {
     name: 'void reason', group: 'dialog', path: () => '/app/ledger/transactions',

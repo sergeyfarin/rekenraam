@@ -45,7 +45,7 @@ test('a card purchase posted the next day lists on its posting day', async ({ pa
   const tomorrow = daysFromTodayISO(1);
 
   await page.goto(`/app/ledger/accounts/${card.id}/register`);
-  await page.getByRole('button', { name: 'New transaction' }).click();
+  await page.getByRole('button', { name: 'Add transaction' }).click();
   const form = page.locator('form').filter({ has: page.getByRole('heading', { name: 'Add transaction' }) });
   await form.getByLabel('Date', { exact: true }).fill(today);
   await form.getByRole('button', { name: 'Posted on another day' }).click();
@@ -75,7 +75,7 @@ test('a two-day transfer posts each leg on its day and survives an edit', async 
   const arrival = daysFromTodayISO(2);
 
   await page.goto(`/app/ledger/transactions?account_id=${checking.id}`);
-  await page.getByRole('button', { name: 'New transaction' }).click();
+  await page.getByRole('button', { name: 'Add transaction' }).click();
   const form = page.getByRole('complementary', { name: 'Actions' });
   await form.getByLabel('Date', { exact: true }).fill(today);
   await form.getByLabel('Description').fill(description);
