@@ -17,7 +17,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru'] as const) {
     await page.getByRole('button', { name: languages[locale], exact: true }).click();
     await expect(page.getByRole('button', { name: languages[locale], exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.goto('/app/ledger/transactions');
-    await page.getByRole('button', { name: messages.transactions_new, exact: true }).click();
+    await page.getByRole('button', { name: messages.transactions_form_create_title, exact: true }).click();
     let form = page.locator('form').filter({ has: page.getByRole('heading', { name: messages.transactions_form_create_title, exact: true }) });
     await form.getByLabel(messages.transactions_field_date, { exact: true }).fill(todayISO());
     await form.getByLabel(messages.transactions_field_description, { exact: true }).fill(description);
