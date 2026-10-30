@@ -65,7 +65,7 @@ test('real draft count reaches header, Home and tab, and updates after discard',
   const attention = await apiJSON<{ total_known: number }>(page, 'GET', '/api/v1/attention');
   expect(attention.total_known).toBe(1);
   await expect(review(page)).toContainText('1');
-  await expect(page.locator('main').getByRole('link', { name: /^Review ·/ })).toContainText('1');
+  await expect(page.getByTestId('home-status').getByRole('link', { name: /1 draft to review/ })).toHaveAttribute('href', '/app/review');
   await review(page).click();
   await expect(page).toHaveURL('/app/review');
   await expect(page.getByRole('link', { name: 'Draft transactions', exact: true })).toBeVisible();

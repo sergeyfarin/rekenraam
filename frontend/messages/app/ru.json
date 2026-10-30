@@ -1036,5 +1036,437 @@
   "keyboard_help_close": "Закрыть",
   "keyboard_help_or": "или",
   "keyboard_key_ctrl": "Ctrl",
-  "keyboard_key_escape": "Esc"
+  "keyboard_key_escape": "Esc",
+  "briefing_headline_net_worth": "Чистые активы",
+  "briefing_headline_cash": "Денежные средства",
+  "briefing_scope_all": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Все счета: {n}",
+        "countPlural=*": "Все счета: {n}"
+      }
+    }
+  ],
+  "briefing_scope_cash": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Денежные счета: {n}",
+        "countPlural=*": "Денежные счета: {n}"
+      }
+    }
+  ],
+  "briefing_change": "{amount} в {month}",
+  "briefing_change_label": "{amount} с конца {start} по {end}",
+  "briefing_needs_price_named": "Для чистых активов нужна цена {code}",
+  "briefing_needs_rate_named": "Для чистых активов нужен курс {code}",
+  "briefing_missing_price_named": "Нет цены {code}",
+  "briefing_missing_rate_named": "Нет курса {code}",
+  "briefing_stale_price_named": "Цена {code} устарела",
+  "briefing_stale_rate_named": "Курс {code} устарел",
+  "briefing_needs_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Для чистых активов нужна {n} цена",
+        "countPlural=few": "Для чистых активов нужны {n} цены",
+        "countPlural=many": "Для чистых активов нужно {n} цен",
+        "countPlural=*": "Для чистых активов нужно {n} цены"
+      }
+    }
+  ],
+  "briefing_needs_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Для чистых активов нужен {n} курс",
+        "countPlural=few": "Для чистых активов нужны {n} курса",
+        "countPlural=many": "Для чистых активов нужно {n} курсов",
+        "countPlural=*": "Для чистых активов нужно {n} курса"
+      }
+    }
+  ],
+  "briefing_needs_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Для чистых активов нужно {n} значение",
+        "countPlural=few": "Для чистых активов нужны {n} значения",
+        "countPlural=many": "Для чистых активов нужно {n} значений",
+        "countPlural=*": "Для чистых активов нужно {n} значения"
+      }
+    }
+  ],
+  "briefing_missing_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Не хватает цен: {n}",
+        "countPlural=*": "Не хватает цен: {n}"
+      }
+    }
+  ],
+  "briefing_missing_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Не хватает курсов: {n}",
+        "countPlural=*": "Не хватает курсов: {n}"
+      }
+    }
+  ],
+  "briefing_missing_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Не хватает значений: {n}",
+        "countPlural=*": "Не хватает значений: {n}"
+      }
+    }
+  ],
+  "briefing_stale_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Устаревших цен: {n}",
+        "countPlural=*": "Устаревших цен: {n}"
+      }
+    }
+  ],
+  "briefing_stale_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Устаревших курсов: {n}",
+        "countPlural=*": "Устаревших курсов: {n}"
+      }
+    }
+  ],
+  "briefing_stale_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Устаревших значений: {n}",
+        "countPlural=*": "Устаревших значений: {n}"
+      }
+    }
+  ],
+  "briefing_work_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} черновик",
+        "countPlural=few": "{n} черновика",
+        "countPlural=many": "{n} черновиков",
+        "countPlural=*": "{n} черновика"
+      }
+    }
+  ],
+  "briefing_work_transactions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} операция",
+        "countPlural=few": "{n} операции",
+        "countPlural=many": "{n} операций",
+        "countPlural=*": "{n} операции"
+      }
+    }
+  ],
+  "briefing_work_recurring": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} заблокированный повтор",
+        "countPlural=few": "{n} заблокированных повтора",
+        "countPlural=many": "{n} заблокированных повторов",
+        "countPlural=*": "{n} заблокированного повтора"
+      }
+    }
+  ],
+  "briefing_work_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} импорт",
+        "countPlural=few": "{n} импорта",
+        "countPlural=many": "{n} импортов",
+        "countPlural=*": "{n} импорта"
+      }
+    }
+  ],
+  "briefing_work_suggestions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} инвестиционное предложение",
+        "countPlural=few": "{n} инвестиционных предложения",
+        "countPlural=many": "{n} инвестиционных предложений",
+        "countPlural=*": "{n} инвестиционного предложения"
+      }
+    }
+  ],
+  "briefing_work_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} цена",
+        "countPlural=few": "{n} цены",
+        "countPlural=many": "{n} цен",
+        "countPlural=*": "{n} цены"
+      }
+    }
+  ],
+  "briefing_work_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} курс",
+        "countPlural=few": "{n} курса",
+        "countPlural=many": "{n} курсов",
+        "countPlural=*": "{n} курса"
+      }
+    }
+  ],
+  "briefing_work_one": "На проверку: {item}",
+  "briefing_work_two": "На проверку: {first} и {second}",
+  "briefing_failed_unchecked": "Некоторые проверки не удалось выполнить",
+  "briefing_failed_backup": "Последнее резервное копирование не удалось",
+  "briefing_failed_self_check": "Самопроверка книги требует внимания",
+  "briefing_failed_connections": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Ошибок загрузки подключений: {n}",
+        "countPlural=*": "Ошибок загрузки подключений: {n}"
+      }
+    }
+  ],
+  "briefing_failed_refresh": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Ошибок обновления цен и курсов: {n}",
+        "countPlural=*": "Ошибок обновления цен и курсов: {n}"
+      }
+    }
+  ],
+  "briefing_failed_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Ошибок импорта: {n}",
+        "countPlural=*": "Ошибок импорта: {n}"
+      }
+    }
+  ],
+  "briefing_failed_other": "Одна из проверок не удалась",
+  "briefing_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n}",
+        "countPlural=*": "ещё {n}"
+      }
+    }
+  ],
+  "briefing_more_label": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} на проверку",
+        "countPlural=*": "ещё {n} на проверку"
+      }
+    }
+  ],
+  "briefing_needs_currency": "Выберите валюту по умолчанию, чтобы видеть чистые активы",
+  "briefing_needs_short_review": "Для чистых активов нужно проверить короткую позицию",
+  "briefing_check_failed": "Не удалось проверить, что требует внимания",
+  "briefing_checking": "Проверяем, что требует внимания…",
+  "briefing_review_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "На проверку: {n}",
+        "countPlural=*": "На проверку: {n}"
+      }
+    }
+  ],
+  "briefing_all_clear": "Всё в порядке, проверять нечего",
+  "briefing_headline_menu": "Выбрать заголовок",
+  "briefing_headline_unavailable": "{label}: нет данных",
+  "briefing_loading": "Загрузка сводки…",
+  "briefing_load_error": "Не удалось загрузить сводку.",
+  "briefing_start_title": "Начните со счёта",
+  "briefing_start_copy": "Добавьте свои счета, чтобы видеть здесь чистые активы и то, что требует внимания.",
+  "briefing_start_action": "Добавить счёт"
 }

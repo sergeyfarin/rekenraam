@@ -168,6 +168,33 @@ widget area:
 On phones the command bar opens the same search full screen when tapped, so
 results are not squeezed under a keyboard.
 
+### Briefing contract (#476)
+
+`GET /api/v1/home` is session-only and starts no work. For owner-local today
+it returns two headlines, `net_worth` and `cash`, each read through the Net
+worth report's series for the same accounts in the book's default currency:
+`value` at today, `start_value` at the end of the previous month and `change`
+between them. A headline is complete-only; `unavailable` names why it has no
+value (`valuation_gaps`, `unclassified_short`, `no_reporting_currency`,
+`no_accounts`). `missing` lists each input without a usable observation today
+(a chained conversion's missing currency leg is that currency's `rate`);
+`stale` lists inputs valued from an earlier observation inside the report's
+staleness window and never repeats a missing one. Inputs beyond the window are
+missing, as in the report, so an old price does block the headline; the
+report's staleness policy, not Home, decides that. Cash is open checking,
+savings, cash and other money accounts; brokerage cash stays with its
+brokerage. `account_count` counts open asset and liability accounts without
+system or per-instrument holding accounts; closed accounts still count in the
+figure. `empty_book` means no owner-created asset or liability account exists.
+
+The status line's order: a failed or unreadable attention source; then the
+net-worth valuation problem (no default currency, an unclassified short,
+missing inputs, then out-of-date ones), linking to Prices filtered by
+`?status=missing|stale` or to Currencies when only rates are involved; then
+the work, naming two kinds at most. What does not lead is one "N more" link to
+Review; price and rate attention units are not counted again behind a
+valuation lead. Values the owner enters join through #454.
+
 ### What belongs in the briefing
 
 A briefing line is one sentence, chosen by the app, and either a position
@@ -523,7 +550,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 |---|---|
 | Shell: header, section links and settings menu, tab row of real routes, route registry, hide amounts, shared search, attention read; retires the sidebar and the duplicate top bar | #436 (header, registry and tab routes #455; hide amounts #456; search #457; attention read #458; page header, widths and `?` help #459) |
 | Route paths of pages outside their section | #460 |
-| Home: briefing, command bar, shortcuts with the shared Add transaction dialog, default My Home and More to explore, composed Home read | #437 |
+| Home: briefing, command bar, shortcuts with the shared Add transaction dialog, default My Home and More to explore, composed Home read | #437 (read and briefing #476; command bar, shortcuts and entry #477; My Home widgets #478; More to explore #479) |
 | Review page: everything needing attention and background status | #453 |
 | Settings in five pages; Trash becomes Transactions › Deleted; ledger export moves to Reports › Export | #446 |
 | Import views: Files, Connections, Rules and profiles, Dividends | #447 |
@@ -564,10 +591,10 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 
 `GET /api/v1/attention` is the session-only composed read. The shell owns one
 `['api', 'attention']` query and provides its reactive result to the header,
-registry-driven tab badges, Home's temporary Review link and the bounded
+registry-driven tab badges, Home's status line (#476) and the bounded
 `/app/review` landing page. It refreshes every 30 seconds while visible, on
-focus, after successful typed-client writes and on explicit Retry. Home's full
-briefing remains #437; Review's Needs action / Notes / Status design, per-source
+focus, after successful typed-client writes and on explicit Retry. Home's
+briefing follows the [briefing contract](#briefing-contract-476); Review's Needs action / Notes / Status design, per-source
 last-run details and retention remain #453. Entered values join this read when
 #454 supplies the shared coverage; their absence is not a claim about asset
 valuation completeness. FX pair discovery includes nonzero posted currency

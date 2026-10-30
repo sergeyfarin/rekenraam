@@ -123,5 +123,9 @@
   "quotes_attribution": "Daten bereitgestellt von CoinGecko",
   "quotes_csv_trade": "{side}: {quantity} Einheiten",
   "quotes_refresh": "Kurse aktualisieren",
-  "quotes_queued": "Kurszuordnungen eingereiht: {count}. Ergebnisse finden Sie im Anbieterstatus."
+  "quotes_queued": "Kurszuordnungen eingereiht: {count}. Ergebnisse finden Sie im Anbieterstatus.",
+  "pricing_filter_missing": "Paare ohne nutzbaren Preis.",
+  "pricing_filter_stale": "Paare mit Preis von einem früheren Tag.",
+  "pricing_filter_clear": "Alle Paare zeigen",
+  "pricing_filter_empty": "Keine Paare entsprechen diesem Filter."
 }

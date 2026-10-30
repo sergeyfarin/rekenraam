@@ -127,6 +127,20 @@ export function formatMoney(value: string, scale: number, standardScale: number,
 	return formatQuantity(roundAmountForDisplay(value, scale, standardScale), standardScale, locale);
 }
 
+/** Home's summary display (#476): an amount of 100 or more in its currency
+ * shows no minor units (€56,750), rounded half up — ties away from zero, as
+ * every display rounding here — for display only; a smaller amount keeps the
+ * currency's standard scale (€96.40). Only Home's briefing and widgets use it;
+ * registers, reports, menus, editors and exports stay exact. */
+export function formatHomeMoney(value: string, scale: number, standardScale: number, locale: string): string {
+	// Decide on the amount as it would otherwise show: 99.995 shows as 100.00,
+	// so it is 100 or more.
+	const shown = BigInt(roundAmountForDisplay(value, scale, standardScale));
+	const magnitude = shown < 0n ? -shown : shown;
+	if (magnitude >= 100n * 10n ** BigInt(standardScale)) return formatQuantity(roundAmountForDisplay(value, scale, 0), 0, locale);
+	return formatQuantity(shown.toString(), standardScale, locale);
+}
+
 /** Exact money display for disclosures that must never round: drops only the
  * trailing zeros below the coefficient's own scale, keeping at least the
  * currency's standard scale. A replay result stored at scale 6 shows `50.00`,

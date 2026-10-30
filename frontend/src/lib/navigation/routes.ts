@@ -97,7 +97,7 @@ export const sections: readonly Section[] = [
 // until #448 folds it into the Ledger overview.
 const definitions: readonly Omit<RouteEntry, 'title' | 'keywords'>[] = [
   { route: '/app/review', section: 'review', titleKey: 'attention_review', icon: 'scan-line', width: 'standard', standalone: true },
-  { route: '/app', section: 'home', titleKey: 'nav_home', icon: 'house', width: 'fluid' },
+  { route: '/app', section: 'home', titleKey: 'nav_home', icon: 'house', width: 'fluid', ownHeader: true },
 
   { route: '/app/ledger', section: 'ledger', titleKey: 'nav_overview', icon: 'landmark', width: 'standard', tab: true },
   { route: '/app/ledger/accounts', section: 'ledger', titleKey: 'accounts_title', icon: 'landmark', width: 'standard', tab: true },

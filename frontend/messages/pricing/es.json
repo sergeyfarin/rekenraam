@@ -123,5 +123,9 @@
   "quotes_attribution": "Datos proporcionados por CoinGecko",
   "quotes_csv_trade": "{side}: {quantity} unidades",
   "quotes_refresh": "Actualizar cotizaciones",
-  "quotes_queued": "Cotizaciones en cola: {count}. Consulte el estado del proveedor para ver los resultados."
+  "quotes_queued": "Cotizaciones en cola: {count}. Consulte el estado del proveedor para ver los resultados.",
+  "pricing_filter_missing": "Pares sin precio utilizable.",
+  "pricing_filter_stale": "Pares valorados con un precio de un día anterior.",
+  "pricing_filter_clear": "Mostrar todos los pares",
+  "pricing_filter_empty": "Ningún par coincide con este filtro."
 }

@@ -1,0 +1,26 @@
+get:
+  summary: Home briefing
+  description: >-
+    Home's composed read for owner-local today. Each headline is the Net worth
+    report's figure for the same accounts in the book's default currency, at
+    today and at the end of the previous month. A headline is complete-only: a
+    missing price or rate leaves value null and lists what is missing, never a
+    partial figure. Out-of-date inputs (valued from an earlier observation
+    inside the staleness window) are listed separately and do not block the
+    value. Never starts work or contacts providers. Session-only; no
+    personal-access-token grant.
+  security:
+    - CookieSession: []
+  responses:
+    '200':
+      description: Briefing headlines
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/HomeResponse'
+    '401':
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ErrorResponse'

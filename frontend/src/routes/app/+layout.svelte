@@ -8,6 +8,7 @@
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import { attentionQueryKey, attentionQueryOptions } from '#lib/api/attention.ts';
+  import { homeQueryKey } from '#lib/api/home.ts';
   import { provideAttention } from '#lib/attention/context.ts';
   import { attentionSummary, sourceBadge } from '#lib/attention/model.ts';
   import { getLocale } from '#lib/paraglide/runtime.js';
@@ -89,13 +90,14 @@
   const attention = createQuery(() => ({ ...attentionQueryOptions(), enabled: shellState === 'ready' && !shouldRedirectHome }));
   provideAttention(() => attention);
   const queryClient = useQueryClient();
-  // Refetch the shared count after successful API writes, including commands
+  // Refetch the shared count and Home's summaries after successful API writes, including commands
   // implemented with async handlers rather than TanStack mutations.
   onMount(() => {
     const middleware: Middleware = {
       onResponse({ request, response }) {
         if (response.ok && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
           void queryClient.invalidateQueries({ queryKey: attentionQueryKey });
+          void queryClient.invalidateQueries({ queryKey: homeQueryKey });
         }
       }
     };

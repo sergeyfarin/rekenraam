@@ -123,5 +123,9 @@
   "quotes_attribution": "Données fournies par CoinGecko",
   "quotes_csv_trade": "{side} : {quantity} unités",
   "quotes_refresh": "Actualiser les cours",
-  "quotes_queued": "Cotations mises en attente : {count}. Consultez l’état des fournisseurs pour les résultats."
+  "quotes_queued": "Cotations mises en attente : {count}. Consultez l’état des fournisseurs pour les résultats.",
+  "pricing_filter_missing": "Paires sans prix utilisable.",
+  "pricing_filter_stale": "Paires évaluées avec un prix d’un jour antérieur.",
+  "pricing_filter_clear": "Afficher toutes les paires",
+  "pricing_filter_empty": "Aucune paire ne correspond à ce filtre."
 }

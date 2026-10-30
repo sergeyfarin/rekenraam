@@ -1036,5 +1036,417 @@
   "keyboard_help_close": "Close",
   "keyboard_help_or": "or",
   "keyboard_key_ctrl": "Ctrl",
-  "keyboard_key_escape": "Esc"
+  "keyboard_key_escape": "Esc",
+  "briefing_headline_net_worth": "Net worth",
+  "briefing_headline_cash": "Cash",
+  "briefing_scope_all": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} account",
+        "countPlural=*": "All {n} accounts"
+      }
+    }
+  ],
+  "briefing_scope_cash": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} cash account",
+        "countPlural=*": "{n} cash accounts"
+      }
+    }
+  ],
+  "briefing_change": "{amount} in {month}",
+  "briefing_change_label": "{amount} from the end of {start} to {end}",
+  "briefing_needs_price_named": "Net worth needs a price for {code}",
+  "briefing_needs_rate_named": "Net worth needs an exchange rate for {code}",
+  "briefing_missing_price_named": "Price missing for {code}",
+  "briefing_missing_rate_named": "Exchange rate missing for {code}",
+  "briefing_stale_price_named": "Price for {code} out of date",
+  "briefing_stale_rate_named": "Exchange rate for {code} out of date",
+  "briefing_needs_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Net worth needs {n} price",
+        "countPlural=*": "Net worth needs {n} prices"
+      }
+    }
+  ],
+  "briefing_needs_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Net worth needs {n} exchange rate",
+        "countPlural=*": "Net worth needs {n} exchange rates"
+      }
+    }
+  ],
+  "briefing_needs_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Net worth needs {n} value",
+        "countPlural=*": "Net worth needs {n} values"
+      }
+    }
+  ],
+  "briefing_missing_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} price missing",
+        "countPlural=*": "{n} prices missing"
+      }
+    }
+  ],
+  "briefing_missing_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} exchange rate missing",
+        "countPlural=*": "{n} exchange rates missing"
+      }
+    }
+  ],
+  "briefing_missing_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} value missing",
+        "countPlural=*": "{n} values missing"
+      }
+    }
+  ],
+  "briefing_stale_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} price out of date",
+        "countPlural=*": "{n} prices out of date"
+      }
+    }
+  ],
+  "briefing_stale_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} exchange rate out of date",
+        "countPlural=*": "{n} exchange rates out of date"
+      }
+    }
+  ],
+  "briefing_stale_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} value out of date",
+        "countPlural=*": "{n} values out of date"
+      }
+    }
+  ],
+  "briefing_work_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} draft",
+        "countPlural=*": "{n} drafts"
+      }
+    }
+  ],
+  "briefing_work_transactions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} transaction",
+        "countPlural=*": "{n} transactions"
+      }
+    }
+  ],
+  "briefing_work_recurring": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} blocked recurring entry",
+        "countPlural=*": "{n} blocked recurring entries"
+      }
+    }
+  ],
+  "briefing_work_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} import",
+        "countPlural=*": "{n} imports"
+      }
+    }
+  ],
+  "briefing_work_suggestions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} investment suggestion",
+        "countPlural=*": "{n} investment suggestions"
+      }
+    }
+  ],
+  "briefing_work_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} price",
+        "countPlural=*": "{n} prices"
+      }
+    }
+  ],
+  "briefing_work_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} exchange rate",
+        "countPlural=*": "{n} exchange rates"
+      }
+    }
+  ],
+  "briefing_work_one": "{item} to review",
+  "briefing_work_two": "{first} and {second} to review",
+  "briefing_failed_unchecked": "Some checks could not run",
+  "briefing_failed_backup": "Latest backup failed",
+  "briefing_failed_self_check": "Ledger self-check needs attention",
+  "briefing_failed_connections": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} connection download failed",
+        "countPlural=*": "{n} connection downloads failed"
+      }
+    }
+  ],
+  "briefing_failed_refresh": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} price or rate refresh failed",
+        "countPlural=*": "{n} price or rate refreshes failed"
+      }
+    }
+  ],
+  "briefing_failed_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} import failed",
+        "countPlural=*": "{n} imports failed"
+      }
+    }
+  ],
+  "briefing_failed_other": "A check failed",
+  "briefing_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} more",
+        "countPlural=*": "{n} more"
+      }
+    }
+  ],
+  "briefing_more_label": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} more to review",
+        "countPlural=*": "{n} more to review"
+      }
+    }
+  ],
+  "briefing_needs_currency": "Choose a default currency to see net worth",
+  "briefing_needs_short_review": "Net worth needs a short position reviewed",
+  "briefing_check_failed": "Could not check what needs review",
+  "briefing_checking": "Checking what needs review…",
+  "briefing_review_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} item to review",
+        "countPlural=*": "{n} items to review"
+      }
+    }
+  ],
+  "briefing_all_clear": "All clear, nothing to review",
+  "briefing_headline_menu": "Choose the headline",
+  "briefing_headline_unavailable": "{label} unavailable",
+  "briefing_loading": "Loading your briefing…",
+  "briefing_load_error": "Could not load your briefing.",
+  "briefing_start_title": "Start with an account",
+  "briefing_start_copy": "Add the accounts you use to see your net worth and what needs attention here.",
+  "briefing_start_action": "Add an account"
 }

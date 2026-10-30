@@ -4941,6 +4941,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Home briefing
+         * @description Home's composed read for owner-local today. Each headline is the Net worth report's figure for the same accounts in the book's default currency, at today and at the end of the previous month. A headline is complete-only: a missing price or rate leaves value null and lists what is missing, never a partial figure. Out-of-date inputs (valued from an earlier observation inside the staleness window) are listed separately and do not block the value. Never starts work or contacts providers. Session-only; no personal-access-token grant.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Briefing headlines */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["HomeResponse"];
+                    };
+                };
+                /** @description Authentication required */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/search/catalog": {
         parameters: {
             query?: never;
@@ -29058,6 +29106,62 @@ export interface components {
             quantity_scale: number;
             /** @description Lossless class-normalized integer coefficient. Liability, equity, and income balances are sign-flipped for display/reporting. */
             normal_quantity_value: string;
+        };
+        HomeResponse: {
+            /**
+             * Format: date
+             * @description Owner-local today.
+             */
+            as_of: string;
+            /**
+             * Format: date
+             * @description Last day of the previous month; the change is measured from the end of this day.
+             */
+            start_boundary: string;
+            /** @description The book's default currency; null when none is set. */
+            reporting_currency: components["schemas"]["HomeReportingCurrency"] | null;
+            /** @description True when the book has no owner-created asset or liability account, open or closed. */
+            empty_book: boolean;
+            headlines: components["schemas"]["HomeHeadline"][];
+        };
+        HomeHeadline: {
+            /**
+             * @description cash is open checking, savings, cash and other money accounts, which need no price.
+             * @enum {string}
+             */
+            id: "net_worth" | "cash";
+            /** @description Open asset and liability accounts in scope, without system or per-instrument holding accounts. */
+            account_count: number;
+            /** @description Converted total at as_of; null when unavailable. */
+            value: components["schemas"]["BalanceQuantity"] | null;
+            /** @description Converted total at start_boundary; null when it cannot be converted. */
+            start_value: components["schemas"]["BalanceQuantity"] | null;
+            /** @description value minus start_value, present only when both are. */
+            change: components["schemas"]["BalanceQuantity"] | null;
+            /** @enum {string|null} */
+            unavailable: "valuation_gaps" | "unclassified_short" | "no_reporting_currency" | "no_accounts" | null;
+            /** @description Inputs with no usable observation at as_of, one per commodity. */
+            missing: components["schemas"]["HomeValuationInput"][];
+            /** @description Inputs valued from an earlier observation inside the staleness window at as_of. Never also missing. */
+            stale: components["schemas"]["HomeValuationInput"][];
+        };
+        HomeValuationInput: {
+            /** Format: int64 */
+            commodity_id: number;
+            code: string;
+            /**
+             * @description rate for a currency's exchange rate; price for anything else. A chained conversion's missing currency leg is that currency's rate.
+             * @enum {string}
+             */
+            kind: "price" | "rate";
+        };
+        HomeReportingCurrency: {
+            /** Format: int64 */
+            commodity_id: number;
+            code: string;
+            /** @description The currency's display symbol, such as €. */
+            symbol: string;
+            scale: number;
         };
         AccountBalance: {
             /** Format: int64 */

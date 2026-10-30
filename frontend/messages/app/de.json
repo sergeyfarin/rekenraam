@@ -1036,5 +1036,417 @@
   "keyboard_help_close": "Schließen",
   "keyboard_help_or": "oder",
   "keyboard_key_ctrl": "Strg",
-  "keyboard_key_escape": "Esc"
+  "keyboard_key_escape": "Esc",
+  "briefing_headline_net_worth": "Nettovermögen",
+  "briefing_headline_cash": "Liquide Mittel",
+  "briefing_scope_all": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Konto",
+        "countPlural=*": "Alle {n} Konten"
+      }
+    }
+  ],
+  "briefing_scope_cash": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Geldkonto",
+        "countPlural=*": "{n} Geldkonten"
+      }
+    }
+  ],
+  "briefing_change": "{amount} im {month}",
+  "briefing_change_label": "{amount} von Ende {start} bis {end}",
+  "briefing_needs_price_named": "Für das Nettovermögen fehlt ein Preis für {code}",
+  "briefing_needs_rate_named": "Für das Nettovermögen fehlt ein Wechselkurs für {code}",
+  "briefing_missing_price_named": "Preis für {code} fehlt",
+  "briefing_missing_rate_named": "Wechselkurs für {code} fehlt",
+  "briefing_stale_price_named": "Preis für {code} veraltet",
+  "briefing_stale_rate_named": "Wechselkurs für {code} veraltet",
+  "briefing_needs_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Für das Nettovermögen fehlt {n} Preis",
+        "countPlural=*": "Für das Nettovermögen fehlen {n} Preise"
+      }
+    }
+  ],
+  "briefing_needs_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Für das Nettovermögen fehlt {n} Wechselkurs",
+        "countPlural=*": "Für das Nettovermögen fehlen {n} Wechselkurse"
+      }
+    }
+  ],
+  "briefing_needs_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Für das Nettovermögen fehlt {n} Wert",
+        "countPlural=*": "Für das Nettovermögen fehlen {n} Werte"
+      }
+    }
+  ],
+  "briefing_missing_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Preis fehlt",
+        "countPlural=*": "{n} Preise fehlen"
+      }
+    }
+  ],
+  "briefing_missing_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Wechselkurs fehlt",
+        "countPlural=*": "{n} Wechselkurse fehlen"
+      }
+    }
+  ],
+  "briefing_missing_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Wert fehlt",
+        "countPlural=*": "{n} Werte fehlen"
+      }
+    }
+  ],
+  "briefing_stale_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Preis veraltet",
+        "countPlural=*": "{n} Preise veraltet"
+      }
+    }
+  ],
+  "briefing_stale_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Wechselkurs veraltet",
+        "countPlural=*": "{n} Wechselkurse veraltet"
+      }
+    }
+  ],
+  "briefing_stale_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Wert veraltet",
+        "countPlural=*": "{n} Werte veraltet"
+      }
+    }
+  ],
+  "briefing_work_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Entwurf",
+        "countPlural=*": "{n} Entwürfe"
+      }
+    }
+  ],
+  "briefing_work_transactions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Buchung",
+        "countPlural=*": "{n} Buchungen"
+      }
+    }
+  ],
+  "briefing_work_recurring": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} blockierte Dauerbuchung",
+        "countPlural=*": "{n} blockierte Dauerbuchungen"
+      }
+    }
+  ],
+  "briefing_work_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Import",
+        "countPlural=*": "{n} Importe"
+      }
+    }
+  ],
+  "briefing_work_suggestions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Anlagevorschlag",
+        "countPlural=*": "{n} Anlagevorschläge"
+      }
+    }
+  ],
+  "briefing_work_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Preis",
+        "countPlural=*": "{n} Preise"
+      }
+    }
+  ],
+  "briefing_work_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Wechselkurs",
+        "countPlural=*": "{n} Wechselkurse"
+      }
+    }
+  ],
+  "briefing_work_one": "{item} zu prüfen",
+  "briefing_work_two": "{first} und {second} zu prüfen",
+  "briefing_failed_unchecked": "Einige Prüfungen konnten nicht laufen",
+  "briefing_failed_backup": "Letzte Sicherung fehlgeschlagen",
+  "briefing_failed_self_check": "Selbstprüfung des Hauptbuchs erfordert Aufmerksamkeit",
+  "briefing_failed_connections": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Verbindungsabruf fehlgeschlagen",
+        "countPlural=*": "{n} Verbindungsabrufe fehlgeschlagen"
+      }
+    }
+  ],
+  "briefing_failed_refresh": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Preis- oder Kursaktualisierung fehlgeschlagen",
+        "countPlural=*": "{n} Preis- oder Kursaktualisierungen fehlgeschlagen"
+      }
+    }
+  ],
+  "briefing_failed_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Import fehlgeschlagen",
+        "countPlural=*": "{n} Importe fehlgeschlagen"
+      }
+    }
+  ],
+  "briefing_failed_other": "Eine Prüfung ist fehlgeschlagen",
+  "briefing_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} weitere",
+        "countPlural=*": "{n} weitere"
+      }
+    }
+  ],
+  "briefing_more_label": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} weitere zu prüfen",
+        "countPlural=*": "{n} weitere zu prüfen"
+      }
+    }
+  ],
+  "briefing_needs_currency": "Wählen Sie eine Standardwährung, um das Nettovermögen zu sehen",
+  "briefing_needs_short_review": "Für das Nettovermögen muss eine Short-Position geprüft werden",
+  "briefing_check_failed": "Offene Punkte konnten nicht geprüft werden",
+  "briefing_checking": "Offene Punkte werden geprüft…",
+  "briefing_review_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} Punkt zu prüfen",
+        "countPlural=*": "{n} Punkte zu prüfen"
+      }
+    }
+  ],
+  "briefing_all_clear": "Alles erledigt, nichts zu prüfen",
+  "briefing_headline_menu": "Überschrift wählen",
+  "briefing_headline_unavailable": "{label} nicht verfügbar",
+  "briefing_loading": "Übersicht wird geladen…",
+  "briefing_load_error": "Die Übersicht konnte nicht geladen werden.",
+  "briefing_start_title": "Mit einem Konto beginnen",
+  "briefing_start_copy": "Fügen Sie Ihre Konten hinzu, um hier Ihr Nettovermögen und offene Punkte zu sehen.",
+  "briefing_start_action": "Konto hinzufügen"
 }

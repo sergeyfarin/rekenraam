@@ -66,6 +66,10 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
 - Shell counts come from `#lib/attention/context.ts`, one composed attention
   query for header, tabs, Home and Review (#458). Unknown/error sources never
   become zero or all-clear. Counting rules live in the design's attention contract.
+- Home reads one composed `GET /api/v1/home` (`#lib/api/home.ts`, keyed by
+  owner-local today); the shell's write middleware invalidates it with the
+  attention count. Briefing rules live in `#lib/home/briefing.ts`; Home
+  amounts use `formatHomeMoney`, nothing else does (#476).
 - Global search is `#lib/search/search-field.svelte` (#457). Mount one shortcut
   owner; reuse `scope`/`onSelect` and `variant="home"` for placement. Keep page
   filters independent, derive page hits from the route registry and consume every
@@ -91,6 +95,9 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   `pnpm --dir frontend run catalogs:check` gates dev/check/build and CI;
   native terminology review remains separate (#102).
 - Never concatenate translated fragments into sentences; use message parameters.
+- A count-dependent message is one plural variant with a `countPlural=*`
+  catch-all, called as `m.key({ count, n })` (`n` locale-formatted); never pick
+  between singular/plural keys in code (`docs/conventions.md`, #476).
 - Formatting of money, dates, numbers is locale-aware (`Intl.NumberFormat`,
   `Intl.DateTimeFormat`, `date-fns` v4) and separate from translation.
   Never use the `Date` constructor or luxon/moment for financial date logic.

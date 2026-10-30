@@ -1567,6 +1567,7 @@ type ReportingCurrencyRecord struct {
 	Code          string
 	Kind          string
 	StandardScale int
+	DisplaySymbol string
 }
 
 // ReportingCurrency reads one commodity's identity and scale.
@@ -1574,14 +1575,41 @@ type ReportingCurrencyRecord struct {
 // The scale matters as much as the code: it is what a converted figure is
 // rounded to, and rounding a yen figure to two places or a dollar figure to
 // none would both be wrong in ways that look right.
+// CommodityCodes returns the code of each listed commodity, so a summary can
+// name a missing price without a read per commodity.
+func (r *PricingRepository) CommodityCodes(ctx context.Context, bookID int64, commodityIDs []int64) (map[int64]string, error) {
+	codes := map[int64]string{}
+	if len(commodityIDs) == 0 {
+		return codes, nil
+	}
+	clause, args := inClause("id", commodityIDs)
+	rows, err := r.database.QueryContext(ctx, `SELECT id, code FROM commodities WHERE book_id = ? AND `+clause, append([]any{bookID}, args...)...)
+	if err != nil {
+		return nil, fmt.Errorf("read commodity codes: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var code string
+		if err := rows.Scan(&id, &code); err != nil {
+			return nil, fmt.Errorf("scan commodity code: %w", err)
+		}
+		codes[id] = code
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read commodity codes: %w", err)
+	}
+	return codes, nil
+}
+
 func (r *PricingRepository) ReportingCurrency(ctx context.Context, bookID int64, commodityID int64) (ReportingCurrencyRecord, error) {
 	var record ReportingCurrencyRecord
 	err := r.database.QueryRowContext(ctx, `
-		SELECT c.id, c.code, c.kind, cv.standard_scale
+		SELECT c.id, c.code, c.kind, cv.standard_scale, cv.display_symbol
 		FROM commodities c
 		JOIN `+CurrentReferenceVersions(ctx, "commodity")+` cv ON cv.commodity_id = c.id
 		WHERE c.book_id = ? AND c.id = ?
-	`, bookID, commodityID).Scan(&record.ID, &record.Code, &record.Kind, &record.StandardScale)
+	`, bookID, commodityID).Scan(&record.ID, &record.Code, &record.Kind, &record.StandardScale, &record.DisplaySymbol)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ReportingCurrencyRecord{}, ErrNotFound
 	}

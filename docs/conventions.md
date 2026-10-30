@@ -633,6 +633,13 @@ has actual installations, its migration files are immutable.
   blank. Configured shipping catalogs must match the base locale in keys and
   placeholders, contain nonempty text, and have unique IDs across domains.
   `catalogs:check` enforces this before frontend dev/check/build and in CI.
+- A message whose wording depends on a count is one Paraglide plural variant
+  (`declarations` with `input count`, `input n` and
+  `local countPlural = count: plural`; `match` keyed `countPlural=one`,
+  `=few`, `=many` as the locale needs, and always a `countPlural=*`
+  catch-all). Pass the number as `count` and its locale-formatted text as `n`.
+  Never choose between separate singular/plural keys in code. The parity check
+  requires the catch-all and the same inputs in every locale (#476).
   Key parity is separate from native terminology review; the language settings
   page retains the draft notice until review is recorded on #102.
 - UI code and built-in app-defined data must stay ready for additional languages without route, component, or schema rewrites.

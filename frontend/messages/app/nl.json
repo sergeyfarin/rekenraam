@@ -1036,5 +1036,417 @@
   "keyboard_help_close": "Sluiten",
   "keyboard_help_or": "of",
   "keyboard_key_ctrl": "Ctrl",
-  "keyboard_key_escape": "Esc"
+  "keyboard_key_escape": "Esc",
+  "briefing_headline_net_worth": "Nettovermogen",
+  "briefing_headline_cash": "Liquide middelen",
+  "briefing_scope_all": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} rekening",
+        "countPlural=*": "Alle {n} rekeningen"
+      }
+    }
+  ],
+  "briefing_scope_cash": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} geldrekening",
+        "countPlural=*": "{n} geldrekeningen"
+      }
+    }
+  ],
+  "briefing_change": "{amount} in {month}",
+  "briefing_change_label": "{amount} van eind {start} tot {end}",
+  "briefing_needs_price_named": "Nettovermogen mist een prijs voor {code}",
+  "briefing_needs_rate_named": "Nettovermogen mist een wisselkoers voor {code}",
+  "briefing_missing_price_named": "Prijs ontbreekt voor {code}",
+  "briefing_missing_rate_named": "Wisselkoers ontbreekt voor {code}",
+  "briefing_stale_price_named": "Prijs voor {code} verouderd",
+  "briefing_stale_rate_named": "Wisselkoers voor {code} verouderd",
+  "briefing_needs_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Nettovermogen mist {n} prijs",
+        "countPlural=*": "Nettovermogen mist {n} prijzen"
+      }
+    }
+  ],
+  "briefing_needs_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Nettovermogen mist {n} wisselkoers",
+        "countPlural=*": "Nettovermogen mist {n} wisselkoersen"
+      }
+    }
+  ],
+  "briefing_needs_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Nettovermogen mist {n} waarde",
+        "countPlural=*": "Nettovermogen mist {n} waarden"
+      }
+    }
+  ],
+  "briefing_missing_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} prijs ontbreekt",
+        "countPlural=*": "{n} prijzen ontbreken"
+      }
+    }
+  ],
+  "briefing_missing_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} wisselkoers ontbreekt",
+        "countPlural=*": "{n} wisselkoersen ontbreken"
+      }
+    }
+  ],
+  "briefing_missing_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} waarde ontbreekt",
+        "countPlural=*": "{n} waarden ontbreken"
+      }
+    }
+  ],
+  "briefing_stale_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} prijs verouderd",
+        "countPlural=*": "{n} prijzen verouderd"
+      }
+    }
+  ],
+  "briefing_stale_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} wisselkoers verouderd",
+        "countPlural=*": "{n} wisselkoersen verouderd"
+      }
+    }
+  ],
+  "briefing_stale_values": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} waarde verouderd",
+        "countPlural=*": "{n} waarden verouderd"
+      }
+    }
+  ],
+  "briefing_work_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} concept",
+        "countPlural=*": "{n} concepten"
+      }
+    }
+  ],
+  "briefing_work_transactions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} transactie",
+        "countPlural=*": "{n} transacties"
+      }
+    }
+  ],
+  "briefing_work_recurring": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} geblokkeerde terugkerende boeking",
+        "countPlural=*": "{n} geblokkeerde terugkerende boekingen"
+      }
+    }
+  ],
+  "briefing_work_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} import",
+        "countPlural=*": "{n} imports"
+      }
+    }
+  ],
+  "briefing_work_suggestions": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} beleggingssuggestie",
+        "countPlural=*": "{n} beleggingssuggesties"
+      }
+    }
+  ],
+  "briefing_work_prices": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} prijs",
+        "countPlural=*": "{n} prijzen"
+      }
+    }
+  ],
+  "briefing_work_rates": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} wisselkoers",
+        "countPlural=*": "{n} wisselkoersen"
+      }
+    }
+  ],
+  "briefing_work_one": "{item} te controleren",
+  "briefing_work_two": "{first} en {second} te controleren",
+  "briefing_failed_unchecked": "Sommige controles konden niet worden uitgevoerd",
+  "briefing_failed_backup": "Laatste back-up mislukt",
+  "briefing_failed_self_check": "Zelfcontrole van het grootboek vraagt aandacht",
+  "briefing_failed_connections": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} verbindingsdownload mislukt",
+        "countPlural=*": "{n} verbindingsdownloads mislukt"
+      }
+    }
+  ],
+  "briefing_failed_refresh": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} prijs- of koersverversing mislukt",
+        "countPlural=*": "{n} prijs- of koersverversingen mislukt"
+      }
+    }
+  ],
+  "briefing_failed_imports": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} import mislukt",
+        "countPlural=*": "{n} imports mislukt"
+      }
+    }
+  ],
+  "briefing_failed_other": "Een controle is mislukt",
+  "briefing_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "nog {n}",
+        "countPlural=*": "nog {n}"
+      }
+    }
+  ],
+  "briefing_more_label": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "nog {n} te controleren",
+        "countPlural=*": "nog {n} te controleren"
+      }
+    }
+  ],
+  "briefing_needs_currency": "Kies een standaardvaluta om het nettovermogen te zien",
+  "briefing_needs_short_review": "Nettovermogen vraagt om controle van een shortpositie",
+  "briefing_check_failed": "Kon niet controleren wat aandacht nodig heeft",
+  "briefing_checking": "Controleren wat aandacht nodig heeft…",
+  "briefing_review_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} item te controleren",
+        "countPlural=*": "{n} items te controleren"
+      }
+    }
+  ],
+  "briefing_all_clear": "Alles in orde, niets te controleren",
+  "briefing_headline_menu": "Kop kiezen",
+  "briefing_headline_unavailable": "{label} niet beschikbaar",
+  "briefing_loading": "Overzicht laden…",
+  "briefing_load_error": "Het overzicht kon niet worden geladen.",
+  "briefing_start_title": "Begin met een rekening",
+  "briefing_start_copy": "Voeg de rekeningen toe die je gebruikt om hier je nettovermogen en openstaande punten te zien.",
+  "briefing_start_action": "Rekening toevoegen"
 }

@@ -123,5 +123,9 @@
   "quotes_attribution": "Gegevens geleverd door CoinGecko",
   "quotes_csv_trade": "{side}: {quantity} eenheden",
   "quotes_refresh": "Koersen vernieuwen",
-  "quotes_queued": "Koerstoewijzingen in de wachtrij: {count}. Bekijk de providerstatus voor resultaten."
+  "quotes_queued": "Koerstoewijzingen in de wachtrij: {count}. Bekijk de providerstatus voor resultaten.",
+  "pricing_filter_missing": "Paren zonder bruikbare prijs.",
+  "pricing_filter_stale": "Paren met een prijs van een eerdere dag.",
+  "pricing_filter_clear": "Alle paren tonen",
+  "pricing_filter_empty": "Geen paren voldoen aan dit filter."
 }

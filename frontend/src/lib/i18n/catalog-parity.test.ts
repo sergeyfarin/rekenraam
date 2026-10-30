@@ -6,14 +6,24 @@ const patterns: string[] = project['plugin.inlang.messageFormat'].pathPattern;
 const locales: string[] = project.locales;
 const baseLocale: string = project.baseLocale;
 
-function catalog(pattern: string, locale: string): Record<string, string> {
+// A message is a string, or one plural variant (`declarations`, `selectors`,
+// `match`) whose cases the locale chooses for its own plural rules.
+type Variant = { declarations: string[]; selectors: string[]; match: Record<string, string> };
+type Message = string | Variant[];
+
+function catalog(pattern: string, locale: string): Record<string, Message> {
   const data = JSON.parse(readFileSync(new URL(`../../../${pattern.replace('{locale}', locale)}`, import.meta.url), 'utf8'));
   delete data.$schema;
   return data;
 }
 
-const keys = (data: Record<string, string>) => Object.keys(data).sort();
-const parameters = (message: string) => [...new Set([...message.matchAll(/\{([A-Za-z_]\w*)\}/g)].map(match => match[1]))].sort();
+const keys = (data: Record<string, Message>) => Object.keys(data).sort();
+const placeholders = (text: string) => [...text.matchAll(/\{([A-Za-z_]\w*)\}/g)].map(match => match[1]);
+const inputs = (variant: Variant) => variant.declarations.filter(item => item.startsWith('input ')).map(item => item.slice(6).trim());
+const parameters = (message: Message) => [...new Set(typeof message === 'string'
+  ? placeholders(message)
+  : message.flatMap(variant => [...inputs(variant), ...Object.values(variant.match).flatMap(placeholders)]))].sort();
+const texts = (message: Message) => typeof message === 'string' ? [message] : message.flatMap(variant => Object.values(variant.match));
 
 // Read the compiler's configuration rather than maintaining a second list:
 // newly enabled domains and locales must satisfy the same contract.
@@ -28,9 +38,16 @@ for (const pattern of patterns) {
       test(`${locale} preserves nonempty messages and parameter names`, () => {
         for (const key of keys(base)) {
           const message = translated[key];
-          expect(typeof message, key).toBe('string');
-          expect(message.trim(), key).not.toBe('');
+          expect(typeof message === 'string', key).toBe(typeof base[key] === 'string');
+          for (const text of texts(message ?? '')) expect(text.trim(), key).not.toBe('');
           expect(parameters(message), key).toEqual(parameters(base[key]));
+          if (typeof message !== 'string') {
+            // A plural category this locale's rules produce but the message
+            // lacks would render the key name; the catch-all prevents that.
+            for (const variant of message) {
+              expect(Object.keys(variant.match).some(key => key.endsWith('=*')), key).toBe(true);
+            }
+          }
         }
       });
     }

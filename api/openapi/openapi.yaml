@@ -107,6 +107,8 @@ paths:
     $ref: "./paths/setup-currencies.yaml"
   /api/v1/attention:
     $ref: "./paths/attention.yaml"
+  /api/v1/home:
+    $ref: "./paths/home.yaml"
   /api/v1/search/catalog:
     $ref: "./paths/search-catalog.yaml"
   /api/v1/accounts:
@@ -982,6 +984,14 @@ components:
       $ref: "./components/schemas/ledger.yaml#/LedgerStatus"
     BalanceQuantity:
       $ref: "./components/schemas/ledger.yaml#/BalanceQuantity"
+    HomeResponse:
+      $ref: "./components/schemas/home.yaml#/HomeResponse"
+    HomeHeadline:
+      $ref: "./components/schemas/home.yaml#/HomeHeadline"
+    HomeValuationInput:
+      $ref: "./components/schemas/home.yaml#/HomeValuationInput"
+    HomeReportingCurrency:
+      $ref: "./components/schemas/home.yaml#/HomeReportingCurrency"
     AccountBalance:
       $ref: "./components/schemas/ledger.yaml#/AccountBalance"
     AccountBalancesResponse:

@@ -124,13 +124,15 @@ Deliver incrementally, tracked in #441, in this order:
    consumer's responsibility.
    Section-owned Ledger and Planning paths #460 are delivered with legacy
    redirects; #448 still replaces the temporary Accounts list with Ledger
-   Overview. Page actions, widths and `?` help #459 are delivered; their
-   shared Home → register → reconciliation journey completes with #442.
+   Overview. Page actions, widths and `?` help #459 are delivered and closed;
+   the shared Home → register → reconciliation journey is #442's acceptance.
 2. **Home (#437):** two-line briefing, central command bar, shortcut tiles led
    by Add transaction, compact default My Home and real-size More to explore
    widgets, backed by a composed Home read and a shared transaction-entry
    dialog. Its status line links to the **Review page (#453)**, which lists
-   everything needing attention and the status of background work.
+   everything needing attention and the status of background work. Split into
+   #476 (composed read and briefing, delivered), #477 (command bar, shortcuts
+   and entry dialog), #478 (My Home widgets) and #479 (More to explore).
 3. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
    (#446); Import views (#447); Ledger overview with accounts by institution,

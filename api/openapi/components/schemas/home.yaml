@@ -1,0 +1,91 @@
+HomeValuationInput:
+  type: object
+  required: [commodity_id, code, kind]
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    code:
+      type: string
+    kind:
+      type: string
+      enum: [price, rate]
+      description: rate for a currency's exchange rate; price for anything else. A chained conversion's missing currency leg is that currency's rate.
+HomeHeadline:
+  type: object
+  required: [id, account_count, value, start_value, change, unavailable, missing, stale]
+  properties:
+    id:
+      type: string
+      enum: [net_worth, cash]
+      description: cash is open checking, savings, cash and other money accounts, which need no price.
+    account_count:
+      type: integer
+      minimum: 0
+      description: Open asset and liability accounts in scope, without system or per-instrument holding accounts.
+    value:
+      description: Converted total at as_of; null when unavailable.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+    start_value:
+      description: Converted total at start_boundary; null when it cannot be converted.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+    change:
+      description: value minus start_value, present only when both are.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+    unavailable:
+      type: [string, 'null']
+      enum: [valuation_gaps, unclassified_short, no_reporting_currency, no_accounts, null]
+    missing:
+      type: array
+      description: Inputs with no usable observation at as_of, one per commodity.
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/HomeValuationInput'
+    stale:
+      type: array
+      description: Inputs valued from an earlier observation inside the staleness window at as_of. Never also missing.
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/HomeValuationInput'
+HomeReportingCurrency:
+  type: object
+  required: [commodity_id, code, symbol, scale]
+  properties:
+    commodity_id:
+      type: integer
+      format: int64
+    code:
+      type: string
+    symbol:
+      type: string
+      description: The currency's display symbol, such as €.
+    scale:
+      type: integer
+HomeResponse:
+  type: object
+  required: [as_of, start_boundary, reporting_currency, empty_book, headlines]
+  properties:
+    as_of:
+      type: string
+      format: date
+      description: Owner-local today.
+    start_boundary:
+      type: string
+      format: date
+      description: Last day of the previous month; the change is measured from the end of this day.
+    reporting_currency:
+      description: The book's default currency; null when none is set.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/HomeReportingCurrency'
+        - type: 'null'
+    empty_book:
+      type: boolean
+      description: True when the book has no owner-created asset or liability account, open or closed.
+    headlines:
+      type: array
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/HomeHeadline'
