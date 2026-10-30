@@ -127,7 +127,10 @@ empty sweep that implies coverage. A refresh run is not reported successful
 when its per-pair item or source-health write fails: the first persistence
 failure stops the sweep, marks the run failed and is returned to the caller.
 Observations already stored remain, while the missing item or health row is
-never fabricated (#469).
+never fabricated (#469). A quote refresh applies the same rule to its
+single-target run: the run finishes failed with the persistence error
+instead of staying running, and the provider fetch error is kept alongside
+it so terminal failures and Retry-After still drive the work's retry (#474).
 
 Every observation exposes source, quote type and adjustment basis, valuation,
 observation, publication and recording times, manual/derived/approximate flags,
