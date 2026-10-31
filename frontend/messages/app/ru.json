@@ -1655,5 +1655,24 @@
         "countPlural=*": "{n} устаревшего значения"
       }
     }
+  ],
+  "home_widgets_changing": "Книга изменилась во время чтения, поэтому карточки могут ненадолго расходиться. Читаем заново…",
+  "home_recurring_blocked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} заблокирована",
+        "countPlural=few": "{n} заблокированы",
+        "countPlural=many": "{n} заблокировано",
+        "countPlural=*": "{n} заблокировано"
+      }
+    }
   ]
 }

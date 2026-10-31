@@ -138,7 +138,10 @@ export function spendingWidget(home: Home, locale: string): WidgetView {
   const currency = home.reporting_currency?.code ?? '';
   const period = range(summary.start_date, summary.end_date, locale, { day: 'numeric', month: 'short' });
   const rowAmounts = summary.categories.map(category => category.converted ?? (category.totals.length === 1 ? category.totals[0] : null));
-  const lengths = bars(rowAmounts);
+  // Bars compare rows only in one currency; an unconverted row in another
+  // currency is listed without one, as the Spending report does.
+  const shared = rowAmounts.every(amount => amount !== null && amount.commodity_id === rowAmounts[0]?.commodity_id);
+  const lengths = shared ? bars(rowAmounts) : rowAmounts.map(() => undefined);
   const rows = summary.categories.map((category, index): WidgetRow => {
     const amount = rowAmounts[index];
     const drillDown: SpendingRow = {
@@ -253,13 +256,14 @@ export function recurringWidget(home: Home, locale: string): WidgetView {
   const open = { text: m.home_recurring_open(), href: summary && summary.draft_count + summary.blocked_count > 0 ? '/app/planning/recurring' : '/app/planning/recurring?tab=templates' };
   if (home.empty_book) return noData('recurring', title, open);
   if (widget.status === 'failed' || !summary) return failed('recurring', title, open);
-  if (summary.active_count === 0 && summary.draft_count === 0) {
+  if (summary.active_count === 0 && summary.draft_count === 0 && summary.blocked_count === 0) {
     return { id: 'recurring', title, wide: false, state: 'not_set_up', fact: m.home_recurring_not_set_up(), scope: null, rows: [], more: null, chart: null, action: { text: m.home_recurring_set_up(), href: '/app/planning/recurring?tab=templates' }, open };
   }
   const commodities = commodityMap(home);
   const next = summary.upcoming[0];
   const scope = [m.home_recurring_active({ count: summary.active_count, n: number(summary.active_count, locale) })];
   if (summary.draft_count > 0) scope.push(m.home_recurring_drafts({ count: summary.draft_count, n: number(summary.draft_count, locale) }));
+  if (summary.blocked_count > 0) scope.push(m.home_recurring_blocked({ count: summary.blocked_count, n: number(summary.blocked_count, locale) }));
   return {
     id: 'recurring', title, wide: false, state: 'ready',
     fact: next ? m.home_recurring_next({ name: next.name, date: day(next.next_due_on, locale) }) : m.home_recurring_none_due(),

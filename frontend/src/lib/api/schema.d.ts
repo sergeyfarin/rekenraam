@@ -29124,6 +29124,8 @@ export interface components {
             empty_book: boolean;
             headlines: components["schemas"]["HomeHeadline"][];
             widgets: components["schemas"]["HomeWidgets"];
+            /** @description True when no write committed while Home was reading, so every summary describes one state of the book. The briefing, trend and account balances share one snapshot; spending, budgets and recurring are separate reads, read again while the book changes. False after three tries; the page then says so and reads again. */
+            consistent: boolean;
             /** @description Every commodity any widget names, so no second read labels an amount. */
             commodities: components["schemas"]["HomeReportingCurrency"][];
         };

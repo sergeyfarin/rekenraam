@@ -37,10 +37,17 @@ const (
 	homeTrendMonths = 12
 )
 
+// homeComposeAttempts bounds how often Home reads again when the book changed
+// while it was reading.
+const homeComposeAttempts = 3
+
 type HomeService struct {
 	transactions *TransactionService
 	budgets      *BudgetService
 	recurring    *RecurringService
+	// afterRead runs after each summary is read; tests use it to commit a
+	// write between two reads.
+	afterRead func(summary string)
 }
 
 func NewHomeService(transactions *TransactionService, budgets *BudgetService, recurring *RecurringService) *HomeService {
@@ -63,6 +70,11 @@ type Home struct {
 	// Commodities describes every commodity any summary names, so Home needs no
 	// second read to label an amount.
 	Commodities []db.ReportingCurrencyRecord
+	// Consistent is true when no write committed while Home was reading, so
+	// every summary describes one state of the book. The summaries are separate
+	// reads; Home reads them again while the book keeps changing and says so
+	// when it could not settle.
+	Consistent bool
 }
 
 // HomeSpendingSummary is the Spending report for this month to date, grouped
@@ -173,8 +185,42 @@ type HomeTrendPoint struct {
 	Value *BalanceQuantity
 }
 
-// Home answers the whole composed Home read for owner-local today.
+// Home answers the whole composed Home read for owner-local today. The
+// briefing, trend and account balances share one ledger snapshot; spending,
+// budgets and recurring are their own reads. A change marker taken before and
+// after shows whether a write committed in between; if one did, Home reads
+// again, and after homeComposeAttempts it returns the last read marked
+// inconsistent rather than mixing states silently.
 func (s *HomeService) Home(ctx context.Context, ownerUserID int64) (Home, error) {
+	marker, err := s.transactions.repository.BookChangeMarker(ctx)
+	if err != nil {
+		return Home{}, err
+	}
+	for attempt := 1; ; attempt++ {
+		home, err := s.compose(ctx, ownerUserID)
+		if err != nil {
+			return Home{}, err
+		}
+		after, err := s.transactions.repository.BookChangeMarker(ctx)
+		if err != nil {
+			return Home{}, err
+		}
+		home.Consistent = after == marker
+		if home.Consistent || attempt == homeComposeAttempts {
+			return home, nil
+		}
+		marker = after
+	}
+}
+
+func (s *HomeService) read(summary string) {
+	if s.afterRead != nil {
+		s.afterRead(summary)
+	}
+}
+
+// compose reads the briefing and every summary once.
+func (s *HomeService) compose(ctx context.Context, ownerUserID int64) (Home, error) {
 	briefing, err := s.transactions.HomeBriefing(ctx, ownerUserID)
 	if err != nil {
 		return Home{}, err
@@ -185,10 +231,14 @@ func (s *HomeService) Home(ctx context.Context, ownerUserID int64) (Home, error)
 		reportingID = briefing.ReportingCurrency.ID
 	}
 
+	s.read("briefing")
 	home.Spending = homeWidget(s.spendingSummary(ctx, briefing.AsOf, reportingID))
+	s.read("spending")
 	home.Budgets = homeWidget(s.budgetSummary(ctx, briefing.AsOf, reportingID))
+	s.read("budgets")
 	home.Accounts = homeWidget(s.accountsSummary(ctx, briefing, reportingID))
 	home.Recurring = homeWidget(s.recurringSummary(ctx, ownerUserID, briefing.AsOf))
+	s.read("recurring")
 	home.NetWorthTrend = homeWidget(netWorthTrendSummary(briefing))
 	// A cancelled request is not a widget failure.
 	for _, widgetErr := range []error{home.Spending.Err, home.Budgets.Err, home.Accounts.Err, home.Recurring.Err, home.NetWorthTrend.Err} {

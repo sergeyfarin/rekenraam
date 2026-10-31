@@ -1619,5 +1619,22 @@
         "countPlural=*": "{n} values out of date"
       }
     }
+  ],
+  "home_widgets_changing": "The book changed while Home was reading it, so cards may differ for a moment. Reading again…",
+  "home_recurring_blocked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} blocked",
+        "countPlural=*": "{n} blocked"
+      }
+    }
   ]
 }

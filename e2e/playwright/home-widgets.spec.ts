@@ -110,12 +110,13 @@ for (const theme of ['light', 'dark'] as const) {
   });
 }
 
-test('one widget that fails keeps its failure in its card', async ({ page }) => {
+test('one widget that fails keeps its failure in its card, and a changing book is disclosed', async ({ page }) => {
   await readyForLedger(page);
   await page.route('**/api/v1/home', async route => {
     const response = await route.fetch();
     const json = await response.json();
     json.widgets.budgets = { status: 'failed', summary: null };
+    json.consistent = false;
     await route.fulfill({ response, json });
   });
   await page.goto('/app');
@@ -124,4 +125,6 @@ test('one widget that fails keeps its failure in its card', async ({ page }) => 
   await expect(budgets.getByRole('alert')).toHaveText('This summary could not be loaded.');
   await expect(page.getByTestId('home-widget-accounts')).not.toHaveAttribute('data-state', 'failed');
   await expect(page.getByTestId('home-headline')).toBeVisible();
+  // A read the book changed under says so rather than mixing states silently.
+  await expect(page.getByTestId('home-widgets-changing')).toHaveText(/changed while Home was reading/);
 });

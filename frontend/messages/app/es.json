@@ -1619,5 +1619,22 @@
         "countPlural=*": "{n} valores desactualizados"
       }
     }
+  ],
+  "home_widgets_changing": "El libro cambió mientras Inicio lo leía, así que las tarjetas pueden diferir un momento. Leyendo de nuevo…",
+  "home_recurring_blocked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} bloqueada",
+        "countPlural=*": "{n} bloqueadas"
+      }
+    }
   ]
 }

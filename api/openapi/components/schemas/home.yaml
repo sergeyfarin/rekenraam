@@ -71,7 +71,7 @@ HomeReportingCurrency:
       type: integer
 HomeResponse:
   type: object
-  required: [as_of, start_boundary, reporting_currency, empty_book, headlines, widgets, commodities]
+  required: [as_of, start_boundary, reporting_currency, empty_book, headlines, widgets, commodities, consistent]
   properties:
     as_of:
       type: string
@@ -95,6 +95,9 @@ HomeResponse:
         $ref: '../../openapi.yaml#/components/schemas/HomeHeadline'
     widgets:
       $ref: '../../openapi.yaml#/components/schemas/HomeWidgets'
+    consistent:
+      type: boolean
+      description: True when no write committed while Home was reading, so every summary describes one state of the book. The briefing, trend and account balances share one snapshot; spending, budgets and recurring are separate reads, read again while the book changes. False after three tries; the page then says so and reads again.
     commodities:
       type: array
       description: Every commodity any widget names, so no second read labels an amount.

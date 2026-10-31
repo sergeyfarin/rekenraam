@@ -415,7 +415,14 @@ widget, each `{status, summary}`: `failed` (summary null) when that summary
 could not be read, which never fails the briefing or another widget; a
 cancelled request is not a widget failure. The trend and the accounts'
 balances are the exception: they come from the briefing's own fold, so they
-share its snapshot and fail with it. `commodities` labels every amount
+share its snapshot and fail with it. Spending, budgets and recurring are
+separate reads, so Home takes a book change marker (the highest audit event,
+transaction version, price observation and recurring occurrence) before and
+after composing; if a write committed in between, it reads again, and after
+three tries returns `consistent: false`, which the page discloses above the
+widgets while it reads again. Two cards never show different states of the
+book without saying so. Spending bars compare rows only when every row is in
+one currency; otherwise rows are listed without bars, as in the report. `commodities` labels every amount
 any summary names, so Home needs no second read. Each summary is its canonical
 read for the same dates, scope and currency, and Home adds no arithmetic
 beyond choosing and ordering rows (`HomeService`, `home_widgets.go`):
@@ -425,7 +432,7 @@ beyond choosing and ordering rows (`HomeService`, `home_widgets.go`):
 | Spending this month | Spending report, by category, 1st of the month to owner-local today, every account, default currency | Converted total (null rather than partial), exact per-currency totals, the report's first three rows in its order, category count |
 | Budgets | Budget month | Expense total in one currency (the default currency when it has an expense target, else the lowest that does) and the count of other currencies; three targeted categories, over budget first (most over first), then by share of target used, compared exactly. No target: *not set up* |
 | Accounts | Account balances at today, posted, taken from the briefing's fold (the same running balances, one pass over the ledger) | Open asset and liability accounts at top level (holdings and nested accounts roll into their parent), largest value in the default currency first; an account without a value ranks after those with one. A balance in one currency shows in that currency. Pins replace the ranking with #442 |
-| Recurring | Recurring templates and the shared review counts | Active (enabled, unarchived) count, drafts and blocked, three schedules by the next due date the Recurring page shows, each with its debit total per commodity |
+| Recurring | Recurring templates and the shared review counts | Active (enabled, unarchived) count, drafts and blocked (both shown, and either keeps the widget set up), three schedules by the next due date the Recurring page shows, each with its debit total per commodity |
 | Net worth trend (wide) | Net worth series, monthly, from the end of the month twelve months ago to today, folded in the same ledger read as the headlines | Points (null where incomplete; the last two are the headline's start and value) and the change from first to last, present only when both are. One snapshot with the briefing, so it fails with it |
 
 Each widget shows the designed states: *loading* (placeholders holding the

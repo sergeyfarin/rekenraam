@@ -62,6 +62,25 @@ func (r *TransactionRepository) WithLedgerSnapshot(ctx context.Context, fn func(
 	return fn(&LedgerSnapshotReader{transaction: transaction})
 }
 
+// BookChangeMarker identifies the book's committed state for reads that span
+// several transactions: it changes whenever anything Home reads changes. User
+// writes record an audit event; ledger writes add a transaction version;
+// provider refreshes add price observations and recurring generation adds
+// occurrences without one. Rows of these tables are never deleted, so equal
+// markers mean no write committed in between (#478).
+func (r *TransactionRepository) BookChangeMarker(ctx context.Context) (string, error) {
+	var audit, versions, prices, occurrences int64
+	err := r.database.QueryRowContext(ctx, `
+		SELECT (SELECT COALESCE(MAX(id), 0) FROM audit_events),
+		       (SELECT COALESCE(MAX(id), 0) FROM transaction_versions),
+		       (SELECT COALESCE(MAX(id), 0) FROM price_observations),
+		       (SELECT COALESCE(MAX(id), 0) FROM recurring_occurrences)`).Scan(&audit, &versions, &prices, &occurrences)
+	if err != nil {
+		return "", fmt.Errorf("read book change marker: %w", err)
+	}
+	return fmt.Sprintf("%d.%d.%d.%d", audit, versions, prices, occurrences), nil
+}
+
 // LedgerSnapshotReader reads the ledger inside one WithLedgerSnapshot
 // transaction.
 type LedgerSnapshotReader struct {

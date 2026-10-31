@@ -1619,5 +1619,22 @@
         "countPlural=*": "{n} waarden verouderd"
       }
     }
+  ],
+  "home_widgets_changing": "Het boek veranderde terwijl Start het las, dus kaarten kunnen even verschillen. Opnieuw lezen…",
+  "home_recurring_blocked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} geblokkeerd",
+        "countPlural=*": "{n} geblokkeerd"
+      }
+    }
   ]
 }

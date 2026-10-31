@@ -16,7 +16,9 @@ export function homeQueryOptions(ownerToday: string) {
     queryKey: [...homeQueryKey, ownerToday] as const,
     queryFn: getHome,
     staleTime: 30_000,
-    refetchOnWindowFocus: true
+    refetchOnWindowFocus: true,
+    // A read the book changed under is shown as such and read again (#478).
+    refetchInterval: (query: { state: { data?: Home } }) => (query.state.data?.consistent === false ? 2_000 : false)
   };
 }
 

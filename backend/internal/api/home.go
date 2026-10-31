@@ -40,6 +40,7 @@ type homeResponse struct {
 	Headlines         []homeHeadlineResponse          `json:"headlines"`
 	Widgets           homeWidgetsResponse             `json:"widgets"`
 	Commodities       []homeReportingCurrencyResponse `json:"commodities"`
+	Consistent        bool                            `json:"consistent"`
 }
 
 type homeWidgetResponse[T any] struct {
@@ -146,7 +147,7 @@ func homeRead(logger *slog.Logger, authService *app.AuthService, homeService *ap
 			return
 		}
 		result := home.Briefing
-		response := homeResponse{AsOf: result.AsOf, StartBoundary: result.StartBoundary, EmptyBook: result.EmptyBook, Headlines: []homeHeadlineResponse{}, Commodities: []homeReportingCurrencyResponse{}}
+		response := homeResponse{AsOf: result.AsOf, StartBoundary: result.StartBoundary, EmptyBook: result.EmptyBook, Consistent: home.Consistent, Headlines: []homeHeadlineResponse{}, Commodities: []homeReportingCurrencyResponse{}}
 		if currency := result.ReportingCurrency; currency != nil {
 			response.ReportingCurrency = &homeReportingCurrencyResponse{CommodityID: currency.ID, Code: currency.Code, Kind: currency.Kind, Symbol: currency.DisplaySymbol, Scale: currency.StandardScale}
 		}

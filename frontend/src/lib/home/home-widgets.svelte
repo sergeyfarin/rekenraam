@@ -93,7 +93,11 @@
 {/snippet}
 
 <!-- My Home has no visible heading: the widgets follow the shortcuts (#478). -->
-<section aria-label={m.home_widgets_label()} class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="home-widgets">
+{#if home && !home.consistent}
+  <!-- The summaries are separate reads; never mix two states of the book silently. -->
+  <p role="status" class="mt-8 text-sm text-muted" data-testid="home-widgets-changing">{m.home_widgets_changing()}</p>
+{/if}
+<section aria-label={m.home_widgets_label()} class="{home && !home.consistent ? 'mt-3' : 'mt-8'} grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3" data-testid="home-widgets">
   {#if widgets}
     {#each widgets as widget (widget.id)}
       {@render card(widget)}

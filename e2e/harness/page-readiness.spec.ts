@@ -92,6 +92,74 @@ test('readiness forgets a request the previous document left in flight', async (
   }
 });
 
+test('readiness forgets a request the departing document starts while the next one loads', async ({ page }) => {
+  const next = barrier(), requestedNext = barrier(), held = barrier(), requestedHeld = barrier();
+  let navigating = false;
+  observePageRequests(page);
+  await page.route('http://readiness.test/**', async route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/poll') {
+      // Polls answer at once until the navigation starts; the first after it is held.
+      if (!navigating) return route.fulfill({ body: 'ok' });
+      requestedHeld.release();
+      await held.promise;
+      await route.fulfill({ body: 'late' }).catch(() => {});
+    } else if (pathname === '/next') {
+      navigating = true;
+      requestedNext.release();
+      await next.promise;
+      await route.fulfill({ contentType: 'text/html', body: '<h1>next</h1>' });
+    } else await route.fulfill({ contentType: 'text/html', body: `<h1>first</h1><script>
+      setInterval(() => fetch('/poll').catch(() => {}), 20);
+    </script>` });
+  });
+  let navigation: Promise<unknown> | undefined;
+  try {
+    await page.goto('http://readiness.test/');
+    // The old document starts a request after the navigation began, before it commits.
+    navigation = page.goto('http://readiness.test/next');
+    await requestedNext.promise;
+    await requestedHeld.promise;
+    next.release();
+    await navigation;
+    await waitForPageReady(page);
+    await expect(page.getByRole('heading')).toHaveText('next');
+  } finally {
+    next.release(); held.release();
+    await navigation?.catch(() => {});
+  }
+});
+
+test('readiness still waits for requests across a client-side navigation', async ({ page }) => {
+  const held = barrier(), requested = barrier();
+  observePageRequests(page);
+  await page.route('http://readiness.test/**', async route => {
+    if (new URL(route.request().url()).pathname === '/data') {
+      requested.release();
+      await held.promise;
+      await route.fulfill({ body: 'data' });
+    } else await route.fulfill({ contentType: 'text/html', body: `<h1>start</h1><script>
+      history.pushState({}, '', '/elsewhere');
+      fetch('/data').then(r => r.text()).then(() => document.querySelector('h1').textContent = 'loaded');
+    </script>` });
+  });
+  let ready: Promise<void> | undefined;
+  try {
+    await page.goto('http://readiness.test/');
+    await requested.promise;
+    let completed = false;
+    ready = waitForPageReady(page).then(() => { completed = true; });
+    await frames(page);
+    expect(completed).toBe(false);
+    held.release();
+    await ready;
+    await expect(page.getByRole('heading')).toHaveText('loaded');
+  } finally {
+    held.release();
+    await ready?.catch(() => {});
+  }
+});
+
 test('readiness waits for font completion and fallback layout', async ({ page }) => {
   const font = barrier(), requested = barrier();
   observePageRequests(page);

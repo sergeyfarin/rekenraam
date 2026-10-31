@@ -73,6 +73,7 @@ function home(overrides: Partial<HomeWidgets> = {}, extra: Partial<Home> = {}): 
       { commodity_id: USD, code: 'USD', kind: 'currency', symbol: '$', scale: 2 },
       { commodity_id: TEST, code: 'TEST', kind: 'security', symbol: 'TEST', scale: 0 }
     ],
+    consistent: true,
     ...extra
   };
 }
@@ -118,6 +119,22 @@ describe('spending', () => {
     const view = spendingWidget(home({ spending: { status: 'ok', summary: { ...widgets().spending.summary!, total: null, commodity_totals: [q('167000'), q('2000', USD)] } } }), 'en');
     expect(view.state).toBe('partial');
     expect(view.fact).toBe('€1,670 · $20.00');
+  });
+
+  it('compares bars only within one currency', () => {
+    const summary = widgets().spending.summary!;
+    // €100 converts; $10,000 has no rate, so it shows in dollars and no row gets a bar.
+    const mixed = { ...summary, total: null, commodity_totals: [q('10000'), q('1000000', USD)], categories: [
+      { ...summary.categories[0], converted: q('10000'), totals: [q('10000')] },
+      { ...summary.categories[1], converted: null, totals: [q('1000000', USD)] }
+    ] };
+    const view = spendingWidget(home({ spending: { status: 'ok', summary: mixed } }), 'en');
+    expect(view.rows.map(row => row.amount)).toEqual(['€100', '$10,000']);
+    expect(view.rows.map(row => row.bar)).toEqual([undefined, undefined]);
+
+    // One currency throughout, converted or not, keeps them.
+    const dollars = { ...mixed, categories: mixed.categories.map(category => ({ ...category, converted: null, totals: [q(category.totals[0].quantity_value, USD)] })) };
+    expect(spendingWidget(home({ spending: { status: 'ok', summary: dollars } }), 'en').rows.map(row => row.bar)).toEqual([0.01, 1]);
   });
 
   it('is zero before anything is spent', () => {
@@ -178,6 +195,16 @@ describe('recurring', () => {
     expect(view.scope).toBe('4 active schedules · 2 drafts to review');
     expect(view.rows[0]).toMatchObject({ label: 'Energy', detail: 'Oct 20', amount: '€142' });
     expect(view.open.href).toBe('/app/planning/recurring');
+  });
+
+  it('counts blocked occurrences and keeps a book with only blocked work set up', () => {
+    const blocked = { today: '2026-10-15', active_count: 1, draft_count: 0, blocked_count: 1, upcoming: [] };
+    const view = recurringWidget(home({ recurring: { status: 'ok', summary: blocked } }), 'en');
+    expect(view.scope).toBe('1 active schedule · 1 blocked');
+    expect(view.open.href).toBe('/app/planning/recurring');
+    const onlyBlocked = recurringWidget(home({ recurring: { status: 'ok', summary: { ...blocked, active_count: 0 } } }), 'en');
+    expect(onlyBlocked.state).toBe('ready');
+    expect(onlyBlocked.scope).toContain('1 blocked');
   });
 
   it('is not set up without schedules', () => {

@@ -451,3 +451,57 @@ func TestHomeCommoditiesLabelEveryWidgetAmount(t *testing.T) {
 	assert.Equal(t, "EUR", codes[f.eurCommodityID])
 	assert.Equal(t, "USD", codes[f.usd], "the dollar account's balance is labelled")
 }
+
+func homeBudgetActual(t *testing.T, home Home, commodityID int64) BudgetAmount {
+	t.Helper()
+	require.NotNil(t, home.Budgets.Summary)
+	require.NotNil(t, home.Budgets.Summary.Total)
+	require.Equal(t, commodityID, home.Budgets.Summary.CommodityID)
+	return home.Budgets.Summary.Total.Actual
+}
+
+// Spending and budgets are separate reads. An expense committed between them
+// would show €1,670 spent beside €1,675 of budget actuals; Home sees the book
+// change and reads again, so both cards describe the same state.
+func TestHomeRereadsWhenTheBookChangesBetweenSummaries(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	f.octoberSpending(t)
+	f.target(t, f.groceries, f.eurCommodityID, 40000)
+	written := 0
+	f.home.afterRead = func(summary string) {
+		if summary == "spending" && written == 0 {
+			written++
+			f.spend(t, "2026-10-14", f.cashAccountID, f.groceries, f.eurCommodityID, 500)
+		}
+	}
+
+	home := f.read(t)
+	assert.Equal(t, 1, written)
+	assert.True(t, home.Consistent)
+	requireHomeCents(t, 167500, home.Spending.Summary.Total, "spending includes the expense")
+	requireBudgetCents(t, 167500, homeBudgetActual(t, home, f.eurCommodityID), "budget actuals agree")
+}
+
+// A book that changes on every read is never shown as one state: the last
+// read comes back marked inconsistent, for the page to say so.
+func TestHomeSaysWhenTheBookKeepsChanging(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	f.octoberSpending(t)
+	writes := 0
+	f.home.afterRead = func(summary string) {
+		if summary == "spending" {
+			writes++
+			f.spend(t, "2026-10-14", f.cashAccountID, f.groceries, f.eurCommodityID, 500)
+		}
+	}
+
+	home := f.read(t)
+	assert.Equal(t, homeComposeAttempts, writes)
+	assert.False(t, home.Consistent)
+	require.NotNil(t, home.Spending.Summary)
+
+	f.home.afterRead = nil
+	assert.True(t, f.read(t).Consistent, "a quiet book reads consistently")
+}

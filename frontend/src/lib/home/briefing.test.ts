@@ -21,7 +21,8 @@ function home(netWorth: Partial<HomeHeadline> = {}, cash: Partial<HomeHeadline> 
       spending: { status: 'failed', summary: null }, budgets: { status: 'failed', summary: null }, accounts: { status: 'failed', summary: null },
       recurring: { status: 'failed', summary: null }, net_worth_trend: { status: 'failed', summary: null }
     },
-    commodities: []
+    commodities: [],
+    consistent: true
   };
 }
 

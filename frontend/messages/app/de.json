@@ -1619,5 +1619,22 @@
         "countPlural=*": "{n} Werte veraltet"
       }
     }
+  ],
+  "home_widgets_changing": "Das Buch hat sich beim Lesen geändert, daher können die Karten kurz voneinander abweichen. Wird erneut gelesen…",
+  "home_recurring_blocked": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} blockiert",
+        "countPlural=*": "{n} blockiert"
+      }
+    }
   ]
 }
