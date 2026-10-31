@@ -281,20 +281,39 @@ func TestPricingDiscoversAnUnpricedNonCurrencyBalance(t *testing.T) {
 	btc := seedTestCryptoCommodity(t, f.database, "BTC")
 	wallet := seedTestAccountWithClass(t, f.database, "active", true, "asset", "crypto_wallet")
 	f.move(t, "2026-10-01", wallet, btc, 50)
+	// The control: ETH is held too, but quoted in USD, and a chained
+	// conversion through today's USD rate values it.
+	eth := seedTestCryptoCommodity(t, f.database, "ETH")
+	usd := seedTestCurrencyCommodity(t, f.database, "USD")
+	f.move(t, "2026-10-01", wallet, eth, 200)
+	f.priceIn(t, eth, usd, "2026-10-15", "2000")
+	f.price(t, usd, "2026-10-15", "1")
 
 	netWorth := homeHeadline(t, f.briefing(t), HomeHeadlineNetWorth)
-	assert.Equal(t, []HomeValuationInput{{CommodityID: btc, Code: "BTC", Kind: "price"}}, netWorth.Missing)
+	assert.Equal(t, []HomeValuationInput{{CommodityID: btc, Code: "BTC", Kind: "price"}}, netWorth.Missing, "ETH is valued, BTC is not")
 	f.requirePricingLists(t, netWorth.Missing, "unusable")
 
-	// A quoted instrument is not given a second, reporting-currency pair: its
-	// own pair is what Prices shows, and a chained conversion values it.
 	workspace, err := f.pricing.Workspace(context.Background(), "2026-10-15")
 	require.NoError(t, err)
-	for _, coverage := range workspace.Coverage {
-		if coverage.BaseCommodityID == f.stockCommodityID {
-			assert.NotEqual(t, f.eurCommodityID, coverage.QuoteCommodityID, "TEST is quoted in its instrument currency only")
+	pairsOf := func(base int64) []PricingCoverage {
+		found := []PricingCoverage{}
+		for _, coverage := range workspace.Coverage {
+			if coverage.BaseCommodityID == base {
+				found = append(found, coverage)
+			}
 		}
+		return found
 	}
+	btcPairs := pairsOf(btc)
+	require.Len(t, btcPairs, 1)
+	assert.Equal(t, f.eurCommodityID, btcPairs[0].QuoteCommodityID, "nothing prices BTC, so its exposure is a base pair")
+	assert.Equal(t, "missing", btcPairs[0].Status)
+	// A priced instrument is not given a second, reporting-currency pair: its
+	// own pair is what Prices shows.
+	ethPairs := pairsOf(eth)
+	require.Len(t, ethPairs, 1, "ETH's own USD pair only, no ETH/EUR")
+	assert.Equal(t, usd, ethPairs[0].QuoteCommodityID)
+	assert.Equal(t, "usable", ethPairs[0].Status)
 }
 
 func TestHomeBriefingMissingRateIsCountedAsARate(t *testing.T) {
