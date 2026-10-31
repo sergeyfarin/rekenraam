@@ -8,6 +8,8 @@
   import { dismissible } from '#lib/navigation/disclosure.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
+  import SearchField from '#lib/search/search-field.svelte';
+  import HomeShortcuts from './home-shortcuts.svelte';
   import { briefingHeadline, briefingStatus, headlineOptions, shownHeadlineID, type HeadlineChoice } from './briefing.ts';
 
   const ownerToday = useOwnerToday();
@@ -108,3 +110,10 @@
     </svelte:element>
   {/if}
 </section>
+
+<!-- The command bar and shortcuts work whatever the briefing's state: search
+     needs no Home data, and an empty book still imports or adds (#477). -->
+<div class="mx-auto max-w-[45rem]">
+  <SearchField variant="home" />
+</div>
+<HomeShortcuts />

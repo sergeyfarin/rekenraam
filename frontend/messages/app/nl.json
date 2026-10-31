@@ -1449,5 +1449,11 @@
   "briefing_load_error": "Het overzicht kon niet worden geladen.",
   "briefing_start_title": "Begin met een rekening",
   "briefing_start_copy": "Voeg de rekeningen toe die je gebruikt om hier je nettovermogen en openstaande punten te zien.",
-  "briefing_start_action": "Rekening toevoegen"
+  "briefing_start_action": "Rekening toevoegen",
+  "home_shortcuts_label": "Snelkoppelingen",
+  "home_shortcut_import": "Bestand importeren",
+  "home_shortcut_spending": "Uitgaven per categorie",
+  "home_shortcut_more": "Meer",
+  "transactions_entry_saved": "Transactie toegevoegd.",
+  "transactions_entry_view": "Transactie bekijken"
 }

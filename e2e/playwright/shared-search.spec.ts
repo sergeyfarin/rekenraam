@@ -12,7 +12,8 @@ for (const width of [1280, 390]) {
     observePageRequests(page);
     const { ids, suffix } = await seedReferenceBook(page);
     await page.goto('/app');
-    if (width === 390) await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeVisible();
+    // Home places search as its command bar; on phones it is a field-like trigger.
+    if (width === 390) await expect(page.getByRole('button', { name: 'Search pages, accounts, commands…', exact: true })).toBeVisible();
     else await expect(search(page)).toBeVisible();
     await page.keyboard.press('Control+k');
     await expect(search(page)).toBeFocused();
@@ -157,7 +158,8 @@ for (const theme of ['light', 'dark'] as const) {
     await readyForLedger(page);
     await page.evaluate(value => localStorage.setItem('rekenraam-theme', value), theme);
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/app');
+    // The header's compact trigger; Home's command bar is covered in home-entry.
+    await page.goto('/app/ledger/accounts');
     const trigger = page.getByRole('button', { name: 'Search', exact: true });
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'Search', exact: true });
@@ -218,10 +220,11 @@ test('phone Add command hands focus to transaction entry', async ({ page }) => {
   await readyForLedger(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/app');
-  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await page.getByRole('button', { name: 'Search pages, accounts, commands…', exact: true }).click();
   await search(page).fill('Add transaction');
   await page.keyboard.press('Enter');
-  const panel = page.getByRole('complementary', { name: 'Actions', exact: true });
+  // Home has no editor of its own: the command opens the shared entry sheet (#477).
+  const panel = page.getByRole('dialog', { name: 'Add transaction', exact: true });
   await expect(page.getByRole('dialog', { name: 'Search', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Add transaction', exact: true })).toBeVisible();
   await expect.poll(() => panel.evaluate(node => node.contains(document.activeElement))).toBe(true);

@@ -119,12 +119,13 @@ test('N and ? work from the keyboard and never while typing', async ({ page }) =
   await expect(help).toHaveCount(0);
   await expect(page.locator('#main-content')).toBeFocused();
 
-  // Elsewhere N opens the Transactions editor and leaves no trigger behind.
+  // Elsewhere N opens the shared entry dialog in place (#477).
   await page.goto('/app');
   await page.locator('#main-content').focus();
   await page.keyboard.press('n');
+  await expect(page.getByRole('dialog', { name: 'Add transaction', exact: true })).toBeVisible();
   await expect(addForm(page)).toBeVisible();
-  await expect(page).toHaveURL((url) => url.pathname === '/app/ledger/transactions' && !url.searchParams.has('create'));
+  await expect(page).toHaveURL((url) => url.pathname === '/app' && !url.searchParams.has('create'));
 });
 
 test('page widths narrow from the shared left edge', async ({ page }) => {

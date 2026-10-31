@@ -258,9 +258,17 @@ One component for Home and the compact header field.
 Existing support: the `transaction_search` FTS5 index (payee, description,
 external reference, notes), the transactions API `q` and `payee_id`
 parameters with matching Transactions URL filters, and MiniSearch-based
-payee matching in the frontend. New work: the shared editor dialog with
-prefill, a last-used-category read per payee, and payee/Everything result grouping (#439).
-The page/object/command grouping foundation is delivered in #457.
+payee matching in the frontend. New work: a last-used-category read per
+payee and payee/Everything result grouping (#439). The page/object/command
+grouping foundation is delivered in #457; the Home placement and the shared
+entry dialog in #477.
+
+Delivered in #477 (2026-10-31): Home renders the shared search with
+`variant="home"` below the briefing, as wide as its column, and the header
+omits its instance there, so Home owns `/` and Ctrl/⌘ K. On phones it is a
+field-shaped trigger that opens the same full-screen search. The command bar
+and shortcuts show in every briefing state, including the empty book and a
+failed Home read, because neither needs Home data.
 Searching account, category or instrument notes is later work.
 
 ### Shared search foundation (#457)
@@ -268,7 +276,7 @@ Searching account, category or instrument notes is later work.
 The compact header field is one reusable combobox. `scope` restricts its result
 kind and `onSelect` lets a future switcher keep the current page's context;
 `variant="home"` supports Home placement, with the header instance omitted
-when that placement ships in #437. The mounting owner registers the global
+on Home (#477). The mounting owner registers the global
 shortcuts once. Page-specific filter fields remain on their own pages.
 
 Pages come from the route registry, including localized search aliases, with
@@ -322,6 +330,32 @@ acceptance; this foundation does not claim their behavior.
 - Each tile has a ⋯ menu (Move left/right, Rename, Remove); a final
   “+ Add shortcut” tile lists the remaining options. Phones show the first
   three tiles plus More.
+
+Delivered in #477 (2026-10-31) as a fixed set: Add transaction, Import file,
+Transactions and Spending by category. Owner decision: **Transfer** waits for
+a transfer entry (#481), and the account-register tile (“Checking”) for pins
+(#442) or the layout document (#438), since nothing yet says which account it
+opens. ⋯ menus, *Add shortcut* and editing are #438. Phones show three tiles
+and a More disclosure listing the rest in order, so a tile moved past the
+third (Add included, once #438 allows moving) stays reachable.
+
+### Shared entry dialog (#477)
+
+*Add transaction* on Home, `N` and search's *Add transaction* command on a
+page without its own editor open one shared dialog: the existing transaction
+editor (locale parsing, financial guards, reconciliation checks, error
+recovery) in `ModalDialog`, a full-screen sheet below 768px. A page that
+offers *Add transaction* in its header keeps its own side-panel editor,
+prefilled for the page (#459); the dialog takes the same account/category
+prefill when a caller supplies it. The shell mounts the dialog once, outside
+every page, so Home's or any page's background refresh never touches the
+working copy, and the editor reads its prefill once (#433). Opening it never
+replaces an open working copy. Cancel and Escape discard it without asking;
+backdrop clicks do nothing, and a write in flight cannot be dismissed. Focus
+returns to the opener. Saving closes the dialog, refreshes transaction lists,
+registers, forecast, Home and the attention count, and announces *Transaction
+added* with a link to the transaction. Nothing posts without the editor's own
+save.
 
 ## Widgets
 
@@ -489,7 +523,9 @@ left edge instead of re-centring, because header, tab row and page share one
 left edge at every width (#436); Home may still centre its own top block
 inside that column. *N* and search's *Add transaction* open the current
 page's editor in place, prefilled, when the page has one, never replace an
-editor that is already open, and otherwise open the Transactions editor.
+editor that is already open, and otherwise open the
+[shared entry dialog](#shared-entry-dialog-477) (#477; until then the
+Transactions editor).
 Register and category titles name the object, with the parent tab as the
 breadcrumb; the *Accounts › Brokerage* and category-tree trails and the
 switcher in the title slot remain #442.

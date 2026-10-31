@@ -80,7 +80,13 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   leaving a pathname, never on navigation completion or same-page URL repair;
   a completed selection must not close a newly opened search (#472). The design's
   [search contract](../../../docs/design/home-and-navigation.md#shared-search-foundation-457)
-  records retained #437/#439/#442 scope.
+  records retained #437/#439/#442 scope. Home mounts it as its command bar and
+  the header omits its own instance there (#477).
+- Adding a transaction from anywhere is `addTransaction()`
+  (`#lib/transactions/add-transaction.svelte.ts`): the page's own editor when
+  it provides one (`providePageAdd`), otherwise the shared
+  `TransactionEntryDialog` the shell mounts once (#477). Never add another
+  entry dialog or navigate away to add.
 - Every modal is `ModalDialog` (`#lib/components/modal-dialog.svelte`, #327):
   wrap it in `{#if}`, pass `onCancel` and `pending`, and keep Cancel before a
   destructive confirm. Never hand-roll a `fixed inset-0` + `aria-modal`

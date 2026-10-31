@@ -1449,5 +1449,11 @@
   "briefing_load_error": "No se pudo cargar tu resumen.",
   "briefing_start_title": "Empieza con una cuenta",
   "briefing_start_copy": "Añade las cuentas que usas para ver aquí tu patrimonio neto y lo que requiere atención.",
-  "briefing_start_action": "Añadir una cuenta"
+  "briefing_start_action": "Añadir una cuenta",
+  "home_shortcuts_label": "Accesos directos",
+  "home_shortcut_import": "Importar archivo",
+  "home_shortcut_spending": "Gastos por categoría",
+  "home_shortcut_more": "Más",
+  "transactions_entry_saved": "Transacción añadida.",
+  "transactions_entry_view": "Ver transacción"
 }

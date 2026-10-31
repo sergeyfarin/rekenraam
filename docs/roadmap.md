@@ -132,7 +132,8 @@ Deliver incrementally, tracked in #441, in this order:
    dialog. Its status line links to the **Review page (#453)**, which lists
    everything needing attention and the status of background work. Split into
    #476 (composed read and briefing, delivered), #477 (command bar, shortcuts
-   and entry dialog), #478 (My Home widgets) and #479 (More to explore).
+   and entry dialog, delivered), #478 (My Home widgets) and #479 (More to
+   explore). The Transfer tile and entry follow as #481.
 3. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
    (#446); Import views (#447); Ledger overview with accounts by institution,

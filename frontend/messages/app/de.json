@@ -1449,5 +1449,11 @@
   "briefing_load_error": "Die Übersicht konnte nicht geladen werden.",
   "briefing_start_title": "Mit einem Konto beginnen",
   "briefing_start_copy": "Fügen Sie Ihre Konten hinzu, um hier Ihr Nettovermögen und offene Punkte zu sehen.",
-  "briefing_start_action": "Konto hinzufügen"
+  "briefing_start_action": "Konto hinzufügen",
+  "home_shortcuts_label": "Verknüpfungen",
+  "home_shortcut_import": "Datei importieren",
+  "home_shortcut_spending": "Ausgaben nach Kategorie",
+  "home_shortcut_more": "Mehr",
+  "transactions_entry_saved": "Transaktion hinzugefügt.",
+  "transactions_entry_view": "Transaktion anzeigen"
 }

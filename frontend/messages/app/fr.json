@@ -1449,5 +1449,11 @@
   "briefing_load_error": "Impossible de charger votre résumé.",
   "briefing_start_title": "Commencez par un compte",
   "briefing_start_copy": "Ajoutez les comptes que vous utilisez pour voir ici votre patrimoine net et ce qui demande votre attention.",
-  "briefing_start_action": "Ajouter un compte"
+  "briefing_start_action": "Ajouter un compte",
+  "home_shortcuts_label": "Raccourcis",
+  "home_shortcut_import": "Importer un fichier",
+  "home_shortcut_spending": "Dépenses par catégorie",
+  "home_shortcut_more": "Plus",
+  "transactions_entry_saved": "Transaction ajoutée.",
+  "transactions_entry_view": "Voir la transaction"
 }

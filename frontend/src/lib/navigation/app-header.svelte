@@ -118,7 +118,8 @@
         <a href="/app/review" aria-current={entry?.route === '/app/review' ? 'page' : undefined} aria-label={m.attention_review_label({ status: reviewBadge.label })} class="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-2 text-sm font-semibold text-foreground hover:bg-control-hover">
           <ListChecks size={18} class="shrink-0 sm:hidden" aria-hidden="true" /><span class="hidden sm:inline">{m.attention_review()}</span> <span aria-hidden="true" class="rounded-full bg-foreground px-1.5 text-xs text-background">{reviewBadge.text}</span>
         </a>
-        <div class="min-w-0 md:w-48 xl:w-60"><SearchField /></div>
+        <!-- Home places the same search large and centred instead (#477). -->
+        {#if !onHome}<div class="min-w-0 md:w-48 xl:w-60"><SearchField /></div>{/if}
         <button type="button" aria-label={m.nav_hide_amounts()} title={m.nav_hide_amounts()}
           aria-pressed={amountPrivacy.hidden} onclick={() => setAmountsHidden(!amountPrivacy.hidden)}
           class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted transition hover:bg-control-hover hover:text-foreground">

@@ -1449,5 +1449,11 @@
   "briefing_load_error": "Could not load your briefing.",
   "briefing_start_title": "Start with an account",
   "briefing_start_copy": "Add the accounts you use to see your net worth and what needs attention here.",
-  "briefing_start_action": "Add an account"
+  "briefing_start_action": "Add an account",
+  "home_shortcuts_label": "Shortcuts",
+  "home_shortcut_import": "Import file",
+  "home_shortcut_spending": "Spending by category",
+  "home_shortcut_more": "More",
+  "transactions_entry_saved": "Transaction added.",
+  "transactions_entry_view": "View transaction"
 }

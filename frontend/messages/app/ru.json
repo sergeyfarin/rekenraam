@@ -1469,5 +1469,11 @@
   "briefing_load_error": "Не удалось загрузить сводку.",
   "briefing_start_title": "Начните со счёта",
   "briefing_start_copy": "Добавьте свои счета, чтобы видеть здесь чистые активы и то, что требует внимания.",
-  "briefing_start_action": "Добавить счёт"
+  "briefing_start_action": "Добавить счёт",
+  "home_shortcuts_label": "Ярлыки",
+  "home_shortcut_import": "Импорт файла",
+  "home_shortcut_spending": "Расходы по категориям",
+  "home_shortcut_more": "Ещё",
+  "transactions_entry_saved": "Транзакция добавлена.",
+  "transactions_entry_view": "Открыть транзакцию"
 }

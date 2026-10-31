@@ -17,6 +17,7 @@
   import Panel from '#lib/components/panel.svelte';
   import AppHeader from '#lib/navigation/app-header.svelte';
   import KeyboardHelp from '#lib/navigation/keyboard-help.svelte';
+  import TransactionEntryDialog from '#lib/transactions/transaction-entry-dialog.svelte';
   import { canonicalURL, routeFor, routes, sectionFor, type PageWidth } from '#lib/navigation/routes.ts';
   import { authSessionQueryOptions, logout } from '#lib/api/auth.ts';
   import { setupStatusQueryOptions } from '#lib/api/setup.ts';
@@ -201,4 +202,5 @@
     </div>
   </main>
   <KeyboardHelp />
+  <TransactionEntryDialog />
 {/if}

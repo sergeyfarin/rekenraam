@@ -31,6 +31,9 @@
   const listID = `${uid}-results`;
   let open = $state(false);
   let phone = $state(false);
+  const home = $derived(variant === 'home');
+  // Phones open the same field in the full-screen dialog at its usual size.
+  const large = $derived(home && !phone);
   let query = $state('');
   let currentScope = $state<SearchScope>('all');
   let inactive = $state(false);
@@ -152,8 +155,8 @@
 <svelte:window onkeydown={shortcut} />
 
 {#snippet field()}
-  <div class="flex min-w-0 items-center gap-2 rounded-(--radius-control) border border-border bg-control px-3 focus-within:ring-2 focus-within:ring-accent">
-    <Search size={16} aria-hidden="true" class="shrink-0 text-muted" />
+  <div class="flex min-w-0 items-center gap-2 border border-border bg-control focus-within:ring-2 focus-within:ring-accent {large ? 'rounded-full px-5 shadow-(--shadow-panel)' : 'rounded-(--radius-control) px-3'}">
+    <Search size={large ? 20 : 16} aria-hidden="true" class="shrink-0 text-muted" />
     <input {@attach bindInput} data-initial-focus type="text" role="combobox" aria-label={m.search_label()}
       aria-autocomplete="list" aria-expanded={open} aria-controls={open ? listID : undefined}
       aria-activedescendant={open && active ? `${uid}-${active.id}` : undefined}
@@ -161,7 +164,7 @@
       placeholder={m.search_placeholder()} value={query}
       oninput={event => { query = event.currentTarget.value; open = true; resetSelection(); }}
       onfocus={() => { if (!restoringFocus) open = true; }} onkeydown={keydown}
-      class="min-h-11 min-w-0 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted" />
+      class="min-w-0 w-full bg-transparent text-foreground outline-none placeholder:text-muted {large ? 'min-h-14 text-base' : 'min-h-11 text-sm'}" />
   </div>
 {/snippet}
 
@@ -202,12 +205,15 @@
   <label class="flex min-h-11 items-center gap-2 border-t border-border px-3 text-xs text-muted"><input type="checkbox" bind:checked={inactive} onchange={resetSelection} />{m.search_include_inactive()}</label>
 {/snippet}
 
-<div class="relative min-w-0 {variant === 'home' ? 'w-full' : ''}" {@attach viewport} {@attach dismissible(() => open && !phone, close)}>
+<div class="relative min-w-0 {home ? 'w-full' : ''}" {@attach viewport} {@attach dismissible(() => open && !phone, close)}>
   {#if phone}
-    <button type="button" aria-label={variant === 'home' ? m.search_placeholder() : m.search_label()} aria-haspopup="dialog" onclick={() => { void focusSearch(); }}
-      class="flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted hover:bg-control-hover hover:text-foreground">
-      <Search size={18} aria-hidden="true" />
-      {#if variant === 'home'}<span class="px-3 text-sm">{m.search_placeholder()}</span>{/if}
+    <!-- On Home the trigger looks like the field it opens, full screen. -->
+    <button type="button" aria-label={home ? m.search_placeholder() : m.search_label()} aria-haspopup="dialog" onclick={() => { void focusSearch(); }}
+      class={home
+        ? 'flex min-h-13 w-full items-center gap-3 rounded-full border border-border bg-control px-5 text-left text-muted shadow-(--shadow-panel) hover:bg-control-hover'
+        : 'flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted hover:bg-control-hover hover:text-foreground'}>
+      <Search size={home ? 20 : 18} aria-hidden="true" class="shrink-0" />
+      {#if home}<span class="truncate text-base">{m.search_placeholder()}</span>{/if}
     </button>
     {#if open}
       <ModalDialog label={m.search_label()} onCancel={() => close(false)} class="m-0! h-dvh max-h-dvh! w-full! max-w-none! rounded-none!">
@@ -221,7 +227,7 @@
   {:else}
     {@render field()}
     {#if open}
-      <div data-search-popup class="absolute right-0 top-full z-50 mt-2 w-[min(32rem,calc(100vw-2rem))] rounded-(--radius-panel) border border-border bg-surface shadow-(--shadow-panel)">
+      <div data-search-popup class="absolute top-full z-50 mt-2 rounded-(--radius-panel) border border-border bg-surface text-left shadow-(--shadow-panel) {home ? 'inset-x-0' : 'right-0 w-[min(32rem,calc(100vw-2rem))]'}">
         {@render results()}
       </div>
     {/if}
