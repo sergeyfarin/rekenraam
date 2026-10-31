@@ -1006,7 +1006,6 @@
   "search_switch_theme": "Переключить светлую/тёмную тему",
   "search_navigation_error": "Не удалось открыть этот результат. Попробуйте ещё раз.",
   "attention_review": "Проверить",
-  "attention_review_label": "Проверить · {status}",
   "attention_count": "Элементов для проверки: {count}",
   "attention_failed": "Известных элементов: {count} · ошибка проверки",
   "attention_checking": "Известных элементов: {count} · проверка не завершена",

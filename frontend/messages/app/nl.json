@@ -1006,7 +1006,6 @@
   "search_switch_theme": "Wissel licht/donker thema",
   "search_navigation_error": "Dit resultaat kon niet worden geopend. Probeer opnieuw.",
   "attention_review": "Controleren",
-  "attention_review_label": "Controleren · {status}",
   "attention_count": "Te controleren items: {count}",
   "attention_failed": "{count} bekende items · een controle is mislukt",
   "attention_checking": "{count} bekende items · de controle is onvolledig",

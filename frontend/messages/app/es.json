@@ -1006,7 +1006,6 @@
   "search_switch_theme": "Cambiar tema claro/oscuro",
   "search_navigation_error": "No se pudo abrir este resultado. Vuelva a intentarlo.",
   "attention_review": "Revisar",
-  "attention_review_label": "Revisar · {status}",
   "attention_count": "Elementos para revisar: {count}",
   "attention_failed": "{count} elementos conocidos · falló una comprobación",
   "attention_checking": "{count} elementos conocidos · comprobación incompleta",

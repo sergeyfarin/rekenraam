@@ -3,7 +3,7 @@ import { apiJSON } from './support/api';
 import { createCashAccount, ensureCurrency, readyForLedger } from './support/ledger';
 import { expectNoAccessibilityViolations } from './support/a11y';
 
-const review = (page: import('@playwright/test').Page) => page.locator('header').getByRole('link', { name: /^Review ·/ });
+const review = (page: import('@playwright/test').Page) => page.locator('header').getByRole('link', { name: /^Review / });
 
 test('posted non-default currency exposes missing FX in pricing and Review, then recovers with a manual rate', async ({ page }) => {
   const { csrfToken, currencyID } = await readyForLedger(page);
@@ -65,6 +65,7 @@ test('real draft count reaches header, Home and tab, and updates after discard',
   const attention = await apiJSON<{ total_known: number }>(page, 'GET', '/api/v1/attention');
   expect(attention.total_known).toBe(1);
   await expect(review(page)).toContainText('1');
+  await expect(review(page)).toHaveAccessibleDescription('Items to review: 1');
   await expect(page.getByTestId('home-status').getByRole('link', { name: /1 draft to review/ })).toHaveAttribute('href', '/app/review');
   await review(page).click();
   await expect(page).toHaveURL('/app/review');
@@ -127,7 +128,8 @@ test('a failed source remains visible even beside known counts and running work'
     ]
   } }));
   await page.goto('/app/review');
-  await expect(review(page)).toHaveAccessibleName(/2 known items · a check failed/);
+  await expect(review(page)).toHaveAccessibleName('Review !');
+  await expect(review(page)).toHaveAccessibleDescription('2 known items · a check failed');
   await expect(page.locator('li').filter({ has: page.getByRole('link', { name: 'Import batches to review', exact: true }) })).toContainText('2');
   await expect(page.getByText('Could not check this source.', { exact: false })).toBeVisible();
   await expect(page.getByText('Work is running;', { exact: false })).toBeVisible();

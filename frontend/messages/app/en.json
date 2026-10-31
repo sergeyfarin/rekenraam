@@ -1006,7 +1006,6 @@
   "search_switch_theme": "Switch light/dark theme",
   "search_navigation_error": "Could not open this result. Try again.",
   "attention_review": "Review",
-  "attention_review_label": "Review · {status}",
   "attention_count": "Items to review: {count}",
   "attention_failed": "{count} known items · a check failed",
   "attention_checking": "{count} known items · checking is incomplete",

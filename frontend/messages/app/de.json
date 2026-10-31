@@ -1006,7 +1006,6 @@
   "search_switch_theme": "Helles/dunkles Design wechseln",
   "search_navigation_error": "Dieses Ergebnis konnte nicht geöffnet werden. Erneut versuchen.",
   "attention_review": "Prüfen",
-  "attention_review_label": "Prüfen · {status}",
   "attention_count": "Zu prüfende Einträge: {count}",
   "attention_failed": "{count} bekannte Einträge · eine Prüfung ist fehlgeschlagen",
   "attention_checking": "{count} bekannte Einträge · Prüfung unvollständig",

@@ -1006,7 +1006,6 @@
   "search_switch_theme": "Changer de thème clair/sombre",
   "search_navigation_error": "Impossible d’ouvrir ce résultat. Réessayez.",
   "attention_review": "Vérifier",
-  "attention_review_label": "Vérifier · {status}",
   "attention_count": "Éléments à vérifier : {count}",
   "attention_failed": "{count} éléments connus · une vérification a échoué",
   "attention_checking": "{count} éléments connus · vérification incomplète",

@@ -35,6 +35,9 @@
   const section = $derived(entry?.section);
   const onHome = $derived(entry?.route === '/app');
   const tabbed = $derived(section !== undefined && section !== 'home' && section !== 'settings' && section !== 'review');
+  // The link's name is its visible text (label and badge) so it matches what
+  // voice control users say; the status sentence rides along as a description.
+  const reviewStatusID = $props.id();
 
   let menuOpen = $state(false);
   let menuButton = $state<HTMLButtonElement>();
@@ -115,9 +118,10 @@
       </div>
 
       <div class="ml-auto flex min-w-0 items-center gap-1">
-        <a href="/app/review" aria-current={entry?.route === '/app/review' ? 'page' : undefined} aria-label={m.attention_review_label({ status: reviewBadge.label })} class="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-2 text-sm font-semibold text-foreground hover:bg-control-hover">
-          <ListChecks size={18} class="shrink-0 sm:hidden" aria-hidden="true" /><span class="hidden sm:inline">{m.attention_review()}</span> <span aria-hidden="true" class="rounded-full bg-foreground px-1.5 text-xs text-background">{reviewBadge.text}</span>
+        <a href="/app/review" aria-current={entry?.route === '/app/review' ? 'page' : undefined} aria-describedby={reviewStatusID} class="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full px-2 text-sm font-semibold text-foreground hover:bg-control-hover">
+          <ListChecks size={18} class="shrink-0 sm:hidden" aria-hidden="true" /><span class="sr-only sm:not-sr-only">{m.attention_review()}</span> <span class="rounded-full bg-foreground px-1.5 text-xs text-background">{reviewBadge.text}</span>
         </a>
+        <span id={reviewStatusID} hidden>{reviewBadge.label}</span>
         <!-- Home places the same search large and centred instead (#477). -->
         {#if !onHome}<div class="min-w-0 md:w-48 xl:w-60"><SearchField /></div>{/if}
         <button type="button" aria-label={m.nav_hide_amounts()} title={m.nav_hide_amounts()}
