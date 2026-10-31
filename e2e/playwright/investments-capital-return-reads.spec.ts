@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { apiJSON } from './support/api';
 import { readyForLedger } from './support/ledger';
 import { todayISO } from './support/dates';
+import { scopedDomTrace } from '../trace-options';
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -11,7 +12,8 @@ test.use({
   // and browser network evidence for this small spec so the next occurrence
   // can distinguish a missing control, actionability wait and lost dialog.
   // Other journeys retain the lighter global trace; trace screenshots stay off.
-  trace: { mode: 'retain-on-failure', snapshots: true, screenshots: false, sources: false }
+  // E2E_FULL_TRACE=1 upgrades every spec, including this one, to a full trace.
+  trace: scopedDomTrace
 });
 function ago(days: number) { const date = new Date(); date.setDate(date.getDate() - days); return todayISO(date); }
 

@@ -690,16 +690,31 @@ stacks and console output. DOM snapshots, trace screenshots and browser network
 capture are off by default: full tracing measured 25–35% slower and the light
 trace 1–6%.
 Use the worker's `app.log` for the server side of a request. Open the trace with
-`pnpm --dir e2e exec playwright show-trace <path>/trace.zip`, or pass `--trace=on`
-to record a full trace while reproducing locally.
+`pnpm --dir e2e exec playwright show-trace <path>/trace.zip`.
+
+For a genuinely full local trace, set `E2E_FULL_TRACE=1`, for example while
+reproducing one shared-search case:
+
+```sh
+E2E_FULL_TRACE=1 pnpm --dir e2e exec playwright test shared-search --grep "#472"
+```
+
+That selection records every case, including passing ones, with DOM snapshots,
+trace screenshots, browser network records and sources. It is a focused
+diagnostic, not a suite setting: full tracing is slower and its retained traces
+are much larger. Do not expect `--trace=on` to do this: Playwright replaces only
+the configured trace mode and keeps the light trace's disabled screenshots,
+snapshots and sources, so the resulting ZIP still has no DOM or network evidence
+(#473). CI and the normal wrappers leave `E2E_FULL_TRACE` unset.
 
 `investments-capital-return-reads.spec.ts` additionally keeps DOM snapshots and
 browser network evidence for its seven cases (#414), with trace screenshots
 and sources still off. Its reversal phases are named timing steps, so a stalled
 click is separate from navigation, reason entry and submit. All other specs
-retain the global light trace. The
-[2026-10-29 follow-up](reviews/capital-return-stall-2026-10-29.md) records the
-failure-artifact control, tracing cost and current reproduction limits.
+retain the global light trace, and `E2E_FULL_TRACE=1` upgrades this scoped spec
+too. The [2026-10-29 follow-up](reviews/capital-return-stall-2026-10-29.md)
+records the failure-artifact control, tracing cost and current reproduction
+limits.
 
 The route and sub-view sweeps run in separate projects before ordinary app
 journeys, with their own worker books. Their complete matrices and assertions
