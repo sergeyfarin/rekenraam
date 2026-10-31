@@ -68,6 +68,30 @@ test('readiness accounts for failed requests', async ({ page }) => {
   await expect(page.getByRole('heading')).toHaveText('refused');
 });
 
+test('readiness forgets a request the previous document left in flight', async ({ page }) => {
+  const held = barrier(), requested = barrier();
+  observePageRequests(page);
+  await page.route('http://readiness.test/**', async route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/held') {
+      requested.release();
+      await held.promise;
+      await route.fulfill({ body: 'late' }).catch(() => {});
+    } else await route.fulfill({ contentType: 'text/html', body: pathname === '/next'
+      ? '<h1>next</h1>'
+      : `<h1>first</h1><script>fetch('/held')</script>` });
+  });
+  try {
+    await page.goto('http://readiness.test/');
+    await requested.promise;
+    await page.goto('http://readiness.test/next');
+    await waitForPageReady(page);
+    await expect(page.getByRole('heading')).toHaveText('next');
+  } finally {
+    held.release();
+  }
+});
+
 test('readiness waits for font completion and fallback layout', async ({ page }) => {
   const font = barrier(), requested = barrier();
   observePageRequests(page);
