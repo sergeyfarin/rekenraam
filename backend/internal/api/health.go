@@ -64,7 +64,7 @@ func RegisterRoutesWithAuth(mux *http.ServeMux, logger *slog.Logger, services Se
 	mux.HandleFunc("POST /api/v1/institutions/{institution_id}/restore", restoreInstitution(logger, services.Auth, services.Institution, options))
 	mux.HandleFunc("GET /api/v1/institutions/{institution_id}/versions", listInstitutionVersions(logger, services.Auth, services.Institution))
 	mux.HandleFunc("GET /api/v1/attention", attentionRead(logger, services.Auth, services.Attention))
-	mux.HandleFunc("GET /api/v1/home", homeRead(logger, services.Auth, services.Transaction))
+	mux.HandleFunc("GET /api/v1/home", homeRead(logger, services.Auth, app.NewHomeService(services.Transaction, services.Budget, services.Recurring)))
 	mux.HandleFunc("GET /api/v1/search/catalog", searchCatalog(logger, services.Auth, services.Search))
 	mux.HandleFunc("GET /api/v1/accounts", listAccounts(logger, services.Auth, services.Account))
 	mux.HandleFunc("POST /api/v1/accounts", createAccount(logger, services.Auth, services.Account, options))

@@ -1454,5 +1454,170 @@
   "home_shortcut_spending": "Spending by category",
   "home_shortcut_more": "More",
   "transactions_entry_saved": "Transaction added.",
-  "transactions_entry_view": "View transaction"
+  "transactions_entry_view": "View transaction",
+  "home_widgets_label": "My Home",
+  "home_widget_failed": "This summary could not be loaded.",
+  "home_widget_no_data": "No data yet",
+  "home_widget_no_data_copy": "Appears once you add an account and transactions.",
+  "home_widget_no_currency": "Set a default currency to see this in one currency.",
+  "home_widget_set_currency": "Set default currency",
+  "home_spending_title": "Spending this month",
+  "home_spending_scope": "{period} · all accounts · {currency}",
+  "home_spending_zero": "Nothing spent yet this month",
+  "home_spending_partial": "Not all spending converts to {currency}; totals by currency",
+  "home_spending_open": "Open spending report",
+  "home_budgets_title": "Budgets · {month}",
+  "home_budgets_left": "{amount} left",
+  "home_budgets_over": "{amount} over budget",
+  "home_budgets_spent": "{actual} of {target} spent",
+  "home_budgets_row": "{actual} of {target}",
+  "home_budgets_row_over": "{amount} over",
+  "home_budgets_not_set_up": "No budget this month",
+  "home_budgets_set_up": "Set a budget",
+  "home_budgets_open": "Open budgets",
+  "home_accounts_title": "Accounts",
+  "home_accounts_scope": "Largest balances · {date}",
+  "home_accounts_no_value": "No value",
+  "home_accounts_open": "All accounts",
+  "home_recurring_title": "Recurring",
+  "home_recurring_next": "Next: {name} on {date}",
+  "home_recurring_none_due": "Nothing scheduled",
+  "home_recurring_not_set_up": "No recurring schedules",
+  "home_recurring_set_up": "Set up a schedule",
+  "home_recurring_open": "Open recurring",
+  "home_trend_title": "Net worth · 12 months",
+  "home_trend_scope": "{period} · month-end values · {currency}",
+  "home_trend_unavailable": "Unavailable",
+  "home_trend_unavailable_copy": "Today’s value needs a price or rate; it is never shown partially.",
+  "home_trend_chart_label": "Net worth from {start} to {end}",
+  "home_trend_change_label": "{amount} since {date}",
+  "home_trend_open": "Open net worth report",
+  "home_spending_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more category",
+        "countPlural=*": "+{n} more categories"
+      }
+    }
+  ],
+  "home_budgets_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more budget",
+        "countPlural=*": "+{n} more budgets"
+      }
+    }
+  ],
+  "home_budgets_other_currencies": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "also {n} other currency",
+        "countPlural=*": "also {n} other currencies"
+      }
+    }
+  ],
+  "home_accounts_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} open account",
+        "countPlural=*": "{n} open accounts"
+      }
+    }
+  ],
+  "home_accounts_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more account",
+        "countPlural=*": "+{n} more accounts"
+      }
+    }
+  ],
+  "home_recurring_active": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} active schedule",
+        "countPlural=*": "{n} active schedules"
+      }
+    }
+  ],
+  "home_recurring_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} draft to review",
+        "countPlural=*": "{n} drafts to review"
+      }
+    }
+  ],
+  "home_trend_stale": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} value out of date",
+        "countPlural=*": "{n} values out of date"
+      }
+    }
+  ]
 }

@@ -10,6 +10,7 @@
   import { getLocale } from '#lib/paraglide/runtime.js';
   import SearchField from '#lib/search/search-field.svelte';
   import HomeShortcuts from './home-shortcuts.svelte';
+  import HomeWidgets from './home-widgets.svelte';
   import { briefingHeadline, briefingStatus, headlineOptions, shownHeadlineID, type HeadlineChoice } from './briefing.ts';
 
   const ownerToday = useOwnerToday();
@@ -117,3 +118,4 @@
   <SearchField variant="home" />
 </div>
 <HomeShortcuts />
+<HomeWidgets home={homeQuery.data} failed={homeQuery.isError && !homeQuery.data} onRetry={() => homeQuery.refetch()} />

@@ -54,13 +54,16 @@ HomeHeadline:
         $ref: '../../openapi.yaml#/components/schemas/HomeValuationInput'
 HomeReportingCurrency:
   type: object
-  required: [commodity_id, code, symbol, scale]
+  required: [commodity_id, code, kind, symbol, scale]
   properties:
     commodity_id:
       type: integer
       format: int64
     code:
       type: string
+    kind:
+      type: string
+      description: The commodity kind, such as currency or security.
     symbol:
       type: string
       description: The currency's display symbol, such as €.
@@ -68,7 +71,7 @@ HomeReportingCurrency:
       type: integer
 HomeResponse:
   type: object
-  required: [as_of, start_boundary, reporting_currency, empty_book, headlines]
+  required: [as_of, start_boundary, reporting_currency, empty_book, headlines, widgets, commodities]
   properties:
     as_of:
       type: string
@@ -90,3 +93,221 @@ HomeResponse:
       type: array
       items:
         $ref: '../../openapi.yaml#/components/schemas/HomeHeadline'
+    widgets:
+      $ref: '../../openapi.yaml#/components/schemas/HomeWidgets'
+    commodities:
+      type: array
+      description: Every commodity any widget names, so no second read labels an amount.
+      items:
+        $ref: '../../openapi.yaml#/components/schemas/HomeReportingCurrency'
+HomeWidgetStatus:
+  type: string
+  enum: [ok, failed]
+  description: failed means this summary could not be read; summary is then null and the other widgets are unaffected.
+HomeWidgets:
+  type: object
+  description: The default My Home widgets (#478). Each fails on its own.
+  required: [spending, budgets, accounts, recurring, net_worth_trend]
+  properties:
+    spending:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeSpendingSummary'
+            - type: 'null'
+    budgets:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeBudgetSummary'
+            - type: 'null'
+    accounts:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeAccountsSummary'
+            - type: 'null'
+    recurring:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeRecurringSummary'
+            - type: 'null'
+    net_worth_trend:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeNetWorthTrendSummary'
+            - type: 'null'
+HomeSpendingSummary:
+  type: object
+  description: The Spending report for this month to date, by category, over every account, in the default currency.
+  required: [start_date, end_date, total, commodity_totals, categories, category_count]
+  properties:
+    start_date: { type: string, format: date }
+    end_date: { type: string, format: date }
+    total:
+      description: The report's converted total; null without a default currency or when any posting cannot be converted, never partial.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+    commodity_totals:
+      type: array
+      items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' }
+    categories:
+      type: array
+      description: The report's first rows, in its order (at most three).
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeSpendingCategory' }
+    category_count:
+      type: integer
+      minimum: 0
+HomeSpendingCategory:
+  type: object
+  required: [category_id, code, name, builtin_key, converted, totals]
+  properties:
+    category_id: { type: integer, format: int64 }
+    code: { type: string }
+    name: { type: string }
+    builtin_key:
+      type: [string, 'null']
+      description: Built-in or starter category key; label by it when name is empty.
+    converted:
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+    totals:
+      type: array
+      items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' }
+HomeBudgetSummary:
+  type: object
+  description: This month's expense budget in one currency, the default currency when it has an expense target. Currencies are never totalled together.
+  required: [period_start, period_end, commodity_id, other_commodity_count, total, categories, category_count]
+  properties:
+    period_start: { type: string, format: date }
+    period_end: { type: string, format: date }
+    commodity_id:
+      type: [integer, 'null']
+      format: int64
+      description: null when no expense category has a target this month (not set up).
+    other_commodity_count:
+      type: integer
+      minimum: 0
+    total:
+      description: The budget month's expense total in commodity_id.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BudgetCategoryAmount'
+        - type: 'null'
+    categories:
+      type: array
+      description: Targeted expense categories, over budget first (most over first), then by share of target used (at most three).
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeBudgetCategory' }
+    category_count:
+      type: integer
+      minimum: 0
+HomeBudgetCategory:
+  type: object
+  required: [category_id, code, name, builtin_key, amount]
+  properties:
+    category_id: { type: integer, format: int64 }
+    code: { type: string }
+    name: { type: string }
+    builtin_key:
+      type: [string, 'null']
+      description: Built-in or starter category key; label by it when name is empty.
+    amount: { $ref: '../../openapi.yaml#/components/schemas/BudgetCategoryAmount' }
+HomeAccountsSummary:
+  type: object
+  description: The largest open accounts by value in the default currency, until pinned accounts exist (#442). A balance includes the accounts under it. Balances are the posted account balances at as_of from the same ledger read as the headlines.
+  required: [as_of, open_count, accounts]
+  properties:
+    as_of: { type: string, format: date }
+    open_count:
+      type: integer
+      minimum: 0
+      description: Open accounts listed at top level; holdings and nested accounts roll into their parent.
+    accounts:
+      type: array
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeAccountRow' }
+HomeAccountRow:
+  type: object
+  required: [account_id, code, name, account_class, account_kind, balances, value]
+  properties:
+    account_id: { type: integer, format: int64 }
+    code: { type: string }
+    name: { type: string }
+    account_class: { type: string, enum: [asset, liability] }
+    account_kind: { type: string }
+    balances:
+      type: array
+      items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' }
+    value:
+      description: balances in the default currency at as_of; null when any part cannot be converted.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+HomeRecurringSummary:
+  type: object
+  required: [today, active_count, draft_count, blocked_count, upcoming]
+  properties:
+    today: { type: string, format: date }
+    active_count:
+      type: integer
+      minimum: 0
+      description: Enabled, unarchived schedules.
+    draft_count: { type: integer, minimum: 0 }
+    blocked_count: { type: integer, minimum: 0 }
+    upcoming:
+      type: array
+      description: Active schedules by next due date (at most three).
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeRecurringItem' }
+HomeRecurringItem:
+  type: object
+  required: [template_id, name, next_due_on, amounts]
+  properties:
+    template_id: { type: integer, format: int64 }
+    name: { type: string }
+    next_due_on: { type: string, format: date }
+    amounts:
+      type: array
+      description: The transaction's size per commodity, the sum of its debit postings, as the Recurring page shows it.
+      items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' }
+HomeNetWorthTrendSummary:
+  type: object
+  description: The Net worth series by month from the end of the month twelve months ago to today, in the default currency, folded in the same ledger read as the headlines, so its last two points are the net worth headline's start_value and value. Empty points without a default currency or accounts.
+  required: [start_date, end_date, points, change]
+  properties:
+    start_date: { type: string, format: date }
+    end_date: { type: string, format: date }
+    points:
+      type: array
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeTrendPoint' }
+    change:
+      description: The last point minus the first, present only when both are.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+HomeTrendPoint:
+  type: object
+  required: [date, value]
+  properties:
+    date: { type: string, format: date }
+    value:
+      description: Complete-only converted net worth at date; null when any price or rate is missing.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'

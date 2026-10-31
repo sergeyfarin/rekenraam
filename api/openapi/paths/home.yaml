@@ -1,5 +1,5 @@
 get:
-  summary: Home briefing
+  summary: Home briefing and widgets
   description: >-
     Home's composed read for owner-local today. Each headline is the Net worth
     report's figure for the same accounts in the book's default currency, at
@@ -7,7 +7,10 @@ get:
     missing price or rate leaves value null and lists what is missing, never a
     partial figure. Out-of-date inputs (valued from an earlier observation
     inside the staleness window) are listed separately and do not block the
-    value. Never starts work or contacts providers. Session-only; no
+    value. The default My Home widgets (spending this month, budgets,
+    accounts, recurring, net worth trend) are bounded summaries of their
+    canonical reads; each fails on its own (status failed) without failing the
+    briefing. Never starts work or contacts providers. Session-only; no
     personal-access-token grant.
   security:
     - CookieSession: []

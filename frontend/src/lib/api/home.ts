@@ -4,6 +4,8 @@ import { APIClientError, apiClient, toAPIClientError, toNetworkError } from '#li
 export type Home = components['schemas']['HomeResponse'];
 export type HomeHeadline = components['schemas']['HomeHeadline'];
 export type HomeValuationInput = components['schemas']['HomeValuationInput'];
+export type HomeCommodity = components['schemas']['HomeReportingCurrency'];
+export type HomeWidgets = components['schemas']['HomeWidgets'];
 
 /** Every Home summary shares this prefix, so one invalidation refreshes them all. */
 export const homeQueryKey = ['api', 'home'] as const;

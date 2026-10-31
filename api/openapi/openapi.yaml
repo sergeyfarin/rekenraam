@@ -992,6 +992,30 @@ components:
       $ref: "./components/schemas/home.yaml#/HomeValuationInput"
     HomeReportingCurrency:
       $ref: "./components/schemas/home.yaml#/HomeReportingCurrency"
+    HomeWidgetStatus:
+      $ref: "./components/schemas/home.yaml#/HomeWidgetStatus"
+    HomeWidgets:
+      $ref: "./components/schemas/home.yaml#/HomeWidgets"
+    HomeSpendingSummary:
+      $ref: "./components/schemas/home.yaml#/HomeSpendingSummary"
+    HomeSpendingCategory:
+      $ref: "./components/schemas/home.yaml#/HomeSpendingCategory"
+    HomeBudgetSummary:
+      $ref: "./components/schemas/home.yaml#/HomeBudgetSummary"
+    HomeBudgetCategory:
+      $ref: "./components/schemas/home.yaml#/HomeBudgetCategory"
+    HomeAccountsSummary:
+      $ref: "./components/schemas/home.yaml#/HomeAccountsSummary"
+    HomeAccountRow:
+      $ref: "./components/schemas/home.yaml#/HomeAccountRow"
+    HomeRecurringSummary:
+      $ref: "./components/schemas/home.yaml#/HomeRecurringSummary"
+    HomeRecurringItem:
+      $ref: "./components/schemas/home.yaml#/HomeRecurringItem"
+    HomeNetWorthTrendSummary:
+      $ref: "./components/schemas/home.yaml#/HomeNetWorthTrendSummary"
+    HomeTrendPoint:
+      $ref: "./components/schemas/home.yaml#/HomeTrendPoint"
     AccountBalance:
       $ref: "./components/schemas/ledger.yaml#/AccountBalance"
     AccountBalancesResponse:

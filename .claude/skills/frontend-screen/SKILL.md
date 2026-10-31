@@ -70,7 +70,9 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
 - Home reads one composed `GET /api/v1/home` (`#lib/api/home.ts`, keyed by
   owner-local today); the shell's write middleware invalidates it with the
   attention count. Briefing rules live in `#lib/home/briefing.ts`; Home
-  amounts use `formatHomeMoney`, nothing else does (#476). "Out of date" is the
+  amounts use `formatHomeMoney`, nothing else does (#476). My Home widgets
+  are view models in `#lib/home/widgets.ts` built from that same read; a
+  widget never fetches on its own, and a failed summary stays in its card (#478). "Out of date" is the
   pricing policy's staleness, the word Prices and Review use; a link to a
   filtered destination must list what Home named (`?status=unusable|stale`).
 - Global search is `#lib/search/search-field.svelte` (#457). Mount one shortcut

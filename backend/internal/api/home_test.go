@@ -27,7 +27,7 @@ func TestHomeReadAuthenticationShapeAndPurity(t *testing.T) {
 
 	var raw map[string]any
 	require.NoError(t, json.Unmarshal(res.Body.Bytes(), &raw))
-	for _, field := range []string{"as_of", "start_boundary", "reporting_currency", "empty_book", "headlines"} {
+	for _, field := range []string{"as_of", "start_boundary", "reporting_currency", "empty_book", "headlines", "widgets", "commodities"} {
 		assert.Contains(t, raw, field)
 	}
 	var result homeResponse
@@ -39,6 +39,22 @@ func TestHomeReadAuthenticationShapeAndPurity(t *testing.T) {
 		item := headline.(map[string]any)
 		for _, field := range []string{"value", "start_value", "change", "unavailable", "missing", "stale"} {
 			assert.Contains(t, item, field, "null and empty are sent, never omitted")
+		}
+	}
+	widgets := raw["widgets"].(map[string]any)
+	for widget, fields := range map[string][]string{
+		"spending":        {"start_date", "end_date", "total", "commodity_totals", "categories", "category_count"},
+		"budgets":         {"period_start", "period_end", "commodity_id", "other_commodity_count", "total", "categories", "category_count"},
+		"accounts":        {"as_of", "open_count", "accounts"},
+		"recurring":       {"today", "active_count", "draft_count", "blocked_count", "upcoming"},
+		"net_worth_trend": {"start_date", "end_date", "points", "change"},
+	} {
+		item := widgets[widget].(map[string]any)
+		assert.Equal(t, "ok", item["status"], widget)
+		summary, ok := item["summary"].(map[string]any)
+		require.True(t, ok, "%s has a summary", widget)
+		for _, field := range fields {
+			assert.Contains(t, summary, field, "%s.%s is sent, never omitted", widget, field)
 		}
 	}
 }

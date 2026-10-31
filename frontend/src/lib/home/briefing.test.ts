@@ -14,8 +14,14 @@ function headline(id: HomeHeadline['id'], overrides: Partial<HomeHeadline> = {})
 function home(netWorth: Partial<HomeHeadline> = {}, cash: Partial<HomeHeadline> = {}): Home {
   return {
     as_of: '2026-10-15', start_boundary: '2026-09-30', empty_book: false,
-    reporting_currency: { commodity_id: 1, code: 'EUR', symbol: '€', scale: 2 },
-    headlines: [headline('net_worth', netWorth), headline('cash', cash)]
+    reporting_currency: { commodity_id: 1, code: 'EUR', kind: 'currency', symbol: '€', scale: 2 },
+    headlines: [headline('net_worth', netWorth), headline('cash', cash)],
+    // The briefing reads no widget; widgets.test.ts covers them.
+    widgets: {
+      spending: { status: 'failed', summary: null }, budgets: { status: 'failed', summary: null }, accounts: { status: 'failed', summary: null },
+      recurring: { status: 'failed', summary: null }, net_worth_trend: { status: 'failed', summary: null }
+    },
+    commodities: []
   };
 }
 

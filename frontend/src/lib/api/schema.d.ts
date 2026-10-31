@@ -4949,8 +4949,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Home briefing
-         * @description Home's composed read for owner-local today. Each headline is the Net worth report's figure for the same accounts in the book's default currency, at today and at the end of the previous month. A headline is complete-only: a missing price or rate leaves value null and lists what is missing, never a partial figure. Out-of-date inputs (valued from an earlier observation inside the staleness window) are listed separately and do not block the value. Never starts work or contacts providers. Session-only; no personal-access-token grant.
+         * Home briefing and widgets
+         * @description Home's composed read for owner-local today. Each headline is the Net worth report's figure for the same accounts in the book's default currency, at today and at the end of the previous month. A headline is complete-only: a missing price or rate leaves value null and lists what is missing, never a partial figure. Out-of-date inputs (valued from an earlier observation inside the staleness window) are listed separately and do not block the value. The default My Home widgets (spending this month, budgets, accounts, recurring, net worth trend) are bounded summaries of their canonical reads; each fails on its own (status failed) without failing the briefing. Never starts work or contacts providers. Session-only; no personal-access-token grant.
          */
         get: {
             parameters: {
@@ -29123,6 +29123,9 @@ export interface components {
             /** @description True when the book has no owner-created asset or liability account, open or closed. */
             empty_book: boolean;
             headlines: components["schemas"]["HomeHeadline"][];
+            widgets: components["schemas"]["HomeWidgets"];
+            /** @description Every commodity any widget names, so no second read labels an amount. */
+            commodities: components["schemas"]["HomeReportingCurrency"][];
         };
         HomeHeadline: {
             /**
@@ -29162,9 +29165,144 @@ export interface components {
             /** Format: int64 */
             commodity_id: number;
             code: string;
+            /** @description The commodity kind, such as currency or security. */
+            kind: string;
             /** @description The currency's display symbol, such as €. */
             symbol: string;
             scale: number;
+        };
+        /**
+         * @description failed means this summary could not be read; summary is then null and the other widgets are unaffected.
+         * @enum {string}
+         */
+        HomeWidgetStatus: "ok" | "failed";
+        /** @description The default My Home widgets (#478). Each fails on its own. */
+        HomeWidgets: {
+            spending: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeSpendingSummary"] | null;
+            };
+            budgets: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeBudgetSummary"] | null;
+            };
+            accounts: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeAccountsSummary"] | null;
+            };
+            recurring: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeRecurringSummary"] | null;
+            };
+            net_worth_trend: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeNetWorthTrendSummary"] | null;
+            };
+        };
+        /** @description The Spending report for this month to date, by category, over every account, in the default currency. */
+        HomeSpendingSummary: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @description The report's converted total; null without a default currency or when any posting cannot be converted, never partial. */
+            total: components["schemas"]["BalanceQuantity"] | null;
+            commodity_totals: components["schemas"]["BalanceQuantity"][];
+            /** @description The report's first rows, in its order (at most three). */
+            categories: components["schemas"]["HomeSpendingCategory"][];
+            category_count: number;
+        };
+        HomeSpendingCategory: {
+            /** Format: int64 */
+            category_id: number;
+            code: string;
+            name: string;
+            /** @description Built-in or starter category key; label by it when name is empty. */
+            builtin_key: string | null;
+            converted: components["schemas"]["BalanceQuantity"] | null;
+            totals: components["schemas"]["BalanceQuantity"][];
+        };
+        /** @description This month's expense budget in one currency, the default currency when it has an expense target. Currencies are never totalled together. */
+        HomeBudgetSummary: {
+            /** Format: date */
+            period_start: string;
+            /** Format: date */
+            period_end: string;
+            /**
+             * Format: int64
+             * @description null when no expense category has a target this month (not set up).
+             */
+            commodity_id: number | null;
+            other_commodity_count: number;
+            /** @description The budget month's expense total in commodity_id. */
+            total: components["schemas"]["BudgetCategoryAmount"] | null;
+            /** @description Targeted expense categories, over budget first (most over first), then by share of target used (at most three). */
+            categories: components["schemas"]["HomeBudgetCategory"][];
+            category_count: number;
+        };
+        HomeBudgetCategory: {
+            /** Format: int64 */
+            category_id: number;
+            code: string;
+            name: string;
+            /** @description Built-in or starter category key; label by it when name is empty. */
+            builtin_key: string | null;
+            amount: components["schemas"]["BudgetCategoryAmount"];
+        };
+        /** @description The largest open accounts by value in the default currency, until pinned accounts exist (#442). A balance includes the accounts under it. Balances are the posted account balances at as_of from the same ledger read as the headlines. */
+        HomeAccountsSummary: {
+            /** Format: date */
+            as_of: string;
+            /** @description Open accounts listed at top level; holdings and nested accounts roll into their parent. */
+            open_count: number;
+            accounts: components["schemas"]["HomeAccountRow"][];
+        };
+        HomeAccountRow: {
+            /** Format: int64 */
+            account_id: number;
+            code: string;
+            name: string;
+            /** @enum {string} */
+            account_class: "asset" | "liability";
+            account_kind: string;
+            balances: components["schemas"]["BalanceQuantity"][];
+            /** @description balances in the default currency at as_of; null when any part cannot be converted. */
+            value: components["schemas"]["BalanceQuantity"] | null;
+        };
+        HomeRecurringSummary: {
+            /** Format: date */
+            today: string;
+            /** @description Enabled, unarchived schedules. */
+            active_count: number;
+            draft_count: number;
+            blocked_count: number;
+            /** @description Active schedules by next due date (at most three). */
+            upcoming: components["schemas"]["HomeRecurringItem"][];
+        };
+        HomeRecurringItem: {
+            /** Format: int64 */
+            template_id: number;
+            name: string;
+            /** Format: date */
+            next_due_on: string;
+            /** @description The transaction's size per commodity, the sum of its debit postings, as the Recurring page shows it. */
+            amounts: components["schemas"]["BalanceQuantity"][];
+        };
+        /** @description The Net worth series by month from the end of the month twelve months ago to today, in the default currency, folded in the same ledger read as the headlines, so its last two points are the net worth headline's start_value and value. Empty points without a default currency or accounts. */
+        HomeNetWorthTrendSummary: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            points: components["schemas"]["HomeTrendPoint"][];
+            /** @description The last point minus the first, present only when both are. */
+            change: components["schemas"]["BalanceQuantity"] | null;
+        };
+        HomeTrendPoint: {
+            /** Format: date */
+            date: string;
+            /** @description Complete-only converted net worth at date; null when any price or rate is missing. */
+            value: components["schemas"]["BalanceQuantity"] | null;
         };
         AccountBalance: {
             /** Format: int64 */

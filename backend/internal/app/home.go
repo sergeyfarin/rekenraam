@@ -86,6 +86,16 @@ type HomeHeadline struct {
 type HomeBriefing struct {
 	AsOf          string
 	StartBoundary string
+	// TrendStart is the end of the month twelve months ago; NetWorthTrend is
+	// net worth at each month end from there and today, from the same fold as
+	// the headlines, so its last two points are the headline's start and value.
+	// Empty when net worth is not valued (no accounts, no default currency).
+	TrendStart    string
+	NetWorthTrend []HomeTrendPoint
+	// Accounts are the owner's accounts with their posted balances today, from
+	// the same fold, as the account balances read returns them (no system
+	// accounts). Empty for an empty book.
+	Accounts []AccountBalance
 	// ReportingCurrency is the book's default currency; nil when none is set.
 	ReportingCurrency *db.ReportingCurrencyRecord
 	// EmptyBook is true when the book has no asset or liability account an
@@ -108,12 +118,16 @@ func (s *TransactionService) HomeBriefing(ctx context.Context, ownerUserID int64
 	if err != nil {
 		return HomeBriefing{}, err
 	}
+	trendStart, err := homeTrendStart(asOf)
+	if err != nil {
+		return HomeBriefing{}, err
+	}
 	accounts, err := s.repository.LedgerAccountsAsOf(ctx, BookID, asOf)
 	if err != nil {
 		return HomeBriefing{}, fmt.Errorf("read home accounts: %w", err)
 	}
 
-	briefing := HomeBriefing{AsOf: asOf, StartBoundary: startBoundary, EmptyBook: true}
+	briefing := HomeBriefing{AsOf: asOf, StartBoundary: startBoundary, TrendStart: trendStart, NetWorthTrend: []HomeTrendPoint{}, Accounts: []AccountBalance{}, EmptyBook: true}
 	netWorthCount := 0
 	cashAccountIDs := make([]int64, 0)
 	for _, account := range accounts {
@@ -174,44 +188,72 @@ func (s *TransactionService) HomeBriefing(ctx context.Context, ownerUserID int64
 			filters = append(filters, ReportFilters{AccountIDs: scope.accountIDs})
 		}
 	}
+	if briefing.EmptyBook {
+		return briefing, nil
+	}
+	fold, err := s.foldHome(ctx, filters, trendStart, startBoundary, asOf)
+	if err != nil {
+		return HomeBriefing{}, err
+	}
+	briefing.Accounts, err = accountBalancesFrom(accounts, fold.running, false)
+	if err != nil {
+		return HomeBriefing{}, err
+	}
 	if len(valued) > 0 {
-		if err := s.valueHomeHeadlines(ctx, valued, filters, startBoundary, asOf, briefing.ReportingCurrency.ID); err != nil {
+		trend, err := s.valueHomeHeadlines(ctx, valued, fold, startBoundary, asOf, briefing.ReportingCurrency.ID)
+		if err != nil {
 			return HomeBriefing{}, err
+		}
+		if valued[0].ID == HomeHeadlineNetWorth {
+			briefing.NetWorthTrend = trend
 		}
 	}
 	return briefing, nil
 }
 
-// valueHomeHeadlines computes what the Net worth report's series computes for
-// each headline's accounts, from one ledger read and one fold for all of
-// them, and converts each boundary through its own coverage, so a gap at the
-// start of the month is not reported as a gap today.
-func (s *TransactionService) valueHomeHeadlines(ctx context.Context, headlines []*HomeHeadline, filters []ReportFilters, startBoundary, asOf string, reportingID int64) error {
+// homeFold is Home's one pass over the ledger: monthly from the trend's start
+// to today, totalled per valued headline scope, and the running per-account
+// balances it ends with.
+type homeFold struct {
+	bounds  []calendarBucketBound
+	scoped  [][]netWorthBucket
+	running map[int64]map[int64]*exact.ScaledInt
+}
+
+func (s *TransactionService) foldHome(ctx context.Context, filters []ReportFilters, trendStart, startBoundary, asOf string) (homeFold, error) {
 	scopes := make([]ReportFilters, len(filters))
 	for index, filter := range filters {
 		resolved, _, err := s.resolveReportFilters(ctx, filter, asOf)
 		if err != nil {
-			return err
+			return homeFold{}, err
 		}
 		scopes[index] = echoedReportFilters(resolved)
 	}
-	bounds, err := calendarBucketBounds(startBoundary, asOf, "month")
+	bounds, err := calendarBucketBounds(trendStart, asOf, "month")
 	if err != nil {
-		return err
+		return homeFold{}, err
 	}
-	if len(bounds) != 2 || bounds[0].endDate != startBoundary || bounds[1].endDate != asOf {
-		return fmt.Errorf("home series has unexpected buckets")
+	last := len(bounds) - 1
+	if last < 1 || bounds[0].endDate != trendStart || bounds[last-1].endDate != startBoundary || bounds[last].endDate != asOf {
+		return homeFold{}, fmt.Errorf("home series has unexpected buckets")
 	}
-	var scoped [][]netWorthBucket
+	fold := homeFold{bounds: bounds}
 	err = s.repository.WithLedgerSnapshot(ctx, func(ledger *db.LedgerSnapshotReader) error {
 		var readErr error
-		scoped, readErr = netWorthScopedSeriesTotals(ctx, ledger, bounds, scopes)
+		fold.scoped, fold.running, readErr = netWorthScopedSeriesTotals(ctx, ledger, bounds, scopes)
 		return readErr
 	})
-	if err != nil {
-		return err
-	}
+	return fold, err
+}
 
+// valueHomeHeadlines values what the Net worth report's series computes for
+// each headline's accounts from Home's one fold, and converts each boundary
+// through its own coverage, so a gap at the start of the month is not reported
+// as a gap today. The fold runs monthly from the trend's start, so the first
+// headline's twelve-month trend (#478) comes with it, which it returns.
+func (s *TransactionService) valueHomeHeadlines(ctx context.Context, headlines []*HomeHeadline, fold homeFold, startBoundary, asOf string, reportingID int64) ([]HomeTrendPoint, error) {
+	bounds, scoped := fold.bounds, fold.scoped
+	last := len(bounds) - 1
 	seen := make([]int64, 0)
 	for _, buckets := range scoped {
 		for _, bucket := range buckets {
@@ -220,20 +262,30 @@ func (s *TransactionService) valueHomeHeadlines(ctx context.Context, headlines [
 			}
 		}
 	}
-	rates, err := s.NewRateTable(ctx, ReportingCurrencyInput{CommodityID: reportingID}, seen, startBoundary, asOf)
+	rates, err := s.NewRateTable(ctx, ReportingCurrencyInput{CommodityID: reportingID}, seen, bounds[0].endDate, asOf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	staleness, err := s.pricingStalenessDays(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for index, headline := range headlines {
-		if err := s.valueHomeHeadline(ctx, headline, rates, scoped[index][0], scoped[index][1], startBoundary, asOf, staleness); err != nil {
-			return err
+		if err := s.valueHomeHeadline(ctx, headline, rates, scoped[index][last-1], scoped[index][last], startBoundary, asOf, staleness); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	// Each point as the report's series converts it: complete-only, and none
+	// while a short position is unclassified.
+	trend := make([]HomeTrendPoint, 0, len(bounds))
+	for index, bound := range bounds {
+		point := HomeTrendPoint{Date: bound.endDate}
+		if bucket := scoped[0][index]; len(bucket.unclassifiedShorts) == 0 {
+			point.Value = homeConverted(rates.withFreshCoverage(), bucket.totals, bound.endDate)
+		}
+		trend = append(trend, point)
+	}
+	return trend, nil
 }
 
 func (s *TransactionService) valueHomeHeadline(ctx context.Context, headline *HomeHeadline, rates *RateTable, start, today netWorthBucket, startBoundary, asOf string, staleness int) error {

@@ -408,6 +408,38 @@ editor's own save.
 The capability inventory, which widget uses which existing contract, and the
 composed Home read model are specified in the design review.
 
+### Default widgets contract (#478)
+
+`GET /api/v1/home` also returns `widgets`, one bounded summary per default
+widget, each `{status, summary}`: `failed` (summary null) when that summary
+could not be read, which never fails the briefing or another widget; a
+cancelled request is not a widget failure. The trend and the accounts'
+balances are the exception: they come from the briefing's own fold, so they
+share its snapshot and fail with it. `commodities` labels every amount
+any summary names, so Home needs no second read. Each summary is its canonical
+read for the same dates, scope and currency, and Home adds no arithmetic
+beyond choosing and ordering rows (`HomeService`, `home_widgets.go`):
+
+| Widget | Canonical read | Summary |
+|---|---|---|
+| Spending this month | Spending report, by category, 1st of the month to owner-local today, every account, default currency | Converted total (null rather than partial), exact per-currency totals, the report's first three rows in its order, category count |
+| Budgets | Budget month | Expense total in one currency (the default currency when it has an expense target, else the lowest that does) and the count of other currencies; three targeted categories, over budget first (most over first), then by share of target used, compared exactly. No target: *not set up* |
+| Accounts | Account balances at today, posted, taken from the briefing's fold (the same running balances, one pass over the ledger) | Open asset and liability accounts at top level (holdings and nested accounts roll into their parent), largest value in the default currency first; an account without a value ranks after those with one. A balance in one currency shows in that currency. Pins replace the ranking with #442 |
+| Recurring | Recurring templates and the shared review counts | Active (enabled, unarchived) count, drafts and blocked, three schedules by the next due date the Recurring page shows, each with its debit total per commodity |
+| Net worth trend (wide) | Net worth series, monthly, from the end of the month twelve months ago to today, folded in the same ledger read as the headlines | Points (null where incomplete; the last two are the headline's start and value) and the change from first to last, present only when both are. One snapshot with the briefing, so it fails with it |
+
+Each widget shows the designed states: *loading* (placeholders holding the
+grid's places), *ready*, *zero* (nothing spent), *no data* (empty book),
+*not set up* (no budget, no schedule, no default currency), *partial*
+(per-currency totals when spending cannot convert, an account without a
+value, today's net worth unavailable), *stale* (the trend counts the headline's
+out-of-date inputs) and *failed* (in its card, with Retry). Drill-downs are
+plain links that keep the canonical page's URL filters: spending rows open
+Transactions filtered as the Spending report's drill-down, Open links carry
+the period, bucket and reporting currency or the budget month and currency.
+Home keeps the read cached across navigation, so Back restores its scroll
+without late content moving it.
+
 ## Customization
 
 - One Customize panel (sliders icon on Home): headline choice (net worth,
@@ -611,7 +643,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 |---|---|
 | Shell: header, section links and settings menu, tab row of real routes, route registry, hide amounts, shared search, attention read; retires the sidebar and the duplicate top bar | #436 (header, registry and tab routes #455; hide amounts #456; search #457; attention read #458; page header, widths and `?` help #459) |
 | Route paths of pages outside their section | #460 |
-| Home: briefing, command bar, shortcuts with the shared Add transaction dialog, default My Home and More to explore, composed Home read | #437 (read and briefing #476; command bar, shortcuts and entry #477; My Home widgets #478; More to explore #479) |
+| Home: briefing, command bar, shortcuts with the shared Add transaction dialog, default My Home and More to explore, composed Home read | #437 (read and briefing #476; command bar, shortcuts and entry #477; My Home widgets #478, delivered; More to explore #479) |
 | Review page: everything needing attention and background status | #453 |
 | Settings in five pages; Trash becomes Transactions › Deleted; ledger export moves to Reports › Export | #446 |
 | Import views: Files, Connections, Rules and profiles, Dividends | #447 |

@@ -1454,5 +1454,170 @@
   "home_shortcut_spending": "Uitgaven per categorie",
   "home_shortcut_more": "Meer",
   "transactions_entry_saved": "Transactie toegevoegd.",
-  "transactions_entry_view": "Transactie bekijken"
+  "transactions_entry_view": "Transactie bekijken",
+  "home_widgets_label": "Mijn start",
+  "home_widget_failed": "Dit overzicht kon niet worden geladen.",
+  "home_widget_no_data": "Nog geen gegevens",
+  "home_widget_no_data_copy": "Verschijnt zodra u een rekening en transacties toevoegt.",
+  "home_widget_no_currency": "Stel een standaardvaluta in om dit in één valuta te zien.",
+  "home_widget_set_currency": "Standaardvaluta instellen",
+  "home_spending_title": "Uitgaven deze maand",
+  "home_spending_scope": "{period} · alle rekeningen · {currency}",
+  "home_spending_zero": "Deze maand nog niets uitgegeven",
+  "home_spending_partial": "Niet alle uitgaven zijn om te rekenen naar {currency}; totalen per valuta",
+  "home_spending_open": "Uitgavenrapport openen",
+  "home_budgets_title": "Budgetten · {month}",
+  "home_budgets_left": "{amount} over",
+  "home_budgets_over": "{amount} boven budget",
+  "home_budgets_spent": "{actual} van {target} uitgegeven",
+  "home_budgets_row": "{actual} van {target}",
+  "home_budgets_row_over": "{amount} erover",
+  "home_budgets_not_set_up": "Geen budget deze maand",
+  "home_budgets_set_up": "Budget instellen",
+  "home_budgets_open": "Budgetten openen",
+  "home_accounts_title": "Rekeningen",
+  "home_accounts_scope": "Grootste saldi · {date}",
+  "home_accounts_no_value": "Geen waarde",
+  "home_accounts_open": "Alle rekeningen",
+  "home_recurring_title": "Terugkerend",
+  "home_recurring_next": "Volgende: {name} op {date}",
+  "home_recurring_none_due": "Niets gepland",
+  "home_recurring_not_set_up": "Geen terugkerende schema’s",
+  "home_recurring_set_up": "Schema instellen",
+  "home_recurring_open": "Terugkerende openen",
+  "home_trend_title": "Nettovermogen · 12 maanden",
+  "home_trend_scope": "{period} · waarden aan maandeinde · {currency}",
+  "home_trend_unavailable": "Niet beschikbaar",
+  "home_trend_unavailable_copy": "De waarde van vandaag mist een koers; die wordt nooit gedeeltelijk getoond.",
+  "home_trend_chart_label": "Nettovermogen van {start} tot {end}",
+  "home_trend_change_label": "{amount} sinds {date}",
+  "home_trend_open": "Vermogensrapport openen",
+  "home_spending_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} andere categorie",
+        "countPlural=*": "+{n} andere categorieën"
+      }
+    }
+  ],
+  "home_budgets_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} ander budget",
+        "countPlural=*": "+{n} andere budgetten"
+      }
+    }
+  ],
+  "home_budgets_other_currencies": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "plus {n} andere valuta",
+        "countPlural=*": "plus {n} andere valuta’s"
+      }
+    }
+  ],
+  "home_accounts_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} open rekening",
+        "countPlural=*": "{n} open rekeningen"
+      }
+    }
+  ],
+  "home_accounts_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} andere rekening",
+        "countPlural=*": "+{n} andere rekeningen"
+      }
+    }
+  ],
+  "home_recurring_active": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} actief schema",
+        "countPlural=*": "{n} actieve schema’s"
+      }
+    }
+  ],
+  "home_recurring_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} concept te controleren",
+        "countPlural=*": "{n} concepten te controleren"
+      }
+    }
+  ],
+  "home_trend_stale": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} waarde verouderd",
+        "countPlural=*": "{n} waarden verouderd"
+      }
+    }
+  ]
 }

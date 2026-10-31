@@ -1602,6 +1602,36 @@ func (r *PricingRepository) CommodityCodes(ctx context.Context, bookID int64, co
 	return codes, nil
 }
 
+// ReportingCurrencies reads many commodities' identity and scale in one query,
+// keyed by ID. Unknown IDs are absent rather than an error.
+func (r *PricingRepository) ReportingCurrencies(ctx context.Context, bookID int64, commodityIDs []int64) (map[int64]ReportingCurrencyRecord, error) {
+	records := map[int64]ReportingCurrencyRecord{}
+	if len(commodityIDs) == 0 {
+		return records, nil
+	}
+	clause, args := inClause("c.id", commodityIDs)
+	rows, err := r.database.QueryContext(ctx, `
+		SELECT c.id, c.code, c.kind, cv.standard_scale, cv.display_symbol
+		FROM commodities c
+		JOIN `+CurrentReferenceVersions(ctx, "commodity")+` cv ON cv.commodity_id = c.id
+		WHERE c.book_id = ? AND `+clause, append([]any{bookID}, args...)...)
+	if err != nil {
+		return nil, fmt.Errorf("read commodities: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var record ReportingCurrencyRecord
+		if err := rows.Scan(&record.ID, &record.Code, &record.Kind, &record.StandardScale, &record.DisplaySymbol); err != nil {
+			return nil, fmt.Errorf("scan commodity: %w", err)
+		}
+		records[record.ID] = record
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read commodities: %w", err)
+	}
+	return records, nil
+}
+
 func (r *PricingRepository) ReportingCurrency(ctx context.Context, bookID int64, commodityID int64) (ReportingCurrencyRecord, error) {
 	var record ReportingCurrencyRecord
 	err := r.database.QueryRowContext(ctx, `

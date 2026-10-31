@@ -1454,5 +1454,170 @@
   "home_shortcut_spending": "Gastos por categoría",
   "home_shortcut_more": "Más",
   "transactions_entry_saved": "Transacción añadida.",
-  "transactions_entry_view": "Ver transacción"
+  "transactions_entry_view": "Ver transacción",
+  "home_widgets_label": "Mi inicio",
+  "home_widget_failed": "No se pudo cargar este resumen.",
+  "home_widget_no_data": "Aún no hay datos",
+  "home_widget_no_data_copy": "Aparece cuando añadas una cuenta y transacciones.",
+  "home_widget_no_currency": "Define una moneda predeterminada para verlo en una sola moneda.",
+  "home_widget_set_currency": "Definir moneda predeterminada",
+  "home_spending_title": "Gasto de este mes",
+  "home_spending_scope": "{period} · todas las cuentas · {currency}",
+  "home_spending_zero": "Aún no hay gastos este mes",
+  "home_spending_partial": "No todo el gasto se convierte a {currency}; totales por moneda",
+  "home_spending_open": "Abrir informe de gastos",
+  "home_budgets_title": "Presupuestos · {month}",
+  "home_budgets_left": "Quedan {amount}",
+  "home_budgets_over": "{amount} por encima del presupuesto",
+  "home_budgets_spent": "{actual} de {target} gastado",
+  "home_budgets_row": "{actual} de {target}",
+  "home_budgets_row_over": "{amount} de más",
+  "home_budgets_not_set_up": "Sin presupuesto este mes",
+  "home_budgets_set_up": "Definir un presupuesto",
+  "home_budgets_open": "Abrir presupuestos",
+  "home_accounts_title": "Cuentas",
+  "home_accounts_scope": "Saldos mayores · {date}",
+  "home_accounts_no_value": "Sin valor",
+  "home_accounts_open": "Todas las cuentas",
+  "home_recurring_title": "Recurrentes",
+  "home_recurring_next": "Próximo: {name} el {date}",
+  "home_recurring_none_due": "Nada programado",
+  "home_recurring_not_set_up": "Sin programaciones recurrentes",
+  "home_recurring_set_up": "Crear una programación",
+  "home_recurring_open": "Abrir recurrentes",
+  "home_trend_title": "Patrimonio neto · 12 meses",
+  "home_trend_scope": "{period} · valores a fin de mes · {currency}",
+  "home_trend_unavailable": "No disponible",
+  "home_trend_unavailable_copy": "El valor de hoy necesita un precio o un tipo de cambio; nunca se muestra parcialmente.",
+  "home_trend_chart_label": "Patrimonio neto de {start} a {end}",
+  "home_trend_change_label": "{amount} desde el {date}",
+  "home_trend_open": "Abrir informe de patrimonio",
+  "home_spending_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} categoría más",
+        "countPlural=*": "+{n} categorías más"
+      }
+    }
+  ],
+  "home_budgets_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} presupuesto más",
+        "countPlural=*": "+{n} presupuestos más"
+      }
+    }
+  ],
+  "home_budgets_other_currencies": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "y {n} moneda más",
+        "countPlural=*": "y {n} monedas más"
+      }
+    }
+  ],
+  "home_accounts_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} cuenta abierta",
+        "countPlural=*": "{n} cuentas abiertas"
+      }
+    }
+  ],
+  "home_accounts_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} cuenta más",
+        "countPlural=*": "+{n} cuentas más"
+      }
+    }
+  ],
+  "home_recurring_active": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} programación activa",
+        "countPlural=*": "{n} programaciones activas"
+      }
+    }
+  ],
+  "home_recurring_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} borrador por revisar",
+        "countPlural=*": "{n} borradores por revisar"
+      }
+    }
+  ],
+  "home_trend_stale": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} valor desactualizado",
+        "countPlural=*": "{n} valores desactualizados"
+      }
+    }
+  ]
 }

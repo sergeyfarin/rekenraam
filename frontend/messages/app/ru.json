@@ -1474,5 +1474,186 @@
   "home_shortcut_spending": "Расходы по категориям",
   "home_shortcut_more": "Ещё",
   "transactions_entry_saved": "Транзакция добавлена.",
-  "transactions_entry_view": "Открыть транзакцию"
+  "transactions_entry_view": "Открыть транзакцию",
+  "home_widgets_label": "Моя главная",
+  "home_widget_failed": "Не удалось загрузить эту сводку.",
+  "home_widget_no_data": "Данных пока нет",
+  "home_widget_no_data_copy": "Появится, когда вы добавите счёт и операции.",
+  "home_widget_no_currency": "Укажите основную валюту, чтобы видеть это в одной валюте.",
+  "home_widget_set_currency": "Указать основную валюту",
+  "home_spending_title": "Расходы за месяц",
+  "home_spending_scope": "{period} · все счета · {currency}",
+  "home_spending_zero": "В этом месяце расходов пока нет",
+  "home_spending_partial": "Не все расходы пересчитываются в {currency}; итоги по валютам",
+  "home_spending_open": "Открыть отчёт о расходах",
+  "home_budgets_title": "Бюджеты · {month}",
+  "home_budgets_left": "Осталось {amount}",
+  "home_budgets_over": "Перерасход {amount}",
+  "home_budgets_spent": "Потрачено {actual} из {target}",
+  "home_budgets_row": "{actual} из {target}",
+  "home_budgets_row_over": "перерасход {amount}",
+  "home_budgets_not_set_up": "На этот месяц бюджета нет",
+  "home_budgets_set_up": "Задать бюджет",
+  "home_budgets_open": "Открыть бюджеты",
+  "home_accounts_title": "Счета",
+  "home_accounts_scope": "Крупнейшие остатки · {date}",
+  "home_accounts_no_value": "Нет оценки",
+  "home_accounts_open": "Все счета",
+  "home_recurring_title": "Регулярные",
+  "home_recurring_next": "Далее: {name}, {date}",
+  "home_recurring_none_due": "Ничего не запланировано",
+  "home_recurring_not_set_up": "Регулярных операций нет",
+  "home_recurring_set_up": "Настроить расписание",
+  "home_recurring_open": "Открыть регулярные",
+  "home_trend_title": "Чистые активы · 12 месяцев",
+  "home_trend_scope": "{period} · на конец месяца · {currency}",
+  "home_trend_unavailable": "Недоступно",
+  "home_trend_unavailable_copy": "Для сегодняшней оценки нужна цена или курс; частичная сумма не показывается.",
+  "home_trend_chart_label": "Чистые активы: с {start} до {end}",
+  "home_trend_change_label": "{amount} с {date}",
+  "home_trend_open": "Открыть отчёт о чистых активах",
+  "home_spending_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} категория",
+        "countPlural=few": "ещё {n} категории",
+        "countPlural=many": "ещё {n} категорий",
+        "countPlural=*": "ещё {n} категории"
+      }
+    }
+  ],
+  "home_budgets_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} бюджет",
+        "countPlural=few": "ещё {n} бюджета",
+        "countPlural=many": "ещё {n} бюджетов",
+        "countPlural=*": "ещё {n} бюджета"
+      }
+    }
+  ],
+  "home_budgets_other_currencies": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} валюта",
+        "countPlural=few": "ещё {n} валюты",
+        "countPlural=many": "ещё {n} валют",
+        "countPlural=*": "ещё {n} валюты"
+      }
+    }
+  ],
+  "home_accounts_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} открытый счёт",
+        "countPlural=few": "{n} открытых счёта",
+        "countPlural=many": "{n} открытых счетов",
+        "countPlural=*": "{n} открытого счёта"
+      }
+    }
+  ],
+  "home_accounts_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} счёт",
+        "countPlural=few": "ещё {n} счёта",
+        "countPlural=many": "ещё {n} счетов",
+        "countPlural=*": "ещё {n} счёта"
+      }
+    }
+  ],
+  "home_recurring_active": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} активное расписание",
+        "countPlural=few": "{n} активных расписания",
+        "countPlural=many": "{n} активных расписаний",
+        "countPlural=*": "{n} активного расписания"
+      }
+    }
+  ],
+  "home_recurring_drafts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} черновик на проверку",
+        "countPlural=few": "{n} черновика на проверку",
+        "countPlural=many": "{n} черновиков на проверку",
+        "countPlural=*": "{n} черновика на проверку"
+      }
+    }
+  ],
+  "home_trend_stale": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} устаревшее значение",
+        "countPlural=few": "{n} устаревших значения",
+        "countPlural=many": "{n} устаревших значений",
+        "countPlural=*": "{n} устаревшего значения"
+      }
+    }
+  ]
 }
