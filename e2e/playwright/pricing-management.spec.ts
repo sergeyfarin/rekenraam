@@ -52,7 +52,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     expect(response.request().postDataJSON().price_value).toBe('9007199254740993');
     const created = await response.json(); expect(created.price_value).toBe('9007199254740993');
     await expect(dialog).toBeHidden(); await expect(add).toBeFocused();
-    await expect(page.getByRole('status')).toContainText(m.pricing_saved);
+    await expect(page.getByRole('status').filter({ hasText: m.pricing_saved })).toBeVisible();
     const row = page.locator(`[data-price-id="${created.id}"]`);
     await row.getByRole('button', { name: m.pricing_correct, exact: true }).click();
     const correct = page.getByRole('dialog', { name: m.pricing_correct, exact: true });

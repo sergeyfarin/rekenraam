@@ -58,7 +58,7 @@ test('[acceptance] a provider dividend is reviewed, completed and posted through
   await page.goto('/app/investments');
   await page.getByRole('link', { name: /^Suggestions/ }).click();
   await page.getByRole('button', { name: 'Check provider dividends', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Dividend check queued for listings:');
+  await expect(page.getByRole('status').filter({ hasText: 'Dividend check queued for listings:' })).toBeVisible();
 
   const card = page.getByTestId('event-suggestion').filter({ hasText: name });
   await expect(card).toBeVisible({ timeout: 30_000 });

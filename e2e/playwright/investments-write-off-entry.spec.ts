@@ -120,7 +120,7 @@ for (const locale of ['en', 'es', 'fr', 'nl', 'de', 'ru']) {
     expect(postings.some((posting: { account_id: number }) => posting.account_id === s.cash.id)).toBe(false);
     await expect(dialog).toBeHidden();
     await expect(action).toBeFocused();
-    await expect(page.getByRole('status')).toContainText(m.investments_write_off_success);
+    await expect(page.getByRole('status').filter({ hasText: m.investments_write_off_success })).toBeVisible();
     expect(await gains(page, s)).toEqual(['-1250']);
     // The already mounted portfolio reflects the invalidated holding read.
     await expect(page.locator('tbody tr').filter({ hasText: s.name })).toContainText(new Intl.NumberFormat(locale).format(1.75));
