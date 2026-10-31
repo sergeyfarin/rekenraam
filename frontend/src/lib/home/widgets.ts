@@ -13,7 +13,8 @@ import { spendingDrillDownHref, type SpendingRow } from '#lib/reports/spending.t
  * it); this module only picks the words, links and Home rounding.
  */
 
-export type WidgetID = keyof HomeWidgets;
+/** Home read summaries, plus cards that read data Home already has. */
+export type WidgetID = keyof HomeWidgets | 'forecast' | 'imports' | 'prices';
 
 /** The designed states (docs/design/home-and-navigation.md → Widgets). */
 export type WidgetState = 'ready' | 'zero' | 'no_data' | 'not_set_up' | 'partial' | 'stale' | 'failed';
@@ -52,28 +53,36 @@ export type WidgetView = {
   /** A not-set-up widget's first step. */
   action: WidgetLink | null;
   open: WidgetLink;
+  /** A short label beside the title, such as Estimate. */
+  badge?: string;
+  /** The fact needs attention; carried by its words too, never by colour alone. */
+  warning?: boolean;
+  /** Retries the read this card depends on, when it is not the Home read. */
+  retry?: () => unknown;
 };
 
 /** The default My Home order (design: Default My Home). */
-export const defaultWidgetOrder: readonly WidgetID[] = ['spending', 'budgets', 'accounts', 'recurring', 'net_worth_trend'];
+export const defaultWidgetOrder = ['spending', 'budgets', 'accounts', 'recurring', 'net_worth_trend'] as const satisfies readonly WidgetID[];
 
-type Commodities = ReadonlyMap<number, HomeCommodity>;
+type DefaultWidgetID = (typeof defaultWidgetOrder)[number];
 
-function commodityMap(home: Home): Commodities {
+export type Commodities = ReadonlyMap<number, HomeCommodity>;
+
+export function commodityMap(home: Home): Commodities {
   const map = new Map<number, HomeCommodity>();
   for (const commodity of home.commodities) map.set(commodity.commodity_id, commodity);
   if (home.reporting_currency) map.set(home.reporting_currency.commodity_id, home.reporting_currency);
   return map;
 }
 
-type Quantity = { commodity_id: number; quantity_value: string; quantity_scale: number };
+export type Quantity = { commodity_id: number; quantity_value: string; quantity_scale: number };
 
-function sign(value: string): number {
+export function sign(value: string): number {
   return value.startsWith('-') ? -1 : /^0+$/.test(value) ? 0 : 1;
 }
 
 /** Home-rounded money with its symbol; a negative amount reads −€2,000. */
-function money(quantity: Quantity, commodities: Commodities, locale: string, signed = false): string {
+export function money(quantity: Quantity, commodities: Commodities, locale: string, signed = false): string {
   if (amountPrivacy.hidden) return hiddenAmount;
   const commodity = commodities.get(quantity.commodity_id);
   const scale = commodity?.scale ?? quantity.quantity_scale;
@@ -86,15 +95,15 @@ function money(quantity: Quantity, commodities: Commodities, locale: string, sig
   return `${sign(value) > 0 ? '+' : '±'}${shown}`;
 }
 
-function number(value: number, locale: string): string {
+export function number(value: number, locale: string): string {
   return new Intl.NumberFormat(locale).format(value);
 }
 
-function day(date: string, locale: string): string {
+export function day(date: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(parseISO(date));
 }
 
-function range(start: string, end: string, locale: string, options: Intl.DateTimeFormatOptions): string {
+export function range(start: string, end: string, locale: string, options: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat(locale, options).formatRange(parseISO(start), parseISO(end));
 }
 
@@ -112,15 +121,15 @@ function categoryLabel(category: { name: string; code: string; builtin_key: stri
   return category.name.trim() || (category.builtin_key ? builtinCategoryLabel(category.builtin_key) : category.code.trim()) || m.reports_spending_unnamed();
 }
 
-function failed(id: WidgetID, title: string, open: WidgetLink, wide = false): WidgetView {
+export function failed(id: WidgetID, title: string, open: WidgetLink, wide = false): WidgetView {
   return { id, title, wide, state: 'failed', fact: null, scope: m.home_widget_failed(), rows: [], more: null, chart: null, action: null, open };
 }
 
-function noData(id: WidgetID, title: string, open: WidgetLink, wide = false): WidgetView {
+export function noData(id: WidgetID, title: string, open: WidgetLink, wide = false): WidgetView {
   return { id, title, wide, state: 'no_data', fact: m.home_widget_no_data(), scope: m.home_widget_no_data_copy(), rows: [], more: null, chart: null, action: null, open };
 }
 
-function reportQuery(start: string, end: string, home: Home): string {
+export function reportQuery(start: string, end: string, home: Home): string {
   const params = new URLSearchParams({ start_date: start, end_date: end, bucket: 'month' });
   if (home.reporting_currency) params.set('reporting_currency_id', String(home.reporting_currency.commodity_id));
   return params.toString();
@@ -330,7 +339,7 @@ export function netWorthTrendWidget(home: Home, locale: string): WidgetView {
   };
 }
 
-const builders: Record<WidgetID, (home: Home, locale: string) => WidgetView> = {
+const builders: Record<DefaultWidgetID, (home: Home, locale: string) => WidgetView> = {
   spending: spendingWidget,
   budgets: budgetsWidget,
   accounts: accountsWidget,
@@ -344,7 +353,7 @@ export function homeWidgets(home: Home, locale: string): WidgetView[] {
 }
 
 /** Titles for the loading state, so each card holds its place. */
-export function widgetTitles(): { id: WidgetID; title: string; wide: boolean }[] {
+export function widgetTitles(): { id: DefaultWidgetID; title: string; wide: boolean }[] {
   return [
     { id: 'spending', title: m.home_spending_title(), wide: false },
     { id: 'budgets', title: m.budgets_title(), wide: false },

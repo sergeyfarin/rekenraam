@@ -1636,5 +1636,270 @@
         "countPlural=*": "{n} blocked"
       }
     }
-  ]
+  ],
+  "home_explore_title": "More to explore",
+  "home_explore_subtitle": "Add any of the widgets below to the home page",
+  "home_explore_collapse": "Collapse",
+  "home_explore_expand": "Show all",
+  "home_explore_everyday": "Everyday",
+  "home_explore_wealth": "Wealth & investments",
+  "home_explore_planning": "Planning",
+  "home_explore_data": "Ledger & data",
+  "home_cashflow_label": "Cashflow",
+  "home_cashflow_title": "Cashflow · {month}",
+  "home_cashflow_open": "Open cashflow report",
+  "home_cashflow_no_accounts": "No cash accounts",
+  "home_cashflow_add_account": "Add an account",
+  "home_cashflow_accounts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} cash account",
+        "countPlural=*": "{n} cash accounts"
+      }
+    }
+  ],
+  "home_cashflow_zero": "No money in or out yet this month",
+  "home_cashflow_in": "Money in",
+  "home_cashflow_out": "Money out",
+  "home_cashflow_transfers": "Transfers, net",
+  "home_cashflow_net_label": "{amount} money in minus money out",
+  "home_cashflow_partial": "Not every amount converts to {currency}; totals by currency",
+  "home_holdings_title": "Holdings",
+  "home_holdings_open": "Open investments",
+  "home_holdings_none": "No investments yet",
+  "home_holdings_set_up": "Record a buy",
+  "home_holdings_no_price": "No price",
+  "home_holdings_scope": "Largest by value · {date}",
+  "home_holdings_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} position",
+        "countPlural=*": "{n} positions"
+      }
+    }
+  ],
+  "home_holdings_unpriced": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} without a price",
+        "countPlural=*": "{n} without a price"
+      }
+    }
+  ],
+  "home_holdings_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more position",
+        "countPlural=*": "+{n} more positions"
+      }
+    }
+  ],
+  "home_returns_title": "Returns",
+  "home_returns_open": "Open returns",
+  "home_returns_scope": "Time-weighted · {period}",
+  "home_returns_saved": "saved {date}",
+  "home_returns_saved_badge": "Saved run",
+  "home_returns_annualized": "Annualized",
+  "home_returns_not_saved": "No saved run yet",
+  "home_returns_not_saved_copy": "Home shows the latest run you save on Returns; it never calculates one itself.",
+  "home_returns_calculate": "Calculate returns",
+  "home_allocation_title": "Allocation",
+  "home_allocation_scope": "By asset type · {date}",
+  "home_allocation_short": "{type}, short",
+  "home_allocation_fact": "{type} {weight}",
+  "home_allocation_unknown": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} balance without a value",
+        "countPlural=*": "{n} balances without a value"
+      }
+    }
+  ],
+  "home_allocation_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more type",
+        "countPlural=*": "+{n} more types"
+      }
+    }
+  ],
+  "home_income_title": "Dividend income",
+  "home_income_open": "Open income",
+  "home_income_zero": "No dividends recorded",
+  "home_income_instruments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Income from {n} instrument",
+        "countPlural=*": "Income from {n} instruments"
+      }
+    }
+  ],
+  "home_income_scope": "Confirmed dividends, all time",
+  "home_income_to_assign": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} payment to assign",
+        "countPlural=*": "{n} payments to assign"
+      }
+    }
+  ],
+  "home_income_unassigned_copy": "unassigned cash is not income until you assign it",
+  "home_income_unassigned_cash": "Unassigned cash",
+  "home_income_payments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} payment",
+        "countPlural=*": "{n} payments"
+      }
+    }
+  ],
+  "home_forecast_title": "Forecast",
+  "home_forecast_open": "Open forecast",
+  "home_forecast_badge": "Estimate",
+  "home_forecast_fact": "Next 90 days",
+  "home_forecast_scope": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Projected balances from {n} active schedule, calculated when you open it",
+        "countPlural=*": "Projected balances from {n} active schedules, calculated when you open it"
+      }
+    }
+  ],
+  "home_forecast_scope_unknown": "Projected balances, calculated when you open it",
+  "home_forecast_not_set_up": "Nothing scheduled to project",
+  "home_forecast_not_set_up_copy": "The forecast projects your recurring schedules.",
+  "home_imports_title": "Imports",
+  "home_imports_open": "Open import",
+  "home_imports_zero": "Nothing waiting for review",
+  "home_imports_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} batch to review",
+        "countPlural=*": "{n} batches to review"
+      }
+    }
+  ],
+  "home_imports_scope": "Staged file imports wait for your review",
+  "home_prices_title": "Prices",
+  "home_prices_open": "Open prices",
+  "home_prices_scope": "Prices and rates your net worth uses",
+  "home_prices_current": "Up to date",
+  "home_prices_price": "price",
+  "home_prices_rate": "exchange rate",
+  "home_prices_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} more",
+        "countPlural=*": "+{n} more"
+      }
+    }
+  ],
+  "home_backups_title": "Backups",
+  "home_backups_open": "Open backups and data",
+  "home_backups_off": "Automatic backups are off",
+  "home_backups_set_up": "Turn on backups",
+  "home_backups_last": "Backed up {date}",
+  "home_backups_next": "Next {date}",
+  "home_backups_none": "No backup yet",
+  "home_backups_failed": "Last backup failed",
+  "home_backups_retrying": "It will try again",
+  "home_backups_retry_copy": "Open Backups to retry",
+  "home_backups_running": "Backing up now",
+  "home_imports_checking": "Checking…"
 }

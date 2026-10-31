@@ -45,13 +45,15 @@ type HomeService struct {
 	transactions *TransactionService
 	budgets      *BudgetService
 	recurring    *RecurringService
+	investments  *InvestmentService
+	backups      *BackupService
 	// afterRead runs after each summary is read; tests use it to commit a
 	// write between two reads.
 	afterRead func(summary string)
 }
 
-func NewHomeService(transactions *TransactionService, budgets *BudgetService, recurring *RecurringService) *HomeService {
-	return &HomeService{transactions: transactions, budgets: budgets, recurring: recurring}
+func NewHomeService(transactions *TransactionService, budgets *BudgetService, recurring *RecurringService, investments *InvestmentService, backups *BackupService) *HomeService {
+	return &HomeService{transactions: transactions, budgets: budgets, recurring: recurring, investments: investments, backups: backups}
 }
 
 // HomeWidget is one summary or the error that kept it from being read.
@@ -67,6 +69,13 @@ type Home struct {
 	Accounts      HomeWidget[HomeAccountsSummary]
 	Recurring     HomeWidget[HomeRecurringSummary]
 	NetWorthTrend HomeWidget[HomeNetWorthTrendSummary]
+	// More to explore (#479).
+	Cashflow   HomeWidget[HomeCashflowSummary]
+	Holdings   HomeWidget[HomeHoldingsSummary]
+	Returns    HomeWidget[HomeReturnsSummary]
+	Allocation HomeWidget[HomeAllocationSummary]
+	Income     HomeWidget[HomeIncomeSummary]
+	Backups    HomeWidget[HomeBackupsSummary]
 	// Commodities describes every commodity any summary names, so Home needs no
 	// second read to label an amount.
 	Commodities []db.ReportingCurrencyRecord
@@ -236,12 +245,26 @@ func (s *HomeService) compose(ctx context.Context, ownerUserID int64) (Home, err
 	s.read("spending")
 	home.Budgets = homeWidget(s.budgetSummary(ctx, briefing.AsOf, reportingID))
 	s.read("budgets")
-	home.Accounts = homeWidget(s.accountsSummary(ctx, briefing, reportingID))
+	// Accounts and holdings value the fold's balances through one rate table.
+	rates, ratesErr := s.homeRates(ctx, briefing, reportingID)
+	if ratesErr != nil {
+		home.Accounts, home.Holdings = HomeWidget[HomeAccountsSummary]{Err: ratesErr}, HomeWidget[HomeHoldingsSummary]{Err: ratesErr}
+	} else {
+		home.Accounts = homeWidget(accountsSummary(briefing, rates), nil)
+		home.Holdings = homeWidget(holdingsSummary(briefing, rates), nil)
+	}
 	home.Recurring = homeWidget(s.recurringSummary(ctx, ownerUserID, briefing.AsOf))
 	s.read("recurring")
 	home.NetWorthTrend = homeWidget(netWorthTrendSummary(briefing))
+	home.Cashflow = homeWidget(s.cashflowSummary(ctx, briefing.AsOf, reportingID))
+	s.read("cashflow")
+	returns, allocation, returnsErr := s.returnsSummaries(ctx)
+	home.Returns, home.Allocation = homeWidget(returns, returnsErr), homeWidget(allocation, returnsErr)
+	home.Income = homeWidget(s.incomeSummary(ctx))
+	home.Backups = homeWidget(s.backupsSummary(ctx))
 	// A cancelled request is not a widget failure.
-	for _, widgetErr := range []error{home.Spending.Err, home.Budgets.Err, home.Accounts.Err, home.Recurring.Err, home.NetWorthTrend.Err} {
+	for _, widgetErr := range []error{home.Spending.Err, home.Budgets.Err, home.Accounts.Err, home.Recurring.Err, home.NetWorthTrend.Err,
+		home.Cashflow.Err, home.Holdings.Err, home.Returns.Err, home.Income.Err, home.Backups.Err} {
 		if errors.Is(widgetErr, context.Canceled) || errors.Is(widgetErr, context.DeadlineExceeded) {
 			return Home{}, widgetErr
 		}
@@ -405,7 +428,7 @@ func compareBudgetAttention(a, b HomeBudgetCategory) int {
 
 // accountsSummary ranks the balances the briefing's fold ended with: the
 // account balances read for today, without a second pass over the ledger.
-func (s *HomeService) accountsSummary(ctx context.Context, briefing HomeBriefing, reportingID int64) (*HomeAccountsSummary, error) {
+func accountsSummary(briefing HomeBriefing, rates *RateTable) *HomeAccountsSummary {
 	asOf := briefing.AsOf
 	// The owner's open accounts, as the briefing counts them: asset and
 	// liability accounts without system or per-instrument holding accounts.
@@ -416,43 +439,21 @@ func (s *HomeService) accountsSummary(ctx context.Context, briefing HomeBriefing
 		}
 	}
 	rows := make([]HomeAccountRow, 0, len(listed))
-	seen := make([]int64, 0)
 	for _, account := range briefing.Accounts {
 		if !listed[account.AccountID] || (account.ParentAccountID != nil && listed[*account.ParentAccountID]) {
 			continue
 		}
-		rows = append(rows, HomeAccountRow{AccountID: account.AccountID, Code: account.Code, Name: account.Name,
-			AccountClass: account.AccountClass, AccountKind: account.AccountKind, Balances: account.SubtreeBalances})
-		for _, balance := range account.SubtreeBalances {
-			seen = append(seen, balance.CommodityID)
+		row := HomeAccountRow{AccountID: account.AccountID, Code: account.Code, Name: account.Name,
+			AccountClass: account.AccountClass, AccountKind: account.AccountKind, Balances: account.SubtreeBalances}
+		if rates != nil {
+			row.Value = homeConverted(rates, row.Balances, asOf)
 		}
-	}
-	if reportingID != 0 && len(rows) > 0 {
-		rates, err := s.transactions.NewRateTable(ctx, ReportingCurrencyInput{CommodityID: reportingID}, seen, asOf, asOf)
-		if err != nil {
-			return nil, fmt.Errorf("home account values: %w", err)
-		}
-		for index := range rows {
-			rows[index].Value = homeConverted(rates, rows[index].Balances, asOf)
-		}
+		rows = append(rows, row)
 	}
 	slices.SortStableFunc(rows, func(a, b HomeAccountRow) int {
-		switch {
-		case a.Value != nil && b.Value != nil:
-			magnitudeA := new(big.Int).Abs(exact.ScaledIntFromCoefficient(a.Value.QuantityValue, a.Value.QuantityScale).BigInt())
-			magnitudeB := new(big.Int).Abs(exact.ScaledIntFromCoefficient(b.Value.QuantityValue, b.Value.QuantityScale).BigInt())
-			// One rate table converts every value to the same scale.
-			if c := magnitudeB.Cmp(magnitudeA); c != 0 {
-				return c
-			}
-		case a.Value != nil:
-			return -1
-		case b.Value != nil:
-			return 1
-		}
-		return cmp.Or(strings.Compare(a.Name, b.Name), cmp.Compare(a.AccountID, b.AccountID))
+		return cmp.Or(compareHomeValues(a.Value, b.Value), strings.Compare(a.Name, b.Name), cmp.Compare(a.AccountID, b.AccountID))
 	})
-	return &HomeAccountsSummary{AsOf: asOf, OpenCount: len(rows), Accounts: rows[:min(len(rows), homeAccountRows)]}, nil
+	return &HomeAccountsSummary{AsOf: asOf, OpenCount: len(rows), Accounts: rows[:min(len(rows), homeAccountRows)]}
 }
 
 func (s *HomeService) recurringSummary(ctx context.Context, ownerUserID int64, asOf string) (*HomeRecurringSummary, error) {
@@ -562,6 +563,29 @@ func (s *HomeService) homeCommodities(ctx context.Context, home Home) ([]db.Repo
 	if summary := home.NetWorthTrend.Summary; summary != nil {
 		for _, point := range summary.Points {
 			add(point.Value)
+		}
+	}
+	if summary := home.Cashflow.Summary; summary != nil {
+		add(summary.ConvertedInflow, summary.ConvertedOutflow, summary.ConvertedTransferNet, summary.ConvertedOperatingNet)
+		addAll(summary.Inflow)
+		addAll(summary.Outflow)
+		addAll(summary.TransferNet)
+		addAll(summary.OperatingNet)
+	}
+	if summary := home.Holdings.Summary; summary != nil {
+		for _, row := range summary.Holdings {
+			add(row.Value)
+			addAll(row.Balances)
+		}
+	}
+	if summary := home.Allocation.Summary; summary != nil {
+		for _, row := range summary.Rows {
+			add(row.Value)
+		}
+	}
+	if summary := home.Income.Summary; summary != nil {
+		for _, item := range summary.Unassigned {
+			add(&item.Cash)
 		}
 	}
 	if len(ids) == 0 || s.transactions.pricingRepository == nil {

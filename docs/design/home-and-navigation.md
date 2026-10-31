@@ -404,6 +404,13 @@ editor's own save.
   for example “Set up backups”), partial, stale, failed. Estimates (forecast)
   are labelled; market-value changes are never called returns.
 - Unbuilt capabilities (goals, insights, available-to-spend) do not appear.
+- Widgets introduce no rules of their own (owner, 2026-10-31). A threshold,
+  ranking, window or setting a widget needs belongs to the feature it
+  summarises and applies wherever that feature shows the same thing; when one
+  does not exist yet, it is built there first (configurable where the owner
+  would tune it), and the widget reads it. Example: *reconciled within 60
+  days* is a reconciliation setting that the account list and Review use too,
+  not a Home rule.
 
 The capability inventory, which widget uses which existing contract, and the
 composed Home read model are specified in the design review.
@@ -446,6 +453,30 @@ Transactions filtered as the Spending report's drill-down, Open links carry
 the period, bucket and reporting currency or the budget month and currency.
 Home keeps the read cached across navigation, so Back restores its scroll
 without late content moving it.
+
+### More to explore contract (#479)
+
+More to explore lists every widget not on My Home, by category, from the same
+`GET /api/v1/home` and the shell's attention read: mounting or expanding it
+starts no request and no returns or forecast calculation. Cards are the My
+Home cards at real size with a dashed outline, muted text and half
+saturation (full colour on hover or focus); the section collapses (the state
+is remembered with #438) and *Add to Home* arrives with #438.
+
+| Category | Widget | Source | Summary |
+|---|---|---|---|
+| Everyday | Cashflow | Cashflow report, 1st of the month to owner-local today, its default liquid-cash scope, one bucket, default currency | Money in, money out, transfers (net) and the operating net, converted only when every posting converts, else exact per currency |
+| Wealth & investments | Holdings | Holding accounts from the briefing's fold, valued with the accounts widget's rate table (net worth's valuation) | Open positions with a balance, the largest three by value with instrument and brokerage; an unpriced position has no value and ranks last (*partial*); the net-worth headline's out-of-date prices make it *stale* |
+| | Returns | The latest saved returns run, frozen | Time-weighted return (and annualized when the run has one) for the run's period, labelled *Saved run* with its save date; no run is *not set up* with a link to calculate. Home never calculates a return; live figures are #440 |
+| | Allocation | The same saved run's allocation | By asset type, largest value first, weights as the run froze them; `known_only` is *partial* with the count of balances without a value |
+| | Dividend income | Income coverage summary (`SummaryOnly`) | Instruments with confirmed dividends; unassigned investment cash per currency is cash, never income, and leads as payments to assign |
+| Planning | Forecast | None (the recurring summary Home already has) | Labelled *Estimate*, names the 90-day horizon and the active schedules it projects, calculated when opened; no schedule is *not set up* |
+| Ledger & data | Imports | The shared attention read's `imports` source | Batches to review, the same count Review shows; its own Retry refetches the attention read |
+| | Prices | The net-worth headline's `missing` and `stale` inputs | Named as the status line names them, linking to the same filtered Prices list |
+| | Backups | The Data screen's backup status | Off is *not set up*; a failed latest run says whether it will retry; otherwise the last backup and the next run. Shown in an empty book too |
+
+Reconciliation joins Ledger & data with the reconciliation out-of-date rule
+(#482), which the account list uses as well.
 
 ## Customization
 
@@ -650,7 +681,7 @@ Sequencing belongs in the roadmap; acceptance in the issues.
 |---|---|
 | Shell: header, section links and settings menu, tab row of real routes, route registry, hide amounts, shared search, attention read; retires the sidebar and the duplicate top bar | #436 (header, registry and tab routes #455; hide amounts #456; search #457; attention read #458; page header, widths and `?` help #459) |
 | Route paths of pages outside their section | #460 |
-| Home: briefing, command bar, shortcuts with the shared Add transaction dialog, default My Home and More to explore, composed Home read | #437 (read and briefing #476; command bar, shortcuts and entry #477; My Home widgets #478, delivered; More to explore #479) |
+| Home: briefing, command bar, shortcuts with the shared Add transaction dialog, default My Home and More to explore, composed Home read | #437 (read and briefing #476; command bar, shortcuts and entry #477; My Home widgets #478, delivered; More to explore #479, delivered) |
 | Review page: everything needing attention and background status | #453 |
 | Settings in five pages; Trash becomes Transactions › Deleted; ledger export moves to Reports › Export | #446 |
 | Import views: Files, Connections, Rules and profiles, Dividends | #447 |

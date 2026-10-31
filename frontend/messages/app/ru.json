@@ -1674,5 +1674,294 @@
         "countPlural=*": "{n} заблокировано"
       }
     }
-  ]
+  ],
+  "home_explore_title": "Ещё виджеты",
+  "home_explore_subtitle": "Любой из виджетов ниже можно добавить на главную",
+  "home_explore_collapse": "Свернуть",
+  "home_explore_expand": "Показать все",
+  "home_explore_everyday": "Повседневное",
+  "home_explore_wealth": "Капитал и инвестиции",
+  "home_explore_planning": "Планирование",
+  "home_explore_data": "Учёт и данные",
+  "home_cashflow_label": "Денежный поток",
+  "home_cashflow_title": "Денежный поток · {month}",
+  "home_cashflow_open": "Открыть отчёт о денежном потоке",
+  "home_cashflow_no_accounts": "Нет денежных счетов",
+  "home_cashflow_add_account": "Добавить счёт",
+  "home_cashflow_accounts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} денежный счёт",
+        "countPlural=few": "{n} денежных счёта",
+        "countPlural=many": "{n} денежных счетов",
+        "countPlural=*": "{n} денежного счёта"
+      }
+    }
+  ],
+  "home_cashflow_zero": "В этом месяце пока нет поступлений и списаний",
+  "home_cashflow_in": "Поступления",
+  "home_cashflow_out": "Списания",
+  "home_cashflow_transfers": "Переводы, нетто",
+  "home_cashflow_net_label": "{amount}: поступления минус списания",
+  "home_cashflow_partial": "Не все суммы пересчитываются в {currency}; итоги по валютам",
+  "home_holdings_title": "Позиции",
+  "home_holdings_open": "Открыть инвестиции",
+  "home_holdings_none": "Инвестиций пока нет",
+  "home_holdings_set_up": "Записать покупку",
+  "home_holdings_no_price": "Нет цены",
+  "home_holdings_scope": "Крупнейшие по стоимости · {date}",
+  "home_holdings_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} позиция",
+        "countPlural=few": "{n} позиции",
+        "countPlural=many": "{n} позиций",
+        "countPlural=*": "{n} позиции"
+      }
+    }
+  ],
+  "home_holdings_unpriced": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} без цены",
+        "countPlural=few": "{n} без цены",
+        "countPlural=many": "{n} без цены",
+        "countPlural=*": "{n} без цены"
+      }
+    }
+  ],
+  "home_holdings_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} позиция",
+        "countPlural=few": "ещё {n} позиции",
+        "countPlural=many": "ещё {n} позиций",
+        "countPlural=*": "ещё {n} позиции"
+      }
+    }
+  ],
+  "home_returns_title": "Доходность",
+  "home_returns_open": "Открыть доходность",
+  "home_returns_scope": "Взвешенная по времени · {period}",
+  "home_returns_saved": "сохранено {date}",
+  "home_returns_saved_badge": "Сохранённый расчёт",
+  "home_returns_annualized": "Годовая",
+  "home_returns_not_saved": "Сохранённых расчётов пока нет",
+  "home_returns_not_saved_copy": "Главная показывает последний расчёт, сохранённый на странице «Доходность», и никогда не считает сама.",
+  "home_returns_calculate": "Рассчитать доходность",
+  "home_allocation_title": "Распределение",
+  "home_allocation_scope": "По типу активов · {date}",
+  "home_allocation_short": "{type}, короткая",
+  "home_allocation_fact": "{type} {weight}",
+  "home_allocation_unknown": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} остаток без оценки",
+        "countPlural=few": "{n} остатка без оценки",
+        "countPlural=many": "{n} остатков без оценки",
+        "countPlural=*": "{n} остатка без оценки"
+      }
+    }
+  ],
+  "home_allocation_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n} тип",
+        "countPlural=few": "ещё {n} типа",
+        "countPlural=many": "ещё {n} типов",
+        "countPlural=*": "ещё {n} типа"
+      }
+    }
+  ],
+  "home_income_title": "Дивиденды",
+  "home_income_open": "Открыть доходы",
+  "home_income_zero": "Дивидендов не записано",
+  "home_income_instruments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Доход от {n} инструмента",
+        "countPlural=few": "Доход от {n} инструментов",
+        "countPlural=many": "Доход от {n} инструментов",
+        "countPlural=*": "Доход от {n} инструмента"
+      }
+    }
+  ],
+  "home_income_scope": "Подтверждённые дивиденды за всё время",
+  "home_income_to_assign": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} платёж нужно отнести",
+        "countPlural=few": "{n} платежа нужно отнести",
+        "countPlural=many": "{n} платежей нужно отнести",
+        "countPlural=*": "{n} платежа нужно отнести"
+      }
+    }
+  ],
+  "home_income_unassigned_copy": "неотнесённые деньги не считаются доходом, пока вы их не отнесёте",
+  "home_income_unassigned_cash": "Неотнесённые деньги",
+  "home_income_payments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} платёж",
+        "countPlural=few": "{n} платежа",
+        "countPlural=many": "{n} платежей",
+        "countPlural=*": "{n} платежа"
+      }
+    }
+  ],
+  "home_forecast_title": "Прогноз",
+  "home_forecast_open": "Открыть прогноз",
+  "home_forecast_badge": "Оценка",
+  "home_forecast_fact": "Ближайшие 90 дней",
+  "home_forecast_scope": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Ожидаемые остатки по {n} активному расписанию, рассчитываются при открытии",
+        "countPlural=few": "Ожидаемые остатки по {n} активным расписаниям, рассчитываются при открытии",
+        "countPlural=many": "Ожидаемые остатки по {n} активным расписаниям, рассчитываются при открытии",
+        "countPlural=*": "Ожидаемые остатки по {n} активного расписания, рассчитываются при открытии"
+      }
+    }
+  ],
+  "home_forecast_scope_unknown": "Ожидаемые остатки, рассчитываются при открытии",
+  "home_forecast_not_set_up": "Нечего прогнозировать",
+  "home_forecast_not_set_up_copy": "Прогноз строится по вашим регулярным расписаниям.",
+  "home_imports_title": "Импорт",
+  "home_imports_open": "Открыть импорт",
+  "home_imports_zero": "Нет ничего на проверку",
+  "home_imports_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} пакет на проверку",
+        "countPlural=few": "{n} пакета на проверку",
+        "countPlural=many": "{n} пакетов на проверку",
+        "countPlural=*": "{n} пакета на проверку"
+      }
+    }
+  ],
+  "home_imports_scope": "Подготовленные файлы ждут вашей проверки",
+  "home_prices_title": "Цены",
+  "home_prices_open": "Открыть цены",
+  "home_prices_scope": "Цены и курсы для расчёта капитала",
+  "home_prices_current": "Актуальны",
+  "home_prices_price": "цена",
+  "home_prices_rate": "курс валюты",
+  "home_prices_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "ещё {n}",
+        "countPlural=few": "ещё {n}",
+        "countPlural=many": "ещё {n}",
+        "countPlural=*": "ещё {n}"
+      }
+    }
+  ],
+  "home_backups_title": "Резервные копии",
+  "home_backups_open": "Открыть копии и данные",
+  "home_backups_off": "Автоматическое копирование выключено",
+  "home_backups_set_up": "Включить копирование",
+  "home_backups_last": "Копия от {date}",
+  "home_backups_next": "Следующая {date}",
+  "home_backups_none": "Копий пока нет",
+  "home_backups_failed": "Последнее копирование не удалось",
+  "home_backups_retrying": "Будет повторная попытка",
+  "home_backups_retry_copy": "Откройте копии, чтобы повторить",
+  "home_backups_running": "Идёт копирование",
+  "home_imports_checking": "Проверяем…"
 }

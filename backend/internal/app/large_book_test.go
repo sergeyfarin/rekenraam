@@ -317,14 +317,17 @@ func TestLargeBookExportAndSelfCheckStayBounded(t *testing.T) {
 	transactions := NewTransactionService(db.NewTransactionRepository(writer), db.NewPayeeRepository(writer), db.NewAccountRepository(writer), db.NewCommodityRepository(writer))
 	transactions.SetPricingRepository(db.NewPricingRepository(writer))
 	homeService := NewHomeService(transactions, NewBudgetService(db.NewBudgetRepository(writer), settings),
-		NewRecurringService(db.NewRecurringRepository(writer), transactions, settings))
+		NewRecurringService(db.NewRecurringRepository(writer), transactions, settings),
+		NewInvestmentService(db.NewInvestmentRepository(writer), nil, transactions, nil),
+		NewBackupService(db.NewBackupRepository(writer), db.NewBackgroundWorkRepository(writer), writer, databaseURL, t.TempDir()))
 	probe = startResourceProbe()
 	composed, err := homeService.Home(context.Background(), 1)
 	homeUsage := probe.finish()
 	require.NoError(t, err)
 	t.Logf("home: wall=%s allocated=%dMiB peak-heap=%dMiB", homeUsage.Wall.Round(time.Millisecond), homeUsage.Allocated>>20, homeUsage.PeakHeap>>20)
 	for name, widgetErr := range map[string]error{"spending": composed.Spending.Err, "budgets": composed.Budgets.Err, "accounts": composed.Accounts.Err,
-		"recurring": composed.Recurring.Err, "net worth trend": composed.NetWorthTrend.Err} {
+		"recurring": composed.Recurring.Err, "net worth trend": composed.NetWorthTrend.Err, "cashflow": composed.Cashflow.Err, "holdings": composed.Holdings.Err,
+		"returns": composed.Returns.Err, "income": composed.Income.Err, "backups": composed.Backups.Err} {
 		assert.NoError(t, widgetErr, name)
 	}
 	home := composed.Briefing

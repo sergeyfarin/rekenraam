@@ -9,6 +9,7 @@
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
   import SearchField from '#lib/search/search-field.svelte';
+  import HomeExplore from './home-explore.svelte';
   import HomeShortcuts from './home-shortcuts.svelte';
   import HomeWidgets from './home-widgets.svelte';
   import { briefingHeadline, briefingStatus, headlineOptions, shownHeadlineID, type HeadlineChoice } from './briefing.ts';
@@ -119,3 +120,4 @@
 </div>
 <HomeShortcuts />
 <HomeWidgets home={homeQuery.data} failed={homeQuery.isError && !homeQuery.data} onRetry={() => homeQuery.refetch()} />
+<HomeExplore home={homeQuery.data} failed={homeQuery.isError && !homeQuery.data} onRetry={() => homeQuery.refetch()} />

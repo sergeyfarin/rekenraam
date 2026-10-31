@@ -109,8 +109,8 @@ HomeWidgetStatus:
   description: failed means this summary could not be read; summary is then null and the other widgets are unaffected.
 HomeWidgets:
   type: object
-  description: The default My Home widgets (#478). Each fails on its own.
-  required: [spending, budgets, accounts, recurring, net_worth_trend]
+  description: The default My Home widgets (#478) and the More to explore widgets (#479). Each fails on its own.
+  required: [spending, budgets, accounts, recurring, net_worth_trend, cashflow, holdings, returns, allocation, income, backups]
   properties:
     spending:
       type: object
@@ -156,6 +156,60 @@ HomeWidgets:
         summary:
           oneOf:
             - $ref: '../../openapi.yaml#/components/schemas/HomeNetWorthTrendSummary'
+            - type: 'null'
+    cashflow:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeCashflowSummary'
+            - type: 'null'
+    holdings:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeHoldingsSummary'
+            - type: 'null'
+    returns:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeReturnsSummary'
+            - type: 'null'
+    allocation:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeAllocationSummary'
+            - type: 'null'
+    income:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeIncomeSummary'
+            - type: 'null'
+    backups:
+      type: object
+      required: [status, summary]
+      properties:
+        status: { $ref: '../../openapi.yaml#/components/schemas/HomeWidgetStatus' }
+        summary:
+          oneOf:
+            - $ref: '../../openapi.yaml#/components/schemas/HomeBackupsSummary'
             - type: 'null'
 HomeSpendingSummary:
   type: object
@@ -314,3 +368,130 @@ HomeTrendPoint:
       oneOf:
         - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
         - type: 'null'
+HomeCashflowSummary:
+  type: object
+  description: The Cashflow report for this month to date over its default liquid-cash scope, as one bucket. Measures are exact per commodity; converted_* are the report's reporting-currency figures, null when a posting cannot be converted, never partial.
+  required: [start_date, end_date, cash_scope, account_count, inflow, outflow, transfer_net, operating_net, converted_inflow, converted_outflow, converted_transfer_net, converted_operating_net]
+  properties:
+    start_date: { type: string, format: date }
+    end_date: { type: string, format: date }
+    cash_scope: { type: string, enum: [default_liquid_cash, selected_accounts] }
+    account_count: { type: integer, minimum: 0 }
+    inflow: { type: array, items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' } }
+    outflow: { type: array, items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' } }
+    transfer_net: { type: array, items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' } }
+    operating_net: { type: array, items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' } }
+    converted_inflow:
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+    converted_outflow:
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+    converted_transfer_net:
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+    converted_operating_net:
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+HomeHoldingsSummary:
+  type: object
+  description: Open holding accounts with a balance, largest value in the default currency first, from the briefing's fold and valued through the same rates as the accounts widget. A position without a usable price has no value and ranks last.
+  required: [as_of, position_count, unpriced_count, holdings]
+  properties:
+    as_of: { type: string, format: date }
+    position_count: { type: integer, minimum: 0 }
+    unpriced_count: { type: integer, minimum: 0 }
+    holdings:
+      type: array
+      description: At most three.
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeHoldingRow' }
+HomeHoldingRow:
+  type: object
+  required: [account_id, brokerage_id, brokerage_name, balances, value]
+  properties:
+    account_id: { type: integer, format: int64 }
+    brokerage_id: { type: [integer, 'null'], format: int64 }
+    brokerage_name: { type: string }
+    balances: { type: array, items: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' } }
+    value:
+      description: The position in the default currency today; null when its price or rate is missing.
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+HomeReturnsSummary:
+  type: object
+  description: The latest saved returns run's time-weighted return, as frozen when saved; Home never calculates returns. Every run field is null when no run has been saved.
+  required: [run_id, captured_at, from, to, account_scope, account_count, time_weighted, time_weighted_annualized]
+  properties:
+    run_id: { type: [integer, 'null'], format: int64 }
+    captured_at: { type: [string, 'null'], format: date-time }
+    from: { type: [string, 'null'], format: date }
+    to: { type: [string, 'null'], format: date }
+    account_scope: { type: [string, 'null'] }
+    account_count: { type: integer, minimum: 0 }
+    time_weighted:
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/ReturnFigure'
+        - type: 'null'
+    time_weighted_annualized:
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/ReturnFigure'
+        - type: 'null'
+HomeAllocationSummary:
+  type: object
+  description: The same saved run's allocation by asset type, largest value first (at most three rows). reason makes it unavailable; basis known_only means unknown_count balances had no value and are in no weight.
+  required: [run_id, captured_at, date, reason, basis, unknown_count, rows, row_count]
+  properties:
+    run_id: { type: [integer, 'null'], format: int64 }
+    captured_at: { type: [string, 'null'], format: date-time }
+    date: { type: [string, 'null'], format: date }
+    reason: { type: [string, 'null'], enum: [unclassified_short, null] }
+    basis: { type: [string, 'null'], enum: [closing_value, known_only, null] }
+    unknown_count: { type: integer, minimum: 0 }
+    rows:
+      type: array
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeAllocationRow' }
+    row_count: { type: integer, minimum: 0 }
+HomeAllocationRow:
+  type: object
+  required: [asset_type, side, value, weight]
+  properties:
+    asset_type: { type: string, enum: [cash, stock, etf, fund, bond, option, future, crypto, other, unclassified] }
+    side: { type: string, enum: [long, short] }
+    value:
+      oneOf:
+        - $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity'
+        - type: 'null'
+    weight:
+      type: [string, 'null']
+      pattern: "^-?[0-9]+\\.[0-9]{6}$"
+HomeIncomeSummary:
+  type: object
+  description: The income coverage summary. instrument_count counts instruments with owner-confirmed dividends; unassigned is identifiable investment cash per currency (at most three, most payments first), which is cash, never gross income.
+  required: [instrument_count, unassigned_count, unassigned]
+  properties:
+    instrument_count: { type: integer, minimum: 0 }
+    unassigned_count: { type: integer, minimum: 0 }
+    unassigned:
+      type: array
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeIncomeUnassigned' }
+HomeIncomeUnassigned:
+  type: object
+  required: [cash, item_count]
+  properties:
+    cash: { $ref: '../../openapi.yaml#/components/schemas/BalanceQuantity' }
+    item_count: { type: integer, minimum: 0 }
+HomeBackupsSummary:
+  type: object
+  description: The backup status the Data screen reads. latest_will_retry tells a failed run with a retry queued from one that spent its attempts.
+  required: [enabled, next_run_at, last_success_at, latest_status, latest_will_retry]
+  properties:
+    enabled: { type: boolean }
+    next_run_at: { type: [string, 'null'], format: date-time }
+    last_success_at: { type: [string, 'null'], format: date-time }
+    latest_status: { type: [string, 'null'], enum: [pending, running, completed, failed, null] }
+    latest_will_retry: { type: boolean }

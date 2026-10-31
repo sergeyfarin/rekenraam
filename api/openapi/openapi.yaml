@@ -1016,6 +1016,24 @@ components:
       $ref: "./components/schemas/home.yaml#/HomeNetWorthTrendSummary"
     HomeTrendPoint:
       $ref: "./components/schemas/home.yaml#/HomeTrendPoint"
+    HomeCashflowSummary:
+      $ref: "./components/schemas/home.yaml#/HomeCashflowSummary"
+    HomeHoldingsSummary:
+      $ref: "./components/schemas/home.yaml#/HomeHoldingsSummary"
+    HomeHoldingRow:
+      $ref: "./components/schemas/home.yaml#/HomeHoldingRow"
+    HomeReturnsSummary:
+      $ref: "./components/schemas/home.yaml#/HomeReturnsSummary"
+    HomeAllocationSummary:
+      $ref: "./components/schemas/home.yaml#/HomeAllocationSummary"
+    HomeAllocationRow:
+      $ref: "./components/schemas/home.yaml#/HomeAllocationRow"
+    HomeIncomeSummary:
+      $ref: "./components/schemas/home.yaml#/HomeIncomeSummary"
+    HomeIncomeUnassigned:
+      $ref: "./components/schemas/home.yaml#/HomeIncomeUnassigned"
+    HomeBackupsSummary:
+      $ref: "./components/schemas/home.yaml#/HomeBackupsSummary"
     AccountBalance:
       $ref: "./components/schemas/ledger.yaml#/AccountBalance"
     AccountBalancesResponse:

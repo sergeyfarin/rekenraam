@@ -29178,7 +29178,7 @@ export interface components {
          * @enum {string}
          */
         HomeWidgetStatus: "ok" | "failed";
-        /** @description The default My Home widgets (#478). Each fails on its own. */
+        /** @description The default My Home widgets (#478) and the More to explore widgets (#479). Each fails on its own. */
         HomeWidgets: {
             spending: {
                 status: components["schemas"]["HomeWidgetStatus"];
@@ -29199,6 +29199,30 @@ export interface components {
             net_worth_trend: {
                 status: components["schemas"]["HomeWidgetStatus"];
                 summary: components["schemas"]["HomeNetWorthTrendSummary"] | null;
+            };
+            cashflow: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeCashflowSummary"] | null;
+            };
+            holdings: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeHoldingsSummary"] | null;
+            };
+            returns: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeReturnsSummary"] | null;
+            };
+            allocation: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeAllocationSummary"] | null;
+            };
+            income: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeIncomeSummary"] | null;
+            };
+            backups: {
+                status: components["schemas"]["HomeWidgetStatus"];
+                summary: components["schemas"]["HomeBackupsSummary"] | null;
             };
         };
         /** @description The Spending report for this month to date, by category, over every account, in the default currency. */
@@ -29305,6 +29329,103 @@ export interface components {
             date: string;
             /** @description Complete-only converted net worth at date; null when any price or rate is missing. */
             value: components["schemas"]["BalanceQuantity"] | null;
+        };
+        /** @description The Cashflow report for this month to date over its default liquid-cash scope, as one bucket. Measures are exact per commodity; converted_* are the report's reporting-currency figures, null when a posting cannot be converted, never partial. */
+        HomeCashflowSummary: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** @enum {string} */
+            cash_scope: "default_liquid_cash" | "selected_accounts";
+            account_count: number;
+            inflow: components["schemas"]["BalanceQuantity"][];
+            outflow: components["schemas"]["BalanceQuantity"][];
+            transfer_net: components["schemas"]["BalanceQuantity"][];
+            operating_net: components["schemas"]["BalanceQuantity"][];
+            converted_inflow: components["schemas"]["BalanceQuantity"] | null;
+            converted_outflow: components["schemas"]["BalanceQuantity"] | null;
+            converted_transfer_net: components["schemas"]["BalanceQuantity"] | null;
+            converted_operating_net: components["schemas"]["BalanceQuantity"] | null;
+        };
+        /** @description Open holding accounts with a balance, largest value in the default currency first, from the briefing's fold and valued through the same rates as the accounts widget. A position without a usable price has no value and ranks last. */
+        HomeHoldingsSummary: {
+            /** Format: date */
+            as_of: string;
+            position_count: number;
+            unpriced_count: number;
+            /** @description At most three. */
+            holdings: components["schemas"]["HomeHoldingRow"][];
+        };
+        HomeHoldingRow: {
+            /** Format: int64 */
+            account_id: number;
+            /** Format: int64 */
+            brokerage_id: number | null;
+            brokerage_name: string;
+            balances: components["schemas"]["BalanceQuantity"][];
+            /** @description The position in the default currency today; null when its price or rate is missing. */
+            value: components["schemas"]["BalanceQuantity"] | null;
+        };
+        /** @description The latest saved returns run's time-weighted return, as frozen when saved; Home never calculates returns. Every run field is null when no run has been saved. */
+        HomeReturnsSummary: {
+            /** Format: int64 */
+            run_id: number | null;
+            /** Format: date-time */
+            captured_at: string | null;
+            /** Format: date */
+            from: string | null;
+            /** Format: date */
+            to: string | null;
+            account_scope: string | null;
+            account_count: number;
+            time_weighted: components["schemas"]["ReturnFigure"] | null;
+            time_weighted_annualized: components["schemas"]["ReturnFigure"] | null;
+        };
+        /** @description The same saved run's allocation by asset type, largest value first (at most three rows). reason makes it unavailable; basis known_only means unknown_count balances had no value and are in no weight. */
+        HomeAllocationSummary: {
+            /** Format: int64 */
+            run_id: number | null;
+            /** Format: date-time */
+            captured_at: string | null;
+            /** Format: date */
+            date: string | null;
+            /** @enum {string|null} */
+            reason: "unclassified_short" | null;
+            /** @enum {string|null} */
+            basis: "closing_value" | "known_only" | null;
+            unknown_count: number;
+            rows: components["schemas"]["HomeAllocationRow"][];
+            row_count: number;
+        };
+        HomeAllocationRow: {
+            /** @enum {string} */
+            asset_type: "cash" | "stock" | "etf" | "fund" | "bond" | "option" | "future" | "crypto" | "other" | "unclassified";
+            /** @enum {string} */
+            side: "long" | "short";
+            value: components["schemas"]["BalanceQuantity"] | null;
+            weight: string | null;
+        };
+        /** @description The income coverage summary. instrument_count counts instruments with owner-confirmed dividends; unassigned is identifiable investment cash per currency (at most three, most payments first), which is cash, never gross income. */
+        HomeIncomeSummary: {
+            instrument_count: number;
+            unassigned_count: number;
+            unassigned: components["schemas"]["HomeIncomeUnassigned"][];
+        };
+        HomeIncomeUnassigned: {
+            cash: components["schemas"]["BalanceQuantity"];
+            item_count: number;
+        };
+        /** @description The backup status the Data screen reads. latest_will_retry tells a failed run with a retry queued from one that spent its attempts. */
+        HomeBackupsSummary: {
+            enabled: boolean;
+            /** Format: date-time */
+            next_run_at: string | null;
+            /** Format: date-time */
+            last_success_at: string | null;
+            /** @enum {string|null} */
+            latest_status: "pending" | "running" | "completed" | "failed" | null;
+            latest_will_retry: boolean;
         };
         AccountBalance: {
             /** Format: int64 */

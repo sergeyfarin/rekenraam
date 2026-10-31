@@ -54,6 +54,90 @@ type homeWidgetsResponse struct {
 	Accounts      homeWidgetResponse[homeAccountsSummaryResponse]      `json:"accounts"`
 	Recurring     homeWidgetResponse[homeRecurringSummaryResponse]     `json:"recurring"`
 	NetWorthTrend homeWidgetResponse[homeNetWorthTrendSummaryResponse] `json:"net_worth_trend"`
+	Cashflow      homeWidgetResponse[homeCashflowSummaryResponse]      `json:"cashflow"`
+	Holdings      homeWidgetResponse[homeHoldingsSummaryResponse]      `json:"holdings"`
+	Returns       homeWidgetResponse[homeReturnsSummaryResponse]       `json:"returns"`
+	Allocation    homeWidgetResponse[homeAllocationSummaryResponse]    `json:"allocation"`
+	Income        homeWidgetResponse[homeIncomeSummaryResponse]        `json:"income"`
+	Backups       homeWidgetResponse[homeBackupsSummaryResponse]       `json:"backups"`
+}
+
+type homeCashflowSummaryResponse struct {
+	StartDate             string                    `json:"start_date"`
+	EndDate               string                    `json:"end_date"`
+	CashScope             string                    `json:"cash_scope"`
+	AccountCount          int                       `json:"account_count"`
+	Inflow                []balanceQuantityResponse `json:"inflow"`
+	Outflow               []balanceQuantityResponse `json:"outflow"`
+	TransferNet           []balanceQuantityResponse `json:"transfer_net"`
+	OperatingNet          []balanceQuantityResponse `json:"operating_net"`
+	ConvertedInflow       *balanceQuantityResponse  `json:"converted_inflow"`
+	ConvertedOutflow      *balanceQuantityResponse  `json:"converted_outflow"`
+	ConvertedTransferNet  *balanceQuantityResponse  `json:"converted_transfer_net"`
+	ConvertedOperatingNet *balanceQuantityResponse  `json:"converted_operating_net"`
+}
+
+type homeHoldingsSummaryResponse struct {
+	AsOf          string                   `json:"as_of"`
+	PositionCount int                      `json:"position_count"`
+	UnpricedCount int                      `json:"unpriced_count"`
+	Holdings      []homeHoldingRowResponse `json:"holdings"`
+}
+
+type homeHoldingRowResponse struct {
+	AccountID     int64                     `json:"account_id"`
+	BrokerageID   *int64                    `json:"brokerage_id"`
+	BrokerageName string                    `json:"brokerage_name"`
+	Balances      []balanceQuantityResponse `json:"balances"`
+	Value         *balanceQuantityResponse  `json:"value"`
+}
+
+type homeReturnsSummaryResponse struct {
+	RunID                  *int64                `json:"run_id"`
+	CapturedAt             *string               `json:"captured_at"`
+	From                   *string               `json:"from"`
+	To                     *string               `json:"to"`
+	AccountScope           *string               `json:"account_scope"`
+	AccountCount           int                   `json:"account_count"`
+	TimeWeighted           *returnFigureResponse `json:"time_weighted"`
+	TimeWeightedAnnualized *returnFigureResponse `json:"time_weighted_annualized"`
+}
+
+type homeAllocationSummaryResponse struct {
+	RunID        *int64                      `json:"run_id"`
+	CapturedAt   *string                     `json:"captured_at"`
+	Date         *string                     `json:"date"`
+	Reason       *string                     `json:"reason"`
+	Basis        *string                     `json:"basis"`
+	UnknownCount int                         `json:"unknown_count"`
+	Rows         []homeAllocationRowResponse `json:"rows"`
+	RowCount     int                         `json:"row_count"`
+}
+
+type homeAllocationRowResponse struct {
+	AssetType string                   `json:"asset_type"`
+	Side      string                   `json:"side"`
+	Value     *balanceQuantityResponse `json:"value"`
+	Weight    *string                  `json:"weight"`
+}
+
+type homeIncomeSummaryResponse struct {
+	InstrumentCount int                            `json:"instrument_count"`
+	UnassignedCount int                            `json:"unassigned_count"`
+	Unassigned      []homeIncomeUnassignedResponse `json:"unassigned"`
+}
+
+type homeIncomeUnassignedResponse struct {
+	Cash      balanceQuantityResponse `json:"cash"`
+	ItemCount int                     `json:"item_count"`
+}
+
+type homeBackupsSummaryResponse struct {
+	Enabled         bool    `json:"enabled"`
+	NextRunAt       *string `json:"next_run_at"`
+	LastSuccessAt   *string `json:"last_success_at"`
+	LatestStatus    *string `json:"latest_status"`
+	LatestWillRetry bool    `json:"latest_will_retry"`
 }
 
 type homeSpendingSummaryResponse struct {
@@ -160,6 +244,12 @@ func homeRead(logger *slog.Logger, authService *app.AuthService, homeService *ap
 			Accounts:      toHomeWidget(r, logger, "accounts", home.Accounts, toHomeAccountsSummary),
 			Recurring:     toHomeWidget(r, logger, "recurring", home.Recurring, toHomeRecurringSummary),
 			NetWorthTrend: toHomeWidget(r, logger, "net_worth_trend", home.NetWorthTrend, toHomeNetWorthTrendSummary),
+			Cashflow:      toHomeWidget(r, logger, "cashflow", home.Cashflow, toHomeCashflowSummary),
+			Holdings:      toHomeWidget(r, logger, "holdings", home.Holdings, toHomeHoldingsSummary),
+			Returns:       toHomeWidget(r, logger, "returns", home.Returns, toHomeReturnsSummary),
+			Allocation:    toHomeWidget(r, logger, "allocation", home.Allocation, toHomeAllocationSummary),
+			Income:        toHomeWidget(r, logger, "income", home.Income, toHomeIncomeSummary),
+			Backups:       toHomeWidget(r, logger, "backups", home.Backups, toHomeBackupsSummary),
 		}
 		for _, headline := range result.Headlines {
 			item := homeHeadlineResponse{
@@ -250,6 +340,65 @@ func toHomeNetWorthTrendSummary(summary app.HomeNetWorthTrendSummary) homeNetWor
 		response.Points = append(response.Points, homeTrendPointResponse{Date: point.Date, Value: toBalanceQuantityPointer(point.Value)})
 	}
 	return response
+}
+
+func toHomeCashflowSummary(summary app.HomeCashflowSummary) homeCashflowSummaryResponse {
+	return homeCashflowSummaryResponse{StartDate: summary.StartDate, EndDate: summary.EndDate, CashScope: summary.CashScope, AccountCount: summary.AccountCount,
+		Inflow: toBalanceQuantityResponses(summary.Inflow), Outflow: toBalanceQuantityResponses(summary.Outflow),
+		TransferNet: toBalanceQuantityResponses(summary.TransferNet), OperatingNet: toBalanceQuantityResponses(summary.OperatingNet),
+		ConvertedInflow: toBalanceQuantityPointer(summary.ConvertedInflow), ConvertedOutflow: toBalanceQuantityPointer(summary.ConvertedOutflow),
+		ConvertedTransferNet: toBalanceQuantityPointer(summary.ConvertedTransferNet), ConvertedOperatingNet: toBalanceQuantityPointer(summary.ConvertedOperatingNet)}
+}
+
+func toHomeHoldingsSummary(summary app.HomeHoldingsSummary) homeHoldingsSummaryResponse {
+	response := homeHoldingsSummaryResponse{AsOf: summary.AsOf, PositionCount: summary.PositionCount, UnpricedCount: summary.UnpricedCount, Holdings: []homeHoldingRowResponse{}}
+	for _, row := range summary.Holdings {
+		item := homeHoldingRowResponse{AccountID: row.AccountID, BrokerageName: row.BrokerageName, Balances: toBalanceQuantityResponses(row.Balances), Value: toBalanceQuantityPointer(row.Value)}
+		if row.BrokerageID != 0 {
+			id := row.BrokerageID
+			item.BrokerageID = &id
+		}
+		response.Holdings = append(response.Holdings, item)
+	}
+	return response
+}
+
+func toHomeReturnsSummary(summary app.HomeReturnsSummary) homeReturnsSummaryResponse {
+	// No saved run: every run field is null, never a zero return.
+	if summary.RunID == 0 {
+		return homeReturnsSummaryResponse{}
+	}
+	id := summary.RunID
+	timeWeighted, annualized := toReturnFigureResponse(summary.TimeWeighted), toReturnFigureResponse(summary.TimeWeightedAnnualized)
+	return homeReturnsSummaryResponse{RunID: &id, CapturedAt: &summary.CapturedAt, From: &summary.From, To: &summary.To, AccountScope: &summary.AccountScope,
+		AccountCount: summary.AccountCount, TimeWeighted: &timeWeighted, TimeWeightedAnnualized: &annualized}
+}
+
+func toHomeAllocationSummary(summary app.HomeAllocationSummary) homeAllocationSummaryResponse {
+	response := homeAllocationSummaryResponse{UnknownCount: summary.UnknownCount, Rows: []homeAllocationRowResponse{}, RowCount: summary.RowCount}
+	if summary.RunID == 0 {
+		return response
+	}
+	id := summary.RunID
+	response.RunID, response.CapturedAt, response.Date = &id, &summary.CapturedAt, &summary.Date
+	response.Reason, response.Basis = optionalHomeString(summary.Reason), optionalHomeString(summary.Basis)
+	for _, row := range summary.Rows {
+		response.Rows = append(response.Rows, homeAllocationRowResponse{AssetType: row.AssetType, Side: row.Side, Value: toBalanceQuantityPointer(row.Value), Weight: row.Weight})
+	}
+	return response
+}
+
+func toHomeIncomeSummary(summary app.HomeIncomeSummary) homeIncomeSummaryResponse {
+	response := homeIncomeSummaryResponse{InstrumentCount: summary.InstrumentCount, UnassignedCount: summary.UnassignedCount, Unassigned: []homeIncomeUnassignedResponse{}}
+	for _, item := range summary.Unassigned {
+		response.Unassigned = append(response.Unassigned, homeIncomeUnassignedResponse{Cash: toBalanceQuantityResponse(item.Cash), ItemCount: item.ItemCount})
+	}
+	return response
+}
+
+func toHomeBackupsSummary(summary app.HomeBackupsSummary) homeBackupsSummaryResponse {
+	return homeBackupsSummaryResponse{Enabled: summary.Enabled, NextRunAt: optionalHomeString(summary.NextRunAt), LastSuccessAt: optionalHomeString(summary.LastSuccessAt),
+		LatestStatus: optionalHomeString(summary.LatestStatus), LatestWillRetry: summary.LatestWillRetry}
 }
 
 func optionalHomeString(value string) *string {

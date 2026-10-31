@@ -35,7 +35,8 @@ func newHomeWidgetFixture(t *testing.T) homeWidgetFixture {
 	budgets.SetNowForTest(now)
 	recurring := NewRecurringService(db.NewRecurringRepository(f.database), f.transactionService, settings)
 	recurring.SetNowForTest(now)
-	w := homeWidgetFixture{homeFixture: f, home: NewHomeService(f.transactionService, budgets, recurring), budgets: budgets, recurring: recurring,
+	w := homeWidgetFixture{homeFixture: f, home: NewHomeService(f.transactionService, budgets, recurring, f.investmentService,
+		NewBackupService(db.NewBackupRepository(f.database), db.NewBackgroundWorkRepository(f.database), f.database, "", t.TempDir())), budgets: budgets, recurring: recurring,
 		usd: seedTestCurrencyCommodity(t, f.database, "USD")}
 	nameHomeAccount(t, f, f.cashAccountID, "Checking")
 	w.groceries = w.category(t, "Groceries")
@@ -127,7 +128,8 @@ func (f homeWidgetFixture) read(t *testing.T) Home {
 	home, err := f.home.Home(context.Background(), 1)
 	require.NoError(t, err)
 	for name, widgetErr := range map[string]error{"spending": home.Spending.Err, "budgets": home.Budgets.Err, "accounts": home.Accounts.Err,
-		"recurring": home.Recurring.Err, "net worth trend": home.NetWorthTrend.Err} {
+		"recurring": home.Recurring.Err, "net worth trend": home.NetWorthTrend.Err, "cashflow": home.Cashflow.Err, "holdings": home.Holdings.Err,
+		"returns": home.Returns.Err, "allocation": home.Allocation.Err, "income": home.Income.Err, "backups": home.Backups.Err} {
 		require.NoError(t, widgetErr, name)
 	}
 	return home

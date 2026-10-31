@@ -102,7 +102,7 @@ function value(coefficient: string, scale: number, money: (value: string, scale:
 }
 
 /** One named input, several of one kind counted by kind, mixed kinds as values. */
-function valuationText(inputs: HomeValuationInput[], style: 'needs' | 'missing' | 'stale', locale: string): string {
+export function valuationText(inputs: HomeValuationInput[], style: 'needs' | 'missing' | 'stale', locale: string): string {
   const count = inputs.length;
   const n = new Intl.NumberFormat(locale).format(count);
   const kinds = new Set(inputs.map(input => input.kind));
@@ -124,7 +124,7 @@ function valuationText(inputs: HomeValuationInput[], style: 'needs' | 'missing' 
 
 /** Prices for anything but a currency; a rate-only problem is fixed on Currencies.
  * Prices' `unusable` filter lists what Home calls missing (#476). */
-function valuationHref(inputs: HomeValuationInput[], status: 'missing' | 'stale'): string {
+export function valuationHref(inputs: HomeValuationInput[], status: 'missing' | 'stale'): string {
   if (inputs.every(input => input.kind === 'rate')) return '/app/settings/currencies';
   return `/app/investments/prices?status=${status === 'missing' ? 'unusable' : 'stale'}`;
 }

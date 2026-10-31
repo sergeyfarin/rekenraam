@@ -12,7 +12,7 @@ test('an empty book starts with an account, not a briefing of zeroes', async ({ 
   await page.route('**/api/v1/home', route => route.fulfill({ json: {
     as_of: '2026-10-30', start_boundary: '2026-09-30', reporting_currency: null, empty_book: true,
     headlines: ['net_worth', 'cash'].map(id => ({ id, account_count: 0, value: null, start_value: null, change: null, unavailable: 'no_accounts', missing: [], stale: [] })),
-    widgets: Object.fromEntries(['spending', 'budgets', 'accounts', 'recurring', 'net_worth_trend'].map(id => [id, { status: 'failed', summary: null }])),
+    widgets: Object.fromEntries(['spending', 'budgets', 'accounts', 'recurring', 'net_worth_trend', 'cashflow', 'holdings', 'returns', 'allocation', 'income', 'backups'].map(id => [id, { status: 'failed', summary: null }])),
     commodities: [], consistent: true
   } }));
   await page.goto('/app');
@@ -23,6 +23,9 @@ test('an empty book starts with an account, not a briefing of zeroes', async ({ 
   // Widgets say there is nothing yet rather than showing zeros or failures (#478).
   await expect(page.getByTestId('home-widgets').getByText('No data yet')).toHaveCount(5);
   await expect(page.getByTestId('home-widgets').getByRole('alert')).toHaveCount(0);
+  // More to explore says so too (#479); only backups, which protect an empty
+  // book anyway, show their own state.
+  await expect(page.getByTestId('home-explore').getByText('No data yet')).toHaveCount(8);
 });
 
 for (const theme of ['light', 'dark'] as const) {

@@ -1636,5 +1636,270 @@
         "countPlural=*": "{n} bloquées"
       }
     }
-  ]
+  ],
+  "home_explore_title": "À découvrir",
+  "home_explore_subtitle": "Ajoutez n’importe lequel de ces widgets à la page d’accueil",
+  "home_explore_collapse": "Réduire",
+  "home_explore_expand": "Tout afficher",
+  "home_explore_everyday": "Au quotidien",
+  "home_explore_wealth": "Patrimoine et placements",
+  "home_explore_planning": "Planification",
+  "home_explore_data": "Grand livre et données",
+  "home_cashflow_label": "Flux de trésorerie",
+  "home_cashflow_title": "Flux de trésorerie · {month}",
+  "home_cashflow_open": "Ouvrir le rapport de trésorerie",
+  "home_cashflow_no_accounts": "Aucun compte de trésorerie",
+  "home_cashflow_add_account": "Ajouter un compte",
+  "home_cashflow_accounts": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} compte de trésorerie",
+        "countPlural=*": "{n} comptes de trésorerie"
+      }
+    }
+  ],
+  "home_cashflow_zero": "Aucune entrée ni sortie ce mois-ci",
+  "home_cashflow_in": "Entrées",
+  "home_cashflow_out": "Sorties",
+  "home_cashflow_transfers": "Virements, net",
+  "home_cashflow_net_label": "{amount} entrées moins sorties",
+  "home_cashflow_partial": "Tous les montants ne se convertissent pas en {currency} ; totaux par devise",
+  "home_holdings_title": "Positions",
+  "home_holdings_open": "Ouvrir les placements",
+  "home_holdings_none": "Aucun placement pour l’instant",
+  "home_holdings_set_up": "Enregistrer un achat",
+  "home_holdings_no_price": "Pas de cours",
+  "home_holdings_scope": "Les plus importantes en valeur · {date}",
+  "home_holdings_count": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} position",
+        "countPlural=*": "{n} positions"
+      }
+    }
+  ],
+  "home_holdings_unpriced": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} sans cours",
+        "countPlural=*": "{n} sans cours"
+      }
+    }
+  ],
+  "home_holdings_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} autre position",
+        "countPlural=*": "+{n} autres positions"
+      }
+    }
+  ],
+  "home_returns_title": "Rendement",
+  "home_returns_open": "Ouvrir le rendement",
+  "home_returns_scope": "Pondéré dans le temps · {period}",
+  "home_returns_saved": "enregistré le {date}",
+  "home_returns_saved_badge": "Calcul enregistré",
+  "home_returns_annualized": "Annualisé",
+  "home_returns_not_saved": "Aucun calcul enregistré",
+  "home_returns_not_saved_copy": "L’accueil affiche le dernier calcul enregistré dans Rendement ; il n’en calcule jamais lui-même.",
+  "home_returns_calculate": "Calculer le rendement",
+  "home_allocation_title": "Répartition",
+  "home_allocation_scope": "Par type d’actif · {date}",
+  "home_allocation_short": "{type}, à découvert",
+  "home_allocation_fact": "{type} {weight}",
+  "home_allocation_unknown": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} solde sans valeur",
+        "countPlural=*": "{n} soldes sans valeur"
+      }
+    }
+  ],
+  "home_allocation_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} autre type",
+        "countPlural=*": "+{n} autres types"
+      }
+    }
+  ],
+  "home_income_title": "Dividendes",
+  "home_income_open": "Ouvrir les revenus",
+  "home_income_zero": "Aucun dividende enregistré",
+  "home_income_instruments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Revenus de {n} instrument",
+        "countPlural=*": "Revenus de {n} instruments"
+      }
+    }
+  ],
+  "home_income_scope": "Dividendes confirmés, depuis le début",
+  "home_income_to_assign": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} paiement à attribuer",
+        "countPlural=*": "{n} paiements à attribuer"
+      }
+    }
+  ],
+  "home_income_unassigned_copy": "les liquidités non attribuées ne sont pas des revenus tant que vous ne les attribuez pas",
+  "home_income_unassigned_cash": "Liquidités non attribuées",
+  "home_income_payments": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} paiement",
+        "countPlural=*": "{n} paiements"
+      }
+    }
+  ],
+  "home_forecast_title": "Prévision",
+  "home_forecast_open": "Ouvrir la prévision",
+  "home_forecast_badge": "Estimation",
+  "home_forecast_fact": "90 prochains jours",
+  "home_forecast_scope": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "Soldes projetés à partir de {n} échéancier actif, calculés à l’ouverture",
+        "countPlural=*": "Soldes projetés à partir de {n} échéanciers actifs, calculés à l’ouverture"
+      }
+    }
+  ],
+  "home_forecast_scope_unknown": "Soldes projetés, calculés à l’ouverture",
+  "home_forecast_not_set_up": "Rien de planifié à projeter",
+  "home_forecast_not_set_up_copy": "La prévision projette vos échéanciers récurrents.",
+  "home_imports_title": "Importations",
+  "home_imports_open": "Ouvrir l’importation",
+  "home_imports_zero": "Rien en attente de vérification",
+  "home_imports_review": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "{n} lot à vérifier",
+        "countPlural=*": "{n} lots à vérifier"
+      }
+    }
+  ],
+  "home_imports_scope": "Les importations préparées attendent votre vérification",
+  "home_prices_title": "Cours",
+  "home_prices_open": "Ouvrir les cours",
+  "home_prices_scope": "Cours et taux utilisés par votre valeur nette",
+  "home_prices_current": "À jour",
+  "home_prices_price": "cours",
+  "home_prices_rate": "taux de change",
+  "home_prices_more": [
+    {
+      "declarations": [
+        "input count",
+        "input n",
+        "local countPlural = count: plural"
+      ],
+      "selectors": [
+        "countPlural"
+      ],
+      "match": {
+        "countPlural=one": "+{n} autre",
+        "countPlural=*": "+{n} autres"
+      }
+    }
+  ],
+  "home_backups_title": "Sauvegardes",
+  "home_backups_open": "Ouvrir sauvegardes et données",
+  "home_backups_off": "Les sauvegardes automatiques sont désactivées",
+  "home_backups_set_up": "Activer les sauvegardes",
+  "home_backups_last": "Sauvegardé le {date}",
+  "home_backups_next": "Prochaine {date}",
+  "home_backups_none": "Aucune sauvegarde pour l’instant",
+  "home_backups_failed": "La dernière sauvegarde a échoué",
+  "home_backups_retrying": "Une nouvelle tentative suivra",
+  "home_backups_retry_copy": "Ouvrez Sauvegardes pour réessayer",
+  "home_backups_running": "Sauvegarde en cours",
+  "home_imports_checking": "Vérification…"
 }

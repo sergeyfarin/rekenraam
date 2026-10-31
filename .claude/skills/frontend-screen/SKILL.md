@@ -72,7 +72,10 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   attention count. Briefing rules live in `#lib/home/briefing.ts`; Home
   amounts use `formatHomeMoney`, nothing else does (#476). My Home widgets
   are view models in `#lib/home/widgets.ts` built from that same read; a
-  widget never fetches on its own, and a failed summary stays in its card (#478). "Out of date" is the
+  widget never fetches on its own, and a failed summary stays in its card (#478). More to explore
+  (`#lib/home/explore.ts`, #479) renders the same `home-widget-card.svelte`; a card may also read the
+  shell's attention query, never a request of its own, and a widget invents no threshold or ranking:
+  it reads the owning feature's rule (or that rule is built there first). "Out of date" is the
   pricing policy's staleness, the word Prices and Review use; a link to a
   filtered destination must list what Home named (`?status=unusable|stale`).
 - Global search is `#lib/search/search-field.svelte` (#457). Mount one shortcut

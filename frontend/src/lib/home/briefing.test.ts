@@ -19,7 +19,9 @@ function home(netWorth: Partial<HomeHeadline> = {}, cash: Partial<HomeHeadline> 
     // The briefing reads no widget; widgets.test.ts covers them.
     widgets: {
       spending: { status: 'failed', summary: null }, budgets: { status: 'failed', summary: null }, accounts: { status: 'failed', summary: null },
-      recurring: { status: 'failed', summary: null }, net_worth_trend: { status: 'failed', summary: null }
+      recurring: { status: 'failed', summary: null }, net_worth_trend: { status: 'failed', summary: null },
+      cashflow: { status: 'failed', summary: null }, holdings: { status: 'failed', summary: null }, returns: { status: 'failed', summary: null },
+      allocation: { status: 'failed', summary: null }, income: { status: 'failed', summary: null }, backups: { status: 'failed', summary: null }
     },
     commodities: [],
     consistent: true
