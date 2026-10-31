@@ -62,8 +62,8 @@
   {:else if workspace}
     <Panel>
       <h2 class="text-lg font-semibold">{m.pricing_coverage()}</h2>
-      <p class="mt-2 text-sm text-muted">{m.pricing_coverage_copy({ days: new Intl.NumberFormat(locale).format(workspace.staleness_max_days) })}</p>
-      <p class="mt-2 text-sm text-muted">{m.pricing_consumer_limits()}</p>
+      <p class="mt-2 text-sm text-muted">{m.pricing_coverage_copy({ days: new Intl.NumberFormat(locale).format(Math.min(workspace.staleness_max_days, workspace.valuation_window_days)) })}</p>
+      <p class="mt-2 text-sm text-muted">{m.pricing_consumer_limits({ policy: new Intl.NumberFormat(locale).format(workspace.staleness_max_days), window: new Intl.NumberFormat(locale).format(workspace.valuation_window_days) })}</p>
       <p class="mt-2 text-sm text-muted">{m.valuation_report_policy()}</p>
       <label class="mt-4 grid max-w-xs gap-1 text-sm" for="pricing-as-of">{m.pricing_as_of()}<input id="pricing-as-of" type="date" value={asOf || workspace.as_of} onchange={(event) => { asOf = event.currentTarget.value; }} class="min-h-11 min-w-0 w-full rounded-(--radius-control) border border-border bg-control px-3" /></label>
       {#if workspaceQuery.isFetching}<p role="status" class="mt-3 text-sm">{m.pricing_loading()}</p>{/if}
@@ -75,7 +75,7 @@
           <button type="button" onclick={() => { base = item.base_commodity_id; quote = item.quote_commodity_id; }} class="min-h-11 max-w-full wrap-anywhere text-left font-semibold underline underline-offset-4">{m.pricing_pair({ base: codes.get(item.base_commodity_id) ?? '', quote: codes.get(item.quote_commodity_id) ?? '' })}</button>
           <div><StatusBadge tone={item.status === 'usable' ? 'positive' : 'warning'}>{item.status === 'usable' ? m.pricing_usable() : item.status === 'stale' ? m.pricing_stale() : m.pricing_missing()}</StatusBadge></div>
           {#if item.age_days !== undefined}<p class="text-sm text-muted">{m.pricing_age({ days: new Intl.NumberFormat(locale).format(item.age_days) })}</p>{/if}
-          {#if item.observation}<PriceDetail price={item.observation} {workspace} />{:else}<p class="text-sm text-muted">{m.pricing_missing_copy()}</p><ObservationStatus status={item.reason} />{/if}
+          {#if item.observation}<PriceDetail price={item.observation} {workspace} />{#if item.status === 'missing'}<ObservationStatus status={item.reason} />{/if}{:else}<p class="text-sm text-muted">{m.pricing_missing_copy()}</p><ObservationStatus status={item.reason} />{/if}
         </li>
       {/each}</ul>{/if}
     </Panel>

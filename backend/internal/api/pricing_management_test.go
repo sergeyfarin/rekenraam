@@ -130,6 +130,8 @@ func TestPriceWorkspaceDatedCoverageExcludesFutureAndVoidedPrices(t *testing.T) 
 		return workspace
 	}
 	workspace := get()
+	assert.Equal(t, 3, workspace.StalenessMaxDays, "the default pricing policy")
+	assert.Equal(t, 7, workspace.ValuationWindowDays, "the reports' window, which also bounds coverage")
 	require.Len(t, workspace.Coverage, 1)
 	assert.Equal(t, "missing", workspace.Coverage[0].Status)
 	assert.Nil(t, workspace.Coverage[0].Observation)

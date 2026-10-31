@@ -9,7 +9,7 @@
   "pricing_error": "No se pudieron cargar las observaciones",
   "pricing_coverage": "Cobertura de precios guardados",
   "pricing_coverage_copy": "Diagnóstico fechado con los datos registrados actuales. Una observación de más de {days} días se marca como antigua aquí.",
-  "pricing_consumer_limits": "Las posiciones conservan los precios antiguos señalados; los informes de divisas rechazan precios fuera de su intervalo (siete días por defecto). Esta cobertura usa el límite de antigüedad configurado.",
+  "pricing_consumer_limits": "Las posiciones conservan los precios antiguos señalados; los informes rechazan un precio de más de {window} días. Esta cobertura marca un precio como antiguo tras los {policy} días de su política de precios o los {window} de los informes, lo que sea menor.",
   "pricing_as_of": "Fecha de valoración",
   "pricing_coverage_empty": "Aún no hay pares de precios configurados. Elija un par para introducirlo manualmente.",
   "pricing_pair": "{base} en {quote}",

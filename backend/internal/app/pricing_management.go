@@ -32,11 +32,14 @@ type PricingCommodity struct {
 }
 
 type PricingWorkspace struct {
-	AsOf             string
-	StalenessMaxDays int
-	Commodities      []PricingCommodity
-	Sources          []MarketDataSource
-	Coverage         []PricingCoverage
+	AsOf string
+	// StalenessMaxDays is the pricing policy's limit; ValuationWindowDays the
+	// reports' limit. A price older than either is stale here.
+	StalenessMaxDays    int
+	ValuationWindowDays int
+	Commodities         []PricingCommodity
+	Sources             []MarketDataSource
+	Coverage            []PricingCoverage
 }
 
 func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWorkspace, error) {
@@ -93,14 +96,26 @@ func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWor
 	}
 	// Keep obligations per account: equal and opposite balances in separate
 	// accounts still need a rate when either account is valued on its own.
+	// A non-currency balance joins only when nothing already prices it (no
+	// series, instrument quote currency or lot cost): a quoted instrument is
+	// valued by chaining its own pair, and a second base pair would be noise.
 	pairs := map[[2]int64]bool{}
+	priced := map[int64]bool{}
 	for _, pair := range snapshot.Pairs {
 		pairs[[2]int64{pair.BaseCommodityID, pair.QuoteCommodityID}] = true
+		priced[pair.BaseCommodityID] = true
+	}
+	kinds := map[int64]string{}
+	for _, commodity := range snapshot.Commodities {
+		kinds[commodity.ID] = commodity.Kind
 	}
 	if baseID > 0 {
 		for _, amounts := range balances {
 			for commodityID, amount := range amounts {
 				key := [2]int64{commodityID, baseID}
+				if kinds[commodityID] != "currency" && priced[commodityID] {
+					continue
+				}
 				if commodityID != baseID && amount.Sign() != 0 && !pairs[key] {
 					pairs[key] = true
 					snapshot.Pairs = append(snapshot.Pairs, db.PricingPairRecord{BaseCommodityID: commodityID, QuoteCommodityID: baseID})
@@ -123,6 +138,7 @@ func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWor
 	}
 	result.AsOf = asOf
 	result.StalenessMaxDays = policy.StalenessMaxDays
+	result.ValuationWindowDays = DefaultRateStalenessDays
 	result.Commodities = make([]PricingCommodity, 0, len(snapshot.Commodities))
 	for _, commodity := range snapshot.Commodities {
 		result.Commodities = append(result.Commodities, PricingCommodity{
@@ -148,13 +164,49 @@ func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWor
 			coverage.Status = "usable"
 			// A policy longer than the report's window still cannot call
 			// usable a price that reports, and so Home, cannot value with.
-			if age > policy.StalenessMaxDays || age > DefaultRateStalenessDays {
+			if age > policy.StalenessMaxDays || age > result.ValuationWindowDays {
 				coverage.Status = "stale"
 			}
 		}
 		result.Coverage = append(result.Coverage, coverage)
 	}
+	if err := s.refuseUnvaluableCoverage(ctx, result.Coverage, kinds, asOf, boundary); err != nil {
+		return result, err
+	}
 	return result, nil
+}
+
+// refuseUnvaluableCoverage marks missing a pair recent enough by age that
+// valuation still cannot use, such as a quote across a day the holdings
+// record conflicting splits on. Each quote currency's pairs are judged by the
+// report's own rate table (RateTable.DirectGap), not a second copy of its
+// rules, so Prices lists every input Home and the reports call missing.
+func (s *PricingService) refuseUnvaluableCoverage(ctx context.Context, coverage []PricingCoverage, kinds map[int64]string, asOf string, boundary db.ObservationBoundary) error {
+	byQuote := map[int64][]int64{}
+	for _, item := range coverage {
+		if item.Status == "usable" && kinds[item.QuoteCommodityID] == "currency" {
+			byQuote[item.QuoteCommodityID] = append(byQuote[item.QuoteCommodityID], item.BaseCommodityID)
+		}
+	}
+	tables := map[int64]*RateTable{}
+	for quoteID, bases := range byQuote {
+		table, err := newRateTableAtBoundary(ctx, s.repository, ReportingCurrencyInput{CommodityID: quoteID}, bases, asOf, asOf, boundary)
+		if err != nil {
+			return fmt.Errorf("judge price coverage: %w", err)
+		}
+		tables[quoteID] = table
+	}
+	for index := range coverage {
+		item := &coverage[index]
+		table := tables[item.QuoteCommodityID]
+		if item.Status != "usable" || table == nil {
+			continue
+		}
+		if gap, failed := table.DirectGap(item.BaseCommodityID, asOf); failed {
+			item.Status, item.Reason = "missing", gap.Reason
+		}
+	}
+	return nil
 }
 
 type priceHistoryCursor struct {

@@ -9,7 +9,7 @@
   "pricing_error": "Impossible de charger les observations",
   "pricing_coverage": "Couverture des prix enregistrés",
   "pricing_coverage_copy": "Diagnostic daté utilisant les données actuellement enregistrées. Une observation de plus de {days} jours est signalée comme ancienne ici.",
-  "pricing_consumer_limits": "Les positions conservent les prix anciens signalés ; les rapports de devises refusent les prix hors de leur fenêtre datée (sept jours par défaut). Cette couverture utilise la limite d’ancienneté configurée.",
+  "pricing_consumer_limits": "Les positions conservent les prix anciens signalés ; les rapports refusent un prix de plus de {window} jours. Cette couverture signale un prix comme ancien après les {policy} jours de votre politique de prix ou les {window} des rapports, selon le plus court.",
   "pricing_as_of": "Date de valorisation",
   "pricing_coverage_empty": "Aucune paire de prix configurée. Choisissez une paire pour une saisie manuelle.",
   "pricing_pair": "{base} en {quote}",

@@ -148,6 +148,10 @@ non-trivial diff (yours or reviewed):
     run and missed four other helpers and six inline lists, so 114 call sites
     never asserted checks outside a short named list, such as #389's
     `investment_attribution` (#397).
+    Diagnostics repeat it too: Prices judged a quote by age while valuation
+    also refuses it across conflicting splits, so Home's "needs a price" link
+    hid it (#476). A screen that says whether a consumer can use something
+    asks that consumer (`RateTable.DirectGap`), never a restated rule.
     A healthy known-basis book asserts through
     `requireKnownBasisSelfCheckPasses` (or `requireInvestmentSelfCheckPasses`,
     which adds the investment oracles); never hand-list the checks that must

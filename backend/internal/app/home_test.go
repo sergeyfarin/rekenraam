@@ -272,6 +272,31 @@ func TestHomeBriefingStaleChainedLegIsBlamedOnItsOwnCommodity(t *testing.T) {
 	}
 }
 
+// A balance in an instrument nothing quotes yet (no series, no quote currency)
+// is still an exposure: Prices and Review list the pair Home says is missing.
+func TestPricingDiscoversAnUnpricedNonCurrencyBalance(t *testing.T) {
+	t.Parallel()
+	f := newHomeFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	btc := seedTestCryptoCommodity(t, f.database, "BTC")
+	wallet := seedTestAccountWithClass(t, f.database, "active", true, "asset", "crypto_wallet")
+	f.move(t, "2026-10-01", wallet, btc, 50)
+
+	netWorth := homeHeadline(t, f.briefing(t), HomeHeadlineNetWorth)
+	assert.Equal(t, []HomeValuationInput{{CommodityID: btc, Code: "BTC", Kind: "price"}}, netWorth.Missing)
+	f.requirePricingLists(t, netWorth.Missing, "unusable")
+
+	// A quoted instrument is not given a second, reporting-currency pair: its
+	// own pair is what Prices shows, and a chained conversion values it.
+	workspace, err := f.pricing.Workspace(context.Background(), "2026-10-15")
+	require.NoError(t, err)
+	for _, coverage := range workspace.Coverage {
+		if coverage.BaseCommodityID == f.stockCommodityID {
+			assert.NotEqual(t, f.eurCommodityID, coverage.QuoteCommodityID, "TEST is quoted in its instrument currency only")
+		}
+	}
+}
+
 func TestHomeBriefingMissingRateIsCountedAsARate(t *testing.T) {
 	t.Parallel()
 	f := newHomeFixture(t)

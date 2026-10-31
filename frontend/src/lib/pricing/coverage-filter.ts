@@ -6,7 +6,9 @@ type Coverage = PricingWorkspace['coverage'][number];
  * Prices filtered from Home's status line (#476). `unusable` is every pair
  * without a price the reports can value with, which is what Home calls
  * missing; `stale` is a price older than the pricing policy, what Home and
- * Review call out of date. The workspace's own statuses decide both.
+ * Review call out of date. The workspace's own statuses decide both: the
+ * backend judges a recent quote with the reports' rate table, so one that
+ * valuation refuses (conflicting splits) arrives as `missing`, not `usable`.
  */
 export type CoverageFilter = 'unusable' | 'stale';
 

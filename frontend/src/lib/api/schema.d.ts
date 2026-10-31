@@ -29739,15 +29739,18 @@ export interface components {
         };
         PricingCoverageResponse: {
             /**
-             * @description Why no compatible observation was selected; absent for a pair without any live evidence.
+             * @description Why no compatible observation was selected, or why a recent one cannot value the pair (conflicting_splits); absent for a pair without any live evidence.
              * @enum {string}
              */
-            reason?: "usable" | "future_only" | "incompatible_quote_basis" | "not_known_at_cutoff";
+            reason?: "usable" | "future_only" | "incompatible_quote_basis" | "not_known_at_cutoff" | "no_observation_in_window" | "conflicting_splits";
             /** Format: int64 */
             base_commodity_id: number;
             /** Format: int64 */
             quote_commodity_id: number;
-            /** @enum {string} */
+            /**
+             * @description stale when the observation is older than staleness_max_days or valuation_window_days; missing when there is none, or when valuation cannot use a recent one (reason says why, and observation stays present).
+             * @enum {string}
+             */
             status: "usable" | "stale" | "missing";
             age_days?: number;
             observation?: components["schemas"]["PriceObservationResponse"];
@@ -29755,7 +29758,10 @@ export interface components {
         PricingWorkspaceResponse: {
             /** Format: date */
             as_of: string;
+            /** @description The pricing policy's out-of-date limit, as configured. */
             staleness_max_days: number;
+            /** @description The longest age at which reports, and so Home, value with a price. Coverage applies the smaller of the two limits. */
+            valuation_window_days: number;
             commodities: components["schemas"]["PricingCommodityResponse"][];
             sources: components["schemas"]["MarketDataSourceResponse"][];
             coverage: components["schemas"]["PricingCoverageResponse"][];

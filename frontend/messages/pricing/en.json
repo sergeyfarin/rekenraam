@@ -9,7 +9,7 @@
   "pricing_error": "Observations could not be loaded",
   "pricing_coverage": "Stored price coverage",
   "pricing_coverage_copy": "Dated diagnostic using current recorded knowledge. An observation older than {days} days is marked stale here.",
-  "pricing_consumer_limits": "Holdings retain labelled old prices; FX reports reject prices outside their dated window (seven days by default). Coverage here uses the configured diagnostic age limit.",
+  "pricing_consumer_limits": "Holdings retain labelled old prices; reports reject a price older than {window} days. Coverage here marks a price stale after your pricing policy's {policy} days or the reports' {window}, whichever is shorter.",
   "pricing_as_of": "Valuation date",
   "pricing_coverage_empty": "No configured price pairs yet. Choose a pair for manual entry.",
   "pricing_pair": "{base} in {quote}",

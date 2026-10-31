@@ -26,11 +26,12 @@ type pricingCoverageResponse struct {
 }
 
 type pricingWorkspaceResponse struct {
-	AsOf             string                     `json:"as_of"`
-	StalenessMaxDays int                        `json:"staleness_max_days"`
-	Commodities      []pricingCommodityResponse `json:"commodities"`
-	Sources          []marketDataSourceResponse `json:"sources"`
-	Coverage         []pricingCoverageResponse  `json:"coverage"`
+	AsOf                string                     `json:"as_of"`
+	StalenessMaxDays    int                        `json:"staleness_max_days"`
+	ValuationWindowDays int                        `json:"valuation_window_days"`
+	Commodities         []pricingCommodityResponse `json:"commodities"`
+	Sources             []marketDataSourceResponse `json:"sources"`
+	Coverage            []pricingCoverageResponse  `json:"coverage"`
 }
 
 func pricingWorkspace(logger *slog.Logger, auth *app.AuthService, service *app.PricingService) http.HandlerFunc {
@@ -43,7 +44,7 @@ func pricingWorkspace(logger *slog.Logger, auth *app.AuthService, service *app.P
 			writePricingServiceError(w, r, logger, "read price workspace", err)
 			return
 		}
-		response := pricingWorkspaceResponse{AsOf: result.AsOf, StalenessMaxDays: result.StalenessMaxDays, Commodities: []pricingCommodityResponse{}, Sources: toMarketDataSourceResponses(result.Sources), Coverage: []pricingCoverageResponse{}}
+		response := pricingWorkspaceResponse{AsOf: result.AsOf, StalenessMaxDays: result.StalenessMaxDays, ValuationWindowDays: result.ValuationWindowDays, Commodities: []pricingCommodityResponse{}, Sources: toMarketDataSourceResponses(result.Sources), Coverage: []pricingCoverageResponse{}}
 		for _, commodity := range result.Commodities {
 			response.Commodities = append(response.Commodities, pricingCommodityResponse{
 				ID: commodity.ID, Code: commodity.Code, Name: commodity.Name, Kind: commodity.Kind, Status: commodity.Status,

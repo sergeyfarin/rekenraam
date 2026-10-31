@@ -185,7 +185,11 @@ date; each leg of a chained conversion is judged on its own observation date
 and reported against its own commodity, so a stale rate is never blamed on a
 current price. Inputs beyond the report's 7-day window are missing, as in the
 report, so an old price does block the headline; the report's window, not
-Home, decides that, and Prices never calls usable a price beyond it.
+Home, decides that. Prices never calls usable a price valuation refuses: it
+applies the shorter of the two limits (and returns both), judges a recent
+quote with the report's rate table (a quote across conflicting splits is
+`missing`), and lists a balance in an instrument nothing prices yet, so the
+`?status=unusable` link always shows what Home named.
 Cash is open checking, savings, cash and other money accounts; brokerage cash
 stays with its brokerage. `account_count` counts open asset and liability
 accounts without system or per-instrument holding accounts. Closed accounts
@@ -628,7 +632,7 @@ book snapshot. `checked_at` is the UTC start time of that read. Source units are
 | Connections | Each connection whose latest fetch failed, once. |
 | Refresh | Each market-data source with an unresolved refresh-state error or a failed/partial latest ingest run, once across pairs and runs. |
 | Backup / self-check | The latest recorded run of each kind, not historical failures. A failed/errored run contributes one; self-check warning/incomplete contributes one. Pending/running is unknown, never zero. No recorded run has the explicit `never` status. A later successful run clears its predecessor. |
-| Prices / rates | Each distinct non-usable base/quote pair in the current owner-local Pricing workspace, separated by whether the base is a currency. The shared `live_raw_v1` observation owner and pricing staleness policy decide coverage; there is no separate attention valuation calculation. |
+| Prices / rates | Each distinct non-usable base/quote pair in the current owner-local Pricing workspace, separated by whether the base is a currency. The shared `live_raw_v1` observation owner and pricing staleness policy decide coverage, bounded by the reports' window and judged by the reports' rate table, so a quote valuation refuses (conflicting splits) counts. Posted balances are discovered for currencies and for instruments nothing prices yet; there is no separate attention valuation calculation. |
 
 The total counts **action units**, not unique objects across sources: a failed
 refresh and a missing price can both need action. Read failures retain successful
