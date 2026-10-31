@@ -362,8 +362,6 @@
   "import_fetching_cancel": "Annuler",
   "import_fetching_failed_title": "La récupération a échoué",
   "import_fetching_failed_copy": "Vérifiez la clé d'API de la connexion et réessayez.",
-  "settings_card_language_title": "Langue",
-  "settings_card_language_copy": "Choisissez la langue d'affichage de l'interface.",
   "language_title": "Langue",
   "language_copy": "La langue de l'interface est enregistrée dans ce navigateur. Les montants, les dates et les nombres suivent la langue choisie.",
   "language_select_legend": "Langue de l'interface",
@@ -1902,5 +1900,6 @@
   "home_backups_retry_copy": "Ouvrez Sauvegardes pour réessayer",
   "home_backups_running": "Sauvegarde en cours",
   "home_imports_checking": "Vérification…",
-  "home_cashflow_transfers_unconverted": "virements non convertis en {currency}"
+  "home_cashflow_transfers_unconverted": "virements non convertis en {currency}",
+  "reports_export_title": "Exporter"
 }

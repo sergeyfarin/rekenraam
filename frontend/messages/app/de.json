@@ -362,8 +362,6 @@
   "import_fetching_cancel": "Abbrechen",
   "import_fetching_failed_title": "Der Abruf ist fehlgeschlagen",
   "import_fetching_failed_copy": "Prüfen Sie den API-Schlüssel der Verbindung und versuchen Sie es erneut.",
-  "settings_card_language_title": "Sprache",
-  "settings_card_language_copy": "Wählen Sie die Sprache, in der die Oberfläche angezeigt wird.",
   "language_title": "Sprache",
   "language_copy": "Die Sprache der Oberfläche wird in diesem Browser gespeichert. Beträge, Datumsangaben und Zahlen richten sich nach der gewählten Sprache.",
   "language_select_legend": "Sprache der Oberfläche",
@@ -1902,5 +1900,6 @@
   "home_backups_retry_copy": "Zum Wiederholen Sicherungen öffnen",
   "home_backups_running": "Sicherung läuft",
   "home_imports_checking": "Wird geprüft…",
-  "home_cashflow_transfers_unconverted": "Überträge nicht in {currency} umgerechnet"
+  "home_cashflow_transfers_unconverted": "Überträge nicht in {currency} umgerechnet",
+  "reports_export_title": "Export"
 }

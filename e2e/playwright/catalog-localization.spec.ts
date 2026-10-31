@@ -104,7 +104,7 @@ for (const locale of ['es', 'fr', 'nl', 'de', 'ru']) {
       await page.getByLabel(m.security_mfa_password_label, { exact: true }).fill('test-password');
       await page.getByRole('button', { name: m.security_mfa_disable, exact: true }).click();
       await expect(page.getByText(m.security_mfa_badge_inactive, { exact: true })).toBeVisible();
-      await page.goto('/app/settings/language');
+      await page.goto('/app/settings/preferences');
       await expect(page.getByText(messages('app', locale).language_translation_progress_copy, { exact: true })).toBeVisible();
     } finally {
       const status = await apiJSON<{ status: string }>(page, 'GET', '/api/v1/auth/mfa');

@@ -226,10 +226,10 @@ const subViews: SubView[] = [
     }
   },
   {
-    name: 'trash restore override', group: 'dialog', path: () => '/app/settings/trash',
+    name: 'Deleted restore override', group: 'dialog', path: () => '/app/ledger/transactions?view=deleted',
     open: async (c) => {
       // Phone rows repeat the action for the stacked layout; take the visible one.
-      await c.page.getByRole('row').filter({ hasText: 'Sweep restore subject' }).getByRole('button', { name: c.t('trash_restore_guarded') }).filter({ visible: true }).first().click();
+      await c.page.getByRole('row').filter({ hasText: 'Sweep restore subject' }).getByRole('button', { name: c.t('transactions_deleted_restore_guarded') }).filter({ visible: true }).first().click();
       const dialog = openDialog(c.page);
       await expect(dialog.getByRole('listitem').first()).toBeVisible();
       return dialog;

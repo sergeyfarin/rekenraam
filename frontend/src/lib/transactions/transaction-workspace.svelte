@@ -206,7 +206,7 @@
       await restoreTransaction(transaction.id, csrfToken, { expected_version_id: transaction.version_id });
       await invalidate();
     } catch {
-      // It stays deleted; Settings → Trash can still restore it.
+      // It stays deleted; Transactions → Deleted can still restore it.
     }
     panel = { type: 'none' };
   }

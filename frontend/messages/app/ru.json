@@ -362,8 +362,6 @@
   "import_fetching_cancel": "Отмена",
   "import_fetching_failed_title": "Загрузка не удалась",
   "import_fetching_failed_copy": "Проверьте ключ API этого подключения и попробуйте снова.",
-  "settings_card_language_title": "Язык",
-  "settings_card_language_copy": "Выберите язык интерфейса.",
   "language_title": "Язык",
   "language_copy": "Язык интерфейса сохраняется в этом браузере. Суммы, даты и числа отображаются по правилам выбранного языка.",
   "language_select_legend": "Язык интерфейса",
@@ -1964,5 +1962,6 @@
   "home_backups_retry_copy": "Откройте копии, чтобы повторить",
   "home_backups_running": "Идёт копирование",
   "home_imports_checking": "Проверяем…",
-  "home_cashflow_transfers_unconverted": "переводы не пересчитаны в {currency}"
+  "home_cashflow_transfers_unconverted": "переводы не пересчитаны в {currency}",
+  "reports_export_title": "Экспорт"
 }

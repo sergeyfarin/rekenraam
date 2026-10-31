@@ -12,7 +12,7 @@ test.afterEach(async ({ page }) => {
 
 /**
  * #225: restoring a deleted transaction into a reconciled period asked for an
- * override without naming a single checkpoint. The trash dialog now lists
+ * override without naming a single checkpoint. The Deleted view dialog now lists
  * every checkpoint from the restore's own preview (later ones included) and
  * only then lets the owner confirm. Phone-sized screen.
  */
@@ -70,7 +70,7 @@ async function seed(page: Page) {
 const restoreButton = (page: Page, description: string) =>
   page.getByRole('row').filter({ hasText: description }).getByRole('button', { name: /^Restore/ });
 
-test('a guarded trash restore lists every checkpoint before override; cancel writes nothing', async ({ page }) => {
+test('a guarded Deleted restore lists every checkpoint before override; cancel writes nothing', async ({ page }) => {
   const s = await seed(page);
   const description = `Trash subject ${s.suffix}`;
   let release!: () => void;
@@ -82,7 +82,7 @@ test('a guarded trash restore lists every checkpoint before override; cancel wri
     return route.continue();
   });
 
-  await page.goto('/app/settings/trash');
+  await page.goto('/app/ledger/transactions?view=deleted');
   await restoreButton(page, description).click();
   const warning = page.getByRole('alertdialog', { name: 'Restore and invalidate reconciliation?' });
   const proceed = warning.getByRole('button', { name: 'Restore anyway' });
@@ -113,7 +113,7 @@ test('a guarded trash restore lists every checkpoint before override; cancel wri
   await expect(page.getByRole('row').filter({ hasText: description })).toHaveCount(0);
 });
 
-test('a plain trash restore refused by a newer statement opens the checkpoint list', async ({ page }) => {
+test('a plain Deleted restore refused by a newer statement opens the checkpoint list', async ({ page }) => {
   const s = await seed(page);
   const description = `Trash subject ${s.suffix}`;
   // A stale list: it still says the restore needs no override.
@@ -123,7 +123,7 @@ test('a plain trash restore refused by a newer statement opens the checkpoint li
     for (const row of body.transactions ?? []) row.restore_blocked_by_reconciliation = false;
     await route.fulfill({ response, json: body });
   });
-  await page.goto('/app/settings/trash');
+  await page.goto('/app/ledger/transactions?view=deleted');
   await restoreButton(page, description).click();
   const warning = page.getByRole('alertdialog', { name: 'Restore and invalidate reconciliation?' });
   await expect(warning.getByRole('listitem')).toHaveCount(2);
@@ -154,7 +154,7 @@ test('a deleted voided transaction shows its translated status', async ({ page }
   await apiJSON(page, 'POST', `/api/v1/transactions/${tx.id}/void`, csrfToken, { change_reason: 'duplicate' });
   await apiJSON(page, 'POST', `/api/v1/transactions/${tx.id}/soft-delete`, csrfToken, { change_reason: 'duplicate' });
 
-  await page.goto('/app/settings/trash');
+  await page.goto('/app/ledger/transactions?view=deleted');
   const row = page.getByRole('row').filter({ hasText: description });
   await expect(row.getByText('Voided', { exact: true })).toBeVisible();
   await expect(row.getByText('voided', { exact: true })).toHaveCount(0);

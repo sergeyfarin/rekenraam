@@ -41,6 +41,16 @@ describe('route registry', () => {
     }
   });
 
+  it('lists the five settings pages in the agreed order', () => {
+    expect(sectionTabs('settings').map((entry) => entry.route)).toEqual([
+      '/app/settings',
+      '/app/settings/preferences',
+      '/app/settings/currencies',
+      '/app/settings/security',
+      '/app/settings/data'
+    ]);
+  });
+
   it('keeps a detail page parent inside its own section', () => {
     for (const entry of routes.filter((item) => item.parent)) {
       const parent = routeFor(entry.parent!);
@@ -104,7 +114,9 @@ describe('legacy links', () => {
     ['/app/reconcile', '/app/ledger/reconcile'],
     ['/app/budgets', '/app/planning/budgets'],
     ['/app/recurring', '/app/planning/recurring'],
-    ['/app/forecast', '/app/planning/forecast']
+    ['/app/forecast', '/app/planning/forecast'],
+    ['/app/settings/appearance', '/app/settings/preferences'],
+    ['/app/settings/language', '/app/settings/preferences']
   ])('preserves every parameter and fragment from %s', (from, to) => {
     for (const suffix of ['', '/']) {
       const original = url(`${from}${suffix}?account_id=1&account_id=2&empty=&q=a%2Bb+%26+c&view=drafts&future=unknown#detail`);
@@ -125,6 +137,31 @@ describe('legacy links', () => {
       expect(routeFor(next!.pathname)?.legacy, entry.route).toBeUndefined();
       expect(routeFor(next!.pathname), entry.route).toBeDefined();
     }
+  });
+
+  it('moves Trash to the Deleted transaction view without losing URL state', () => {
+    const next = canonicalURL(url('/app/settings/trash?empty=&future=a%2Bb#detail'))!;
+    expect(next.pathname).toBe('/app/ledger/transactions');
+    expect([...next.searchParams]).toEqual([
+      ['empty', ''],
+      ['future', 'a+b'],
+      ['view', 'deleted']
+    ]);
+    expect(next.hash).toBe('#detail');
+    expect(canonicalURL(next)).toBeNull();
+  });
+
+  it('moves an old export deep link to Reports → Export', () => {
+    for (const from of [
+      '/app/settings/data?view=export&q=kept',
+      '/app/settings/data?export=true&q=kept'
+    ]) {
+      const next = canonicalURL(url(from))!;
+      expect(`${next.pathname}${next.search}`).toBe('/app/reports/export?q=kept');
+      expect(canonicalURL(next)).toBeNull();
+    }
+    // The Data and backups page itself stays where it is.
+    expect(canonicalURL(url('/app/settings/data'))).toBeNull();
   });
 
   it.each([
@@ -155,6 +192,11 @@ describe('legacy links', () => {
     '/app/investments?tab=splits&split_operation_id=4',
     '/app/investments?tab=suggestions',
     '/app/ledger/transactions?view=drafts',
+    '/app/ledger/transactions?view=deleted',
+    '/app/settings',
+    '/app/settings/preferences',
+    '/app/settings/data',
+    '/app/reports/export',
     '/app/accounts/12',
     '/app/import/unknown',
     '/app/forecasting'
