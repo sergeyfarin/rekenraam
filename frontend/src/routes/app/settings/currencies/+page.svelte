@@ -491,39 +491,39 @@
           {m.currencies_policy_refresh_enabled()}
         </label>
 
-        <div class="grid grid-cols-3 gap-3">
-          <label class="block text-sm font-semibold text-foreground">
+        <div class="grid min-w-0 grid-cols-3 gap-3">
+          <label class="block min-w-0 break-words text-sm font-semibold text-foreground">
             {m.currencies_policy_hour_label()}
             <input
               type="number"
               min="0"
               max="23"
               bind:value={refreshHourLocal}
-              class="mt-2 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
+              class="mt-2 w-full min-w-0 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
             />
           </label>
 
-          <label class="block text-sm font-semibold text-foreground">
+          <label class="block min-w-0 break-words text-sm font-semibold text-foreground">
             {m.currencies_policy_minute_label()}
             <input
               type="number"
               min="0"
               max="59"
               bind:value={refreshMinuteLocal}
-              class="mt-2 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
+              class="mt-2 w-full min-w-0 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
             />
           </label>
 
-          <label class="block text-sm font-semibold text-foreground">
+          <label class="block min-w-0 break-words text-sm font-semibold text-foreground">
             {m.currencies_policy_hops_label()}
             <input
               type="number"
               min="0"
               max="4"
               bind:value={triangulationMaxHops}
-              class="mt-2 w-full rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
+              class="mt-2 w-full min-w-0 rounded-(--radius-control) border border-border bg-control px-3 py-2 text-sm text-foreground"
             />
-            <span class="mt-1 block text-sm font-normal text-muted">{m.currencies_policy_hops_hint()}</span>
+            <span class="mt-1 block break-words text-sm font-normal text-muted">{m.currencies_policy_hops_hint()}</span>
           </label>
         </div>
         <p class="text-sm text-muted">{m.currencies_policy_time_zone_note({ timeZone: preferencesTimeZone })}</p>
