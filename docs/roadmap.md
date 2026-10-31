@@ -104,7 +104,7 @@ Implement the owner-approved [Home and navigation design](design/home-and-naviga
 recorded in [commit `457dd74`](https://github.com/sergeyfarin/rekenraam/commit/457dd74a8344caa962bfdf29fe8dd18a69254102),
 with its [v3 mockup](design/home-mockup/README.md). The design is approved;
 its header, registry, tab-route, hide-amounts, shared-search and attention slices
-#455–#459 and section-owned paths #460 are delivered; the remaining shell and Home work is not delivered. The owner made it the current
+#455–#459 and section-owned paths #460 are delivered, and Home #437 is delivered and closed; the remaining shell work (#436) and the pages below are not delivered. The owner made it the current
 initiative on 2026-10-29, after the remaining maintenance items (#414, #416)
 were judged not to block it; they, owner-dependent readiness and release
 evidence continue in parallel. Implementation starts with #436.
@@ -131,11 +131,13 @@ Deliver incrementally, tracked in #441, in this order:
    widgets, backed by a composed Home read and a shared transaction-entry
    dialog. Its status line links to the **Review page (#453)**, which lists
    everything needing attention and the status of background work. Split into
-   #476 (composed read and briefing, delivered), #477 (command bar, shortcuts
-   and entry dialog, delivered), #478 (My Home widgets, delivered) and #479
-   (More to explore, delivered). The Transfer tile and entry follow as #481;
-   the Reconciliation widget follows the general reconciliation out-of-date
-   rule (#482).
+   #476 (composed read and briefing), #477 (command bar, shortcuts and entry
+   dialog), #478 (My Home widgets) and #479 (More to explore), all delivered;
+   #437 closed 2026-10-31. Split off and still open: the Transfer tile and
+   simple transfer entry (#481), and the general reconciliation out-of-date
+   rule with its account-list state and Home widget (#482, configurable window,
+   default 60 days). Pinned accounts on the Accounts widget arrive with #442
+   and entered values in the briefing with #454.
 3. **Pages in their new places**, in any order after #436: settings in five
    pages with Trash moved to Transactions › Deleted and export to Reports
    (#446); Import views (#447); Ledger overview with accounts by institution,
