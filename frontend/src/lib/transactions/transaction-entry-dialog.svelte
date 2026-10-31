@@ -1,37 +1,39 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { afterNavigate } from '$app/navigation';
   import { createQuery, useQueryClient } from '@tanstack/svelte-query';
   import X from '@lucide/svelte/icons/x';
   import ModalDialog from '#lib/components/modal-dialog.svelte';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
-  import { accountRegisterQueryKey, transactionsQueryKey, type TransactionResponse } from '#lib/api/transactions.ts';
-  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import type { TransactionResponse } from '#lib/api/transactions.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { closeTransactionEntry, transactionEntry } from './add-transaction.svelte.ts';
+  import { invalidateTransactionReads } from './invalidate.ts';
   import TransactionEditor from './transaction-editor.svelte';
 
   // The shared Add transaction dialog (#477): the existing editor, its locale
   // parsing, guards and error recovery, in a dialog on desktop and a
   // full-screen sheet on phones. The shell mounts it once, outside every page,
-  // so a background refresh of Home or any page leaves the working copy alone;
-  // the editor itself reads its prefill once (#433). Cancel and Escape discard
+  // and outside the shell's error state, so a background refresh of Home, any
+  // page or the session leaves the working copy alone; the editor itself reads
+  // its prefill once (#433). Cancel and Escape discard
   // it; the dialog returns focus to the control that opened it.
   const sessionQuery = createQuery(() => authSessionQueryOptions());
   const queryClient = useQueryClient();
 
   async function saved(transaction: TransactionResponse) {
-    // The shell already refreshes Home and the attention count after a write.
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: accountRegisterQueryKey }),
-      queryClient.invalidateQueries({ queryKey: forecastQueryKey })
-    ]);
+    // The page beneath (a report, a budget month, balances) refetches too.
+    await invalidateTransactionReads(queryClient);
     closeTransactionEntry(transaction);
   }
 
   afterNavigate(() => {
     transactionEntry.saved = undefined;
   });
+
+  // The open flag never outlives the dialog: after signing out, the next
+  // session must not reopen an empty entry.
+  onDestroy(() => closeTransactionEntry());
 </script>
 
 {#if transactionEntry.open}

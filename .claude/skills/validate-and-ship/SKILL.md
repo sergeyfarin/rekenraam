@@ -889,6 +889,19 @@ non-trivial diff (yours or reviewed):
     also verify genuine page departure still dismisses search
     (`shared-search.spec.ts`, `search entered during Spending range repair … (#472)`).
 
+78. **A dismissal guard that sees only part of a write chain** — the editor's
+    busy state covered the save but not the payee it creates first, so Escape
+    closed the entry dialog mid-chain and the continuation still posted it
+    (#477). Busy (`aria-busy`, which `ModalDialog`/`phoneModal` honour) spans
+    every write that leads to the commit, and an unmounted form never continues
+    to its own save. Related in the same review: a write from a dialog over any
+    page refreshes every read it can change (`invalidateTransactionReads`), and
+    a shell error state must not unmount an open working copy. Suggestion-list
+    options are never Tab stops: one that closes on blur drops focus out of the
+    dialog. Named checks: `home-entry.spec.ts` (payee chain, report refresh,
+    failed session refresh, keyboard category), `invalidate.test.ts`,
+    `suggestion-keys.test.ts`.
+
 Fix workflow for any bug: failing named test first, then the fix, then the
 full relevant suite.
 

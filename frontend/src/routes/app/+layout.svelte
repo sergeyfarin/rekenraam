@@ -202,5 +202,11 @@
     </div>
   </main>
   <KeyboardHelp />
+{/if}
+
+<!-- Outside the shell's states: a failed background session or setup refresh
+     swaps the page for the shell error, but must not discard an unsaved entry
+     (#477). Signing out does. -->
+{#if !shouldRedirectHome}
   <TransactionEntryDialog />
 {/if}

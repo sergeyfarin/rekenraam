@@ -41,8 +41,8 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { phoneModal } from '#lib/components/modal-focus.ts';
   import { authSessionQueryOptions } from '#lib/api/auth.ts';
-  import { accountRegisterQueryKey, approveTransaction, getTransaction, restoreTransaction, transactionsQueryKey } from '#lib/api/transactions.ts';
-  import { forecastQueryKey } from '#lib/api/forecast.ts';
+  import { approveTransaction, getTransaction, restoreTransaction } from '#lib/api/transactions.ts';
+  import { invalidateTransactionReads } from './invalidate.ts';
   import type { TransactionRowAction } from './row-action.ts';
   import TransactionDetailPanel from './transaction-detail-panel.svelte';
   import TransactionEditor from './transaction-editor.svelte';
@@ -95,13 +95,10 @@
     if (Number.isSafeInteger(linkedTransactionID) && linkedTransactionID > 0) void showTransaction(linkedTransactionID);
   });
 
-  // A write may change any list and every account's running balance.
+  // A write may change any list, every account's running balance and the
+  // reports and budgets read from them.
   async function invalidate() {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: transactionsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: accountRegisterQueryKey }),
-      queryClient.invalidateQueries({ queryKey: forecastQueryKey })
-    ]);
+    await invalidateTransactionReads(queryClient);
   }
 
   async function showTransaction(transactionID: number) {

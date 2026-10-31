@@ -4,6 +4,7 @@ import { apiJSON } from './support/api';
 import { todayISO } from './support/dates';
 import { expectFocusTrapped, expectNoAccessibilityViolations, focusIsInside } from './support/a11y';
 import { createCashAccount, readyForLedger } from './support/ledger';
+import { observePageRequests, waitForPageReady } from './support/page-readiness';
 
 // Home's command bar, shortcut tiles and the shared Add transaction dialog
 // (#477): the existing editor in a dialog on desktop and a full-screen sheet on
@@ -22,6 +23,7 @@ for (const theme of ['light', 'dark'] as const) {
   test(`desktop Home: command bar, tiles and the entry dialog by keyboard in ${theme}`, async ({ page }) => {
     const { csrfToken, currencyID } = await readyForLedger(page);
     const account = await createCashAccount(page, csrfToken, `Home entry ${theme} ${Date.now()}`, currencyID);
+    const category = await apiJSON<{ name: string }>(page, 'POST', '/api/v1/categories', csrfToken, { name: `Home entry spend ${theme} ${Date.now()}`, category_type: 'expense' });
     const description = `Home entry ${theme} ${Date.now()}`;
     await setTheme(page, theme);
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -55,6 +57,12 @@ for (const theme of ['light', 'dark'] as const) {
     expect((await dialog.boundingBox())!.width).toBeLessThan(1000);
     await expect(page).toHaveURL(url => url.pathname === '/app');
     await expectNoAccessibilityViolations(page, `desktop entry dialog ${theme}`);
+    // Walk from the category field with its suggestions open: options are not
+    // Tab stops, so Tab never lands on one that closes under it (#477).
+    const categoryField = dialog.getByRole('combobox', { name: 'Category', exact: true });
+    await categoryField.focus();
+    await expect(categoryField).toHaveAttribute('aria-expanded', 'true');
+    await expectNoAccessibilityViolations(page, `desktop entry dialog with suggestions ${theme}`);
     await expectFocusTrapped(page, dialog, `desktop entry dialog ${theme}`);
 
     // Unsaved input survives Home refetching behind the dialog.
@@ -85,10 +93,16 @@ for (const theme of ['light', 'dark'] as const) {
     await dialog.getByLabel('Description', { exact: true }).fill(description);
     await dialog.getByRole('combobox', { name: 'Account', exact: true }).selectOption({ label: account.name });
     await dialog.getByLabel('Amount', { exact: true }).fill('-12.34');
-    await dialog.getByPlaceholder('Search categories').click();
-    await dialog.locator('ul[role="listbox"] button[role="option"]').first().click();
+    // The category by keyboard: type, arrow to the match, Enter.
+    await categoryField.focus();
+    await page.keyboard.type(category.name);
+    await page.keyboard.press('ArrowDown');
+    await expect(categoryField).toHaveAttribute('aria-activedescendant', /category-0$/);
+    await page.keyboard.press('Enter');
+    await expect(dialog.getByText(category.name, { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Clear selection', exact: true })).toBeFocused();
     const created = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions');
-    await dialog.getByRole('button', { name: 'Add transaction', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Add transaction', exact: true }).press('Enter');
     expect((await created).status()).toBe(201);
     const transaction = await (await created).json() as { id: number };
     await expect(dialog).toHaveCount(0);
@@ -146,4 +160,101 @@ test.describe('on a touch phone', () => {
       await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue('');
     });
   }
+});
+
+async function fillExpense(page: Page, accountName: string, categoryName: string, description: string, amount = '-23.45') {
+  const dialog = entryDialog(page);
+  await dialog.getByLabel('Date', { exact: true }).fill(todayISO());
+  await dialog.getByLabel('Description', { exact: true }).fill(description);
+  await dialog.getByRole('combobox', { name: 'Account', exact: true }).selectOption({ label: accountName });
+  await dialog.getByLabel('Amount', { exact: true }).fill(amount);
+  await dialog.getByPlaceholder('Search categories').fill(categoryName);
+  await dialog.locator('ul[role="listbox"] button[role="option"]').filter({ hasText: categoryName }).first().click();
+}
+
+test('Escape cannot discard an entry while the payee it confirmed is still being created', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const account = await createCashAccount(page, csrfToken, `Payee chain ${suffix}`, currencyID);
+  const category = await apiJSON<{ name: string }>(page, 'POST', '/api/v1/categories', csrfToken, { name: `Payee chain spend ${suffix}`, category_type: 'expense' });
+  const payee = `Payee chain shop ${suffix}`;
+  await page.goto('/app');
+  await addTile(page).click();
+  const dialog = entryDialog(page);
+  await fillExpense(page, account.name, category.name, `Payee chain ${suffix}`);
+  await dialog.getByLabel('Payee', { exact: true }).fill(payee);
+  await dialog.getByRole('button', { name: 'Add transaction', exact: true }).click();
+
+  // Hold the payee creation, the first write of the save chain.
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/v1/payees', async route => {
+    if (route.request().method() === 'POST') await held;
+    await route.continue();
+  });
+  const posts: number[] = [];
+  page.on('response', response => {
+    if (response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/transactions') posts.push(response.status());
+  });
+  await dialog.getByRole('button', { name: `Create “${payee}”`, exact: true }).click();
+  await expect(dialog.locator('form[aria-busy="true"]')).toBeAttached();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(`Payee chain ${suffix}`);
+
+  // The owner's confirmed save completes once, and only then closes the dialog.
+  release();
+  await expect(dialog).toHaveCount(0);
+  await expect.poll(() => posts).toEqual([201]);
+});
+
+test('saving over a report refreshes it in place', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  const suffix = Date.now();
+  const account = await createCashAccount(page, csrfToken, `Report entry ${suffix}`, currencyID);
+  const category = await apiJSON<{ name: string }>(page, 'POST', '/api/v1/categories', csrfToken, { name: `Report entry spend ${suffix}`, category_type: 'expense' });
+  observePageRequests(page);
+  await page.goto('/app/reports/spending');
+  await expect(page).toHaveURL(url => url.searchParams.has('start_date'));
+  await waitForPageReady(page);
+  // This test's own category has no spending row until the entry is saved.
+  const spent = page.locator('main').getByRole('row').filter({ hasText: category.name }).filter({ hasText: '31.17' });
+  await expect(page.locator('main').getByRole('table').or(page.getByText('No spending in this period')).first()).toBeVisible();
+  await expect(spent).toHaveCount(0);
+
+  await page.locator('#main-content').focus();
+  await page.keyboard.press('n');
+  await fillExpense(page, account.name, category.name, `Report entry ${suffix}`, '-31.17');
+  const refreshed = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/reports/spending' && response.ok());
+  await entryDialog(page).getByRole('button', { name: 'Add transaction', exact: true }).click();
+  await refreshed;
+  await expect(entryDialog(page)).toHaveCount(0);
+  await expect(spent.first()).toBeVisible();
+});
+
+test('a failed session refresh keeps the unsaved entry until the owner cancels', async ({ page }) => {
+  await readyForLedger(page);
+  const description = `Shell failure ${Date.now()}`;
+  await page.goto('/app');
+  await addTile(page).click();
+  const dialog = entryDialog(page);
+  await dialog.getByLabel('Description', { exact: true }).fill(description);
+  await dialog.getByLabel('Amount', { exact: true }).fill('-7.50');
+
+  await page.route('**/api/v1/auth/session', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: 'synthetic' } }) }));
+  const failed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/auth/session' && response.status() === 500);
+  // The session query refetches whenever the window regains focus.
+  await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+  await failed;
+  await expect(page.getByText('The app shell could not load')).toBeAttached();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(description);
+  await expect(dialog.getByLabel('Amount', { exact: true })).toHaveValue('-7.50');
+
+  await page.unroute('**/api/v1/auth/session');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).last().click();
+  await expect(dialog).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retry shell', exact: true }).click();
+  await expect(addTile(page)).toBeVisible();
+  await expect(entryDialog(page)).toHaveCount(0);
 });

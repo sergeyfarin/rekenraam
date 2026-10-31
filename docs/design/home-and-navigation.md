@@ -348,14 +348,22 @@ recovery) in `ModalDialog`, a full-screen sheet below 768px. A page that
 offers *Add transaction* in its header keeps its own side-panel editor,
 prefilled for the page (#459); the dialog takes the same account/category
 prefill when a caller supplies it. The shell mounts the dialog once, outside
-every page, so Home's or any page's background refresh never touches the
-working copy, and the editor reads its prefill once (#433). Opening it never
+every page and outside the shell's own loading and error states, so a
+background refresh of Home, any page or the session never touches the working
+copy (a failed session refresh shows the shell error behind it); the editor
+reads its prefill once (#433). Signing out closes it. Opening it never
 replaces an open working copy. Cancel and Escape discard it without asking;
-backdrop clicks do nothing, and a write in flight cannot be dismissed. Focus
-returns to the opener. Saving closes the dialog, refreshes transaction lists,
-registers, forecast, Home and the attention count, and announces *Transaction
-added* with a link to the transaction. Nothing posts without the editor's own
-save.
+backdrop clicks do nothing, and nothing in flight can be dismissed: the whole
+save chain, including a payee the owner confirmed creating first, keeps the
+editor busy, and a dismissed editor never continues to a save. Focus returns
+to the opener. Payee and category suggestions are comboboxes (arrows, Enter,
+Escape closes the list, not the dialog) whose options are not Tab stops, so
+entry works by keyboard alone. Saving closes the dialog, refreshes every read
+a transaction can change — transaction lists, registers, balances, reports,
+budgets, forecast, reconciliation and brokerage cash reads, so the page
+beneath updates in place, plus Home and the attention count — and announces
+*Transaction added* with a link to the transaction. Nothing posts without the
+editor's own save.
 
 ## Widgets
 

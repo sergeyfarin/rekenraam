@@ -2,7 +2,7 @@
   import { useOwnerToday } from '#lib/dates/owner-date-context.ts';
   import { transactionTitle } from '#lib/transactions/transaction-title.ts';
   import { systemLabelText } from '#lib/transactions/system-label.ts';
-  import { untrack, type Snippet } from 'svelte';
+  import { onDestroy, tick, untrack, type Snippet } from 'svelte';
   import { tagsQueryOptions } from '#lib/api/tags.ts';
   import Plus from '@lucide/svelte/icons/plus';
   import Save from '@lucide/svelte/icons/save';
@@ -14,6 +14,7 @@
   import APIFormError from '#lib/components/api-form-error.svelte';
   import { isSubledgerManagedAccountKind } from '#lib/accounts/subledger-accounts.ts';
   import { isOrdinaryEntryAccount } from './entry-account';
+  import { suggestionKey } from './suggestion-keys.ts';
   import { editablePostings, hasPostingDay, postedOnForRequest } from './posted-on';
   import { m } from '#lib/paraglide/messages.js';
   import { accountsQueryOptions } from '#lib/api/accounts.ts';
@@ -147,12 +148,57 @@
   const queryClient = useQueryClient();
   let categoryDropdownOpen = $state(false);
   let categorySearch = $state('');
+  // Suggestion lists are comboboxes: the active option, -1 for none.
+  const uid = $props.id();
+  let payeeActive = $state(-1);
+  let categoryActive = $state(-1);
 
   function onPayeeInput(e: Event) {
     const val = (e.target as HTMLInputElement).value;
     payeeSearch = val;
     payeeID = undefined; // clear resolved ID when user edits
     payeeDropdownOpen = val.length > 0;
+    payeeActive = -1;
+  }
+
+  function choosePayee(payee: PayeeResponse) {
+    payeeID = payee.id;
+    payeeSearch = payee.name;
+    payeeDropdownOpen = false;
+    payeeActive = -1;
+  }
+
+  function payeeKeydown(event: KeyboardEvent) {
+    if (event.isComposing) return;
+    const result = suggestionKey(event.key, payeeDropdownOpen, payeeMatches.length, payeeActive);
+    if (result.kind === 'none') return;
+    event.preventDefault();
+    if (result.kind === 'move') {
+      payeeDropdownOpen = true;
+      payeeActive = result.active;
+      void tick().then(() => document.getElementById(`${uid}-payee-${payeeActive}`)?.scrollIntoView({ block: 'nearest' }));
+    }
+    else if (result.kind === 'choose') choosePayee(payeeMatches[result.index]);
+    else { payeeDropdownOpen = false; payeeActive = -1; }
+  }
+
+  async function categoryKeydown(event: KeyboardEvent) {
+    if (event.isComposing) return;
+    const result = suggestionKey(event.key, categoryDropdownOpen, filteredCategories.length, categoryActive);
+    if (result.kind === 'none') return;
+    event.preventDefault();
+    if (result.kind === 'move') {
+      categoryDropdownOpen = true;
+      categoryActive = result.active;
+      await tick();
+      document.getElementById(`${uid}-category-${categoryActive}`)?.scrollIntoView({ block: 'nearest' });
+    }
+    else if (result.kind === 'choose') {
+      // The field becomes the chosen label and its clear button; keep focus there.
+      selectCategory(filteredCategories[result.index]);
+      await tick();
+      document.getElementById(`${uid}-category-clear`)?.focus();
+    } else { categoryDropdownOpen = false; categoryActive = -1; }
   }
 
   const payeesQuery = createQuery(() => payeesQueryOptions({}));
@@ -194,7 +240,14 @@
 
   // ── Form state ────────────────────────────────────────────────────
   let pending = $state(false);
-  $effect(() => { onPendingChange?.(pending); });
+  // The whole save chain is busy, the payee it creates first included: a
+  // dialog or panel never dismisses (and so discards) the entry while a write
+  // that leads to posting it is in flight.
+  const busy = $derived(pending || payeeCreatePending);
+  $effect(() => { onPendingChange?.(busy); });
+  // A dismissed editor never continues to a save of its own.
+  let dismissed = false;
+  onDestroy(() => { dismissed = true; });
   let formError = $state<unknown>(undefined);
 
   // Reconciliation override modal
@@ -474,6 +527,7 @@
     } finally {
       payeeCreatePending = false;
     }
+    if (dismissed) return;
     await savePayee();
   }
 
@@ -667,6 +721,7 @@
     categoryLabel = categoryDisplayName(cat);
     categorySearch = '';
     categoryDropdownOpen = false;
+    categoryActive = -1;
   }
 
   function clearCategory() {
@@ -803,7 +858,7 @@
   </ModalDialog>
 {/if}
 
-<form class="space-y-4" onsubmit={handleSubmit} aria-busy={pending}>
+<form class="space-y-4" onsubmit={handleSubmit} aria-busy={busy}>
   <!-- Header -->
   <div class="flex items-start justify-between gap-3">
     <div class="min-w-0">
@@ -818,7 +873,7 @@
       type="button"
       class="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
-      disabled={pending}
+      disabled={busy}
       aria-label={m.transactions_form_cancel()}
       title={m.transactions_form_cancel()}
     >
@@ -826,7 +881,7 @@
     </button>
   </div>
 
-  <fieldset disabled={pending} class="space-y-4">
+  <fieldset disabled={busy} class="space-y-4">
   {#if templateFields}{@render templateFields()}{/if}
 
   <!-- Correction banner -->
@@ -896,14 +951,21 @@
     {/if}
     <!-- Payee autocomplete -->
     <label class="relative">
-      <span class={labelClass}>{m.transactions_field_payee()}</span>
+      <span id={`${uid}-payee-label`} class={labelClass}>{m.transactions_field_payee()}</span>
       <input
         id={payeeInputID}
         type="text"
+        aria-labelledby={`${uid}-payee-label`}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={payeeDropdownOpen && payeeMatches.length > 0}
+        aria-controls={payeeDropdownOpen && payeeMatches.length > 0 ? `${uid}-payees` : undefined}
+        aria-activedescendant={payeeDropdownOpen && payeeActive >= 0 ? `${uid}-payee-${payeeActive}` : undefined}
         value={payeeSearch}
         oninput={onPayeeInput}
+        onkeydown={payeeKeydown}
         onfocus={() => { if (payeeSearch) payeeDropdownOpen = true; }}
-        onblur={() => setTimeout(() => { payeeDropdownOpen = false; }, 150)}
+        onblur={() => setTimeout(() => { payeeDropdownOpen = false; payeeActive = -1; }, 150)}
         class={inputClass}
         placeholder={m.transactions_field_payee_placeholder()}
         autocomplete="off"
@@ -911,21 +973,21 @@
       />
       {#if payeeDropdownOpen && payeeMatches.length > 0}
         <ul
+          id={`${uid}-payees`}
           class="absolute z-20 mt-1 w-full rounded-[var(--radius-control)] border border-border bg-surface text-sm shadow-[var(--shadow-panel)]"
           role="listbox"
+          aria-label={m.transactions_field_payee()}
         >
-          {#each payeeMatches as payee (payee.id)}
-            <li>
+          {#each payeeMatches as payee, index (payee.id)}
+            <li role="none">
               <button
                 type="button"
-                class="w-full px-3 py-2 text-left hover:bg-row-hover"
-                onmousedown={() => {
-                  payeeID = payee.id;
-                  payeeSearch = payee.name;
-                  payeeDropdownOpen = false;
-                }}
+                id={`${uid}-payee-${index}`}
+                tabindex="-1"
+                class="w-full px-3 py-2 text-left hover:bg-row-hover aria-selected:bg-row-hover"
+                onmousedown={() => choosePayee(payee)}
                 role="option"
-                aria-selected={payeeID === payee.id}
+                aria-selected={index === payeeActive}
               >
                 {payee.name}
               </button>
@@ -1062,7 +1124,7 @@
 
       <!-- Category (income/expense) with searchable dropdown -->
       <label class="relative sm:col-span-2">
-        <span class={labelClass}>{m.transactions_field_category()}</span>
+        <span id={`${uid}-category-label`} class={labelClass}>{m.transactions_field_category()}</span>
         {#if categoryID !== undefined}
           <div class="mt-1.5 flex items-center gap-2">
             <span class="flex-1 truncate rounded-[var(--radius-control)] border border-border bg-control px-3 py-2.5 text-sm text-foreground">
@@ -1071,7 +1133,12 @@
             <button
               type="button"
               class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-control)] border border-border bg-control text-muted transition hover:bg-control-hover hover:text-foreground"
-              onclick={clearCategory}
+              id={`${uid}-category-clear`}
+              onclick={async () => {
+                clearCategory();
+                await tick();
+                document.getElementById(`${uid}-category`)?.focus();
+              }}
               aria-label={m.reports_filter_clear_dimension()}
               disabled={isVoided && mode === 'edit'}
             >
@@ -1081,10 +1148,19 @@
         {:else}
           <div class="relative mt-1.5">
             <input
+              id={`${uid}-category`}
               type="text"
+              aria-labelledby={`${uid}-category-label`}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={categoryDropdownOpen && filteredCategories.length > 0}
+              aria-controls={categoryDropdownOpen && filteredCategories.length > 0 ? `${uid}-categories` : undefined}
+              aria-activedescendant={categoryDropdownOpen && categoryActive >= 0 ? `${uid}-category-${categoryActive}` : undefined}
               bind:value={categorySearch}
+              oninput={() => { categoryDropdownOpen = true; categoryActive = -1; }}
+              onkeydown={categoryKeydown}
               onfocus={() => { categoryDropdownOpen = true; }}
-              onblur={() => setTimeout(() => { categoryDropdownOpen = false; }, 150)}
+              onblur={() => setTimeout(() => { categoryDropdownOpen = false; categoryActive = -1; }, 150)}
               class={inputClass + ' mt-0'}
               placeholder={m.transactions_field_category_placeholder()}
               autocomplete="off"
@@ -1092,17 +1168,21 @@
             />
             {#if categoryDropdownOpen && filteredCategories.length > 0}
               <ul
+                id={`${uid}-categories`}
                 class="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-[var(--radius-control)] border border-border bg-surface text-sm shadow-[var(--shadow-panel)]"
                 role="listbox"
+                aria-label={m.transactions_field_category()}
               >
-                {#each filteredCategories as cat (cat.id)}
-                  <li>
+                {#each filteredCategories as cat, index (cat.id)}
+                  <li role="none">
                     <button
                       type="button"
-                      class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-row-hover"
+                      id={`${uid}-category-${index}`}
+                      tabindex="-1"
+                      class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-row-hover aria-selected:bg-row-hover"
                       onmousedown={() => selectCategory(cat)}
                       role="option"
-                      aria-selected={false}
+                      aria-selected={index === categoryActive}
                     >
                       <span class="min-w-0 truncate text-foreground">{categoryDisplayName(cat)}</span>
                       <span class="ml-auto shrink-0 text-xs text-muted">{cat.category_type === 'income' ? '↑' : '↓'}</span>
@@ -1262,7 +1342,7 @@
     {:else if !tagsQuery.data?.tags.length}<p class="text-sm text-muted">{m.recurring_no_tags()}</p>
     {:else}<div class="flex flex-wrap gap-3">
       {#each tagsQuery.data.tags as tag (tag.id)}
-        <label class="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" value={tag.id} bind:group={tagIDs} disabled={pending} />{tag.name}</label>
+        <label class="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" value={tag.id} bind:group={tagIDs} disabled={busy} />{tag.name}</label>
       {/each}
     </div>{/if}
   </fieldset>
@@ -1317,7 +1397,7 @@
       type="button"
       class="inline-flex items-center gap-2 rounded-[var(--radius-control)] border border-border bg-control px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-control-hover"
       onclick={onCancel}
-      disabled={pending}
+      disabled={busy}
     >
       <X size={16} aria-hidden="true" />
       {m.transactions_form_cancel()}
@@ -1327,7 +1407,7 @@
       <button
         type="submit"
         class="inline-flex items-center gap-2 rounded-[var(--radius-control)] bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={pending}
+        disabled={busy}
       >
         <Save size={16} aria-hidden="true" />
         {submitLabel}
