@@ -70,6 +70,26 @@ describe('cashflow', () => {
     expect(view.scope).toBe('Oct 1\u2009–\u200915 · 2 cash accounts · EUR · transfers not converted to EUR');
   });
 
+  // $300 out at €0.90 and back at €0.80: $0 in dollars, −€30 converted.
+  it('keeps transfers that net to zero in their own currency', () => {
+    const quiet = { ...widgets().cashflow.summary!, inflow: [], outflow: [], operating_net: [], converted_inflow: q('0'), converted_outflow: q('0'), converted_operating_net: q('0') };
+    const atTwoRates = cashflowWidget(home({ cashflow: { status: 'ok', summary: { ...quiet, transfer_net: [q('0', USD)], converted_transfer_net: q('-3000') } } }), 'en');
+    expect(atTwoRates.state).toBe('ready');
+    expect(atTwoRates.rows.at(-1)).toEqual({ key: 'transfers', label: 'Transfers, net', amount: '−€30.00' });
+
+    const atOneRate = cashflowWidget(home({ cashflow: { status: 'ok', summary: { ...quiet, transfer_net: [q('0', USD)], converted_transfer_net: q('0') } } }), 'en');
+    expect(atOneRate.state).toBe('zero');
+
+    // No rate: the exact $0 is shown and the card is not complete.
+    const summary = { ...widgets().cashflow.summary!, transfer_net: [q('0', USD)], converted_transfer_net: null };
+    const unconverted = cashflowWidget(home({ cashflow: { status: 'ok', summary } }), 'en');
+    expect(unconverted.state).toBe('partial');
+    expect(unconverted.rows.at(-1)?.key).toBe('transfers');
+    expect(unconverted.rows.at(-1)?.amount).toMatch(/\$0\.00/);
+    expect(unconverted.scope).toContain('transfers not converted to EUR');
+    expect(cashflowWidget(home({ cashflow: { status: 'ok', summary: { ...quiet, transfer_net: [q('0', USD)], converted_transfer_net: null } } }), 'en').state).toBe('partial');
+  });
+
   it('keeps each currency exact when anything cannot convert', () => {
     const summary = { ...widgets().cashflow.summary!, inflow: [q('250000'), q('5000', USD)], operating_net: [q('83000'), q('5000', USD)], converted_inflow: null, converted_operating_net: null };
     const view = cashflowWidget(home({ cashflow: { status: 'ok', summary } }), 'en');
@@ -81,7 +101,7 @@ describe('cashflow', () => {
   });
 
   it('says when nothing moved or there is no cash account', () => {
-    const quiet = { ...widgets().cashflow.summary!, inflow: [], outflow: [], transfer_net: [], operating_net: [] };
+    const quiet = { ...widgets().cashflow.summary!, inflow: [], outflow: [], transfer_net: [], operating_net: [], converted_inflow: q('0'), converted_outflow: q('0'), converted_transfer_net: q('0'), converted_operating_net: q('0') };
     expect(cashflowWidget(home({ cashflow: { status: 'ok', summary: quiet } }), 'en').state).toBe('zero');
     const none = cashflowWidget(home({ cashflow: { status: 'ok', summary: { ...quiet, account_count: 0 } } }), 'en');
     expect(none.state).toBe('not_set_up');

@@ -62,7 +62,14 @@ export function cashflowWidget(home: Home, locale: string): WidgetView {
   const commodities = commodityMap(home);
   const period = range(summary.start_date, summary.end_date, locale, { day: 'numeric', month: 'short' });
   const accounts = m.home_cashflow_accounts({ count: summary.account_count, n: number(summary.account_count, locale) });
-  const moved = summary.inflow.length > 0 || summary.outflow.length > 0 || summary.transfer_net.some(total => sign(total.quantity_value) !== 0);
+  // A currency listed in transfer_net had transfers. $300 out and back nets to
+  // $0 and still moves value at two rates, so only a converted zero, or no
+  // reporting currency to convert into, means the transfers moved nothing.
+  const transfers = summary.transfer_net.filter(total => sign(total.quantity_value) !== 0);
+  const transferValueKnown = !home.reporting_currency || summary.converted_transfer_net !== null;
+  const transfersMoved = transfers.length > 0 || (summary.transfer_net.length > 0 && !transferValueKnown) ||
+    (summary.converted_transfer_net !== null && sign(summary.converted_transfer_net.quantity_value) !== 0);
+  const moved = summary.inflow.length > 0 || summary.outflow.length > 0 || transfersMoved;
   if (!moved) return view('cashflow', title, open, { state: 'zero', fact: null, scope: m.home_cashflow_zero() });
 
   const converted = home.reporting_currency && summary.converted_operating_net ? summary : null;
@@ -72,14 +79,13 @@ export function cashflowWidget(home: Home, locale: string): WidgetView {
       { key: 'in', label: m.home_cashflow_in(), amount: money(converted.converted_inflow, commodities, locale) },
       { key: 'out', label: m.home_cashflow_out(), amount: money(converted.converted_outflow, commodities, locale) }
     ];
-    const transfers = summary.transfer_net.filter(total => sign(total.quantity_value) !== 0);
     // Transfers convert on their own; one that does not keeps its exact
-    // amounts and says so, never a silent zero.
-    const transfersConverted = converted.converted_transfer_net !== null || transfers.length === 0;
+    // amounts, a zero net among them, and says so, never a silent zero.
+    const transfersConverted = converted.converted_transfer_net !== null || summary.transfer_net.length === 0;
     if (converted.converted_transfer_net && sign(converted.converted_transfer_net.quantity_value) !== 0) {
       rows.push({ key: 'transfers', label: m.home_cashflow_transfers(), amount: money(converted.converted_transfer_net, commodities, locale, true) });
     } else if (!transfersConverted) {
-      rows.push({ key: 'transfers', label: m.home_cashflow_transfers(), amount: signedJoined(transfers, home, locale) });
+      rows.push({ key: 'transfers', label: m.home_cashflow_transfers(), amount: signedJoined(transfers.length ? transfers : summary.transfer_net, home, locale) });
     }
     const scope = [period, accounts, home.reporting_currency?.code ?? ''];
     if (!transfersConverted) scope.push(m.home_cashflow_transfers_unconverted({ currency: home.reporting_currency?.code ?? '' }));
@@ -97,7 +103,6 @@ export function cashflowWidget(home: Home, locale: string): WidgetView {
     { key: 'in', label: m.home_cashflow_in(), amount: joined(summary.inflow, home, locale) || '—' },
     { key: 'out', label: m.home_cashflow_out(), amount: joined(summary.outflow, home, locale) || '—' }
   ];
-  const transfers = summary.transfer_net.filter(total => sign(total.quantity_value) !== 0);
   if (transfers.length) rows.push({ key: 'transfers', label: m.home_cashflow_transfers(), amount: signedJoined(transfers, home, locale) });
   return view('cashflow', title, open, {
     state: 'partial',
