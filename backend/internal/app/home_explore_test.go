@@ -154,3 +154,43 @@ func TestHomeExploreFailureStaysLocal(t *testing.T) {
 	assert.NoError(t, home.Holdings.Err)
 	requireHomeCents(t, 167000, home.Spending.Summary.Total, "My Home still answers")
 }
+
+// A foreign holding is valued through a price and a rate; an out-of-date rate
+// is the holding's own stale input, reported against the currency, never the
+// current price (#479 review).
+func TestHomeHoldingsJudgeTheirOwnPricesAndRates(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	f.buyTen(t)
+	// $60 today; 1 USD = €0.90 from five days ago, older than the policy's
+	// three days and inside the report's window: 10 × 60 × 0.9 = €540.
+	f.priceIn(t, f.stockCommodityID, f.usd, "2026-10-15", "60")
+	f.rate(t, "2026-10-10")
+
+	home := f.read(t)
+	summary := home.Holdings.Summary
+	require.NotNil(t, summary)
+	requireHomeCents(t, 54000, summary.Holdings[0].Value, "valued through the rate")
+	assert.Empty(t, summary.Missing)
+	assert.Equal(t, []HomeValuationInput{{CommodityID: f.usd, Code: "USD", Kind: "rate"}}, summary.Stale)
+	assert.Equal(t, home.Briefing.Headlines[0].Stale, summary.Stale, "the same judgement as the headline")
+}
+
+// An unclassified short leaves net worth unavailable, but its inputs are still
+// judged: Prices never reads an unchecked set as up to date (#479 review).
+func TestHomeJudgesValuationInputsBehindAnUnclassifiedShort(t *testing.T) {
+	t.Parallel()
+	f := newHomeWidgetFixture(t)
+	f.move(t, "2026-09-10", f.cashAccountID, f.eurCommodityID, 100000)
+	f.buyTen(t) // priced on 28 Sep only: missing today
+	_, _, coins := cryptoFixture(t, f.investmentsTestFixture)
+	coins("2026-10-02", -500000000, 100000)
+
+	home := f.read(t)
+	netWorth := home.Briefing.Headlines[0]
+	assert.Equal(t, HomeUnavailableUnclassifiedShort, netWorth.Unavailable)
+	assert.Nil(t, netWorth.Value)
+	assert.Contains(t, netWorth.Missing, HomeValuationInput{CommodityID: f.stockCommodityID, Code: "TEST", Kind: "price"})
+	assert.Contains(t, home.Holdings.Summary.Missing, HomeValuationInput{CommodityID: f.stockCommodityID, Code: "TEST", Kind: "price"})
+}

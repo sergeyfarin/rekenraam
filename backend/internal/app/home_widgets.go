@@ -251,7 +251,7 @@ func (s *HomeService) compose(ctx context.Context, ownerUserID int64) (Home, err
 		home.Accounts, home.Holdings = HomeWidget[HomeAccountsSummary]{Err: ratesErr}, HomeWidget[HomeHoldingsSummary]{Err: ratesErr}
 	} else {
 		home.Accounts = homeWidget(accountsSummary(briefing, rates), nil)
-		home.Holdings = homeWidget(holdingsSummary(briefing, rates), nil)
+		home.Holdings = homeWidget(s.holdingsSummary(ctx, briefing, rates))
 	}
 	home.Recurring = homeWidget(s.recurringSummary(ctx, ownerUserID, briefing.AsOf))
 	s.read("recurring")

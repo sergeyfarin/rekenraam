@@ -1963,5 +1963,6 @@
   "home_backups_retrying": "Будет повторная попытка",
   "home_backups_retry_copy": "Откройте копии, чтобы повторить",
   "home_backups_running": "Идёт копирование",
-  "home_imports_checking": "Проверяем…"
+  "home_imports_checking": "Проверяем…",
+  "home_cashflow_transfers_unconverted": "переводы не пересчитаны в {currency}"
 }

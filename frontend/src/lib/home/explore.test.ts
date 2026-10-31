@@ -60,12 +60,23 @@ describe('cashflow', () => {
     expect(view.open.href).toBe('/app/reports/cashflow?start_date=2026-10-01&end_date=2026-10-15&bucket=month&reporting_currency_id=1');
   });
 
+  it('keeps transfers in their own currency when only they cannot convert', () => {
+    // Money in and out convert; a $300 move to a brokerage has no rate.
+    const summary = { ...widgets().cashflow.summary!, transfer_net: [q('-30000', USD)], converted_transfer_net: null };
+    const view = cashflowWidget(home({ cashflow: { status: 'ok', summary } }), 'en');
+    expect(view.state).toBe('partial');
+    expect(view.fact).toBe('+€830');
+    expect(view.rows.at(-1)).toEqual({ key: 'transfers', label: 'Transfers, net', amount: '−$300' });
+    expect(view.scope).toBe('Oct 1\u2009–\u200915 · 2 cash accounts · EUR · transfers not converted to EUR');
+  });
+
   it('keeps each currency exact when anything cannot convert', () => {
     const summary = { ...widgets().cashflow.summary!, inflow: [q('250000'), q('5000', USD)], operating_net: [q('83000'), q('5000', USD)], converted_inflow: null, converted_operating_net: null };
     const view = cashflowWidget(home({ cashflow: { status: 'ok', summary } }), 'en');
     expect(view.state).toBe('partial');
     expect(view.fact).toBe('+€830 · +$50.00');
     expect(view.rows[0].amount).toBe('€2,500 · $50.00');
+    expect(view.rows.at(-1)?.amount).toBe('−€300');
     expect(view.scope).toBe('Not every amount converts to EUR; totals by currency');
   });
 
@@ -102,10 +113,15 @@ describe('holdings', () => {
     expect(unpriced.rows[0].amount).toBe('No price');
     expect(unpriced.scope).toBe('Largest by value · Oct 15 · 1 without a price');
 
-    const base = home();
-    const stale = holdingsWidget({ ...base, headlines: [{ ...base.headlines[0], stale: [{ commodity_id: TEST, code: 'TEST', kind: 'price' }] }] }, 'en');
-    expect(stale.state).toBe('stale');
-    expect(stale.scope).toBe('Largest by value · Oct 15 · 1 value out of date');
+    const missing = holdingsWidget(home({ holdings: { status: 'ok', summary: { ...summary, unpriced_count: 1, missing: [{ commodity_id: TEST, code: 'TEST', kind: 'price' }], holdings: [{ ...summary.holdings[0], value: null }] } } }), 'en');
+    expect(missing.scope).toBe('Largest by value · Oct 15 · Price missing for TEST');
+  });
+
+  it('is stale when a rate behind a foreign holding is out of date, though its price is current', () => {
+    const summary = { ...widgets().holdings.summary!, stale: [{ commodity_id: USD, code: 'USD', kind: 'rate' as const }] };
+    const view = holdingsWidget(home({ holdings: { status: 'ok', summary } }), 'en');
+    expect(view.state).toBe('stale');
+    expect(view.scope).toBe('Largest by value · Oct 15 · Exchange rate for USD out of date');
   });
 
   it('does not blame prices when there is no default currency', () => {
@@ -117,7 +133,7 @@ describe('holdings', () => {
   });
 
   it('offers the first step without positions', () => {
-    const view = holdingsWidget(home({ holdings: { status: 'ok', summary: { as_of: '2026-10-15', position_count: 0, unpriced_count: 0, holdings: [] } } }), 'en');
+    const view = holdingsWidget(home({ holdings: { status: 'ok', summary: { as_of: '2026-10-15', position_count: 0, unpriced_count: 0, holdings: [], missing: [], stale: [] } } }), 'en');
     expect(view.state).toBe('not_set_up');
     expect(view.action?.text).toBe('Record a buy');
   });
@@ -131,7 +147,9 @@ describe('returns and allocation', () => {
     expect(view.badge).toBe('Saved run');
     expect(view.scope).toBe('Time-weighted · Jan 1 – Oct 13, 2026 · saved Oct 14, 2026');
     expect(view.rows).toEqual([]);
-    expect(view.open.href).toBe('/app/investments/returns?from=2026-01-01&to=2026-10-13');
+    // The saved run itself, not its period: a live read would use another scope.
+    expect(view.open.href).toBe('/app/investments/returns?run_id=7');
+    expect(allocationWidget(home(), 'en').open.href).toBe('/app/investments/returns?run_id=7');
   });
 
   it('never calculates without a saved run', () => {

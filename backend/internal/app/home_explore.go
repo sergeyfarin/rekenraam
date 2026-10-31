@@ -60,6 +60,11 @@ type HomeHoldingsSummary struct {
 	PositionCount int
 	UnpricedCount int
 	Holdings      []HomeHoldingRow
+	// Missing and Stale are the prices and rates valuing every listed
+	// position needs, judged and reported as the headline judges its own:
+	// each leg of a chained conversion against its own commodity.
+	Missing []HomeValuationInput
+	Stale   []HomeValuationInput
 }
 
 type HomeHoldingRow struct {
@@ -172,13 +177,17 @@ func (s *HomeService) homeRates(ctx context.Context, briefing HomeBriefing, repo
 	return rates, nil
 }
 
-// holdingsSummary ranks open holding accounts with a balance by their value.
-func holdingsSummary(briefing HomeBriefing, rates *RateTable) *HomeHoldingsSummary {
+// holdingsSummary ranks open holding accounts with a balance by their value,
+// through its own coverage of the shared rates so its inputs are its own.
+func (s *HomeService) holdingsSummary(ctx context.Context, briefing HomeBriefing, rates *RateTable) (*HomeHoldingsSummary, error) {
+	if rates != nil {
+		rates = rates.withFreshCoverage()
+	}
 	names := map[int64]string{}
 	for _, account := range briefing.Accounts {
 		names[account.AccountID] = account.Name
 	}
-	summary := &HomeHoldingsSummary{AsOf: briefing.AsOf, Holdings: []HomeHoldingRow{}}
+	summary := &HomeHoldingsSummary{AsOf: briefing.AsOf, Holdings: []HomeHoldingRow{}, Missing: []HomeValuationInput{}, Stale: []HomeValuationInput{}}
 	rows := []HomeHoldingRow{}
 	for _, account := range briefing.Accounts {
 		if !homeHoldingAccountKinds[account.AccountKind] || account.Status != "active" || !homeHasBalance(account.SubtreeBalances) {
@@ -201,7 +210,18 @@ func holdingsSummary(briefing HomeBriefing, rates *RateTable) *HomeHoldingsSumma
 	})
 	summary.PositionCount = len(rows)
 	summary.Holdings = rows[:min(len(rows), homeHoldingRows)]
-	return summary
+	if rates != nil && len(rows) > 0 {
+		staleness, err := s.transactions.pricingStalenessDays(ctx)
+		if err != nil {
+			return nil, err
+		}
+		coverage := HomeHeadline{Missing: []HomeValuationInput{}, Stale: []HomeValuationInput{}}
+		if err := s.transactions.classifyHomeCoverage(ctx, &coverage, rates.Coverage(""), briefing.AsOf, staleness); err != nil {
+			return nil, err
+		}
+		summary.Missing, summary.Stale = coverage.Missing, coverage.Stale
+	}
+	return summary, nil
 }
 
 func homeHasBalance(balances []BalanceQuantity) bool {

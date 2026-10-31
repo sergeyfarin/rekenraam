@@ -29356,6 +29356,10 @@ export interface components {
             unpriced_count: number;
             /** @description At most three. */
             holdings: components["schemas"]["HomeHoldingRow"][];
+            /** @description Prices and rates valuing every open position needs and lacks today, as the headline's missing are judged (a chained conversion's missing currency leg is that currency's rate). */
+            missing: components["schemas"]["HomeValuationInput"][];
+            /** @description Inputs valuing the positions from an observation older than the pricing policy's staleness days, each leg judged on its own; never repeats a missing one. */
+            stale: components["schemas"]["HomeValuationInput"][];
         };
         HomeHoldingRow: {
             /** Format: int64 */

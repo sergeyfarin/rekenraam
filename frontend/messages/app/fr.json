@@ -1901,5 +1901,6 @@
   "home_backups_retrying": "Une nouvelle tentative suivra",
   "home_backups_retry_copy": "Ouvrez Sauvegardes pour réessayer",
   "home_backups_running": "Sauvegarde en cours",
-  "home_imports_checking": "Vérification…"
+  "home_imports_checking": "Vérification…",
+  "home_cashflow_transfers_unconverted": "virements non convertis en {currency}"
 }

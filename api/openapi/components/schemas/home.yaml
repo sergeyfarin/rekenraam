@@ -400,7 +400,7 @@ HomeCashflowSummary:
 HomeHoldingsSummary:
   type: object
   description: Open holding accounts with a balance, largest value in the default currency first, from the briefing's fold and valued through the same rates as the accounts widget. A position without a usable price has no value and ranks last.
-  required: [as_of, position_count, unpriced_count, holdings]
+  required: [as_of, position_count, unpriced_count, holdings, missing, stale]
   properties:
     as_of: { type: string, format: date }
     position_count: { type: integer, minimum: 0 }
@@ -409,6 +409,14 @@ HomeHoldingsSummary:
       type: array
       description: At most three.
       items: { $ref: '../../openapi.yaml#/components/schemas/HomeHoldingRow' }
+    missing:
+      type: array
+      description: Prices and rates valuing every open position needs and lacks today, as the headline's missing are judged (a chained conversion's missing currency leg is that currency's rate).
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeValuationInput' }
+    stale:
+      type: array
+      description: Inputs valuing the positions from an observation older than the pricing policy's staleness days, each leg judged on its own; never repeats a missing one.
+      items: { $ref: '../../openapi.yaml#/components/schemas/HomeValuationInput' }
 HomeHoldingRow:
   type: object
   required: [account_id, brokerage_id, brokerage_name, balances, value]

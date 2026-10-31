@@ -2,6 +2,7 @@ import { test, expect } from './support/owned-book';
 import { apiJSON, csrfTokenFor } from './support/api';
 import { createCashAccount, readyForLedger } from './support/ledger';
 import { expectNoAccessibilityViolations } from './support/a11y';
+import { daysFromTodayISO, todayISO } from './support/dates';
 
 // More to explore (#479): every widget not on My Home, at real size, read from
 // the same Home read and the shell's attention read. An owned book, because
@@ -112,4 +113,51 @@ test('a failed explore summary stays in its card', async ({ page }) => {
   await expect(backups).toHaveAttribute('data-state', 'failed');
   await expect(backups.getByRole('alert')).toHaveText('This summary could not be loaded.');
   await expect(page.getByTestId('explore-widget-prices')).not.toHaveAttribute('data-state', 'failed');
+});
+
+// Home shows a saved run for one account; Open returns opens that very run,
+// not a live read of its period over another scope (#479 review).
+test('Returns on Home opens the saved run it shows', async ({ page }) => {
+  const { csrfToken, currencyID } = await readyForLedger(page);
+  await apiJSON(page, 'POST', `/api/v1/currencies/${currencyID}/default`, csrfToken, undefined, [200]);
+  const opened = daysFromTodayISO(-60);
+  const account = (name: string) => apiJSON<{ id: number }>(page, 'POST', '/api/v1/accounts', csrfToken, {
+    name, account_class: 'asset', account_kind: 'checking', default_commodity_id: currencyID, allows_postings: true, opened_on: opened, effective_from: opened
+  });
+  const checking = await account('Explore run checking');
+  const instrument = await apiJSON<{ id: number; commodity_id: number }>(page, 'POST', '/api/v1/investments/instruments', csrfToken, {
+    commodity_code: 'HOMERUN', instrument_type: 'stock', display_name: 'Home run example', symbol: 'HOMERUN',
+    quote_commodity_id: currencyID, trading_commodity_id: currencyID, quantity_scale: 0, price_scale: 2, effective_from: opened
+  });
+  const holdings = [];
+  for (const name of ['Explore run holding A', 'Explore run holding B']) {
+    holdings.push(await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/holding-accounts', csrfToken, { instrument_id: instrument.id, name, opened_on: opened, effective_from: opened }));
+  }
+  for (const holding of holdings) {
+    await apiJSON(page, 'POST', '/api/v1/investments/buy', csrfToken, {
+      transaction_date: daysFromTodayISO(-40), commodity_id: instrument.commodity_id, holding_account_id: holding.id,
+      cash_account_id: checking.id, quantity_value: '10', quantity_scale: 0, cash_amount_value: '100000', cash_amount_scale: 2,
+      cash_commodity_id: currencyID, cost_basis_method: 'fifo'
+    });
+  }
+  await apiJSON(page, 'POST', '/api/v1/pricing/prices', csrfToken, {
+    base_commodity_id: instrument.commodity_id, quote_commodity_id: currencyID, quote_type: 'close',
+    adjustment_basis: 'raw', price_value: 11000, price_scale: 2, valuation_date: todayISO(), is_manual: true
+  });
+  // A run over one of the two holdings only.
+  const run = await apiJSON<{ id: number }>(page, 'POST', '/api/v1/investments/returns/runs', csrfToken, {
+    from: daysFromTodayISO(-45), to: todayISO(), reporting_currency_id: currencyID, account_ids: [holdings[0].id]
+  });
+
+  await page.goto('/app');
+  const card = page.getByTestId('explore-widget-returns');
+  await expect(card).toHaveAttribute('data-state', 'ready');
+  await expect(card.getByText('Saved run')).toBeVisible();
+  const link = card.getByRole('link', { name: /Open returns/ });
+  await expect(link).toHaveAttribute('href', `/app/investments/returns?run_id=${run.id}`);
+  await expect(page.getByTestId('explore-widget-allocation').getByRole('link', { name: /Open returns/ })).toHaveAttribute('href', `/app/investments/returns?run_id=${run.id}`);
+  await link.click();
+  const heading = page.getByTestId('saved-returns-run').getByRole('heading', { name: new RegExp(`^Saved run #${run.id} · `) });
+  await expect(heading).toBeFocused();
+  await expect(page.getByTestId('returns-runs').getByRole('button', { name: new RegExp(`^#${run.id} · saved `) })).toHaveAttribute('aria-pressed', 'true');
 });

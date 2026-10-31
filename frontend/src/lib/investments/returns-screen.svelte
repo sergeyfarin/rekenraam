@@ -42,6 +42,11 @@
   const csrfToken = $derived(session.data?.csrf_token ?? '');
 
   const selection = $derived(parseReturnsSelection(page.url.searchParams, today));
+  // A saved run a link names opens beside the live read (#479).
+  const linkedRunID = $derived.by(() => {
+    const raw = page.url.searchParams.get('run_id');
+    return raw !== null && /^[1-9][0-9]{0,15}$/.test(raw) ? Number(raw) : null;
+  });
   const activeCurrencies = $derived((currencies.data?.currencies ?? []).filter((currency) => currency.status === 'active'));
   // The owner's choice wins; otherwise propose the book's default currency for
   // new UI, then the first active currency. The response names whichever is used.
@@ -338,6 +343,6 @@
     {/if}
 
     <ReturnsRuns {csrfToken} request={returns.isFetching ? null : savedRunRequest} currencies={currencies.data?.currencies ?? []} {locale}
-      {accountName} {currencyOrCommodity} />
+      {accountName} {currencyOrCommodity} {linkedRunID} />
   {/if}
 </div>

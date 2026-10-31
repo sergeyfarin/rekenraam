@@ -289,15 +289,18 @@ func (s *TransactionService) valueHomeHeadlines(ctx context.Context, headlines [
 }
 
 func (s *TransactionService) valueHomeHeadline(ctx context.Context, headline *HomeHeadline, rates *RateTable, start, today netWorthBucket, startBoundary, asOf string, staleness int) error {
+	todayRates := rates.withFreshCoverage()
+	value := homeConverted(todayRates, today.totals, asOf)
+	// Coverage is judged even when a short leaves the headline unavailable, so
+	// Home never reads an unchecked set of inputs as current (#479).
+	if err := s.classifyHomeCoverage(ctx, headline, todayRates.Coverage(""), asOf, staleness); err != nil {
+		return err
+	}
 	if len(today.unclassifiedShorts) > 0 {
 		headline.Unavailable = HomeUnavailableUnclassifiedShort
 		return nil
 	}
-	todayRates := rates.withFreshCoverage()
-	headline.Value = homeConverted(todayRates, today.totals, asOf)
-	if err := s.classifyHomeCoverage(ctx, headline, todayRates.Coverage(""), asOf, staleness); err != nil {
-		return err
-	}
+	headline.Value = value
 	if headline.Value == nil {
 		headline.Unavailable = HomeUnavailableValuationGaps
 		return nil

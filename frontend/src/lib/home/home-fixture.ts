@@ -68,7 +68,7 @@ export function widgets(overrides: Partial<HomeWidgets> = {}): HomeWidgets {
     holdings: {
       status: 'ok',
       summary: {
-        as_of: '2026-10-15', position_count: 4, unpriced_count: 0,
+        as_of: '2026-10-15', position_count: 4, unpriced_count: 0, missing: [], stale: [],
         holdings: [{ account_id: 41, brokerage_id: 23, brokerage_name: 'Brokerage', balances: [q('10', TEST, 0)], value: q('60000') }]
       }
     },

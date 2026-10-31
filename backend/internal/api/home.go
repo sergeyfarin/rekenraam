@@ -78,10 +78,12 @@ type homeCashflowSummaryResponse struct {
 }
 
 type homeHoldingsSummaryResponse struct {
-	AsOf          string                   `json:"as_of"`
-	PositionCount int                      `json:"position_count"`
-	UnpricedCount int                      `json:"unpriced_count"`
-	Holdings      []homeHoldingRowResponse `json:"holdings"`
+	AsOf          string                       `json:"as_of"`
+	PositionCount int                          `json:"position_count"`
+	UnpricedCount int                          `json:"unpriced_count"`
+	Holdings      []homeHoldingRowResponse     `json:"holdings"`
+	Missing       []homeValuationInputResponse `json:"missing"`
+	Stale         []homeValuationInputResponse `json:"stale"`
 }
 
 type homeHoldingRowResponse struct {
@@ -351,7 +353,8 @@ func toHomeCashflowSummary(summary app.HomeCashflowSummary) homeCashflowSummaryR
 }
 
 func toHomeHoldingsSummary(summary app.HomeHoldingsSummary) homeHoldingsSummaryResponse {
-	response := homeHoldingsSummaryResponse{AsOf: summary.AsOf, PositionCount: summary.PositionCount, UnpricedCount: summary.UnpricedCount, Holdings: []homeHoldingRowResponse{}}
+	response := homeHoldingsSummaryResponse{AsOf: summary.AsOf, PositionCount: summary.PositionCount, UnpricedCount: summary.UnpricedCount, Holdings: []homeHoldingRowResponse{},
+		Missing: toHomeValuationInputs(summary.Missing), Stale: toHomeValuationInputs(summary.Stale)}
 	for _, row := range summary.Holdings {
 		item := homeHoldingRowResponse{AccountID: row.AccountID, BrokerageName: row.BrokerageName, Balances: toBalanceQuantityResponses(row.Balances), Value: toBalanceQuantityPointer(row.Value)}
 		if row.BrokerageID != 0 {

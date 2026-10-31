@@ -51,7 +51,7 @@ func TestHomeReadAuthenticationShapeAndPurity(t *testing.T) {
 		"net_worth_trend": {"start_date", "end_date", "points", "change"},
 		"cashflow": {"start_date", "end_date", "cash_scope", "account_count", "inflow", "outflow", "transfer_net", "operating_net",
 			"converted_inflow", "converted_outflow", "converted_transfer_net", "converted_operating_net"},
-		"holdings":   {"as_of", "position_count", "unpriced_count", "holdings"},
+		"holdings":   {"as_of", "position_count", "unpriced_count", "holdings", "missing", "stale"},
 		"returns":    {"run_id", "captured_at", "from", "to", "account_scope", "account_count", "time_weighted", "time_weighted_annualized"},
 		"allocation": {"run_id", "captured_at", "date", "reason", "basis", "unknown_count", "rows", "row_count"},
 		"income":     {"instrument_count", "unassigned_count", "unassigned"},

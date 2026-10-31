@@ -1901,5 +1901,6 @@
   "home_backups_retrying": "Er volgt een nieuwe poging",
   "home_backups_retry_copy": "Open Back-ups om opnieuw te proberen",
   "home_backups_running": "Back-up loopt",
-  "home_imports_checking": "Controleren…"
+  "home_imports_checking": "Controleren…",
+  "home_cashflow_transfers_unconverted": "overboekingen niet omgerekend naar {currency}"
 }

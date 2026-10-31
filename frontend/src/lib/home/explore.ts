@@ -42,6 +42,11 @@ function joined(quantities: Quantity[], home: Home, locale: string): string {
   return quantities.map(quantity => money(quantity, commodities, locale)).join(' · ');
 }
 
+function signedJoined(quantities: Quantity[], home: Home, locale: string): string {
+  const commodities = commodityMap(home);
+  return quantities.map(quantity => money(quantity, commodities, locale, true)).join(' · ');
+}
+
 export function cashflowWidget(home: Home, locale: string): WidgetView {
   const widget = home.widgets.cashflow;
   const summary = widget.summary;
@@ -67,15 +72,23 @@ export function cashflowWidget(home: Home, locale: string): WidgetView {
       { key: 'in', label: m.home_cashflow_in(), amount: money(converted.converted_inflow, commodities, locale) },
       { key: 'out', label: m.home_cashflow_out(), amount: money(converted.converted_outflow, commodities, locale) }
     ];
+    const transfers = summary.transfer_net.filter(total => sign(total.quantity_value) !== 0);
+    // Transfers convert on their own; one that does not keeps its exact
+    // amounts and says so, never a silent zero.
+    const transfersConverted = converted.converted_transfer_net !== null || transfers.length === 0;
     if (converted.converted_transfer_net && sign(converted.converted_transfer_net.quantity_value) !== 0) {
       rows.push({ key: 'transfers', label: m.home_cashflow_transfers(), amount: money(converted.converted_transfer_net, commodities, locale, true) });
+    } else if (!transfersConverted) {
+      rows.push({ key: 'transfers', label: m.home_cashflow_transfers(), amount: signedJoined(transfers, home, locale) });
     }
+    const scope = [period, accounts, home.reporting_currency?.code ?? ''];
+    if (!transfersConverted) scope.push(m.home_cashflow_transfers_unconverted({ currency: home.reporting_currency?.code ?? '' }));
     return view('cashflow', title, open, {
-      state: 'ready',
+      state: transfersConverted ? 'ready' : 'partial',
       fact: money(net, commodities, locale, true),
       factSign: sign(net.quantity_value),
       factLabel: m.home_cashflow_net_label({ amount: money(net, commodities, locale, true) }),
-      scope: [period, accounts, home.reporting_currency?.code ?? ''].join(' · '),
+      scope: scope.join(' · '),
       rows
     });
   }
@@ -84,16 +97,14 @@ export function cashflowWidget(home: Home, locale: string): WidgetView {
     { key: 'in', label: m.home_cashflow_in(), amount: joined(summary.inflow, home, locale) || '—' },
     { key: 'out', label: m.home_cashflow_out(), amount: joined(summary.outflow, home, locale) || '—' }
   ];
+  const transfers = summary.transfer_net.filter(total => sign(total.quantity_value) !== 0);
+  if (transfers.length) rows.push({ key: 'transfers', label: m.home_cashflow_transfers(), amount: signedJoined(transfers, home, locale) });
   return view('cashflow', title, open, {
     state: 'partial',
     fact: summary.operating_net.map(total => money(total, commodities, locale, true)).join(' · ') || null,
     scope: home.reporting_currency ? m.home_cashflow_partial({ currency: home.reporting_currency.code }) : m.home_widget_no_currency(),
     rows
   });
-}
-
-function priceStale(home: Home): HomeValuationInput[] {
-  return home.headlines.find(headline => headline.id === 'net_worth')?.stale ?? [];
 }
 
 export function holdingsWidget(home: Home, locale: string): WidgetView {
@@ -125,13 +136,15 @@ export function holdingsWidget(home: Home, locale: string): WidgetView {
       fact: m.home_holdings_count({ count: summary.position_count, n: number(summary.position_count, locale) })
     });
   }
-  const stale = priceStale(home).filter(input => input.kind === 'price').length;
-  const scope = [m.home_holdings_scope({ date: day(summary.as_of, locale) })];
-  if (summary.unpriced_count > 0) scope.push(m.home_holdings_unpriced({ count: summary.unpriced_count, n: number(summary.unpriced_count, locale) }));
-  else if (stale > 0) scope.push(m.home_trend_stale({ count: stale, n: number(stale, locale) }));
+  // The positions' own inputs, prices and the rates behind them, judged as
+  // the headline judges its own.
+  const scope: string[] = [m.home_holdings_scope({ date: day(summary.as_of, locale) })];
+  if (summary.missing.length > 0) scope.push(valuationText(summary.missing, 'missing', locale));
+  else if (summary.unpriced_count > 0) scope.push(m.home_holdings_unpriced({ count: summary.unpriced_count, n: number(summary.unpriced_count, locale) }));
+  else if (summary.stale.length > 0) scope.push(valuationText(summary.stale, 'stale', locale));
   const rest = summary.position_count - summary.holdings.length;
   return view('holdings', title, open, {
-    state: summary.unpriced_count > 0 ? 'partial' : stale > 0 ? 'stale' : 'ready',
+    state: summary.missing.length > 0 || summary.unpriced_count > 0 ? 'partial' : summary.stale.length > 0 ? 'stale' : 'ready',
     fact: m.home_holdings_count({ count: summary.position_count, n: number(summary.position_count, locale) }),
     scope: scope.join(' · '),
     rows,
@@ -139,14 +152,10 @@ export function holdingsWidget(home: Home, locale: string): WidgetView {
   });
 }
 
-function returnsOpen(from: string | null, to: string | null): WidgetLink {
-  const params = new URLSearchParams();
-  if (from && to) {
-    params.set('from', from);
-    params.set('to', to);
-  }
-  const query = params.toString();
-  return { text: m.home_returns_open(), href: `/app/investments/returns${query ? `?${query}` : ''}` };
+/** Opens the saved run itself: its period alone would start a live read with
+ * another account scope and show a different figure. */
+function returnsOpen(runID: number | null): WidgetLink {
+  return { text: m.home_returns_open(), href: `/app/investments/returns${runID !== null ? `?run_id=${runID}` : ''}` };
 }
 
 function savedOn(capturedAt: string, locale: string): string {
@@ -162,7 +171,7 @@ export function returnsWidget(home: Home, locale: string): WidgetView {
   const title = m.home_returns_title();
   const widget = home.widgets.returns;
   const summary = widget.summary;
-  const open = returnsOpen(summary?.from ?? null, summary?.to ?? null);
+  const open = returnsOpen(summary?.run_id ?? null);
   if (home.empty_book) return noData('returns', title, open);
   if (widget.status === 'failed' || !summary) return failed('returns', title, open);
   if (summary.run_id === null || !summary.time_weighted || !summary.captured_at || !summary.from || !summary.to) return notSaved('returns', title, open);
@@ -190,7 +199,7 @@ export function allocationWidget(home: Home, locale: string): WidgetView {
   const title = m.home_allocation_title();
   const widget = home.widgets.allocation;
   const summary = widget.summary;
-  const open = returnsOpen(home.widgets.returns.summary?.from ?? null, summary?.date ?? null);
+  const open = returnsOpen(summary?.run_id ?? null);
   if (home.empty_book) return noData('allocation', title, open);
   if (widget.status === 'failed' || !summary) return failed('allocation', title, open);
   if (summary.run_id === null || !summary.captured_at || !summary.date) return notSaved('allocation', title, open);

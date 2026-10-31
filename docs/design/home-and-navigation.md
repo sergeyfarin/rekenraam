@@ -465,14 +465,14 @@ is remembered with #438) and *Add to Home* arrives with #438.
 
 | Category | Widget | Source | Summary |
 |---|---|---|---|
-| Everyday | Cashflow | Cashflow report, 1st of the month to owner-local today, its default liquid-cash scope, one bucket, default currency | Money in, money out, transfers (net) and the operating net, converted only when every posting converts, else exact per currency |
-| Wealth & investments | Holdings | Holding accounts from the briefing's fold, valued with the accounts widget's rate table (net worth's valuation) | Open positions with a balance, the largest three by value with instrument and brokerage; an unpriced position has no value and ranks last (*partial*); the net-worth headline's out-of-date prices make it *stale* |
-| | Returns | The latest saved returns run, frozen | Time-weighted return (and annualized when the run has one) for the run's period, labelled *Saved run* with its save date; no run is *not set up* with a link to calculate. Home never calculates a return; live figures are #440 |
+| Everyday | Cashflow | Cashflow report, 1st of the month to owner-local today, its default liquid-cash scope, one bucket, default currency | Money in, money out, transfers (net) and the operating net, each converted only when every posting it sums converts, else exact per currency; transfers that do not convert keep their exact amounts and the card says so (*partial*), never a silent zero |
+| Wealth & investments | Holdings | Holding accounts from the briefing's fold, valued with the accounts widget's rate table (net worth's valuation) | Open positions with a balance, the largest three by value with instrument and brokerage; an unpriced position has no value and ranks last. The summary's own `missing` and `stale` inputs, the prices and the rates behind foreign holdings, judged as the headline judges its own, make it *partial* or *stale* |
+| | Returns | The latest saved returns run, frozen | Time-weighted return (and annualized when the run has one) for the run's period, labelled *Saved run* with its save date; *Open* links `?run_id=` and Returns opens and focuses that run (its period alone would start a live read over another scope). No run is *not set up* with a link to calculate. Home never calculates a return; live figures are #440 |
 | | Allocation | The same saved run's allocation | By asset type, largest value first, weights as the run froze them; `known_only` is *partial* with the count of balances without a value |
 | | Dividend income | Income coverage summary (`SummaryOnly`) | Instruments with confirmed dividends; unassigned investment cash per currency is cash, never income, and leads as payments to assign |
 | Planning | Forecast | None (the recurring summary Home already has) | Labelled *Estimate*, names the 90-day horizon and the active schedules it projects, calculated when opened; no schedule is *not set up* |
 | Ledger & data | Imports | The shared attention read's `imports` source | Batches to review, the same count Review shows; its own Retry refetches the attention read |
-| | Prices | The net-worth headline's `missing` and `stale` inputs | Named as the status line names them, linking to the same filtered Prices list |
+| | Prices | The net-worth headline's `missing` and `stale` inputs | Named as the status line names them, linking to the same filtered Prices list. The headline judges its inputs even when an unclassified short leaves it unavailable, so empty lists always mean checked and current |
 | | Backups | The Data screen's backup status | Off is *not set up*; a failed latest run says whether it will retry; otherwise the last backup and the next run. Shown in an empty book too |
 
 Reconciliation joins Ledger & data with the reconciliation out-of-date rule

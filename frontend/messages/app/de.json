@@ -1901,5 +1901,6 @@
   "home_backups_retrying": "Es wird erneut versucht",
   "home_backups_retry_copy": "Zum Wiederholen Sicherungen öffnen",
   "home_backups_running": "Sicherung läuft",
-  "home_imports_checking": "Wird geprüft…"
+  "home_imports_checking": "Wird geprüft…",
+  "home_cashflow_transfers_unconverted": "Überträge nicht in {currency} umgerechnet"
 }

@@ -13,7 +13,7 @@
   // immutable returns_v1 document, list them and reopen one. A reopened run
   // reads only its saved bytes; it never queries the live read.
   let {
-    request, csrfToken, currencies, locale, accountName, currencyOrCommodity
+    request, csrfToken, currencies, locale, accountName, currencyOrCommodity, linkedRunID = null
   }: {
     /** The applied selection, or null when there is no live result to save. */
     request: ReturnsRunRequest | null;
@@ -22,9 +22,26 @@
     locale: string;
     accountName: (id: number) => string;
     currencyOrCommodity: (id: number) => string;
+    /** A run a link names (`?run_id=`, as Home's Returns and Allocation link it): opened and focused. */
+    linkedRunID?: number | null;
   } = $props();
 
   let selectedID = $state(0);
+  let revealed = false;
+  $effect.pre(() => {
+    if (linkedRunID !== null) {
+      selectedID = linkedRunID;
+      revealed = false;
+    }
+  });
+
+  /** Moves focus, and so the view, to the run the link opened, once. */
+  function reveal(node: HTMLElement) {
+    if (!revealed && linkedRunID !== null && run?.id === linkedRunID) {
+      revealed = true;
+      node.focus();
+    }
+  }
   const client = useQueryClient();
   const instants = $derived(new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }));
   const dates = $derived(new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }));
@@ -109,7 +126,7 @@
           </div>
           <button type="button" class="min-h-11 text-sm text-foreground underline" onclick={() => query.refetch()}>{m.install_gate_retry()}</button>
         {:else if run}
-          <h3 class="text-sm font-semibold text-foreground">{m.returns_runs_selected({ id: String(run.id), date: instants.format(new Date(run.captured_at)) })}</h3>
+          <h3 tabindex="-1" {@attach reveal} class="text-sm font-semibold text-foreground">{m.returns_runs_selected({ id: String(run.id), date: instants.format(new Date(run.captured_at)) })}</h3>
           <p class="text-sm text-muted">{m.returns_runs_frozen_note()}</p>
           <div class="flex flex-wrap gap-2">
             <a href={`/api/v1/investments/returns/runs/${run.id}?download=true`}

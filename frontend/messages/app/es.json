@@ -1901,5 +1901,6 @@
   "home_backups_retrying": "Se volverá a intentar",
   "home_backups_retry_copy": "Abre Copias para reintentar",
   "home_backups_running": "Copiando ahora",
-  "home_imports_checking": "Comprobando…"
+  "home_imports_checking": "Comprobando…",
+  "home_cashflow_transfers_unconverted": "transferencias no convertidas a {currency}"
 }
