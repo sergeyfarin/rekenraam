@@ -44,6 +44,12 @@ checks; CI must not need a separate warm-up or skip catalog validation.
 | Changed the investment writer admission or payment-in-lieu entitlement checks | `REKENRAAM_PIL_DENSITIES=0,10,100 ./scripts/measure-payment-in-lieu-density.sh` — compare against the #379 figures (*Payment-in-lieu density measurement* in `docs/developer-workflow.md`); never on push |
 | User journeys | `./scripts/test-e2e.sh` (self-contained: builds app once, one instance + fresh SQLite per worker under `backend/var/e2e/`, ports from 127.0.0.1:16900; `E2E_SKIP_BUILD=1` to reuse the binary) |
 
+For browser diagnostics, the default failure trace is light. `--trace=on` only
+changes its mode and keeps the configured DOM/network exclusions. Use
+`E2E_FULL_TRACE=1 pnpm --dir e2e exec playwright test <spec> --grep <case>` for a
+full local trace with DOM snapshots, screenshots, sources and network records;
+keep it focused and leave CI unset (#473).
+
 Native SQLite requires CGO and a C compiler with development headers. Supported
 commands source `scripts/native-sqlite-env.sh` and enable `fts5,netgo,osusergo`.
 Use `./scripts/go-backend.sh test ...` for focused checks. Go race detection
