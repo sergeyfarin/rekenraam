@@ -641,7 +641,7 @@ func cleanPricingPolicySpec(input PricingPolicyInput) (db.PricingPolicySpec, err
 		input.MaxBackfillDays = 370
 	}
 	if input.StalenessMaxDays <= 0 {
-		input.StalenessMaxDays = 3
+		input.StalenessMaxDays = DefaultPricingStalenessDays
 	}
 	if input.TriangulationMaxHops < 0 || input.TriangulationMaxHops > 4 {
 		return db.PricingPolicySpec{}, ValidationError{Message: "triangulation max hops is invalid"}

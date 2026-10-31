@@ -124,8 +124,8 @@
   "quotes_csv_trade": "{side}: {quantity} units",
   "quotes_refresh": "Refresh quotes",
   "quotes_queued": "Quote assignments queued: {count}. Check provider health for results.",
-  "pricing_filter_missing": "Showing pairs without a usable price.",
-  "pricing_filter_stale": "Showing pairs valued from an earlier day.",
+  "pricing_filter_unusable": "Showing pairs without a usable price.",
+  "pricing_filter_stale": "Showing pairs with an out-of-date price.",
   "pricing_filter_clear": "Show all pairs",
   "pricing_filter_empty": "No pairs match this filter."
 }

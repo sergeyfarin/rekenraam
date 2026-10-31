@@ -1071,6 +1071,7 @@
       }
     }
   ],
+  "briefing_scope_closed": "Только закрытые счета",
   "briefing_change": "{amount} в {month}",
   "briefing_change_label": "{amount} с конца {start} по {end}",
   "briefing_needs_price_named": "Для чистых активов нужна цена {code}",

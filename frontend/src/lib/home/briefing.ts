@@ -52,17 +52,15 @@ export function shownHeadlineID(home: Home, choice: HeadlineChoice): HeadlineID 
   return null;
 }
 
+/** A scope with nothing in it is no choice; closed accounts alone still hold a net worth. */
 export function headlineOptions(home: Home, locale: string): HeadlineOption[] {
   return home.headlines
-    .filter(headline => headline.account_count > 0)
+    .filter(headline => headline.unavailable !== 'no_accounts')
     .map(headline => {
       const n = new Intl.NumberFormat(locale).format(headline.account_count);
       const count = headline.account_count;
-      return {
-        id: headline.id,
-        label: headlineLabel(headline.id),
-        scope: headline.id === 'cash' ? m.briefing_scope_cash({ count, n }) : m.briefing_scope_all({ count, n })
-      };
+      const scope = count === 0 ? m.briefing_scope_closed() : headline.id === 'cash' ? m.briefing_scope_cash({ count, n }) : m.briefing_scope_all({ count, n });
+      return { id: headline.id, label: headlineLabel(headline.id), scope };
     });
 }
 
@@ -124,10 +122,11 @@ function valuationText(inputs: HomeValuationInput[], style: 'needs' | 'missing' 
   return messages[style][kind]({ count, n });
 }
 
-/** Prices for anything but a currency; a rate-only problem is fixed on Currencies. */
+/** Prices for anything but a currency; a rate-only problem is fixed on Currencies.
+ * Prices' `unusable` filter lists what Home calls missing (#476). */
 function valuationHref(inputs: HomeValuationInput[], status: 'missing' | 'stale'): string {
   if (inputs.every(input => input.kind === 'rate')) return '/app/settings/currencies';
-  return `/app/investments/prices?status=${status}`;
+  return `/app/investments/prices?status=${status === 'missing' ? 'unusable' : 'stale'}`;
 }
 
 const workSources: readonly AttentionSourceID[] = ['drafts', 'transaction_review', 'recurring_blocked', 'imports', 'suggestions', 'prices', 'rates'];
@@ -176,8 +175,9 @@ function sourceCount(sources: readonly AttentionSource[], ids: readonly Attentio
  * "N more" count. "All clear" only after a complete, successful check.
  */
 export function briefingStatus(home: Home | undefined, shown: HeadlineID | null, choice: HeadlineChoice, attention: AttentionState, locale: string): BriefingStatus {
+  // A failed refresh keeps the last data; it must not keep saying all clear.
   const data = attention.data;
-  if (attention.isError && !data) {
+  if (attention.isError) {
     return { tone: 'failed', lead: { text: m.briefing_check_failed(), href: reviewHref }, more: null };
   }
   const sources = data?.sources ?? [];

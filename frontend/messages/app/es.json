@@ -1071,6 +1071,7 @@
       }
     }
   ],
+  "briefing_scope_closed": "Solo cuentas cerradas",
   "briefing_change": "{amount} en {month}",
   "briefing_change_label": "{amount} desde el cierre del {start} hasta el {end}",
   "briefing_needs_price_named": "El patrimonio neto necesita un precio para {code}",

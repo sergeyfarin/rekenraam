@@ -146,7 +146,9 @@ func (s *PricingService) Workspace(ctx context.Context, asOf string) (PricingWor
 			coverage.AgeDays = &age
 			coverage.Observation = &price
 			coverage.Status = "usable"
-			if age > policy.StalenessMaxDays {
+			// A policy longer than the report's window still cannot call
+			// usable a price that reports, and so Home, cannot value with.
+			if age > policy.StalenessMaxDays || age > DefaultRateStalenessDays {
 				coverage.Status = "stale"
 			}
 		}

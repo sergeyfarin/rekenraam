@@ -178,22 +178,32 @@ between them. A headline is complete-only; `unavailable` names why it has no
 value (`valuation_gaps`, `unclassified_short`, `no_reporting_currency`,
 `no_accounts`). `missing` lists each input without a usable observation today
 (a chained conversion's missing currency leg is that currency's `rate`);
-`stale` lists inputs valued from an earlier observation inside the report's
-staleness window and never repeats a missing one. Inputs beyond the window are
-missing, as in the report, so an old price does block the headline; the
-report's staleness policy, not Home, decides that. Cash is open checking,
-savings, cash and other money accounts; brokerage cash stays with its
-brokerage. `account_count` counts open asset and liability accounts without
-system or per-instrument holding accounts; closed accounts still count in the
-figure. `empty_book` means no owner-created asset or liability account exists.
+`stale` lists inputs valued from an observation older than the pricing
+policy's staleness days (3 by default) and never repeats a missing one. That
+is the threshold Prices and Review use, so the three agree on what is out of
+date; each leg of a chained conversion is judged on its own observation date
+and reported against its own commodity, so a stale rate is never blamed on a
+current price. Inputs beyond the report's 7-day window are missing, as in the
+report, so an old price does block the headline; the report's window, not
+Home, decides that, and Prices never calls usable a price beyond it.
+Cash is open checking, savings, cash and other money accounts; brokerage cash
+stays with its brokerage. `account_count` counts open asset and liability
+accounts without system or per-instrument holding accounts. Closed accounts
+still count in the net-worth figure, so a book whose accounts are all closed
+still has one (scope "Closed accounts only"); only an empty scope is
+`no_accounts`. `empty_book` means no owner-created asset or liability account
+exists. Both headlines total one ledger read and fold.
 
 The status line's order: a failed or unreadable attention source; then the
 net-worth valuation problem (no default currency, an unclassified short,
 missing inputs, then out-of-date ones), linking to Prices filtered by
-`?status=missing|stale` or to Currencies when only rates are involved; then
+`?status=unusable` (every pair without a usable price, which covers what Home
+calls missing) or `?status=stale`, or to Currencies when only rates are
+involved; then
 the work, naming two kinds at most. What does not lead is one "N more" link to
 Review; price and rate attention units are not counted again behind a
-valuation lead. Values the owner enters join through #454.
+valuation lead. A failed attention refresh replaces the line even while
+earlier counts are cached, so an old "All clear" never outlives it. Values the owner enters join through #454.
 
 ### What belongs in the briefing
 

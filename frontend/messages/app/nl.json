@@ -1071,6 +1071,7 @@
       }
     }
   ],
+  "briefing_scope_closed": "Alleen gesloten rekeningen",
   "briefing_change": "{amount} in {month}",
   "briefing_change_label": "{amount} van eind {start} tot {end}",
   "briefing_needs_price_named": "Nettovermogen mist een prijs voor {code}",

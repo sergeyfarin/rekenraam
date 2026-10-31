@@ -1071,6 +1071,7 @@
       }
     }
   ],
+  "briefing_scope_closed": "Nur geschlossene Konten",
   "briefing_change": "{amount} im {month}",
   "briefing_change_label": "{amount} von Ende {start} bis {end}",
   "briefing_needs_price_named": "Für das Nettovermögen fehlt ein Preis für {code}",

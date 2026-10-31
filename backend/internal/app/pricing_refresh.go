@@ -164,6 +164,11 @@ func (s *PricingService) finishFXRefreshRun(ctx context.Context, runID int64, co
 	return toPricingRefreshRun(record), nil
 }
 
+// DefaultPricingStalenessDays is the pricing policy's out-of-date threshold
+// until the owner saves one: older observations are stale on Prices, in Review
+// and on Home. It is not the report's valuation window (DefaultRateStalenessDays).
+const DefaultPricingStalenessDays = 3
+
 func (s *PricingService) pricingPolicyOrDefault(ctx context.Context) (PricingPolicy, error) {
 	record, err := s.repository.GetPricingPolicy(ctx, BookID)
 	if err == nil {
@@ -180,7 +185,7 @@ func (s *PricingService) pricingPolicyOrDefault(ctx context.Context) (PricingPol
 		RefreshHourLocal:     4,
 		RefreshMinuteLocal:   0,
 		MaxBackfillDays:      370,
-		StalenessMaxDays:     3,
+		StalenessMaxDays:     DefaultPricingStalenessDays,
 		TriangulationMaxHops: 1,
 		RoundingMode:         "half_up",
 		PreferOfficialFX:     true,

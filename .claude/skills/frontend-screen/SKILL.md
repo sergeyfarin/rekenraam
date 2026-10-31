@@ -65,11 +65,14 @@ description: SvelteKit frontend rules for Rekenraam - static adapter constraints
   `shortcutList()` so `?` help shows it.
 - Shell counts come from `#lib/attention/context.ts`, one composed attention
   query for header, tabs, Home and Review (#458). Unknown/error sources never
-  become zero or all-clear. Counting rules live in the design's attention contract.
+  become zero or all-clear, and a failed refresh is an error even while TanStack
+  still holds the last data. Counting rules live in the design's attention contract.
 - Home reads one composed `GET /api/v1/home` (`#lib/api/home.ts`, keyed by
   owner-local today); the shell's write middleware invalidates it with the
   attention count. Briefing rules live in `#lib/home/briefing.ts`; Home
-  amounts use `formatHomeMoney`, nothing else does (#476).
+  amounts use `formatHomeMoney`, nothing else does (#476). "Out of date" is the
+  pricing policy's staleness, the word Prices and Review use; a link to a
+  filtered destination must list what Home named (`?status=unusable|stale`).
 - Global search is `#lib/search/search-field.svelte` (#457). Mount one shortcut
   owner; reuse `scope`/`onSelect` and `variant="home"` for placement. Keep page
   filters independent, derive page hits from the route registry and consume every

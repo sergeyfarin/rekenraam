@@ -310,6 +310,23 @@ func TestLargeBookExportAndSelfCheckStayBounded(t *testing.T) {
 	}
 	assert.Less(t, attentionUsage.Wall, 5*time.Second, "attention wall time")
 	assert.Less(t, attentionUsage.PeakHeap, uint64(64<<20), "attention peak heap")
+
+	// Home loads with the shell. Both headlines come from one ledger read and
+	// one fold, not one per headline.
+	transactions := NewTransactionService(db.NewTransactionRepository(writer), db.NewPayeeRepository(writer), db.NewAccountRepository(writer), db.NewCommodityRepository(writer))
+	transactions.SetPricingRepository(db.NewPricingRepository(writer))
+	probe = startResourceProbe()
+	home, err := transactions.HomeBriefing(context.Background(), 1)
+	homeUsage := probe.finish()
+	require.NoError(t, err)
+	t.Logf("home: wall=%s allocated=%dMiB peak-heap=%dMiB", homeUsage.Wall.Round(time.Millisecond), homeUsage.Allocated>>20, homeUsage.PeakHeap>>20)
+	require.Len(t, home.Headlines, 2)
+	for _, headline := range home.Headlines {
+		assert.Equal(t, HomeUnavailableValuationGaps, headline.Unavailable, "%s: the EUR balances have no USD rate", headline.ID)
+		assert.Equal(t, []HomeValuationInput{{CommodityID: 2, Code: "EUR", Kind: "rate"}}, headline.Missing, headline.ID)
+	}
+	assert.Less(t, homeUsage.Wall, 10*time.Second, "home wall time")
+	assert.Less(t, homeUsage.PeakHeap, uint64(256<<20), "home peak heap")
 }
 
 func BenchmarkLargeBookBundleExport(b *testing.B) {

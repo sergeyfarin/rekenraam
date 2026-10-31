@@ -124,8 +124,8 @@
   "quotes_csv_trade": "{side}: {quantity} ед.",
   "quotes_refresh": "Обновить котировки",
   "quotes_queued": "Заданий в очереди: {count}. Результаты доступны в состоянии поставщика.",
-  "pricing_filter_missing": "Пары без подходящей цены.",
-  "pricing_filter_stale": "Пары с ценой за более ранний день.",
+  "pricing_filter_unusable": "Пары без подходящей цены.",
+  "pricing_filter_stale": "Пары с устаревшей ценой.",
   "pricing_filter_clear": "Показать все пары",
   "pricing_filter_empty": "Нет пар, подходящих под фильтр."
 }

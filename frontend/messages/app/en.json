@@ -1071,6 +1071,7 @@
       }
     }
   ],
+  "briefing_scope_closed": "Closed accounts only",
   "briefing_change": "{amount} in {month}",
   "briefing_change_label": "{amount} from the end of {start} to {end}",
   "briefing_needs_price_named": "Net worth needs a price for {code}",

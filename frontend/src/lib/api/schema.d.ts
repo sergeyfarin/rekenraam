@@ -29130,7 +29130,7 @@ export interface components {
              * @enum {string}
              */
             id: "net_worth" | "cash";
-            /** @description Open asset and liability accounts in scope, without system or per-instrument holding accounts. */
+            /** @description Open asset and liability accounts in scope, without system or per-instrument holding accounts. Zero with a value when net worth is held only in closed accounts. */
             account_count: number;
             /** @description Converted total at as_of; null when unavailable. */
             value: components["schemas"]["BalanceQuantity"] | null;
@@ -29138,11 +29138,14 @@ export interface components {
             start_value: components["schemas"]["BalanceQuantity"] | null;
             /** @description value minus start_value, present only when both are. */
             change: components["schemas"]["BalanceQuantity"] | null;
-            /** @enum {string|null} */
+            /**
+             * @description no_accounts means the scope holds no account at all; for net worth, closed accounts still count.
+             * @enum {string|null}
+             */
             unavailable: "valuation_gaps" | "unclassified_short" | "no_reporting_currency" | "no_accounts" | null;
             /** @description Inputs with no usable observation at as_of, one per commodity. */
             missing: components["schemas"]["HomeValuationInput"][];
-            /** @description Inputs valued from an earlier observation inside the staleness window at as_of. Never also missing. */
+            /** @description Inputs valued from an observation older than the pricing policy's staleness days at as_of, the threshold Prices uses. Each leg of a chained conversion is reported against its own commodity. Never also missing. */
             stale: components["schemas"]["HomeValuationInput"][];
         };
         HomeValuationInput: {

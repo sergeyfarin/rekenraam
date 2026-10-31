@@ -11,6 +11,7 @@
   import StatusBadge from '#lib/components/status-badge.svelte';
   import PriceDetail from './price-detail.svelte';
   import PriceForm from './price-form.svelte';
+  import { coverageFilter, filterCoverage } from './coverage-filter.ts';
   import { m } from '#lib/paraglide/messages.js';
   import { getLocale } from '#lib/paraglide/runtime.js';
 
@@ -29,8 +30,8 @@
   const workspace = $derived(workspaceQuery.data);
   // Home's status line links here filtered to what it counted (#476); read on
   // every navigation so a second link from the same page applies.
-  const statusFilter = $derived.by(() => { const value = page.url.searchParams.get('status'); return value === 'missing' || value === 'stale' ? value : null; });
-  const coverage = $derived((workspace?.coverage ?? []).filter(item => statusFilter === null || item.status === statusFilter));
+  const statusFilter = $derived(coverageFilter(page.url.searchParams.get('status')));
+  const coverage = $derived(filterCoverage(workspace?.coverage ?? [], statusFilter));
   const unfilteredHref = $derived.by(() => { const params = new URLSearchParams(page.url.searchParams.toString()); params.delete('status'); const query = params.toString(); return `${page.url.pathname}${query ? `?${query}` : ''}`; });
   const codes = $derived(new Map((workspace?.commodities ?? []).map(item => [item.id, item.code])));
   const history = $derived(historyQuery.data?.pages.flatMap(item => item.prices) ?? []);
@@ -66,7 +67,7 @@
       <p class="mt-2 text-sm text-muted">{m.valuation_report_policy()}</p>
       <label class="mt-4 grid max-w-xs gap-1 text-sm" for="pricing-as-of">{m.pricing_as_of()}<input id="pricing-as-of" type="date" value={asOf || workspace.as_of} onchange={(event) => { asOf = event.currentTarget.value; }} class="min-h-11 min-w-0 w-full rounded-(--radius-control) border border-border bg-control px-3" /></label>
       {#if workspaceQuery.isFetching}<p role="status" class="mt-3 text-sm">{m.pricing_loading()}</p>{/if}
-      {#if statusFilter}<p class="mt-4 text-sm"><span class="font-semibold">{statusFilter === 'missing' ? m.pricing_filter_missing() : m.pricing_filter_stale()}</span> <a href={unfilteredHref} class="underline underline-offset-4">{m.pricing_filter_clear()}</a></p>{/if}
+      {#if statusFilter}<p class="mt-4 text-sm"><span class="font-semibold">{statusFilter === 'unusable' ? m.pricing_filter_unusable() : m.pricing_filter_stale()}</span> <a href={unfilteredHref} class="underline underline-offset-4">{m.pricing_filter_clear()}</a></p>{/if}
       {#if workspace.coverage.length === 0}<p class="mt-4 text-sm text-muted">{m.pricing_coverage_empty()}</p>
       {:else if coverage.length === 0}<p class="mt-4 text-sm text-muted">{m.pricing_filter_empty()}</p>
       {:else}<ul class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{#each coverage as item}

@@ -74,9 +74,11 @@ type HomeHeadline struct {
 	StartValue  *BalanceQuantity
 	Change      *BalanceQuantity
 	Unavailable string
-	// Missing are the inputs Value lacks on AsOf; Stale those it valued from
-	// an earlier observation inside the staleness window. Each commodity
-	// appears once, sorted by kind then code.
+	// Missing are the inputs Value lacks on AsOf. Stale are those it valued
+	// from an observation the pricing policy calls out of date: older than its
+	// staleness days, as Prices and Review judge it, yet inside the report's
+	// window. Each leg of a chained conversion is judged and reported on its
+	// own. Each commodity appears once, sorted by kind then code.
 	Missing []HomeValuationInput
 	Stale   []HomeValuationInput
 }
@@ -144,76 +146,112 @@ func (s *TransactionService) HomeBriefing(ctx context.Context, ownerUserID int64
 		}
 	}
 
+	// The count is what the owner has open; whether to value is whether the
+	// scope holds anything. Closed balances stay in net worth, so a book whose
+	// accounts are all closed still has one. Cash is open money accounts only.
 	scopes := []struct {
 		id         string
 		count      int
+		valued     bool
 		accountIDs []int64
 	}{
-		{HomeHeadlineNetWorth, netWorthCount, nil},
-		{HomeHeadlineCash, len(cashAccountIDs), cashAccountIDs},
+		{HomeHeadlineNetWorth, netWorthCount, !briefing.EmptyBook, nil},
+		{HomeHeadlineCash, len(cashAccountIDs), len(cashAccountIDs) > 0, cashAccountIDs},
 	}
-	for _, scope := range scopes {
-		headline := HomeHeadline{ID: scope.id, AccountCount: scope.count, Missing: []HomeValuationInput{}, Stale: []HomeValuationInput{}}
+	valued := make([]*HomeHeadline, 0, len(scopes))
+	filters := make([]ReportFilters, 0, len(scopes))
+	briefing.Headlines = make([]HomeHeadline, len(scopes))
+	for index, scope := range scopes {
+		headline := &briefing.Headlines[index]
+		*headline = HomeHeadline{ID: scope.id, AccountCount: scope.count, Missing: []HomeValuationInput{}, Stale: []HomeValuationInput{}}
 		switch {
-		case scope.count == 0:
+		case !scope.valued:
 			headline.Unavailable = HomeUnavailableNoAccounts
 		case briefing.ReportingCurrency == nil:
 			headline.Unavailable = HomeUnavailableNoReportingCurrency
 		default:
-			if err := s.valueHomeHeadline(ctx, &headline, scope.accountIDs, startBoundary, asOf, briefing.ReportingCurrency.ID); err != nil {
-				return HomeBriefing{}, err
-			}
+			valued = append(valued, headline)
+			filters = append(filters, ReportFilters{AccountIDs: scope.accountIDs})
 		}
-		briefing.Headlines = append(briefing.Headlines, headline)
+	}
+	if len(valued) > 0 {
+		if err := s.valueHomeHeadlines(ctx, valued, filters, startBoundary, asOf, briefing.ReportingCurrency.ID); err != nil {
+			return HomeBriefing{}, err
+		}
 	}
 	return briefing, nil
 }
 
-// valueHomeHeadline reads both boundaries through the Net worth report's
-// series and converts each through its own coverage, so a gap at the start of
-// the month is not reported as a gap today.
-func (s *TransactionService) valueHomeHeadline(ctx context.Context, headline *HomeHeadline, accountIDs []int64, startBoundary, asOf string, reportingID int64) error {
-	series, err := s.NetWorthSeries(ctx, NetWorthSeriesInput{
-		StartDate: startBoundary,
-		EndDate:   asOf,
-		Bucket:    "month",
-		Filters:   ReportFilters{AccountIDs: accountIDs},
+// valueHomeHeadlines computes what the Net worth report's series computes for
+// each headline's accounts, from one ledger read and one fold for all of
+// them, and converts each boundary through its own coverage, so a gap at the
+// start of the month is not reported as a gap today.
+func (s *TransactionService) valueHomeHeadlines(ctx context.Context, headlines []*HomeHeadline, filters []ReportFilters, startBoundary, asOf string, reportingID int64) error {
+	scopes := make([]ReportFilters, len(filters))
+	for index, filter := range filters {
+		resolved, _, err := s.resolveReportFilters(ctx, filter, asOf)
+		if err != nil {
+			return err
+		}
+		scopes[index] = echoedReportFilters(resolved)
+	}
+	bounds, err := calendarBucketBounds(startBoundary, asOf, "month")
+	if err != nil {
+		return err
+	}
+	if len(bounds) != 2 || bounds[0].endDate != startBoundary || bounds[1].endDate != asOf {
+		return fmt.Errorf("home series has unexpected buckets")
+	}
+	var scoped [][]netWorthBucket
+	err = s.repository.WithLedgerSnapshot(ctx, func(ledger *db.LedgerSnapshotReader) error {
+		var readErr error
+		scoped, readErr = netWorthScopedSeriesTotals(ctx, ledger, bounds, scopes)
+		return readErr
 	})
 	if err != nil {
 		return err
 	}
-	if len(series.Buckets) != 2 || series.Buckets[0].EndDate != startBoundary || series.Buckets[1].EndDate != asOf {
-		return fmt.Errorf("home series has unexpected buckets")
-	}
-	start, today := series.Buckets[0], series.Buckets[1]
-	if len(today.UnclassifiedShorts) > 0 {
-		headline.Unavailable = HomeUnavailableUnclassifiedShort
-		return nil
-	}
 
 	seen := make([]int64, 0)
-	for _, bucket := range series.Buckets {
-		for _, total := range bucket.Totals {
-			seen = append(seen, total.CommodityID)
+	for _, buckets := range scoped {
+		for _, bucket := range buckets {
+			for _, total := range bucket.totals {
+				seen = append(seen, total.CommodityID)
+			}
 		}
 	}
 	rates, err := s.NewRateTable(ctx, ReportingCurrencyInput{CommodityID: reportingID}, seen, startBoundary, asOf)
 	if err != nil {
 		return err
 	}
+	staleness, err := s.pricingStalenessDays(ctx)
+	if err != nil {
+		return err
+	}
+	for index, headline := range headlines {
+		if err := s.valueHomeHeadline(ctx, headline, rates, scoped[index][0], scoped[index][1], startBoundary, asOf, staleness); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func (s *TransactionService) valueHomeHeadline(ctx context.Context, headline *HomeHeadline, rates *RateTable, start, today netWorthBucket, startBoundary, asOf string, staleness int) error {
+	if len(today.unclassifiedShorts) > 0 {
+		headline.Unavailable = HomeUnavailableUnclassifiedShort
+		return nil
+	}
 	todayRates := rates.withFreshCoverage()
-	headline.Value = homeConverted(todayRates, today.Totals, asOf)
-	coverage := todayRates.Coverage("")
-	if err := s.classifyHomeCoverage(ctx, headline, coverage); err != nil {
+	headline.Value = homeConverted(todayRates, today.totals, asOf)
+	if err := s.classifyHomeCoverage(ctx, headline, todayRates.Coverage(""), asOf, staleness); err != nil {
 		return err
 	}
 	if headline.Value == nil {
 		headline.Unavailable = HomeUnavailableValuationGaps
 		return nil
 	}
-	if len(start.UnclassifiedShorts) == 0 {
-		headline.StartValue = homeConverted(rates.withFreshCoverage(), start.Totals, startBoundary)
+	if len(start.unclassifiedShorts) == 0 {
+		headline.StartValue = homeConverted(rates.withFreshCoverage(), start.totals, startBoundary)
 	}
 	if headline.StartValue != nil {
 		change := new(big.Int).Sub(headline.Value.QuantityValue.BigInt(), headline.StartValue.QuantityValue.BigInt())
@@ -221,9 +259,22 @@ func (s *TransactionService) valueHomeHeadline(ctx context.Context, headline *Ho
 		if err != nil {
 			return fmt.Errorf("home change: %w", err)
 		}
-		headline.Change = &BalanceQuantity{CommodityID: reportingID, QuantityValue: coefficient, QuantityScale: headline.Value.QuantityScale, NormalQuantityValue: coefficient}
+		headline.Change = &BalanceQuantity{CommodityID: rates.QuoteCommodityID(), QuantityValue: coefficient, QuantityScale: headline.Value.QuantityScale, NormalQuantityValue: coefficient}
 	}
 	return nil
+}
+
+// pricingStalenessDays is the pricing policy's out-of-date threshold, the one
+// Prices and the Review attention source apply.
+func (s *TransactionService) pricingStalenessDays(ctx context.Context) (int, error) {
+	policy, err := s.pricingRepository.GetPricingPolicy(ctx, BookID)
+	switch {
+	case errors.Is(err, db.ErrNotFound):
+		return DefaultPricingStalenessDays, nil
+	case err != nil:
+		return 0, fmt.Errorf("read pricing policy: %w", err)
+	}
+	return policy.StalenessMaxDays, nil
 }
 
 // homeConverted is the complete-only converted total, or nil.
@@ -240,10 +291,11 @@ func homeConverted(rates *RateTable, totals []BalanceQuantity, onDate string) *B
 	return &BalanceQuantity{CommodityID: rates.QuoteCommodityID(), QuantityValue: value, QuantityScale: scale, NormalQuantityValue: value}
 }
 
-// classifyHomeCoverage turns one date's coverage into inputs by kind. A gap on
-// a chained conversion is the quote currency's missing rate, not the
-// instrument's price, so it is reported against that currency.
-func (s *TransactionService) classifyHomeCoverage(ctx context.Context, headline *HomeHeadline, coverage ValuationCoverage) error {
+// classifyHomeCoverage turns one date's coverage into inputs by kind. A
+// chained conversion has two observations, the instrument's price in a quote
+// currency and that currency's rate, so a gap or an out-of-date observation is
+// reported against the leg it belongs to, never the instrument for the rate.
+func (s *TransactionService) classifyHomeCoverage(ctx context.Context, headline *HomeHeadline, coverage ValuationCoverage, asOf string, staleness int) error {
 	missing := map[int64]bool{}
 	for _, gap := range coverage.Gaps {
 		id := gap.CommodityID
@@ -252,10 +304,17 @@ func (s *TransactionService) classifyHomeCoverage(ctx context.Context, headline 
 		}
 		missing[id] = true
 	}
+	current, err := shiftISODate(asOf, -staleness)
+	if err != nil {
+		return err
+	}
 	stale := map[int64]bool{}
 	for _, use := range coverage.Used {
-		if use.Stale && !missing[use.CommodityID] {
+		if use.ObservationDate < current && !missing[use.CommodityID] {
 			stale[use.CommodityID] = true
+		}
+		if use.ViaCommodityID != 0 && use.ViaObservationDate < current && !missing[use.ViaCommodityID] {
+			stale[use.ViaCommodityID] = true
 		}
 	}
 	ids := make([]int64, 0, len(missing)+len(stale))

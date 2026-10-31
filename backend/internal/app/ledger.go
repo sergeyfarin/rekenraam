@@ -551,6 +551,17 @@ func (q namedShortQuantities) unexplainedNegative(accountID, commodityID int64, 
 // the snapshot in effect at each bucket's end. Collapsing early would bake one
 // bucket's classification into every later one.
 func netWorthSeriesTotals(ctx context.Context, ledger netWorthLedger, bounds []calendarBucketBound, filters ReportFilters) ([]netWorthBucket, error) {
+	scoped, err := netWorthScopedSeriesTotals(ctx, ledger, bounds, []ReportFilters{filters})
+	if err != nil || scoped == nil {
+		return nil, err
+	}
+	return scoped[0], nil
+}
+
+// netWorthScopedSeriesTotals is netWorthSeriesTotals for several account
+// scopes at once: the ledger is read and folded once, and each scope totals
+// the same running balances, so Home's two headlines cost one pass (#476).
+func netWorthScopedSeriesTotals(ctx context.Context, ledger netWorthLedger, bounds []calendarBucketBound, scopes []ReportFilters) ([][]netWorthBucket, error) {
 	if len(bounds) == 0 {
 		return nil, nil
 	}
@@ -585,7 +596,10 @@ func netWorthSeriesTotals(ctx context.Context, ledger netWorthLedger, bounds []c
 	running := map[int64]map[int64]*exact.ScaledInt{}
 	next := 0
 
-	bucketTotals := make([]netWorthBucket, 0, len(bounds))
+	scopedTotals := make([][]netWorthBucket, len(scopes))
+	for index := range scopes {
+		scopedTotals[index] = make([]netWorthBucket, 0, len(bounds))
+	}
 	for _, bound := range bounds {
 		// Postings arrive ordered by entry date and bucket ends ascend, so one
 		// forward cursor covers the whole series.
@@ -597,13 +611,16 @@ func netWorthSeriesTotals(ctx context.Context, ledger netWorthLedger, bounds []c
 			shorts.fold(shortEvents[nextShort])
 			nextShort++
 		}
-		totals, err := netWorthBucketTotals(timeline.snapshotThrough(bound.endDate), running, unsettled.at(bound.endDate), unsettled.accounts, kinds, filters, shorts)
-		if err != nil {
-			return nil, err
+		accounts, pending := timeline.snapshotThrough(bound.endDate), unsettled.at(bound.endDate)
+		for index, filters := range scopes {
+			totals, err := netWorthBucketTotals(accounts, running, pending, unsettled.accounts, kinds, filters, shorts)
+			if err != nil {
+				return nil, err
+			}
+			scopedTotals[index] = append(scopedTotals[index], totals)
 		}
-		bucketTotals = append(bucketTotals, totals)
 	}
-	return bucketTotals, nil
+	return scopedTotals, nil
 }
 
 // netWorthBucketTotals sums the running per-account balances that count as net

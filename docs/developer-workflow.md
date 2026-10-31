@@ -393,7 +393,9 @@ at a realistic upper bound — 250,000 posted postings over 3,020 accounts in tw
 currencies across five years — and runs the bundle export and the self-check
 against it (#108). It also measures the shell attention read (#458), asserting
 successful aggregate reads and empty transaction-review queues, with ceilings
-of 5 seconds and 64 MiB peak live heap. This does not certify complete FX
+of 5 seconds and 64 MiB peak live heap, and the Home briefing read (#476),
+asserting both headlines name the missing EUR rate, with ceilings of
+10 seconds and 256 MiB. This does not certify complete FX
 discovery from posted currencies (#464). It asserts the right answer at that size (every posting in
 `ledger.csv`, one trial-balance row per leaf and commodity, a passing check)
 and fails when wall time or peak live heap crosses a ceiling set several times
@@ -408,6 +410,12 @@ Measured 2026-10-16 on an 8-core AMD EPYC 3251, without `-race`:
 | --- | --- | --- | --- |
 | Bundle export | 11.2 s | 413 MiB | 24 MiB |
 | Self-check | 11.8 s | 137 MiB | 39 MiB |
+
+Home was measured 2026-10-31 on the same machine: 5.9 s, 513 MiB allocated and
+141 MiB peak heap while each headline ran its own net-worth series; 2.8 s,
+261 MiB and 112 MiB once both headlines total one ledger read and fold
+(`netWorthScopedSeriesTotals`). Its peak heap is the posting history the
+series reads whole.
 
 Both are SQLite-bound (over 90% of CPU in cgo), and the peak heap shows the
 whole-book folds — the trial balance, account paths, the self-check

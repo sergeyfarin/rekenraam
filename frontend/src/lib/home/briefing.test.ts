@@ -72,7 +72,13 @@ describe('headline', () => {
 
   it('states each choice scope as a count, never an account list', () => {
     expect(headlineOptions(home(), 'en').map(option => option.scope)).toEqual(['All 5 accounts', '3 cash accounts']);
-    expect(headlineOptions(home({ account_count: 1 }, { account_count: 0 }), 'en').map(option => option.scope)).toEqual(['1 account']);
+    expect(headlineOptions(home({ account_count: 1 }, { account_count: 0, value: null, unavailable: 'no_accounts' }), 'en').map(option => option.scope)).toEqual(['1 account']);
+  });
+
+  it('keeps net worth a choice when every account is closed', () => {
+    const book = home({ account_count: 0 }, { account_count: 0, value: null, unavailable: 'no_accounts' });
+    expect(shownHeadlineID(book, 'auto')).toBe('net_worth');
+    expect(headlineOptions(book, 'en')).toEqual([{ id: 'net_worth', label: 'Net worth', scope: 'Closed accounts only' }]);
   });
 });
 
@@ -95,7 +101,7 @@ describe('status line', () => {
   it('leads with the valuation problem behind the headline and counts the rest', () => {
     const book = home({ value: null, unavailable: 'valuation_gaps', missing: missingPrices(3) });
     const status = briefingStatus(book, 'cash', 'auto', attention([source('drafts', 2), source('prices', 3, { unit: 'pair' })]), 'en');
-    expect(status.lead).toEqual({ text: 'Net worth needs 3 prices', href: '/app/investments/prices?status=missing' });
+    expect(status.lead).toEqual({ text: 'Net worth needs 3 prices', href: '/app/investments/prices?status=unusable' });
     expect(status.more?.text).toBe('2 more');
   });
 
@@ -127,6 +133,14 @@ describe('status line', () => {
     const unchecked = briefingStatus(home(), 'net_worth', 'auto', attention([source('drafts', 0), source('imports', 0, { state: 'error', count: null, error_code: 'INTERNAL_ERROR' })]), 'en');
     expect(unchecked.lead.text).toBe('Some checks could not run');
     expect(briefingStatus(home(), 'net_worth', 'auto', attention([], { data: undefined, isError: true }), 'en').lead.text).toBe('Could not check what needs review');
+  });
+
+  it('never keeps an earlier all clear after a refresh fails', () => {
+    const kept = attention([source('drafts', 0)], { isError: true });
+    expect(kept.data?.total_known).toBe(0);
+    const status = briefingStatus(home(), 'net_worth', 'auto', kept, 'en');
+    expect(status.tone).toBe('failed');
+    expect(status.lead.text).toBe('Could not check what needs review');
   });
 
   it('asks for a default currency rather than an empty net worth', () => {

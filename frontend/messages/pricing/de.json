@@ -124,8 +124,8 @@
   "quotes_csv_trade": "{side}: {quantity} Einheiten",
   "quotes_refresh": "Kurse aktualisieren",
   "quotes_queued": "Kurszuordnungen eingereiht: {count}. Ergebnisse finden Sie im Anbieterstatus.",
-  "pricing_filter_missing": "Paare ohne nutzbaren Preis.",
-  "pricing_filter_stale": "Paare mit Preis von einem früheren Tag.",
+  "pricing_filter_unusable": "Paare ohne nutzbaren Preis.",
+  "pricing_filter_stale": "Paare mit veraltetem Preis.",
   "pricing_filter_clear": "Alle Paare zeigen",
   "pricing_filter_empty": "Keine Paare entsprechen diesem Filter."
 }
